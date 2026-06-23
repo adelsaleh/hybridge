@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dgfem"
+version = "0.1.0"
+description = "Self-contained DG/HDG simulator."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numba",
+    "numpy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+mesh = ["gmsh"]
+plot = ["pyvista"]
+test = ["pytest"]
+all = ["gmsh", "pyvista", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["dgfem*"]
+
+[tool.pytest.ini_options]
+testpaths = ["dgfem/tests"]

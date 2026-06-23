@@ -42,13 +42,13 @@ python3 -m pip install -r requirements.txt
 Preferred invocation:
 
 ```bash
-python -m dgfem.adv_rea [options]
+python3 -m dgfem.adv_rea [options]
 ```
 
 Direct script execution is also supported:
 
 ```bash
-python dgfem/adv_rea.py [options]
+python3 dgfem/adv_rea.py [options]
 ```
 
 ### Common Runs
@@ -56,38 +56,38 @@ python dgfem/adv_rea.py [options]
 Small smoke run:
 
 ```bash
-python -m dgfem.adv_rea -p 2 --lc 0.30
+python3 -m dgfem.adv_rea -p 2 --lc 0.30
 ```
 
 Verbose timing run:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --verbosity 2
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plotting run:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --plot
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --plot
 ```
 
 Projected reaction path:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --project-reaction
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --project-reaction
 ```
 
 Structured rectangle instead of Gmsh:
 
 ```bash
-python -m dgfem.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
+python3 -m dgfem.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
 ```
 
 Disc and triangle Gmsh domains:
 
 ```bash
-python -m dgfem.adv_rea -p 4 --domain disc --lc 0.08
-python -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
+python3 -m dgfem.adv_rea -p 4 --domain disc --lc 0.08
+python3 -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
 ```
 
 ### Main CLI Options
@@ -111,7 +111,7 @@ python -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
 Run:
 
 ```bash
-python -m dgfem.adv_rea --help
+python3 -m dgfem.adv_rea --help
 ```
 
 for the exact current option list.
@@ -470,17 +470,17 @@ factorization in that helper; this matters for large trace systems.
 Run the current dgfem tests:
 
 ```bash
-env MPLCONFIGDIR=/tmp python -m pytest dgfem/tests/test_space.py -q
+env MPLCONFIGDIR=/tmp python3 -m pytest dgfem/tests/test_space.py -q
 ```
 
 Run syntax checks:
 
 ```bash
-python -m py_compile dgfem/*.py dgfem/tests/test_space.py
+python3 -m py_compile dgfem/*.py dgfem/tests/test_space.py
 ```
 
 Run the CLI smoke test:
 
 ```bash
-python -m dgfem.adv_rea -p 2 --lc 0.30 --quiet
+python3 -m dgfem.adv_rea -p 2 --lc 0.30 --quiet
 ```

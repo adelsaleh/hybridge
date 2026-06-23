@@ -8,13 +8,13 @@ assembly modules.
 The main executable solver is:
 
 ```bash
-python -m dgfem.adv_rea
+python3 -m dgfem.adv_rea
 ```
 
 Direct script execution also works:
 
 ```bash
-python dgfem/adv_rea.py
+python3 dgfem/adv_rea.py
 ```
 
 ## Quick Start
@@ -31,30 +31,36 @@ or run pip directly:
 python3 -m pip install -r requirements.txt
 ```
 
+For editable package installation from a clone, use:
+
+```bash
+python3 -m pip install -e ".[all]"
+```
+
 Run the manufactured advection-reaction test on a Gmsh rectangle:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --verbosity 2
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plot the numerical solution, exact solution, and absolute error:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --plot
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --plot
 ```
 
 Use the projected-reaction path, which projects callable reaction data into
 `V_h` and assembles the reaction mass from cached reference triple products:
 
 ```bash
-python -m dgfem.adv_rea -p 6 --lc 0.03 --project-reaction
+python3 -m dgfem.adv_rea -p 6 --lc 0.03 --project-reaction
 ```
 
 Use a sparse direct trace solve instead of the default ILU-preconditioned
 `BICGSTAB` path:
 
 ```bash
-python -m dgfem.adv_rea -p 4 --lc 0.08 --solver direct
+python3 -m dgfem.adv_rea -p 4 --lc 0.08 --solver direct
 ```
 
 ## Solver Defaults
