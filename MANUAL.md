@@ -1,54 +1,40 @@
 # dgfem Manual
 
 This manual describes the current `dgfem` package and, in particular, how to
-use `dgfem/adv_rea.py`.
+use the advection-reaction and diffusion-reaction HDG solvers.
 
-The package is intentionally independent from the legacy root-level modules.
-It keeps the same numerical HDG structure as `adv_rea_vec_msh4.py`, but exposes
-object-oriented mesh, space, and field objects.
+The repository root is the `dgfem` package root.  The solvers keep the same
+numerical HDG structure as the older scripts, but expose object-oriented mesh,
+space, and field objects through package-native modules.
 
 ## Package Structure
 
 ```text
-dgfem/
+.
   __init__.py      public package exports
-  adv_rea.py      linear advection-reaction HDG solver and command-line entry point
-  basis.py        Bernstein, hierarchical C0, and Dubiner orthogonal bases
-  global_system.py sparse global trace-system assembly and solve helpers
-  hdg_assembly.py reusable HDG static-condensation and trace assembly helpers
-  hdg_mats.py     vectorized HDG/DG assembly helpers
-  mesh.py         triangular mesh object and Gmsh generators
-  plot.py         generic DG field plotting and numerical/exact/error plots
-  quadrature.py   reference element quadrature and cached reference tensors
-  space.py        DGSpace, DGField, VectorDGSpace, VectorDGField
-  transfer.py     same-mesh and cross-mesh projection/evaluation helpers
+  assembly/       HDG assembly helpers, NumPy matrices, and projection helpers
+  backends/       NumPy, Numba, and CuPy backend modules
+  core/           mesh, basis, quadrature, DG spaces/fields, and transfer
+  io/             output formatting and plotting helpers
+  kernels/        low-level Numba kernels
+  linalg/         sparse global-system solve and graph ordering helpers
+  run_configs/    version-controlled benchmark and solver presets
+  solvers/        advection-reaction and diffusion-reaction solver CLIs
+  tests/          focused package tests
 ```
 
 ## Command-Line Solver
 
-Install the Python dependencies from the repository root:
-
-```bash
-python3 scripts/install_dependencies.py
-```
-
-The installer uses the current Python interpreter's pip and reads
-`requirements.txt`. You can also call pip directly:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
 Preferred invocation:
 
 ```bash
-python3 -m dgfem.adv_rea [options]
+python -m dgfem.solvers.adv_rea [options]
 ```
 
 Direct script execution is also supported:
 
 ```bash
-python3 dgfem/adv_rea.py [options]
+python solvers/adv_rea.py [options]
 ```
 
 ### Common Runs
@@ -56,38 +42,77 @@ python3 dgfem/adv_rea.py [options]
 Small smoke run:
 
 ```bash
-python3 -m dgfem.adv_rea -p 2 --lc 0.30
+python -m dgfem.solvers.adv_rea -p 2 --lc 0.30
 ```
 
 Verbose timing run:
 
 ```bash
-python3 -m dgfem.adv_rea -p 6 --lc 0.03 --verbosity 2
+python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plotting run:
 
 ```bash
-python3 -m dgfem.adv_rea -p 6 --lc 0.03 --plot
+python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
 ```
 
 Projected reaction path:
 
 ```bash
-python3 -m dgfem.adv_rea -p 6 --lc 0.03 --project-reaction
+python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --project-reaction
+```
+
+Projected-coefficient Numba path:
+
+```bash
+python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 \
+  --project-source --project-beta --project-reaction \
+  --assembly-backend numba --verbosity 2
+```
+
+Boundary elimination and upwind trace ordering:
+
+```bash
+python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 \
+  --boundary-mode eliminate --trace-ordering upwind-scc
+```
+
+Save before/after matrix sparsity pattern plots for the upwind ordering:
+
+```bash
+python -m dgfem.solvers.adv_rea -p 4 --lc 0.08 \
+  --boundary-mode eliminate --trace-ordering upwind-scc \
+  --plot-matrix-pattern
 ```
 
 Structured rectangle instead of Gmsh:
 
 ```bash
-python3 -m dgfem.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
+python -m dgfem.solvers.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
 ```
 
 Disc and triangle Gmsh domains:
 
 ```bash
-python3 -m dgfem.adv_rea -p 4 --domain disc --lc 0.08
-python3 -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
+python -m dgfem.solvers.adv_rea -p 4 --domain disc --lc 0.08
+python -m dgfem.solvers.adv_rea -p 4 --domain triangle --lc 0.08
+```
+
+Diffusion-reaction manufactured solve:
+
+```bash
+python -m dgfem.solvers.diff_rea -p 2 --lc 0.30
+```
+
+The diffusion CLI currently includes legacy tests `0`, `2`, `3`, `5`, and `6`.
+With `--domain auto`, test `3` uses the legacy disk domain and test `6` uses
+the L-shaped reentrant-corner domain.
+
+Use the optional Numba local-solver block builder:
+
+```bash
+python -m dgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
 ```
 
 ### Main CLI Options
@@ -102,7 +127,13 @@ python3 -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
 --solver-rtol            Krylov relative tolerance
 --solver-atol            Krylov absolute tolerance
 --maxiter                maximum Krylov iterations
---project-reaction       project callable reaction into V_h before local assembly
+--project-source         project callable source into V_h before calling the solver
+--project-beta           project callable beta into V_h x V_h before calling the solver
+--project-reaction       project callable reaction into V_h before calling the solver
+--assembly-backend       numpy, numba, or auto
+--boundary-mode          penalty or eliminate
+--trace-ordering         none or upwind-scc
+--plot-matrix-pattern    save before/after sparsity pattern plots
 --verbosity              0 quiet, 1 major phases, 2 substeps
 --plot                   show numerical/exact/error plots
 --plot-resolution        samples per reference direction for plotting
@@ -111,7 +142,7 @@ python3 -m dgfem.adv_rea -p 4 --domain triangle --lc 0.08
 Run:
 
 ```bash
-python3 -m dgfem.adv_rea --help
+python -m dgfem.solvers.adv_rea --help
 ```
 
 for the exact current option list.
@@ -156,9 +187,9 @@ b = 0
 Basic solve:
 
 ```python
-from dgfem.mesh import gmsh_rectangle_mesh
-from dgfem.space import DGSpace
-from dgfem.adv_rea import solve_advection_reaction_hdg, test2
+from dgfem.core.mesh import gmsh_rectangle_mesh
+from dgfem.core.space import DGField, DGSpace, VectorDGField
+from dgfem.solvers.adv_rea import solve_advection_reaction_hdg, test2
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 4, basis_type="dub_orth")
@@ -181,6 +212,11 @@ print(result.trace.shape)
 print(result.timings)
 ```
 
+`solve_advection_reaction_hdg` does not project PDE coefficients internally.
+Callable coefficients are evaluated directly on the quadrature rules used by
+assembly.  If you want polynomial coefficients, project them first and pass
+the resulting DG fields.
+
 Request legacy-like tuple output:
 
 ```python
@@ -195,10 +231,83 @@ trace, rows, cols, data = solve_advection_reaction_hdg(
 )
 ```
 
-Use an already projected reaction field:
+### Reusable Stateful Solver
+
+Use `AdvectionReactionHDGSolver` when a driver solves related advection-reaction
+problems repeatedly and needs a stable object that stores the latest assembled
+arrays, boundary reduction, graph ordering, linear-solve diagnostics,
+preconditioner, trace, and reconstructed field.
 
 ```python
-reaction_h = space.project_callable(reaction, name="reaction_h")
+from dgfem import AdvectionReactionHDGSolver
+
+solver = AdvectionReactionHDGSolver(
+    space,
+    assembly_backend="numba",
+    boundary_mode="eliminate",
+    trace_ordering="upwind-scc",
+    solver="BICGSTAB",
+)
+solver.set_discrete_problem(source_h, beta_h, reaction_h, exact)
+result = solver.solve()
+
+rows = solver.solve_rows
+cols = solver.solve_cols
+data = solver.solve_data
+preconditioner = solver.preconditioner
+trace = solver.trace
+field = solver.field
+```
+
+The class invalidates cached assembled data conservatively.  Updating any
+coefficient clears the previous matrix, preconditioner, trace, and field:
+
+```python
+solver.set_source(next_source_h)
+next_result = solver.solve()
+```
+
+For mesh adaptivity, install a new space and then provide coefficient data on
+that space:
+
+```python
+solver.set_space(new_space)
+solver.set_discrete_problem(new_source_h, new_beta_h, new_reaction_h, exact)
+adapted_result = solver.solve()
+```
+
+The one-shot `solve_advection_reaction_hdg(...)` function remains available and
+uses the same numerical path.
+
+Diffusion-reaction solve:
+
+```python
+from dgfem.core.mesh import gmsh_rectangle_mesh
+from dgfem.core.space import DGSpace
+from dgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, test0
+
+mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
+space = DGSpace(mesh, 3, basis_type="dub_orth")
+
+reaction, source, exact = test0()
+
+result = solve_diffusion_reaction_hdg(
+    source,
+    reaction,
+    exact,
+    space,
+    stabilization=1.0,
+    solver="BICGSTAB",
+)
+
+print(result.field.l2_error(exact))
+print(result.flux.as_component_first().shape)
+```
+
+Use an explicitly projected reaction field:
+
+```python
+reaction_h = DGField(reaction, space, name="reaction_h")
 result = solve_advection_reaction_hdg(
     source,
     (beta_x, beta_y),
@@ -208,18 +317,45 @@ result = solve_advection_reaction_hdg(
 )
 ```
 
-or let the solver project a callable reaction:
+Use explicitly projected source, advection, and reaction fields:
 
 ```python
+source_h = DGField(source, space, name="source_h")
+beta_h = VectorDGField((beta_x, beta_y), space, name="beta_h")
+reaction_h = DGField(reaction, space, name="reaction_h")
 result = solve_advection_reaction_hdg(
-    source,
-    (beta_x, beta_y),
-    reaction,
+    source_h,
+    beta_h,
+    reaction_h,
     exact,
     space,
-    project_reaction=True,
 )
 ```
+
+Use the projected Numba backend programmatically:
+
+```python
+source_h = DGField(source, space, name="source_h")
+beta_h = VectorDGField((beta_x, beta_y), space, name="beta_h")
+reaction_h = DGField(reaction, space, name="reaction_h")
+
+result = solve_advection_reaction_hdg(
+    source_h,
+    beta_h,
+    reaction_h,
+    exact,
+    space,
+    assembly_backend="numba",
+    boundary_mode="eliminate",
+    trace_ordering="upwind-scc",
+    verbose=2,
+)
+```
+
+The Numba backend currently requires projected source and beta data.  It
+accepts a scalar reaction coefficient or a projected reaction field.  It
+assembles the global trace system directly and does not materialize the full
+set of dense local tensors in Python.
 
 ## Data Model
 
@@ -231,7 +367,7 @@ result = solve_advection_reaction_hdg(
 node_coords       (num_nodes, 2)
 triangles         (num_elements, 3)
 edges             (num_edges, 2)
-sigma             (num_elements, 3)
+loc2glob_edge     (num_elements, 3)
 orientations      (num_elements, 3)
 aff_mats          (num_elements, 2, 2)
 aff_vecs          (num_elements, 2)
@@ -240,8 +376,11 @@ normals           (num_elements, 3, 2)
 jacs_el_fc        (num_elements, 3)
 ```
 
-The mesh also caches global trace assembly helpers such as `sigma_1`,
-`interior_elements`, `interior_faces`, and `edge_jacs`.
+The mesh also caches global trace assembly helpers such as
+`loc2oriented_face_coupling`, `interior_elements`, `interior_faces`, and
+`edge_jacs`.  The legacy aliases `sigma`, `sigma_1`, and `eta` are still
+available for compatibility, but new code should prefer `loc2glob_edge`,
+`loc2oriented_face_coupling`, and `edge_to_elements`.
 
 ### ReferenceElementData
 
@@ -257,11 +396,21 @@ bas_of_bd_quads            (3, el_dof, num_face_quads)
 bas1d_of_ref_edg_qds       (edg_dof, num_face_quads)
 MKrf                       (el_dof, el_dof)
 MKrf_inv                   (el_dof, el_dof)
-MKrfe_lst                  (6, edg_dof, el_dof)
+face_element_test_trace_trial            (3, el_dof, edg_dof)
+face_element_test_trace_trial_reversed   (3, el_dof, edg_dof)
+face_trace_test_element_trial_oriented   (6, edg_dof, el_dof)
+face_element_test_element_trial          (3, el_dof, el_dof)
 weighted_phi               (num_volume_quads, el_dof)
 weighted_phi_phi_flat      (num_volume_quads, el_dof * el_dof)
 weighted_triple_phi_flat   (el_dof, el_dof * el_dof)
 ```
+
+The face-coupling table names encode test/trial convention.  For example,
+`face_element_test_trace_trial[f, i, a]` couples element test basis `phi_i`
+to trace trial basis `mu_a` on local face `f`, while
+`face_trace_test_element_trial_oriented[o, a, i]` is the orientation-aware
+transpose used for trace-tested assembly.  Legacy aliases `MKrfe_lst_p`,
+`MKrfe_lst_n`, `MKrfe_lst`, and `MbdeKrf_lst` are still available.
 
 The weighted tables are there to avoid repeatedly rebuilding reference
 products during local matrix assembly.
@@ -292,7 +441,7 @@ The plotting helpers are generic over `DGField`; they are not tied to
 Plot one field:
 
 ```python
-from dgfem.plot import plot_field
+from dgfem.io.plot import plot_field
 
 plot_field(result.field, resolution=20, title="u_h")
 ```
@@ -300,7 +449,7 @@ plot_field(result.field, resolution=20, title="u_h")
 Plot several fields in one window:
 
 ```python
-from dgfem.plot import plot_fields
+from dgfem.io.plot import plot_fields
 
 plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
 ```
@@ -308,7 +457,7 @@ plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
 Get sampled data or a refined PyVista mesh for a custom plot:
 
 ```python
-from dgfem.plot import refined_field_polydata, sample_field_on_elements
+from dgfem.io.plot import refined_field_polydata, sample_field_on_elements
 
 ref_points, xy, values = sample_field_on_elements(result.field, resolution=16)
 poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
@@ -317,14 +466,14 @@ poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
 The solver-specific helper remains available:
 
 ```python
-from dgfem.plot import plot_solution_comparison
+from dgfem.io.plot import plot_solution_comparison
 
 plot_solution_comparison(result.field, exact)
 ```
 
 ## Local Matrix Assembly
 
-`hdg_mats.py` keeps two styles of APIs.
+`assembly/matrices_numpy.py` keeps two styles of APIs.
 
 Return-style reference functions:
 
@@ -349,13 +498,34 @@ The solver uses the accumulation style so it does not keep three full local
 element tensors alive at the same time.  The return-style functions are kept as
 readable reference paths and are often useful for tests and profiling.
 
+## Projected Numba Assembly
+
+`backends/numba.py` adapts package objects to the low-level kernels in
+`kernels/`.  The fused projected trace assembly path performs the local
+operator build, local solve, and global COO scatter inside the Numba kernel.
+
+At `--verbosity 2`, the Numba assembly timing line is split into:
+
+```text
+coefficients     shape validation and coefficient normalization
+boundary/flux    boundary trace projection plus beta_h . n face samples
+kernel           fused local assembly, local solve, and COO scatter
+rhs              dense RHS finalization from indexed contributions
+```
+
+`boundary/flux` is intentionally outside the fused kernel because
+`beta_h . n` is also reused by boundary elimination, upwind SCC ordering, and
+diagnostics.  When comparing timings with legacy scripts, compare the `kernel`
+entry with the legacy fused assembly timer; the package-level assembly timer
+also includes wrapper work needed by the higher-level solver.
+
 ## Static Condensation and Trace Assembly
 
 `hdg_assembly.py` contains the reusable HDG steps that are not specific to the
 advection-reaction manufactured test:
 
 ```python
-from dgfem import hdg_assembly
+from dgfem.assembly import hdg as hdg_assembly
 
 source_rhs = hdg_assembly.source_moments(source, space)
 trace_blocks = hdg_assembly.element_to_trace_matrix(local_solver, element_boundary_mats, space)
@@ -380,11 +550,19 @@ trace_system = hdg_assembly.assemble_trace_system(
 The solved trace can then be used to recover the element field:
 
 ```python
-solve_result = hdg_assembly.solve_trace_system(
+from dgfem.linalg.system import solve_global_system
+
+solve_result = solve_global_system(
     trace_system.rows,
     trace_system.cols,
     trace_system.data,
     trace_system.rhs,
+    trace_system.rhs.size,
+    solver="BICGSTAB",
+    preconditioner="ilu",
+    scale_system=True,
+    scale_matrix_in_place=True,
+    raise_on_nonconvergence=True,
 )
 u_h = hdg_assembly.reconstruct_field(
     solve_result.x,
@@ -395,18 +573,43 @@ u_h = hdg_assembly.reconstruct_field(
 )
 ```
 
+Mixed local systems such as diffusion-reaction use two additional generic
+helpers:
+
+```python
+source_rhs = hdg_assembly.block_source_moments(source, space, num_blocks=3)
+unknowns = hdg_assembly.reconstruct_local_unknowns(
+    trace,
+    source_rhs,
+    local_solver,
+    element_boundary_mats,
+    space,
+)
+```
+
+`trace_matrix_indices(..., interior_mass_mode="face")` and
+`trace_matrix_data(..., interior_mass_mode="face", interior_mass_blocks=...)`
+support operators whose stabilization trace mass is contributed once per
+element-side incidence rather than once per global edge.
+
 ## Exact vs Projected Reaction
 
-By default, callable reaction data is assembled exactly on the volume
-quadrature points:
+By default, callable coefficient data is assembled directly on the quadrature
+points:
 
 ```text
+source   = exact callable -> int_K f(x,y) phi_i dx
+beta     = exact callable -> volume/face quadrature samples
 reaction = exact callable -> int_K r(x,y) phi_i phi_j dx
 ```
 
-With `--project-reaction`, the callable is first projected into `V_h`:
+With the CLI options `--project-source`, `--project-beta`, or
+`--project-reaction`, the corresponding callable is projected before
+`solve_advection_reaction_hdg` is called:
 
 ```text
+source_h   = Pi_h source
+beta_h     = Pi_h beta
 reaction_h = Pi_h reaction
 ```
 
@@ -417,15 +620,34 @@ int_K reaction_h phi_i phi_j dx
 ```
 
 This can substantially reduce reaction assembly time when `reaction_h` already
-exists or is reused.  For a single solve, the projection cost may simply move
-work from assembly into preparation.
+exists or is reused.  Programmatic callers should do this projection explicitly
+and pass the resulting :class:`DGField` to the solver.
+
+## Boundary Elimination and Upwind Ordering
+
+The advection-reaction solver supports two boundary modes:
+
+```text
+penalty     keep all trace unknowns and impose Dirichlet values with a large diagonal penalty
+eliminate   remove known boundary trace dofs before the global solve
+```
+
+`--trace-ordering upwind-scc` builds a directed graph from the sign of
+`beta_h . n`, computes strongly connected components, topologically orders the
+component DAG, and converts that order to a trace-dof permutation.  On
+acyclic advection-dominated test cases this can expose nearly triangular
+structure to ILU.
+
+Matrix-pattern diagnostics can be generated with `--plot-matrix-pattern`.
+Those images are run artifacts and should generally not be committed unless a
+specific documentation change needs them.
 
 ## Output Interpretation
 
 At `--verbosity 2`, the solver prints substep timings:
 
 ```text
-preparing projected data
+preparing coefficient data
 assembling local element matrices
   assembling boundary mass matrices
   accumulating reaction mass matrices
@@ -447,7 +669,7 @@ solver and physical residual diagnostics
 ILU and Krylov solve timings
 ```
 
-The default `BICGSTAB` path uses `dgfem.global_system.solve_global_system` with
+The default `BICGSTAB` path uses `dgfem.linalg.system.solve_global_system` with
 diagonal scaling and ILU.  Explicit sparse zeros are removed before ILU
 factorization in that helper; this matters for large trace systems.
 
@@ -462,25 +684,29 @@ factorization in that helper; this matters for large trace systems.
 - The current NumPy path is not a true fused element kernel.  It reduces
   persistent temporaries and memory pressure, but separate contractions still
   stream large local tensors through memory.
-- A true fused local kernel would most likely be a Numba/Cython/C++ kernel
-  parallelized over elements.
+- The projected Numba advection-reaction backend is the current fused package
+  path.  It is fastest when source, beta, and reaction fields are already
+  projected and reused across solves.
+- Projection costs are intentionally reported separately from solve time in
+  benchmark scripts.  Package CLI totals start after CLI input objects have
+  been constructed, so compare timing scopes carefully.
 
 ## Development Checks
 
 Run the current dgfem tests:
 
 ```bash
-env MPLCONFIGDIR=/tmp python3 -m pytest dgfem/tests/test_space.py -q
+env MPLCONFIGDIR=/tmp PYTHONPATH=.. python -m pytest tests -q
 ```
 
 Run syntax checks:
 
 ```bash
-python3 -m py_compile dgfem/*.py dgfem/tests/test_space.py
+python -m compileall -q __init__.py assembly backends core io kernels linalg solvers tests
 ```
 
 Run the CLI smoke test:
 
 ```bash
-python3 -m dgfem.adv_rea -p 2 --lc 0.30 --quiet
+PYTHONPATH=.. python -m dgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
 ```

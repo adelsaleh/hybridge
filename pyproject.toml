@@ -20,8 +20,21 @@ plot = ["pyvista"]
 test = ["pytest"]
 all = ["gmsh", "pyvista", "pytest"]
 
-[tool.setuptools.packages.find]
-include = ["dgfem*"]
+[tool.setuptools]
+packages = [
+    "dgfem",
+    "dgfem.assembly",
+    "dgfem.backends",
+    "dgfem.core",
+    "dgfem.io",
+    "dgfem.kernels",
+    "dgfem.linalg",
+    "dgfem.solvers",
+]
+
+[tool.setuptools.package-dir]
+dgfem = "."
 
 [tool.pytest.ini_options]
-testpaths = ["dgfem/tests"]
+testpaths = ["tests"]
+pythonpath = [".."]

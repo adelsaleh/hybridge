@@ -1,0 +1,517 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\K}{\mathcal{K}}
+\newcommand{\G}{\mathcal{G}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\A}{\mathcal{A}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  breaklines=true,
+  backgroundcolor=\color{black!3}
+}
+
+\title{Upwind SCC Graph Ordering for HDG Trace Systems}
+\author{\code{dgfem.linalg.ordering}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note documents the ordering algorithm implemented in
+\code{linalg/ordering.py}.  The purpose of the module is to build an
+experimental permutation for HDG trace unknowns in advection-dominated systems.
+The ordering is algebraic with respect to the sparse trace system, but it is
+constructed from mesh-edge connectivity and the sign of the normal advective
+flux on element faces.  The main pipeline is:
+\begin{enumerate}[nosep]
+  \item build a directed graph between mesh-edge blocks using local
+        inflow-to-outflow dependencies;
+  \item compute strongly connected components (SCCs) with Kosaraju's
+        algorithm;
+  \item topologically order the SCC condensation graph;
+  \item lift the ordered edge blocks to a trace degree-of-freedom permutation.
+\end{enumerate}
+The module also contains sparsity-pattern plotting utilities for comparing the
+matrix before and after the upwind SCC permutation.
+\end{abstract}
+
+\tableofcontents
+
+\section{Scope and Design Intent}
+
+The HDG global unknown is the trace field on mesh edges.  For a uniform trace
+polynomial degree, each global mesh edge carries the same number of trace
+degrees of freedom, denoted here by
+\[
+  n_{\partial} = \code{edg_dof}.
+\]
+The graph-ordering module does not alter element assembly, mesh connectivity,
+or numerical fluxes.  It only computes a permutation of trace unknown indices.
+The convention matches \code{dgfem.linalg.system.solve_global_system}:
+\[
+  A_{\pi} = A[\pi, \pi], \qquad b_{\pi} = b[\pi],
+\]
+and after solving the permuted system the solution is unpermuted by
+\[
+  x[\pi] = x_{\pi}.
+\]
+
+The ordering is designed to expose approximate upstream-to-downstream
+structure in advection-dominated HDG trace matrices.  It should be viewed as a
+preconditioner-ordering experiment, not as a guaranteed fill-reducing ordering.
+In particular, SuperLU's internal orderings such as \code{COLAMD} may still be
+better at high polynomial order because they optimize symbolic fill rather than
+flow direction.
+
+\section{Inputs and Core Data Structures}
+
+\subsection{Mesh edge connectivity}
+
+The primary mesh input is the element-local to global-edge map
+\[
+  \code{loc2glob_edge}[K,f] \in \{0,\ldots,N_e-1\},
+\]
+where \(K\) is an element index, \(f\in\{0,1,2\}\) is a local triangle face, and
+\(N_e\) is the number of global mesh edges.  In the code this is passed to the
+Numba kernel as \code{loc2glob_edge}.  For boundary-eliminated trace systems,
+only non-boundary edge blocks remain active.  The helper \code{_as_active_edges}
+builds three arrays:
+\begin{itemize}[nosep]
+  \item \code{active_edge_ids}: sorted global edge ids participating in the
+        reduced system;
+  \item \code{active_mask}: Boolean mask over all mesh edges;
+  \item \code{old_to_active}: map from global edge id to active graph node id,
+        with \(-1\) for inactive edges.
+\end{itemize}
+
+\subsection{Face-normal advective flux}
+
+The second geometric/numerical input is
+\[
+  \code{beta_dot_normal}[K,f,q]
+  \approx \beta_h(x_{K,f,q})\cdot n_{K,f},
+\]
+where \(q\) indexes face quadrature points.  The graph construction reduces
+this to one mean face flux per element-local face:
+\[
+  \bar F_{K,f}
+  =
+  \frac{1}{N_q}\sum_{q=1}^{N_q}
+  \beta_h(x_{K,f,q})\cdot n_{K,f}.
+\]
+A face is classified as inflow when
+\[
+  \bar F_{K,f} < -\varepsilon,
+\]
+and as outflow when
+\[
+  \bar F_{K,f} > \varepsilon,
+\]
+where \(\varepsilon=\code{flux_tolerance}\).  Faces in the neutral band
+\([-\varepsilon,\varepsilon]\) are ignored.
+
+\subsection{Return containers}
+
+The algorithm returns a \code{GraphOrderingResult}:
+\[
+\begin{array}{ll}
+\code{edge_order} & \text{active global edge ids in graph order},\\
+\code{dof_permutation} & \text{trace dof permutation used by the sparse solver},\\
+\code{component_id} & \text{SCC id for each active graph node},\\
+\code{component_order} & \text{topological order of SCC ids},\\
+\code{diagnostics} & \text{graph sizes and timing information}.
+\end{array}
+\]
+The diagnostics contain the number of graph nodes, directed graph edges, SCCs,
+the largest SCC size, the number of cyclic SCCs, the number of nodes in cyclic
+SCCs, and a timing breakdown.
+
+\section{Step 1: Build the Directed Upwind Edge Graph}
+
+\subsection{Graph nodes}
+
+The directed graph nodes are active mesh-edge blocks, not individual trace
+degrees of freedom.  If boundary dofs have not been eliminated, every mesh edge
+is active.  If boundary dofs have been eliminated, only non-boundary edges are
+active.  Therefore the graph vertex set is
+\[
+  \V = \{0,\ldots,N_a-1\},
+\]
+where \(N_a=\code{active_edge_ids.size}\).
+
+\subsection{Element-local dependencies}
+
+For each element \(K\), the kernel inspects all local faces.  Every active
+inflow face is connected to every active outflow face in the same element:
+\[
+  e_{K,f_{\rm in}} \longrightarrow e_{K,f_{\rm out}}.
+\]
+In code, this is done by \code{_build_upwind_edge_pairs_kernel}.  In words:
+
+\begin{lstlisting}
+for each element K:
+    compute mean face flux F[f] for f=0,1,2
+    for each source face f:
+        keep it only if active and F[f] < -flux_tolerance
+        for each target face g != f:
+            keep it only if active and F[g] > flux_tolerance
+            append edge active_id(f) -> active_id(g)
+\end{lstlisting}
+
+The direction ``inflow to outflow'' is the local transport dependency direction:
+information entering an element through an inflow face contributes to unknowns
+on outflow faces.  The graph can contain duplicate directed edges.  Duplicates
+are accepted because they do not affect reachability or SCC membership, and
+removing them would add a sorting/unique phase.
+
+\subsection{Storage}
+
+The kernel emits two arrays
+\[
+  \code{sources},\quad \code{targets}
+\]
+with equal length.  Directed graph edge \(m\) is
+\[
+  \code{sources}[m]\rightarrow \code{targets}[m].
+\]
+The maximum number of appended pairs is bounded by \(6N_K\), because each
+triangle has three faces and at most each inflow face connects to the two other
+faces.  Hence the temporary arrays are allocated with length
+\[
+  6\,\code{num_elements}.
+\]
+
+\section{Step 2: Build CSR Adjacency}
+
+The helper \code{_build_csr_kernel} converts edge arrays into compressed sparse
+row adjacency:
+\[
+  \code{indptr}\in\mathbb{N}^{N_a+1}, \qquad
+  \code{indices}\in\mathbb{N}^{N_{\rm graph\ edges}}.
+\]
+The implementation has two passes:
+\begin{enumerate}[nosep]
+  \item count outgoing edges per source node and prefix-sum the counts;
+  \item fill \code{indices} using a mutable copy of \code{indptr}.
+\end{enumerate}
+The same routine is used for the reverse graph by swapping sources and
+targets.  Duplicate edges remain in the adjacency.
+
+\section{Step 3: Strongly Connected Components}
+
+\subsection{Why SCCs?}
+
+If the upwind graph is acyclic, a topological ordering gives an exact upstream
+to downstream order.  If the flow recirculates, some edge blocks are mutually
+reachable.  These cycles cannot be linearly ordered without breaking a
+dependency.  The algorithm therefore groups mutually reachable nodes into SCCs,
+then orders the SCCs.  Inside one SCC, nodes are kept in their original order.
+
+\subsection{Kosaraju algorithm}
+
+The function \code{_kosaraju_scc_kernel} implements Kosaraju's two-pass SCC
+algorithm using explicit stacks so that it works inside Numba without Python
+recursion.
+
+The first pass runs depth-first search on the original graph and records nodes
+by finishing time:
+\[
+  \code{finish_order}[0],\ldots,\code{finish_order}[N_a-1].
+\]
+The second pass scans nodes in reverse finishing order and runs DFS on the
+reverse graph.  Each reverse DFS discovers one SCC.  The outputs are:
+\[
+  \code{component_id}[v] = c,
+  \qquad
+  \code{component_sizes}[c] = |\{v:\code{component_id}[v]=c\}|.
+\]
+
+\subsection{Correctness property}
+
+For any directed graph, Kosaraju's algorithm partitions vertices into maximal
+sets of mutually reachable vertices.  Collapsing each SCC into one component
+produces a directed acyclic graph.  That acyclicity is what makes the next
+topological-order step well-defined.
+
+\section{Step 4: Build and Order the SCC Condensation DAG}
+
+\subsection{Component graph}
+
+The function \code{_component_edges_kernel} maps each original graph edge
+\[
+  u\rightarrow v
+\]
+to an SCC edge
+\[
+  C(u)\rightarrow C(v).
+\]
+Self-edges, where \(C(u)=C(v)\), are discarded.  The result is the condensation
+graph.  It is a DAG by construction.
+
+\subsection{Topological order}
+
+The function \code{_topological_order_kernel} computes indegrees in the
+condensation DAG and applies Kahn's queue algorithm:
+\begin{lstlisting}
+queue = all components with indegree zero
+while queue is not empty:
+    pop a component c
+    append c to the order
+    for each outgoing edge c -> d:
+        decrement indegree[d]
+        if indegree[d] becomes zero:
+            push d
+\end{lstlisting}
+The code checks that the number of ordered components equals the number of
+components.  Failure would indicate a bug, because the condensation graph of an
+SCC partition must be acyclic.
+
+\section{Step 5: Lift Component Order to Edge-Block Order}
+
+The function \code{_node_order_from_components_kernel} produces an ordered list
+of graph nodes.  It reserves contiguous ranges for components according to the
+topological component order, then inserts original node ids into the range of
+their component.  Thus:
+\begin{itemize}[nosep]
+  \item components are topologically ordered;
+  \item nodes inside one SCC keep original active-node order.
+\end{itemize}
+The active-node order is then converted back to global mesh-edge ids:
+\[
+  \code{edge_order}
+  =
+  \code{active_edge_ids}[\code{node_order}].
+\]
+
+\section{Step 6: Lift Edge Blocks to Trace DOFs}
+
+The sparse trace matrix is indexed by individual trace degrees of freedom.  If
+edge block \(e\) has \(n_{\partial}\) local trace dofs, its trace dof range is
+\[
+  e n_{\partial},\ e n_{\partial}+1,\ \ldots,\ e n_{\partial}+n_{\partial}-1.
+\]
+The helper \code{_trace_dof_permutation_kernel} receives ordered active-node
+positions, not global edge ids.  For each ordered active node position \(a\),
+it appends the contiguous local block
+\[
+  a n_{\partial},\ a n_{\partial}+1,\ldots,a n_{\partial}+n_{\partial}-1.
+\]
+This is exactly the correct indexing for reduced systems where active edge
+blocks have been compacted into consecutive reduced-system coordinates.
+
+For a full, non-reduced trace system, active nodes are all edges in natural
+global edge order.  Then the active-node position and global edge id coincide.
+For a boundary-eliminated system, \code{active_edges} must be passed so the
+active edge positions match the reduced-system matrix.
+
+\section{Boundary Elimination and Active Edges}
+
+The ordering routine is used in two common modes:
+
+\paragraph{Full penalty system.}
+Boundary trace dofs remain in the system.  The active edge set is all mesh
+edges:
+\[
+  \code{active_edges} = \code{None}.
+\]
+
+\paragraph{Boundary-eliminated system.}
+Prescribed boundary trace dofs are removed before the solve.  The reduced
+matrix contains only non-boundary edge blocks.  In this case the caller builds
+\[
+  \code{active_edges} = \{e:\ e \notin \partial\Omega\}.
+\]
+The graph is built using global edge ids, but all graph nodes are compacted
+through \code{old_to_active}.  The resulting dof permutation is therefore in
+reduced-system coordinates and can be applied directly to the reduced matrix.
+
+\section{Complexity}
+
+Let \(N_K\) be the number of elements, \(N_a\) the number of active edge
+blocks, and \(M_g\) the number of directed graph edges after local inflow to
+outflow construction.  For triangular elements,
+\[
+  M_g \le 6N_K.
+\]
+Ignoring duplicate graph edges, the algorithmic costs are:
+\[
+\begin{array}{ll}
+\text{graph pair construction} & O(N_K N_q),\\
+\text{CSR construction} & O(N_a + M_g),\\
+\text{Kosaraju SCC} & O(N_a + M_g),\\
+\text{component DAG construction} & O(M_g),\\
+\text{topological order} & O(N_{\rm comp}+M_{\rm comp}),\\
+\text{dof lift} & O(N_a n_{\partial}).
+\end{array}
+\]
+The graph-ordering cost is usually small compared with HDG matrix assembly and
+incomplete factorization.  It is also almost independent of the polynomial
+degree \(p\), except for the final dof lift through \(n_{\partial}=p+1\).
+
+\section{Diagnostics}
+
+\code{GraphOrderingDiagnostics} reports:
+\[
+\begin{array}{ll}
+\code{num_nodes} & N_a,\\
+\code{num_directed_edges} & M_g,\\
+\code{num_components} & N_{\rm comp},\\
+\code{largest_component_size} & \max_c |C_c|,\\
+\code{cyclic_components} & \#\{c:\ |C_c|>1\},\\
+\code{cyclic_nodes} & \sum_{c:\ |C_c|>1}|C_c|.
+\end{array}
+\]
+For a nearly acyclic upwind graph, one typically sees
+\[
+  \code{largest_component_size}=1,\qquad \code{cyclic_nodes}=0.
+\]
+For recirculating flows, SCCs larger than one indicate trace-edge blocks whose
+flow dependencies are mutually coupled.
+
+The timing object \code{GraphOrderingTimings} records the wall-clock time for
+graph pair construction, CSR construction, SCC, DAG construction, topological
+ordering, dof permutation, and total ordering.
+
+\section{Sparse Pattern Plotting}
+
+The module also provides two plotting helpers:
+\[
+\begin{array}{ll}
+\code{save_sparse_pattern_plot} & \text{plot one sparse matrix pattern},\\
+\code{save_upwind_reordered_matrix_patterns}
+  & \text{plot before and after } A[\pi,\pi].
+\end{array}
+\]
+The marker area is chosen by \code{sparse_pattern_marker_area}.  The intended
+law is inverse in the number of nonzeros:
+\[
+  s
+  =
+  s_{\rm ref}\frac{N_{\rm ref}}{\operatorname{nnz}(A)}.
+\]
+The current implementation clips this value and applies an additional practical
+floor, so very large matrices do not disappear completely in PNG output.  Very
+large matrices are also stride-sampled to \code{max_plot_points}; the marker
+area is still computed from the original \(\operatorname{nnz}(A)\), not from
+the sampled count.
+
+\section{Interaction with SuperLU ILU}
+
+The upwind SCC permutation is not a symbolic fill-reducing ordering.  It is a
+physics-motivated block ordering.  If the sparse solver is SuperLU's
+\code{spilu}, then its \code{permc_spec} option matters:
+\begin{itemize}
+  \item \code{NATURAL} forces SuperLU to respect the supplied matrix ordering.
+        This can expose the benefit of a good upwind order, but it can also be
+        fragile at high polynomial degree.
+  \item \code{COLAMD} lets SuperLU apply a fill-reducing column ordering.  This
+        may override much of the upwind-ordering effect, but it can be far more
+        robust when local trace blocks become large.
+\end{itemize}
+Thus the SCC ordering should be benchmarked together with the ILU column
+permutation strategy.  A small edge-block graph can look excellent while the
+lifted high-order dof matrix still has poor symbolic fill under \code{NATURAL}.
+
+\section{High-Level Pseudocode}
+
+\begin{lstlisting}
+function upwind_scc_trace_ordering(mesh, beta_dot_normal, edg_dof,
+                                   active_edges=None, flux_tolerance=0):
+    active_edge_ids, active_mask, old_to_active = active_edges_to_maps(...)
+
+    sources, targets =
+        build_upwind_edge_pairs(mesh.loc2glob_edge,
+                                beta_dot_normal,
+                                active_mask,
+                                old_to_active,
+                                flux_tolerance)
+
+    node_order, component_id, component_order, component_sizes, timings =
+        strongly_connected_component_order(num_active_edges, sources, targets)
+
+    edge_order = active_edge_ids[node_order]
+    dof_permutation = lift_edge_order_to_trace_dofs(node_order, edg_dof)
+
+    return GraphOrderingResult(edge_order,
+                               dof_permutation,
+                               component_id,
+                               component_order,
+                               diagnostics)
+\end{lstlisting}
+
+\section{Function Map}
+
+\begin{center}
+\small
+\begin{tabular}{p{0.42\linewidth}p{0.48\linewidth}}
+\toprule
+Function & Role \\
+\midrule
+\code{_build_upwind_edge_pairs_kernel} & Build directed inflow-to-outflow edge graph. \\
+\code{_build_csr_kernel} & Convert directed edge arrays to CSR adjacency. \\
+\code{_kosaraju_scc_kernel} & Compute SCCs with iterative Kosaraju DFS. \\
+\code{_component_edges_kernel} & Build condensation graph edges between SCCs. \\
+\code{_topological_order_kernel} & Topologically order the condensation DAG. \\
+\code{_node_order_from_components_kernel} & Convert component order to node order. \\
+\code{_trace_dof_permutation_kernel} & Lift ordered edge blocks to trace dofs. \\
+\code{strongly_connected_component_order} & Public graph-only SCC ordering routine. \\
+\code{upwind_scc_trace_ordering} & Public HDG trace-edge ordering routine. \\
+\code{sparse_pattern_marker_area} & Compute nnz-dependent marker area for plots. \\
+\code{save_sparse_pattern_plot} & Save one matrix sparsity pattern figure. \\
+\code{save_upwind_reordered_matrix_patterns} & Save before/after upwind permutation figures. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Practical Usage}
+
+From the advection-reaction CLI, the current diagnostic path can generate the
+matrix patterns without entering the expensive global solve:
+
+\begin{lstlisting}
+python -m dgfem.solvers.adv_rea -p 7 --lc 0.03 \
+  --boundary-mode eliminate \
+  --matrix-pattern-only \
+  --matrix-pattern-max-points 2000000
+\end{lstlisting}
+
+This writes figures such as:
+\begin{lstlisting}
+matrix_patterns/*_before_upwind.png
+matrix_patterns/*_after_upwind.png
+\end{lstlisting}
+
+\section{Summary}
+
+The ordering in \code{graph_ordering.py} is a block-level flow ordering:
+construct local inflow-to-outflow dependencies, compress cycles with SCCs,
+topologically order the acyclic component graph, and lift the result to trace
+dofs.  The graph construction is inexpensive and mostly independent of
+polynomial order.  Its effect on ILU depends on how the block ordering interacts
+with the symbolic fill behavior of the sparse factorization.
+
+\end{document}

@@ -1,7 +1,7 @@
 """Vectorized HDG/DG matrix assembly for :mod:`dgfem`.
 
-All functions in this module operate on :class:`dgfem.space.DGSpace` and
-:class:`dgfem.space.DGField` objects. The implementation is self-contained and
+All functions in this module operate on :class:`dgfem.core.space.DGSpace` and
+:class:`dgfem.core.space.DGField` objects. The implementation is self-contained and
 uses large NumPy contractions instead of delegating to the repository-level
 legacy module.
 """
@@ -12,7 +12,7 @@ from typing import Callable
 
 import numpy as np
 
-from .space import DGField, DGSpace, VectorDGField, _normalize_callable_values
+from ..core.space import DGField, DGSpace, VectorDGField, _normalize_callable_values
 
 
 def _local_matrix_shape(space: DGSpace) -> tuple[int, int, int]:

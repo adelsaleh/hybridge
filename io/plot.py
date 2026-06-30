@@ -8,12 +8,14 @@ visible instead of being averaged by the rendering backend.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from math import sqrt
 
 import numpy as np
 from scipy.spatial import Delaunay
 
-from .mesh import DGMesh
-from .space import DGField
+from ..core.mesh import DGMesh
+from ..core.space import DGField
+
 
 def _require_pyvista():
     """Import PyVista lazily so non-plotting code has no plotting dependency."""
@@ -64,6 +66,49 @@ def reference_plot_points(resolution: int) -> np.ndarray:
     xx, yy = np.meshgrid(axis, axis, indexing="xy")
     inside = yy <= -xx
     return np.ascontiguousarray(np.column_stack((xx[inside], yy[inside])), dtype=np.float64)
+
+
+def _triangle_grid_point_count(resolution: int) -> int:
+    """Return the number of points produced by :func:`reference_plot_points`."""
+    resolution = int(resolution)
+    return resolution * (resolution + 1) // 2
+
+
+def _auto_exact_plot_resolution(
+        *,
+        num_elements: int,
+        max_total_points: int = 5_000_000,
+        max_resolution: int = 100,
+) -> int:
+    """Choose a dense exact-plot resolution without unbounded memory growth."""
+    num_elements = max(1, int(num_elements))
+    max_points_per_element = max(1, int(max_total_points) // num_elements)
+    candidate = int((sqrt(8.0 * max_points_per_element + 1.0) - 1.0) // 2)
+    return max(2, min(int(max_resolution), candidate))
+
+
+def _resolve_exact_plot_resolution(
+        exact_resolution: int | str | None,
+        *,
+        numerical_resolution: int,
+        num_elements: int,
+) -> int:
+    """Resolve the exact-panel resolution policy."""
+    if exact_resolution is None:
+        return int(numerical_resolution)
+    if isinstance(exact_resolution, str):
+        policy = exact_resolution.lower()
+        if policy == "same":
+            return int(numerical_resolution)
+        if policy == "auto":
+            return _auto_exact_plot_resolution(
+                num_elements=num_elements,
+            )
+        raise ValueError("exact_resolution must be an integer, 'same', 'auto', or None")
+    exact_resolution = int(exact_resolution)
+    if exact_resolution < 2:
+        raise ValueError("exact_resolution must be at least 2")
+    return exact_resolution
 
 
 def reference_plot_connectivity(reference_points: np.ndarray) -> np.ndarray:
@@ -118,6 +163,46 @@ def sample_field_on_elements(
     return reference_points, physical_points, values
 
 
+def sample_callable_on_elements(
+        mesh: DGMesh,
+        function: Callable,
+        *,
+        resolution: int = 20,
+        reference_points: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Sample a scalar callable on every physical element.
+
+    Parameters
+    ----------
+    mesh
+        Mesh whose affine element maps are used for sampling.
+    function
+        Callable ``function(x, y)`` evaluated on mapped physical points.
+    resolution
+        Number of points per reference coordinate direction.  Ignored when
+        ``reference_points`` is supplied.
+    reference_points
+        Optional custom points on :math:`\hat K`.
+
+    Returns
+    -------
+    reference_points
+        Reference sampling points.
+    physical_points
+        Mapped physical coordinates with shape ``(num_elements, num_points, 2)``.
+    values
+        Callable values normalized to shape ``(num_elements, num_points)``.
+    """
+    if reference_points is None:
+        reference_points = reference_plot_points(resolution)
+    else:
+        reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+    physical_points = mesh.map_reference_points(reference_points)
+    values = function(physical_points[:, :, 0], physical_points[:, :, 1])
+    values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
+    return reference_points, physical_points, values
+
+
 def refined_field_polydata(
         field: DGField,
         *,
@@ -129,15 +214,14 @@ def refined_field_polydata(
     """Build a discontinuous refined :class:`pyvista.PolyData` for a DG field.
 
     The geometry is refined only for visualization.  It does not change the
-    field or its owning :class:`~dgfem.space.DGSpace`.
+    field or its owning :class:`~dgfem.core.space.DGSpace`.
     """
-    pv = _require_pyvista()
-    reference_points, physical_points, sampled_values = sample_field_on_elements(
-        field,
-        resolution=resolution,
-        reference_points=reference_points,
-    )
+    if reference_points is None:
+        reference_points = reference_plot_points(resolution)
+    else:
+        reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
     if values is None:
+        sampled_values = field.values_at_ref(reference_points)
         values = sampled_values
     else:
         values = _normalize_sample_values(
@@ -146,22 +230,48 @@ def refined_field_polydata(
             reference_points.shape[0],
         )
 
+    name = field.name if scalar_name is None else str(scalar_name)
+    return refined_sample_polydata(
+        field.space.mesh,
+        reference_points,
+        values,
+        scalar_name=name,
+    )
+
+
+def refined_sample_polydata(
+        mesh: DGMesh,
+        reference_points: np.ndarray,
+        values: np.ndarray,
+        *,
+        scalar_name: str,
+):
+    """Build refined :class:`pyvista.PolyData` from mesh-only scalar samples.
+
+    Unlike :func:`refined_field_polydata`, this helper never evaluates a
+    :class:`~dgfem.core.space.DGField` basis.  It is therefore appropriate for exact
+    reference functions whose visualization should depend only on the physical
+    mesh and the requested sampling density, not on the DG polynomial order.
+    """
+    pv = _require_pyvista()
+    reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+    values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
+    physical_points = mesh.map_reference_points(reference_points)
     reference_triangles = reference_plot_connectivity(reference_points)
     points_per_element = reference_points.shape[0]
     triangle_offsets = np.repeat(
-        np.arange(field.space.mesh.num_tri, dtype=np.int64) * points_per_element,
+        np.arange(mesh.num_tri, dtype=np.int64) * points_per_element,
         reference_triangles.shape[0],
     )
-    refined_triangles = np.tile(reference_triangles, (field.space.mesh.num_tri, 1)) + triangle_offsets[:, None]
+    refined_triangles = np.tile(reference_triangles, (mesh.num_tri, 1)) + triangle_offsets[:, None]
     refined_faces = np.insert(refined_triangles, 0, 3, axis=1).ravel()
 
-    refined_points = np.zeros((field.space.mesh.num_tri * points_per_element, 3), dtype=np.float64)
+    refined_points = np.zeros((mesh.num_tri * points_per_element, 3), dtype=np.float64)
     refined_points[:, :2] = physical_points.reshape(-1, 2)
 
-    name = field.name if scalar_name is None else str(scalar_name)
-    mesh = pv.PolyData(refined_points, refined_faces)
-    mesh.point_data[name] = np.asarray(values, dtype=np.float64).reshape(-1)
-    return mesh
+    polydata = pv.PolyData(refined_points, refined_faces)
+    polydata.point_data[str(scalar_name)] = np.asarray(values, dtype=np.float64).reshape(-1)
+    return polydata
 
 
 def coarse_mesh_polydata(mesh: DGMesh):
@@ -223,6 +333,66 @@ def add_field_to_plotter(
     if show_mesh:
         plotter.add_mesh(
             coarse_mesh_polydata(field.space.mesh),
+            style="wireframe",
+            color=mesh_color,
+            line_width=1.0,
+            opacity=mesh_opacity,
+        )
+    if title:
+        plotter.add_text(title, position="upper_edge", font_size=11, shadow=False)
+    plotter.enable_parallel_projection()
+    plotter.view_xy()
+    plotter.show_grid(color=(100, 100, 100, 0.15))
+    return refined_mesh
+
+
+def add_samples_to_plotter(
+        plotter,
+        mesh: DGMesh,
+        reference_points: np.ndarray,
+        values: np.ndarray,
+        *,
+        scalar_name: str,
+        title: str | None = None,
+        subplot: tuple[int, int] | None = None,
+        show_mesh: bool = True,
+        cmap: str = "viridis",
+        clim: tuple[float, float] | None = None,
+        scalar_bar_args: dict | None = None,
+        show_edges: bool = False,
+        mesh_color: str = "black",
+        mesh_opacity: float = 0.45,
+):
+    """Add mesh-only scalar samples to an existing PyVista plotter.
+
+    This is intended for exact/reference callables.  It maps the supplied
+    reference points with the mesh geometry and never touches a DG basis or a
+    :class:`DGField`, so the rendered data are independent of polynomial order.
+    """
+    if subplot is not None:
+        plotter.subplot(*subplot)
+
+    refined_mesh = refined_sample_polydata(
+        mesh,
+        reference_points,
+        values,
+        scalar_name=scalar_name,
+    )
+    scalar_values = refined_mesh.point_data[scalar_name]
+    if clim is None:
+        clim = _safe_clim(scalar_values)
+
+    plotter.add_mesh(
+        refined_mesh,
+        scalars=scalar_name,
+        cmap=cmap,
+        clim=clim,
+        show_edges=show_edges,
+        scalar_bar_args=scalar_bar_args,
+    )
+    if show_mesh:
+        plotter.add_mesh(
+            coarse_mesh_polydata(mesh),
             style="wireframe",
             color=mesh_color,
             line_width=1.0,
@@ -349,6 +519,7 @@ def plot_solution_comparison(
         exact_solution: Callable,
         *,
         resolution: int = 20,
+        exact_resolution: int | str | None = None,
         title: str = "",
         show_mesh: bool = True,
         show: bool = True,
@@ -357,24 +528,41 @@ def plot_solution_comparison(
 ):
     """Plot numerical solution, exact solution, and absolute error.
 
-    This is the solver-oriented helper used by :mod:`dgfem.adv_rea`.  For a
+    This is the solver-oriented helper used by :mod:`dgfem.solvers.adv_rea`.  For a
     generic single-field plot use :func:`plot_field`.
+
+    ``resolution`` controls the numerical and error panels.  ``exact_resolution``
+    controls only the exact reference panel; use ``"auto"`` for a denser exact
+    sampling that is independent of the DG polynomial order while still drawing
+    the physical mesh as a wireframe overlay.  ``None`` preserves the historical
+    behavior and samples the exact panel on the same grid as the numerical panel.
     """
     pv = _require_pyvista()
     reference_points, physical_points, numerical_values = sample_field_on_elements(
         field,
         resolution=resolution,
     )
-    exact_values = exact_solution(physical_points[:, :, 0], physical_points[:, :, 1])
-    exact_values = _normalize_sample_values(
-        exact_values,
+    exact_values_for_error = exact_solution(physical_points[:, :, 0], physical_points[:, :, 1])
+    exact_values_for_error = _normalize_sample_values(
+        exact_values_for_error,
         field.space.mesh.num_tri,
         reference_points.shape[0],
     )
-    absolute_error = np.abs(numerical_values - exact_values)
+    absolute_error = np.abs(numerical_values - exact_values_for_error)
 
-    field_min = float(min(np.min(numerical_values), np.min(exact_values)))
-    field_max = float(max(np.max(numerical_values), np.max(exact_values)))
+    exact_panel_resolution = _resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=resolution,
+        num_elements=field.space.mesh.num_tri,
+    )
+    exact_reference_points, _, exact_display_values = sample_callable_on_elements(
+        field.space.mesh,
+        exact_solution,
+        resolution=exact_panel_resolution,
+    )
+
+    field_min = float(min(np.min(numerical_values), np.min(exact_display_values)))
+    field_max = float(max(np.max(numerical_values), np.max(exact_display_values)))
     if field_min == field_max:
         field_max = field_min + 1.0
 
@@ -387,25 +575,40 @@ def plot_solution_comparison(
         "position_y": 0.02,
     }
     panels = (
-        ("Numerical solution", numerical_values, (field_min, field_max), "viridis"),
-        ("Exact solution", exact_values, (field_min, field_max), "viridis"),
-        ("Absolute error", absolute_error, None, "magma"),
+        ("Numerical solution", reference_points, numerical_values, (field_min, field_max), "viridis"),
+        ("Exact solution", exact_reference_points, exact_display_values, (field_min, field_max), "viridis"),
+        ("Absolute error", reference_points, absolute_error, None, "magma"),
     )
-    for column, (panel_title, values, clim, cmap) in enumerate(panels):
+    for column, (panel_title, panel_reference_points, values, clim, cmap) in enumerate(panels):
         display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
-        add_field_to_plotter(
-            plotter,
-            field,
-            reference_points=reference_points,
-            values=values,
-            scalar_name=f"field_{column}",
-            title=display_title,
-            subplot=(0, column),
-            show_mesh=show_mesh,
-            cmap=cmap,
-            clim=clim,
-            scalar_bar_args=scalar_bar_args,
-        )
+        if column == 1:
+            add_samples_to_plotter(
+                plotter,
+                field.space.mesh,
+                panel_reference_points,
+                values,
+                scalar_name=f"field_{column}",
+                title=display_title,
+                subplot=(0, column),
+                show_mesh=show_mesh,
+                cmap=cmap,
+                clim=clim,
+                scalar_bar_args=scalar_bar_args,
+            )
+        else:
+            add_field_to_plotter(
+                plotter,
+                field,
+                reference_points=panel_reference_points,
+                values=values,
+                scalar_name=f"field_{column}",
+                title=display_title,
+                subplot=(0, column),
+                show_mesh=show_mesh,
+                cmap=cmap,
+                clim=clim,
+                scalar_bar_args=scalar_bar_args,
+            )
     plotter.link_views()
     if show:
         plotter.show()
@@ -414,6 +617,7 @@ def plot_solution_comparison(
 
 __all__ = [
     "add_field_to_plotter",
+    "add_samples_to_plotter",
     "coarse_mesh_polydata",
     "plot_field",
     "plot_fields",
@@ -421,5 +625,7 @@ __all__ = [
     "reference_plot_connectivity",
     "reference_plot_points",
     "refined_field_polydata",
+    "refined_sample_polydata",
+    "sample_callable_on_elements",
     "sample_field_on_elements",
 ]

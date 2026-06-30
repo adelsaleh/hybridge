@@ -28,7 +28,7 @@ def _unique_edges(element_edges: np.ndarray):
     return oriented_flat[first], inverse, counts
 
 
-def _edge_pair_indices(edge_ids: np.ndarray, interior_edges: np.ndarray) -> dict[int, tuple[int, int]]:
+def _build_edge_to_elements(edge_ids: np.ndarray, interior_edges: np.ndarray) -> dict[int, tuple[int, int]]:
     """Map an interior global edge id to its two neighboring element ids."""
     pairs: dict[int, list[int]] = {int(edge): [] for edge in interior_edges}
     for element, local_edges in enumerate(edge_ids):
@@ -84,8 +84,9 @@ class DGMesh:
     node_coords: np.ndarray
     triangles: np.ndarray
     edges: np.ndarray = field(init=False)
-    sigma: np.ndarray = field(init=False)
-    sigma_1: np.ndarray = field(init=False)
+    loc2glob_edge: np.ndarray = field(init=False)
+    loc2oriented_ref_face: np.ndarray = field(init=False)
+    loc2oriented_face_coupling: np.ndarray = field(init=False)
     orientations: np.ndarray = field(init=False)
     interior_face_mask: np.ndarray = field(init=False)
     interior_elements: np.ndarray = field(init=False)
@@ -93,7 +94,7 @@ class DGMesh:
     int_edges_inds: np.ndarray = field(init=False)
     bnd_edges_inds: np.ndarray = field(init=False)
     edge_jacs: np.ndarray = field(init=False)
-    eta: dict[int, tuple[int, int]] = field(init=False)
+    edge_to_elements: dict[int, tuple[int, int]] = field(init=False)
     aff_mats: np.ndarray = field(init=False)
     aff_vecs: np.ndarray = field(init=False)
     aff_jacs: np.ndarray = field(init=False)
@@ -117,15 +118,17 @@ class DGMesh:
 
         local_edges = np.stack([tris[:, [i, (i + 1) % 3]] for i in range(3)], axis=1)
         edges, inverse, counts = _unique_edges(local_edges)
-        sigma = inverse.reshape(tris.shape[0], 3)
+        loc2glob_edge = inverse.reshape(tris.shape[0], 3)
         object.__setattr__(self, "edges", np.ascontiguousarray(edges, dtype=np.int64))
-        object.__setattr__(self, "sigma", np.ascontiguousarray(sigma, dtype=np.int64))
+        object.__setattr__(self, "loc2glob_edge", np.ascontiguousarray(loc2glob_edge, dtype=np.int64))
         object.__setattr__(self, "int_edges_inds", np.where(counts > 1)[0].astype(np.int64))
         object.__setattr__(self, "bnd_edges_inds", np.where(counts == 1)[0].astype(np.int64))
-        orientations = self._compute_orientations(sigma)
+        orientations = self._compute_orientations(loc2glob_edge)
         object.__setattr__(self, "orientations", orientations)
-        object.__setattr__(self, "sigma_1", self._compute_sigma_1(orientations))
-        interior_face_mask = counts[sigma] > 1
+        oriented_face_coupling = self._compute_oriented_ref_face_indices(orientations)
+        object.__setattr__(self, "loc2oriented_ref_face", oriented_face_coupling)
+        object.__setattr__(self, "loc2oriented_face_coupling", oriented_face_coupling)
+        interior_face_mask = counts[loc2glob_edge] > 1
         interior_elements, interior_faces = np.nonzero(interior_face_mask)
         object.__setattr__(
             self,
@@ -135,7 +138,7 @@ class DGMesh:
         object.__setattr__(self, "interior_elements", np.ascontiguousarray(interior_elements, dtype=np.int64))
         object.__setattr__(self, "interior_faces", np.ascontiguousarray(interior_faces, dtype=np.int64))
         object.__setattr__(self, "edge_jacs", self._compute_edge_jacobians(edges))
-        object.__setattr__(self, "eta", _edge_pair_indices(sigma, self.int_edges_inds))
+        object.__setattr__(self, "edge_to_elements", _build_edge_to_elements(loc2glob_edge, self.int_edges_inds))
 
         aff_mats, aff_vecs = self._compute_affine_maps()
         inv_aff_mats = np.linalg.inv(aff_mats)
@@ -159,6 +162,25 @@ class DGMesh:
     def triangulation(self) -> "DGMesh":
         """Compatibility property: the mesh is its own triangulation."""
         return self
+
+    @property
+    def sigma(self) -> np.ndarray:
+        """Legacy alias for :attr:`loc2glob_edge`.
+
+        ``loc2glob_edge[K, f]`` is the global mesh-edge id of local face
+        ``f`` on element ``K``.
+        """
+        return self.loc2glob_edge
+
+    @property
+    def sigma_1(self) -> np.ndarray:
+        """Legacy alias for :attr:`loc2oriented_face_coupling`."""
+        return self.loc2oriented_ref_face
+
+    @property
+    def eta(self) -> dict[int, tuple[int, int]]:
+        """Legacy alias for :attr:`edge_to_elements`."""
+        return self.edge_to_elements
 
     @property
     def num_tri(self) -> int:
@@ -191,42 +213,54 @@ class DGMesh:
         return float(self.node_coords[:, 1].min()), float(self.node_coords[:, 1].max())
 
     def get_sigma_1(self) -> np.ndarray:
-        r"""Return orientation-aware reference-face matrix indices.
+        r"""Return orientation-aware face-coupling table indices.
 
         The returned integer array has shape ``(num_elements, 3)`` and values
         in ``0..5``. Local faces ``0..2`` use positive edge orientation; faces
-        ``3..5`` use the reversed orientation. This indexes
-        ``ReferenceElementData.MKrfe_lst`` in the same convention as the
-        legacy assembly formula
+        ``3..5`` use the reversed orientation. This indexes the
+        ``ReferenceElementData.face_trace_test_element_trial_oriented`` table
+        in the same convention as the legacy assembly formula
 
         .. math::
 
             B_{K,f} = J_{K,f}\, M_{\hat K,\hat f}/2.
         """
-        return self.sigma_1
+        return self.loc2oriented_face_coupling
+
+    def get_oriented_ref_face_indices(self) -> np.ndarray:
+        """Return :attr:`loc2oriented_face_coupling`.
+
+        Prefer :meth:`get_oriented_face_coupling_indices` in new code.  This
+        name is retained for compatibility with older intermediate APIs.
+        """
+        return self.loc2oriented_face_coupling
+
+    def get_oriented_face_coupling_indices(self) -> np.ndarray:
+        """Return indices into oriented face-coupling reference tables."""
+        return self.loc2oriented_face_coupling
 
     @staticmethod
-    def _compute_sigma_1(orientations: np.ndarray) -> np.ndarray:
+    def _compute_oriented_ref_face_indices(orientations: np.ndarray) -> np.ndarray:
         """Return orientation-aware reference-face matrix indices."""
         local_faces = np.arange(3, dtype=np.int64)
         return np.ascontiguousarray(np.where(orientations, local_faces, local_faces + 3), dtype=np.int64)
 
-    def _compute_orientations(self, sigma: np.ndarray) -> np.ndarray:
+    def _compute_orientations(self, loc2glob_edge: np.ndarray) -> np.ndarray:
         """Return element-local trace orientation signs.
 
         This matches the legacy convention: for each interior edge, the first
-        occurrence in element-major ``sigma.ravel()`` order is positive and the
-        second occurrence is negative. Boundary edges occur once and therefore
-        stay positive.
+        occurrence in element-major ``loc2glob_edge.ravel()`` order is positive
+        and the second occurrence is negative. Boundary edges occur once and
+        therefore stay positive.
         """
-        edge_ids = sigma.reshape(-1)
+        edge_ids = loc2glob_edge.reshape(-1)
         sort_order = np.argsort(edge_ids, kind="stable")
         sorted_interior_positions = np.where(
             np.isin(edge_ids[sort_order], self.int_edges_inds)
         )[0]
         orientations = np.ones_like(edge_ids, dtype=bool)
         orientations[sort_order[sorted_interior_positions][1::2]] = False
-        return np.ascontiguousarray(orientations.reshape(sigma.shape), dtype=orientations.dtype)
+        return np.ascontiguousarray(orientations.reshape(loc2glob_edge.shape), dtype=orientations.dtype)
 
     def _compute_edge_jacobians(self, edges: np.ndarray) -> np.ndarray:
         """Return reference-to-physical edge Jacobians for all global edges."""
@@ -273,8 +307,12 @@ class DGMesh:
         return float(np.max(np.maximum(d01, np.maximum(d12, d20))))
 
     def get_edge_neighbors(self, edge_id: int) -> tuple[int, int]:
-        """Return the two neighboring element ids for an interior edge."""
-        return self.eta[int(edge_id)]
+        """Compatibility alias for :meth:`get_edge_elements`."""
+        return self.get_edge_elements(edge_id)
+
+    def get_edge_elements(self, edge_id: int) -> tuple[int, int]:
+        """Return the two element ids adjacent to an interior edge."""
+        return self.edge_to_elements[int(edge_id)]
 
     def map_reference_points(self, reference_points: np.ndarray) -> np.ndarray:
         r"""Map reference points to all physical elements."""
@@ -516,6 +554,65 @@ def gmsh_triangle_mesh(
 
     return _generate_gmsh_mesh(
         "triangle",
+        mesh_size,
+        build,
+        verbosity=verbosity,
+        algorithm=algorithm,
+        write_path=write_path,
+    )
+
+
+def gmsh_lshape_mesh(
+        mesh_size: float,
+        *,
+        half_width: float = 1.0,
+        corner_mesh_size: float | None = None,
+        corner_refine_radius: float = 0.4,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+) -> DGMesh:
+    r"""Generate the legacy L-shaped reentrant-corner domain with Gmsh.
+
+    The domain is :math:`(-L,L)^2 \setminus [-L,0]\times[-L,0]`, where
+    ``L=half_width``.  This matches the singular diffusion test used by the
+    legacy ``diff_rea3.py`` runner.
+    """
+    half_width = float(half_width)
+    if half_width <= 0.0:
+        raise ValueError("half_width must be positive")
+    corner_mesh_size = float(mesh_size if corner_mesh_size is None else corner_mesh_size)
+
+    def build(gmsh):
+        occ = gmsh.model.occ
+        big = occ.addRectangle(-half_width, -half_width, 0.0, 2.0 * half_width, 2.0 * half_width)
+        cut = occ.addRectangle(-half_width, -half_width, 0.0, half_width, half_width)
+        result, _ = occ.cut([(2, big)], [(2, cut)], removeObject=True, removeTool=True)
+        surfaces = [entity for dim, entity in result if dim == 2]
+        if len(surfaces) != 1:
+            raise RuntimeError("L-shape construction did not produce one surface")
+        surface = surfaces[0]
+        occ.synchronize()
+
+        if corner_mesh_size < mesh_size:
+            ball = gmsh.model.mesh.field.add("Ball")
+            gmsh.model.mesh.field.setNumber(ball, "VIn", corner_mesh_size)
+            gmsh.model.mesh.field.setNumber(ball, "VOut", float(mesh_size))
+            gmsh.model.mesh.field.setNumber(ball, "XCenter", 0.0)
+            gmsh.model.mesh.field.setNumber(ball, "YCenter", 0.0)
+            gmsh.model.mesh.field.setNumber(ball, "ZCenter", 0.0)
+            gmsh.model.mesh.field.setNumber(ball, "Radius", float(corner_refine_radius))
+
+            background = gmsh.model.mesh.field.add("Constant")
+            gmsh.model.mesh.field.setNumber(background, "VIn", float(mesh_size))
+
+            minimum = gmsh.model.mesh.field.add("Min")
+            gmsh.model.mesh.field.setNumbers(minimum, "FieldsList", [background, ball])
+            gmsh.model.mesh.field.setAsBackgroundMesh(minimum)
+        return surface
+
+    return _generate_gmsh_mesh(
+        "lshape",
         mesh_size,
         build,
         verbosity=verbosity,

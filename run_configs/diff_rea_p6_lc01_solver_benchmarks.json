@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-06-24",
+  "purpose": "Track best solver configurations for solvers/diff_rea_w_boostrap.py on the p=6, lc=0.1 diffusion-reaction stress test.",
+  "problem": {
+    "module": "solvers/diff_rea_w_boostrap.py",
+    "test": 3,
+    "order": 6,
+    "mesh_size_lc": 0.1,
+    "tau": 19.0,
+    "domain": "auto",
+    "basis": "dub_orth",
+    "boundary_mode": "eliminate",
+    "elements": 18361,
+    "edges": 27699,
+    "global_trace_dofs_full": 193893,
+    "reduced_trace_dofs": 191688
+  },
+  "ranking_policy": {
+    "primary": "lowest total_wall_seconds among runs with comparable accuracy",
+    "secondary": "lowest global_solve_seconds",
+    "accuracy_guard": "L2 error should remain near 1.214e-08 for this test"
+  },
+  "best_current": {
+    "name": "petsc_cg_gamg_default",
+    "reason": "Best total time among successful high-accuracy runs measured so far; bootstrap improves Krylov iterations but not total time."
+  },
+  "runs": [
+    {
+      "name": "petsc_cg_gamg_bootstrap_p1",
+      "status": "success",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 1 --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 1,
+      "bootstrap_solver": "petsc",
+      "metrics": {
+        "setup_seconds": 7.7,
+        "initial_guess_seconds": 1.362,
+        "global_solve_seconds": 6.038,
+        "total_wall_seconds": 13.9,
+        "petsc_setup_seconds": 0.954,
+        "krylov_seconds": 4.327,
+        "iterations": 79,
+        "solver_relative_residual": 1.053e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Bootstrap p=1 with accurate PETSc/GAMG coarse solve reduces final iterations from 89 to 79, but the coarse solve cost makes total time worse."
+    },
+    {
+      "name": "petsc_cg_gamg_bootstrap_p3",
+      "status": "success",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 3 --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 3,
+      "bootstrap_solver": "petsc",
+      "metrics": {
+        "setup_seconds": 9.5,
+        "initial_guess_seconds": 3.186,
+        "global_solve_seconds": 5.218,
+        "total_wall_seconds": 14.9,
+        "petsc_setup_seconds": 0.958,
+        "krylov_seconds": 3.555,
+        "iterations": 65,
+        "solver_relative_residual": 1.261e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Best iteration reduction in the bootstrap sweep, but p=3 bootstrap setup dominates."
+    },
+    {
+      "name": "petsc_cg_gamg_bootstrap_p1_scipy_cg_jacobi",
+      "status": "success",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 1 --bootstrap-solver CG --bootstrap-preconditioner jacobi --no-scale-system --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 1,
+      "bootstrap_solver": "scipy_cg_jacobi",
+      "metrics": {
+        "setup_seconds": 6.6,
+        "initial_guess_seconds": 0.161,
+        "global_solve_seconds": 7.022,
+        "total_wall_seconds": 13.7,
+        "petsc_setup_seconds": 0.953,
+        "krylov_seconds": 4.834,
+        "iterations": 89,
+        "solver_relative_residual": 1.441e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Very cheap coarse solve, but the initial guess is too crude to reduce final GAMG iterations."
+    },
+    {
+      "name": "petsc_cg_gamg_bootstrap_p2_scipy_cg_jacobi",
+      "status": "success",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 2 --bootstrap-solver CG --bootstrap-preconditioner jacobi --no-scale-system --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 2,
+      "bootstrap_solver": "scipy_cg_jacobi",
+      "metrics": {
+        "setup_seconds": 7.1,
+        "initial_guess_seconds": 0.358,
+        "global_solve_seconds": 6.958,
+        "total_wall_seconds": 14.2,
+        "petsc_setup_seconds": 0.951,
+        "krylov_seconds": 4.806,
+        "iterations": 89,
+        "solver_relative_residual": 1.432e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Cheap p=2 bootstrap did not reduce the final GAMG iteration count."
+    },
+    {
+      "name": "petsc_cg_gamg_bootstrap_p2_direct",
+      "status": "success",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 2 --bootstrap-solver direct --bootstrap-preconditioner none --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 2,
+      "bootstrap_solver": "direct",
+      "metrics": {
+        "setup_seconds": 8.1,
+        "initial_guess_seconds": 1.639,
+        "global_solve_seconds": 6.042,
+        "total_wall_seconds": 14.3,
+        "petsc_setup_seconds": 0.971,
+        "krylov_seconds": 3.827,
+        "iterations": 70,
+        "solver_relative_residual": 9.662e-14,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Same final iteration reduction as p=2 PETSc/GAMG bootstrap, but still slower overall than no bootstrap."
+    },
+    {
+      "name": "petsc_cg_hypre",
+      "name": "petsc_cg_gamg_default",
+      "status": "success",
+      "rank": 1,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 2 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.4,
+        "global_solve_seconds": 6.588,
+        "total_wall_seconds": 13.1,
+        "petsc_setup_seconds": 0.939,
+        "krylov_seconds": 4.409,
+        "iterations": 89,
+        "solver_relative_residual": 1.468e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Current best default. PETSc initialization is included in global_solve_seconds."
+    },
+    {
+      "name": "petsc_cg_gamg_bootstrap_p2",
+      "status": "success",
+      "rank": 2,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --bootstrap-order 2 --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {},
+      "bootstrap_order": 2,
+      "metrics": {
+        "setup_seconds": 8.1,
+        "initial_guess_seconds": 1.840,
+        "global_solve_seconds": 5.486,
+        "total_wall_seconds": 13.8,
+        "petsc_setup_seconds": 0.959,
+        "krylov_seconds": 3.802,
+        "iterations": 70,
+        "solver_relative_residual": 9.662e-14,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Fewer Krylov iterations than default GAMG, but bootstrap cost makes total time worse."
+    },
+    {
+      "name": "petsc_cg_gamg_levels4",
+      "status": "success",
+      "rank": 3,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --petsc-levels 4 --boundary-mode eliminate --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_levels": 4,
+      "petsc_options": {},
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.8,
+        "global_solve_seconds": 6.590,
+        "total_wall_seconds": 13.5,
+        "petsc_setup_seconds": 0.940,
+        "krylov_seconds": 4.582,
+        "iterations": 89,
+        "solver_relative_residual": 1.468e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Tied with default GAMG in iterations; slightly worse total time in this run."
+    },
+    {
+      "name": "petsc_cg_gamg_threshold_0_005",
+      "status": "success",
+      "rank": 4,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --maxiter 2000 --petsc-option pc_gamg_threshold=0.005",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {
+        "pc_gamg_threshold": "0.005"
+      },
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.8,
+        "global_solve_seconds": 6.980,
+        "total_wall_seconds": 13.9,
+        "petsc_setup_seconds": 1.118,
+        "krylov_seconds": 4.668,
+        "iterations": 89,
+        "solver_relative_residual": 2.067e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "No iteration improvement and higher setup cost than default."
+    },
+    {
+      "name": "petsc_cg_gamg_threshold_0_02",
+      "status": "success",
+      "rank": 5,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_gamg --boundary-mode eliminate --maxiter 2000 --petsc-option pc_gamg_threshold=0.02",
+      "solver": "petsc",
+      "petsc_preset": "cg_gamg",
+      "petsc_options": {
+        "pc_gamg_threshold": "0.02"
+      },
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.4,
+        "global_solve_seconds": 7.198,
+        "total_wall_seconds": 13.7,
+        "petsc_setup_seconds": 1.265,
+        "krylov_seconds": 4.713,
+        "iterations": 89,
+        "solver_relative_residual": 1.912e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Worse than default GAMG in this run."
+    },
+    {
+      "name": "petsc_cg_icc",
+      "status": "success",
+      "rank": 6,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_icc --boundary-mode eliminate --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_icc",
+      "petsc_options": {},
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.3,
+        "global_solve_seconds": 10.371,
+        "total_wall_seconds": 16.8,
+        "petsc_setup_seconds": 0.063,
+        "krylov_seconds": 9.104,
+        "iterations": 514,
+        "solver_relative_residual": 7.044e-14,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Much cheaper setup than GAMG, but many more iterations."
+    },
+    {
+      "name": "petsc_cg_ilu",
+      "status": "success",
+      "rank": 7,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_ilu --boundary-mode eliminate --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_ilu",
+      "petsc_options": {},
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.3,
+        "global_solve_seconds": 12.480,
+        "total_wall_seconds": 18.9,
+        "petsc_setup_seconds": 0.093,
+        "krylov_seconds": 11.203,
+        "iterations": 514,
+        "solver_relative_residual": 7.076e-14,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4273e-09
+      },
+      "notes": "Worse than PETSc ICC and GAMG."
+    },
+    {
+      "name": "scipy_cg_jacobi",
+      "status": "success",
+      "rank": 8,
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 2 --tau 19 --solver CG --preconditioner jacobi --boundary-mode eliminate --no-scale-system --maxiter 2000",
+      "solver": "scipy_cg",
+      "preconditioner": "jacobi",
+      "bootstrap_order": null,
+      "metrics": {
+        "setup_seconds": 6.5,
+        "global_solve_seconds": 24.713,
+        "total_wall_seconds": 31.3,
+        "preconditioner_seconds": 0.011,
+        "krylov_seconds": 24.419,
+        "iterations": 1528,
+        "solver_relative_residual": 1.035e-13,
+        "l2_error": 1.2141e-08,
+        "linf_error": 2.0326e-07,
+        "average_element_max_error": 7.4274e-09
+      },
+      "notes": "Useful low-memory baseline, but too many iterations for this p=6 trace system."
+    },
+    {
+      "name": "petsc_cg_hypre",
+      "status": "unavailable",
+      "command": ".venv1/bin/python solvers/diff_rea_w_boostrap.py --test 3 -p 6 --lc 0.1 -v 1 --tau 19 --solver petsc --petsc-preset cg_hypre --boundary-mode eliminate --maxiter 2000",
+      "solver": "petsc",
+      "petsc_preset": "cg_hypre",
+      "error": "PETSc build cannot find requested PC type hypre.",
+      "notes": "Could be worth testing on a PETSc build configured with Hypre/BoomerAMG."
+    }
+  ],
+  "runner_notes": [
+    "PETSc/MPI initialization required unsandboxed execution in this environment.",
+    "The best current config is PETSc CG + GAMG with default PETSc GAMG options.",
+    "Accurate bootstrap solves reduce final GAMG iterations but have not reduced total wall time on this benchmark.",
+    "Bootstrap p=1 with PETSc/GAMG reduces iterations from 89 to 79, but costs about 1.36s.",
+    "Bootstrap p=2 with PETSc/GAMG or direct solve reduces iterations from 89 to 70, but costs about 1.6-1.9s.",
+    "Bootstrap p=3 reduces iterations from 89 to 65, but costs about 3.19s.",
+    "Cheap SciPy CG/Jacobi bootstrap solves are fast but do not reduce final GAMG iterations.",
+    "GAMG threshold tweaks tested here did not improve the default."
+  ]
+}
