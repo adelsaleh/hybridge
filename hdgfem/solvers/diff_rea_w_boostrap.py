@@ -1,7 +1,7 @@
 r"""Bootstrap-enabled HDG solver for scalar diffusion-reaction problems.
 
 This module layers a coarse same-mesh initial guess on top of
-:mod:`dgfem.solvers.diff_rea`.  The base module owns the actual HDG assembly and solve;
+:mod:`hdgfem.solvers.diff_rea`.  The base module owns the actual HDG assembly and solve;
 this module only builds a lower-order trace solution, degree-elevates it to the
 target trace space, and passes it as ``initial_guess`` to the normal solver.
 
@@ -16,7 +16,7 @@ if __name__ == "__main__" and __package__ in {None, ""}:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("dgfem.solvers.diff_rea_w_boostrap", run_name="__main__")
+    runpy.run_module("hdgfem.solvers.diff_rea_w_boostrap", run_name="__main__")
     raise SystemExit
 
 from collections.abc import Callable, Iterable
@@ -235,7 +235,7 @@ def solve_diffusion_reaction_hdg(
 ):
     r"""Solve :math:`-\Delta u + r u=f` with an optional bootstrap trace guess.
 
-    This wrapper keeps the normal solver in :mod:`dgfem.solvers.diff_rea` untouched.  If
+    This wrapper keeps the normal solver in :mod:`hdgfem.solvers.diff_rea` untouched.  If
     ``bootstrap_order`` is provided, it first solves the same problem on the
     same mesh with a lower polynomial order, degree-elevates the trace, and uses
     the result as ``initial_guess`` for the target-order solve.
@@ -431,7 +431,7 @@ def _main() -> None:
     from ..core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
     from ..io.plot import plot_solution_comparison
 
-    parser = ArgumentParser(description="Run the bootstrap-enabled dgfem diffusion-reaction HDG solver.")
+    parser = ArgumentParser(description="Run the bootstrap-enabled hdgfem diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
     parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6), help="manufactured legacy test id")
     parser.add_argument(

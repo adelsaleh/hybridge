@@ -34,7 +34,7 @@
 }
 
 \title{Upwind SCC Graph Ordering for HDG Trace Systems}
-\author{\code{dgfem.linalg.ordering}}
+\author{\code{hdgfem.linalg.ordering}}
 \date{\today}
 
 \begin{document}
@@ -71,7 +71,7 @@ degrees of freedom, denoted here by
 \]
 The graph-ordering module does not alter element assembly, mesh connectivity,
 or numerical fluxes.  It only computes a permutation of trace unknown indices.
-The convention matches \code{dgfem.linalg.system.solve_global_system}:
+The convention matches \code{hdgfem.linalg.system.solve_global_system}:
 \[
   A_{\pi} = A[\pi, \pi], \qquad b_{\pi} = b[\pi],
 \]
@@ -493,7 +493,7 @@ From the advection-reaction CLI, the current diagnostic path can generate the
 matrix patterns without entering the expensive global solve:
 
 \begin{lstlisting}
-python -m dgfem.solvers.adv_rea -p 7 --lc 0.03 \
+python -m hdgfem.solvers.adv_rea -p 7 --lc 0.03 \
   --boundary-mode eliminate \
   --matrix-pattern-only \
   --matrix-pattern-max-points 2000000

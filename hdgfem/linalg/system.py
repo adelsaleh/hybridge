@@ -1,6 +1,6 @@
 """Sparse global-system assembly and solve helpers.
 
-This module is the self-contained :mod:`dgfem` version of the trace-system
+This module is the self-contained :mod:`hdgfem` version of the trace-system
 solver used by the HDG assembly code.  It builds CSR matrices from COO triplets
 and provides direct or Krylov solves with optional diagonal scaling, ILU
 preconditioning, and cheap diagonal Jacobi preconditioning.
@@ -555,7 +555,7 @@ def solve_petsc_system(
 
     The intended diffusion-reaction path is ``preset="cg_gamg"`` on the
     boundary-eliminated trace system.  PETSc is imported lazily, so the rest of
-    :mod:`dgfem` remains usable without petsc4py.
+    :mod:`hdgfem` remains usable without petsc4py.
     """
     total_start = time.time()
     import_start = time.time()

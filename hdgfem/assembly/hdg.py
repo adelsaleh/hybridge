@@ -2,7 +2,7 @@
 
 This module contains the mesh/trace glue that is independent of the concrete
 PDE local operator.  Local element matrices still come from problem-specific
-code, usually via :mod:`dgfem.assembly.matrices_numpy`; once those matrices and element RHS
+code, usually via :mod:`hdgfem.assembly.matrices_numpy`; once those matrices and element RHS
 moments are available, the functions here assemble the global trace system and
 recover element coefficients.
 """

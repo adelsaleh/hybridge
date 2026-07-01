@@ -3,21 +3,21 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dgfem.assembly import hdg as hdg_assembly
-from dgfem.assembly import matrices_numpy as hdg_mats
-from dgfem.backends.numba import (
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.backends.numba import (
     assemble_local_advection_reaction_numba,
     assemble_projected_trace_system_eliminated_numba,
     assemble_projected_trace_system_numba,
 )
-from dgfem.linalg.system import eliminate_known_dofs
-from dgfem.core.mesh import rectangle_mesh
-from dgfem.solvers.adv_rea import (
+from hdgfem.linalg.system import eliminate_known_dofs
+from hdgfem.core.mesh import rectangle_mesh
+from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver,
     solve_advection_reaction_hdg,
     test2 as adv_rea_test2,
 )
-from dgfem.core.space import DGField, DGSpace, VectorDGField
+from hdgfem.core.space import DGField, DGSpace, VectorDGField
 
 
 pytest.importorskip("numba")

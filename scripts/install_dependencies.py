@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install dgfem dependencies with pip.
+"""Install hdgfem dependencies with pip.
 
 Run from a fresh clone with:
 

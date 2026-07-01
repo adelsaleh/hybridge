@@ -428,7 +428,7 @@ def save_upwind_reordered_matrix_patterns(
         Sparse matrix in the original trace ordering.
     permutation
         Symmetric permutation with the same convention as
-        :func:`dgfem.linalg.system.solve_global_system`, i.e.
+        :func:`hdgfem.linalg.system.solve_global_system`, i.e.
         ``A_perm = A[permutation][:, permutation]``.
     output_dir
         Directory where ``*_before_upwind.png`` and ``*_after_upwind.png`` are
@@ -574,7 +574,7 @@ def upwind_scc_trace_ordering(
     Parameters
     ----------
     mesh
-        :class:`dgfem.core.mesh.DGMesh`-like object with ``loc2glob_edge`` and edge
+        :class:`hdgfem.core.mesh.DGMesh`-like object with ``loc2glob_edge`` and edge
         counts.
     beta_dot_normal
         Values of :math:`\beta_h\cdot n` on element-face quadrature points,

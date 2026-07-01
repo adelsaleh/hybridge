@@ -1,6 +1,6 @@
 """CuPy backend placeholder.
 
-The project has older GPU experiments outside the canonical :mod:`dgfem`
+The project has older GPU experiments outside the canonical :mod:`hdgfem`
 package.  A supported CuPy backend should live here once those routines are
 ported to the package mesh/space data model and covered by tests.
 """

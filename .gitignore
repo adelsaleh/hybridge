@@ -15,3 +15,11 @@ dist/
 *.egg-info/
 .idea/
 *.msh
+run_logs/
+matrix_patterns/
+mat/matrix_patterns/
+docs/**/*.aux
+docs/**/*.log
+docs/**/*.out
+docs/**/*.toc
+docs/algorithms/diff_rea_assembly_pipeline.pdf

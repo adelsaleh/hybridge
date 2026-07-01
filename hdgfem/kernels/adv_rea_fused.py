@@ -3,7 +3,7 @@ r"""Fused Numba kernels for projected advection-reaction HDG assembly.
 The kernels in this module assemble the global trace COO matrix directly from
 ``DGSpace`` reference data and already-projected coefficient arrays.  They do
 not materialize dense element-local tensors in Python.  This mirrors the fast
-legacy Numba solvers while using the new :mod:`dgfem` mesh/reference layout.
+legacy Numba solvers while using the new :mod:`hdgfem` mesh/reference layout.
 """
 
 from __future__ import annotations
@@ -168,7 +168,7 @@ def assemble_projected_trace_system_kernel(
     r"""Assemble the projected-coefficient HDG trace system in COO form.
 
     The COO layout is intentionally identical to
-    :func:`dgfem.assembly.hdg.trace_matrix_indices`: first all interior
+    :func:`hdgfem.assembly.hdg.trace_matrix_indices`: first all interior
     element-side flux blocks, then one interior edge mass block per edge, then
     one diagonal penalty entry per boundary trace dof.
     """

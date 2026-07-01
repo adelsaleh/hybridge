@@ -1,8 +1,8 @@
-"""Small reusable Numba helpers for :mod:`dgfem` kernels.
+"""Small reusable Numba helpers for :mod:`hdgfem` kernels.
 
 The functions here are copied in spirit from the legacy ``hdg_numba_helpers``
 module, but they deliberately avoid mesh-specific geometry reconstruction.  New
-``dgfem`` kernels receive precomputed geometry from :class:`dgfem.core.mesh.DGMesh`.
+``hdgfem`` kernels receive precomputed geometry from :class:`hdgfem.core.mesh.DGMesh`.
 """
 
 from __future__ import annotations

@@ -170,7 +170,7 @@ def build_transfer_plan(
     )
     if verbose:
         print(
-            f"    dgfem transfer plan        {time.perf_counter() - start:8.3f}s | "
+            f"    hdgfem transfer plan        {time.perf_counter() - start:8.3f}s | "
             f"pts {plan.n_located_points}/{plan.n_target_points}, missed={plan.n_missed_points}"
         )
     return plan
@@ -240,7 +240,7 @@ def project_field(
     )
     if verbose:
         print(
-            f"    dgfem transfer scalar      {diag.total_seconds:8.3f}s | "
+            f"    hdgfem transfer scalar      {diag.total_seconds:8.3f}s | "
             f"pts {diag.n_located_points}/{diag.n_target_points}, missed={diag.n_missed_points}"
         )
     return target.field(coeffs, name=field.name), diag

@@ -1,25 +1,26 @@
-# dgfem Manual
+# hdgfem Manual
 
-This manual describes the current `dgfem` package and, in particular, how to
+This manual describes the current `hdgfem` package and, in particular, how to
 use the advection-reaction and diffusion-reaction HDG solvers.
 
-The repository root is the `dgfem` package root.  The solvers keep the same
-numerical HDG structure as the older scripts, but expose object-oriented mesh,
-space, and field objects through package-native modules.
+The repository root contains the `hdgfem/` package directory.  The solvers keep
+the same numerical HDG structure as the older scripts, but expose
+object-oriented mesh, space, and field objects through package-native modules.
 
 ## Package Structure
 
 ```text
 .
-  __init__.py      public package exports
-  assembly/       HDG assembly helpers, NumPy matrices, and projection helpers
-  backends/       NumPy, Numba, and CuPy backend modules
-  core/           mesh, basis, quadrature, DG spaces/fields, and transfer
-  io/             output formatting and plotting helpers
-  kernels/        low-level Numba kernels
-  linalg/         sparse global-system solve and graph ordering helpers
+  hdgfem/
+    __init__.py   public package exports
+    assembly/     HDG assembly helpers, NumPy matrices, and projection helpers
+    backends/     NumPy, Numba, and CuPy backend modules
+    core/         mesh, basis, quadrature, DG spaces/fields, and transfer
+    io/           output formatting and plotting helpers
+    kernels/      low-level Numba kernels
+    linalg/       sparse global-system solve and graph ordering helpers
+    solvers/      advection-reaction and diffusion-reaction solver CLIs
   run_configs/    version-controlled benchmark and solver presets
-  solvers/        advection-reaction and diffusion-reaction solver CLIs
   tests/          focused package tests
 ```
 
@@ -28,13 +29,13 @@ space, and field objects through package-native modules.
 Preferred invocation:
 
 ```bash
-python -m dgfem.solvers.adv_rea [options]
+python -m hdgfem.solvers.adv_rea [options]
 ```
 
 Direct script execution is also supported:
 
 ```bash
-python solvers/adv_rea.py [options]
+python hdgfem/solvers/adv_rea.py [options]
 ```
 
 ### Common Runs
@@ -42,31 +43,31 @@ python solvers/adv_rea.py [options]
 Small smoke run:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 2 --lc 0.30
+python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30
 ```
 
 Verbose timing run:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plotting run:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
 ```
 
 Projected reaction path:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --project-reaction
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-reaction
 ```
 
 Projected-coefficient Numba path:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 \
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 \
   --project-source --project-beta --project-reaction \
   --assembly-backend numba --verbosity 2
 ```
@@ -74,14 +75,14 @@ python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 \
 Boundary elimination and upwind trace ordering:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 \
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 \
   --boundary-mode eliminate --trace-ordering upwind-scc
 ```
 
 Save before/after matrix sparsity pattern plots for the upwind ordering:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 4 --lc 0.08 \
+python -m hdgfem.solvers.adv_rea -p 4 --lc 0.08 \
   --boundary-mode eliminate --trace-ordering upwind-scc \
   --plot-matrix-pattern
 ```
@@ -89,20 +90,20 @@ python -m dgfem.solvers.adv_rea -p 4 --lc 0.08 \
 Structured rectangle instead of Gmsh:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
+python -m hdgfem.solvers.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
 ```
 
 Disc and triangle Gmsh domains:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 4 --domain disc --lc 0.08
-python -m dgfem.solvers.adv_rea -p 4 --domain triangle --lc 0.08
+python -m hdgfem.solvers.adv_rea -p 4 --domain disc --lc 0.08
+python -m hdgfem.solvers.adv_rea -p 4 --domain triangle --lc 0.08
 ```
 
 Diffusion-reaction manufactured solve:
 
 ```bash
-python -m dgfem.solvers.diff_rea -p 2 --lc 0.30
+python -m hdgfem.solvers.diff_rea -p 2 --lc 0.30
 ```
 
 The diffusion CLI currently includes legacy tests `0`, `2`, `3`, `5`, and `6`.
@@ -112,7 +113,7 @@ the L-shaped reentrant-corner domain.
 Use the optional Numba local-solver block builder:
 
 ```bash
-python -m dgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
+python -m hdgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
 ```
 
 ### Main CLI Options
@@ -142,7 +143,7 @@ python -m dgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
 Run:
 
 ```bash
-python -m dgfem.solvers.adv_rea --help
+python -m hdgfem.solvers.adv_rea --help
 ```
 
 for the exact current option list.
@@ -187,9 +188,9 @@ b = 0
 Basic solve:
 
 ```python
-from dgfem.core.mesh import gmsh_rectangle_mesh
-from dgfem.core.space import DGField, DGSpace, VectorDGField
-from dgfem.solvers.adv_rea import solve_advection_reaction_hdg, test2
+from hdgfem.core.mesh import gmsh_rectangle_mesh
+from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from hdgfem.solvers.adv_rea import solve_advection_reaction_hdg, test2
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 4, basis_type="dub_orth")
@@ -239,7 +240,7 @@ arrays, boundary reduction, graph ordering, linear-solve diagnostics,
 preconditioner, trace, and reconstructed field.
 
 ```python
-from dgfem import AdvectionReactionHDGSolver
+from hdgfem import AdvectionReactionHDGSolver
 
 solver = AdvectionReactionHDGSolver(
     space,
@@ -282,9 +283,9 @@ uses the same numerical path.
 Diffusion-reaction solve:
 
 ```python
-from dgfem.core.mesh import gmsh_rectangle_mesh
-from dgfem.core.space import DGSpace
-from dgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, test0
+from hdgfem.core.mesh import gmsh_rectangle_mesh
+from hdgfem.core.space import DGSpace
+from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, test0
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 3, basis_type="dub_orth")
@@ -441,7 +442,7 @@ The plotting helpers are generic over `DGField`; they are not tied to
 Plot one field:
 
 ```python
-from dgfem.io.plot import plot_field
+from hdgfem.io.plot import plot_field
 
 plot_field(result.field, resolution=20, title="u_h")
 ```
@@ -449,7 +450,7 @@ plot_field(result.field, resolution=20, title="u_h")
 Plot several fields in one window:
 
 ```python
-from dgfem.io.plot import plot_fields
+from hdgfem.io.plot import plot_fields
 
 plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
 ```
@@ -457,7 +458,7 @@ plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
 Get sampled data or a refined PyVista mesh for a custom plot:
 
 ```python
-from dgfem.io.plot import refined_field_polydata, sample_field_on_elements
+from hdgfem.io.plot import refined_field_polydata, sample_field_on_elements
 
 ref_points, xy, values = sample_field_on_elements(result.field, resolution=16)
 poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
@@ -466,14 +467,14 @@ poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
 The solver-specific helper remains available:
 
 ```python
-from dgfem.io.plot import plot_solution_comparison
+from hdgfem.io.plot import plot_solution_comparison
 
 plot_solution_comparison(result.field, exact)
 ```
 
 ## Local Matrix Assembly
 
-`assembly/matrices_numpy.py` keeps two styles of APIs.
+`hdgfem/assembly/matrices_numpy.py` keeps two styles of APIs.
 
 Return-style reference functions:
 
@@ -500,8 +501,8 @@ readable reference paths and are often useful for tests and profiling.
 
 ## Projected Numba Assembly
 
-`backends/numba.py` adapts package objects to the low-level kernels in
-`kernels/`.  The fused projected trace assembly path performs the local
+`hdgfem/backends/numba.py` adapts package objects to the low-level kernels in
+`hdgfem/kernels/`.  The fused projected trace assembly path performs the local
 operator build, local solve, and global COO scatter inside the Numba kernel.
 
 At `--verbosity 2`, the Numba assembly timing line is split into:
@@ -521,11 +522,12 @@ also includes wrapper work needed by the higher-level solver.
 
 ## Static Condensation and Trace Assembly
 
-`hdg_assembly.py` contains the reusable HDG steps that are not specific to the
-advection-reaction manufactured test:
+`hdgfem/assembly/hdg.py` contains the reusable HDG steps that are not specific
+to the advection-reaction manufactured test.  In code examples it is imported
+as `hdg_assembly`:
 
 ```python
-from dgfem.assembly import hdg as hdg_assembly
+from hdgfem.assembly import hdg as hdg_assembly
 
 source_rhs = hdg_assembly.source_moments(source, space)
 trace_blocks = hdg_assembly.element_to_trace_matrix(local_solver, element_boundary_mats, space)
@@ -550,7 +552,7 @@ trace_system = hdg_assembly.assemble_trace_system(
 The solved trace can then be used to recover the element field:
 
 ```python
-from dgfem.linalg.system import solve_global_system
+from hdgfem.linalg.system import solve_global_system
 
 solve_result = solve_global_system(
     trace_system.rows,
@@ -669,7 +671,7 @@ solver and physical residual diagnostics
 ILU and Krylov solve timings
 ```
 
-The default `BICGSTAB` path uses `dgfem.linalg.system.solve_global_system` with
+The default `BICGSTAB` path uses `hdgfem.linalg.system.solve_global_system` with
 diagonal scaling and ILU.  Explicit sparse zeros are removed before ILU
 factorization in that helper; this matters for large trace systems.
 
@@ -693,20 +695,20 @@ factorization in that helper; this matters for large trace systems.
 
 ## Development Checks
 
-Run the current dgfem tests:
+Run the current hdgfem tests:
 
 ```bash
-env MPLCONFIGDIR=/tmp PYTHONPATH=.. python -m pytest tests -q
+env MPLCONFIGDIR=/tmp python -m pytest tests -q
 ```
 
 Run syntax checks:
 
 ```bash
-python -m compileall -q __init__.py assembly backends core io kernels linalg solvers tests
+python -m compileall -q hdgfem tests scripts
 ```
 
 Run the CLI smoke test:
 
 ```bash
-PYTHONPATH=.. python -m dgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
+python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
 ```

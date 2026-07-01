@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dgfem"
+name = "hdgfem"
 version = "0.1.0"
 description = "Self-contained DG/HDG simulator."
 readme = "README.md"
@@ -22,19 +22,15 @@ all = ["gmsh", "pyvista", "pytest"]
 
 [tool.setuptools]
 packages = [
-    "dgfem",
-    "dgfem.assembly",
-    "dgfem.backends",
-    "dgfem.core",
-    "dgfem.io",
-    "dgfem.kernels",
-    "dgfem.linalg",
-    "dgfem.solvers",
+    "hdgfem",
+    "hdgfem.assembly",
+    "hdgfem.backends",
+    "hdgfem.core",
+    "hdgfem.io",
+    "hdgfem.kernels",
+    "hdgfem.linalg",
+    "hdgfem.solvers",
 ]
-
-[tool.setuptools.package-dir]
-dgfem = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".."]

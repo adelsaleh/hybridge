@@ -1,20 +1,20 @@
-# dgfem
+# hdgfem
 
-`dgfem` is a self-contained discontinuous Galerkin / HDG package.  The
-repository root is the Python package root, with mesh, reference-element,
-space/field, transfer, plotting, sparse global-system, and HDG assembly code
-organized into subpackages.
+`hdgfem` is a self-contained discontinuous Galerkin / HDG package.  The
+repository root contains the `hdgfem/` Python package directory, with mesh,
+reference-element, space/field, transfer, plotting, sparse global-system, and
+HDG assembly code organized into subpackages.
 
 The canonical advection-reaction executable solver is:
 
 ```bash
-python -m dgfem.solvers.adv_rea
+python -m hdgfem.solvers.adv_rea
 ```
 
 The canonical diffusion-reaction executable solver is:
 
 ```bash
-python -m dgfem.solvers.diff_rea
+python -m hdgfem.solvers.diff_rea
 ```
 
 Legacy diffusion tests `0`, `2`, `3`, `5`, and `6` are available.  With
@@ -24,7 +24,7 @@ reentrant-corner domain.
 Direct script execution also works:
 
 ```bash
-python solvers/adv_rea.py
+python hdgfem/solvers/adv_rea.py
 ```
 
 ## What Is Included
@@ -45,32 +45,32 @@ python solvers/adv_rea.py
 Run the manufactured advection-reaction test on a Gmsh rectangle:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plot the numerical solution, exact solution, and absolute error:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
 ```
 
 Project CLI callables into DG fields before calling the solver:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction
 ```
 
 Use the fused projected-coefficient Numba assembly backend:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction --assembly-backend numba
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction --assembly-backend numba
 ```
 
 Use the reusable solver class when a driver needs to keep the mesh, space,
 latest matrix data, ordering, preconditioner, trace, and reconstructed field:
 
 ```python
-from dgfem import AdvectionReactionHDGSolver
+from hdgfem import AdvectionReactionHDGSolver
 
 solver = AdvectionReactionHDGSolver(
     space,
@@ -88,19 +88,19 @@ next_result = solver.solve()
 Eliminate boundary trace unknowns and apply upwind SCC trace ordering:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 6 --lc 0.03 --boundary-mode eliminate --trace-ordering upwind-scc
+python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --boundary-mode eliminate --trace-ordering upwind-scc
 ```
 
 Use a sparse direct trace solve instead of the default ILU-preconditioned
 `BICGSTAB` path:
 
 ```bash
-python -m dgfem.solvers.adv_rea -p 4 --lc 0.08 --solver direct
+python -m hdgfem.solvers.adv_rea -p 4 --lc 0.08 --solver direct
 ```
 
 ## Solver Defaults
 
-`dgfem.solvers.adv_rea` solves the manufactured legacy `test2` problem:
+`hdgfem.solvers.adv_rea` solves the manufactured legacy `test2` problem:
 
 ```text
 beta = (x, -y)
@@ -123,42 +123,41 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 
 ## Important Files
 
-- `solvers/adv_rea.py`: compact HDG advection-reaction solver and CLI.
-- `solvers/diff_rea.py`: HDG diffusion-reaction solver and CLI.
-- `backends/numba.py`: package adapter for the projected Numba backend.
-- `backends/numpy.py`: NumPy backend exports.
-- `backends/cupy.py`: placeholder for a supported CuPy backend.
-- `assembly/hdg.py`: reusable HDG static-condensation and trace assembly helpers.
-- `assembly/matrices_numpy.py`: vectorized local and trace matrix assembly helpers.
-- `assembly/projection.py`: package-native DG projection helpers.
-- `io/plot.py`: generic DG field plotting helpers plus numerical/exact/error comparison plots.
-- `io/output.py`: console table formatting helpers.
-- `linalg/system.py`: sparse global trace-system assembly and solve helpers.
-- `linalg/ordering.py`: upwind SCC trace ordering for advection-dominated systems.
-- `kernels/`: Numba kernels used by package backends.
-- `core/mesh.py`: triangular mesh data, Gmsh mesh generators, and connectivity.
-- `core/quadrature.py`: reference triangle quadrature, basis values, and cached reference tensors.
-- `core/space.py`: `DGSpace`, `DGField`, `VectorDGSpace`, and `VectorDGField`.
-- `core/transfer.py`: field transfer/projection helpers between DG spaces.
+- `hdgfem/solvers/adv_rea.py`: compact HDG advection-reaction solver and CLI.
+- `hdgfem/solvers/diff_rea.py`: HDG diffusion-reaction solver and CLI.
+- `hdgfem/backends/numba.py`: package adapter for the projected Numba backend.
+- `hdgfem/backends/numpy.py`: NumPy backend exports.
+- `hdgfem/backends/cupy.py`: placeholder for a supported CuPy backend.
+- `hdgfem/assembly/hdg.py`: reusable HDG static-condensation and trace assembly helpers.
+- `hdgfem/assembly/matrices_numpy.py`: vectorized local and trace matrix assembly helpers.
+- `hdgfem/assembly/projection.py`: package-native DG projection helpers.
+- `hdgfem/io/plot.py`: generic DG field plotting helpers plus numerical/exact/error comparison plots.
+- `hdgfem/io/output.py`: console table formatting helpers.
+- `hdgfem/linalg/system.py`: sparse global trace-system assembly and solve helpers.
+- `hdgfem/linalg/ordering.py`: upwind SCC trace ordering for advection-dominated systems.
+- `hdgfem/kernels/`: Numba kernels used by package backends.
+- `hdgfem/core/mesh.py`: triangular mesh data, Gmsh mesh generators, and connectivity.
+- `hdgfem/core/quadrature.py`: reference triangle quadrature, basis values, and cached reference tensors.
+- `hdgfem/core/space.py`: `DGSpace`, `DGField`, `VectorDGSpace`, and `VectorDGField`.
+- `hdgfem/core/transfer.py`: field transfer/projection helpers between DG spaces.
 - `run_configs/`: version-controlled benchmark and solver presets.
 - `scripts/`: runnable project scripts and benchmark sweep entry points.
 - `tests/`: focused package tests.
 
 ## Local Development
 
-Because the package root is the repository root, run local commands from this
-directory with the parent directory on `PYTHONPATH`, or install the project in
-editable mode:
+Run local commands from the repository root, or install the project in editable
+mode so `hdgfem` is importable from any working directory:
 
 ```bash
-PYTHONPATH=.. python -m dgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
+python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
 python -m pip install -e .
 ```
 
 ## Generic Field Plotting
 
 ```python
-from dgfem.io.plot import plot_field, plot_fields
+from hdgfem.io.plot import plot_field, plot_fields
 
 plot_field(result.field, resolution=20)
 plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)

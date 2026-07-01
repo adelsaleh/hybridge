@@ -1,4 +1,4 @@
-r"""Reference-triangle basis functions for :mod:`dgfem`.
+r"""Reference-triangle basis functions for :mod:`hdgfem`.
 
 The package supports three local polynomial bases on
 :math:`\hat K = \operatorname{conv}\{(-1,-1),(1,-1),(-1,1)\}`:

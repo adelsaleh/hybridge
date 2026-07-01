@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dgfem.core.mesh import rectangle_mesh
-from dgfem.core.space import DGField, DGSpace
-from dgfem.solvers.diff_rea import (
+from hdgfem.core.mesh import rectangle_mesh
+from hdgfem.core.space import DGField, DGSpace
+from hdgfem.solvers.diff_rea import (
     DiffusionReactionHDGSolver as DiffReaSolver,
     solve_diffusion_reaction_hdg,
     test0 as diff_rea_test0,

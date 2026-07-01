@@ -1,6 +1,6 @@
 r"""HDG solver for scalar diffusion-reaction problems.
 
-This module is the :mod:`dgfem` rewrite of the legacy ``diff_rea3.py`` path.
+This module is the :mod:`hdgfem` rewrite of the legacy ``diff_rea3.py`` path.
 It solves
 
 .. math::
@@ -20,7 +20,7 @@ if __name__ == "__main__" and __package__ in {None, ""}:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("dgfem.solvers.diff_rea", run_name="__main__")
+    runpy.run_module("hdgfem.solvers.diff_rea", run_name="__main__")
     raise SystemExit
 
 import time
@@ -1440,7 +1440,7 @@ def _main() -> None:
     from ..io.plot import plot_solution_comparison
     from ..io.output import pretty_print_ncol
 
-    parser = ArgumentParser(description="Run the dgfem diffusion-reaction HDG solver.")
+    parser = ArgumentParser(description="Run the hdgfem diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
     parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6), help="manufactured legacy test id")
     parser.add_argument(

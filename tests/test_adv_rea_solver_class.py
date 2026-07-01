@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dgfem.core.mesh import rectangle_mesh
-from dgfem.core.space import DGField, DGSpace, VectorDGField
-from dgfem.solvers.adv_rea import (
+from hdgfem.core.mesh import rectangle_mesh
+from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver as AdvReaSolver,
     solve_advection_reaction_hdg,
     test2 as adv_rea_test2,

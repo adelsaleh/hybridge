@@ -1,6 +1,6 @@
 """DGSpace-aware Numba assembly adapter for advection-reaction HDG.
 
-This module is the boundary between the public :mod:`dgfem` abstractions and
+This module is the boundary between the public :mod:`hdgfem` abstractions and
 pure ndarray Numba kernels.  It intentionally keeps Python callables and
 ``DGField`` objects out of the kernels.
 """

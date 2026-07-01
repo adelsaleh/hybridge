@@ -1,6 +1,6 @@
 """Self-contained object-oriented DG helpers.
 
-The :mod:`dgfem` package exposes explicit DG meshes, reference elements,
+The :mod:`hdgfem` package exposes explicit DG meshes, reference elements,
 spaces, fields, reusable HDG assembly helpers, sparse solvers, and executable
 advection-reaction and diffusion-reaction solver modules.
 """

@@ -6,7 +6,7 @@ The reference element is
 
     \hat K = \operatorname{conv}\{(-1,-1), (1,-1), (-1,1)\}.
 
-This module owns the reference-element data used by :class:`dgfem.core.space.DGSpace`.
+This module owns the reference-element data used by :class:`hdgfem.core.space.DGSpace`.
 It does not know about a physical mesh; geometric scaling by element Jacobians
 is applied later by mesh- and assembly-level code.  All arrays here are
 therefore reference arrays, stored once per polynomial order and basis family.

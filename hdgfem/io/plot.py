@@ -1,4 +1,4 @@
-"""PyVista plotting helpers for :mod:`dgfem` fields.
+"""PyVista plotting helpers for :mod:`hdgfem` fields.
 
 The helpers in this module sample each DG element independently.  Vertices on
 shared mesh edges are intentionally duplicated so discontinuities remain
@@ -22,7 +22,7 @@ def _require_pyvista():
     try:
         import pyvista as pv
     except ImportError as exc:
-        raise ImportError("dgfem plotting helpers require pyvista") from exc
+        raise ImportError("hdgfem plotting helpers require pyvista") from exc
     return pv
 
 
@@ -214,7 +214,7 @@ def refined_field_polydata(
     """Build a discontinuous refined :class:`pyvista.PolyData` for a DG field.
 
     The geometry is refined only for visualization.  It does not change the
-    field or its owning :class:`~dgfem.core.space.DGSpace`.
+    field or its owning :class:`~hdgfem.core.space.DGSpace`.
     """
     if reference_points is None:
         reference_points = reference_plot_points(resolution)
@@ -249,7 +249,7 @@ def refined_sample_polydata(
     """Build refined :class:`pyvista.PolyData` from mesh-only scalar samples.
 
     Unlike :func:`refined_field_polydata`, this helper never evaluates a
-    :class:`~dgfem.core.space.DGField` basis.  It is therefore appropriate for exact
+    :class:`~hdgfem.core.space.DGField` basis.  It is therefore appropriate for exact
     reference functions whose visualization should depend only on the physical
     mesh and the requested sampling density, not on the DG polynomial order.
     """
@@ -528,7 +528,7 @@ def plot_solution_comparison(
 ):
     """Plot numerical solution, exact solution, and absolute error.
 
-    This is the solver-oriented helper used by :mod:`dgfem.solvers.adv_rea`.  For a
+    This is the solver-oriented helper used by :mod:`hdgfem.solvers.adv_rea`.  For a
     generic single-field plot use :func:`plot_field`.
 
     ``resolution`` controls the numerical and error panels.  ``exact_resolution``

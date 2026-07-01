@@ -1,7 +1,7 @@
-"""Vectorized HDG/DG matrix assembly for :mod:`dgfem`.
+"""Vectorized HDG/DG matrix assembly for :mod:`hdgfem`.
 
-All functions in this module operate on :class:`dgfem.core.space.DGSpace` and
-:class:`dgfem.core.space.DGField` objects. The implementation is self-contained and
+All functions in this module operate on :class:`hdgfem.core.space.DGSpace` and
+:class:`hdgfem.core.space.DGField` objects. The implementation is self-contained and
 uses large NumPy contractions instead of delegating to the repository-level
 legacy module.
 """

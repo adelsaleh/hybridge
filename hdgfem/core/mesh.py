@@ -1,4 +1,4 @@
-"""Self-contained triangular mesh utilities for :mod:`dgfem`.
+"""Self-contained triangular mesh utilities for :mod:`hdgfem`.
 
 The mesh object stores the geometric and connectivity arrays needed by local
 DG/HDG assembly. It intentionally uses simple, explicit names while preserving

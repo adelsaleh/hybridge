@@ -1,6 +1,6 @@
 """Compact HDG solver for linear advection-reaction problems.
 
-This module is the :mod:`dgfem` rewrite of the legacy
+This module is the :mod:`hdgfem` rewrite of the legacy
 ``adv_rea_vec_msh4.py`` solver.  The numerical structure is the same HDG
 trace formulation, but the public API works with :class:`DGSpace`,
 :class:`DGField`, and :class:`VectorDGField` objects instead of raw mesh and
@@ -15,7 +15,7 @@ if __name__ == "__main__" and __package__ in {None, ""}:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("dgfem.solvers.adv_rea", run_name="__main__")
+    runpy.run_module("hdgfem.solvers.adv_rea", run_name="__main__")
     raise SystemExit
 
 import time
@@ -748,7 +748,7 @@ def solve_advection_reaction_hdg(
         Global trace solver name.  The default is ``"BICGSTAB"`` with ILU
         preconditioning.  Use ``"direct"`` or ``None`` for sparse direct solve.
     preconditioner
-        Preconditioner passed to :func:`dgfem.linalg.system.solve_global_system`.
+        Preconditioner passed to :func:`hdgfem.linalg.system.solve_global_system`.
         The default ``"ilu"`` builds a SciPy ILU preconditioner.
     boundary_penalty
         Penalty used to impose boundary trace coefficients in the full trace
@@ -1571,7 +1571,7 @@ def _main() -> None:
     from ..core.space import DGSpace
     from ..io.output import pretty_print_ncol
 
-    parser = ArgumentParser(description="Run the dgfem advection-reaction HDG test2 problem.")
+    parser = ArgumentParser(description="Run the hdgfem advection-reaction HDG test2 problem.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
     parser.add_argument(
         "--domain",
