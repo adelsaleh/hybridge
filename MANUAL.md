@@ -106,14 +106,23 @@ Diffusion-reaction manufactured solve:
 python -m hdgfem.solvers.diff_rea -p 2 --lc 0.30
 ```
 
-The diffusion CLI currently includes legacy tests `0`, `2`, `3`, `5`, and `6`.
-With `--domain auto`, test `3` uses the legacy disk domain and test `6` uses
-the L-shaped reentrant-corner domain.
+The diffusion CLI includes tests `0`, `2`, `3`, `5`, `6`, and tensor-diffusion
+test `7`.  With `--domain auto`, test `3` uses the legacy disk domain and test
+`6` uses the L-shaped reentrant-corner domain.
 
 Use the optional Numba local-solver block builder:
 
 ```bash
 python -m hdgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
+```
+
+Experimental hard-coded tensor test7 fused path:
+
+```bash
+python -m hdgfem.solvers.diff_rea_test7_fused \
+  --domain structured-rectangle --nx 200 --ny 200 -p 6 \
+  --tau 4 --petsc --petsc-preset cg_gamg \
+  --volume-quad-1d 7 --edge-quad-1d 7
 ```
 
 ### Main CLI Options
@@ -290,13 +299,14 @@ from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, test0
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 3, basis_type="dub_orth")
 
-reaction, source, exact = test0()
+diffusion, reaction, source, exact = test0()
 
 result = solve_diffusion_reaction_hdg(
     source,
     reaction,
     exact,
     space,
+    diffusion=diffusion,
     stabilization=1.0,
     solver="BICGSTAB",
 )
@@ -416,10 +426,20 @@ transpose used for trace-tested assembly.  Legacy aliases `MKrfe_lst_p`,
 The weighted tables are there to avoid repeatedly rebuilding reference
 products during local matrix assembly.
 
+By default, volume and edge quadrature use `2 * order + 2` one-dimensional
+Gauss points.  For experiments that need a different rule, pass explicit counts
+through `DGSpace`:
+
+```python
+space = DGSpace(mesh, 6, basis_type="dub_orth", volume_quad_1d=7, edge_quad_1d=7)
+```
+
 ### DGSpace and DGField
 
 `DGSpace(mesh, order, basis_type="dub_orth")` creates a scalar uniform-order DG
-space.  A `DGField` is a coefficient array plus its owning space:
+space.  Optional `volume_quad_1d` and `edge_quad_1d` arguments override the
+default quadrature point counts without changing the polynomial basis degree.
+A `DGField` is a coefficient array plus its owning space:
 
 ```python
 u = space.project_callable(lambda x, y: x + y)

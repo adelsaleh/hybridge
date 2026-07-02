@@ -17,9 +17,9 @@ The canonical diffusion-reaction executable solver is:
 python -m hdgfem.solvers.diff_rea
 ```
 
-Legacy diffusion tests `0`, `2`, `3`, `5`, and `6` are available.  With
-`--domain auto`, test `3` uses a disk and test `6` uses the L-shaped
-reentrant-corner domain.
+Diffusion tests `0`, `2`, `3`, `5`, `6`, and tensor-diffusion test `7` are
+available.  With `--domain auto`, test `3` uses a disk and test `6` uses the
+L-shaped reentrant-corner domain.
 
 Direct script execution also works:
 
@@ -35,6 +35,7 @@ python hdgfem/solvers/adv_rea.py
 - Reusable HDG static-condensation and trace-system assembly helpers.
 - Sparse direct and Krylov trace solves with optional diagonal scaling and ILU.
 - Advection-reaction and diffusion-reaction CLIs.
+- Tensor diffusion coefficients for the diffusion-reaction solver.
 - Projected source, advection, and reaction coefficient paths.
 - Numba-backed projected advection-reaction trace assembly and reconstruction.
 - Boundary trace elimination, upwind SCC trace ordering, and matrix-pattern
@@ -64,6 +65,16 @@ Use the fused projected-coefficient Numba assembly backend:
 
 ```bash
 python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction --assembly-backend numba
+```
+
+Run the experimental hard-coded tensor test7 fused diffusion path with reduced
+quadrature:
+
+```bash
+python -m hdgfem.solvers.diff_rea_test7_fused \
+  --domain structured-rectangle --nx 200 --ny 200 -p 6 \
+  --tau 4 --petsc --petsc-preset cg_gamg \
+  --volume-quad-1d 7 --edge-quad-1d 7
 ```
 
 Use the reusable solver class when a driver needs to keep the mesh, space,

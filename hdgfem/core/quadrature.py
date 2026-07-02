@@ -58,7 +58,16 @@ def _normalize_basis_type(name: str) -> str:
         ) from exc
 
 
-def _triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
+def _quadrature_point_count(order: int, num_1d: int | None) -> int:
+    if num_1d is None:
+        return max(2 * order + 2, 2)
+    count = int(num_1d)
+    if count < 1:
+        raise ValueError("quadrature point count must be positive")
+    return count
+
+
+def _triangle_quadrature(order: int, num_1d: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Build a collapsed tensor-product Gauss rule on the reference triangle.
 
     A tensor Gauss-Legendre rule on ``[-1, 1]^2`` is mapped to the reference
@@ -70,7 +79,7 @@ def _triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
     ``(num_quads,)``.  The weights integrate on the reference triangle only;
     callers multiply by each physical element Jacobian when assembling.
     """
-    num_1d = max(2 * order + 2, 2)
+    num_1d = _quadrature_point_count(order, num_1d)
     s, ws = np.polynomial.legendre.leggauss(num_1d)
     t, wt = np.polynomial.legendre.leggauss(num_1d)
     ss, tt = np.meshgrid(s, t, indexing="xy")
@@ -83,14 +92,14 @@ def _triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
     return np.ascontiguousarray(points), np.ascontiguousarray(weights)
 
 
-def _edge_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
+def _edge_quadrature(order: int, num_1d: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Build a one-dimensional Gauss rule for reference edges.
 
     The same rule is used on all three reference faces.  Points and weights are
     returned in the canonical interval coordinate ``t in [-1, 1]`` with shape
     ``(num_face_quads,)``.
     """
-    num_1d = max(2 * order + 2, 2)
+    num_1d = _quadrature_point_count(order, num_1d)
     points, weights = np.polynomial.legendre.leggauss(num_1d)
     return np.ascontiguousarray(points), np.ascontiguousarray(weights)
 
@@ -240,6 +249,8 @@ class ReferenceElementData:
     basis_type: str = "bernstein"
     verbosity: int = 0
     cache: bool = True
+    volume_quad_1d: int | None = None
+    edge_quad_1d: int | None = None
     el_dof: int = field(init=False)
     edg_dof: int = field(init=False)
     Krf_quads: np.ndarray = field(init=False)
@@ -285,7 +296,7 @@ class ReferenceElementData:
         object.__setattr__(self, "el_dof", (order + 1) * (order + 2) // 2)
         object.__setattr__(self, "edg_dof", order + 1)
 
-        q_points, q_weights = _triangle_quadrature(order)
+        q_points, q_weights = _triangle_quadrature(order, self.volume_quad_1d)
         basis = _evaluate_basis(basis_type, order, q_points)
         gradients = _evaluate_gradients(basis_type, order, q_points)
         phi = np.ascontiguousarray(basis)
@@ -302,7 +313,7 @@ class ReferenceElementData:
             np.array(((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)), dtype=np.float64),
         )
 
-        edge_points, edge_weights = _edge_quadrature(order)
+        edge_points, edge_weights = _edge_quadrature(order, self.edge_quad_1d)
         face_points = _edge_points(edge_points)
         face_basis = _evaluate_basis(basis_type, order, face_points.reshape(-1, 2))
         face_basis = face_basis.reshape(edge_points.size, 3, self.el_dof).transpose(1, 2, 0)
@@ -423,6 +434,8 @@ class ReferenceElementData:
             basis_type: str = "bernstein",
             verbosity: int = 0,
             cache: bool = True,
+            volume_quad_1d: int | None = None,
+            edge_quad_1d: int | None = None,
     ) -> "ReferenceElementData":
         """Build reference data for a triangular DG space.
 
@@ -431,7 +444,14 @@ class ReferenceElementData:
         ``order`` and the returned object contains all volume, edge, and
         preweighted reference tensors needed by :class:`DGSpace`.
         """
-        return cls(polynomial_order, basis_type=basis_type, verbosity=verbosity, cache=cache)
+        return cls(
+            polynomial_order,
+            basis_type=basis_type,
+            verbosity=verbosity,
+            cache=cache,
+            volume_quad_1d=volume_quad_1d,
+            edge_quad_1d=edge_quad_1d,
+        )
 
     @property
     def quadrature(self) -> "ReferenceElementData":

@@ -125,6 +125,8 @@ class DGSpace:
             verbosity: int = 0,
             cache: bool = True,
             name: str = "Vh",
+            volume_quad_1d: int | None = None,
+            edge_quad_1d: int | None = None,
     ) -> None:
         self.mesh = as_dg_mesh(mesh)
         self.reference = ReferenceElementData.triangle(
@@ -132,6 +134,8 @@ class DGSpace:
             basis_type=basis_type,
             verbosity=verbosity,
             cache=cache,
+            volume_quad_1d=volume_quad_1d,
+            edge_quad_1d=edge_quad_1d,
         )
         self.name = str(name)
         self._basis_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
@@ -147,6 +151,8 @@ class DGSpace:
             basis_type: str = "bernstein",
             verbosity: int = 0,
             name: str = "Vh",
+            volume_quad_1d: int | None = None,
+            edge_quad_1d: int | None = None,
     ) -> "DGSpace":
         """Build a scalar DG space from a mesh and polynomial degree.
 
@@ -161,6 +167,8 @@ class DGSpace:
             verbosity=verbosity,
             cache=True,
             name=name,
+            volume_quad_1d=volume_quad_1d,
+            edge_quad_1d=edge_quad_1d,
         )
 
     @property

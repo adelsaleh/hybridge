@@ -91,6 +91,19 @@ def test_constant_field_evaluation_and_norm() -> None:
     np.testing.assert_allclose(u.l2_norm() ** 2, np.sum(V.quad_data.Krf_w))
 
 
+def test_dgspace_accepts_explicit_quadrature_counts() -> None:
+    mesh = reference_triangle_mesh()
+    default = DGSpace(mesh, 3, basis_type="dub_orth")
+    custom = DGSpace(mesh, 3, basis_type="dub_orth", volume_quad_1d=5, edge_quad_1d=4)
+
+    assert default.quad_data.Krf_w.size == (2 * default.order + 2) ** 2
+    assert default.quad_data.weights_JGL.size == 2 * default.order + 2
+    assert custom.quad_data.Krf_w.size == 25
+    assert custom.quad_data.weights_JGL.size == 4
+    assert custom.el_dof == default.el_dof
+    assert custom.quad_data.edg_dof == default.quad_data.edg_dof
+
+
 def test_project_callable_constant() -> None:
     mesh = reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="hier_C0")
@@ -603,13 +616,14 @@ def test_hdg_assembly_helpers_build_trace_system() -> None:
 def test_diffusion_reaction_solver_quadratic_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = diffusion_test0()
 
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="direct",
         preconditioner=None,
@@ -626,13 +640,14 @@ def test_diffusion_reaction_solver_quadratic_smoke() -> None:
 def test_diffusion_reaction_boundary_elimination_matches_penalty_path() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = diffusion_test0()
 
     penalty = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="direct",
         preconditioner=None,
@@ -644,6 +659,7 @@ def test_diffusion_reaction_boundary_elimination_matches_penalty_path() -> None:
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="direct",
         preconditioner=None,
@@ -659,13 +675,14 @@ def test_diffusion_reaction_boundary_elimination_matches_penalty_path() -> None:
 def test_diffusion_reaction_boundary_elimination_weak_ilu_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = diffusion_test0()
 
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="BICGSTAB",
         preconditioner="ilu",
@@ -684,13 +701,14 @@ def test_diffusion_reaction_boundary_elimination_weak_ilu_smoke() -> None:
 def test_diffusion_reaction_symmetric_krylov_jacobi_smoke(solver) -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = diffusion_test0()
 
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver=solver,
         preconditioner="jacobi",
@@ -716,13 +734,14 @@ def test_trace_degree_elevation_from_linear_to_cubic() -> None:
 def test_diffusion_reaction_bootstrap_initial_guess_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = diffusion_test0()
 
     result = solve_diffusion_reaction_hdg_with_bootstrap(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="BICGSTAB",
         preconditioner="ilu",
@@ -757,13 +776,14 @@ def test_initial_guess_boundary_trace_is_imposed() -> None:
 def test_diffusion_reaction_legacy_tests_3_and_6_smoke(problem) -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 1, basis_type="dub_orth")
-    reaction, source, exact = problem()
+    diffusion, reaction, source, exact = problem()
 
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         V,
+        diffusion=diffusion,
         stabilization=1.0,
         solver="direct",
         preconditioner=None,

@@ -9,6 +9,8 @@ from hdgfem.solvers.diff_rea import (
     DiffusionReactionHDGSolver as DiffReaSolver,
     solve_diffusion_reaction_hdg,
     test0 as diff_rea_test0,
+    test7 as diff_rea_test7,
+    test7_gradients as diff_rea_test7_gradients,
 )
 
 
@@ -17,12 +19,12 @@ def _space(order: int = 2) -> DGSpace:
 
 
 def _callable_problem():
-    reaction, source, exact = diff_rea_test0()
+    _, reaction, source, exact = diff_rea_test0()
     return source, reaction, exact
 
 
 def _projected_problem(space: DGSpace):
-    reaction, source, exact = diff_rea_test0()
+    _, reaction, source, exact = diff_rea_test0()
     return (
         DGField(source, space, name="source_h"),
         DGField(reaction, space, name="reaction_h"),
@@ -147,3 +149,91 @@ def test_diff_rea_solver_rejects_incomplete_problem_update() -> None:
     solver.set_problem(source, reaction, exact)
     result = solver.solve()
     assert result.trace is not None
+
+
+def test_identity_diffusion_argument_preserves_default_solution() -> None:
+    space = _space(order=2)
+    diffusion, reaction, source, exact = diff_rea_test0()
+    kwargs = {
+        "stabilization": 1.0,
+        "solver": "direct",
+        "preconditioner": None,
+        "boundary_mode": "eliminate",
+        "verbose": False,
+    }
+
+    default = solve_diffusion_reaction_hdg(source, reaction, exact, space, **kwargs)
+    explicit = solve_diffusion_reaction_hdg(source, reaction, exact, space, diffusion=diffusion, **kwargs)
+
+    np.testing.assert_allclose(explicit.trace, default.trace, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(explicit.field.coeffs, default.field.coeffs, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(
+        explicit.flux.as_component_first(),
+        default.flux.as_component_first(),
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_tensor_diffusion_manufactured_solution_numpy_and_numba_agree() -> None:
+    mesh = rectangle_mesh(3, 3)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    diffusion, reaction, source, exact = diff_rea_test7()
+    kwargs = {
+        "diffusion": diffusion,
+        "stabilization": 4.0,
+        "solver": "direct",
+        "preconditioner": None,
+        "boundary_mode": "eliminate",
+        "verbose": False,
+    }
+
+    numpy_result = solve_diffusion_reaction_hdg(source, reaction, exact, space, assembly_backend="numpy", **kwargs)
+    numba_result = solve_diffusion_reaction_hdg(source, reaction, exact, space, assembly_backend="numba", **kwargs)
+
+    assert numpy_result.field.l2_error(exact) < 2.0e-2
+    np.testing.assert_allclose(numba_result.trace, numpy_result.trace, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(numba_result.field.coeffs, numpy_result.field.coeffs, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(
+        numba_result.flux.as_component_first(),
+        numpy_result.flux.as_component_first(),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
+def test_tensor_diffusion_flux_uses_conservative_sign() -> None:
+    mesh = rectangle_mesh(4, 4)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    diffusion, reaction, source, exact = diff_rea_test7()
+    gradx, grady = diff_rea_test7_gradients()
+    k11, k12, k22 = diffusion
+
+    result = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=4.0,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        verbose=False,
+    )
+
+    points = space.mapped_quads()
+    x = points[:, :, 0]
+    y = points[:, :, 1]
+    exact_qx = -(k11(x, y) * gradx(x, y) + k12(x, y) * grady(x, y))
+    exact_qy = -(k12(x, y) * gradx(x, y) + k22(x, y) * grady(x, y))
+    qx = result.flux.components[0].values()
+    qy = result.flux.components[1].values()
+
+    weights = space.quad_data.Krf_w
+    jac = space.mesh.aff_jacs
+    flux_error = np.sqrt(
+        np.einsum("K,Kq,q->", jac, (qx - exact_qx) ** 2 + (qy - exact_qy) ** 2, weights, optimize=True)
+    )
+    flux_norm = np.sqrt(np.einsum("K,Kq,q->", jac, exact_qx**2 + exact_qy**2, weights, optimize=True))
+    assert flux_error / flux_norm < 4.0e-2

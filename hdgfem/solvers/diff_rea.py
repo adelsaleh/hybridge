@@ -5,11 +5,11 @@ It solves
 
 .. math::
 
-    -\Delta u + r u = f
+    -\nabla\cdot(\kappa\nabla u) + r u = f
 
 with the mixed local unknown vector ``[u_h, q_{x,h}, q_{y,h}]`` and a global
-HDG trace unknown.  Local dense algebra is implemented in vectorized NumPy, with
-an optional Numba-assisted setup path for the block local solvers.
+HDG trace unknown.  Identity diffusion uses the scalar fast path; tensor
+diffusion uses dense local mixed inverses.
 """
 
 from __future__ import annotations
@@ -130,6 +130,7 @@ class DiffusionReactionResult:
 class DiffusionReactionHDGOptions:
     """Configuration for :class:`DiffusionReactionHDGSolver`."""
 
+    diffusion: Any = 1.0
     stabilization: Any = 1.0
     solver: str | None = "BICGSTAB"
     preconditioner: Any = "ilu"
@@ -225,9 +226,15 @@ def zero_func(x, y):
     return 0.0 * x * y
 
 
+def identity_diffusion():
+    """Identity diffusion tensor in symmetric component form ``(k00, k01, k11)``."""
+    return 1.0, 0.0, 1.0
+
+
 def test0():
     """Legacy diffusion test: quadratic exact solution on a rectangle."""
     return (
+        identity_diffusion(),
         zero_func,
         lambda x, y: -4.0 + 0.0 * x * y,
         lambda x, y: 1.0 + x**2 + y**2,
@@ -237,6 +244,7 @@ def test0():
 def test2():
     """Legacy unit-square manufactured solution."""
     return (
+        identity_diffusion(),
         zero_func,
         lambda x, y: -2.0 * x * (y - 1.0) * (y - 2.0 * x + x * y + 2.0) * np.exp(x - y),
         lambda x, y: np.exp(x - y) * x * (1.0 - x) * y * (1.0 - y),
@@ -246,6 +254,7 @@ def test2():
 def test3():
     """Legacy smooth trigonometric test, usually run on a disk."""
     return (
+        identity_diffusion(),
         zero_func,
         lambda x, y: -(
             4.0 * np.cos(x**2 + y**2)
@@ -262,6 +271,7 @@ def test5():
         return np.cos(3.0 * np.pi * x) + np.cos(3.0 * np.pi * y) + 2.0
 
     return (
+        identity_diffusion(),
         reaction,
         lambda x, y: -4.0 + reaction(x, y) * (x**2 + y**2),
         lambda x, y: x**2 + y**2,
@@ -271,11 +281,88 @@ def test5():
 def test6():
     """Legacy L-shape reentrant-corner singular harmonic solution."""
     return (
+        identity_diffusion(),
         zero_func,
         zero_func,
         lambda x, y: (x**2 + y**2) ** (1.0 / 3.0)
         * np.sin((2.0 / 3.0) * (np.arctan2(y, x) + np.pi / 2.0)),
     )
+
+
+def _tensor_sine_case(m: int = 1, n: int = 1):
+    r"""Smooth tensor-diffusion manufactured solution on ``[-1, 1]^2``.
+
+    The returned source follows this module's elliptic sign convention,
+
+    .. math::
+
+        -\nabla\cdot(\kappa\nabla u) + r u = f.
+
+    The tensor is symmetric positive definite:
+
+    .. math::
+
+        \kappa =
+        \begin{bmatrix}
+        2+x^2 & \tfrac12 xy \\
+        \tfrac12 xy & 3+y^2
+        \end{bmatrix}.
+    """
+
+    a = 0.5 * int(m) * np.pi
+    b = 0.5 * int(n) * np.pi
+
+    def exact(x, y):
+        return np.sin(a * (x + 1.0)) * np.sin(b * (y + 1.0))
+
+    def gradx(x, y):
+        return a * np.cos(a * (x + 1.0)) * np.sin(b * (y + 1.0))
+
+    def grady(x, y):
+        return b * np.sin(a * (x + 1.0)) * np.cos(b * (y + 1.0))
+
+    def reaction(x, y):
+        return 1.0 + x**2 + y**2
+
+    def source(x, y):
+        u = exact(x, y)
+        ux = gradx(x, y)
+        uy = grady(x, y)
+        uxx = -(a**2) * u
+        uyy = -(b**2) * u
+        uxy = a * b * np.cos(a * (x + 1.0)) * np.cos(b * (y + 1.0))
+
+        div_kappa_grad_u = (
+            (2.0 + x**2) * uxx
+            + x * y * uxy
+            + (3.0 + y**2) * uyy
+            + 2.5 * x * ux
+            + 2.5 * y * uy
+        )
+        return -div_kappa_grad_u + reaction(x, y) * u
+
+    def k11(x, y):
+        return 2.0 + x**2
+
+    def k12(x, y):
+        return 0.5 * x * y
+
+    def k22(x, y):
+        return 3.0 + y**2
+
+    return (k11, k12, k22), reaction, source, exact, gradx, grady
+
+
+def test7(m: int = 1, n: int = 1):
+    """Tensor-diffusion sine manufactured solution as ``(diffusion, r, f, u)``."""
+    diffusion, reaction, source, exact, _, _ = _tensor_sine_case(m, n)
+    return diffusion, reaction, source, exact
+
+
+def test7_gradients(m: int = 1, n: int = 1):
+    """Return exact gradient callables for :func:`test7`."""
+    _, _, _, _, gradx, grady = _tensor_sine_case(m, n)
+    return gradx, grady
 
 
 def _normalize_tau(stabilization, space: DGSpace) -> np.ndarray:
@@ -288,6 +375,133 @@ def _normalize_tau(stabilization, space: DGSpace) -> np.ndarray:
     if tau.shape != (space.mesh.num_tri, 3):
         raise ValueError(f"stabilization must be scalar or have shape ({space.mesh.num_tri}, 3); got {tau.shape}")
     return np.ascontiguousarray(tau)
+
+
+def _diffusion_is_identity(diffusion) -> bool:
+    """Return whether diffusion represents the identity tensor exactly enough."""
+    if np.isscalar(diffusion):
+        return bool(float(diffusion) == 1.0)
+    try:
+        array = np.asarray(diffusion, dtype=np.float64)
+    except (TypeError, ValueError):
+        return False
+    if array.shape == (2, 2):
+        return bool(np.allclose(array, np.eye(2), rtol=0.0, atol=0.0))
+    if array.shape == (3,):
+        return bool(np.allclose(array, np.array([1.0, 0.0, 1.0]), rtol=0.0, atol=0.0))
+    if array.shape == (4,):
+        return bool(np.allclose(array, np.array([1.0, 0.0, 0.0, 1.0]), rtol=0.0, atol=0.0))
+    return False
+
+
+def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np.ndarray:
+    """Evaluate one scalar coefficient component on volume quadrature points."""
+    num_elements = space.mesh.num_tri
+    num_quads = space.quad_data.Krf_w.shape[0]
+    if np.isscalar(component):
+        return np.full((num_elements, num_quads), float(component), dtype=np.float64)
+    if isinstance(component, DGField):
+        component.space.assert_same_mesh(space)
+        return np.asarray(component.values_at_ref(space.quad_data.Krf_quads), dtype=np.float64)
+    if callable(component):
+        points = space.mapped_quads()
+        values = component(points[:, :, 0], points[:, :, 1])
+    else:
+        values = np.asarray(component, dtype=np.float64)
+        if values.shape == space.shape:
+            values = space.field(values, name=label).values()
+        elif values.shape != (num_elements, num_quads):
+            raise ValueError(
+                f"{label} must be scalar, callable, DGField, DG coefficients with shape "
+                f"{space.shape}, or quadrature values with shape ({num_elements}, {num_quads}); "
+                f"got {values.shape}"
+            )
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim == 0:
+        return np.full((num_elements, num_quads), float(values), dtype=np.float64)
+    if values.shape == (num_quads,):
+        return np.broadcast_to(values[None, :], (num_elements, num_quads)).copy()
+    if values.shape != (num_elements, num_quads):
+        raise ValueError(
+            f"{label} values must have shape ({num_elements}, {num_quads}); got {values.shape}"
+        )
+    return np.ascontiguousarray(values)
+
+
+def _diffusion_components(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return diffusion tensor components sampled on volume quadrature points."""
+    num_elements = space.mesh.num_tri
+    num_quads = space.quad_data.Krf_w.shape[0]
+    zeros = np.zeros((num_elements, num_quads), dtype=np.float64)
+
+    if np.isscalar(diffusion):
+        diagonal = np.full((num_elements, num_quads), float(diffusion), dtype=np.float64)
+        return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
+
+    try:
+        constant = np.asarray(diffusion, dtype=np.float64)
+    except (TypeError, ValueError):
+        constant = None
+    if constant is not None and constant.shape == (2, 2):
+        k00 = np.full((num_elements, num_quads), constant[0, 0], dtype=np.float64)
+        k01 = np.full((num_elements, num_quads), constant[0, 1], dtype=np.float64)
+        k10 = np.full((num_elements, num_quads), constant[1, 0], dtype=np.float64)
+        k11 = np.full((num_elements, num_quads), constant[1, 1], dtype=np.float64)
+        return k00, k01, k10, k11
+
+    if isinstance(diffusion, (tuple, list)):
+        if len(diffusion) == 3:
+            k00, k01, k11 = diffusion
+            k10 = k01
+        elif len(diffusion) == 4:
+            k00, k01, k10, k11 = diffusion
+        elif (
+            len(diffusion) == 2
+            and all(isinstance(row, (tuple, list)) and len(row) == 2 for row in diffusion)
+        ):
+            k00, k01 = diffusion[0]
+            k10, k11 = diffusion[1]
+        else:
+            raise ValueError("diffusion must be scalar, 2x2 constant, (k00,k01,k11), or (k00,k01,k10,k11)")
+        return (
+            _component_quadrature_values(k00, space, label="diffusion[0,0]"),
+            _component_quadrature_values(k01, space, label="diffusion[0,1]"),
+            _component_quadrature_values(k10, space, label="diffusion[1,0]"),
+            _component_quadrature_values(k11, space, label="diffusion[1,1]"),
+        )
+
+    raise TypeError("diffusion must be scalar, a constant 2x2 array, or component callables/fields")
+
+
+def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    r"""Assemble local mass blocks for :math:`\kappa^{-1}`.
+
+    Returns ``(G00, G01, G10, G11)`` where
+    ``Gab[K] = int_K (kappa^{-1})_{ab} phi_i phi_j dx``.
+    """
+    from ..assembly import matrices_numpy as hdg_mats
+
+    k00, k01, k10, k11 = _diffusion_components(diffusion, space)
+    det = k00 * k11 - k01 * k10
+    det_min = float(np.min(det))
+    if det_min <= 0.0:
+        raise ValueError(f"diffusion tensor must be pointwise positive definite; minimum determinant is {det_min}")
+
+    inv00 = k11 / det
+    inv01 = -k01 / det
+    inv10 = -k10 / det
+    inv11 = k00 / det
+
+    shape = (space.mesh.num_tri, space.el_dof, space.el_dof)
+    g00 = np.empty(shape, dtype=np.float64)
+    g01 = np.empty(shape, dtype=np.float64)
+    g10 = np.empty(shape, dtype=np.float64)
+    g11 = np.empty(shape, dtype=np.float64)
+    hdg_mats.set_weighted_mass_from_values(g00, inv00, space)
+    hdg_mats.set_weighted_mass_from_values(g01, inv01, space)
+    hdg_mats.set_weighted_mass_from_values(g10, inv10, space)
+    hdg_mats.set_weighted_mass_from_values(g11, inv11, space)
+    return g00, g01, g10, g11
 
 
 def _project_callable_for_numba(value, space: DGSpace, *, name: str):
@@ -386,12 +600,50 @@ def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity
     return d0, d1, m_tau, m_n0, m_n1, jacs_inv
 
 
-def local_solvers_numpy(reaction, stabilization, space: DGSpace) -> np.ndarray:
+def local_solvers_numpy(reaction, stabilization, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
     """Build local mixed diffusion-reaction solvers with vectorized NumPy."""
     q = space.quad_data
     d0, d1, m_tau, m_n0, m_n1, jacs_inv = _local_solver_pre_mats(reaction, stabilization, space)
+    if not _diffusion_is_identity(diffusion):
+        g00, g01, g10, g11 = diffusion_inverse_mass_blocks(diffusion, space)
+        return _local_solver_tensor_blocks_numpy(d0, d1, m_tau, m_n0, m_n1, g00, g01, g10, g11, space)
     e = _local_solver_scalar_inverse(d0, d1, m_tau, m_n0, m_n1, jacs_inv, space)
     return _local_solver_blocks_numpy(e, d0, d1, m_n0, m_n1, jacs_inv, space)
+
+
+def _local_solver_tensor_blocks_numpy(
+        d0: np.ndarray,
+        d1: np.ndarray,
+        m_tau: np.ndarray,
+        m_n0: np.ndarray,
+        m_n1: np.ndarray,
+        g00: np.ndarray,
+        g01: np.ndarray,
+        g10: np.ndarray,
+        g11: np.ndarray,
+        space: DGSpace,
+) -> np.ndarray:
+    r"""Invert local mixed systems for ``-div(kappa grad u) + r u``.
+
+    The flux unknown follows the conservative HDG convention
+    ``q = -kappa grad u``.  The local mixed equations therefore contain the
+    block mass matrix of ``kappa^{-1}`` in the two flux rows.
+    """
+    q = space.quad_data
+    local_matrix = np.zeros((space.mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof), dtype=np.float64)
+    blocks = local_matrix.reshape(space.mesh.num_tri, 3, q.el_dof, 3, q.el_dof)
+
+    blocks[:, 0, :, 0, :] = m_tau
+    blocks[:, 0, :, 1, :] = m_n0 - d0
+    blocks[:, 0, :, 2, :] = m_n1 - d1
+    blocks[:, 1, :, 0, :] = d0
+    blocks[:, 1, :, 1, :] = -g00
+    blocks[:, 1, :, 2, :] = -g01
+    blocks[:, 2, :, 0, :] = d1
+    blocks[:, 2, :, 1, :] = -g10
+    blocks[:, 2, :, 2, :] = -g11
+
+    return np.ascontiguousarray(np.linalg.inv(local_matrix))
 
 
 def _local_solver_scalar_inverse(
@@ -492,8 +744,12 @@ else:
     _build_res_numba = None
 
 
-def local_solvers_numba(reaction, stabilization, space: DGSpace) -> np.ndarray:
+def local_solvers_numba(reaction, stabilization, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
     """Build local solvers using Numba for the final block construction."""
+    if not _diffusion_is_identity(diffusion):
+        # Tensor diffusion couples q_x and q_y through kappa^{-1}; use the
+        # general dense local inverse while still allowing Numba trace assembly.
+        return local_solvers_numpy(reaction, stabilization, space, diffusion=diffusion)
     if _build_res_numba is None:
         raise RuntimeError("local_solvers_numba requires numba")
     q = space.quad_data
@@ -508,12 +764,13 @@ def local_solvers(
         space: DGSpace,
         *,
         backend: LocalSolverBackend = "numpy",
+        diffusion=1.0,
 ) -> np.ndarray:
     """Build local mixed diffusion-reaction solvers."""
     if backend == "numpy":
-        return local_solvers_numpy(reaction, stabilization, space)
+        return local_solvers_numpy(reaction, stabilization, space, diffusion=diffusion)
     if backend == "numba":
-        return local_solvers_numba(reaction, stabilization, space)
+        return local_solvers_numba(reaction, stabilization, space, diffusion=diffusion)
     raise ValueError("backend must be 'numpy' or 'numba'")
 
 
@@ -754,7 +1011,7 @@ class DiffusionReactionHDGSolver:
         self._require_problem_or_partial_update()
         self.source = source
         self._problem_is_set = self.reaction is not None and self.boundary_condition is not None
-        if self.options.assembly_backend == "numba":
+        if self.options.assembly_backend == "numba" and _diffusion_is_identity(self.options.diffusion):
             self.clear_rhs_and_solution()
         else:
             self.clear_cache()
@@ -848,6 +1105,8 @@ class DiffusionReactionHDGSolver:
         self._require_problem()
         if (
             self.options.assembly_backend == "numba"
+            and _diffusion_is_identity(self.options.diffusion)
+            and self.local_solver is None
             and self.solve_rows is not None
             and self.solve_cols is not None
             and self.solve_data is not None
@@ -1056,6 +1315,7 @@ def solve_diffusion_reaction_hdg(
         boundary_condition: Callable,
         space: DGSpace,
         *,
+        diffusion=1.0,
         stabilization=1.0,
         solver: str | None = "BICGSTAB",
         preconditioner="ilu",
@@ -1079,7 +1339,7 @@ def solve_diffusion_reaction_hdg(
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
-    r"""Solve :math:`-\Delta u + r u=f` with HDG static condensation."""
+    r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with HDG static condensation."""
     total_start = time.perf_counter()
     verbosity = _verbosity_level(verbose)
     if verbosity:
@@ -1091,6 +1351,7 @@ def solve_diffusion_reaction_hdg(
     effective_backend = "numpy" if assembly_backend == "auto" else assembly_backend
     effective_boundary_mode = "eliminate" if effective_backend == "numba" else boundary_mode
     effective_scale_system = False if solver is not None and str(solver).lower() == "petsc" else scale_system
+    projected_numba_diffusion = effective_backend == "numba" and _diffusion_is_identity(diffusion)
 
     def prepare_data():
         tau, _ = _timed_call(
@@ -1101,7 +1362,7 @@ def solve_diffusion_reaction_hdg(
         )
         source_input = source
         reaction_input = reaction
-        if effective_backend == "numba":
+        if projected_numba_diffusion:
             source_input = _project_callable_for_numba(source, space, name="source_h")
             reaction_input = _project_callable_for_numba(reaction, space, name="reaction_h")
             return tau, None, source_input, reaction_input
@@ -1119,13 +1380,22 @@ def solve_diffusion_reaction_hdg(
         prepare_data,
         multiline=verbosity >= 2,
     )
-    effective_local_solver_backend = "numba" if effective_backend == "numba" else local_solver_backend
+    effective_local_solver_backend = "numba" if projected_numba_diffusion else local_solver_backend
 
     def build_local_solver():
         if effective_local_solver_backend not in {"numpy", "numba"}:
             raise ValueError("local_solver_backend must be 'numpy' or 'numba'")
         if effective_local_solver_backend == "numba" and _build_res_numba is None:
             raise RuntimeError("local_solver_backend='numba' requires numba")
+
+        if not _diffusion_is_identity(diffusion):
+            return local_solvers(
+                reaction_for_local,
+                tau,
+                space,
+                backend=effective_local_solver_backend,
+                diffusion=diffusion,
+            )
 
         d0, d1, m_tau, m_n0, m_n1, jacs_inv = _local_solver_pre_mats(
             reaction_for_local,
@@ -1157,7 +1427,7 @@ def solve_diffusion_reaction_hdg(
             )
         return local_solver
 
-    if effective_backend == "numba":
+    if projected_numba_diffusion:
         local_solver = None
         local_solver_time = 0.0
         element_boundary_mats = None
@@ -1176,12 +1446,23 @@ def solve_diffusion_reaction_hdg(
         )
 
     def assemble_trace():
-        if effective_backend == "numba":
+        if projected_numba_diffusion:
             from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
 
             return assemble_projected_diffusion_trace_system_eliminated_numba(
                 source_for_backend,
                 reaction_for_local,
+                boundary_condition,
+                tau,
+                space,
+            )
+        if effective_backend == "numba":
+            from ..backends.numba import assemble_diffusion_trace_system_eliminated_numba
+
+            return assemble_diffusion_trace_system_eliminated_numba(
+                local_solver,
+                element_boundary_mats,
+                source_rhs,
                 boundary_condition,
                 tau,
                 space,
@@ -1199,6 +1480,8 @@ def solve_diffusion_reaction_hdg(
 
     trace_assembly_label = (
         "assembling reduced global trace system (numba)"
+        if projected_numba_diffusion
+        else "assembling reduced generic trace system (numba)"
         if effective_backend == "numba"
         else "assembling global trace system"
     )
@@ -1311,7 +1594,7 @@ def solve_diffusion_reaction_hdg(
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
     def reconstruct():
-        if effective_backend == "numba":
+        if projected_numba_diffusion:
             from ..backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
             unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
@@ -1319,6 +1602,16 @@ def solve_diffusion_reaction_hdg(
                 source_for_backend,
                 reaction_for_local,
                 tau,
+                space,
+            )
+        elif effective_backend == "numba":
+            from ..backends.numba import reconstruct_diffusion_local_unknowns_numba
+
+            unknowns = reconstruct_diffusion_local_unknowns_numba(
+                trace,
+                source_rhs,
+                local_solver,
+                element_boundary_mats,
                 space,
             )
         else:
@@ -1431,7 +1724,9 @@ def _test_problem(test_id: int):
         return test5()
     if test_id == 6:
         return test6()
-    raise ValueError("supported tests are 0, 2, 3, 5, and 6")
+    if test_id == 7:
+        return test7()
+    raise ValueError("supported tests are 0, 2, 3, 5, 6, and 7")
 
 
 def _main() -> None:
@@ -1442,7 +1737,7 @@ def _main() -> None:
 
     parser = ArgumentParser(description="Run the hdgfem diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
-    parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6), help="manufactured legacy test id")
+    parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6, 7), help="manufactured test id")
     parser.add_argument(
         "--domain",
         default="auto",
@@ -1577,13 +1872,14 @@ def _main() -> None:
 
     mesh, _ = _timed_call(f"generating {args.domain} mesh", verbosity, build_mesh)
     space = DGSpace(mesh, args.order, basis_type=args.basis)
-    reaction, source, exact = _test_problem(args.test)
+    diffusion, reaction, source, exact = _test_problem(args.test)
     petsc_options = _parse_key_value_options(args.petsc_option)
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         space,
+        diffusion=diffusion,
         stabilization=args.tau,
         solver=args.solver,
         preconditioner=None if args.preconditioner == "none" else args.preconditioner,
@@ -1621,6 +1917,7 @@ def _main() -> None:
         ("# edges", mesh.num_edg, ",d"),
         ("#global_dof", result.trace.size, ",d"),
         ("tau", args.tau, ".3e"),
+        ("diffusion", "identity" if _diffusion_is_identity(diffusion) else "tensor", "s"),
         ("h^p", mesh.h ** (space.order + 1), ".4e"),
         ("L2 error", l2_error, ".4e"),
         ("Linf error", linfty_error, ".4e"),
@@ -1634,7 +1931,7 @@ def _main() -> None:
         ("preconditioner", "petsc" if str(args.solver).lower() == "petsc" else args.preconditioner, "s"),
         ("scaling", "left" if result.scale_system else "none", "s"),
         ("assembly backend", result.assembly_backend, "s"),
-        ("local backend", "fused" if result.assembly_backend == "numba" else args.local_backend, "s"),
+        ("local backend", "fused" if result.assembly_backend == "numba" and result.local_solver is None else args.local_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
     ]
     if str(args.solver).lower() == "petsc":
@@ -1676,6 +1973,8 @@ __all__ = [
     "DiffusionReactionTimings",
     "assemble_diffusion_trace_system",
     "diff_rea_hdg_solve",
+    "identity_diffusion",
+    "diffusion_inverse_mass_blocks",
     "diffusion_element_boundary_mats",
     "diffusion_trace_lift",
     "interior_stabilization_mass_blocks",
@@ -1690,6 +1989,8 @@ __all__ = [
     "test3",
     "test5",
     "test6",
+    "test7",
+    "test7_gradients",
     "zero_func",
 ]
 

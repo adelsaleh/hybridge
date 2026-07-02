@@ -97,6 +97,7 @@ def _load_hdgfem() -> None:
     global assemble_projected_trace_system_eliminated_numba
     global assemble_projected_trace_system_numba
     global diff_rea_tests
+    global diffusion_is_identity
     global diffusion_element_boundary_mats
     global eliminate_known_dofs
     global hdg_assembly
@@ -134,6 +135,9 @@ def _load_hdgfem() -> None:
         from hdgfem.linalg.system import eliminate_known_dofs as _eliminate_known_dofs
         from hdgfem.solvers.adv_rea import test2 as _adv_rea_test2
         from hdgfem.solvers.diff_rea import (
+            _diffusion_is_identity as _diffusion_is_identity,
+        )
+        from hdgfem.solvers.diff_rea import (
             _local_solver_blocks_numpy as _local_solver_blocks_numpy,
         )
         from hdgfem.solvers.diff_rea import (
@@ -166,6 +170,7 @@ def _load_hdgfem() -> None:
         "test5": _diff_test5,
         "test6": _diff_test6,
     }
+    diffusion_is_identity = _diffusion_is_identity
     diffusion_element_boundary_mats = _diffusion_element_boundary_mats
     eliminate_known_dofs = _eliminate_known_dofs
     hdg_assembly = _hdg_assembly
@@ -199,7 +204,9 @@ def _projected_adv_test2_fields(space: DGSpace):
 
 
 def _projected_diff_fields(space: DGSpace, test_name: str):
-    reaction, source, exact = diff_rea_tests[test_name]()
+    diffusion, reaction, source, exact = diff_rea_tests[test_name]()
+    if not diffusion_is_identity(diffusion):
+        raise ValueError("compare_assembly_backends only supports identity diffusion tests")
     return (
         DGField(source, space, name="source_h"),
         DGField(reaction, space, name="reaction_h"),

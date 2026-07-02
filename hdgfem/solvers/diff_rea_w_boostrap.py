@@ -103,6 +103,7 @@ def bootstrap_trace_initial_guess(
         boundary_condition: Callable,
         target_space: DGSpace,
         *,
+        diffusion=1.0,
         bootstrap_order: int = 1,
         stabilization=1.0,
         solver: str | None = "BICGSTAB",
@@ -149,6 +150,7 @@ def bootstrap_trace_initial_guess(
         reaction,
         boundary_condition,
         bootstrap_space,
+        diffusion=diffusion,
         stabilization=stabilization,
         solver=solver,
         preconditioner=preconditioner,
@@ -204,6 +206,7 @@ def solve_diffusion_reaction_hdg(
         boundary_condition: Callable,
         space: DGSpace,
         *,
+        diffusion=1.0,
         stabilization=1.0,
         solver: str | None = "BICGSTAB",
         preconditioner="ilu",
@@ -233,7 +236,7 @@ def solve_diffusion_reaction_hdg(
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
-    r"""Solve :math:`-\Delta u + r u=f` with an optional bootstrap trace guess.
+    r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with an optional bootstrap trace guess.
 
     This wrapper keeps the normal solver in :mod:`hdgfem.solvers.diff_rea` untouched.  If
     ``bootstrap_order`` is provided, it first solves the same problem on the
@@ -256,6 +259,7 @@ def solve_diffusion_reaction_hdg(
                 reaction,
                 boundary_condition,
                 space,
+                diffusion=diffusion,
                 bootstrap_order=int(bootstrap_order),
                 stabilization=stabilization,
                 solver=solver if bootstrap_solver is None else bootstrap_solver,
@@ -286,6 +290,7 @@ def solve_diffusion_reaction_hdg(
         reaction,
         boundary_condition,
         space,
+        diffusion=diffusion,
         stabilization=stabilization,
         solver=solver,
         preconditioner=preconditioner,
@@ -570,13 +575,14 @@ def _main() -> None:
 
     mesh, _ = _timed_call(f"generating {args.domain} mesh", verbosity, build_mesh)
     space = DGSpace(mesh, args.order, basis_type=args.basis)
-    reaction, source, exact = _test_problem(args.test)
+    diffusion, reaction, source, exact = _test_problem(args.test)
     petsc_options = _parse_key_value_options(args.petsc_option)
     result = solve_diffusion_reaction_hdg(
         source,
         reaction,
         exact,
         space,
+        diffusion=diffusion,
         stabilization=args.tau,
         solver=args.solver,
         preconditioner=_as_optional_preconditioner(args.preconditioner),
