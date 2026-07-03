@@ -11,15 +11,31 @@ The canonical advection-reaction executable solver is:
 python -m hdgfem.solvers.adv_rea
 ```
 
-The canonical diffusion-reaction executable solver is:
+The manufactured diffusion-reaction case runner is:
 
 ```bash
-python -m hdgfem.solvers.diff_rea
+python scripts/run_diff_rea_cases.py
 ```
 
-Diffusion tests `0`, `2`, `3`, `5`, `6`, and tensor-diffusion test `7` are
-available.  With `--domain auto`, test `3` uses a disk and test `6` uses the
-L-shaped reentrant-corner domain.
+Preset definitions live in the `PRESETS` dictionary inside
+`scripts/run_diff_rea_cases.py`.  List the available presets with:
+
+```bash
+python scripts/run_diff_rea_cases.py --list-presets
+```
+
+Select a preset by passing its name.  To add a new manufactured PDE case, add
+it to `scripts/diff_rea_cases.py`; to add a new run configuration, add an
+entry to `PRESETS` in `scripts/run_diff_rea_cases.py`.
+
+The runner keeps numerical parameters in presets.  Command-line flags are
+limited to presentation and inspection, for example:
+
+```bash
+python scripts/run_diff_rea_cases.py tensor_sine_quick --plot
+python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
+python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
+```
 
 Direct script execution also works:
 
@@ -67,8 +83,15 @@ Use the fused projected-coefficient Numba assembly backend:
 python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction --assembly-backend numba
 ```
 
-Run the experimental hard-coded tensor test7 fused diffusion path with reduced
-quadrature:
+Run tensor diffusion test7 through the main diffusion solver's projected
+Numba tensor path with reduced quadrature:
+
+```bash
+python scripts/run_diff_rea_cases.py tensor_sine_gamg
+```
+
+An experimental hard-coded test7 fused diffusion path is also available for
+kernel comparisons:
 
 ```bash
 python -m hdgfem.solvers.diff_rea_test7_fused \

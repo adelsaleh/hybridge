@@ -103,20 +103,42 @@ python -m hdgfem.solvers.adv_rea -p 4 --domain triangle --lc 0.08
 Diffusion-reaction manufactured solve:
 
 ```bash
-python -m hdgfem.solvers.diff_rea -p 2 --lc 0.30
+python scripts/run_diff_rea_cases.py quadratic_poisson
 ```
 
-The diffusion CLI includes tests `0`, `2`, `3`, `5`, `6`, and tensor-diffusion
-test `7`.  With `--domain auto`, test `3` uses the legacy disk domain and test
-`6` uses the L-shaped reentrant-corner domain.
-
-Use the optional Numba local-solver block builder:
+Manufactured run defaults are stored in the `PRESETS` dictionary inside
+`scripts/run_diff_rea_cases.py`; edit that dictionary to change case
+parameters, mesh defaults, quadrature, stabilization, or solver settings.
+Available presets can be listed with:
 
 ```bash
-python -m hdgfem.solvers.diff_rea -p 4 --lc 0.08 --local-backend numba
+python scripts/run_diff_rea_cases.py --list-presets
 ```
 
-Experimental hard-coded tensor test7 fused path:
+The runner keeps numerical settings in presets.  Command-line flags are limited
+to plotting, verbosity, and preset inspection:
+
+```bash
+python scripts/run_diff_rea_cases.py tensor_sine_quick --plot
+python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
+python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
+```
+
+To create a new manufactured PDE, add a factory and `CASE_DEFINITIONS` entry in
+`scripts/diff_rea_cases.py`.  To create a new run configuration for an existing
+or new PDE, add a `DiffusionReactionRunPreset` entry to `PRESETS` in
+`scripts/run_diff_rea_cases.py`.
+
+Use the optional Numba local-solver block builder by adding or editing a preset
+with `local_backend="numba"`.
+
+Tensor diffusion test7 through the main projected Numba tensor path:
+
+```bash
+python scripts/run_diff_rea_cases.py tensor_sine_gamg
+```
+
+Experimental hard-coded tensor test7 fused path for kernel comparisons:
 
 ```bash
 python -m hdgfem.solvers.diff_rea_test7_fused \
@@ -294,12 +316,13 @@ Diffusion-reaction solve:
 ```python
 from hdgfem.core.mesh import gmsh_rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, test0
+from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg
+from scripts.diff_rea_cases import quadratic_poisson_case
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 3, basis_type="dub_orth")
 
-diffusion, reaction, source, exact = test0()
+diffusion, reaction, source, exact = quadratic_poisson_case()
 
 result = solve_diffusion_reaction_hdg(
     source,

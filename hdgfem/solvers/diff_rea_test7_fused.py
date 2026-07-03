@@ -14,6 +14,7 @@ if __name__ == "__main__" and __package__ in {None, ""}:
 import time
 import sys
 from argparse import ArgumentParser
+from collections.abc import Iterable
 from typing import Literal
 
 import numpy as np
@@ -29,12 +30,49 @@ from .diff_rea import (
     DiffusionReactionTimings,
     _diffusion_is_identity,
     _format_seconds,
-    _parse_key_value_options,
     _timed_call,
     _verbosity_level,
     split_diffusion_unknowns,
-    test7,
 )
+
+
+def _parse_key_value_options(option_strings: Iterable[str] | None) -> dict[str, str]:
+    """Parse repeated ``key=value`` CLI options into a dictionary."""
+    parsed: dict[str, str] = {}
+    if option_strings is None:
+        return parsed
+    for item in option_strings:
+        if "=" not in item:
+            raise ValueError(f"option {item!r} must have the form key=value")
+        key, value = item.split("=", 1)
+        key = key.strip().lstrip("-")
+        if not key:
+            raise ValueError(f"option {item!r} has an empty key")
+        parsed[key] = value.strip()
+    return parsed
+
+
+def _test7_exact_callable(m: int = 1, n: int = 1):
+    a = 0.5 * int(m) * np.pi
+    b = 0.5 * int(n) * np.pi
+
+    def exact(x, y):
+        return np.sin(a * (x + 1.0)) * np.sin(b * (y + 1.0))
+
+    return exact
+
+
+def _test7_diffusion_components():
+    def k11(x, y):
+        return 2.0 + x**2
+
+    def k12(x, y):
+        return 0.5 * x * y
+
+    def k22(x, y):
+        return 3.0 + y**2
+
+    return k11, k12, k22
 
 
 def solve_test7_tensor_fused_hdg(
@@ -182,7 +220,7 @@ def _summarize_solve(result: DiffusionReactionResult, exact, *, mesh, space, tau
     avg_error = float(np.average(element_max_error))
     max_error_element = int(np.argmax(element_max_error))
     global_solve = result.global_solve_result
-    diffusion, _, _, _ = test7(m=args.m, n=args.n)
+    diffusion = _test7_diffusion_components()
 
     items = [
         ("p", space.order, ",d"),
@@ -367,7 +405,7 @@ def _main() -> None:
         verbose=verbosity,
     )
 
-    _, _, _, exact = test7(m=args.m, n=args.n)
+    exact = _test7_exact_callable(m=args.m, n=args.n)
     l2_error = _summarize_solve(result, exact, mesh=mesh, space=space, tau=args.tau, args=args)
 
     if args.plot:

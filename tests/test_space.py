@@ -41,9 +41,6 @@ from hdgfem.assembly.matrices_numpy import (
 from hdgfem.solvers.diff_rea import (
     impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg,
-    test0 as diffusion_test0,
-    test3 as diffusion_test3,
-    test6 as diffusion_test6,
 )
 from hdgfem.solvers.diff_rea_w_boostrap import (
     prolong_trace_coefficients,
@@ -51,6 +48,11 @@ from hdgfem.solvers.diff_rea_w_boostrap import (
 )
 from hdgfem.linalg.system import eliminate_known_dofs, expand_known_dofs, solve_global_system
 from hdgfem.linalg.ordering import strongly_connected_component_order, upwind_scc_trace_ordering
+from scripts.diff_rea_cases import (
+    lshape_singular_harmonic_case,
+    quadratic_poisson_case,
+    trigonometric_poisson_case,
+)
 
 
 def reference_triangle_mesh() -> DGMesh:
@@ -616,7 +618,7 @@ def test_hdg_assembly_helpers_build_trace_system() -> None:
 def test_diffusion_reaction_solver_quadratic_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
 
     result = solve_diffusion_reaction_hdg(
         source,
@@ -640,7 +642,7 @@ def test_diffusion_reaction_solver_quadratic_smoke() -> None:
 def test_diffusion_reaction_boundary_elimination_matches_penalty_path() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
 
     penalty = solve_diffusion_reaction_hdg(
         source,
@@ -675,7 +677,7 @@ def test_diffusion_reaction_boundary_elimination_matches_penalty_path() -> None:
 def test_diffusion_reaction_boundary_elimination_weak_ilu_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
 
     result = solve_diffusion_reaction_hdg(
         source,
@@ -701,7 +703,7 @@ def test_diffusion_reaction_boundary_elimination_weak_ilu_smoke() -> None:
 def test_diffusion_reaction_symmetric_krylov_jacobi_smoke(solver) -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
 
     result = solve_diffusion_reaction_hdg(
         source,
@@ -734,7 +736,7 @@ def test_trace_degree_elevation_from_linear_to_cubic() -> None:
 def test_diffusion_reaction_bootstrap_initial_guess_smoke() -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diffusion_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
 
     result = solve_diffusion_reaction_hdg_with_bootstrap(
         source,
@@ -772,8 +774,8 @@ def test_initial_guess_boundary_trace_is_imposed() -> None:
     np.testing.assert_allclose(corrected_edges[mesh.int_edges_inds], 0.0)
 
 
-@pytest.mark.parametrize("problem", (diffusion_test3, diffusion_test6))
-def test_diffusion_reaction_legacy_tests_3_and_6_smoke(problem) -> None:
+@pytest.mark.parametrize("problem", (trigonometric_poisson_case, lshape_singular_harmonic_case))
+def test_diffusion_reaction_nonrectangular_manufactured_cases_smoke(problem) -> None:
     mesh = split_reference_triangle_mesh()
     V = DGSpace(mesh, 1, basis_type="dub_orth")
     diffusion, reaction, source, exact = problem()

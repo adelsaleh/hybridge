@@ -28,8 +28,10 @@ from ..kernels.diff_rea_fused import (
     assemble_diffusion_trace_system_eliminated_kernel,
     assemble_projected_diffusion_trace_rhs_eliminated_kernel,
     assemble_projected_diffusion_trace_system_eliminated_kernel,
+    assemble_projected_tensor_diffusion_trace_system_eliminated_kernel,
     reconstruct_diffusion_local_unknowns_kernel,
     reconstruct_projected_diffusion_local_unknowns_kernel,
+    reconstruct_projected_tensor_diffusion_local_unknowns_kernel,
 )
 from ..core.space import DGField, DGSpace, VectorDGField
 
@@ -250,6 +252,18 @@ def _reaction_coefficients(reaction, space: DGSpace) -> tuple[np.ndarray, float,
     if np.isscalar(reaction):
         return np.zeros((1, 1), dtype=np.float64), float(reaction), True
     return _same_space_field_coefficients(reaction, space, "reaction"), 0.0, False
+
+
+def _projected_tensor_coefficients(tensor, space: DGSpace, label: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return four same-space coefficient arrays for a projected tensor."""
+    if not isinstance(tensor, (tuple, list)) or len(tensor) != 4:
+        raise TypeError(f"{label} must be a 4-tuple of projected coefficient arrays")
+    return (
+        _same_space_field_coefficients(tensor[0], space, f"{label}[0,0]"),
+        _same_space_field_coefficients(tensor[1], space, f"{label}[0,1]"),
+        _same_space_field_coefficients(tensor[2], space, f"{label}[1,0]"),
+        _same_space_field_coefficients(tensor[3], space, f"{label}[1,1]"),
+    )
 
 
 def _interior_side_index(space: DGSpace) -> np.ndarray:
@@ -722,6 +736,117 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
     )
 
 
+def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
+        source,
+        reaction,
+        diffusion_inverse,
+        boundary_condition: Callable,
+        stabilization,
+        space: DGSpace,
+        *,
+        edge_order: np.ndarray | None = None,
+) -> NumbaDiffusionTraceAssembly:
+    """Assemble the reduced projected tensor diffusion-reaction trace system."""
+    if not NUMBA_AVAILABLE:
+        raise RuntimeError("assembly_backend='numba' requires numba")
+
+    timings: dict[str, float] = {}
+    start = time.perf_counter()
+    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
+        diffusion_inverse,
+        space,
+        "diffusion_inverse",
+    )
+    tau = _normalize_diffusion_stabilization(stabilization, space)
+    interior_side_index = _interior_side_index(space)
+    d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    timings["coefficient_validation"] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    mesh = space.mesh
+    q = space.quad_data
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    valid_elements = np.ascontiguousarray(mesh.interior_elements, dtype=np.int64)
+    valid_faces = np.ascontiguousarray(mesh.interior_faces, dtype=np.int64)
+    face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
+    side_col_counts = np.count_nonzero(face_is_free[valid_elements], axis=1).astype(np.int64)
+    side_flux_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
+    side_flux_offsets[0] = 0
+    np.cumsum(side_col_counts * q.edg_dof * q.edg_dof, out=side_flux_offsets[1:])
+    n_flux = int(side_flux_offsets[-1])
+    n_mass = valid_elements.size * q.edg_dof * q.edg_dof
+    nnz = n_flux + n_mass
+    timings["reduction_map"] = time.perf_counter() - start
+
+    rows = np.empty(nnz, dtype=np.int64)
+    cols = np.empty_like(rows)
+    data = np.empty(nnz, dtype=np.float64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
+
+    start = time.perf_counter()
+    assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
+        rows,
+        cols,
+        data,
+        rhs_indices,
+        rhs_values,
+        np.ascontiguousarray(mesh.loc2glob_edge, dtype=np.int64),
+        np.ascontiguousarray(mesh.orientations, dtype=np.bool_),
+        np.ascontiguousarray(mesh.loc2oriented_face_coupling, dtype=np.int64),
+        interior_side_index,
+        np.ascontiguousarray(edge_to_solve_edge, dtype=np.int64),
+        valid_elements,
+        valid_faces,
+        np.ascontiguousarray(side_flux_offsets, dtype=np.int64),
+        np.ascontiguousarray(mesh.aff_mats, dtype=np.float64),
+        np.ascontiguousarray(mesh.aff_jacs, dtype=np.float64),
+        np.ascontiguousarray(mesh.jacs_el_fc, dtype=np.float64),
+        np.ascontiguousarray(mesh.normals, dtype=np.float64),
+        tau,
+        np.ascontiguousarray(q.MKrf, dtype=np.float64),
+        np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
+        np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
+        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
+        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
+        float(reaction_scalar),
+        bool(reaction_is_scalar),
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+        np.ascontiguousarray(boundary_trace, dtype=np.float64),
+    )
+    timings["kernel"] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    np.add.at(rhs, rhs_indices, rhs_values)
+    timings["rhs_finalization"] = time.perf_counter() - start
+    timings["total"] = sum(timings.values())
+
+    reduction = _reduction_with_system(reduction_template, rows, cols, data, rhs)
+    return NumbaDiffusionTraceAssembly(
+        trace_system=hdg_assembly.TraceSystem(
+            rows=rows,
+            cols=cols,
+            data=data,
+            rhs=rhs,
+            boundary_trace=boundary_trace,
+        ),
+        timings=timings,
+        reduction=reduction,
+    )
+
+
 def assemble_projected_diffusion_trace_rhs_eliminated_numba(
         source,
         reaction,
@@ -1049,6 +1174,63 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
     return local_unknowns
 
 
+def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
+        trace: np.ndarray,
+        source,
+        reaction,
+        diffusion_inverse,
+        stabilization,
+        space: DGSpace,
+) -> np.ndarray:
+    """Recover mixed local unknowns with projected tensor fused kernels."""
+    if not NUMBA_AVAILABLE:
+        raise RuntimeError("assembly_backend='numba' requires numba")
+
+    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
+        diffusion_inverse,
+        space,
+        "diffusion_inverse",
+    )
+    tau = _normalize_diffusion_stabilization(stabilization, space)
+    d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    mesh = space.mesh
+    q = space.quad_data
+    trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
+    expected_trace_shape = (mesh.num_edg * q.edg_dof,)
+    if trace.shape != expected_trace_shape:
+        raise ValueError(f"trace must have shape {expected_trace_shape}; got {trace.shape}")
+
+    local_unknowns = np.empty((mesh.num_tri, 3 * q.el_dof), dtype=np.float64)
+    reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
+        local_unknowns,
+        trace,
+        np.ascontiguousarray(mesh.loc2glob_edge, dtype=np.int64),
+        np.ascontiguousarray(mesh.orientations, dtype=np.bool_),
+        np.ascontiguousarray(mesh.aff_mats, dtype=np.float64),
+        np.ascontiguousarray(mesh.aff_jacs, dtype=np.float64),
+        np.ascontiguousarray(mesh.jacs_el_fc, dtype=np.float64),
+        np.ascontiguousarray(mesh.normals, dtype=np.float64),
+        tau,
+        np.ascontiguousarray(q.MKrf, dtype=np.float64),
+        np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
+        np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
+        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
+        float(reaction_scalar),
+        bool(reaction_is_scalar),
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+    )
+    return local_unknowns
+
+
 def reconstruct_projected_field_numba(
         trace: np.ndarray,
         source,
@@ -1105,12 +1287,14 @@ __all__ = [
     "assemble_diffusion_trace_system_eliminated_numba",
     "assemble_projected_diffusion_trace_rhs_eliminated_numba",
     "assemble_projected_diffusion_trace_system_eliminated_numba",
+    "assemble_projected_tensor_diffusion_trace_system_eliminated_numba",
     "assemble_local_advection_reaction_numba",
     "assemble_projected_trace_system_eliminated_numba",
     "assemble_projected_trace_system_numba",
     "beta_values_on_volume",
     "reconstruct_diffusion_local_unknowns_numba",
     "reconstruct_projected_diffusion_local_unknowns_numba",
+    "reconstruct_projected_tensor_diffusion_local_unknowns_numba",
     "reconstruct_projected_field_numba",
     "reaction_values_on_volume",
 ]

@@ -149,11 +149,10 @@ def _load_hdgfem() -> None:
         from hdgfem.solvers.diff_rea import _normalize_tau as _normalize_tau
         from hdgfem.solvers.diff_rea import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
         from hdgfem.solvers.diff_rea import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
-        from hdgfem.solvers.diff_rea import test0 as _diff_test0
-        from hdgfem.solvers.diff_rea import test2 as _diff_test2
-        from hdgfem.solvers.diff_rea import test3 as _diff_test3
-        from hdgfem.solvers.diff_rea import test5 as _diff_test5
-        from hdgfem.solvers.diff_rea import test6 as _diff_test6
+        try:
+            from scripts.diff_rea_cases import legacy_case_factories as _legacy_case_factories
+        except ModuleNotFoundError:
+            from diff_rea_cases import legacy_case_factories as _legacy_case_factories
 
     DGField = _DGField
     DGSpace = _DGSpace
@@ -163,13 +162,7 @@ def _load_hdgfem() -> None:
     assemble_projected_diffusion_trace_system_eliminated_numba = _assemble_projected_diffusion_trace_system_eliminated_numba
     assemble_projected_trace_system_eliminated_numba = _assemble_projected_trace_system_eliminated_numba
     assemble_projected_trace_system_numba = _assemble_projected_trace_system_numba
-    diff_rea_tests = {
-        "test0": _diff_test0,
-        "test2": _diff_test2,
-        "test3": _diff_test3,
-        "test5": _diff_test5,
-        "test6": _diff_test6,
-    }
+    diff_rea_tests = _legacy_case_factories()
     diffusion_is_identity = _diffusion_is_identity
     diffusion_element_boundary_mats = _diffusion_element_boundary_mats
     eliminate_known_dofs = _eliminate_known_dofs

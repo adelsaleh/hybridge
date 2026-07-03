@@ -1,0 +1,230 @@
+"""Manufactured diffusion-reaction cases used by development drivers and tests."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+
+ProblemTuple = tuple[Any, Callable, Callable, Callable]
+
+
+@dataclass(frozen=True)
+class DiffusionReactionCase:
+    """Metadata and factory for a manufactured diffusion-reaction problem."""
+
+    legacy_id: int
+    key: str
+    name: str
+    factory: Callable[..., ProblemTuple]
+    default_domain: str = "rectangle"
+
+    def build(self, **params) -> ProblemTuple:
+        """Return ``(diffusion, reaction, source, exact)`` for this case."""
+        return self.factory(**params)
+
+
+def zero_coefficient(x, y):
+    """Zero callable with NumPy broadcasting semantics."""
+    return 0.0 * x * y
+
+
+def identity_diffusion_tensor():
+    """Identity diffusion tensor in symmetric component form ``(k00, k01, k11)``."""
+    return 1.0, 0.0, 1.0
+
+
+def quadratic_poisson_case() -> ProblemTuple:
+    """Quadratic exact solution with identity diffusion and no reaction."""
+    return (
+        identity_diffusion_tensor(),
+        zero_coefficient,
+        lambda x, y: -4.0 + 0.0 * x * y,
+        lambda x, y: 1.0 + x**2 + y**2,
+    )
+
+
+def exponential_bubble_poisson_case() -> ProblemTuple:
+    """Exponential polynomial bubble with identity diffusion and no reaction."""
+    return (
+        identity_diffusion_tensor(),
+        zero_coefficient,
+        lambda x, y: -2.0 * x * (y - 1.0) * (y - 2.0 * x + x * y + 2.0) * np.exp(x - y),
+        lambda x, y: np.exp(x - y) * x * (1.0 - x) * y * (1.0 - y),
+    )
+
+
+def trigonometric_poisson_case() -> ProblemTuple:
+    """Smooth trigonometric exact solution, usually run on a disk."""
+    return (
+        identity_diffusion_tensor(),
+        zero_coefficient,
+        lambda x, y: -(
+            4.0 * np.cos(x**2 + y**2)
+            - (x**2 + y**2) * (np.sin(x * y) + 4.0 * np.sin(x**2 + y**2))
+        ),
+        lambda x, y: np.sin(x**2 + y**2) + np.sin(x * y),
+    )
+
+
+def quadratic_variable_reaction_case() -> ProblemTuple:
+    """Quadratic exact solution with a smooth variable reaction coefficient."""
+
+    def reaction(x, y):
+        return np.cos(3.0 * np.pi * x) + np.cos(3.0 * np.pi * y) + 2.0
+
+    return (
+        identity_diffusion_tensor(),
+        reaction,
+        lambda x, y: -4.0 + reaction(x, y) * (x**2 + y**2),
+        lambda x, y: x**2 + y**2,
+    )
+
+
+def lshape_singular_harmonic_case() -> ProblemTuple:
+    """Reentrant-corner singular harmonic solution for the L-shaped domain."""
+    return (
+        identity_diffusion_tensor(),
+        zero_coefficient,
+        zero_coefficient,
+        lambda x, y: (x**2 + y**2) ** (1.0 / 3.0)
+        * np.sin((2.0 / 3.0) * (np.arctan2(y, x) + np.pi / 2.0)),
+    )
+
+
+def _tensor_sine_data(m: int = 1, n: int = 1):
+    r"""Return tensor sine manufactured data and exact gradients on ``[-1, 1]^2``."""
+    a = 0.5 * int(m) * np.pi
+    b = 0.5 * int(n) * np.pi
+
+    def exact(x, y):
+        return np.sin(a * (x + 1.0)) * np.sin(b * (y + 1.0))
+
+    def gradx(x, y):
+        return a * np.cos(a * (x + 1.0)) * np.sin(b * (y + 1.0))
+
+    def grady(x, y):
+        return b * np.sin(a * (x + 1.0)) * np.cos(b * (y + 1.0))
+
+    def reaction(x, y):
+        return 1.0 + x**2 + y**2
+
+    def source(x, y):
+        u = exact(x, y)
+        ux = gradx(x, y)
+        uy = grady(x, y)
+        uxx = -(a**2) * u
+        uyy = -(b**2) * u
+        uxy = a * b * np.cos(a * (x + 1.0)) * np.cos(b * (y + 1.0))
+        div_kappa_grad_u = (
+            (2.0 + x**2) * uxx
+            + x * y * uxy
+            + (3.0 + y**2) * uyy
+            + 2.5 * x * ux
+            + 2.5 * y * uy
+        )
+        return -div_kappa_grad_u + reaction(x, y) * u
+
+    def k11(x, y):
+        return 2.0 + x**2
+
+    def k12(x, y):
+        return 0.5 * x * y
+
+    def k22(x, y):
+        return 3.0 + y**2
+
+    return (k11, k12, k22), reaction, source, exact, gradx, grady
+
+
+def tensor_sine_diffusion_reaction_case(m: int = 1, n: int = 1) -> ProblemTuple:
+    """Smooth manufactured tensor-diffusion reaction case."""
+    diffusion, reaction, source, exact, _, _ = _tensor_sine_data(m, n)
+    return diffusion, reaction, source, exact
+
+
+def tensor_sine_exact_gradients(m: int = 1, n: int = 1) -> tuple[Callable, Callable]:
+    """Return exact gradient callables for :func:`tensor_sine_diffusion_reaction_case`."""
+    _, _, _, _, gradx, grady = _tensor_sine_data(m, n)
+    return gradx, grady
+
+
+CASE_DEFINITIONS: tuple[DiffusionReactionCase, ...] = (
+    DiffusionReactionCase(0, "quadratic-poisson", "quadratic Poisson", quadratic_poisson_case),
+    DiffusionReactionCase(2, "exponential-bubble", "exponential bubble Poisson", exponential_bubble_poisson_case),
+    DiffusionReactionCase(3, "trigonometric-poisson", "trigonometric Poisson", trigonometric_poisson_case, "disc"),
+    DiffusionReactionCase(
+        5,
+        "quadratic-variable-reaction",
+        "quadratic variable-reaction",
+        quadratic_variable_reaction_case,
+    ),
+    DiffusionReactionCase(6, "lshape-singular", "L-shape singular harmonic", lshape_singular_harmonic_case, "lshape"),
+    DiffusionReactionCase(
+        7,
+        "tensor-sine",
+        "tensor sine diffusion-reaction",
+        tensor_sine_diffusion_reaction_case,
+    ),
+)
+
+CASE_BY_KEY = {case.key: case for case in CASE_DEFINITIONS}
+CASE_BY_LEGACY_ID = {case.legacy_id: case for case in CASE_DEFINITIONS}
+
+
+def case_definition_by_key(key: str) -> DiffusionReactionCase:
+    """Return case metadata by descriptive key."""
+    try:
+        return CASE_BY_KEY[key]
+    except KeyError as exc:
+        valid = ", ".join(sorted(CASE_BY_KEY))
+        raise ValueError(f"unknown diffusion-reaction case {key!r}; valid cases are {valid}") from exc
+
+
+def case_definition_by_legacy_id(legacy_id: int) -> DiffusionReactionCase:
+    """Return case metadata by legacy numeric ID."""
+    try:
+        return CASE_BY_LEGACY_ID[int(legacy_id)]
+    except KeyError as exc:
+        valid = ", ".join(str(key) for key in sorted(CASE_BY_LEGACY_ID))
+        raise ValueError(f"supported legacy diffusion-reaction tests are {valid}") from exc
+
+
+def case_by_key(key: str, **params) -> ProblemTuple:
+    """Return ``(diffusion, reaction, source, exact)`` by descriptive key."""
+    return case_definition_by_key(key).build(**params)
+
+
+def case_by_legacy_id(legacy_id: int, **params) -> ProblemTuple:
+    """Return ``(diffusion, reaction, source, exact)`` by legacy numeric ID."""
+    return case_definition_by_legacy_id(legacy_id).build(**params)
+
+
+def legacy_case_factories() -> dict[str, Callable[[], ProblemTuple]]:
+    """Return factories keyed by legacy benchmark names like ``test0``."""
+    return {f"test{case.legacy_id}": case.factory for case in CASE_DEFINITIONS if case.legacy_id != 7}
+
+
+__all__ = [
+    "CASE_BY_KEY",
+    "CASE_BY_LEGACY_ID",
+    "CASE_DEFINITIONS",
+    "DiffusionReactionCase",
+    "case_by_key",
+    "case_by_legacy_id",
+    "case_definition_by_key",
+    "case_definition_by_legacy_id",
+    "exponential_bubble_poisson_case",
+    "identity_diffusion_tensor",
+    "legacy_case_factories",
+    "lshape_singular_harmonic_case",
+    "quadratic_poisson_case",
+    "quadratic_variable_reaction_case",
+    "tensor_sine_diffusion_reaction_case",
+    "tensor_sine_exact_gradients",
+    "trigonometric_poisson_case",
+    "zero_coefficient",
+]

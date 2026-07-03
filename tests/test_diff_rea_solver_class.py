@@ -8,9 +8,11 @@ from hdgfem.core.space import DGField, DGSpace
 from hdgfem.solvers.diff_rea import (
     DiffusionReactionHDGSolver as DiffReaSolver,
     solve_diffusion_reaction_hdg,
-    test0 as diff_rea_test0,
-    test7 as diff_rea_test7,
-    test7_gradients as diff_rea_test7_gradients,
+)
+from scripts.diff_rea_cases import (
+    quadratic_poisson_case,
+    tensor_sine_diffusion_reaction_case,
+    tensor_sine_exact_gradients,
 )
 
 
@@ -19,12 +21,12 @@ def _space(order: int = 2) -> DGSpace:
 
 
 def _callable_problem():
-    _, reaction, source, exact = diff_rea_test0()
+    _, reaction, source, exact = quadratic_poisson_case()
     return source, reaction, exact
 
 
 def _projected_problem(space: DGSpace):
-    _, reaction, source, exact = diff_rea_test0()
+    _, reaction, source, exact = quadratic_poisson_case()
     return (
         DGField(source, space, name="source_h"),
         DGField(reaction, space, name="reaction_h"),
@@ -153,7 +155,7 @@ def test_diff_rea_solver_rejects_incomplete_problem_update() -> None:
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:
     space = _space(order=2)
-    diffusion, reaction, source, exact = diff_rea_test0()
+    diffusion, reaction, source, exact = quadratic_poisson_case()
     kwargs = {
         "stabilization": 1.0,
         "solver": "direct",
@@ -175,10 +177,10 @@ def test_identity_diffusion_argument_preserves_default_solution() -> None:
     )
 
 
-def test_tensor_diffusion_manufactured_solution_numpy_and_numba_agree() -> None:
+def test_tensor_diffusion_manufactured_solution_numpy_and_projected_numba_are_accurate() -> None:
     mesh = rectangle_mesh(3, 3)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diff_rea_test7()
+    diffusion, reaction, source, exact = tensor_sine_diffusion_reaction_case()
     kwargs = {
         "diffusion": diffusion,
         "stabilization": 4.0,
@@ -192,21 +194,18 @@ def test_tensor_diffusion_manufactured_solution_numpy_and_numba_agree() -> None:
     numba_result = solve_diffusion_reaction_hdg(source, reaction, exact, space, assembly_backend="numba", **kwargs)
 
     assert numpy_result.field.l2_error(exact) < 2.0e-2
-    np.testing.assert_allclose(numba_result.trace, numpy_result.trace, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(numba_result.field.coeffs, numpy_result.field.coeffs, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(
-        numba_result.flux.as_component_first(),
-        numpy_result.flux.as_component_first(),
-        rtol=1e-12,
-        atol=1e-12,
-    )
+    assert numba_result.field.l2_error(exact) < 2.0e-2
+    assert numba_result.local_solver is None
+    assert numba_result.element_boundary_mats is None
+    np.testing.assert_allclose(numba_result.trace, numpy_result.trace, rtol=0.0, atol=1.0e-3)
+    np.testing.assert_allclose(numba_result.field.coeffs, numpy_result.field.coeffs, rtol=0.0, atol=1.0e-3)
 
 
 def test_tensor_diffusion_flux_uses_conservative_sign() -> None:
     mesh = rectangle_mesh(4, 4)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
-    diffusion, reaction, source, exact = diff_rea_test7()
-    gradx, grady = diff_rea_test7_gradients()
+    diffusion, reaction, source, exact = tensor_sine_diffusion_reaction_case()
+    gradx, grady = tensor_sine_exact_gradients()
     k11, k12, k22 = diffusion
 
     result = solve_diffusion_reaction_hdg(

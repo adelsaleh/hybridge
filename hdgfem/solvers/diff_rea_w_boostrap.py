@@ -30,8 +30,6 @@ from .diff_rea import (
     DiffusionReactionResult,
     LocalSolverBackend,
     ReturnKey,
-    _parse_key_value_options,
-    _test_problem,
     _timed_call,
     _verbosity_level,
     impose_boundary_trace_on_guess,
@@ -45,6 +43,22 @@ class DiffusionReactionBootstrapResult(DiffusionReactionResult):
     """Result returned by the bootstrap-enabled diffusion-reaction wrapper."""
 
     bootstrap_order: int | None = None
+
+
+def _parse_key_value_options(option_strings: Iterable[str] | None) -> dict[str, str]:
+    """Parse repeated ``key=value`` CLI options into a dictionary."""
+    parsed: dict[str, str] = {}
+    if option_strings is None:
+        return parsed
+    for item in option_strings:
+        if "=" not in item:
+            raise ValueError(f"option {item!r} must have the form key=value")
+        key, value = item.split("=", 1)
+        key = key.strip().lstrip("-")
+        if not key:
+            raise ValueError(f"option {item!r} has an empty key")
+        parsed[key] = value.strip()
+    return parsed
 
 
 def bernstein_degree_elevation_matrix(source_order: int, target_order: int) -> np.ndarray:
@@ -435,6 +449,7 @@ def _main() -> None:
 
     from ..core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
     from ..io.plot import plot_solution_comparison
+    from scripts.diff_rea_cases import case_by_legacy_id
 
     parser = ArgumentParser(description="Run the bootstrap-enabled hdgfem diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
@@ -575,7 +590,7 @@ def _main() -> None:
 
     mesh, _ = _timed_call(f"generating {args.domain} mesh", verbosity, build_mesh)
     space = DGSpace(mesh, args.order, basis_type=args.basis)
-    diffusion, reaction, source, exact = _test_problem(args.test)
+    diffusion, reaction, source, exact = case_by_legacy_id(args.test)
     petsc_options = _parse_key_value_options(args.petsc_option)
     result = solve_diffusion_reaction_hdg(
         source,

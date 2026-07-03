@@ -9,23 +9,13 @@ It solves
 
 with the mixed local unknown vector ``[u_h, q_{x,h}, q_{y,h}]`` and a global
 HDG trace unknown.  Identity diffusion uses the scalar fast path; tensor
-diffusion uses dense local mixed inverses.
+diffusion uses dense local mixed inverses in NumPy and a projected-coefficient
+fused trace assembly path in Numba.
 """
 
 from __future__ import annotations
 
-if __name__ == "__main__" and __package__ in {None, ""}:
-    import runpy
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("hdgfem.solvers.diff_rea", run_name="__main__")
-    raise SystemExit
-
 import time
-import sys
-from argparse import ArgumentParser
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
 from typing import Any, Literal
@@ -177,22 +167,6 @@ def _format_seconds(seconds: float) -> str:
     return f"{seconds:.4f}s"
 
 
-def _parse_key_value_options(option_strings: Iterable[str] | None) -> dict[str, str]:
-    """Parse repeated ``key=value`` CLI options into a dictionary."""
-    parsed: dict[str, str] = {}
-    if option_strings is None:
-        return parsed
-    for item in option_strings:
-        if "=" not in item:
-            raise ValueError(f"option {item!r} must have the form key=value")
-        key, value = item.split("=", 1)
-        key = key.strip().lstrip("-")
-        if not key:
-            raise ValueError(f"option {item!r} has an empty key")
-        parsed[key] = value.strip()
-    return parsed
-
-
 def _verbosity_level(verbose: bool | int) -> int:
     """Normalize bool/int verbosity flags to an integer level."""
     if isinstance(verbose, bool):
@@ -219,150 +193,6 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
         else:
             print(f"done in {_format_seconds(elapsed)}")
     return result, elapsed
-
-
-def zero_func(x, y):
-    """Zero callable with NumPy broadcasting semantics."""
-    return 0.0 * x * y
-
-
-def identity_diffusion():
-    """Identity diffusion tensor in symmetric component form ``(k00, k01, k11)``."""
-    return 1.0, 0.0, 1.0
-
-
-def test0():
-    """Legacy diffusion test: quadratic exact solution on a rectangle."""
-    return (
-        identity_diffusion(),
-        zero_func,
-        lambda x, y: -4.0 + 0.0 * x * y,
-        lambda x, y: 1.0 + x**2 + y**2,
-    )
-
-
-def test2():
-    """Legacy unit-square manufactured solution."""
-    return (
-        identity_diffusion(),
-        zero_func,
-        lambda x, y: -2.0 * x * (y - 1.0) * (y - 2.0 * x + x * y + 2.0) * np.exp(x - y),
-        lambda x, y: np.exp(x - y) * x * (1.0 - x) * y * (1.0 - y),
-    )
-
-
-def test3():
-    """Legacy smooth trigonometric test, usually run on a disk."""
-    return (
-        identity_diffusion(),
-        zero_func,
-        lambda x, y: -(
-            4.0 * np.cos(x**2 + y**2)
-            - (x**2 + y**2) * (np.sin(x * y) + 4.0 * np.sin(x**2 + y**2))
-        ),
-        lambda x, y: np.sin(x**2 + y**2) + np.sin(x * y),
-    )
-
-
-def test5():
-    """Legacy variable-reaction quadratic exact solution."""
-
-    def reaction(x, y):
-        return np.cos(3.0 * np.pi * x) + np.cos(3.0 * np.pi * y) + 2.0
-
-    return (
-        identity_diffusion(),
-        reaction,
-        lambda x, y: -4.0 + reaction(x, y) * (x**2 + y**2),
-        lambda x, y: x**2 + y**2,
-    )
-
-
-def test6():
-    """Legacy L-shape reentrant-corner singular harmonic solution."""
-    return (
-        identity_diffusion(),
-        zero_func,
-        zero_func,
-        lambda x, y: (x**2 + y**2) ** (1.0 / 3.0)
-        * np.sin((2.0 / 3.0) * (np.arctan2(y, x) + np.pi / 2.0)),
-    )
-
-
-def _tensor_sine_case(m: int = 1, n: int = 1):
-    r"""Smooth tensor-diffusion manufactured solution on ``[-1, 1]^2``.
-
-    The returned source follows this module's elliptic sign convention,
-
-    .. math::
-
-        -\nabla\cdot(\kappa\nabla u) + r u = f.
-
-    The tensor is symmetric positive definite:
-
-    .. math::
-
-        \kappa =
-        \begin{bmatrix}
-        2+x^2 & \tfrac12 xy \\
-        \tfrac12 xy & 3+y^2
-        \end{bmatrix}.
-    """
-
-    a = 0.5 * int(m) * np.pi
-    b = 0.5 * int(n) * np.pi
-
-    def exact(x, y):
-        return np.sin(a * (x + 1.0)) * np.sin(b * (y + 1.0))
-
-    def gradx(x, y):
-        return a * np.cos(a * (x + 1.0)) * np.sin(b * (y + 1.0))
-
-    def grady(x, y):
-        return b * np.sin(a * (x + 1.0)) * np.cos(b * (y + 1.0))
-
-    def reaction(x, y):
-        return 1.0 + x**2 + y**2
-
-    def source(x, y):
-        u = exact(x, y)
-        ux = gradx(x, y)
-        uy = grady(x, y)
-        uxx = -(a**2) * u
-        uyy = -(b**2) * u
-        uxy = a * b * np.cos(a * (x + 1.0)) * np.cos(b * (y + 1.0))
-
-        div_kappa_grad_u = (
-            (2.0 + x**2) * uxx
-            + x * y * uxy
-            + (3.0 + y**2) * uyy
-            + 2.5 * x * ux
-            + 2.5 * y * uy
-        )
-        return -div_kappa_grad_u + reaction(x, y) * u
-
-    def k11(x, y):
-        return 2.0 + x**2
-
-    def k12(x, y):
-        return 0.5 * x * y
-
-    def k22(x, y):
-        return 3.0 + y**2
-
-    return (k11, k12, k22), reaction, source, exact, gradx, grady
-
-
-def test7(m: int = 1, n: int = 1):
-    """Tensor-diffusion sine manufactured solution as ``(diffusion, r, f, u)``."""
-    diffusion, reaction, source, exact, _, _ = _tensor_sine_case(m, n)
-    return diffusion, reaction, source, exact
-
-
-def test7_gradients(m: int = 1, n: int = 1):
-    """Return exact gradient callables for :func:`test7`."""
-    _, _, _, _, gradx, grady = _tensor_sine_case(m, n)
-    return gradx, grady
 
 
 def _normalize_tau(stabilization, space: DGSpace) -> np.ndarray:
@@ -502,6 +332,31 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     hdg_mats.set_weighted_mass_from_values(g10, inv10, space)
     hdg_mats.set_weighted_mass_from_values(g11, inv11, space)
     return g00, g01, g10, g11
+
+
+def _project_quadrature_values(values: np.ndarray, space: DGSpace) -> np.ndarray:
+    """Project element-quadrature values into same-space DG coefficients."""
+    values = np.asarray(values, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
+    if values.shape != expected:
+        raise ValueError(f"values must have shape {expected}; got {values.shape}")
+    rhs = values @ space.quad_data.weighted_phi
+    return np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=np.float64)
+
+
+def _project_inverse_diffusion_for_numba(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    r"""Project :math:`\kappa^{-1}` components for fused tensor Numba kernels."""
+    k00, k01, k10, k11 = _diffusion_components(diffusion, space)
+    det = k00 * k11 - k01 * k10
+    det_min = float(np.min(det))
+    if det_min <= 0.0:
+        raise ValueError(f"diffusion tensor must be pointwise positive definite; minimum determinant is {det_min}")
+    return (
+        _project_quadrature_values(k11 / det, space),
+        _project_quadrature_values(-k01 / det, space),
+        _project_quadrature_values(-k10 / det, space),
+        _project_quadrature_values(k00 / det, space),
+    )
 
 
 def _project_callable_for_numba(value, space: DGSpace, *, name: str):
@@ -1351,7 +1206,9 @@ def solve_diffusion_reaction_hdg(
     effective_backend = "numpy" if assembly_backend == "auto" else assembly_backend
     effective_boundary_mode = "eliminate" if effective_backend == "numba" else boundary_mode
     effective_scale_system = False if solver is not None and str(solver).lower() == "petsc" else scale_system
-    projected_numba_diffusion = effective_backend == "numba" and _diffusion_is_identity(diffusion)
+    projected_numba_identity_diffusion = effective_backend == "numba" and _diffusion_is_identity(diffusion)
+    projected_numba_tensor_diffusion = effective_backend == "numba" and not _diffusion_is_identity(diffusion)
+    projected_numba_diffusion = projected_numba_identity_diffusion or projected_numba_tensor_diffusion
 
     def prepare_data():
         tau, _ = _timed_call(
@@ -1362,19 +1219,22 @@ def solve_diffusion_reaction_hdg(
         )
         source_input = source
         reaction_input = reaction
+        diffusion_inverse_input = None
         if projected_numba_diffusion:
             source_input = _project_callable_for_numba(source, space, name="source_h")
             reaction_input = _project_callable_for_numba(reaction, space, name="reaction_h")
-            return tau, None, source_input, reaction_input
+            if projected_numba_tensor_diffusion:
+                diffusion_inverse_input = _project_inverse_diffusion_for_numba(diffusion, space)
+            return tau, None, source_input, reaction_input, diffusion_inverse_input
         source_rhs, _ = _timed_call(
             "assembling block source moments",
             verbosity,
             lambda: hdg_assembly.block_source_moments(source_input, space, num_blocks=3, source_block=0),
             level=2,
         )
-        return tau, source_rhs, source_input, reaction_input
+        return tau, source_rhs, source_input, reaction_input, diffusion_inverse_input
 
-    (tau, source_rhs, source_for_backend, reaction_for_local), preparation = _timed_call(
+    (tau, source_rhs, source_for_backend, reaction_for_local, diffusion_inverse_for_backend), preparation = _timed_call(
         "preparing source and stabilization",
         verbosity,
         prepare_data,
@@ -1446,12 +1306,23 @@ def solve_diffusion_reaction_hdg(
         )
 
     def assemble_trace():
-        if projected_numba_diffusion:
+        if projected_numba_identity_diffusion:
             from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
 
             return assemble_projected_diffusion_trace_system_eliminated_numba(
                 source_for_backend,
                 reaction_for_local,
+                boundary_condition,
+                tau,
+                space,
+            )
+        if projected_numba_tensor_diffusion:
+            from ..backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
+
+            return assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
+                source_for_backend,
+                reaction_for_local,
+                diffusion_inverse_for_backend,
                 boundary_condition,
                 tau,
                 space,
@@ -1480,7 +1351,9 @@ def solve_diffusion_reaction_hdg(
 
     trace_assembly_label = (
         "assembling reduced global trace system (numba)"
-        if projected_numba_diffusion
+        if projected_numba_identity_diffusion
+        else "assembling reduced tensor trace system (numba)"
+        if projected_numba_tensor_diffusion
         else "assembling reduced generic trace system (numba)"
         if effective_backend == "numba"
         else "assembling global trace system"
@@ -1594,13 +1467,24 @@ def solve_diffusion_reaction_hdg(
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
     def reconstruct():
-        if projected_numba_diffusion:
+        if projected_numba_identity_diffusion:
             from ..backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
             unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
                 trace,
                 source_for_backend,
                 reaction_for_local,
+                tau,
+                space,
+            )
+        elif projected_numba_tensor_diffusion:
+            from ..backends.numba import reconstruct_projected_tensor_diffusion_local_unknowns_numba
+
+            unknowns = reconstruct_projected_tensor_diffusion_local_unknowns_numba(
+                trace,
+                source_for_backend,
+                reaction_for_local,
+                diffusion_inverse_for_backend,
                 tau,
                 space,
             )
@@ -1713,267 +1597,13 @@ def solve_diffusion_reaction_hdg(
 diff_rea_hdg_solve = solve_diffusion_reaction_hdg
 
 
-def _test_problem(test_id: int):
-    if test_id == 0:
-        return test0()
-    if test_id == 2:
-        return test2()
-    if test_id == 3:
-        return test3()
-    if test_id == 5:
-        return test5()
-    if test_id == 6:
-        return test6()
-    if test_id == 7:
-        return test7()
-    raise ValueError("supported tests are 0, 2, 3, 5, 6, and 7")
-
-
-def _main() -> None:
-    """Run a manufactured diffusion-reaction smoke solve."""
-    from ..core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
-    from ..io.plot import plot_solution_comparison
-    from ..io.output import pretty_print_ncol
-
-    parser = ArgumentParser(description="Run the hdgfem diffusion-reaction HDG solver.")
-    parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
-    parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6, 7), help="manufactured test id")
-    parser.add_argument(
-        "--domain",
-        default="auto",
-        choices=("auto", "rectangle", "unit-rectangle", "disc", "triangle", "lshape", "structured-rectangle"),
-    )
-    parser.add_argument("--mesh-size", "--lc", type=float, default=0.35, help="Gmsh target mesh size")
-    parser.add_argument("--nx", type=int, default=8, help="structured rectangle cells in x")
-    parser.add_argument("--ny", type=int, default=None, help="structured rectangle cells in y")
-    parser.add_argument("--gmsh-verbosity", type=int, default=0, help="Gmsh verbosity level")
-    parser.add_argument("--basis", default="dub_orth", choices=("bernstein", "hier_C0", "dub_orth"))
-    parser.add_argument("--tau", type=float, default=1.0, help="constant HDG stabilization")
-    parser.add_argument("--local-backend", default="numpy", choices=("numpy", "numba"), help="local solver backend")
-    parser.add_argument(
-        "--assembly-backend",
-        default="numpy",
-        choices=("numpy", "numba", "auto"),
-        help="trace assembly backend; numba uses strong boundary trace elimination",
-    )
-    parser.add_argument("--solver", default="BICGSTAB", help="global trace solver; use direct for sparse direct or petsc for PETSc")
-    parser.add_argument("--petsc", dest="solver", action="store_const", const="petsc", help="shortcut for --solver petsc")
-    parser.add_argument(
-        "--preconditioner",
-        default="ilu",
-        choices=("ilu", "jacobi", "none"),
-        help="global trace preconditioner",
-    )
-    parser.add_argument("--solver-rtol", type=float, default=1e-13)
-    parser.add_argument("--solver-atol", type=float, default=0.0)
-    parser.add_argument("--maxiter", type=int, default=None)
-    parser.add_argument(
-        "--petsc-preset",
-        default="cg_gamg",
-        choices=("cg_ilu", "cg_icc", "cg_hypre", "cg_gamg", "lu", "mumps_lu"),
-        help="PETSc KSP/PC preset used when --solver petsc",
-    )
-    parser.add_argument("--petsc-levels", type=int, default=None, help="PETSc ILU/ICC fill levels or GAMG levels")
-    parser.add_argument("--petsc-divtol", type=float, default=1e4, help="PETSc KSP divergence tolerance")
-    parser.add_argument("--petsc-monitor", action="store_true", help="print PETSc residual monitor output")
-    parser.add_argument(
-        "--petsc-option",
-        action="append",
-        default=None,
-        metavar="KEY=VALUE",
-        help="extra PETSc option without leading dash; repeatable, for example pc_gamg_threshold=0.02",
-    )
-    parser.add_argument(
-        "--scale-system",
-        dest="scale_system",
-        action="store_true",
-        default=True,
-        help="use legacy left diagonal row scaling for iterative solves",
-    )
-    parser.add_argument(
-        "--no-scale-system",
-        dest="scale_system",
-        action="store_false",
-        help="disable left scaling; required for CG/MINRES symmetry",
-    )
-    parser.add_argument("--ilu-drop-tol", type=float, default=1e-10, help="ILU drop tolerance")
-    parser.add_argument("--ilu-fill-factor", type=float, default=35.0, help="ILU fill factor")
-    parser.add_argument(
-        "--ilu-failure",
-        default="none",
-        choices=("raise", "none"),
-        help="behavior if main ILU factorization fails",
-    )
-    parser.add_argument(
-        "--boundary-mode",
-        default="penalty",
-        choices=("penalty", "eliminate"),
-        help="Dirichlet trace treatment: legacy penalty rows or reduced known-dof elimination",
-    )
-    parser.add_argument("--verbosity", "-v", type=int, default=1)
-    parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--plot", action="store_true")
-    parser.add_argument("--plot-resolution", type=int, default=20)
-    parser.add_argument(
-        "--exact-plot-resolution",
-        type=int,
-        default=None,
-        help="exact-solution panel resolution; default uses an automatic dense reference sampling",
-    )
-    parser.add_argument("--hide-mesh", action="store_true")
-    args = parser.parse_args()
-    petsc_option_flags = (
-        "--petsc-preset",
-        "--petsc-levels",
-        "--petsc-divtol",
-        "--petsc-monitor",
-        "--petsc-option",
-    )
-    used_petsc_options = any(
-        arg == flag or arg.startswith(f"{flag}=")
-        for arg in sys.argv[1:]
-        for flag in petsc_option_flags
-    )
-    if used_petsc_options and str(args.solver).lower() != "petsc":
-        parser.error("PETSc options were provided, but PETSc was not selected. Add --solver petsc or --petsc.")
-
-    verbosity = 0 if args.quiet else max(0, int(args.verbosity))
-
-    def build_mesh():
-        domain = args.domain
-        if domain == "auto":
-            if args.test == 3:
-                domain = "disc"
-            elif args.test == 6:
-                domain = "lshape"
-            else:
-                domain = "rectangle"
-        if domain == "structured-rectangle":
-            return rectangle_mesh(args.nx, args.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
-        if domain == "unit-rectangle":
-            return gmsh_rectangle_mesh(args.mesh_size, xlim=(0.0, 1.0), ylim=(0.0, 1.0), verbosity=args.gmsh_verbosity)
-        if domain == "rectangle":
-            return gmsh_rectangle_mesh(args.mesh_size, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0), verbosity=args.gmsh_verbosity)
-        if domain == "disc":
-            radius = 5.0 if args.test == 3 and args.domain == "auto" else 1.0
-            return gmsh_disc_mesh(args.mesh_size, center=(0.0, 0.0), radius=radius, verbosity=args.gmsh_verbosity)
-        if domain == "lshape":
-            return gmsh_lshape_mesh(
-                args.mesh_size,
-                corner_mesh_size=args.mesh_size / 10.0 if args.domain == "auto" else None,
-                corner_refine_radius=0.1 if args.domain == "auto" else 0.4,
-                verbosity=args.gmsh_verbosity,
-            )
-        return gmsh_triangle_mesh(
-            args.mesh_size,
-            vertices=((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)),
-            verbosity=args.gmsh_verbosity,
-        )
-
-    mesh, _ = _timed_call(f"generating {args.domain} mesh", verbosity, build_mesh)
-    space = DGSpace(mesh, args.order, basis_type=args.basis)
-    diffusion, reaction, source, exact = _test_problem(args.test)
-    petsc_options = _parse_key_value_options(args.petsc_option)
-    result = solve_diffusion_reaction_hdg(
-        source,
-        reaction,
-        exact,
-        space,
-        diffusion=diffusion,
-        stabilization=args.tau,
-        solver=args.solver,
-        preconditioner=None if args.preconditioner == "none" else args.preconditioner,
-        solver_rtol=args.solver_rtol,
-        solver_atol=args.solver_atol,
-        maxiter=args.maxiter,
-        scale_system=args.scale_system,
-        petsc_preset=args.petsc_preset,
-        petsc_levels=args.petsc_levels,
-        petsc_options=petsc_options,
-        petsc_divtol=args.petsc_divtol,
-        petsc_monitor=args.petsc_monitor,
-        ilu_drop_tol=args.ilu_drop_tol,
-        ilu_fill_factor=args.ilu_fill_factor,
-        ilu_failure=args.ilu_failure,
-        local_solver_backend=args.local_backend,
-        assembly_backend=args.assembly_backend,
-        boundary_mode=args.boundary_mode,
-        verbose=verbosity,
-    )
-
-    l2_error = result.field.l2_error(exact)
-    numerical_values = result.field.values()
-    points = space.mapped_quads()
-    exact_values = exact(points[:, :, 0], points[:, :, 1])
-    abs_error = np.abs(numerical_values - exact_values)
-    linfty_error = float(np.max(abs_error))
-    element_max_error = np.max(abs_error, axis=1)
-    avg_error = float(np.average(element_max_error))
-    max_error_element = int(np.argmax(element_max_error))
-    global_solve = result.global_solve_result
-    items = [
-        ("p", space.order, ",d"),
-        ("#triangles", mesh.num_tri, ",d"),
-        ("# edges", mesh.num_edg, ",d"),
-        ("#global_dof", result.trace.size, ",d"),
-        ("tau", args.tau, ".3e"),
-        ("diffusion", "identity" if _diffusion_is_identity(diffusion) else "tensor", "s"),
-        ("h^p", mesh.h ** (space.order + 1), ".4e"),
-        ("L2 error", l2_error, ".4e"),
-        ("Linf error", linfty_error, ".4e"),
-        ("avg error", avg_error, ".4e"),
-        ("max_err at el", max_error_element, "d"),
-        ("setup time(s)", result.timings.assembly, "1.1f"),
-        ("glb_solve time(s)", result.timings.solve, "1.1f"),
-        ("recons time(s)", result.timings.reconstruction, "1.1f"),
-        ("tot time(s)", result.timings.total, "1.1f"),
-        ("solver", args.solver, "s"),
-        ("preconditioner", "petsc" if str(args.solver).lower() == "petsc" else args.preconditioner, "s"),
-        ("scaling", "left" if result.scale_system else "none", "s"),
-        ("assembly backend", result.assembly_backend, "s"),
-        ("local backend", "fused" if result.assembly_backend == "numba" and result.local_solver is None else args.local_backend, "s"),
-        ("boundary mode", result.boundary_mode, "s"),
-    ]
-    if str(args.solver).lower() == "petsc":
-        items.extend(
-            [
-                ("PETSc preset", args.petsc_preset, "s"),
-                ("PETSc levels", -1 if args.petsc_levels is None else args.petsc_levels, ",d"),
-            ]
-        )
-    if global_solve is not None:
-        free_trace_relative_residual = global_solve.diagnostic_relative_residual_norm
-        if free_trace_relative_residual is None and result.boundary_mode == "eliminate":
-            free_trace_relative_residual = global_solve.solver_relative_residual_norm
-        items.extend(
-            [
-                ("iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
-                ("solver rel res", np.nan if global_solve.solver_relative_residual_norm is None else global_solve.solver_relative_residual_norm, ".3e"),
-                ("free trace rel res", np.nan if free_trace_relative_residual is None else free_trace_relative_residual, ".3e"),
-                ("prec time(s)", 0.0 if global_solve.preconditioner_elapsed_seconds is None else global_solve.preconditioner_elapsed_seconds, ".3f"),
-                ("Krylov time(s)", 0.0 if global_solve.solve_elapsed_seconds is None else global_solve.solve_elapsed_seconds, ".3f"),
-            ]
-        )
-    pretty_print_ncol(items, ncols=3, title="Diffusion-Reaction Solve Summary")
-
-    if args.plot:
-        title = f"diff test {args.test}, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
-        plot_solution_comparison(
-            result.field,
-            exact,
-            resolution=args.plot_resolution,
-            exact_resolution="auto" if args.exact_plot_resolution is None else args.exact_plot_resolution,
-            title=title,
-            show_mesh=not args.hide_mesh,
-        )
-
-
 __all__ = [
+    "DiffusionReactionHDGOptions",
+    "DiffusionReactionHDGSolver",
     "DiffusionReactionResult",
     "DiffusionReactionTimings",
     "assemble_diffusion_trace_system",
     "diff_rea_hdg_solve",
-    "identity_diffusion",
     "diffusion_inverse_mass_blocks",
     "diffusion_element_boundary_mats",
     "diffusion_trace_lift",
@@ -1984,16 +1614,4 @@ __all__ = [
     "local_solvers_numpy",
     "solve_diffusion_reaction_hdg",
     "split_diffusion_unknowns",
-    "test0",
-    "test2",
-    "test3",
-    "test5",
-    "test6",
-    "test7",
-    "test7_gradients",
-    "zero_func",
 ]
-
-
-if __name__ == "__main__":
-    _main()
