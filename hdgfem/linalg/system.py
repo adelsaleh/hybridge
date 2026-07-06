@@ -481,6 +481,30 @@ def _configure_petsc_solver(
         pc.setType("ilu")
         if levels is not None and levels > 0:
             pc.setFactorLevels(int(levels))
+    elif normalized in {"bicgstab_ilu", "bcgs_ilu"}:
+        ksp.setType("bcgs")
+        pc.setType("ilu")
+        if levels is not None and levels > 0:
+            pc.setFactorLevels(int(levels))
+    elif normalized in {"bicgstab_asm_ilu", "bcgs_asm_ilu"}:
+        ksp.setType("bcgs")
+        pc.setType("asm")
+        temporary_options["sub_ksp_type"] = "preonly"
+        temporary_options["sub_pc_type"] = "ilu"
+        if levels is not None and levels > 0:
+            temporary_options["sub_pc_factor_levels"] = int(levels)
+    elif normalized == "gmres_ilu":
+        ksp.setType("gmres")
+        pc.setType("ilu")
+        if levels is not None and levels > 0:
+            pc.setFactorLevels(int(levels))
+    elif normalized == "gmres_asm_ilu":
+        ksp.setType("gmres")
+        pc.setType("asm")
+        temporary_options["sub_ksp_type"] = "preonly"
+        temporary_options["sub_pc_type"] = "ilu"
+        if levels is not None and levels > 0:
+            temporary_options["sub_pc_factor_levels"] = int(levels)
     elif normalized == "cg_icc":
         ksp.setType("cg")
         pc.setType("icc")
@@ -508,7 +532,8 @@ def _configure_petsc_solver(
     else:
         raise ValueError(
             "unknown PETSc solver preset "
-            f"{preset!r}; expected cg_ilu, cg_icc, cg_hypre, cg_gamg, lu, or mumps_lu"
+            f"{preset!r}; expected cg_ilu, bicgstab_ilu, bicgstab_asm_ilu, "
+            "gmres_ilu, gmres_asm_ilu, cg_icc, cg_hypre, cg_gamg, lu, or mumps_lu"
         )
 
     combined_options = dict(temporary_options)
@@ -520,15 +545,28 @@ def _configure_petsc_solver(
 
 def _petsc_matrix_from_scipy(PETSc, matrix: scipy.sparse.spmatrix | scipy.sparse.sparray):
     """Build a PETSc AIJ matrix from a SciPy sparse matrix."""
-    coo = matrix.tocoo(copy=False)
-    rows = np.asarray(coo.row, dtype=PETSc.IntType)
-    cols = np.asarray(coo.col, dtype=PETSc.IntType)
-    values = np.asarray(coo.data, dtype=np.float64)
     petsc_matrix = PETSc.Mat().create(comm=PETSc.COMM_WORLD)
+    if hasattr(petsc_matrix, "setPreallocationCOO"):
+        coo = matrix.tocoo(copy=False)
+        rows = np.asarray(coo.row, dtype=PETSc.IntType)
+        cols = np.asarray(coo.col, dtype=PETSc.IntType)
+        values = np.asarray(coo.data, dtype=np.float64)
+        petsc_matrix.setSizes(matrix.shape)
+        petsc_matrix.setType(PETSc.Mat.Type.AIJ)
+        petsc_matrix.setPreallocationCOO(rows, cols)
+        petsc_matrix.setValuesCOO(values)
+        petsc_matrix.assemble()
+        return petsc_matrix
+
+    csr = matrix.tocsr(copy=False)
+    csr.sum_duplicates()
+    row_pointers = np.asarray(csr.indptr, dtype=PETSc.IntType)
+    column_indices = np.asarray(csr.indices, dtype=PETSc.IntType)
+    values = np.asarray(csr.data, dtype=np.float64)
     petsc_matrix.setSizes(matrix.shape)
     petsc_matrix.setType(PETSc.Mat.Type.AIJ)
-    petsc_matrix.setPreallocationCOO(rows, cols)
-    petsc_matrix.setValuesCOO(values)
+    petsc_matrix.setPreallocationCSR((row_pointers, column_indices))
+    petsc_matrix.setValuesCSR(row_pointers, column_indices, values)
     petsc_matrix.assemble()
     return petsc_matrix
 

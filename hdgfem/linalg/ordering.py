@@ -43,6 +43,18 @@ class GraphOrderingTimings:
 
 
 @dataclass(frozen=True)
+class LevelWidthDiagnostics:
+    """Topological level-width diagnostics for a condensation DAG."""
+
+    num_levels: int
+    max_width: int
+    median_width: float
+    mean_width: float
+    top10_width_fraction: float
+    widths: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class GraphOrderingDiagnostics:
     """Summary diagnostics for a trace-edge graph ordering."""
 
@@ -52,6 +64,7 @@ class GraphOrderingDiagnostics:
     largest_component_size: int
     cyclic_components: int
     cyclic_nodes: int
+    level_widths: LevelWidthDiagnostics
     timings: GraphOrderingTimings
 
 
@@ -495,11 +508,57 @@ def _as_active_edges(num_edges: int, active_edges: np.ndarray | None) -> tuple[n
     return np.ascontiguousarray(edges), active_mask, old_to_active
 
 
+def _dag_level_width_diagnostics(
+        num_components: int,
+        indptr: np.ndarray,
+        indices: np.ndarray,
+        component_order: np.ndarray,
+        component_sizes: np.ndarray,
+) -> LevelWidthDiagnostics:
+    """Compute topological level widths for a condensation DAG."""
+    if num_components == 0:
+        return LevelWidthDiagnostics(
+            num_levels=0,
+            max_width=0,
+            median_width=0.0,
+            mean_width=0.0,
+            top10_width_fraction=0.0,
+            widths=(),
+        )
+
+    levels = np.zeros(num_components, dtype=np.int64)
+    for component in component_order:
+        source_level = levels[component]
+        for pos in range(indptr[component], indptr[component + 1]):
+            target = indices[pos]
+            next_level = source_level + 1
+            if levels[target] < next_level:
+                levels[target] = next_level
+
+    num_levels = int(levels.max()) + 1
+    widths = np.zeros(num_levels, dtype=np.int64)
+    for component in range(num_components):
+        widths[levels[component]] += int(component_sizes[component])
+
+    sorted_widths = np.sort(widths)[::-1]
+    top_count = min(10, sorted_widths.size)
+    total_nodes = int(np.sum(widths))
+    top10_fraction = float(np.sum(sorted_widths[:top_count]) / total_nodes) if total_nodes else 0.0
+    return LevelWidthDiagnostics(
+        num_levels=num_levels,
+        max_width=int(widths.max()) if widths.size else 0,
+        median_width=float(np.median(widths)) if widths.size else 0.0,
+        mean_width=float(np.mean(widths)) if widths.size else 0.0,
+        top10_width_fraction=top10_fraction,
+        widths=tuple(int(width) for width in widths),
+    )
+
+
 def strongly_connected_component_order(
         num_nodes: int,
         sources: np.ndarray,
         targets: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, float]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, LevelWidthDiagnostics, dict[str, float]]:
     """Return node and component orders for a directed graph.
 
     Parameters
@@ -555,10 +614,17 @@ def strongly_connected_component_order(
     component_order = _topological_order_kernel(component_sizes.size, comp_indptr, comp_indices)
     if component_order.size != component_sizes.size:
         raise RuntimeError("SCC condensation graph topological ordering failed")
+    level_widths = _dag_level_width_diagnostics(
+        component_sizes.size,
+        comp_indptr,
+        comp_indices,
+        component_order,
+        component_sizes,
+    )
     node_order = _node_order_from_components_kernel(component_id, component_order, component_sizes)
     timings["topological_order"] = time.perf_counter() - start
 
-    return node_order, component_id, component_order, component_sizes, timings
+    return node_order, component_id, component_order, component_sizes, level_widths, timings
 
 
 def upwind_scc_trace_ordering(
@@ -617,7 +683,7 @@ def upwind_scc_trace_ordering(
     )
     graph_pairs_time = time.perf_counter() - start
 
-    node_order, component_id, component_order, component_sizes, timings = strongly_connected_component_order(
+    node_order, component_id, component_order, component_sizes, level_widths, timings = strongly_connected_component_order(
         active_edge_ids.size,
         sources,
         targets,
@@ -646,6 +712,7 @@ def upwind_scc_trace_ordering(
         largest_component_size=largest_component,
         cyclic_components=int(np.count_nonzero(cyclic_mask)),
         cyclic_nodes=int(np.sum(component_sizes[cyclic_mask])) if component_sizes.size else 0,
+        level_widths=level_widths,
         timings=graph_timings,
     )
     return GraphOrderingResult(
@@ -661,6 +728,7 @@ __all__ = [
     "GraphOrderingDiagnostics",
     "GraphOrderingResult",
     "GraphOrderingTimings",
+    "LevelWidthDiagnostics",
     "SparsePatternPlotResult",
     "save_sparse_pattern_plot",
     "save_upwind_reordered_matrix_patterns",

@@ -133,7 +133,6 @@ def _load_hdgfem() -> None:
         from hdgfem.core.space import VectorDGField as _VectorDGField
         from hdgfem.linalg.ordering import upwind_scc_trace_ordering as _upwind_scc_trace_ordering
         from hdgfem.linalg.system import eliminate_known_dofs as _eliminate_known_dofs
-        from hdgfem.solvers.adv_rea import test2 as _adv_rea_test2
         from hdgfem.solvers.diff_rea import (
             _diffusion_is_identity as _diffusion_is_identity,
         )
@@ -150,8 +149,10 @@ def _load_hdgfem() -> None:
         from hdgfem.solvers.diff_rea import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
         from hdgfem.solvers.diff_rea import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
         try:
+            from scripts.adv_rea_cases import test2 as _adv_rea_test2
             from scripts.diff_rea_cases import legacy_case_factories as _legacy_case_factories
         except ModuleNotFoundError:
+            from adv_rea_cases import test2 as _adv_rea_test2
             from diff_rea_cases import legacy_case_factories as _legacy_case_factories
 
     DGField = _DGField

@@ -8,8 +8,8 @@ from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver as AdvReaSolver,
     solve_advection_reaction_hdg,
-    test2 as adv_rea_test2,
 )
+from scripts.adv_rea_cases import test2 as adv_rea_test2
 
 
 def _space(order: int = 2) -> DGSpace:

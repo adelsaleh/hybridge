@@ -9,19 +9,10 @@ quadrature tuples.
 
 from __future__ import annotations
 
-if __name__ == "__main__" and __package__ in {None, ""}:
-    import runpy
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("hdgfem.solvers.adv_rea", run_name="__main__")
-    raise SystemExit
-
 import time
-from argparse import ArgumentParser
+import json
 from dataclasses import dataclass, fields, replace
-from math import pi
+from pathlib import Path
 from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
@@ -120,6 +111,14 @@ class AdvectionReactionHDGOptions:
     solver_rtol: float = 1e-13
     solver_atol: float = 0.0
     maxiter: int | None = None
+    petsc_preset: str = "gmres_ilu"
+    petsc_levels: int | None = None
+    petsc_options: dict | None = None
+    petsc_divtol: float = 1e4
+    petsc_monitor: bool = False
+    ilu_drop_tol: float | None = None
+    ilu_fill_factor: float | None = None
+    ilu_failure: Literal["raise", "none"] = "raise"
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
     trace_ordering: Literal["none", "upwind-scc"] = "none"
@@ -706,6 +705,14 @@ def solve_advection_reaction_hdg(
         solver_rtol: float = 1e-13,
         solver_atol: float = 0.0,
         maxiter: int | None = None,
+        petsc_preset: str = "gmres_ilu",
+        petsc_levels: int | None = None,
+        petsc_options: dict | None = None,
+        petsc_divtol: float = 1e4,
+        petsc_monitor: bool = False,
+        ilu_drop_tol: float | None = None,
+        ilu_fill_factor: float | None = None,
+        ilu_failure: Literal["raise", "none"] = "raise",
         boundary_penalty: float = 1e20,
         boundary_mode: Literal["penalty", "eliminate"] = "penalty",
         trace_ordering: Literal["none", "upwind-scc"] = "none",
@@ -812,6 +819,14 @@ def solve_advection_reaction_hdg(
     effective_backend = assembly_backend
     if effective_backend == "auto":
         effective_backend = "numpy"
+    solver_is_petsc = solver is not None and str(solver).lower() == "petsc"
+    effective_scale_system = not solver_is_petsc
+    effective_ilu_drop_tol = ilu_drop_tol
+    if effective_ilu_drop_tol is None:
+        effective_ilu_drop_tol = 1e-8 if boundary_mode == "eliminate" else 1e-10
+    effective_ilu_fill_factor = ilu_fill_factor
+    if effective_ilu_fill_factor is None:
+        effective_ilu_fill_factor = 20 if boundary_mode == "eliminate" else 35
 
     def prepare_data():
         if effective_backend == "numba":
@@ -859,6 +874,7 @@ def solve_advection_reaction_hdg(
     def print_trace_ordering_diagnostics(ordering: GraphOrderingResult) -> None:
         diagnostics = ordering.diagnostics
         timings = diagnostics.timings
+        levels = diagnostics.level_widths
         print(
             "  upwind SCC graph: "
             f"nodes={diagnostics.num_nodes:,}, edges={diagnostics.num_directed_edges:,}, "
@@ -875,6 +891,50 @@ def solve_advection_reaction_hdg(
             f"dof_perm={timings.dof_permutation:.5f}s, total={timings.total:.5f}s",
             flush=True,
         )
+        print(
+            "  upwind level widths: "
+            f"levels={levels.num_levels:,}, max={levels.max_width:,}, "
+            f"median={levels.median_width:.1f}, mean={levels.mean_width:.1f}, "
+            f"top10_fraction={levels.top10_width_fraction:.3f}",
+            flush=True,
+        )
+
+    def save_trace_ordering_diagnostics(ordering: GraphOrderingResult) -> Path | None:
+        if matrix_pattern_dir is None:
+            return None
+        diagnostics = ordering.diagnostics
+        timings = diagnostics.timings
+        levels = diagnostics.level_widths
+        output_dir = Path(matrix_pattern_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / f"{matrix_pattern_prefix}_upwind_diagnostics.json"
+        payload = {
+            "num_nodes": diagnostics.num_nodes,
+            "num_directed_edges": diagnostics.num_directed_edges,
+            "num_components": diagnostics.num_components,
+            "largest_component_size": diagnostics.largest_component_size,
+            "cyclic_components": diagnostics.cyclic_components,
+            "cyclic_nodes": diagnostics.cyclic_nodes,
+            "level_widths": {
+                "num_levels": levels.num_levels,
+                "max_width": levels.max_width,
+                "median_width": levels.median_width,
+                "mean_width": levels.mean_width,
+                "top10_width_fraction": levels.top10_width_fraction,
+                "widths": list(levels.widths),
+            },
+            "timings": {
+                "graph_pairs": timings.graph_pairs,
+                "csr": timings.csr,
+                "scc": timings.scc,
+                "dag": timings.dag,
+                "topological_order": timings.topological_order,
+                "dof_permutation": timings.dof_permutation,
+                "total": timings.total,
+            },
+        }
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return path
 
     preorder_numba_trace = (
         effective_backend == "numba"
@@ -1130,6 +1190,9 @@ def solve_advection_reaction_hdg(
     if matrix_pattern_dir is not None:
         if plot_permutation is None:
             raise RuntimeError("matrix pattern plotting requires an upwind SCC permutation")
+        diagnostics_path = None
+        if ordering_result is not None:
+            diagnostics_path = save_trace_ordering_diagnostics(ordering_result)
 
         def save_matrix_patterns():
             matrix = assemble_global_matrix(solve_rows, solve_cols, solve_data, solve_rhs.size)
@@ -1150,6 +1213,8 @@ def solve_advection_reaction_hdg(
         if verbosity:
             print(f"  matrix pattern before: {matrix_pattern_plots.before_path}", flush=True)
             print(f"  matrix pattern after : {matrix_pattern_plots.after_path}", flush=True)
+            if diagnostics_path is not None:
+                print(f"  upwind diagnostics : {diagnostics_path}", flush=True)
 
     assembly = local_assembly + local_inverse + boundary_assembly + trace_assembly
     keep_local_solver = effective_backend == "numpy" or cache_local_solvers or "local_solver" in want
@@ -1199,9 +1264,17 @@ def solve_advection_reaction_hdg(
             rtol=solver_rtol,
             atol=solver_atol,
             maxiter=maxiter,
+            petsc_preset=petsc_preset,
+            petsc_levels=petsc_levels,
+            petsc_options=petsc_options,
+            petsc_divtol=petsc_divtol,
+            petsc_monitor=petsc_monitor,
+            ilu_drop_tol=effective_ilu_drop_tol,
+            ilu_fill_factor=effective_ilu_fill_factor,
+            ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
-            scale_system=True,
-            scale_matrix_in_place=True,
+            scale_system=effective_scale_system,
+            scale_matrix_in_place=effective_scale_system,
             permutation=trace_permutation,
             raise_on_nonconvergence=True,
             verbose=verbosity,
@@ -1220,11 +1293,17 @@ def solve_advection_reaction_hdg(
             rtol=solver_rtol,
             atol=solver_atol,
             maxiter=maxiter,
+            petsc_preset=petsc_preset,
+            petsc_levels=petsc_levels,
+            petsc_options=petsc_options,
+            petsc_divtol=petsc_divtol,
+            petsc_monitor=petsc_monitor,
+            ilu_drop_tol=effective_ilu_drop_tol,
+            ilu_fill_factor=effective_ilu_fill_factor,
+            ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
-            scale_system=True,
-            ilu_drop_tol=1e-8,
-            ilu_fill_factor=20,
-            scale_matrix_in_place=True,
+            scale_system=effective_scale_system,
+            scale_matrix_in_place=effective_scale_system,
             permutation=trace_permutation,
             raise_on_nonconvergence=True,
             verbose=verbosity,
@@ -1327,232 +1406,6 @@ def solve_advection_reaction_hdg(
 adv_rea_hdg_solv = solve_advection_reaction_hdg
 
 
-def test2(m: float = 10, n: float = 15, a: float = 2, b: float = 2):
-    """Manufactured legacy advection-reaction test used by ``adv_rea_vec_msh4``."""
-
-    def f2(t):
-        return a * np.cos(m * pi * t) + b * np.sin(n * pi * t)
-
-    return (
-        lambda x, y: x + 0 * y,
-        lambda x, y: -y + 0 * x,
-        lambda x, y: y**2 + 0 * x,
-        lambda x, y: y**2 + 0 * x,
-        lambda x, y: f2(x * y) * np.exp(y**2 / 2.0) + 1.0,
-    )
-
-
-import numpy as np
-
-
-def test3(
-    r0=1.0,
-    A=1.0,
-    N=8,
-    M=20.0,
-    delta=0.35,
-    u0=1.0,
-    B=0.35,
-    C=0.15,
-    sigma=0.6,
-    xc=0.0,
-    yc=0.0,
-    P=13.0 * np.pi,
-    Q=17.0 * np.pi,
-):
-    """
-    Build a manufactured solution for the conservative transport-reaction equation
-
-        r(x,y) u(x,y) + div( u(x,y) beta(x,y) ) = f(x,y)
-
-    on the square [-1,1]^2.
-
-    The velocity field beta is generated from a streamfunction
-
-        psi(x,y) = sin(a(x+1)) sin(a(y+1)),
-        a = N*pi/2,
-
-    through
-
-        beta = A * grad^perp(psi)
-             = A * (psi_y, -psi_x).
-
-    Hence beta is exactly divergence-free:
-
-        div(beta) = 0,
-
-    and the source term is computed as
-
-        f = r u + beta . grad(u).
-
-    The manufactured exact solution has the form
-
-        u(x,y)
-        =
-        u0
-        + B sin(M psi(x,y) + delta x)
-        + C exp(-sigma((x-xc)^2 + (y-yc)^2)) cos(Px + Qy).
-
-    Parameters
-    ----------
-    r0 : float, default=1.0
-        Constant reaction coefficient. The returned reaction function is
-        reaction(x,y) = r0. Larger r0 makes the reaction term dominate the
-        transport term.
-
-    A : float, default=1.0
-        Amplitude of the divergence-free velocity field beta. Increasing A
-        strengthens advection and increases the magnitude of beta . grad(u).
-
-    N : int or float, default=8
-        Number of vortex cells per coordinate direction. The streamfunction
-        creates approximately an N-by-N array of counter-rotating vortices on
-        [-1,1]^2. Larger N gives smaller, more numerous vortices.
-
-    M : float, default=20.0
-        Oscillation frequency of the exact solution along the streamfunction
-        psi. Larger M creates more oscillations inside and across vortex cells.
-
-    delta : float, default=0.35
-        Linear phase shift in the exact solution, appearing as delta*x inside
-        sin(M*psi + delta*x). This prevents the exact solution from being purely
-        a function of psi, which would make beta . grad(u) vanish for that part
-        because beta is tangent to the level curves of psi.
-
-    u0 : float, default=1.0
-        Constant background level of the exact solution. Use this to keep u
-        away from zero if desired.
-
-    B : float, default=0.35
-        Amplitude of the streamfunction-driven oscillatory part
-        sin(M*psi + delta*x). Larger B increases the main vortex-aligned
-        oscillations in u.
-
-    C : float, default=0.15
-        Amplitude of the localized Gaussian-trigonometric perturbation.
-        Setting C=0 removes this extra localized high-frequency component.
-
-    sigma : float, default=0.6
-        Localization strength of the Gaussian factor
-
-            exp(-sigma((x-xc)^2 + (y-yc)^2)).
-
-        Larger sigma makes the perturbation more concentrated near (xc,yc).
-        Smaller sigma spreads it over more of the square.
-
-    xc : float, default=0.0
-        x-coordinate of the center of the Gaussian perturbation.
-
-    yc : float, default=0.0
-        y-coordinate of the center of the Gaussian perturbation.
-
-    P : float, default=13*pi
-        x-frequency of the localized oscillatory perturbation cos(P*x + Q*y).
-        Larger P gives faster oscillations in the x direction.
-
-    Q : float, default=17*pi
-        y-frequency of the localized oscillatory perturbation cos(P*x + Q*y).
-        Larger Q gives faster oscillations in the y direction.
-
-    Returns
-    -------
-    betax : callable
-        Function betax(x,y) returning the first component beta_x(x,y).
-
-    betay : callable
-        Function betay(x,y) returning the second component beta_y(x,y).
-
-    reaction : callable
-        Function reaction(x,y) returning the reaction coefficient r(x,y).
-        Here this is the constant function r0.
-
-    source : callable
-        Function source(x,y) returning the manufactured right-hand side f(x,y)
-        such that the returned exact solution satisfies
-
-            r u + div(u beta) = f.
-
-    exact : callable
-        Function exact(x,y) returning the manufactured exact solution u(x,y).
-
-    Notes
-    -----
-    The returned functions are NumPy-vectorized lambdas: x and y may be scalars
-    or NumPy arrays of matching shape.
-
-    The boundary-normal velocity vanishes on the boundary of [-1,1]^2 because
-    the streamfunction psi vanishes there. Thus beta . n = 0 on the boundary.
-    """
-
-    a = 0.5 * N * np.pi
-
-    psi = lambda x, y: (
-        np.sin(a * (x + 1.0)) * np.sin(a * (y + 1.0))
-    )
-
-    psix = lambda x, y: (
-        a * np.cos(a * (x + 1.0)) * np.sin(a * (y + 1.0))
-    )
-
-    psiy = lambda x, y: (
-        a * np.sin(a * (x + 1.0)) * np.cos(a * (y + 1.0))
-    )
-
-    betax = lambda x, y: A * psiy(x, y)
-    betay = lambda x, y: -A * psix(x, y)
-
-    reaction = lambda x, y: r0 + 0.0 * x * y
-
-    theta = lambda x, y: M * psi(x, y) + delta * x
-
-    G = lambda x, y: np.exp(
-        -sigma * ((x - xc) ** 2 + (y - yc) ** 2)
-    )
-
-    Phi = lambda x, y: P * x + Q * y
-
-    exact = lambda x, y: (
-        u0
-        + B * np.sin(theta(x, y))
-        + C * G(x, y) * np.cos(Phi(x, y))
-    )
-
-    ux = lambda x, y: (
-        B * np.cos(theta(x, y)) * (M * psix(x, y) + delta)
-        + C
-        * G(x, y)
-        * (
-            -2.0 * sigma * (x - xc) * np.cos(Phi(x, y))
-            - P * np.sin(Phi(x, y))
-        )
-    )
-
-    uy = lambda x, y: (
-        B * np.cos(theta(x, y)) * M * psiy(x, y)
-        + C
-        * G(x, y)
-        * (
-            -2.0 * sigma * (y - yc) * np.cos(Phi(x, y))
-            - Q * np.sin(Phi(x, y))
-        )
-    )
-
-    # Since beta = A grad^perp(psi), div(beta) = 0.
-    #
-    # Therefore:
-    #
-    #   source = r exact + div(exact beta)
-    #          = r exact + beta . grad(exact)
-    #
-    source = lambda x, y: (
-        reaction(x, y) * exact(x, y)
-        + betax(x, y) * ux(x, y)
-        + betay(x, y) * uy(x, y)
-    )
-
-    return betax, betay, reaction, source, exact
-
-
 __all__ = [
     "AdvectionReactionHDGOptions",
     "AdvectionReactionHDGSolver",
@@ -1560,268 +1413,4 @@ __all__ = [
     "AdvectionReactionTimings",
     "adv_rea_hdg_solv",
     "solve_advection_reaction_hdg",
-    "test2",
 ]
-
-
-def _main() -> None:
-    """Run the legacy manufactured advection-reaction test."""
-    from ..core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
-    from ..io.plot import plot_solution_comparison
-    from ..core.space import DGSpace
-    from ..io.output import pretty_print_ncol
-
-    parser = ArgumentParser(description="Run the hdgfem advection-reaction HDG test2 problem.")
-    parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
-    parser.add_argument(
-        "--domain",
-        default="rectangle",
-        choices=("rectangle", "disc", "triangle", "structured-rectangle"),
-        help="mesh domain; rectangle/disc/triangle use Gmsh",
-    )
-    parser.add_argument("--mesh-size", "--lc", type=float, default=0.35, help="Gmsh target mesh size")
-    parser.add_argument("--nx", type=int, default=8, help="structured rectangle cells in x")
-    parser.add_argument("--ny", type=int, default=None, help="structured rectangle cells in y; defaults to nx")
-    parser.add_argument("--gmsh-verbosity", type=int, default=0, help="Gmsh verbosity level")
-    parser.add_argument("--gmsh-algorithm", type=int, default=None, help="optional Gmsh 2D meshing algorithm")
-    parser.add_argument("--basis", default="dub_orth", choices=("bernstein", "hier_C0", "dub_orth"))
-    parser.add_argument("--solver", default="BICGSTAB", help="global trace solver; use 'direct' for sparse direct solve")
-    parser.add_argument("--preconditioner", default="ilu", choices=("ilu", "none"), help="global trace preconditioner")
-    parser.add_argument("--solver-rtol", type=float, default=1e-13, help="relative tolerance for iterative solves")
-    parser.add_argument("--solver-atol", type=float, default=0.0, help="absolute tolerance for iterative solves")
-    parser.add_argument("--maxiter", type=int, default=None, help="maximum Krylov iterations")
-    parser.add_argument(
-        "--ilu-permc-spec",
-        default=None,
-        choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"),
-        help="SuperLU spilu column permutation; defaults to NATURAL when trace ordering is enabled, else COLAMD",
-    )
-    parser.add_argument(
-        "--project-reaction",
-        action="store_true",
-        help="project callable reaction into Vh before calling the solver",
-    )
-    parser.add_argument(
-        "--project-source",
-        action="store_true",
-        help="project callable source into Vh before calling the solver",
-    )
-    parser.add_argument(
-        "--project-beta",
-        action="store_true",
-        help="project callable advection field into Vh x Vh before calling the solver",
-    )
-    parser.add_argument(
-        "--assembly-backend",
-        default="numpy",
-        choices=("numpy", "numba", "auto"),
-        help="assembly backend; 'numba' is an explicit experimental projected-coefficient fused path",
-    )
-    parser.add_argument(
-        "--cache-local-solvers",
-        action="store_true",
-        help="retain dense local inverse blocks in the returned result",
-    )
-    parser.add_argument(
-        "--boundary-mode",
-        default="penalty",
-        choices=("penalty", "eliminate"),
-        help="Dirichlet trace treatment: legacy penalty rows or reduced known-dof elimination",
-    )
-    parser.add_argument(
-        "--trace-ordering",
-        default="none",
-        choices=("none", "upwind-scc"),
-        help="optional trace-DOF ordering before the global solve",
-    )
-    parser.add_argument(
-        "--trace-ordering-flux-tol",
-        type=float,
-        default=0.0,
-        help="mean face-normal flux tolerance for upwind SCC trace ordering",
-    )
-    parser.add_argument(
-        "--plot-matrix-pattern",
-        action="store_true",
-        help="write sparse matrix pattern plots before and after upwind SCC ordering",
-    )
-    parser.add_argument(
-        "--matrix-pattern-dir",
-        default="matrix_patterns",
-        help="output directory for --plot-matrix-pattern",
-    )
-    parser.add_argument(
-        "--matrix-pattern-max-points",
-        type=int,
-        default=2_000_000,
-        help="maximum plotted nonzeros per matrix-pattern figure",
-    )
-    parser.add_argument(
-        "--matrix-pattern-dpi",
-        type=int,
-        default=250,
-        help="DPI for matrix-pattern PNG files",
-    )
-    parser.add_argument(
-        "--matrix-pattern-only",
-        action="store_true",
-        help="assemble and plot matrix patterns, then stop before the global solve",
-    )
-    parser.add_argument("--verbosity", "-v", type=int, default=1, help="logging verbosity: 0 quiet, 1 phases, 2 substeps")
-    parser.add_argument("--quiet", action="store_true", help="suppress phase timing output")
-    parser.add_argument("--plot", action="store_true", help="plot numerical, exact, and absolute-error fields")
-    parser.add_argument("--plot-resolution", type=int, default=20, help="samples per reference axis for plotting")
-    parser.add_argument(
-        "--exact-plot-resolution",
-        type=int,
-        default=None,
-        help="exact-solution panel resolution; default uses an automatic dense reference sampling",
-    )
-    parser.add_argument("--hide-mesh", action="store_true", help="do not overlay the coarse mesh on plots")
-    args = parser.parse_args()
-
-    verbosity = 0 if args.quiet else max(0, int(args.verbosity))
-
-    def build_mesh():
-        if args.domain == "structured-rectangle":
-            return rectangle_mesh(args.nx, args.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
-        if args.domain == "rectangle":
-            return gmsh_rectangle_mesh(
-                args.mesh_size,
-                xlim=(-1.0, 1.0),
-                ylim=(-1.0, 1.0),
-                verbosity=args.gmsh_verbosity,
-                algorithm=args.gmsh_algorithm,
-            )
-        if args.domain == "disc":
-            return gmsh_disc_mesh(
-                args.mesh_size,
-                center=(0.0, 0.0),
-                radius=1.0,
-                verbosity=args.gmsh_verbosity,
-                algorithm=args.gmsh_algorithm,
-            )
-        return gmsh_triangle_mesh(
-            args.mesh_size,
-            vertices=((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)),
-            verbosity=args.gmsh_verbosity,
-            algorithm=args.gmsh_algorithm,
-        )
-
-    mesh, _ = _timed_call(f"generating {args.domain} mesh", verbosity, build_mesh)
-    space = DGSpace(mesh, args.order, basis_type=args.basis)
-    beta_x, beta_y, reaction, source, exact = test2()
-    # beta_x, beta_y, reaction, source, exact = test3(N=2, sigma=0.0, P=0, Q=0)
-    bd_cond = exact
-    source_input = DGField(source, space, name="source_h") if args.project_source else source
-    reaction_input = DGField(reaction, space, name="reaction_h") if args.project_reaction else reaction
-    beta_input = VectorDGField((beta_x, beta_y), space, name="beta_h") if args.project_beta else (beta_x, beta_y)
-    plot_matrix_pattern = args.plot_matrix_pattern or args.matrix_pattern_only
-    result = solve_advection_reaction_hdg(
-        source_input,
-        beta_input,
-        reaction_input,
-        bd_cond,
-        space,
-        solver=args.solver,
-        preconditioner=None if args.preconditioner == "none" else args.preconditioner,
-        solver_rtol=args.solver_rtol,
-        solver_atol=args.solver_atol,
-        maxiter=args.maxiter,
-        boundary_mode=args.boundary_mode,
-        trace_ordering=args.trace_ordering,
-        trace_ordering_flux_tolerance=args.trace_ordering_flux_tol,
-        ilu_permc_spec=args.ilu_permc_spec,
-        matrix_pattern_dir=args.matrix_pattern_dir if plot_matrix_pattern else None,
-        matrix_pattern_prefix=(
-            f"adv_rea_p{space.order}_ne{mesh.num_tri}_bd-{args.boundary_mode}"
-        ),
-        matrix_pattern_max_points=args.matrix_pattern_max_points,
-        matrix_pattern_dpi=args.matrix_pattern_dpi,
-        matrix_pattern_only=args.matrix_pattern_only,
-        assembly_backend=args.assembly_backend,
-        cache_local_solvers=args.cache_local_solvers,
-        verbose=verbosity,
-    )
-    if args.matrix_pattern_only:
-        if result.matrix_pattern_plots is not None:
-            print(f"matrix pattern before: {result.matrix_pattern_plots.before_path}")
-            print(f"matrix pattern after : {result.matrix_pattern_plots.after_path}")
-        return
-
-    l2_error = result.field.l2_error(exact)
-    numerical_values = result.field.values()
-    points = space.mapped_quads()
-    exact_values = exact(points[:, :, 0], points[:, :, 1])
-    abs_error = np.abs(numerical_values - exact_values)
-    linfty_error = float(np.max(abs_error))
-    element_max_error = np.max(abs_error, axis=1)
-    avg_error = float(np.average(element_max_error))
-    max_error_element = int(np.argmax(element_max_error))
-
-    global_solve = result.global_solve_result
-    items = [
-        ("p", space.order, ",d"),
-        ("#triangles", mesh.num_tri, ",d"),
-        ("# edges", mesh.num_edg, ",d"),
-        ("#global_dof", result.trace.size, ",d"),
-        ("ℓ_c (Gmsh)", args.mesh_size, ".3f"),
-        ("h^p", mesh.h ** (space.order + 1), ".4e"),
-        ("L₂ error", l2_error, ".4e"),
-        ("L∞ error", linfty_error, ".4e"),
-        ("avg error", avg_error, ".4e"),
-        ("max_err at el", max_error_element, "d"),
-        ("prep time(s)", result.timings.preparation, "1.1f"),
-        ("setup time(s)", result.timings.assembly, "1.1f"),
-        ("glb_solve time(s)", result.timings.solve, "1.1f"),
-        ("recons time(s)", result.timings.reconstruction, "1.1f"),
-        ("tot time(s)", result.timings.total, "1.1f"),
-        ("solver", args.solver, "s"),
-        ("source", "projected" if args.project_source else "exact", "s"),
-        ("beta", "projected" if args.project_beta else "exact", "s"),
-        ("reaction", "projected" if args.project_reaction else "exact", "s"),
-        ("assembly", result.assembly_backend, "s"),
-        ("boundary mode", result.boundary_mode, "s"),
-        ("trace ordering", result.trace_ordering, "s"),
-    ]
-    if result.ordering_result is not None:
-        diagnostics = result.ordering_result.diagnostics
-        items.extend(
-            [
-                ("ordering time(s)", result.timings.trace_ordering, ".3f"),
-                ("SCC components", diagnostics.num_components, ",d"),
-                ("largest SCC", diagnostics.largest_component_size, ",d"),
-                ("cyclic trace edges", diagnostics.cyclic_nodes, ",d"),
-            ]
-        )
-    if global_solve is not None:
-        free_trace_relative_residual = global_solve.diagnostic_relative_residual_norm
-        if free_trace_relative_residual is None and result.boundary_mode == "eliminate":
-            free_trace_relative_residual = global_solve.solver_relative_residual_norm
-        items.extend(
-            [
-                ("iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
-                ("solver rel res", np.nan if global_solve.solver_relative_residual_norm is None else global_solve.solver_relative_residual_norm, ".3e"),
-                ("free trace rel res", np.nan if free_trace_relative_residual is None else free_trace_relative_residual, ".3e"),
-                ("ILU time(s)", 0.0 if global_solve.preconditioner_elapsed_seconds is None else global_solve.preconditioner_elapsed_seconds, ".3f"),
-                ("perm time(s)", 0.0 if global_solve.permutation_elapsed_seconds is None else global_solve.permutation_elapsed_seconds, ".3f"),
-                ("ILU permc", "-" if global_solve.ilu_permc_spec is None else global_solve.ilu_permc_spec, "s"),
-                ("Krylov time(s)", 0.0 if global_solve.solve_elapsed_seconds is None else global_solve.solve_elapsed_seconds, ".3f"),
-            ]
-        )
-    pretty_print_ncol(items, ncols=5, title="Solve Summary")
-
-    if args.plot:
-        title = f"test2, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
-        plot_solution_comparison(
-            result.field,
-            exact,
-            resolution=args.plot_resolution,
-            exact_resolution="auto" if args.exact_plot_resolution is None else args.exact_plot_resolution,
-            title=title,
-            show_mesh=not args.hide_mesh,
-        )
-
-
-if __name__ == "__main__":
-    _main()

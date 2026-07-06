@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Repeat the advection-reaction CLI solve and summarize printed timings.
+"""Repeat the advection-reaction preset runner and summarize printed timings.
 
-This benchmark intentionally drives ``hdgfem/solvers/adv_rea.py`` as a
-subprocess.  It is meant to answer "what does the solver script itself report?"
+This benchmark intentionally drives ``scripts/run_adv_rea_cases.py`` as a
+subprocess.  It is meant to answer "what does the preset runner itself report?"
 rather than timing a lower-level assembly function.
 """
 
@@ -22,7 +22,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ADV_REA_SCRIPT = REPO_ROOT / "hdgfem" / "solvers" / "adv_rea.py"
+ADV_REA_SCRIPT = REPO_ROOT / "scripts" / "run_adv_rea_cases.py"
 
 SUMMARY_LABELS = (
     "prep time(s)",
@@ -125,6 +125,7 @@ def _base_adv_rea_args(args: argparse.Namespace, backend: str) -> list[str]:
     command = [
         sys.executable,
         str(ADV_REA_SCRIPT),
+        "test2_scipy_ilu_upwind",
         "-p",
         str(args.order),
         "--lc",
@@ -137,9 +138,6 @@ def _base_adv_rea_args(args: argparse.Namespace, backend: str) -> list[str]:
         args.ilu_permc_spec,
         "--verbosity",
         str(args.verbosity),
-        "--project-reaction",
-        "--project-beta",
-        "--project-source",
         "--assembly-backend",
         backend,
     ]
@@ -218,7 +216,7 @@ def _print_metric_table(results: list[RunResult]) -> None:
     ]
 
     print()
-    print("Summary from adv_rea.py printed timings")
+    print("Summary from run_adv_rea_cases.py printed timings")
     print("backend  metric                                           n  median     min        max        mean")
     print("-------  -----------------------------------------------  -  ---------  ---------  ---------  ---------")
     for backend in sorted(by_backend):
@@ -254,7 +252,7 @@ def _print_metric_table(results: list[RunResult]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run adv_rea.py repeatedly with NumPy and/or Numba and parse its printed timings."
+        description="Run run_adv_rea_cases.py repeatedly with NumPy and/or Numba and parse its printed timings."
     )
     parser.add_argument("-p", "--order", type=int, default=6)
     parser.add_argument("--lc", type=float, default=0.01)
@@ -268,7 +266,7 @@ def main() -> None:
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="include adv_rea.py --plot; useful for exact manual parity but can open/block a GUI window",
+        help="include runner --plot; useful for exact manual parity but can open/block a GUI window",
     )
     parser.add_argument(
         "--log-dir",
@@ -284,7 +282,7 @@ def main() -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     print(
-        f"Running adv_rea.py repeats={args.repeats} order={args.order} lc={args.lc} "
+        f"Running run_adv_rea_cases.py repeats={args.repeats} order={args.order} lc={args.lc} "
         f"boundary_mode={args.boundary_mode} trace_ordering={args.trace_ordering} plot={args.plot}"
     )
     print(f"Raw logs: {log_dir}")

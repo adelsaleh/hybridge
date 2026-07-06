@@ -4,6 +4,7 @@ from .ordering import (
     GraphOrderingDiagnostics,
     GraphOrderingResult,
     GraphOrderingTimings,
+    LevelWidthDiagnostics,
     SparsePatternPlotResult,
     save_sparse_pattern_plot,
     save_upwind_reordered_matrix_patterns,
@@ -19,15 +20,24 @@ from .system import (
     expand_known_dofs,
     solve_global_system,
 )
+from .upwind_block_gs import (
+    UpwindBlockGSPreconditioner,
+    UpwindBlockGSStats,
+    build_upwind_block_gs_preconditioner,
+)
 
 __all__ = [
     "GraphOrderingDiagnostics",
     "GraphOrderingResult",
     "GraphOrderingTimings",
     "KnownDofReduction",
+    "LevelWidthDiagnostics",
     "SolveResult",
     "SparsePatternPlotResult",
+    "UpwindBlockGSPreconditioner",
+    "UpwindBlockGSStats",
     "assemble_global_matrix",
+    "build_upwind_block_gs_preconditioner",
     "eliminate_known_dofs",
     "expand_known_dofs",
     "save_sparse_pattern_plot",

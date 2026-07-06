@@ -19,23 +19,23 @@ object-oriented mesh, space, and field objects through package-native modules.
     io/           output formatting and plotting helpers
     kernels/      low-level Numba kernels
     linalg/       sparse global-system solve and graph ordering helpers
-    solvers/      advection-reaction and diffusion-reaction solver CLIs
+    solvers/      advection-reaction and diffusion-reaction solver APIs
   run_configs/    version-controlled benchmark and solver presets
   tests/          focused package tests
 ```
 
-## Command-Line Solver
+## Command-Line Runners
 
-Preferred invocation:
+Advection-reaction manufactured presets:
 
 ```bash
-python -m hdgfem.solvers.adv_rea [options]
+python scripts/run_adv_rea_cases.py [preset]
 ```
 
-Direct script execution is also supported:
+Diffusion-reaction manufactured presets:
 
 ```bash
-python hdgfem/solvers/adv_rea.py [options]
+python scripts/run_diff_rea_cases.py [preset]
 ```
 
 ### Common Runs
@@ -43,62 +43,86 @@ python hdgfem/solvers/adv_rea.py [options]
 Small smoke run:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30
 ```
 
 Verbose timing run:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plotting run:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --plot
 ```
 
-Projected reaction path:
+PETSc BiCGStab + ILU path:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-reaction
+python scripts/run_adv_rea_cases.py test2_petsc_bicgstab_ilu -p 6 --lc 0.03
 ```
 
 Projected-coefficient Numba path:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 \
-  --project-source --project-beta --project-reaction \
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 \
   --assembly-backend numba --verbosity 2
 ```
 
 Boundary elimination and upwind trace ordering:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 \
-  --boundary-mode eliminate --trace-ordering upwind-scc
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03
 ```
 
-Save before/after matrix sparsity pattern plots for the upwind ordering:
+One-assembly advection solver benchmark:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 4 --lc 0.08 \
-  --boundary-mode eliminate --trace-ordering upwind-scc \
-  --plot-matrix-pattern
+python scripts/benchmark_adv_rea_solvers.py -p 6 --lc 0.01
 ```
 
-Structured rectangle instead of Gmsh:
+This benchmark assembles the `test2` upwind-ordered trace matrix once, builds a
+reusable SciPy CSR matrix, and then runs selected global solver configurations
+against exactly the same matrix and right-hand side.  This removes mesh
+generation and trace assembly from the per-solver comparison, which is the
+right timing scope when developing preconditioners.
 
-```bash
-python -m hdgfem.solvers.adv_rea -p 3 --domain structured-rectangle --nx 16 --ny 16
+Default iterative configurations:
+
+```text
+scipy_bicgstab_ilu             SciPy BICGSTAB with high-fill SuperLU ILU
+scipy_bicgstab_upwind_bgs      forward level-scheduled block-GS
+scipy_gmres_upwind_bgs         forward level-scheduled block-GS
+scipy_bicgstab_upwind_fbgs     forward/backward block-GS diagnostic
+scipy_gmres_upwind_fbgs        forward/backward block-GS diagnostic
+petsc_bicgstab_ilu             PETSc BICGSTAB with ILU
+petsc_gmres_ilu                PETSc GMRES with ILU
+petsc_bicgstab_asm_ilu         PETSc BICGSTAB with ASM subdomain ILU
+petsc_gmres_asm_ilu            PETSc GMRES with ASM subdomain ILU
 ```
 
-Disc and triangle Gmsh domains:
+Useful benchmark controls:
 
-```bash
-python -m hdgfem.solvers.adv_rea -p 4 --domain disc --lc 0.08
-python -m hdgfem.solvers.adv_rea -p 4 --domain triangle --lc 0.08
+```text
+--config NAME                  run one config; repeat for multiple configs
+--include-direct               also include sparse direct/PETSc LU configs
+--json-out PATH                write timing and residual diagnostics as JSON
+--upwind-bgs-apply-mode MODE   auto, serial, or parallel Numba apply kernel
+--upwind-bgs-sweep SWEEP       forward or forward_backward block-GS sweep
 ```
+
+Performance notes in this manual refer to runs on host `23G82`, Ubuntu 22.04
+with Linux 6.8, Intel Core i5-10210U CPU, 4 physical cores / 8 hardware
+threads, and 15 GiB RAM.  On that machine, the `p=6`, `lc=0.01` `test2`
+benchmark showed that upwind block-GS setup can be cheaper than high-fill
+SciPy ILU setup after Numba warm-up, but the preconditioner is weaker: it
+needs many Krylov iterations because same-level trace-block couplings are
+dropped.  High-fill SciPy ILU and PETSc ILU remain the practical choices for
+this case.  If you record or compare absolute timings, include the CPU core
+count, thread count, memory size, and whether Numba kernels were already JIT
+compiled.
 
 Diffusion-reaction manufactured solve:
 
@@ -147,25 +171,65 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
   --volume-quad-1d 7 --edge-quad-1d 7
 ```
 
-### Main CLI Options
+### Optional PETSc Install Notes
+
+PETSc is an optional backend.  The rest of `hdgfem` runs without it because
+`petsc4py` is imported only when a PETSc solve is requested.
+
+Build PETSc and `petsc4py` as a matched pair.  A working PETSc 3.22.2 setup
+with MUMPS, Hypre/BoomerAMG, and GAMG uses:
+
+```bash
+source .venv/bin/activate
+
+python -m pip install --force-reinstall \
+  "numpy<2.5,>=2.4" "Cython>=3.0,<3.1" "setuptools<75" "wheel<0.46"
+
+export PETSC_DIR=$HOME/opt/petsc
+export PETSC_ARCH=arch-linux-c-opt
+export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
+
+cd "$PETSC_DIR/src/binding/petsc4py"
+python setup.py clean --all
+
+cd /path/to/hdgfem
+python -m pip install --no-build-isolation --no-deps \
+  "$PETSC_DIR/src/binding/petsc4py"
+```
+
+The important constraints are:
+
+- install the `petsc4py` source bundled with the PETSc checkout, or install the
+  exact matching `petsc4py` release;
+- keep NumPy below 2.5 while the project depends on the current Numba release;
+- use `Cython>=3.0,<3.1` for `petsc4py` 3.22.2, because newer Cython versions
+  can crash while generating `PETSc.c`;
+- use an older setuptools/wheel pair, because newer setuptools releases removed
+  compatibility expected by this `petsc4py` build;
+- avoid mixing a system `petsc4py` package with virtualenv NumPy.
+
+Verify with real imports, not just `pip show`:
+
+```bash
+python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); k.getPC().setType('gamg'); print('GAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('hypre'); pc.setHYPREType('boomeramg'); print('Hypre/BoomerAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('lu'); pc.setFactorSolverType('mumps'); print('MUMPS ok')"
+```
+
+### Main Runner Options
 
 ```text
--p, --order              uniform DG polynomial degree
---lc, --mesh-size        Gmsh target mesh size
---domain                 rectangle, disc, triangle, or structured-rectangle
---basis                  bernstein, hier_C0, or dub_orth
---solver                 BICGSTAB by default; use direct for sparse direct solve
---preconditioner         ilu or none
---solver-rtol            Krylov relative tolerance
---solver-atol            Krylov absolute tolerance
---maxiter                maximum Krylov iterations
---project-source         project callable source into V_h before calling the solver
---project-beta           project callable beta into V_h x V_h before calling the solver
---project-reaction       project callable reaction into V_h before calling the solver
---assembly-backend       numpy, numba, or auto
+preset                   preset name from scripts/run_adv_rea_cases.py
+--list-presets           print available advection presets
+--print-preset           print the selected preset fields
+--dry-run                validate and print the selected preset without solving
+-p, --order              override uniform DG polynomial degree
+--lc, --mesh-size        override Gmsh target mesh size
 --boundary-mode          penalty or eliminate
 --trace-ordering         none or upwind-scc
---plot-matrix-pattern    save before/after sparsity pattern plots
+--ilu-permc-spec         SuperLU column permutation for SciPy ILU
+--assembly-backend       numpy, numba, or auto
 --verbosity              0 quiet, 1 major phases, 2 substeps
 --plot                   show numerical/exact/error plots
 --plot-resolution        samples per reference direction for plotting
@@ -174,15 +238,15 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
 Run:
 
 ```bash
-python -m hdgfem.solvers.adv_rea --help
+python scripts/run_adv_rea_cases.py --help
 ```
 
-for the exact current option list.
+for the current runner option list.
 
 ## Manufactured Problem
 
-`adv_rea.py` currently runs the same legacy `test2` problem used for comparison
-with `adv_rea_vec_msh4.py`.
+The default advection runner preset uses the same legacy `test2` problem used
+for comparison with `adv_rea_vec_msh4.py`.
 
 The PDE is:
 
@@ -221,7 +285,8 @@ Basic solve:
 ```python
 from hdgfem.core.mesh import gmsh_rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.solvers.adv_rea import solve_advection_reaction_hdg, test2
+from hdgfem.solvers.adv_rea import solve_advection_reaction_hdg
+from scripts.adv_rea_cases import test2
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 4, basis_type="dub_orth")
@@ -753,5 +818,5 @@ python -m compileall -q hdgfem tests scripts
 Run the CLI smoke test:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
 ```

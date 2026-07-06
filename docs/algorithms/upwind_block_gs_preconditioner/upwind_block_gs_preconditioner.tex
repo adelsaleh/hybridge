@@ -1,0 +1,220 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\R}{\mathbb{R}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  breaklines=true,
+  backgroundcolor=\color{black!3}
+}
+
+\title{Level-Scheduled Upwind Block Gauss-Seidel Preconditioning}
+\author{\code{hdgfem.linalg.upwind_block_gs}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note documents the first implementation of a flow-aware block
+Gauss-Seidel preconditioner for advection-reaction HDG trace systems.  The
+method assumes the global trace matrix has already been ordered by the upwind
+SCC graph ordering.  It builds a reusable SciPy \code{LinearOperator} from the
+assembled CSR matrix, using dense edge-block diagonal inverses and strictly
+upstream cross-level block couplings.  Couplings within the same topological
+level and couplings to downstream levels are dropped, which makes each level
+parallelizable with Numba.
+\end{abstract}
+
+\tableofcontents
+
+\section{Context}
+
+For a boundary-eliminated HDG advection-reaction trace system, the global solve
+has the form
+\[
+  A \lambda = b,
+\]
+where each active mesh edge contributes
+\[
+  n_{\partial} = p + 1
+\]
+trace degrees of freedom.  After upwind SCC ordering, the unknown vector is
+viewed as a sequence of edge blocks,
+\[
+  \lambda =
+  \begin{bmatrix}
+    \lambda_0 & \lambda_1 & \cdots & \lambda_{N_b-1}
+  \end{bmatrix}^T,
+  \qquad
+  \lambda_i \in \R^{n_{\partial}}.
+\]
+The ordering module also computes topological level widths
+\[
+  w_0,\ldots,w_{L-1},
+\]
+where blocks in the same level are intended to be independent with respect to
+the directed upwind dependency graph.
+
+\section{Preconditioner Approximation}
+
+Let \(A_{ij}\in\R^{n_{\partial}\times n_{\partial}}\) denote the dense block of
+the trace matrix coupling block \(j\) into block row \(i\).  The version-1
+preconditioner forms
+\[
+  M = D + L_{\rm up},
+\]
+where
+\[
+  D_{ii} = A_{ii},
+\]
+and \(L_{\rm up}\) contains only block couplings satisfying
+\[
+  \ell(j) < \ell(i),
+\]
+with \(\ell(i)\) the topological level of block \(i\).  All couplings with
+\(\ell(j)=\ell(i)\) and \(\ell(j)>\ell(i)\) are dropped.
+
+The default preconditioner apply computes
+\[
+  z = M^{-1} r
+\]
+by a forward level sweep.  For each level \(\ell=0,\ldots,L-1\), every block in
+that level is processed in parallel:
+\[
+  z_i =
+  A_{ii}^{-1}
+  \left(
+    r_i -
+    \sum_{\substack{j\\ \ell(j)<\ell(i)}} A_{ij}z_j
+  \right).
+\]
+Because all retained dependencies point from earlier levels into later levels,
+the loop over levels is sequential, while the loop over blocks inside a level
+is parallel.
+
+An experimental \code{forward_backward} sweep also stores downstream
+cross-level couplings.  It applies a forward sweep, multiplies by the dense
+block diagonal, and then applies a backward sweep.  In matrix form, this is the
+block analogue of
+\[
+  (D+U_{\rm down})^{-1}D(D+L_{\rm up})^{-1}.
+\]
+This uses both cross-level directions, but it still drops same-level couplings.
+It is therefore mainly a diagnostic for whether downstream couplings are the
+missing ingredient.
+
+\section{Version-1 Builder}
+
+The first implementation deliberately builds the preconditioner after CSR
+assembly.  This gives a simple correctness path:
+\begin{enumerate}[nosep]
+  \item assemble the trace matrix normally;
+  \item sum duplicate COO entries by converting to CSR;
+  \item extract dense diagonal edge blocks;
+  \item extract retained upstream block couplings into a block-CSR structure;
+  \item invert every dense diagonal block;
+  \item expose the Numba level sweep as a SciPy \code{LinearOperator}.
+\end{enumerate}
+
+This route avoids changing the fused trace-assembly kernel while we evaluate
+the numerical quality of the preconditioner.
+
+\section{Parallel Structure}
+
+The apply kernel has the following structure:
+
+\begin{lstlisting}
+for level in range(num_levels):
+    for block in prange(level_offsets[level], level_offsets[level + 1]):
+        residual = r[block]
+        for retained upstream neighbor j:
+            residual -= A[block, j] @ z[j]
+        z[block] = inverse_diagonal_block[block] @ residual
+\end{lstlisting}
+
+The computation is race-free because every retained neighbor \(j\) lies in an
+earlier level, so \(z_j\) has already been computed before the current level
+starts.  The diagnostics from the trigonometric-style \code{test2} advection
+case with \(p=6\) and \(\code{lc}=0.01\) showed 439 levels and maximum width
+599, which is a useful amount of level parallelism.
+
+In practice, launching a threaded region once per level has overhead.  The
+implementation therefore supports three apply modes:
+\begin{itemize}[nosep]
+  \item \code{serial}: a single-threaded Numba level sweep;
+  \item \code{parallel}: a \code{prange} loop inside each level;
+  \item \code{auto}: select \code{parallel} only when the maximum level width
+        is above a configurable threshold.
+\end{itemize}
+For the current \code{test2} diagnostics, the serial Numba sweep is often the
+better baseline because level widths are in the hundreds rather than the
+thousands.
+
+\section{Diagnostics}
+
+The builder reports:
+\begin{itemize}[nosep]
+  \item number of edge blocks;
+  \item trace block size;
+  \item number of topological levels;
+  \item maximum, median, and mean level width;
+  \item retained upstream block couplings;
+  \item dropped same-level block couplings;
+  \item dropped downstream block couplings;
+  \item fraction of off-diagonal block couplings dropped;
+  \item selected apply mode;
+  \item setup timings for CSR preparation, coupling counting, block filling,
+        diagonal-block inversion, and warm-up.
+\end{itemize}
+
+The dropped-coupling counts are important.  A high same-level count means the
+upwind graph levels are not sufficient to represent the matrix-level
+dependencies exactly.  In that case the preconditioner is still valid, but it
+is more like a level block-Jacobi/Gauss-Seidel hybrid.
+
+\section{Benchmark Entry Points}
+
+The current benchmark script adds two configurations:
+\begin{lstlisting}
+scipy_bicgstab_upwind_bgs
+scipy_gmres_upwind_bgs
+scipy_bicgstab_upwind_fbgs
+scipy_gmres_upwind_fbgs
+\end{lstlisting}
+
+They live in \code{scripts/benchmark_adv_rea_solvers.py}.  The script assembles
+the trace matrix once, builds the reusable CSR matrix once, and then compares
+the new preconditioner with SciPy ILU and PETSc ILU/ASM configurations.
+When multiple SciPy configurations use the same upwind block-GS options, the
+benchmark caches and reuses the scaled matrix and preconditioner.  This avoids
+charging the setup cost separately to BICGSTAB and GMRES.
+
+\section{Next Optimization}
+
+If the CSR-built version is competitive, the next optimization is to build the
+same block-CSR preconditioner data during the Numba trace assembly.  That
+should reduce memory traffic and avoid scanning the scalar CSR matrix.  The
+apply kernel should remain in \code{hdgfem.linalg.upwind_block_gs}; only the
+builder should move closer to the fused assembly path.
+
+\end{document}

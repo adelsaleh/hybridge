@@ -15,9 +15,9 @@ from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver,
     solve_advection_reaction_hdg,
-    test2 as adv_rea_test2,
 )
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from scripts.adv_rea_cases import test2 as adv_rea_test2
 
 
 pytest.importorskip("numba")

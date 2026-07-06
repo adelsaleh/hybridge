@@ -5,6 +5,10 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+*.aux
+*.log
+*.out
+*.pdf
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -18,8 +22,8 @@ dist/
 run_logs/
 matrix_patterns/
 mat/matrix_patterns/
+run_outputs/
 docs/**/*.aux
 docs/**/*.log
 docs/**/*.out
 docs/**/*.toc
-docs/algorithms/diff_rea_assembly_pipeline.pdf

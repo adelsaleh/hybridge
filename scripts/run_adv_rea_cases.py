@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Run manufactured diffusion-reaction presets.
-
-Preset definitions live in this file, in the ``PRESETS`` dictionary below.
-
-To create a new manufactured test:
-1. Add a factory in ``scripts/diff_rea_cases.py`` that returns
-   ``(diffusion, reaction, source, exact)``.
-2. Register it in ``CASE_DEFINITIONS`` in that same file.
-3. Add one or more ``DiffusionReactionRunPreset`` entries in ``PRESETS`` below.
-
-To change mesh size, polynomial order, stabilization, quadrature, solver, PETSc
-settings, plotting, or case parameters such as tensor-sine ``m``/``n``, edit
-the corresponding preset here.
-"""
+"""Run manufactured advection-reaction presets."""
 
 from __future__ import annotations
 
@@ -27,39 +14,47 @@ if __package__ in {None, ""}:
 
 
 @dataclass(frozen=True)
-class DiffusionReactionRunPreset:
-    """Complete default configuration for one manufactured-case run."""
+class AdvectionReactionRunPreset:
+    """Complete default configuration for one manufactured advection run."""
 
     case: str
     description: str
     case_params: dict[str, Any] = field(default_factory=dict)
     domain: str = "auto"
-    mesh_size: float = 0.35
+    mesh_size: float = 0.03
     nx: int = 8
     ny: int | None = None
     gmsh_verbosity: int = 0
+    gmsh_algorithm: int | None = None
     basis: str = "dub_orth"
     order: int = 4
-    volume_quad_1d: int | None = None
-    edge_quad_1d: int | None = None
-    tau: float = 1.0
-    local_backend: str = "numpy"
-    assembly_backend: str = "numpy"
     solver: str | None = "BICGSTAB"
     preconditioner: str | None = "ilu"
     solver_rtol: float = 1.0e-13
     solver_atol: float = 0.0
     maxiter: int | None = None
-    scale_system: bool = True
-    petsc_preset: str = "cg_gamg"
+    petsc_preset: str = "gmres_ilu"
     petsc_levels: int | None = None
     petsc_options: dict[str, str] = field(default_factory=dict)
     petsc_divtol: float = 1.0e4
     petsc_monitor: bool = False
-    ilu_drop_tol: float = 1.0e-10
-    ilu_fill_factor: float = 35.0
-    ilu_failure: str = "none"
-    boundary_mode: str = "penalty"
+    ilu_drop_tol: float | None = None
+    ilu_fill_factor: float | None = None
+    ilu_failure: str = "raise"
+    boundary_mode: str = "eliminate"
+    trace_ordering: str = "upwind-scc"
+    trace_ordering_flux_tolerance: float = 0.0
+    ilu_permc_spec: str | None = None
+    matrix_pattern_dir: str | None = None
+    matrix_pattern_prefix: str = "adv_rea_trace_matrix"
+    matrix_pattern_max_points: int = 2_000_000
+    matrix_pattern_dpi: int = 250
+    matrix_pattern_only: bool = False
+    assembly_backend: str = "numba"
+    project_source: bool = True
+    project_beta: bool = True
+    project_reaction: bool = True
+    cache_local_solvers: bool = False
     verbosity: int = 1
     plot: bool = False
     plot_resolution: int = 20
@@ -67,149 +62,98 @@ class DiffusionReactionRunPreset:
     hide_mesh: bool = False
 
 
-# Edit this dictionary to change existing runs or add new preset names.
-# The ``case`` value must match a key from scripts/diff_rea_cases.py.
-PRESETS: dict[str, DiffusionReactionRunPreset] = {
-    "quadratic_poisson": DiffusionReactionRunPreset(
-        case="quadratic-poisson",
-        description="Default quadratic pure-Poisson smoke run.",
+def _test2_solver_preset(
+        *,
+        description: str,
+        solver: str | None,
+        mesh_size: float= 0.01,
+        order: int = 6,
+        preconditioner: str | None,
+        petsc_preset: str = "gmres_ilu",
+        ilu_drop_tol: float | None = None,
+        ilu_fill_factor: float | None = None,
+        maxiter: int | None = None,
+) -> AdvectionReactionRunPreset:
+    return AdvectionReactionRunPreset(
+        case="test2",
+        description=description,
+        solver=solver,
+        preconditioner=preconditioner,
+        petsc_preset=petsc_preset,
+        ilu_drop_tol=ilu_drop_tol,
+        ilu_fill_factor=ilu_fill_factor,
+        maxiter=maxiter,
+        mesh_size=mesh_size,
+        order=order,
+        boundary_mode="eliminate",
+        trace_ordering="upwind-scc",
+        assembly_backend="numba",
+        project_source=True,
+        project_beta=True,
+        project_reaction=True,
+        verbosity=2,
+    )
+
+
+PRESETS: dict[str, AdvectionReactionRunPreset] = {
+    "test2_scipy_ilu_upwind": _test2_solver_preset(
+        description="test2 with SciPy BICGSTAB, upwind ordering, and high-fill ILU.",
+        solver="BICGSTAB",
+        preconditioner="ilu",
+        ilu_drop_tol=1.0e-10,
+        ilu_fill_factor=35.0,
+        maxiter=2000,
     ),
-    "exponential_bubble": DiffusionReactionRunPreset(
-        case="exponential-bubble",
-        description="Legacy exponential bubble pure-Poisson case.",
+    "test2_scipy_direct": _test2_solver_preset(
+        description="test2 with SciPy sparse direct solve.",
+        solver="direct",
+        preconditioner=None,
     ),
-    "trigonometric_poisson_cg_gamg": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Legacy trigonometric pure-Poisson case on its default disk domain.",
+    "test2_petsc_bicgstab_ilu": _test2_solver_preset(
+        description="test2 with PETSc BiCGStab and ILU.",
         solver="petsc",
         preconditioner=None,
-        petsc_preset="cg_gamg",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        petsc_levels=10,
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
+        petsc_preset="bicgstab_ilu",
+        maxiter=2000,
     ),
-    "trigonometric_poisson_cg_hypre": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Trigonometric pure-Poisson PETSc CG with Hypre BoomerAMG.",
+    "test2_petsc_gmres_ilu": _test2_solver_preset(
+        description="test2 with PETSc GMRES and ILU.",
         solver="petsc",
         preconditioner=None,
-        petsc_preset="cg_hypre",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
+        petsc_preset="gmres_ilu",
+        maxiter=2000,
     ),
-    "trigonometric_poisson_cg_icc": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Trigonometric pure-Poisson PETSc CG with ICC.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="cg_icc",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
-    ),
-    "trigonometric_poisson_cg_ilu": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Trigonometric pure-Poisson PETSc CG with ILU.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="cg_ilu",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
-    ),
-    "trigonometric_poisson_lu": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Trigonometric pure-Poisson PETSc direct LU baseline.",
+    "test2_petsc_lu": _test2_solver_preset(
+        description="test2 with PETSc direct LU.",
         solver="petsc",
         preconditioner=None,
         petsc_preset="lu",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
     ),
-    "trigonometric_poisson_mumps_lu": DiffusionReactionRunPreset(
-        case="trigonometric-poisson",
-        description="Trigonometric pure-Poisson PETSc direct LU with MUMPS.",
+    "test2_petsc_mumps_lu": _test2_solver_preset(
+        description="test2 with PETSc direct LU using MUMPS.",
         solver="petsc",
         preconditioner=None,
         petsc_preset="mumps_lu",
-        boundary_mode="eliminate",
-        assembly_backend="numba",
-        order=6,
-        verbosity=2,
-        mesh_size=0.1,
-    ),
-    "quadratic_variable_reaction": DiffusionReactionRunPreset(
-        case="quadratic-variable-reaction",
-        description="Quadratic exact solution with smooth variable reaction.",
-    ),
-    "lshape_singular": DiffusionReactionRunPreset(
-        case="lshape-singular",
-        description="Legacy reentrant-corner singular harmonic case.",
-    ),
-    "tensor_sine_quick": DiffusionReactionRunPreset(
-        case="tensor-sine",
-        description="Small tensor-sine projected-Numba smoke run.",
-        case_params={"m": 1, "n": 1},
-        domain="structured-rectangle",
-        nx=8,
-        ny=8,
-        order=2,
-        tau=4.0,
-        assembly_backend="numba",
-        boundary_mode="eliminate",
-        volume_quad_1d=4,
-        edge_quad_1d=3,
-    ),
-    "tensor_sine_gamg": DiffusionReactionRunPreset(
-        case="tensor-sine",
-        description="Large p=6 tensor-sine run using projected tensor Numba assembly and PETSc GAMG.",
-        case_params={"m": 1, "n": 1},
-        domain="structured-rectangle",
-        nx=50,
-        ny=50,
-        order=6,
-        tau=4.0,
-        assembly_backend="numba",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="cg_hypre",
-        boundary_mode="eliminate",
-        volume_quad_1d=7,
-        edge_quad_1d=7,
     ),
 }
 
-DEFAULT_PRESET = "quadratic_poisson"
+DEFAULT_PRESET = "test2_scipy_ilu_upwind"
 
 
-def preset_by_key(key: str) -> DiffusionReactionRunPreset:
+def preset_by_key(key: str) -> AdvectionReactionRunPreset:
     """Return a run preset by name."""
     try:
         return PRESETS[key]
     except KeyError as exc:
         valid = ", ".join(sorted(PRESETS))
-        raise ValueError(f"unknown diffusion-reaction preset {key!r}; valid presets are {valid}") from exc
+        raise ValueError(f"unknown advection-reaction preset {key!r}; valid presets are {valid}") from exc
 
 
 def _print_presets() -> None:
-    """Print available presets and the file location to edit them."""
     script_path = Path(__file__).resolve()
     print(f"Preset definitions: {script_path}")
     print("Edit the PRESETS dictionary in this file to change or add runs.")
-    print("Manufactured PDE cases are registered in scripts/diff_rea_cases.py.\n")
+    print("Manufactured advection cases are registered in scripts/adv_rea_cases.py.\n")
 
     width = max(len(key) for key in PRESETS)
     for key in sorted(PRESETS):
@@ -217,26 +161,47 @@ def _print_presets() -> None:
         solver = "petsc" if str(preset.solver).lower() == "petsc" else str(preset.solver)
         print(
             f"{key:<{width}}  "
-            f"case={preset.case:<28} "
+            f"case={preset.case:<8} "
             f"p={preset.order:<2d} "
-            f"domain={preset.domain:<20} "
+            f"lc={preset.mesh_size:<6.3f} "
             f"backend={preset.assembly_backend:<5} "
             f"solver={solver:<8} "
             f"{preset.description}"
         )
 
 
-def _print_preset_details(preset_key: str, config: DiffusionReactionRunPreset) -> None:
-    """Print every field in one preset for inspection."""
+def _print_preset_details(preset_key: str, config: AdvectionReactionRunPreset) -> None:
     print(f"Preset: {preset_key}")
     print(f"Defined in: {Path(__file__).resolve()}")
     for key, value in asdict(config).items():
         print(f"{key}: {value!r}")
 
 
-def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReactionRunPreset:
-    """Apply CLI presentation/diagnostic choices without changing numerical inputs."""
+def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReactionRunPreset:
     updates = {}
+    if args.order is not None:
+        updates["order"] = args.order
+    if args.mesh_size is not None:
+        updates["mesh_size"] = args.mesh_size
+    if args.boundary_mode is not None:
+        updates["boundary_mode"] = args.boundary_mode
+    if args.trace_ordering is not None:
+        updates["trace_ordering"] = args.trace_ordering
+    if args.ilu_permc_spec is not None:
+        updates["ilu_permc_spec"] = args.ilu_permc_spec
+    if args.assembly_backend is not None:
+        updates["assembly_backend"] = args.assembly_backend
+    if args.plot_matrix_pattern:
+        updates["matrix_pattern_dir"] = str(args.matrix_pattern_dir)
+    if args.matrix_pattern_only:
+        updates["matrix_pattern_only"] = True
+        updates["matrix_pattern_dir"] = str(args.matrix_pattern_dir)
+    if args.matrix_pattern_prefix is not None:
+        updates["matrix_pattern_prefix"] = args.matrix_pattern_prefix
+    if args.matrix_pattern_max_points is not None:
+        updates["matrix_pattern_max_points"] = args.matrix_pattern_max_points
+    if args.matrix_pattern_dpi is not None:
+        updates["matrix_pattern_dpi"] = args.matrix_pattern_dpi
     if args.verbosity is not None:
         updates["verbosity"] = args.verbosity
     if args.quiet:
@@ -252,67 +217,40 @@ def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReacti
     return replace(config, **updates) if updates else config
 
 
-def _build_mesh(config: DiffusionReactionRunPreset, case):
-    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, \
-        rectangle_mesh
+def _build_mesh(config: AdvectionReactionRunPreset, case):
+    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 
-    domain = config.domain
-    if domain == "auto":
-        domain = case.default_domain
+    domain = case.default_domain if config.domain == "auto" else config.domain
     if domain == "structured-rectangle":
         return rectangle_mesh(config.nx, config.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
-    if domain == "unit-rectangle":
-        return gmsh_rectangle_mesh(
-            config.mesh_size,
-            xlim=(0.0, 1.0),
-            ylim=(0.0, 1.0),
-            verbosity=config.gmsh_verbosity,
-        )
     if domain == "rectangle":
         return gmsh_rectangle_mesh(
             config.mesh_size,
             xlim=(-1.0, 1.0),
             ylim=(-1.0, 1.0),
             verbosity=config.gmsh_verbosity,
+            algorithm=config.gmsh_algorithm,
         )
     if domain == "disc":
-        radius = 5.0 if case.key == "trigonometric-poisson" and config.domain == "auto" else 1.0
         return gmsh_disc_mesh(
             config.mesh_size,
             center=(0.0, 0.0),
-            radius=radius,
+            radius=1.0,
             verbosity=config.gmsh_verbosity,
-        )
-    if domain == "lshape":
-        use_auto_lshape_refinement = case.key == "lshape-singular" and config.domain == "auto"
-        return gmsh_lshape_mesh(
-            config.mesh_size,
-            corner_mesh_size=config.mesh_size / 10.0 if use_auto_lshape_refinement else None,
-            corner_refine_radius=0.1 if use_auto_lshape_refinement else 0.4,
-            verbosity=config.gmsh_verbosity,
+            algorithm=config.gmsh_algorithm,
         )
     return gmsh_triangle_mesh(
         config.mesh_size,
         vertices=((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)),
         verbosity=config.gmsh_verbosity,
+        algorithm=config.gmsh_algorithm,
     )
 
 
-def _summarize_solve(
-        result,
-        exact,
-        *,
-        diffusion,
-        preset_key: str,
-        case,
-        mesh,
-        space,
-        config: DiffusionReactionRunPreset,
-) -> float:
+def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
-    from hdgfem.io.output import pretty_print_ncol
-    from hdgfem.solvers.diff_rea import _diffusion_is_identity
 
+    from hdgfem.io.output import pretty_print_ncol
 
     l2_error = result.field.l2_error(exact)
     numerical_values = result.field.values()
@@ -332,8 +270,6 @@ def _summarize_solve(
         ("#triangles", mesh.num_tri, ",d"),
         ("# edges", mesh.num_edg, ",d"),
         ("#global_dof", result.trace.size, ",d"),
-        ("tau", config.tau, ".3e"),
-        ("diffusion", "identity" if _diffusion_is_identity(diffusion) else "tensor", "s"),
         ("h^p", mesh.h ** (space.order + 1), ".4e"),
         ("L2 error", l2_error, ".4e"),
         ("Linf error", linfty_error, ".4e"),
@@ -345,17 +281,22 @@ def _summarize_solve(
         ("tot time(s)", result.timings.total, "1.1f"),
         ("solver", "none" if config.solver is None else config.solver, "s"),
         ("preconditioner", "petsc" if str(config.solver).lower() == "petsc" else config.preconditioner or "none", "s"),
-        ("scaling", "left" if result.scale_system else "none", "s"),
         ("assembly backend", result.assembly_backend, "s"),
-        ("local backend",
-         "fused" if result.assembly_backend == "numba" and result.local_solver is None else config.local_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
+        ("trace ordering", result.trace_ordering, "s"),
     ]
     if str(config.solver).lower() == "petsc":
         items.extend(
             [
                 ("PETSc preset", config.petsc_preset, "s"),
                 ("PETSc levels", -1 if config.petsc_levels is None else config.petsc_levels, ",d"),
+            ]
+        )
+    else:
+        items.extend(
+            [
+                ("ILU drop", -1.0 if config.ilu_drop_tol is None else config.ilu_drop_tol, ".1e"),
+                ("ILU fill", -1.0 if config.ilu_fill_factor is None else config.ilu_fill_factor, ".1f"),
             ]
         )
     if global_solve is not None:
@@ -391,25 +332,83 @@ def _summarize_solve(
                 ),
             ]
         )
-    pretty_print_ncol(items, ncols=3, title="Diffusion-Reaction Preset Solve Summary")
+    pretty_print_ncol(items, ncols=3, title="Advection-Reaction Preset Solve Summary")
     return l2_error
 
 
 def _main() -> None:
     parser = ArgumentParser(
-        description="Run one manufactured diffusion-reaction preset.",
+        description="Run one manufactured advection-reaction preset.",
         formatter_class=RawDescriptionHelpFormatter,
         epilog=(
-            "Preset configuration lives in this file, scripts/run_diff_rea_cases.py.\n"
+            "Preset configuration lives in this file, scripts/run_adv_rea_cases.py.\n"
             "Edit PRESETS to change numerical parameters or add a new run.\n"
-            "Add new manufactured PDE cases in scripts/diff_rea_cases.py.\n"
-            "CLI flags are limited to plotting, verbosity, and preset inspection."
+            "Add new manufactured cases in scripts/adv_rea_cases.py."
         ),
     )
     parser.add_argument("preset", nargs="?", default=DEFAULT_PRESET, choices=tuple(sorted(PRESETS)))
     parser.add_argument("--list-presets", action="store_true", help="print available presets and where to edit them")
     parser.add_argument("--print-preset", action="store_true", help="print the selected preset fields and exit")
     parser.add_argument("--dry-run", action="store_true", help="validate and print the selected preset without solving")
+    parser.add_argument("--order", "-p", type=int, default=None, help="override uniform DG polynomial order")
+    parser.add_argument("--mesh-size", "--lc", type=float, default=None, help="override Gmsh target mesh size")
+    parser.add_argument(
+        "--boundary-mode",
+        choices=("penalty", "eliminate"),
+        default=None,
+        help="override Dirichlet trace treatment for this run only",
+    )
+    parser.add_argument(
+        "--trace-ordering",
+        choices=("none", "upwind-scc"),
+        default=None,
+        help="override trace-DOF ordering for this run only",
+    )
+    parser.add_argument(
+        "--ilu-permc-spec",
+        choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"),
+        default=None,
+        help="override SuperLU spilu column permutation for this run only",
+    )
+    parser.add_argument(
+        "--assembly-backend",
+        choices=("numpy", "numba", "auto"),
+        default=None,
+        help="override assembly backend for this run only",
+    )
+    parser.add_argument(
+        "--plot-matrix-pattern",
+        action="store_true",
+        help="write sparse matrix pattern plots before and after upwind SCC ordering",
+    )
+    parser.add_argument(
+        "--matrix-pattern-dir",
+        type=Path,
+        default=Path("run_outputs") / "matrix_patterns",
+        help="output directory for matrix pattern plots; defaults outside the hdgfem package",
+    )
+    parser.add_argument(
+        "--matrix-pattern-prefix",
+        default=None,
+        help="filename prefix for matrix pattern plots",
+    )
+    parser.add_argument(
+        "--matrix-pattern-max-points",
+        type=int,
+        default=None,
+        help="maximum plotted nonzeros per matrix-pattern figure",
+    )
+    parser.add_argument(
+        "--matrix-pattern-dpi",
+        type=int,
+        default=None,
+        help="DPI for matrix-pattern PNG files",
+    )
+    parser.add_argument(
+        "--matrix-pattern-only",
+        action="store_true",
+        help="assemble, save matrix patterns, then stop before the global solve",
+    )
     parser.add_argument("--verbosity", "-v", type=int, default=None,
                         help="override logging verbosity for this run only")
     parser.add_argument("--quiet", action="store_true", help="run with verbosity 0 for this run only")
@@ -431,7 +430,7 @@ def _main() -> None:
     preset_key = args.preset
     config = _runtime_config(preset_by_key(preset_key), args)
 
-    from scripts.diff_rea_cases import CASE_BY_KEY, case_definition_by_key
+    from scripts.adv_rea_cases import CASE_BY_KEY, case_definition_by_key
 
     if config.case not in CASE_BY_KEY:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
@@ -440,32 +439,28 @@ def _main() -> None:
         _print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.space import DGSpace
-    from hdgfem.solvers.diff_rea import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver, _timed_call
+    from hdgfem.core.space import DGField, DGSpace, VectorDGField
+    from hdgfem.io.plot import plot_solution_comparison
+    from hdgfem.solvers.adv_rea import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver, _timed_call
 
     case = case_definition_by_key(config.case)
-    diffusion, reaction, source, exact = case.build(**config.case_params)
+    beta_x, beta_y, reaction, source, exact = case.build(**config.case_params)
     mesh, _ = _timed_call(
         f"generating {config.domain} mesh",
         config.verbosity,
         lambda: _build_mesh(config, case),
     )
-    space = DGSpace(
-        mesh,
-        config.order,
-        basis_type=config.basis,
-        volume_quad_1d=config.volume_quad_1d,
-        edge_quad_1d=config.edge_quad_1d,
-    )
-    options = DiffusionReactionHDGOptions(
-        diffusion=diffusion,
-        stabilization=config.tau,
+    space = DGSpace(mesh, config.order, basis_type=config.basis)
+    source_input = DGField(source, space, name="source_h") if config.project_source else source
+    reaction_input = DGField(reaction, space, name="reaction_h") if config.project_reaction else reaction
+    beta_input = VectorDGField((beta_x, beta_y), space, name="beta_h") if config.project_beta else (beta_x, beta_y)
+
+    options = AdvectionReactionHDGOptions(
         solver=config.solver,
         preconditioner=config.preconditioner,
         solver_rtol=config.solver_rtol,
         solver_atol=config.solver_atol,
         maxiter=config.maxiter,
-        scale_system=config.scale_system,
         petsc_preset=config.petsc_preset,
         petsc_levels=config.petsc_levels,
         petsc_options=dict(config.petsc_options),
@@ -474,23 +469,40 @@ def _main() -> None:
         ilu_drop_tol=config.ilu_drop_tol,
         ilu_fill_factor=config.ilu_fill_factor,
         ilu_failure=config.ilu_failure,
-        local_solver_backend=config.local_backend,
-        assembly_backend=config.assembly_backend,
         boundary_mode=config.boundary_mode,
+        trace_ordering=config.trace_ordering,
+        trace_ordering_flux_tolerance=config.trace_ordering_flux_tolerance,
+        ilu_permc_spec=config.ilu_permc_spec,
+        matrix_pattern_dir=config.matrix_pattern_dir,
+        matrix_pattern_prefix=(
+            f"{preset_key}_p{space.order}_ne{mesh.num_tri}"
+            if config.matrix_pattern_prefix == "adv_rea_trace_matrix"
+            else config.matrix_pattern_prefix
+        ),
+        matrix_pattern_max_points=config.matrix_pattern_max_points,
+        matrix_pattern_dpi=config.matrix_pattern_dpi,
+        matrix_pattern_only=config.matrix_pattern_only,
+        assembly_backend=config.assembly_backend,
+        cache_local_solvers=config.cache_local_solvers,
         verbose=config.verbosity,
     )
-    solver = DiffusionReactionHDGSolver(
+    solver = AdvectionReactionHDGSolver(
         space,
-        source=source,
-        reaction=reaction,
+        source=source_input,
+        beta=beta_input,
+        reaction=reaction_input,
         boundary_condition=exact,
         options=options,
     )
     result = solver.solve()
+    if config.matrix_pattern_only:
+        if result.matrix_pattern_plots is not None:
+            print(f"matrix pattern before: {result.matrix_pattern_plots.before_path}")
+            print(f"matrix pattern after : {result.matrix_pattern_plots.after_path}")
+        return
     l2_error = _summarize_solve(
         result,
         exact,
-        diffusion=diffusion,
         preset_key=preset_key,
         case=case,
         mesh=mesh,
@@ -499,8 +511,6 @@ def _main() -> None:
     )
 
     if config.plot:
-        from hdgfem.io.plot import plot_solution_comparison
-
         title = f"{preset_key}, {case.key}, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
         plot_solution_comparison(
             result.field,

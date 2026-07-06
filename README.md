@@ -5,10 +5,10 @@ repository root contains the `hdgfem/` Python package directory, with mesh,
 reference-element, space/field, transfer, plotting, sparse global-system, and
 HDG assembly code organized into subpackages.
 
-The canonical advection-reaction executable solver is:
+The manufactured advection-reaction case runner is:
 
 ```bash
-python -m hdgfem.solvers.adv_rea
+python scripts/run_adv_rea_cases.py
 ```
 
 The manufactured diffusion-reaction case runner is:
@@ -17,30 +17,66 @@ The manufactured diffusion-reaction case runner is:
 python scripts/run_diff_rea_cases.py
 ```
 
-Preset definitions live in the `PRESETS` dictionary inside
-`scripts/run_diff_rea_cases.py`.  List the available presets with:
+Preset definitions live in the `PRESETS` dictionaries inside
+`scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
+available presets with:
 
 ```bash
+python scripts/run_adv_rea_cases.py --list-presets
 python scripts/run_diff_rea_cases.py --list-presets
 ```
 
 Select a preset by passing its name.  To add a new manufactured PDE case, add
-it to `scripts/diff_rea_cases.py`; to add a new run configuration, add an
-entry to `PRESETS` in `scripts/run_diff_rea_cases.py`.
+it to `scripts/adv_rea_cases.py` or `scripts/diff_rea_cases.py`; to add a new
+run configuration, add an entry to the corresponding runner's `PRESETS`.
 
 The runner keeps numerical parameters in presets.  Command-line flags are
 limited to presentation and inspection, for example:
 
 ```bash
-python scripts/run_diff_rea_cases.py tensor_sine_quick --plot
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind --plot
 python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
 python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
 ```
 
-Direct script execution also works:
+## Optional PETSc Backend
+
+PETSc support is optional.  The core package only depends on NumPy, SciPy, and
+Numba; PETSc is imported lazily when `--petsc` or `solver="petsc"` is used.
+
+Use a PETSc build with matching `petsc4py`.  For example, after configuring and
+building PETSc 3.22.2 in `~/opt/petsc` with `PETSC_ARCH=arch-linux-c-opt`:
 
 ```bash
-python hdgfem/solvers/adv_rea.py
+source .venv/bin/activate
+
+python -m pip install --force-reinstall \
+  "numpy<2.5,>=2.4" "Cython>=3.0,<3.1" "setuptools<75" "wheel<0.46"
+
+export PETSC_DIR=$HOME/opt/petsc
+export PETSC_ARCH=arch-linux-c-opt
+export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
+
+cd "$PETSC_DIR/src/binding/petsc4py"
+python setup.py clean --all
+
+cd /path/to/hdgfem
+python -m pip install --no-build-isolation --no-deps \
+  "$PETSC_DIR/src/binding/petsc4py"
+```
+
+The `numpy<2.5` pin keeps the current Numba dependency satisfiable.  The Cython
+and setuptools pins avoid known build failures with `petsc4py` 3.22.2.  Do not
+mix a system `petsc4py` package with a different virtualenv NumPy; that can
+produce binary ABI errors at import time.
+
+Verify the real PETSc import and optional solver packages:
+
+```bash
+python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); k.getPC().setType('gamg'); print('GAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('hypre'); pc.setHYPREType('boomeramg'); print('Hypre/BoomerAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('lu'); pc.setFactorSolverType('mumps'); print('MUMPS ok')"
 ```
 
 ## What Is Included
@@ -50,7 +86,7 @@ python hdgfem/solvers/adv_rea.py
 - Vectorized NumPy HDG/DG matrix assembly helpers.
 - Reusable HDG static-condensation and trace-system assembly helpers.
 - Sparse direct and Krylov trace solves with optional diagonal scaling and ILU.
-- Advection-reaction and diffusion-reaction CLIs.
+- Advection-reaction and diffusion-reaction preset runners.
 - Tensor diffusion coefficients for the diffusion-reaction solver.
 - Projected source, advection, and reaction coefficient paths.
 - Numba-backed projected advection-reaction trace assembly and reconstruction.
@@ -62,26 +98,40 @@ python hdgfem/solvers/adv_rea.py
 Run the manufactured advection-reaction test on a Gmsh rectangle:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --verbosity 2
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plot the numerical solution, exact solution, and absolute error:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --plot
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --plot
 ```
 
-Project CLI callables into DG fields before calling the solver:
+The advection presets project callable coefficients into DG fields before
+calling the Numba assembly backend.
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction
+python scripts/run_adv_rea_cases.py test2_petsc_bicgstab_ilu -p 6 --lc 0.03
 ```
 
-Use the fused projected-coefficient Numba assembly backend:
+Compare advection-reaction global solver configurations after one trace
+assembly:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --project-source --project-beta --project-reaction --assembly-backend numba
+python scripts/benchmark_adv_rea_solvers.py -p 6 --lc 0.01
 ```
+
+This benchmark reuses the assembled upwind-ordered trace matrix while sweeping
+SciPy ILU, PETSc ILU/ASM ILU, and experimental upwind block-Gauss-Seidel
+preconditioners.  The block-GS variants are useful diagnostics for flow-aware
+preconditioning, but high-fill ILU is currently the practical default for the
+large `test2` runs.
+
+Reference timings cited in the manual were collected on host `23G82`, running
+Ubuntu 22.04 with Linux 6.8, an Intel Core i5-10210U CPU, 4 physical cores / 8
+hardware threads, and 15 GiB RAM.  Report that hardware context with any
+performance numbers from this benchmark, because preconditioner setup and
+Krylov timings are sensitive to CPU, memory bandwidth, and thread scheduling.
 
 Run tensor diffusion test7 through the main diffusion solver's projected
 Numba tensor path with reduced quadrature:
@@ -122,19 +172,20 @@ next_result = solver.solve()
 Eliminate boundary trace unknowns and apply upwind SCC trace ordering:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 6 --lc 0.03 --boundary-mode eliminate --trace-ordering upwind-scc
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03
 ```
 
 Use a sparse direct trace solve instead of the default ILU-preconditioned
 `BICGSTAB` path:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 4 --lc 0.08 --solver direct
+python scripts/run_adv_rea_cases.py test2_scipy_direct -p 4 --lc 0.08
 ```
 
 ## Solver Defaults
 
-`hdgfem.solvers.adv_rea` solves the manufactured legacy `test2` problem:
+The default advection runner preset solves the manufactured legacy `test2`
+problem:
 
 ```text
 beta = (x, -y)
@@ -157,7 +208,7 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 
 ## Important Files
 
-- `hdgfem/solvers/adv_rea.py`: compact HDG advection-reaction solver and CLI.
+- `hdgfem/solvers/adv_rea.py`: compact HDG advection-reaction solver.
 - `hdgfem/solvers/diff_rea.py`: HDG diffusion-reaction solver and CLI.
 - `hdgfem/backends/numba.py`: package adapter for the projected Numba backend.
 - `hdgfem/backends/numpy.py`: NumPy backend exports.
@@ -169,6 +220,7 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 - `hdgfem/io/output.py`: console table formatting helpers.
 - `hdgfem/linalg/system.py`: sparse global trace-system assembly and solve helpers.
 - `hdgfem/linalg/ordering.py`: upwind SCC trace ordering for advection-dominated systems.
+- `hdgfem/linalg/upwind_block_gs.py`: experimental level-scheduled upwind block-GS preconditioners.
 - `hdgfem/kernels/`: Numba kernels used by package backends.
 - `hdgfem/core/mesh.py`: triangular mesh data, Gmsh mesh generators, and connectivity.
 - `hdgfem/core/quadrature.py`: reference triangle quadrature, basis values, and cached reference tensors.
@@ -184,7 +236,7 @@ Run local commands from the repository root, or install the project in editable
 mode so `hdgfem` is importable from any working directory:
 
 ```bash
-python -m hdgfem.solvers.adv_rea -p 2 --lc 0.30 --quiet
+python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
 python -m pip install -e .
 ```
 
