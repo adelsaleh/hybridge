@@ -6,6 +6,8 @@ from .mesh import (
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
     gmsh_rectangle_mesh,
+    gmsh_smooth_star_mesh,
+    gmsh_star_mesh,
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
@@ -21,6 +23,8 @@ __all__ = [
     "gmsh_disc_mesh",
     "gmsh_lshape_mesh",
     "gmsh_rectangle_mesh",
+    "gmsh_smooth_star_mesh",
+    "gmsh_star_mesh",
     "gmsh_triangle_mesh",
     "rectangle_mesh",
 ]

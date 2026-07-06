@@ -11,6 +11,8 @@ from hdgfem import (
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
     gmsh_rectangle_mesh,
+    gmsh_smooth_star_mesh,
+    gmsh_star_mesh,
     gmsh_triangle_mesh,
     solve_advection_reaction_hdg,
 )
@@ -516,7 +518,7 @@ def test_strongly_connected_component_order_detects_cycle() -> None:
     sources = np.array([0, 1, 2, 2], dtype=np.int64)
     targets = np.array([1, 0, 3, 4], dtype=np.int64)
 
-    node_order, component_id, component_order, component_sizes, timings = strongly_connected_component_order(
+    node_order, component_id, component_order, component_sizes, level_widths, timings = strongly_connected_component_order(
         5,
         sources,
         targets,
@@ -526,6 +528,7 @@ def test_strongly_connected_component_order_detects_cycle() -> None:
     assert component_id[0] == component_id[1]
     assert np.max(component_sizes) == 2
     assert component_order.size == component_sizes.size
+    assert level_widths.num_levels >= 1
     assert timings["scc"] >= 0.0
 
 
@@ -808,6 +811,8 @@ def test_gmsh_basic_shape_meshes() -> None:
         gmsh_disc_mesh(1.0, verbosity=0),
         gmsh_triangle_mesh(1.0, verbosity=0),
         gmsh_lshape_mesh(1.0, verbosity=0),
+        gmsh_star_mesh(1.0, corners=5, verbosity=0),
+        gmsh_smooth_star_mesh(1.0, boundary_points=40, radius=1.5, amplitude=0.32, mode=5, verbosity=0),
     ):
         assert mesh.num_tri > 0
         assert mesh.num_edg > 0

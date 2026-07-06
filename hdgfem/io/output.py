@@ -166,3 +166,55 @@ def pretty_print_ncol(items, ncols=2, title="Results", pad_lines=1, default_fmt=
                 lbl, val = fmted[i]
                 parts.append(pad_right(lbl, lab_w[c]) + " : " + pad_left(val, val_w[c]))
         print(sep.join(parts))
+
+
+def pretty_print_sections(sections, title="Results", pad_lines=1, default_fmt=".5g", sep="    "):
+    """
+    Print named sections as side-by-side columns.
+
+    sections: list of (section_title, items), where items is a list of
+    (label, value, fmt). Uneven section lengths are allowed.
+    """
+    try:
+        from wcwidth import wcswidth
+    except Exception:
+        from unicodedata import east_asian_width
+        def wcswidth(s): return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
+
+    def pad_right(s, w):
+        s = str(s); return s + " " * max(0, w - wcswidth(s))
+
+    formatted_sections = []
+    for section_title, items in sections:
+        formatted_items = [(lbl, format(val, fmt or default_fmt)) for lbl, val, fmt in items]
+        formatted_sections.append((section_title, formatted_items))
+
+    print("\n" * pad_lines, end="")
+    print(title)
+
+    if not formatted_sections:
+        print("(no data)")
+        return
+
+    rendered_sections = [
+        [f"{lbl}: {val}" for lbl, val in items]
+        for _, items in formatted_sections
+    ]
+    column_widths = [
+        max(wcswidth(section_title), max((wcswidth(item) for item in rendered_sections[i]), default=0))
+        for i, (section_title, _) in enumerate(formatted_sections)
+    ]
+
+    rule_len = sum(column_widths) + len(sep) * max(0, len(column_widths) - 1)
+    print("═" * rule_len)
+    print(sep.join(pad_right(section_title, width) for (section_title, _), width in zip(formatted_sections, column_widths)))
+    print(sep.join("─" * width for width in column_widths))
+
+    max_rows = max((len(items) for _, items in formatted_sections), default=0)
+
+    for row in range(max_rows):
+        row_parts = []
+        for col, items in enumerate(rendered_sections):
+            part = items[row] if row < len(items) else ""
+            row_parts.append(pad_right(part, column_widths[col]))
+        print(sep.join(row_parts))

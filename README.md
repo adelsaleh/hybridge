@@ -17,6 +17,27 @@ The manufactured diffusion-reaction case runner is:
 python scripts/run_diff_rea_cases.py
 ```
 
+The Strategy A star-domain HDG Newton benchmark is:
+
+```bash
+python scripts/strategyA_hdg_newton.py --star-n 100 --order 4 --hdg-tau 10.0 \
+  --hdg-assembly-backend numba \
+  --newton-petsc-initial-presets bicgstab_gamg \
+  --newton-petsc-presets gmres_gamg \
+  --newton-petsc-switch-iteration 1 \
+  --newton-petsc-option pc_gamg_threshold=0.02 \
+  --newton-petsc-option mg_levels_ksp_type=richardson \
+  --newton-petsc-option mg_levels_pc_type=sor \
+  --log-dir run_logs/strategyA_hdg_newton
+```
+
+The runner tees stdout/stderr to timestamped benchmark logs and prints a
+grep-friendly `RUN_SUMMARY_*` table plus a final optional HDG Gram
+`H^{-1}`-like residual check.  For timing-only runs, add
+`--skip-final-hminus-check`; for diagnostic runs, tune
+`--final-gram-cg-rtol`, `--final-gram-cg-atol`, and
+`--final-gram-cg-maxiter`.
+
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
 available presets with:
@@ -85,11 +106,14 @@ python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.
   types.
 - Vectorized NumPy HDG/DG matrix assembly helpers.
 - Reusable HDG static-condensation and trace-system assembly helpers.
+- HDG Gram assembly and condensed inverse applications for dual residual
+  diagnostics.
 - Sparse direct and Krylov trace solves with optional diagonal scaling and ILU.
 - Advection-reaction and diffusion-reaction preset runners.
 - Tensor diffusion coefficients for the diffusion-reaction solver.
 - Projected source, advection, and reaction coefficient paths.
 - Numba-backed projected advection-reaction trace assembly and reconstruction.
+- Smooth and polygonal Gmsh star-domain mesh generators.
 - Boundary trace elimination, upwind SCC trace ordering, and matrix-pattern
   diagnostics for advection-reaction runs.
 
@@ -149,6 +173,36 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
   --tau 4 --petsc --petsc-preset cg_gamg \
   --volume-quad-1d 7 --edge-quad-1d 7
 ```
+
+Inspect the HDG Gram implementation on a small rectangular space:
+
+```bash
+python scripts/hdg_gram_matrix_test.py --order 2 --nx 2 --ny 2
+```
+
+The package test `tests/test_hdg_gram.py` checks that the condensed Gram
+inverse matches a sparse direct solve and that the dual norm satisfies the
+energy identity.
+
+### Strategy A Run Summary
+
+The latest recorded `starN=100`, `p=4`, `tau=10`, Numba assembly run used
+BiCGStab+GAMG for Newton step 0 and GMRES+GAMG afterwards.  The command also
+enabled PETSc monitor output and plotting, so these timings include that
+diagnostic overhead.
+
+```text
+log file     run_logs/strategyA_hdg_newton/20260706-195222/strategyA_hdg_newton_starN100_p4_tau10_numba_gmres_gamg.log
+mesh         49,212 elements, 74,133 edges, hmax=2.610054e-02
+space        order=4, el_dof=15, scalar ndof=738,180
+Newton       converged at k=14, final euclid=1.022272e-10
+solver plan  k=0 bicgstab_gamg; k>=1 gmres_gamg
+final Gram   condensed setup=2.6947s, CG iters=50, solve=3.301s
+H-1 check    hminus=3.524736e-09, hminus/euclid=3.447944e+01
+total time   196.153s
+```
+
+For cleaner timing comparisons, omit `--plot` and `--newton-petsc-monitor`.
 
 Use the reusable solver class when a driver needs to keep the mesh, space,
 latest matrix data, ordering, preconditioner, trace, and reconstructed field:
@@ -214,6 +268,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 - `hdgfem/backends/numpy.py`: NumPy backend exports.
 - `hdgfem/backends/cupy.py`: placeholder for a supported CuPy backend.
 - `hdgfem/assembly/hdg.py`: reusable HDG static-condensation and trace assembly helpers.
+- `hdgfem/assembly/hdg_gram.py`: sparse and statically condensed HDG Gram
+  inverse applications for dual residual norms.
 - `hdgfem/assembly/matrices_numpy.py`: vectorized local and trace matrix assembly helpers.
 - `hdgfem/assembly/projection.py`: package-native DG projection helpers.
 - `hdgfem/io/plot.py`: generic DG field plotting helpers plus numerical/exact/error comparison plots.
@@ -227,7 +283,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 - `hdgfem/core/space.py`: `DGSpace`, `DGField`, `VectorDGSpace`, and `VectorDGField`.
 - `hdgfem/core/transfer.py`: field transfer/projection helpers between DG spaces.
 - `run_configs/`: version-controlled benchmark and solver presets.
-- `scripts/`: runnable project scripts and benchmark sweep entry points.
+- `scripts/`: runnable project scripts and benchmark sweep entry points,
+  including `strategyA_hdg_newton.py` and `hdg_gram_matrix_test.py`.
 - `tests/`: focused package tests.
 
 ## Local Development

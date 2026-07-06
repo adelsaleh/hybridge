@@ -13,7 +13,7 @@ object-oriented mesh, space, and field objects through package-native modules.
 .
   hdgfem/
     __init__.py   public package exports
-    assembly/     HDG assembly helpers, NumPy matrices, and projection helpers
+    assembly/     HDG assembly helpers, NumPy matrices, projection helpers, and Gram operators
     backends/     NumPy, Numba, and CuPy backend modules
     core/         mesh, basis, quadrature, DG spaces/fields, and transfer
     io/           output formatting and plotting helpers
@@ -36,6 +36,12 @@ Diffusion-reaction manufactured presets:
 
 ```bash
 python scripts/run_diff_rea_cases.py [preset]
+```
+
+Strategy A star-domain HDG Newton benchmark:
+
+```bash
+python scripts/strategyA_hdg_newton.py [options]
 ```
 
 ### Common Runs
@@ -170,6 +176,78 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
   --tau 4 --petsc --petsc-preset cg_gamg \
   --volume-quad-1d 7 --edge-quad-1d 7
 ```
+
+### Strategy A HDG Newton Runner
+
+`scripts/strategyA_hdg_newton.py` is the fixed-mesh Strategy A benchmark for
+the smooth or polygonal star domain.  It solves the torsion design fields,
+builds the logistic density window, then applies a damped Newton solve to the
+nonlinear HDG residual.
+
+The current fast PETSc path uses BiCGStab+GAMG for the first Newton correction
+and GMRES+GAMG after that:
+
+```bash
+python scripts/strategyA_hdg_newton.py \
+  --star-n 100 --order 4 --hdg-tau 10.0 \
+  --hdg-assembly-backend numba \
+  --newton-ilu-reuse 0 \
+  --newton-petsc-initial-presets bicgstab_gamg \
+  --newton-petsc-presets gmres_gamg \
+  --newton-petsc-switch-iteration 1 \
+  --newton-petsc-levels 10 \
+  --newton-petsc-divtol 1e4 \
+  --newton-solver-atol 1e-10 \
+  --newton-petsc-option pc_gamg_threshold=0.02 \
+  --newton-petsc-option mg_levels_ksp_type=richardson \
+  --newton-petsc-option mg_levels_pc_type=sor \
+  --log-dir run_logs/strategyA_hdg_newton
+```
+
+Important controls:
+
+```text
+--log-dir PATH                  tee terminal output into timestamped benchmark logs
+--newton-petsc-initial-presets  PETSc presets before the switch iteration
+--newton-petsc-presets          PETSc presets after the switch iteration
+--newton-petsc-switch-iteration first iteration using the main preset list
+--newton-petsc-option KEY=VALUE repeatable PETSc option override
+--tol-res                       outer nonlinear residual stop tolerance
+--tol-newton                    outer Newton step stop tolerance
+--compute-hminus                compute HDG Gram dual norms during the Newton run
+--skip-final-hminus-check       skip the final diagnostic Gram inverse application
+--final-gram-cg-rtol            final diagnostic Gram CG relative tolerance
+--final-gram-cg-atol            final diagnostic Gram CG absolute tolerance
+--final-gram-cg-maxiter         final diagnostic Gram CG iteration cap
+--final-gram-cg-verbose-every   final diagnostic Gram progress frequency
+```
+
+The final H-minus-like diagnostic is deliberately separate from the Newton
+line-search norm.  The default line search is Euclidean so the expensive Gram
+inverse is not applied on every Armijo trial.  At the end, the runner prints
+`FINAL_NORM_CHECK` and `RUN_SUMMARY_*` lines.  If the final Gram solve reaches
+its iteration cap, the status is `approx_infoN`, where `N` is SciPy's iterative
+solver `info` value.
+
+Recent reference run:
+
+```text
+date/log     2026-07-06, run_logs/strategyA_hdg_newton/20260706-195222/strategyA_hdg_newton_starN100_p4_tau10_numba_gmres_gamg.log
+mesh         49,212 elements, 74,133 edges, hmax=2.610054e-02
+space        order=4, basis=dub_orth, scalar ndof=738,180
+residual     mixed HDG residual, Euclidean line search
+PETSc        k=0 bicgstab_gamg; k>=1 gmres_gamg
+GAMG opts    pc_gamg_threshold=0.02, mg_levels_ksp_type=richardson, mg_levels_pc_type=sor
+convergence  k=14, final euclid=1.022272e-10
+final Gram   condensed setup=2.6947s, CG iters=50, solve=3.301s
+comparison   hminus=3.524736e-09, hminus/euclid=34.47944
+wall time    196.153s, including plot and PETSc monitor overhead
+```
+
+For solver timing comparisons, turn off `--plot` and
+`--newton-petsc-monitor`.  For Newton-only sweeps, add
+`--skip-final-hminus-check`; for residual-norm studies, keep the final check
+and use a bounded diagnostic tolerance such as the defaults above.
 
 ### Optional PETSc Install Notes
 
@@ -702,6 +780,59 @@ unknowns = hdg_assembly.reconstruct_local_unknowns(
 support operators whose stabilization trace mass is contributed once per
 element-side incidence rather than once per global edge.
 
+## HDG Gram Dual Norms
+
+`hdgfem/assembly/hdg_gram.py` builds the Gram matrix associated with the HDG
+tuple `(q_x, q_y, u, uhat)`:
+
+```text
+sum_K ||q||^2_K + sum_K ||grad u||^2_K
+  + sum_{K,F subset dK} jump_weight * ||u - uhat||^2_F
+```
+
+Boundary trace degrees of freedom are eliminated, so the trace block is the
+interior HDG trace space.  Two inverse-application paths are available:
+
+```python
+from hdgfem.assembly.hdg_gram import (
+    assemble_hdg_gram,
+    build_condensed_hdg_gram_inverse,
+    build_ilu_bicgstab_inverse,
+)
+
+gram = assemble_hdg_gram(space, sigma=10.0, jump_weight="unit")
+inverse = build_condensed_hdg_gram_inverse(
+    space,
+    sigma=10.0,
+    jump_weight="unit",
+    cg_rtol=1e-8,
+    cg_maxiter=200,
+)
+hminus2, diagnostics = inverse.dual_norm_squared(residual)
+```
+
+`build_condensed_hdg_gram_inverse` never forms or factors the full Gram matrix.
+It inverts the local flux/scalar block elementwise and applies CG to the trace
+Schur complement with an edge-block Jacobi preconditioner.  The sparse
+`assemble_hdg_gram` plus `build_ilu_bicgstab_inverse` path is mostly useful for
+small validation and experiments.
+
+Run the focused check script:
+
+```bash
+python scripts/hdg_gram_matrix_test.py --order 2 --nx 2 --ny 2
+```
+
+Run the package tests for this module:
+
+```bash
+python -m pytest tests/test_hdg_gram.py
+```
+
+The Strategy A runner uses the condensed inverse for final H-minus-like
+diagnostics and can reuse it during the Newton loop when `--compute-hminus` or
+`--line-search-norm hminus` is requested.
+
 ## Exact vs Projected Reaction
 
 By default, callable coefficient data is assembled directly on the quadrature
@@ -783,6 +914,25 @@ The default `BICGSTAB` path uses `hdgfem.linalg.system.solve_global_system` with
 diagonal scaling and ILU.  Explicit sparse zeros are removed before ILU
 factorization in that helper; this matters for large trace systems.
 
+Advection-reaction runner summaries are printed in named sections:
+
+```text
+Run / mesh, Options, Solver, Errors, Timings
+```
+
+Strategy A emits machine-readable benchmark lines:
+
+```text
+LOG_FILE, COMMAND
+NEWTON_SOLVER_CONFIG
+SOLVER_OK
+HDG_LOG
+FINAL_NORM_CHECK
+RUN_SUMMARY_ROW
+RUN_SUMMARY_FINAL
+TIME_TOTAL
+```
+
 ## Performance Notes
 
 - Element axis is kept first, so local tensors use shape
@@ -819,4 +969,18 @@ Run the CLI smoke test:
 
 ```bash
 python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
+```
+
+Run the focused Gram and solver-class checks:
+
+```bash
+python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py
+```
+
+Run a cheap Strategy A smoke test:
+
+```bash
+python scripts/strategyA_hdg_newton.py --star-n 20 --mesh-size 0.5 --order 1 \
+  --max-it 1 --skip-petsc --skip-newton-petsc --hdg-assembly-backend numba \
+  --skip-final-hminus-check
 ```

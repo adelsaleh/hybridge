@@ -1,0 +1,572 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs,array}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\setlength{\emergencystretch}{3em}
+
+\newcommand{\T}{\mathcal T_h}
+\newcommand{\E}{\mathcal E_h}
+\newcommand{\Eint}{\mathcal E_h^{\mathrm{int}}}
+\newcommand{\Edir}{\mathcal E_h^{\mathrm{Dir}}}
+\newcommand{\p}{\mathbb P}
+\newcommand{\dof}{\operatorname{dof}}
+\newcommand{\I}{\mathcal I}
+\newcommand{\uhat}{\underline{\widehat u}}
+\newcommand{\uK}{\underline u^K}
+\newcommand{\qK}[1]{\underline q_{#1}^K}
+\newcommand{\UK}{\underline U^K}
+\newcommand{\FK}{\underline F^K}
+\newcommand{\LK}{\mathbb L^K}
+\newcommand{\SK}{\mathbb S^K}
+\newcommand{\B}{\mathbb B}
+\newcommand{\C}{\mathbb C}
+\newcommand{\Mhat}{\widehat M}
+\newcommand{\Mbb}{\widehat{\mathbb M}}
+\newcommand{\Mhh}{\widehat{\widehat M}}
+\newcommand{\kappab}{\boldsymbol\kappa}
+\newcommand{\etab}{\boldsymbol\eta}
+\newcommand{\inner}[2]{\left\langle #1,#2\right\rangle}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\algrenewcommand\algorithmicrequire{\textbf{Input:}}
+\algrenewcommand\algorithmicensure{\textbf{Output:}}
+
+\title{Diffusion--Reaction HDG: Derivation and Assembly Workflows}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note gives a compact derivation-to-code map for the LDG-H/HDG discretization of a diffusion--reaction problem. It derives the local mixed system, the condensed trace equation, and the corresponding assembly logic for two implementations: a vectorized NumPy workflow and a fused Numba workflow. Up to the implementation specialization, the derivation allows a full, non-diagonal diffusion tensor $\kappab$. The implementation section then states the scalar-Laplacian specialization used in the current code.
+\end{abstract}
+
+\section{Continuous problem and mixed form}
+
+Let $\Omega\subset\mathbb R^2$ be polygonal. Given $f$, $u_D$, a reaction coefficient $r$, and a uniformly positive diffusion tensor
+\[
+    \kappab(x)=
+    \begin{bmatrix}
+        \kappa_{11}(x) & \kappa_{12}(x)\\
+        \kappa_{21}(x) & \kappa_{22}(x)
+    \end{bmatrix},
+\]
+consider
+\begin{equation}\label{eq:model}
+    -\nabla\cdot(\kappab\nabla u)+ru=f\quad\text{in }\Omega,
+    \qquad
+    u=u_D\quad\text{on }\partial\Omega .
+\end{equation}
+Introduce the diffusive flux
+\[
+    q=-\kappab\nabla u .
+\]
+Let
+\[
+    \etab:=\kappab^{-1}
+    =
+    \begin{bmatrix}
+        \eta_{11} & \eta_{12}\\
+        \eta_{21} & \eta_{22}
+    \end{bmatrix}.
+\]
+Then
+\begin{equation}\label{eq:mixed-strong}
+    \nabla\cdot q+ru=f,
+    \qquad
+    \etab q=-\nabla u.
+\end{equation}
+On each element $K\in\T$, integration by parts gives
+\begin{align}
+    \inner{q\cdot n}{v}_{\partial K}
+    -\inner{q}{\nabla v}_{K}
+    +\inner{ru}{v}_{K}
+        &=\inner{f}{v}_{K}, \label{eq:weak-balance}\\
+    -\inner{\etab q}{w}_{K}
+    +\inner{u}{\nabla\cdot w}_{K}
+        &=\inner{u}{w\cdot n}_{\partial K}. \label{eq:weak-flux}
+\end{align}
+HDG replaces the boundary value $u|_{\partial K}$ by a single-valued trace unknown $\widehat u$ on mesh edges.
+
+\section{LDG-H formulation}
+
+Use
+\begin{align*}
+    V_h &= \{v\in L^2(\Omega):v|_K\in\p_p(K),\ K\in\T\},\\
+    W_h &= \{w\in L^2(\Omega)^2:w|_K\in\p_p(K)^2,\ K\in\T\},\\
+    M_h &= \{\mu\in L^2(\partial\T):\mu|_\Gamma\in\p_p(\Gamma),\ \Gamma\in\E\}.
+\end{align*}
+The LDG-H normal flux is
+\begin{equation}\label{eq:num-flux}
+    \widehat q_h\cdot n=q_h\cdot n+\tau(u_h-\widehat u_h),
+    \qquad \tau>0.
+\end{equation}
+For every $K\in\T$, the local equations are
+\begin{align}
+    \inner{q_h\cdot n}{v}_{\partial K}
+    -\inner{q_h}{\nabla v}_{K}
+    +\inner{ru_h}{v}_{K}
+    +\inner{\tau u_h}{v}_{\partial K}
+        &=\inner{f}{v}_{K}+\inner{\tau\widehat u_h}{v}_{\partial K},
+        &&v\in\p_p(K), \label{eq:hdg-u}\\
+    -\inner{\etab q_h}{w}_{K}
+    +\inner{u_h}{\nabla\cdot w}_{K}
+        &=\inner{\widehat u_h}{w\cdot n}_{\partial K},
+        &&w\in\p_p(K)^2. \label{eq:hdg-q}
+\end{align}
+On Dirichlet edges,
+\begin{equation}\label{eq:dirichlet-trace}
+    \widehat u_h^\Gamma=\Pi_{\p_p(\Gamma)}u_D,
+    \qquad \Gamma\in\Edir.
+\end{equation}
+On interior edges, $\widehat u_h$ is determined by flux continuity. Define the incidence set
+\begin{equation}\label{eq:incidence-set}
+    \I_\Gamma:=\{(K,e):\sigma(K,e)=\Gamma\},
+\end{equation}
+where $\sigma(K,e)$ is the global edge attached to local edge $e$ of element $K$. If $\Gamma\in\Eint$, then
+\[
+    \I_\Gamma=\{(K,e),(K',e')\},
+    \qquad
+    \sigma(K,e)=\sigma(K',e')=\Gamma .
+\]
+The interior transmission condition is
+\begin{equation}\label{eq:flux-continuity}
+    \sum_{(K,e)\in\I_\Gamma}
+    \inner{q_h^K\cdot n^K+\tau^{K,e}(u_h^K-\widehat u_h^\Gamma)}{\mu}_{\Gamma}=0,
+    \qquad
+    \mu\in\p_p(\Gamma).
+\end{equation}
+This form emphasizes that the global edge equation is assembled from local element-side contributions.
+
+\section{Element and trace matrices}
+
+On $K$, expand
+\[
+    u_h^K=\sum_{j=1}^{n_K}u_j^K\varphi_j^K,
+    \qquad
+    (q_h^K)_\ell=\sum_{j=1}^{n_K}q_{\ell,j}^K\varphi_j^K,
+    \qquad
+    n_K=\dof(K)=\frac{(p+1)(p+2)}2.
+\]
+On $\Gamma$, expand
+\[
+    \widehat u_h^\Gamma=\sum_{j=1}^{n_\Gamma}\widehat u_j^\Gamma\widehat\varphi_j^\Gamma,
+    \qquad n_\Gamma=\dof(\Gamma)=p+1.
+\]
+We use the following matrices:
+\begin{align*}
+    M_\alpha^K[i,j]
+        &=\inner{\alpha\varphi_j^K}{\varphi_i^K}_{K}, &
+    D_\ell^K[i,j]
+        &=\inner{\partial_{x_\ell}\varphi_j^K}{\varphi_i^K}_{K},\\
+    M_\theta^{\partial K}[i,j]
+        &=\inner{\theta\varphi_j^K}{\varphi_i^K}_{\partial K}, &
+    \Mhat_\theta^{\partial_eK}[i,j]
+        &=\inner{\theta\widehat\varphi_j^{\sigma(K,e)}}{\varphi_i^K}_{\partial_eK},\\
+    \Mhat_\theta^{\sigma(K,e),K}[i,j]
+        &=\inner{\theta\varphi_j^K}{\widehat\varphi_i^{\sigma(K,e)}}_{\sigma(K,e)}, &
+    \Mhh_\theta^{K,e}[i,j]
+        &=\inner{\theta\widehat\varphi_j^{\sigma(K,e)}}{\widehat\varphi_i^{\sigma(K,e)}}_{\sigma(K,e)}.
+\end{align*}
+The tensor inverse $\etab=\kappab^{-1}$ gives four scalar coefficient mass matrices
+\[
+    M_{\eta_{\ell m}}^K[i,j]
+    :=
+    \inner{\eta_{\ell m}\varphi_j^K}{\varphi_i^K}_{K},
+    \qquad
+    \ell,m\in\{1,2\}.
+\]
+Thus no hat means element--element, one hat means trace--element or element--trace coupling, and two hats mean trace--trace products. This is why the local trace-mass contribution is denoted by $\Mhh_\theta^{K,e}$ rather than by a generic block symbol.
+
+Testing \eqref{eq:hdg-u} with $v=\varphi_i^K$ gives
+\begin{equation}\label{eq:matrix-u}
+    (M_r^K+M_\tau^{\partial K})\uK
+    +\sum_{\ell=1}^2
+    \left(M_{n_\ell}^{\partial K}-(D_\ell^K)^T\right)\qK{\ell}
+    =
+    \underline f^K+
+    \sum_{e=1}^3\Mhat_\tau^{\partial_eK}\uhat^{\sigma(K,e)} .
+\end{equation}
+Testing \eqref{eq:hdg-q} with $w=\varphi_i^K e_\ell$ gives the coupled flux-component equations
+\begin{equation}\label{eq:matrix-q-component}
+    (D_\ell^K)^T\uK
+    -
+    \sum_{m=1}^2 M_{\eta_{\ell m}}^K\qK{m}
+    =
+    \sum_{e=1}^3\Mhat_{n_\ell}^{\partial_eK}\uhat^{\sigma(K,e)},
+    \qquad
+    \ell=1,2 .
+\end{equation}
+Equivalently,
+\begin{align}
+    (D_1^K)^T\uK
+    -M_{\eta_{11}}^K\qK{1}
+    -M_{\eta_{12}}^K\qK{2}
+        &=
+    \sum_{e=1}^3\Mhat_{n_1}^{\partial_eK}\uhat^{\sigma(K,e)}, \label{eq:q1-full-tensor}\\
+    (D_2^K)^T\uK
+    -M_{\eta_{21}}^K\qK{1}
+    -M_{\eta_{22}}^K\qK{2}
+        &=
+    \sum_{e=1}^3\Mhat_{n_2}^{\partial_eK}\uhat^{\sigma(K,e)}. \label{eq:q2-full-tensor}
+\end{align}
+The off-diagonal matrices $M_{\eta_{12}}^K$ and $M_{\eta_{21}}^K$ are precisely the terms absent in a diagonal or scalar diffusion model.
+
+\section{Local solver and condensation}
+
+Collect
+\[
+    \UK=\begin{bmatrix}\uK\\ \qK{1}\\ \qK{2}\end{bmatrix},
+    \qquad
+    \uhat^K=\begin{bmatrix}
+        \uhat^{\sigma(K,1)}\\
+        \uhat^{\sigma(K,2)}\\
+        \uhat^{\sigma(K,3)}
+    \end{bmatrix},
+    \qquad
+    \FK=\begin{bmatrix}\underline f^K\\0\\0\end{bmatrix}.
+\]
+Then
+\begin{equation}\label{eq:local-block}
+    \LK\UK=\FK+\Mbb^{\partial K}\uhat^K,
+\end{equation}
+where the full-tensor local matrix is
+\begin{equation}\label{eq:L-block}
+\LK=
+\begin{bmatrix}
+M_r^K+M_\tau^{\partial K}
+& M_{n_1}^{\partial K}-(D_1^K)^T
+& M_{n_2}^{\partial K}-(D_2^K)^T\\
+(D_1^K)^T & -M_{\eta_{11}}^K & -M_{\eta_{12}}^K\\
+(D_2^K)^T & -M_{\eta_{21}}^K & -M_{\eta_{22}}^K
+\end{bmatrix}.
+\end{equation}
+The $m$-th trace-column block of $\Mbb^{\partial K}$ is
+\begin{equation}\label{eq:Mbb-column}
+    \Mbb_m^{\partial K}:=
+    \begin{bmatrix}
+        \Mhat_\tau^{\partial_mK}\\
+        \Mhat_{n_1}^{\partial_mK}\\
+        \Mhat_{n_2}^{\partial_mK}
+    \end{bmatrix}.
+\end{equation}
+Let
+\[
+    \SK=(\LK)^{-1},
+    \qquad
+    \B_e^K:=
+    \begin{bmatrix}
+        \Mhat_\tau^{\sigma(K,e),K} &
+        \Mhat_{n_1}^{\sigma(K,e),K} &
+        \Mhat_{n_2}^{\sigma(K,e),K}
+    \end{bmatrix}.
+\]
+For $\Gamma\in\Eint$ with $\sigma(K,e)=\sigma(K',e')=\Gamma$, the uncondensed matrix transmission equation is
+\begin{equation}\label{eq:uncondensed-transmission-two-side}
+    \left(\Mhh_\tau^{K,e}+\Mhh_\tau^{K',e'}\right)\uhat^\Gamma
+    =
+    \B_e^K\UK+\B_{e'}^{K'}\underline U^{K'}.
+\end{equation}
+Equivalently, for any interior edge,
+\begin{equation}\label{eq:uncondensed-transmission-incidence}
+    \sum_{(K,e)\in\I_\Gamma}\Mhh_\tau^{K,e}\uhat^\Gamma
+    =
+    \sum_{(K,e)\in\I_\Gamma}\B_e^K\UK.
+\end{equation}
+Substituting
+\[
+    \UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)
+\]
+into \eqref{eq:uncondensed-transmission-incidence} gives the condensed trace equation
+\begin{equation}\label{eq:condensed-general}
+    \sum_{(K,e)\in\I_\Gamma}\Mhh_\tau^{K,e}\uhat^\Gamma
+    -
+    \sum_{(K,e)\in\I_\Gamma}\sum_{m=1}^3
+    \C_{e,m}^K\uhat^{\sigma(K,m)}
+    =
+    \sum_{(K,e)\in\I_\Gamma}g_e^K,
+    \qquad \Gamma\in\Eint,
+\end{equation}
+with
+\begin{equation}\label{eq:C-g}
+    \C_{e,m}^K:=\B_e^K\SK\Mbb_m^{\partial K},
+    \qquad
+    g_e^K:=\B_e^K\SK\FK.
+\end{equation}
+For the two-sided edge $\sigma(K,e)=\sigma(K',e')=\Gamma$, \eqref{eq:condensed-general} reads
+\begin{align}\label{eq:condensed-two-side}
+    &\left(\Mhh_\tau^{K,e}+\Mhh_\tau^{K',e'}\right)\uhat^\Gamma
+    -\sum_{m=1}^3\C_{e,m}^K\uhat^{\sigma(K,m)}
+    -\sum_{m=1}^3\C_{e',m}^{K'}\uhat^{\sigma(K',m)} \notag\\
+    &\hspace{10em}=g_e^K+g_{e'}^{K'}.
+\end{align}
+Assembling \eqref{eq:condensed-general} over all interior edges, with Dirichlet traces fixed by \eqref{eq:dirichlet-trace}, gives the global trace system
+\begin{equation}\label{eq:global-trace}
+    \mathbf A\uhat=\underline b.
+\end{equation}
+After solving for $\uhat$, each element is reconstructed independently by \eqref{eq:local-block}.
+
+\section{Implementation specialization}
+
+The implementation discussed here targets the scalar Laplacian case
+\[
+    -\Delta u+ru=f,
+    \qquad q=-\nabla u.
+\]
+Equivalently,
+\[
+    \kappab=I,
+    \qquad
+    \etab=I,
+\]
+so
+\[
+    M_{\eta_{11}}^K=M^K,
+    \qquad
+    M_{\eta_{22}}^K=M^K,
+    \qquad
+    M_{\eta_{12}}^K=0,
+    \qquad
+    M_{\eta_{21}}^K=0.
+\]
+Thus the full-tensor local matrix \eqref{eq:L-block} reduces to
+\begin{equation}\label{eq:L-block-scalar}
+\LK=
+\begin{bmatrix}
+M_r^K+M_\tau^{\partial K}
+& M_{n_1}^{\partial K}-(D_1^K)^T
+& M_{n_2}^{\partial K}-(D_2^K)^T\\
+(D_1^K)^T & -M^K & 0\\
+(D_2^K)^T & 0 & -M^K
+\end{bmatrix}.
+\end{equation}
+The tensor-diffusion extension only changes the flux mass subblock in \eqref{eq:L-block}; the trace equation, incidence-based assembly, and static-condensation pattern are unchanged.
+
+Both implementations assemble the same condensed system \eqref{eq:condensed-general}. They differ only in when local Schur blocks are materialized.
+
+\section{Vectorized NumPy workflow}
+
+The vectorized path forms the local Schur tensor
+\begin{equation}\label{eq:trace-block-tensor}
+    \code{trace\_blocks}[K,e,m,i,j]
+    \equiv
+    \C_{e,m}^K[i,j]
+    =
+    \B_e^K\SK\Mbb_m^{\partial K}[i,j].
+\end{equation}
+Before COO flattening, the column trace basis is oriented consistently with the global edge orientation. If $\pi_{K,m}$ is the identity or reversal permutation, the assembled block from row edge $\sigma(K,e)$ to column edge $\sigma(K,m)$ is
+\[
+    \C_{e,m}^K[:,\pi_{K,m}].
+\]
+For each interior row edge $\Gamma=\sigma(K,e)$, the Schur part contributes
+\[
+    \mathbf A_{\Gamma,\sigma(K,m)} \mathrel{+}= -\C_{e,m}^K,
+    \qquad m=1,2,3,
+\]
+while the trace--trace mass contribution is
+\[
+    \mathbf A_{\Gamma,\Gamma}\mathrel{+}=\Mhh_\tau^{K,e}.
+\]
+The RHS contribution is
+\[
+    \underline b_\Gamma\mathrel{+}=g_e^K.
+\]
+
+\begin{algorithm}[p]
+\caption{Vectorized NumPy HDG assembly}
+\footnotesize
+\begin{algorithmic}[1]
+\Require mesh, basis data, $f$, $r$, $u_D$, stabilization $\tau$
+\Ensure trace solution $\uhat$ and reconstructed local unknowns $\{\UK\}$
+\State Build topology: $\sigma(K,e)$, boundary labels, orientations, normals, Jacobians.
+\State Assemble all local matrices entering $\LK$, $\Mbb_m^{\partial K}$, and $\B_e^K$.
+\State Compute or apply local inverses $\SK=(\LK)^{-1}$.
+\State Materialize $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$ for all $K,e,m$.
+\State Orient column trace bases and flatten $-\C_{e,m}^K$ into COO arrays.
+\State Flatten $\Mhh_\tau^{K,e}$ into the diagonal edge blocks.
+\State Scatter-add $g_e^K=\B_e^K\SK\FK$ into the RHS.
+\State Eliminate or impose Dirichlet trace degrees of freedom.
+\State Solve the sparse trace system and reconstruct $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ elementwise.
+\end{algorithmic}
+\end{algorithm}
+
+\section{Fused Numba workflow}
+
+The fused Numba path uses the same formulae, but computes local inverse actions inside compiled element loops. It avoids storing the full tensor \eqref{eq:trace-block-tensor}. Dirichlet trace unknowns are eliminated during assembly: if $\sigma(K,m)$ is Dirichlet, then
+\[
+    -\C_{e,m}^K\uhat^{\sigma(K,m)}
+\]
+is moved to the reduced RHS instead of being inserted into the reduced matrix.
+
+\begin{algorithm}[p]
+\caption{Fused Numba reduced trace assembly}
+\footnotesize
+\begin{algorithmic}[1]
+\Require mesh, reference data, projected arrays $f_h,r_h$, $u_D$, stabilization $\tau$
+\Ensure reduced trace matrix $\mathbf A_{FF}$, RHS $\underline b_F$, and reconstructed local unknowns
+\State Project $u_D$ on Dirichlet edges and build free-trace maps.
+\State Allocate reduced COO arrays and RHS scatter buffers.
+\ForAll{$K\in\T$}
+    \State Map reference quadrature and derivatives to element $K$.
+    \State Assemble $\LK$, $\FK$, $\Mbb_m^{\partial K}$, $\B_e^K$, and $\Mhh_\tau^{K,e}$ locally.
+    \State Factor or invert the small dense matrix $\LK$ locally.
+    \ForAll{$e=1,2,3$ with $\sigma(K,e)$ free}
+        \State Add $g_e^K=\B_e^K\SK\FK$ to the reduced RHS.
+        \State Insert $\Mhh_\tau^{K,e}$ into the reduced diagonal block.
+        \ForAll{$m=1,2,3$}
+            \State Compute $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$.
+            \If{$\sigma(K,m)$ is free}
+                \State Insert $-\C_{e,m}^K$ into reduced COO arrays.
+            \Else
+                \State Add $+\C_{e,m}^K\uhat_D^{\sigma(K,m)}$ to the reduced RHS.
+            \EndIf
+        \EndFor
+    \EndFor
+\EndFor
+\State Accumulate scatter buffers, solve $\mathbf A_{FF}\uhat_F=\underline b_F$, and expand with known Dirichlet traces.
+\State Reconstruct $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ in a second compiled element loop.
+\end{algorithmic}
+\end{algorithm}
+
+\section{Workflow comparison}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.22\textwidth} >{\raggedright\arraybackslash}p{0.34\textwidth} >{\raggedright\arraybackslash}p{0.34\textwidth}}
+\toprule
+Aspect & Vectorized NumPy & Fused Numba \\
+\midrule
+Schur blocks & Materializes $\C_{e,m}^K$ as a dense tensor over elements and local edges. & Computes $\C_{e,m}^K$ locally and writes COO entries directly. \\
+Memory use & Higher, but easier to inspect. & Lower, suitable for larger meshes. \\
+Loop structure & Mostly hidden inside broadcasting and flattening. & Explicit element/edge loops, but compiled. \\
+Boundary handling & Can impose rows or eliminate known traces. & Naturally uses reduced free-trace assembly. \\
+Orientation & Applied to materialized column blocks before flattening. & Applied locally before insertion or trace gathering. \\
+Best use & Prototyping and debugging. & Production runs and projected-coefficient assembly. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Performance note.}
+The Numba path is faster for the reduced diffusion trace assembly because it
+does not first build the global collection of dense local objects.  The NumPy
+path materializes arrays such as $\SK$, $\Mbb^{\partial K}$, the Schur tensor
+$\C_{e,m}^K$, and then flattens those arrays into COO data.  These arrays scale
+with the number of elements and with high powers of the local polynomial
+dimension.  The fused Numba path instead loops over elements and faces in
+compiled code, forms the needed local blocks in cache, inserts the free-trace
+COO entries directly, and moves Dirichlet-column contributions directly to the
+RHS.  This removes many large temporary arrays and much of the memory traffic.
+
+The following timings are \emph{not} total solve times: they exclude mesh
+generation, sparse matrix construction for the linear solve, ILU/Krylov solve
+time, error evaluation, and plotting.  The reduced assembly timing includes
+only local-factor construction, local inverse construction or fused local
+inverse action, trace COO/RHS assembly, and Dirichlet trace elimination.
+
+On the finer rectangle mesh from
+\code{compare\_assembly\_backends.py --lc 0.01}, with $92552$ triangles, five
+timed repeats, \code{trace\_ordering=none}, and compilation excluded, the
+diffusion-reaction reduced assembly timings were:
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{rrrrrr}
+\toprule
+$p$ & NumPy assembly (s) & Numba assembly (s) & speedup & NumPy peak MiB & Numba peak MiB \\
+\midrule
+3 & 3.069 & 0.096 & $31.81\times$ & 2312 & 449 \\
+4 & 6.306 & 0.166 & $38.03\times$ & 4609 & 685 \\
+5 & 11.333 & 0.349 & $32.47\times$ & 9032 & 972 \\
+6 & 19.480 & 0.644 & $30.26\times$ & 16056 & 1310 \\
+7 & 30.606 & 1.064 & $28.77\times$ & 26540 & 1699 \\
+\bottomrule
+\end{tabular}
+\end{center}
+These runs were on an Intel Xeon w5-3535X workstation with $20$ physical cores
+and $40$ logical CPUs.  The benchmark process had affinity to all $40$ logical
+CPUs.  Numba used its TBB threading layer with \code{numba.get\_num\_threads()}
+$=40$, while NumPy was linked against OpenBLAS and was run with
+\code{OPENBLAS\_NUM\_THREADS=40} and \code{OMP\_NUM\_THREADS=40}.  Thus both
+backends had access to the same logical CPU budget; the remaining difference is
+mostly algorithmic memory traffic and materialization, not an intentionally
+different core count.
+
+This is the regime where the NumPy materialization cost dominates.  The
+diffusion trace assembly is not one large dense matrix multiplication; it is a
+large collection of independent small dense element and face operations.  For
+$p=3,\ldots,7$, the scalar element dimension is only
+$n_K=(p+1)(p+2)/2=10,\ldots,36$, so the mixed local blocks have size
+$3n_K=30,\ldots,108$, and the face blocks have size $(p+1)\times(p+1)$.  This
+is the ``many small GEMM'' regime: each local product is too small to amortize
+all dispatch, scheduling, and memory-movement costs as effectively as a single
+large BLAS-3 operation.
+
+The vectorized NumPy path exposes these local operations by allocating full
+element batches: local inverse blocks $\SK$, element-boundary blocks
+$\Mbb^{\partial K}$, trace-lifted Schur blocks $\C_{e,m}^K$, orientation-adjusted
+copies, COO index arrays, COO data arrays, and RHS work arrays.  Even when the
+individual contractions call optimized kernels, the code must read and write
+large temporary tensors before the final sparse matrix data exist.  The
+orientation reversal and boundary-elimination steps also operate on already
+materialized arrays, so they add more memory traffic.
+
+The fused Numba path changes the execution model.  It parallelizes over
+elements/faces, forms the small local matrices inside compiled loops, applies
+orientation locally, immediately writes free-trace COO entries, and moves known
+Dirichlet-column contributions directly into the RHS.  Intermediate quantities
+usually live only for one element or one face, so they stay closer to cache and
+do not become global NumPy arrays.  This reduces memory bandwidth pressure,
+temporary allocation pressure, and Python/NumPy dispatch overhead.  In the
+fine-mesh runs above, the NumPy path allocates about
+$5.2\times$--$15.6\times$ more Python-tracked peak memory over $p=3,\ldots,7$.
+First-call Numba compilation should be excluded from these comparisons or
+treated separately.
+
+\section{Code correspondence}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.43\textwidth} >{\raggedright\arraybackslash}p{0.47\textwidth}}
+\toprule
+Mathematical object or operation & Representative implementation name \\
+\midrule
+Normalize local stabilization $\tau^{K,e}$ & \code{\_normalize\_tau}; fused Numba path uses \code{\_normalize\_diffusion\_stabilization} \\
+Build the block source vector $\FK$ & \code{block\_source\_moments} \\
+Build local factors entering $\LK$ & \code{\_local\_solver\_pre\_mats} \\
+Build the local inverse $\SK$ & \code{\_local\_solver\_scalar\_inverse}, \code{\_local\_solver\_blocks\_numpy} \\
+Build $\Mbb_m^{\partial K}$ & \code{diffusion\_element\_boundary\_mats} \\
+Build the trace lift $\B_e^K$ & \code{diffusion\_trace\_lift} \\
+Build $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$ & \code{element\_to\_trace\_matrix\_from\_lift} \\
+Build interior trace mass blocks $\Mhh_\tau^{K,e}$ & \code{interior\_stabilization\_mass\_blocks} \\
+COO index and data flattening, NumPy path & \code{trace\_matrix\_indices}, \code{trace\_matrix\_data} \\
+RHS assembly, NumPy path & \code{trace\_rhs\_from\_lift} \\
+Dirichlet trace projection & \code{boundary\_trace\_coefficients} \\
+Trace orientation during Schur/reconstruction & \code{element\_to\_trace\_matrix\_from\_lift}, \code{element\_traces} \\
+Reduced fused assembly, Numba path & \code{assemble\_projected\_diffusion\_trace\_system\_eliminated\_numba} \\
+Known trace elimination & \code{eliminate\_known\_dofs} \\
+Local reconstruction & \code{reconstruct\_local\_unknowns}, \code{reconstruct\_projected\_diffusion\_local\_unknowns\_numba} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Minimal end-to-end flow}
+
+\begin{enumerate}[leftmargin=2em]
+    \item Build topology, edge orientations, boundary labels, normals, and geometric maps.
+    \item Build reference volume and face quadrature data.
+    \item Assemble $\LK$, $\Mbb_m^{\partial K}$, $\B_e^K$, $\Mhh_\tau^{K,e}$, and $\FK$.
+    \item Condense the cell unknowns through $\SK=(\LK)^{-1}$.
+    \item Assemble \eqref{eq:condensed-general}, eliminating Dirichlet trace degrees of freedom if desired.
+    \item Solve the sparse trace system.
+    \item Reconstruct $(u_h,q_h)$ independently on each element.
+\end{enumerate}
+
+\paragraph{Invariant.}
+The NumPy and Numba paths assemble the same condensed HDG trace system. The difference is execution strategy: the NumPy path materializes Schur tensors, while the Numba path fuses local inverse actions and COO insertion.
+
+\end{document}

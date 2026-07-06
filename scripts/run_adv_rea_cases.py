@@ -250,7 +250,7 @@ def _build_mesh(config: AdvectionReactionRunPreset, case):
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
-    from hdgfem.io.output import pretty_print_ncol
+    from hdgfem.io.output import pretty_print_sections
 
     l2_error = result.field.l2_error(exact)
     numerical_values = result.field.values()
@@ -263,37 +263,45 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
     max_error_element = int(np.argmax(element_max_error))
     global_solve = result.global_solve_result
 
-    items = [
+    run_mesh_items = [
         ("preset", preset_key, "s"),
         ("case", case.key, "s"),
         ("p", space.order, ",d"),
-        ("#triangles", mesh.num_tri, ",d"),
-        ("# edges", mesh.num_edg, ",d"),
-        ("#global_dof", result.trace.size, ",d"),
-        ("h^p", mesh.h ** (space.order + 1), ".4e"),
+        ("triangles", mesh.num_tri, ",d"),
+        ("edges", mesh.num_edg, ",d"),
+        ("trace dofs", result.trace.size, ",d"),
+    ]
+    error_items = [
+        ("theoretical h^(p+1)", mesh.h ** (space.order + 1), ".4e"),
         ("L2 error", l2_error, ".4e"),
         ("Linf error", linfty_error, ".4e"),
-        ("avg error", avg_error, ".4e"),
-        ("max_err at el", max_error_element, "d"),
-        ("setup time(s)", result.timings.assembly, "1.1f"),
-        ("glb_solve time(s)", result.timings.solve, "1.1f"),
-        ("recons time(s)", result.timings.reconstruction, "1.1f"),
-        ("tot time(s)", result.timings.total, "1.1f"),
+        ("avg max error", avg_error, ".4e"),
+        ("max-error element", max_error_element, "d"),
+    ]
+    solver_items = [
         ("solver", "none" if config.solver is None else config.solver, "s"),
         ("preconditioner", "petsc" if str(config.solver).lower() == "petsc" else config.preconditioner or "none", "s"),
+    ]
+    option_items = [
         ("assembly backend", result.assembly_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
         ("trace ordering", result.trace_ordering, "s"),
     ]
+    timing_items = [
+        ("assembly (s)", result.timings.assembly, "1.1f"),
+        ("global solve (s)", result.timings.solve, "1.1f"),
+        ("reconstruct (s)", result.timings.reconstruction, "1.1f"),
+        ("total (s)", result.timings.total, "1.1f"),
+    ]
     if str(config.solver).lower() == "petsc":
-        items.extend(
+        option_items.extend(
             [
                 ("PETSc preset", config.petsc_preset, "s"),
                 ("PETSc levels", -1 if config.petsc_levels is None else config.petsc_levels, ",d"),
             ]
         )
     else:
-        items.extend(
+        option_items.extend(
             [
                 ("ILU drop", -1.0 if config.ilu_drop_tol is None else config.ilu_drop_tol, ".1e"),
                 ("ILU fill", -1.0 if config.ilu_fill_factor is None else config.ilu_fill_factor, ".1f"),
@@ -303,9 +311,9 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
         free_trace_relative_residual = global_solve.diagnostic_relative_residual_norm
         if free_trace_relative_residual is None and result.boundary_mode == "eliminate":
             free_trace_relative_residual = global_solve.solver_relative_residual_norm
-        items.extend(
+        solver_items.extend(
             [
-                ("iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
+                ("Krylov iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
                 (
                     "solver rel res",
                     np.nan
@@ -314,25 +322,38 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
                     ".3e",
                 ),
                 (
-                    "free trace rel res",
+                    "free-trace rel res",
                     np.nan if free_trace_relative_residual is None else free_trace_relative_residual,
                     ".3e",
                 ),
+            ]
+        )
+        timing_items.extend(
+            [
                 (
-                    "prec time(s)",
+                    "precond build (s)",
                     0.0
                     if global_solve.preconditioner_elapsed_seconds is None
                     else global_solve.preconditioner_elapsed_seconds,
                     ".3f",
                 ),
                 (
-                    "Krylov time(s)",
+                    "Krylov solve (s)",
                     0.0 if global_solve.solve_elapsed_seconds is None else global_solve.solve_elapsed_seconds,
                     ".3f",
                 ),
             ]
         )
-    pretty_print_ncol(items, ncols=3, title="Advection-Reaction Preset Solve Summary")
+    pretty_print_sections(
+        [
+            ("Run / mesh", run_mesh_items),
+            ("Options", option_items),
+            ("Solver", solver_items),
+            ("Errors", error_items),
+            ("Timings", timing_items),
+        ],
+        title="Advection-Reaction Preset Solve Summary",
+    )
     return l2_error
 
 

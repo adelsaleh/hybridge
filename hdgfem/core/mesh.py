@@ -525,6 +525,114 @@ def gmsh_disc_mesh(
     )
 
 
+def gmsh_star_mesh(
+        mesh_size: float,
+        *,
+        corners: int = 5,
+        inner_radius: float = 0.72,
+        outer_radius: float = 1.0,
+        center: tuple[float, float] = (0.0, 0.0),
+        rotation: float = np.pi / 2.0,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+) -> DGMesh:
+    """Generate a polygonal star-shaped domain with Gmsh.
+
+    The boundary alternates between ``outer_radius`` and ``inner_radius`` at
+    ``2*corners`` equally spaced angles.  ``mesh_size`` controls the target
+    triangle size through Gmsh's usual mesh-size options.
+    """
+    corners = int(corners)
+    if corners < 2:
+        raise ValueError("corners must be at least 2")
+    inner_radius = float(inner_radius)
+    outer_radius = float(outer_radius)
+    if not (0.0 < inner_radius < outer_radius):
+        raise ValueError("inner_radius must satisfy 0 < inner_radius < outer_radius")
+    cx, cy = float(center[0]), float(center[1])
+    angles = float(rotation) + np.arange(2 * corners, dtype=np.float64) * np.pi / corners
+    radii = np.where(np.arange(2 * corners) % 2 == 0, outer_radius, inner_radius)
+    vertices = np.column_stack((cx + radii * np.cos(angles), cy + radii * np.sin(angles)))
+
+    def build(gmsh):
+        occ = gmsh.model.occ
+        points = [
+            occ.addPoint(float(x), float(y), 0.0, mesh_size)
+            for x, y in vertices
+        ]
+        lines = [
+            occ.addLine(points[i], points[(i + 1) % len(points)])
+            for i in range(len(points))
+        ]
+        loop = occ.addCurveLoop(lines)
+        return occ.addPlaneSurface([loop])
+
+    return _generate_gmsh_mesh(
+        "star",
+        mesh_size,
+        build,
+        verbosity=verbosity,
+        algorithm=algorithm,
+        write_path=write_path,
+    )
+
+
+def gmsh_smooth_star_mesh(
+        mesh_size: float,
+        *,
+        boundary_points: int = 260,
+        radius: float = 1.5,
+        amplitude: float = 0.32,
+        mode: int = 5,
+        center: tuple[float, float] = (0.0, 0.0),
+        rotation: float = 0.0,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+) -> DGMesh:
+    """Generate the sampled smooth star domain used by the FreeFEM Strategy A script.
+
+    The boundary follows ``r(theta) = radius + amplitude*cos(mode*theta)`` and
+    is sampled by straight segments, matching FreeFEM's ``buildmesh`` use of
+    ``border GammaStar(t=0, 2*pi)`` with ``GammaStar(boundary_points)``.
+    """
+    boundary_points = int(boundary_points)
+    mode = int(mode)
+    radius = float(radius)
+    amplitude = float(amplitude)
+    if boundary_points < max(8, 4 * mode):
+        raise ValueError("boundary_points is too small for the requested star mode")
+    if radius <= abs(amplitude):
+        raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
+    cx, cy = float(center[0]), float(center[1])
+    theta = float(rotation) + np.linspace(0.0, 2.0 * np.pi, boundary_points, endpoint=False)
+    rr = radius + amplitude * np.cos(mode * (theta - float(rotation)))
+    vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
+
+    def build(gmsh):
+        occ = gmsh.model.occ
+        points = [
+            occ.addPoint(float(x), float(y), 0.0, mesh_size)
+            for x, y in vertices
+        ]
+        lines = [
+            occ.addLine(points[i], points[(i + 1) % len(points)])
+            for i in range(len(points))
+        ]
+        loop = occ.addCurveLoop(lines)
+        return occ.addPlaneSurface([loop])
+
+    return _generate_gmsh_mesh(
+        "smooth_star",
+        mesh_size,
+        build,
+        verbosity=verbosity,
+        algorithm=algorithm,
+        write_path=write_path,
+    )
+
+
 def gmsh_triangle_mesh(
         mesh_size: float,
         *,

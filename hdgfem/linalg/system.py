@@ -505,6 +505,16 @@ def _configure_petsc_solver(
         temporary_options["sub_pc_type"] = "ilu"
         if levels is not None and levels > 0:
             temporary_options["sub_pc_factor_levels"] = int(levels)
+    elif normalized in {"bicgstab_gamg", "bcgs_gamg"}:
+        ksp.setType("bcgs")
+        pc.setType("gamg")
+        if levels is not None:
+            temporary_options["pc_gamg_levels"] = int(levels)
+    elif normalized == "gmres_gamg":
+        ksp.setType("gmres")
+        pc.setType("gamg")
+        if levels is not None:
+            temporary_options["pc_gamg_levels"] = int(levels)
     elif normalized == "cg_icc":
         ksp.setType("cg")
         pc.setType("icc")
@@ -533,7 +543,8 @@ def _configure_petsc_solver(
         raise ValueError(
             "unknown PETSc solver preset "
             f"{preset!r}; expected cg_ilu, bicgstab_ilu, bicgstab_asm_ilu, "
-            "gmres_ilu, gmres_asm_ilu, cg_icc, cg_hypre, cg_gamg, lu, or mumps_lu"
+            "gmres_ilu, gmres_asm_ilu, bicgstab_gamg, gmres_gamg, "
+            "cg_icc, cg_hypre, cg_gamg, lu, or mumps_lu"
         )
 
     combined_options = dict(temporary_options)
