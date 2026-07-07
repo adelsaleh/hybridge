@@ -154,6 +154,19 @@ python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
 python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
 ```
 
+Diffusion-reaction presets also control optional HDG post-processing with
+`hdg_postprocess="none"`, `"primal"`, `"flux"`, or `"both"`.  The primal
+postprocessor recovers a degree `p+1` scalar field.  The flux postprocessor
+recovers a degree `p+1` vector field whose normal moments match the HDG
+numerical flux and whose interior moments match the raw HDG flux against
+`[P_{p-1}]^d`.  Manufactured cases return the exact conservative flux
+`q=-kappa grad u`; the runner uses it to report raw flux and postprocessed flux
+errors alongside primal errors.
+
+Diffusion and advection runner summary tables are grouped into run/mesh,
+options, solver, errors, and timings sections.  Non-total timing rows include
+their percentage of total runtime, for example `assembly (s): 4.7 (39.2%)`.
+
 To create a new manufactured PDE, add a factory and `CASE_DEFINITIONS` entry in
 `scripts/diff_rea_cases.py`.  To create a new run configuration for an existing
 or new PDE, add a `DiffusionReactionRunPreset` entry to `PRESETS` in
@@ -312,6 +325,14 @@ preset                   preset name from scripts/run_adv_rea_cases.py
 --plot                   show numerical/exact/error plots
 --plot-resolution        samples per reference direction for plotting
 ```
+
+For diffusion-reaction plots, small meshes (`<=100` triangles) use Matplotlib
+discontinuous `tricontourf` panels with duplicated per-element vertices and the
+`jet` colormap.  Larger meshes use the PyVista refined-mesh path.  The plot
+resolution is automatically raised to be faithful to the displayed polynomial
+degree; `--plot-resolution` acts as a lower bound.  The exact panel is sampled
+more densely than the HDG panels, and shared color limits are dominated by the
+exact solution range with a capped allowance for numerical overshoot.
 
 Run:
 
@@ -657,6 +678,23 @@ from hdgfem.io.plot import plot_solution_comparison
 
 plot_solution_comparison(result.field, exact)
 ```
+
+Small-mesh Matplotlib contour panels are also available directly:
+
+```python
+from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib, reference_plot_points
+
+ref = reference_plot_points(16)
+values = result.field.values_at_ref(ref)
+plot_scalar_sample_panels_matplotlib(
+    result.field.space.mesh,
+    [("u_h", ref, values)],
+    cmap="jet",
+)
+```
+
+This helper duplicates refined vertices per physical element, so discontinuous
+DG fields are not averaged across element boundaries.
 
 ## Local Matrix Assembly
 

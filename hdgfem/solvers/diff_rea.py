@@ -18,6 +18,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
+from math import comb
 from typing import Any, Literal
 
 import numpy as np
@@ -35,11 +36,14 @@ except ImportError:  # pragma: no cover
 
 LocalSolverBackend = Literal["numpy", "numba"]
 AssemblyBackend = Literal["numpy", "numba", "auto"]
+HDGPostprocessMode = Literal["none", "primal", "flux", "both"]
 ReturnKey = Literal[
     "result",
     "trace",
     "trace_coeffs",
     "flux",
+    "postprocessed_field",
+    "postprocessed_flux",
     "local_unknowns",
     "matrix_rows",
     "matrix_cols",
@@ -74,6 +78,7 @@ class DiffusionReactionTimings:
     total: float
     initial_guess: float = 0.0
     boundary_elimination: float = 0.0
+    postprocessing: float = 0.0
 
     @property
     def assembly(self) -> float:
@@ -96,6 +101,8 @@ class DiffusionReactionResult:
     flux: VectorDGField
     trace: np.ndarray
     timings: DiffusionReactionTimings
+    postprocessed_field: DGField | None = None
+    postprocessed_flux: VectorDGField | None = None
     local_unknowns: np.ndarray | None = None
     matrix_rows: np.ndarray | None = None
     matrix_cols: np.ndarray | None = None
@@ -141,6 +148,7 @@ class DiffusionReactionHDGOptions:
     assembly_backend: AssemblyBackend = "numpy"
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
+    hdg_postprocess: HDGPostprocessMode = "none"
     verbose: bool | int = True
 
     def with_overrides(self, **overrides) -> "DiffusionReactionHDGOptions":
@@ -750,6 +758,385 @@ def split_diffusion_unknowns(local_unknowns: np.ndarray, space: DGSpace) -> tupl
     return field, flux
 
 
+@dataclass
+class _HDGPostprocessCache:
+    """Reference tables and local factorizations for local HDG post-processing.
+
+    The cache owns the degree ``p+1`` scalar space used by both postprocessors.
+    Primal post-processing reuses reference stiffness tensors and per-element
+    LU factors for the Neumann/mean-constrained scalar solve.  Flux
+    post-processing reuses the constraint Schur factors for the local
+    minimum-distance H(div)-type projection that enforces numerical normal-flux
+    moments and low-order interior moments.
+    """
+
+    base_space: DGSpace
+    post_space: DGSpace
+    base_to_post_mass: np.ndarray
+    base_basis_on_post_quads: np.ndarray
+    face_base_to_post: np.ndarray
+    trace_base_to_post: np.ndarray
+    interior_low_to_base: np.ndarray
+    interior_low_to_post: np.ndarray
+    mean_base: np.ndarray
+    mean_post: np.ndarray
+    primal_stiffness_rr: np.ndarray
+    primal_stiffness_rs: np.ndarray
+    primal_stiffness_ss: np.ndarray
+    flux_ainv_constraint_t: np.ndarray | None = None
+    flux_schur_lu: np.ndarray | None = None
+    flux_schur_pivots: np.ndarray | None = None
+    primal_lu: np.ndarray | None = None
+    primal_pivots: np.ndarray | None = None
+
+
+def _normalize_hdg_postprocess_mode(mode) -> HDGPostprocessMode:
+    """Normalize user-facing post-processing mode names."""
+    if mode is None or mode is False:
+        return "none"
+    if mode is True:
+        return "both"
+    text = str(mode).strip().lower().replace("-", "_")
+    aliases = {
+        "off": "none",
+        "false": "none",
+        "0": "none",
+        "field": "primal",
+        "u": "primal",
+        "scalar": "primal",
+        "q": "flux",
+        "hdiv": "flux",
+        "all": "both",
+        "true": "both",
+        "1": "both",
+    }
+    text = aliases.get(text, text)
+    if text not in {"none", "primal", "flux", "both"}:
+        raise ValueError("hdg_postprocess must be one of 'none', 'primal', 'flux', or 'both'")
+    return text
+
+
+def _edge_bernstein_basis(order: int, points: np.ndarray) -> np.ndarray:
+    """Evaluate the 1D Bernstein trace basis of ``order`` at edge points."""
+    order = int(order)
+    if order < 0:
+        raise ValueError("order must be nonnegative")
+    points = np.asarray(points, dtype=np.float64)
+    r = 0.5 * (points + 1.0)
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        values[j] = comb(order, j) * (1.0 - r) ** (order - j) * r**j
+    return np.ascontiguousarray(values)
+
+
+def _face_base_to_post_trace(space: DGSpace, post_space: DGSpace) -> np.ndarray:
+    """Return reference face moments ``int_F phi_p mu_{p+1}``."""
+    q_post = post_space.quad_data
+    face_points = q_post.pts_fc.reshape(-1, 2)
+    base_face = space.basis_at(face_points).reshape(q_post.weights_JGL.size, 3, space.el_dof)
+    base_face = np.ascontiguousarray(base_face.transpose(1, 2, 0))
+    return np.ascontiguousarray(
+        np.einsum(
+            "q,fiq,aq->fia",
+            q_post.weights_JGL,
+            base_face,
+            q_post.bas1d_of_ref_edg_qds,
+            optimize=True,
+        )
+    )
+
+
+def _trace_base_to_post_trace(space: DGSpace, post_space: DGSpace) -> np.ndarray:
+    """Return reference edge moments ``int_F lambda_p mu_{p+1}``."""
+    q_post = post_space.quad_data
+    base_trace = _edge_bernstein_basis(space.order, q_post.quads_JGL)
+    return np.ascontiguousarray(
+        np.einsum(
+            "q,iq,aq->ia",
+            q_post.weights_JGL,
+            base_trace,
+            q_post.bas1d_of_ref_edg_qds,
+            optimize=True,
+        )
+    )
+
+
+def _interior_postprocess_moments(space: DGSpace, post_space: DGSpace) -> tuple[np.ndarray, np.ndarray]:
+    """Return reference volume moments against ``P_{p-1}`` test functions."""
+    if space.order == 0:
+        return (
+            np.empty((0, space.el_dof), dtype=np.float64),
+            np.empty((0, post_space.el_dof), dtype=np.float64),
+        )
+    low_space = DGSpace(
+        space.mesh,
+        space.order - 1,
+        basis_type=space.reference.basis_type,
+        name=f"{space.name}_post_low",
+    )
+    q_post = post_space.quad_data
+    low_basis = low_space.basis_at(q_post.Krf_quads)
+    base_basis = space.basis_at(q_post.Krf_quads)
+    post_basis = q_post.phi
+    low_to_base = np.einsum("q,qi,qj->ij", q_post.Krf_w, low_basis, base_basis, optimize=True)
+    low_to_post = np.einsum("q,qi,qj->ij", q_post.Krf_w, low_basis, post_basis, optimize=True)
+    return np.ascontiguousarray(low_to_base), np.ascontiguousarray(low_to_post)
+
+
+def _inverse_diffusion_values(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return pointwise ``kappa^{-1}`` components on ``space`` quadrature."""
+    k00, k01, k10, k11 = _diffusion_components(diffusion, space)
+    det = k00 * k11 - k01 * k10
+    det_min = float(np.min(det))
+    if det_min <= 0.0:
+        raise ValueError(f"diffusion tensor must be pointwise positive definite; minimum determinant is {det_min}")
+    return (
+        np.ascontiguousarray(k11 / det),
+        np.ascontiguousarray(-k01 / det),
+        np.ascontiguousarray(-k10 / det),
+        np.ascontiguousarray(k00 / det),
+    )
+
+
+def _new_hdg_postprocess_cache(space: DGSpace) -> _HDGPostprocessCache:
+    """Create reference-space data shared by primal and flux post-processing."""
+    post_space = DGSpace(
+        space.mesh,
+        space.order + 1,
+        basis_type=space.reference.basis_type,
+        name=f"{space.name}_post",
+    )
+    q_post = post_space.quad_data
+    base_basis_on_post_quads = np.ascontiguousarray(space.basis_at(q_post.Krf_quads))
+    base_to_post_mass = np.ascontiguousarray(
+        np.einsum(
+            "q,qi,qj->ij",
+            q_post.Krf_w,
+            q_post.phi,
+            base_basis_on_post_quads,
+            optimize=True,
+        )
+    )
+    interior_low_to_base, interior_low_to_post = _interior_postprocess_moments(space, post_space)
+    grad_r = q_post.gphi[:, :, 0]
+    grad_s = q_post.gphi[:, :, 1]
+    stiffness_rs = np.einsum("q,qi,qj->ij", q_post.Krf_w, grad_r, grad_s, optimize=True)
+    return _HDGPostprocessCache(
+        base_space=space,
+        post_space=post_space,
+        base_to_post_mass=base_to_post_mass,
+        base_basis_on_post_quads=base_basis_on_post_quads,
+        face_base_to_post=_face_base_to_post_trace(space, post_space),
+        trace_base_to_post=_trace_base_to_post_trace(space, post_space),
+        interior_low_to_base=interior_low_to_base,
+        interior_low_to_post=interior_low_to_post,
+        mean_base=np.ascontiguousarray(q_post.Krf_w @ base_basis_on_post_quads),
+        mean_post=np.ascontiguousarray(q_post.Krf_w @ q_post.phi),
+        primal_stiffness_rr=np.ascontiguousarray(
+            np.einsum("q,qi,qj->ij", q_post.Krf_w, grad_r, grad_r, optimize=True)
+        ),
+        primal_stiffness_rs=np.ascontiguousarray(stiffness_rs + stiffness_rs.T),
+        primal_stiffness_ss=np.ascontiguousarray(
+            np.einsum("q,qi,qj->ij", q_post.Krf_w, grad_s, grad_s, optimize=True)
+        ),
+    )
+
+
+def _build_hdg_postprocess_cache(
+        space: DGSpace,
+        *,
+        want_primal: bool,
+        want_flux: bool,
+        cache: _HDGPostprocessCache | None = None,
+) -> _HDGPostprocessCache:
+    """Build or extend cached local post-processing factorizations.
+
+    The primal and flux postprocessors can be requested independently.  This
+    routine only allocates/factors the pieces required by the requested mode,
+    and a stateful :class:`DiffusionReactionHDGSolver` reuses the resulting
+    cache on subsequent solves with the same space.
+    """
+    if njit is None:
+        raise RuntimeError("HDG post-processing requires numba")
+    if cache is None or cache.base_space is not space:
+        cache = _new_hdg_postprocess_cache(space)
+
+    if want_flux and cache.flux_schur_lu is None:
+        from ..kernels.diff_rea_fused import factor_hdiv_flux_min_distance_postprocess_kernel
+
+        post_el_dof = cache.post_space.el_dof
+        post_edg_dof = cache.post_space.quad_data.edg_dof
+        low_dof = cache.interior_low_to_post.shape[0]
+        constraints = 3 * post_edg_dof + 2 * low_dof
+        cache.flux_ainv_constraint_t = np.empty(
+            (space.mesh.num_tri, 2 * post_el_dof, constraints),
+            dtype=np.float64,
+        )
+        cache.flux_schur_lu = np.empty((space.mesh.num_tri, constraints, constraints), dtype=np.float64)
+        cache.flux_schur_pivots = np.empty((space.mesh.num_tri, constraints), dtype=np.int64)
+        factor_hdiv_flux_min_distance_postprocess_kernel(
+            cache.flux_ainv_constraint_t,
+            cache.flux_schur_lu,
+            cache.flux_schur_pivots,
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+            np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
+            np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+            cache.interior_low_to_post,
+        )
+
+    if want_primal and cache.primal_lu is None:
+        from ..kernels.diff_rea_fused import factor_primal_postprocess_kernel
+
+        post_el_dof = cache.post_space.el_dof
+        rows = post_el_dof + 1
+        cache.primal_lu = np.empty((space.mesh.num_tri, rows, rows), dtype=np.float64)
+        cache.primal_pivots = np.empty((space.mesh.num_tri, rows), dtype=np.int64)
+        factor_primal_postprocess_kernel(
+            cache.primal_lu,
+            cache.primal_pivots,
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
+            cache.primal_stiffness_rr,
+            cache.primal_stiffness_rs,
+            cache.primal_stiffness_ss,
+            cache.mean_post,
+        )
+    return cache
+
+
+def _postprocess_diffusion_solution(
+        local_unknowns: np.ndarray,
+        trace: np.ndarray,
+        space: DGSpace,
+        stabilization,
+        diffusion,
+        mode,
+        *,
+        cache: _HDGPostprocessCache | None = None,
+) -> tuple[DGField | None, VectorDGField | None, _HDGPostprocessCache | None]:
+    """Apply optional scalar and/or H(div) HDG post-processing.
+
+    ``mode`` accepts ``"primal"``, ``"flux"``, or ``"both"``.  The primal
+    postprocessor computes an element-local degree ``p+1`` scalar field using
+    the recovered mixed flux and a mean constraint.  The flux postprocessor
+    computes a degree ``p+1`` vector field whose normal moments match the HDG
+    numerical flux on every face and whose interior moments match the raw HDG
+    flux against ``[P_{p-1}]^d``.
+    """
+    mode = _normalize_hdg_postprocess_mode(mode)
+    if mode == "none":
+        return None, None, cache
+
+    local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=np.float64))
+    expected_unknowns = (space.mesh.num_tri, 3 * space.el_dof)
+    if local_unknowns.shape != expected_unknowns:
+        raise ValueError(f"local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}")
+
+    trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
+    expected_trace = (space.mesh.num_edg * space.quad_data.edg_dof,)
+    if trace.shape != expected_trace:
+        raise ValueError(f"trace must have shape {expected_trace}; got {trace.shape}")
+
+    want_primal = mode in {"primal", "both"}
+    want_flux = mode in {"flux", "both"}
+    cache = _build_hdg_postprocess_cache(
+        space,
+        want_primal=want_primal,
+        want_flux=want_flux,
+        cache=cache,
+    )
+
+    postprocessed_field = None
+    postprocessed_flux = None
+    if want_primal:
+        from ..kernels.diff_rea_fused import solve_primal_postprocess_kernel
+
+        if cache.primal_lu is None or cache.primal_pivots is None:
+            raise RuntimeError("missing primal post-processing factorization")
+        inv00, inv01, inv10, inv11 = _inverse_diffusion_values(diffusion, cache.post_space)
+        coeffs = np.empty(cache.post_space.shape, dtype=np.float64)
+        solve_primal_postprocess_kernel(
+            coeffs,
+            local_unknowns,
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
+            np.ascontiguousarray(cache.post_space.quad_data.Krf_w, dtype=np.float64),
+            cache.base_basis_on_post_quads,
+            np.ascontiguousarray(cache.post_space.quad_data.gphi, dtype=np.float64),
+            cache.mean_base,
+            inv00,
+            inv01,
+            inv10,
+            inv11,
+            cache.primal_lu,
+            cache.primal_pivots,
+        )
+        postprocessed_field = cache.post_space.field(coeffs, name="u_h_star")
+
+    if want_flux:
+        from ..kernels.diff_rea_fused import solve_hdiv_flux_min_distance_postprocess_kernel
+
+        if (
+            cache.flux_ainv_constraint_t is None
+            or cache.flux_schur_lu is None
+            or cache.flux_schur_pivots is None
+        ):
+            raise RuntimeError("missing flux post-processing factorization")
+        tau = _normalize_tau(stabilization, space)
+        coeffs = np.empty((2, space.mesh.num_tri, cache.post_space.el_dof), dtype=np.float64)
+        solve_hdiv_flux_min_distance_postprocess_kernel(
+            coeffs,
+            local_unknowns,
+            trace,
+            np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
+            np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+            tau,
+            np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
+            cache.base_to_post_mass,
+            cache.face_base_to_post,
+            cache.trace_base_to_post,
+            np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+            cache.interior_low_to_base,
+            cache.interior_low_to_post,
+            cache.flux_ainv_constraint_t,
+            cache.flux_schur_lu,
+            cache.flux_schur_pivots,
+        )
+        postprocessed_flux = (cache.post_space * cache.post_space).field(
+            (coeffs[0], coeffs[1]),
+            name="q_h_star",
+        )
+
+    return postprocessed_field, postprocessed_flux, cache
+
+
+def _result_with_hdg_postprocessing(
+        result: DiffusionReactionResult,
+        *,
+        postprocessed_field: DGField | None,
+        postprocessed_flux: VectorDGField | None,
+        elapsed: float,
+) -> DiffusionReactionResult:
+    """Return ``result`` with optional post-processed fields attached."""
+    if postprocessed_field is None and postprocessed_flux is None:
+        return result
+    timings = replace(
+        result.timings,
+        postprocessing=result.timings.postprocessing + elapsed,
+        total=result.timings.total + elapsed,
+    )
+    result_values = {field.name: getattr(result, field.name) for field in fields(DiffusionReactionResult)}
+    result_values["timings"] = timings
+    result_values["postprocessed_field"] = postprocessed_field
+    result_values["postprocessed_flux"] = postprocessed_flux
+    return DiffusionReactionResult(**result_values)
+
+
 class DiffusionReactionHDGSolver:
     r"""Stateful HDG solver/cache for scalar diffusion-reaction problems.
 
@@ -896,6 +1283,8 @@ class DiffusionReactionHDGSolver:
         self.result: DiffusionReactionResult | None = None
         self.field: DGField | None = None
         self.flux: VectorDGField | None = None
+        self.postprocessed_field: DGField | None = None
+        self.postprocessed_flux: VectorDGField | None = None
         self.trace: np.ndarray | None = None
 
         self.rows: np.ndarray | None = None
@@ -912,6 +1301,7 @@ class DiffusionReactionHDGSolver:
         self.local_solver: np.ndarray | None = None
         self.element_boundary_mats: np.ndarray | None = None
         self.local_unknowns: np.ndarray | None = None
+        self._hdg_postprocess_cache: _HDGPostprocessCache | None = None
         self.global_solve_result: SolveResult | None = None
         self.timings: DiffusionReactionTimings | None = None
         return self
@@ -921,6 +1311,8 @@ class DiffusionReactionHDGSolver:
         self.result = None
         self.field = None
         self.flux = None
+        self.postprocessed_field = None
+        self.postprocessed_flux = None
         self.trace = None
         self.local_unknowns = None
         self.global_solve_result = None
@@ -969,14 +1361,17 @@ class DiffusionReactionHDGSolver:
         ):
             result = self._solve_numba_with_cached_operator()
         else:
+            solve_kwargs = self.options.as_solve_kwargs()
+            solve_kwargs["hdg_postprocess"] = "none"
             result = solve_diffusion_reaction_hdg(
                 self.source,
                 self.reaction,
                 self.boundary_condition,
                 self.space,
                 return_=("result",),
-                **self.options.as_solve_kwargs(),
+                **solve_kwargs,
             )
+        result = self._postprocess_result(result)
         self._store_result(result)
         return result
 
@@ -1139,11 +1534,45 @@ class DiffusionReactionHDGSolver:
                 "or pass source, reaction, and boundary_condition to solve(...)"
             )
 
+    def _postprocess_result(self, result: DiffusionReactionResult) -> DiffusionReactionResult:
+        """Attach requested HDG post-processed fields using the solver cache."""
+        mode = _normalize_hdg_postprocess_mode(self.options.hdg_postprocess)
+        if mode == "none":
+            return result
+        verbosity = _verbosity_level(self.options.verbose)
+
+        def postprocess():
+            postprocessed_field, postprocessed_flux, cache = _postprocess_diffusion_solution(
+                result.local_unknowns,
+                result.trace,
+                self.space,
+                self.options.stabilization,
+                self.options.diffusion,
+                mode,
+                cache=self._hdg_postprocess_cache,
+            )
+            self._hdg_postprocess_cache = cache
+            return postprocessed_field, postprocessed_flux
+
+        (postprocessed_field, postprocessed_flux), elapsed = _timed_call(
+            "post-processing HDG fields",
+            verbosity,
+            postprocess,
+        )
+        return _result_with_hdg_postprocessing(
+            result,
+            postprocessed_field=postprocessed_field,
+            postprocessed_flux=postprocessed_flux,
+            elapsed=elapsed,
+        )
+
     def _store_result(self, result: DiffusionReactionResult) -> None:
         """Copy result artifacts into named cache attributes."""
         self.result = result
         self.field = result.field
         self.flux = result.flux
+        self.postprocessed_field = result.postprocessed_field
+        self.postprocessed_flux = result.postprocessed_flux
         self.trace = result.trace
         self.timings = result.timings
         self.local_unknowns = result.local_unknowns
@@ -1191,6 +1620,7 @@ def solve_diffusion_reaction_hdg(
         assembly_backend: AssemblyBackend = "numpy",
         boundary_penalty: float = 1e20,
         boundary_mode: Literal["penalty", "eliminate"] = "penalty",
+        hdg_postprocess: HDGPostprocessMode = "none",
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
@@ -1203,6 +1633,7 @@ def solve_diffusion_reaction_hdg(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if assembly_backend not in {"numpy", "numba", "auto"}:
         raise ValueError("assembly_backend must be 'numpy', 'numba', or 'auto'")
+    postprocess_mode = _normalize_hdg_postprocess_mode(hdg_postprocess)
     effective_backend = "numpy" if assembly_backend == "auto" else assembly_backend
     effective_boundary_mode = "eliminate" if effective_backend == "numba" else boundary_mode
     effective_scale_system = False if solver is not None and str(solver).lower() == "petsc" else scale_system
@@ -1511,6 +1942,27 @@ def solve_diffusion_reaction_hdg(
 
     (local_unknowns, field, flux), reconstruction = _timed_call("reconstructing local fields", verbosity, reconstruct)
 
+    postprocessed_field = None
+    postprocessed_flux = None
+    postprocessing = 0.0
+    if postprocess_mode != "none":
+        def postprocess():
+            post_field, post_flux, _ = _postprocess_diffusion_solution(
+                local_unknowns,
+                trace,
+                space,
+                tau,
+                diffusion,
+                postprocess_mode,
+            )
+            return post_field, post_flux
+
+        (postprocessed_field, postprocessed_flux), postprocessing = _timed_call(
+            "post-processing HDG fields",
+            verbosity,
+            postprocess,
+        )
+
     timings = DiffusionReactionTimings(
         preparation=preparation,
         local_solver=local_solver_time,
@@ -1520,6 +1972,7 @@ def solve_diffusion_reaction_hdg(
         boundary_elimination=boundary_elimination,
         solve=solve_time,
         reconstruction=reconstruction,
+        postprocessing=postprocessing,
         total=time.perf_counter() - total_start,
     )
     result = DiffusionReactionResult(
@@ -1527,6 +1980,8 @@ def solve_diffusion_reaction_hdg(
         flux=flux,
         trace=trace,
         timings=timings,
+        postprocessed_field=postprocessed_field,
+        postprocessed_flux=postprocessed_flux,
         local_unknowns=local_unknowns,
         matrix_rows=trace_system.rows,
         matrix_cols=trace_system.cols,
@@ -1559,6 +2014,10 @@ def solve_diffusion_reaction_hdg(
             output.append(trace)
         elif key == "flux":
             output.append(flux)
+        elif key == "postprocessed_field":
+            output.append(postprocessed_field)
+        elif key == "postprocessed_flux":
+            output.append(postprocessed_flux)
         elif key == "local_unknowns":
             output.append(local_unknowns)
         elif key == "matrix_rows":

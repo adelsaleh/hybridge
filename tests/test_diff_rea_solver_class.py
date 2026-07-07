@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import comb
+
 import numpy as np
 import pytest
 
@@ -38,6 +40,8 @@ def _assert_solver_cache_matches_result(solver: DiffReaSolver, result) -> None:
     assert solver.result is result
     assert solver.field is result.field
     assert solver.flux is result.flux
+    assert solver.postprocessed_field is result.postprocessed_field
+    assert solver.postprocessed_flux is result.postprocessed_flux
     assert solver.trace is result.trace
     assert solver.timings is result.timings
     assert solver.local_unknowns is result.local_unknowns
@@ -54,6 +58,106 @@ def _assert_solver_cache_matches_result(solver: DiffReaSolver, result) -> None:
     assert solver.local_solver is result.local_solver
     assert solver.element_boundary_mats is result.element_boundary_mats
     assert solver.global_solve_result is result.global_solve_result
+
+
+def _edge_bernstein_basis(order: int, points: np.ndarray) -> np.ndarray:
+    r = 0.5 * (points + 1.0)
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        values[j] = comb(order, j) * (1.0 - r) ** (order - j) * r**j
+    return values
+
+
+def _face_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
+    q_post = post_space.quad_data
+    face_points = q_post.pts_fc.reshape(-1, 2)
+    base_face = space.basis_at(face_points).reshape(q_post.weights_JGL.size, 3, space.el_dof)
+    base_face = base_face.transpose(1, 2, 0)
+    return np.einsum(
+        "q,fiq,aq->fia",
+        q_post.weights_JGL,
+        base_face,
+        q_post.bas1d_of_ref_edg_qds,
+        optimize=True,
+    )
+
+
+def _trace_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
+    q_post = post_space.quad_data
+    base_trace = _edge_bernstein_basis(space.order, q_post.quads_JGL)
+    return np.einsum(
+        "q,iq,aq->ia",
+        q_post.weights_JGL,
+        base_trace,
+        q_post.bas1d_of_ref_edg_qds,
+        optimize=True,
+    )
+
+
+def _interior_moment_tables(space: DGSpace, post_space: DGSpace) -> tuple[np.ndarray, np.ndarray]:
+    if space.order == 0:
+        return np.empty((0, space.el_dof)), np.empty((0, post_space.el_dof))
+    low_space = DGSpace(space.mesh, space.order - 1, basis_type=space.reference.basis_type)
+    q_post = post_space.quad_data
+    low_basis = low_space.basis_at(q_post.Krf_quads)
+    base_basis = space.basis_at(q_post.Krf_quads)
+    return (
+        np.einsum("q,qi,qj->ij", q_post.Krf_w, low_basis, base_basis, optimize=True),
+        np.einsum("q,qi,qj->ij", q_post.Krf_w, low_basis, q_post.phi, optimize=True),
+    )
+
+
+def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float) -> None:
+    flux_star = result.postprocessed_flux
+    assert flux_star is not None
+    post_space = flux_star.components[0].space
+    assert post_space.order == space.order + 1
+
+    unknowns = result.local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
+    qx_star, qy_star = flux_star.as_component_first()
+    face_base = _face_base_to_post(space, post_space)
+    trace_base = _trace_base_to_post(space, post_space)
+    low_to_base, low_to_post = _interior_moment_tables(space, post_space)
+    face_post = post_space.quad_data.face_element_test_trace_trial
+
+    for element in range(space.mesh.num_tri):
+        for face in range(3):
+            edge = space.mesh.loc2glob_edge[element, face]
+            orientation = space.mesh.orientations[element, face]
+            trace_ids = np.arange(space.quad_data.edg_dof)
+            if not orientation:
+                trace_ids = trace_ids[::-1]
+            trace_coeffs = result.trace[edge * space.quad_data.edg_dof + trace_ids]
+
+            nx, ny = space.mesh.normals[element, face]
+            scale = space.mesh.jacs_el_fc[element, face]
+            lhs = scale * (
+                nx * (qx_star[element] @ face_post[face])
+                + ny * (qy_star[element] @ face_post[face])
+            )
+            rhs = scale * (
+                nx * (unknowns[element, 1] @ face_base[face])
+                + ny * (unknowns[element, 2] @ face_base[face])
+                + tau_value * (
+                    unknowns[element, 0] @ face_base[face]
+                    - trace_coeffs @ trace_base
+                )
+            )
+            np.testing.assert_allclose(lhs, rhs, rtol=1e-10, atol=1e-10)
+
+        jac = space.mesh.aff_jacs[element]
+        np.testing.assert_allclose(
+            jac * (low_to_post @ qx_star[element]),
+            jac * (low_to_base @ unknowns[element, 1]),
+            rtol=1e-10,
+            atol=1e-10,
+        )
+        np.testing.assert_allclose(
+            jac * (low_to_post @ qy_star[element]),
+            jac * (low_to_base @ unknowns[element, 2]),
+            rtol=1e-10,
+            atol=1e-10,
+        )
 
 
 @pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
@@ -151,6 +255,40 @@ def test_diff_rea_solver_rejects_incomplete_problem_update() -> None:
     solver.set_problem(source, reaction, exact)
     result = solver.solve()
     assert result.trace is not None
+
+
+def test_hdg_postprocess_primal_and_flux_outputs_and_flux_moments() -> None:
+    pytest.importorskip("numba")
+    space = _space(order=1)
+    source_h, reaction_h, exact = _projected_problem(space)
+    tau = 1.3
+    solver = DiffReaSolver(
+        space,
+        source=source_h,
+        reaction=reaction_h,
+        boundary_condition=exact,
+        stabilization=tau,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        hdg_postprocess="both",
+        verbose=False,
+    )
+
+    result = solver.solve()
+
+    assert result.postprocessed_field is not None
+    assert result.postprocessed_flux is not None
+    assert result.postprocessed_field.space.order == space.order + 1
+    assert result.postprocessed_field.coeffs.shape == (
+        space.mesh.num_tri,
+        (space.order + 2) * (space.order + 3) // 2,
+    )
+    assert result.postprocessed_flux.as_component_first().shape == (2,) + result.postprocessed_field.coeffs.shape
+    assert result.timings.postprocessing > 0.0
+    _assert_hdiv_flux_constraints(result, space, tau)
+    _assert_solver_cache_matches_result(solver, result)
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:

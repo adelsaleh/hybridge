@@ -60,6 +60,14 @@ python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
 python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
 ```
 
+The diffusion-reaction runner can request HDG post-processing through the
+`hdg_postprocess` preset field (`"none"`, `"primal"`, `"flux"`, or `"both"`).
+Manufactured diffusion-reaction cases provide the exact conservative flux
+`q=-kappa grad u`, so the solve summary reports primal, flux, postprocessed
+primal, and postprocessed flux errors when the corresponding fields are
+available.  Runner timing tables also show each non-total timing as a percentage
+of the total runtime.
+
 ## Optional PETSc Backend
 
 PETSc support is optional.  The core package only depends on NumPy, SciPy, and
@@ -263,7 +271,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 ## Important Files
 
 - `hdgfem/solvers/adv_rea.py`: compact HDG advection-reaction solver.
-- `hdgfem/solvers/diff_rea.py`: HDG diffusion-reaction solver and CLI.
+- `hdgfem/solvers/diff_rea.py`: HDG diffusion-reaction solver with optional
+  degree `p+1` primal and H(div)-style flux post-processing.
 - `hdgfem/backends/numba.py`: package adapter for the projected Numba backend.
 - `hdgfem/backends/numpy.py`: NumPy backend exports.
 - `hdgfem/backends/cupy.py`: placeholder for a supported CuPy backend.
@@ -272,7 +281,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
   inverse applications for dual residual norms.
 - `hdgfem/assembly/matrices_numpy.py`: vectorized local and trace matrix assembly helpers.
 - `hdgfem/assembly/projection.py`: package-native DG projection helpers.
-- `hdgfem/io/plot.py`: generic DG field plotting helpers plus numerical/exact/error comparison plots.
+- `hdgfem/io/plot.py`: generic DG field plotting helpers, PyVista comparison
+  plots, and Matplotlib discontinuous contour panels for small meshes.
 - `hdgfem/io/output.py`: console table formatting helpers.
 - `hdgfem/linalg/system.py`: sparse global trace-system assembly and solve helpers.
 - `hdgfem/linalg/ordering.py`: upwind SCC trace ordering for advection-dominated systems.
@@ -304,6 +314,20 @@ from hdgfem.io.plot import plot_field, plot_fields
 
 plot_field(result.field, resolution=20)
 plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
+```
+
+For small discontinuous contour panels with duplicated per-element vertices:
+
+```python
+from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib, reference_plot_points
+
+ref = reference_plot_points(16)
+values = result.field.values_at_ref(ref)
+plot_scalar_sample_panels_matplotlib(
+    result.field.space.mesh,
+    [("u_h", ref, values)],
+    cmap="jet",
+)
 ```
 
 See [MANUAL.md](MANUAL.md) for detailed CLI, API, and performance notes.

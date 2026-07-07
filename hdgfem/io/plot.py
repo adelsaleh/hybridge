@@ -1,8 +1,11 @@
-"""PyVista plotting helpers for :mod:`hdgfem` fields.
+"""Plotting helpers for :mod:`hdgfem` fields.
 
-The helpers in this module sample each DG element independently.  Vertices on
-shared mesh edges are intentionally duplicated so discontinuities remain
-visible instead of being averaged by the rendering backend.
+PyVista helpers provide interactive refined-surface visualizations for medium
+and large DG meshes.  Matplotlib helpers provide lightweight discontinuous
+``tricontourf`` panels for small meshes.  Both paths sample each DG element
+independently and intentionally duplicate vertices on shared mesh edges so
+discontinuities remain visible instead of being averaged by the rendering
+backend.
 """
 
 from __future__ import annotations
@@ -514,6 +517,169 @@ def plot_fields(
     return plotter
 
 
+def matplotlib_discontinuous_triangulation(mesh: DGMesh, reference_points: np.ndarray):
+    """Build a Matplotlib triangulation with duplicated vertices per DG element.
+
+    The returned triangulation is suitable for DG visualizations because every
+    physical element owns its own copy of the refined reference grid.  Neighboring
+    elements therefore do not share Matplotlib vertices and discontinuous values
+    are not interpolated across element boundaries.
+    """
+    import matplotlib.tri as mtri
+
+    reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+    physical_points = mesh.map_reference_points(reference_points)
+    points_per_element = reference_points.shape[0]
+    reference_triangles = reference_plot_connectivity(reference_points)
+    triangle_offsets = np.repeat(
+        np.arange(mesh.num_tri, dtype=np.int64) * points_per_element,
+        reference_triangles.shape[0],
+    )
+    triangles = np.tile(reference_triangles, (mesh.num_tri, 1)) + triangle_offsets[:, None]
+    points = physical_points.reshape(-1, 2)
+    return mtri.Triangulation(points[:, 0], points[:, 1], triangles)
+
+
+def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: float = 0.65, alpha: float = 0.55):
+    """Overlay the coarse physical mesh on a Matplotlib axes."""
+    import matplotlib.tri as mtri
+
+    coarse = mtri.Triangulation(mesh.node_coords[:, 0], mesh.node_coords[:, 1], mesh.triangles)
+    return ax.triplot(coarse, color=color, linewidth=linewidth, alpha=alpha)
+
+
+def _matplotlib_backend_is_noninteractive(backend: str) -> bool:
+    backend = str(backend).lower()
+    return (
+        backend in {"agg", "pdf", "ps", "svg", "template", "cairo"}
+        or backend.endswith("agg")
+        and not backend.startswith(("qt", "tk", "gtk", "wx", "macosx"))
+        or "inline" in backend
+    )
+
+
+def _matplotlib_pyplot(*, show: bool):
+    """Import pyplot, switching away from non-interactive backends when showing."""
+    import matplotlib
+
+    if show and _matplotlib_backend_is_noninteractive(matplotlib.get_backend()):
+        errors = []
+        for backend in ("QtAgg", "TkAgg", "GTK3Agg", "WXAgg", "MacOSX"):
+            try:
+                matplotlib.use(backend, force=True)
+                import matplotlib.pyplot as plt
+
+                return plt
+            except Exception as exc:  # pragma: no cover - backend availability is environment-specific.
+                errors.append(f"{backend}: {exc}")
+        message = "\n".join(errors)
+        raise RuntimeError(
+            "Matplotlib is using a non-interactive backend and no interactive backend could be activated. "
+            "Install PyQt/PySide or Tk support, or run with an interactive backend such as "
+            "`MPLBACKEND=QtAgg python scripts/run_diff_rea_cases.py ... --plot`.\n"
+            f"Tried backends:\n{message}"
+        )
+
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
+def plot_scalar_sample_panels_matplotlib(
+        mesh: DGMesh,
+        panels: Sequence[tuple[str, np.ndarray, np.ndarray]],
+        *,
+        suptitle: str | None = None,
+        show_mesh: bool = True,
+        cmap: str = "jet",
+        levels: int | Sequence[float] = 64,
+        clim: tuple[float, float] | None = None,
+        share_clim: bool = True,
+        show: bool = True,
+        figsize: tuple[float, float] | None = None,
+):
+    """Plot scalar per-element samples using Matplotlib discontinuous contours.
+
+    Each panel is ``(title, reference_points, values)``.  ``values`` may be a
+    scalar, one value per reference point, or an array with shape
+    ``(num_elements, num_points)``.  Vertices are duplicated per element so
+    discontinuous DG fields are not averaged across element boundaries.
+
+    Parameters
+    ----------
+    mesh
+        Mesh used to map all supplied reference-point grids.
+    panels
+        Sequence of panel triples.  Panels may use different reference grids,
+        which is useful when exact/reference data should be sampled more densely
+        than polynomial DG fields.
+    clim
+        Optional shared color limits.  When provided with integer ``levels`` and
+        ``share_clim=True``, the contour levels span exactly this interval.
+    show
+        If true, call :func:`matplotlib.pyplot.show`.  The active Matplotlib
+        backend must be interactive for a window to appear.
+    """
+    plt = _matplotlib_pyplot(show=show)
+
+    panel_tuple = tuple(panels)
+    if not panel_tuple:
+        raise ValueError("at least one panel is required")
+    if figsize is None:
+        figsize = (6.0 * len(panel_tuple), 6.0)
+
+    normalized_panels = []
+    for title, reference_points, values in panel_tuple:
+        reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+        normalized_values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
+        normalized_panels.append((title, reference_points, normalized_values))
+
+    contour_levels = levels
+    if share_clim and isinstance(levels, int):
+        if clim is None:
+            minimum = float(min(np.nanmin(values) for _, _, values in normalized_panels))
+            maximum = float(max(np.nanmax(values) for _, _, values in normalized_panels))
+        else:
+            minimum, maximum = float(clim[0]), float(clim[1])
+        if not np.isfinite(minimum) or not np.isfinite(maximum):
+            minimum, maximum = 0.0, 1.0
+        elif minimum == maximum:
+            maximum = minimum + 1.0
+        contour_levels = np.linspace(minimum, maximum, int(levels))
+
+    fig, axes = plt.subplots(1, len(normalized_panels), figsize=figsize, constrained_layout=True)
+    axes = np.atleast_1d(axes)
+    contour = None
+    triangulations: dict[tuple[tuple[int, ...], bytes], object] = {}
+    for ax, (title, reference_points, values) in zip(axes, normalized_panels):
+        key = (reference_points.shape, reference_points.tobytes())
+        triangulation = triangulations.get(key)
+        if triangulation is None:
+            triangulation = matplotlib_discontinuous_triangulation(mesh, reference_points)
+            triangulations[key] = triangulation
+        contour = ax.tricontourf(
+            triangulation,
+            values.reshape(-1),
+            levels=contour_levels,
+            cmap=cmap,
+            extend="both",
+        )
+        if show_mesh:
+            add_matplotlib_mesh(ax, mesh)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=14)
+    if contour is not None:
+        fig.colorbar(contour, ax=axes.ravel().tolist(), shrink=0.82, location="right")
+    if show:
+        plt.show()
+    return fig
+
+
 def plot_solution_comparison(
         field: DGField,
         exact_solution: Callable,
@@ -617,10 +783,13 @@ def plot_solution_comparison(
 
 __all__ = [
     "add_field_to_plotter",
+    "add_matplotlib_mesh",
     "add_samples_to_plotter",
     "coarse_mesh_polydata",
+    "matplotlib_discontinuous_triangulation",
     "plot_field",
     "plot_fields",
+    "plot_scalar_sample_panels_matplotlib",
     "plot_solution_comparison",
     "reference_plot_connectivity",
     "reference_plot_points",

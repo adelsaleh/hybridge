@@ -247,6 +247,12 @@ def _build_mesh(config: AdvectionReactionRunPreset, case):
     )
 
 
+def _timing_with_percent(seconds: float, total: float, *, precision: int = 1) -> str:
+    """Format elapsed seconds with its percentage of total runtime."""
+    percent = 0.0 if total <= 0.0 else 100.0 * float(seconds) / float(total)
+    return f"{float(seconds):.{precision}f} ({percent:.1f}%)"
+
+
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
@@ -287,10 +293,11 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
         ("boundary mode", result.boundary_mode, "s"),
         ("trace ordering", result.trace_ordering, "s"),
     ]
+    total_time = result.timings.total
     timing_items = [
-        ("assembly (s)", result.timings.assembly, "1.1f"),
-        ("global solve (s)", result.timings.solve, "1.1f"),
-        ("reconstruct (s)", result.timings.reconstruction, "1.1f"),
+        ("assembly (s)", _timing_with_percent(result.timings.assembly, total_time), "s"),
+        ("global solve (s)", _timing_with_percent(result.timings.solve, total_time), "s"),
+        ("reconstruct (s)", _timing_with_percent(result.timings.reconstruction, total_time), "s"),
         ("total (s)", result.timings.total, "1.1f"),
     ]
     if str(config.solver).lower() == "petsc":
@@ -332,15 +339,23 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
             [
                 (
                     "precond build (s)",
-                    0.0
-                    if global_solve.preconditioner_elapsed_seconds is None
-                    else global_solve.preconditioner_elapsed_seconds,
-                    ".3f",
+                    _timing_with_percent(
+                        0.0
+                        if global_solve.preconditioner_elapsed_seconds is None
+                        else global_solve.preconditioner_elapsed_seconds,
+                        total_time,
+                        precision=3,
+                    ),
+                    "s",
                 ),
                 (
                     "Krylov solve (s)",
-                    0.0 if global_solve.solve_elapsed_seconds is None else global_solve.solve_elapsed_seconds,
-                    ".3f",
+                    _timing_with_percent(
+                        0.0 if global_solve.solve_elapsed_seconds is None else global_solve.solve_elapsed_seconds,
+                        total_time,
+                        precision=3,
+                    ),
+                    "s",
                 ),
             ]
         )
