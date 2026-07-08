@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..core.space import DGSpace, _normalize_callable_values
+from ..core.space import DGField, DGSpace, _normalize_callable_values
 
 
 def _call_with_optional_parameters(func: Callable, x: np.ndarray, y: np.ndarray, parameters):
@@ -156,4 +156,79 @@ def project_dg_fields(
     )
 
 
-__all__ = ["dg_project", "project_dg_fields"]
+def project_quadrature_values(space: DGSpace, values: np.ndarray, *, name: str) -> DGField:
+    r"""Project scalar values sampled at ``space`` volume quadrature points.
+
+    ``values`` must have shape ``(num_elements, num_quadrature_points)`` and is
+    interpreted as samples on the reference quadrature rule owned by ``space``.
+    The returned field is the element-local :math:`L^2` projection into the DG
+    basis.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
+    if values.shape != expected:
+        raise ValueError(f"values must have shape {expected}; got {values.shape}")
+    rhs = values @ space.quad_data.weighted_phi
+    coeffs = rhs @ space.quad_data.MKrf_inv
+    return space.field(np.ascontiguousarray(coeffs), name=name)
+
+
+def field_from_moments(space: DGSpace, moments: np.ndarray, *, name: str) -> DGField:
+    r"""Build a DG field from physical element moments.
+
+    ``moments[K, i]`` is interpreted as
+    :math:`\int_K f_h\phi_i\,dx`.  The local coefficients are recovered with
+    the reference mass inverse and the affine element Jacobian.
+    """
+    moments = np.asarray(moments, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.el_dof)
+    if moments.shape != expected:
+        raise ValueError(f"moments must have shape {expected}; got {moments.shape}")
+    coeffs = (moments / space.mesh.aff_jacs[:, None]) @ space.quad_data.MKrf_inv
+    return space.field(np.ascontiguousarray(coeffs), name=name)
+
+
+def scalar_moments_from_values(space: DGSpace, values: np.ndarray) -> np.ndarray:
+    r"""Return physical moments of scalar quadrature values.
+
+    ``values`` must be sampled at ``space`` volume quadrature points.  The
+    result has shape ``space.shape`` and entries
+    :math:`\int_K values\,\phi_i\,dx`.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
+    if values.shape != expected:
+        raise ValueError(f"values must have shape {expected}; got {values.shape}")
+    rhs = values @ space.quad_data.weighted_phi
+    rhs *= space.mesh.aff_jacs[:, None]
+    return np.ascontiguousarray(rhs)
+
+
+def mass_from_values(space: DGSpace, values: np.ndarray) -> float:
+    r"""Integrate scalar quadrature values over the DG mesh."""
+    values = np.asarray(values, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
+    if values.shape != expected:
+        raise ValueError(f"values must have shape {expected}; got {values.shape}")
+    return float(np.einsum("K,Kq,q->", space.mesh.aff_jacs, values, space.quad_data.Krf_w, optimize=True))
+
+
+def l2_from_values(space: DGSpace, values: np.ndarray) -> float:
+    r"""Return the physical :math:`L^2` norm of scalar quadrature values."""
+    values = np.asarray(values, dtype=np.float64)
+    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
+    if values.shape != expected:
+        raise ValueError(f"values must have shape {expected}; got {values.shape}")
+    integral = np.einsum("K,Kq,q->", space.mesh.aff_jacs, values * values, space.quad_data.Krf_w, optimize=True)
+    return float(np.sqrt(integral))
+
+
+__all__ = [
+    "dg_project",
+    "field_from_moments",
+    "l2_from_values",
+    "mass_from_values",
+    "project_dg_fields",
+    "project_quadrature_values",
+    "scalar_moments_from_values",
+]

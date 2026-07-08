@@ -13,6 +13,7 @@ from typing import Callable
 import numpy as np
 
 from ..core.space import DGField, DGSpace, VectorDGField, _normalize_callable_values
+from .projection import scalar_moments_from_values
 
 
 def _local_matrix_shape(space: DGSpace) -> tuple[int, int, int]:
@@ -217,6 +218,59 @@ def add_reaction_mass(
     scratch = _local_matrix_scratch(scratch, out, space)
     set_reaction_mass(scratch, reaction, space)
     return _accumulate_local_matrix(out, scratch, scale)
+
+
+def stiffness_mats(space: DGSpace) -> np.ndarray:
+    r"""Assemble scalar diffusion stiffness matrices on each element.
+
+    The returned tensor has shape ``(num_elements, el_dof, el_dof)`` with
+    entries
+
+    .. math::
+
+        A^K_{ij} = \int_K \nabla \phi_i \cdot \nabla \phi_j\,dx.
+
+    The gradients are mapped from the reference element using the affine
+    inverse transpose stored by :class:`hdgfem.core.mesh.DGMesh`.
+    """
+    mesh = space.mesh
+    q = space.quad_data
+    gradients = np.einsum(
+        "KcD,Diq->Kciq",
+        mesh.inv_aff_mats_t,
+        q.dbas_of_quads,
+        optimize=True,
+    )
+    return np.einsum(
+        "K,q,Kciq,Kcjq->Kij",
+        mesh.aff_jacs,
+        q.Krf_w,
+        gradients,
+        gradients,
+        optimize=True,
+    )
+
+
+def scalar_volume_residual(field: DGField, source_values: np.ndarray) -> np.ndarray:
+    r"""Assemble the elementwise scalar volume residual.
+
+    The returned array has shape ``field.space.shape`` and represents
+
+    .. math::
+
+        \int_K \nabla u_h\cdot\nabla\phi_i\,dx
+        - \int_K f\,\phi_i\,dx
+
+    for scalar source samples ``source_values`` on the field space volume
+    quadrature rule.  No boundary or trace terms are included.
+    """
+    space = field.space
+    stiffness = stiffness_mats(space)
+    source_moments = scalar_moments_from_values(space, source_values)
+    return np.ascontiguousarray(
+        np.einsum("Kij,Kj->Ki", stiffness, field.coeffs, optimize=True) - source_moments,
+        dtype=np.float64,
+    )
 
 
 def _vector_values_on_test_quads(beta: VectorDGField, test_space: DGSpace) -> np.ndarray:

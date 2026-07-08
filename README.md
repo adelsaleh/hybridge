@@ -2,8 +2,8 @@
 
 `hdgfem` is a self-contained discontinuous Galerkin / HDG package.  The
 repository root contains the `hdgfem/` Python package directory, with mesh,
-reference-element, space/field, transfer, plotting, sparse global-system, and
-HDG assembly code organized into subpackages.
+reference-element, space/field, transfer, adaptivity, plotting, sparse
+global-system, and HDG assembly code organized into subpackages.
 
 The manufactured advection-reaction case runner is:
 
@@ -17,26 +17,19 @@ The manufactured diffusion-reaction case runner is:
 python scripts/run_diff_rea_cases.py
 ```
 
-The Strategy A star-domain HDG Newton benchmark is:
+The Strategy A star-domain HDG Newton benchmark is now a non-adaptive
+torsion-initialized run:
 
 ```bash
-python scripts/strategyA_hdg_newton.py --star-n 100 --order 4 --hdg-tau 10.0 \
-  --hdg-assembly-backend numba \
-  --newton-petsc-initial-presets bicgstab_gamg \
-  --newton-petsc-presets gmres_gamg \
-  --newton-petsc-switch-iteration 1 \
-  --newton-petsc-option pc_gamg_threshold=0.02 \
-  --newton-petsc-option mg_levels_ksp_type=richardson \
-  --newton-petsc-option mg_levels_pc_type=sor \
-  --log-dir run_logs/strategyA_hdg_newton
+python scripts/diocotron_equilibrium_torsion_intialized.py \
+  --star-n 260 --order 4 --hdg-tau 20 -v 2 \
+  --residual-norm euclid --newton-shift-mode none
 ```
 
-The runner tees stdout/stderr to timestamped benchmark logs and prints a
-grep-friendly `RUN_SUMMARY_*` table plus a final optional HDG Gram
-`H^{-1}`-like residual check.  For timing-only runs, add
-`--skip-final-hminus-check`; for diagnostic runs, tune
-`--final-gram-cg-rtol`, `--final-gram-cg-atol`, and
-`--final-gram-cg-maxiter`.
+The runner creates a timestamped directory under `run_logs/`, writes
+`newton.csv`, `frames.csv`, and `summary.txt`, and reports the split mixed HDG
+residual components.  Mesh adaptivity was removed from this comparison driver;
+reusable adaptive remeshing helpers live in `hdgfem.core.adaptivity`.
 
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
@@ -122,6 +115,8 @@ python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.
 - Projected source, advection, and reaction coefficient paths.
 - Numba-backed projected advection-reaction trace assembly and reconstruction.
 - Smooth and polygonal Gmsh star-domain mesh generators.
+- Reusable structured-background Gmsh adaptivity helpers in
+  `hdgfem.core.adaptivity`.
 - Boundary trace elimination, upwind SCC trace ordering, and matrix-pattern
   diagnostics for advection-reaction runs.
 
@@ -194,23 +189,23 @@ energy identity.
 
 ### Strategy A Run Summary
 
-The latest recorded `starN=100`, `p=4`, `tau=10`, Numba assembly run used
-BiCGStab+GAMG for Newton step 0 and GMRES+GAMG afterwards.  The command also
-enabled PETSc monitor output and plotting, so these timings include that
-diagnostic overhead.
+The current Strategy A driver is a fixed-mesh HDG Newton comparison against the
+FreeFEM torsion/Newton formalism.  It solves the torsion initializer, builds the
+semilinear density window, then runs epsilon continuation without any preadapt
+or scheduled remesh step.  This isolates the Newton convergence behavior from
+mesh-transfer effects.
 
 ```text
-log file     run_logs/strategyA_hdg_newton/20260706-195222/strategyA_hdg_newton_starN100_p4_tau10_numba_gmres_gamg.log
-mesh         49,212 elements, 74,133 edges, hmax=2.610054e-02
-space        order=4, el_dof=15, scalar ndof=738,180
-Newton       converged at k=14, final euclid=1.022272e-10
-solver plan  k=0 bicgstab_gamg; k>=1 gmres_gamg
-final Gram   condensed setup=2.6947s, CG iters=50, solve=3.301s
-H-1 check    hminus=3.524736e-09, hminus/euclid=3.447944e+01
-total time   196.153s
+script       scripts/diocotron_equilibrium_torsion_intialized.py
+output       run_logs/<run-tag>_<timestamp>/{newton.csv,frames.csv,summary.txt}
+mesh         native smooth-star Gmsh mesh
+residual     selectable: euclid, hdg-local, edp-volume, or hdg
+adaptivity   not used by this driver
 ```
 
-For cleaner timing comparisons, omit `--plot` and `--newton-petsc-monitor`.
+For cleaner timing comparisons, omit `--plot`.  For residual accounting, keep
+`--residual-norm euclid` for the full mixed coefficient residual or use
+`--residual-norm hdg` when the local HDG Gram diagnostic is required.
 
 Use the reusable solver class when a driver needs to keep the mesh, space,
 latest matrix data, ordering, preconditioner, trace, and reconstructed field:
@@ -292,9 +287,12 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 - `hdgfem/core/quadrature.py`: reference triangle quadrature, basis values, and cached reference tensors.
 - `hdgfem/core/space.py`: `DGSpace`, `DGField`, `VectorDGSpace`, and `VectorDGField`.
 - `hdgfem/core/transfer.py`: field transfer/projection helpers between DG spaces.
+- `hdgfem/core/adaptivity.py`: PDE-agnostic DG indicators and structured
+  Gmsh background-field remeshing helpers.
 - `run_configs/`: version-controlled benchmark and solver presets.
 - `scripts/`: runnable project scripts and benchmark sweep entry points,
-  including `strategyA_hdg_newton.py` and `hdg_gram_matrix_test.py`.
+  including `diocotron_equilibrium_torsion_intialized.py` and
+  `hdg_gram_matrix_test.py`.
 - `tests/`: focused package tests.
 
 ## Local Development

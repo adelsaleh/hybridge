@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numba as nb
 import numpy as np
+from scipy.spatial import cKDTree
 
 from . import basis as basis_module
 from .space import DGField, DGSpace, VectorDGField, VectorDGSpace
@@ -43,42 +44,167 @@ class TransferPlan:
     refmap_seconds: float
 
 
-def _points_in_triangles(points: np.ndarray, triangles_xy: np.ndarray, *, eps: float = 1e-12):
-    """Locate points in triangles using vectorized barycentric tests per cell."""
-    points = np.asarray(points, dtype=np.float64)
-    triangles = np.asarray(triangles_xy, dtype=np.float64)
-    point_ids: list[np.ndarray] = []
-    triangle_ids: list[np.ndarray] = []
-    for tri_id, tri in enumerate(triangles):
-        a, b, c = tri
-        mat = np.column_stack((b - a, c - a))
-        det = np.linalg.det(mat)
-        if abs(det) < 1e-30:
-            continue
-        inv = np.linalg.inv(mat)
-        uv = (points - a) @ inv.T
-        u = uv[:, 0]
-        v = uv[:, 1]
-        w = 1.0 - u - v
-        mask = (u >= -eps) & (v >= -eps) & (w >= -eps)
-        ids = np.nonzero(mask)[0]
-        if ids.size:
-            point_ids.append(ids)
-            triangle_ids.append(np.full(ids.size, tri_id, dtype=np.int64))
-    if not point_ids:
-        return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
-    pt_idx = np.concatenate(point_ids)
-    tri_idx = np.concatenate(triangle_ids)
-    order = np.lexsort((tri_idx, pt_idx))
-    return pt_idx[order], tri_idx[order]
+@nb.njit(parallel=True, cache=True, fastmath=True)
+def _locate_points_from_candidates_kernel(
+        points: np.ndarray,
+        candidate_elements: np.ndarray,
+        aff_vecs: np.ndarray,
+        inv_aff_mats: np.ndarray,
+        src_idx: np.ndarray,
+        xi_src: np.ndarray,
+        eps: float,
+) -> None:
+    """Select the first candidate triangle containing each point."""
+    n_points = points.shape[0]
+    n_candidates = candidate_elements.shape[1]
+    for point in nb.prange(n_points):
+        x = points[point, 0]
+        y = points[point, 1]
+        src_idx[point] = -1
+        xi_src[point, 0] = np.nan
+        xi_src[point, 1] = np.nan
+        for candidate in range(n_candidates):
+            element = candidate_elements[point, candidate]
+            dx = x - aff_vecs[element, 0]
+            dy = y - aff_vecs[element, 1]
+            xi = inv_aff_mats[element, 0, 0] * dx + inv_aff_mats[element, 0, 1] * dy
+            eta = inv_aff_mats[element, 1, 0] * dx + inv_aff_mats[element, 1, 1] * dy
+            if xi >= -1.0 - eps and eta >= -1.0 - eps and xi + eta <= eps:
+                src_idx[point] = element
+                xi_src[point, 0] = xi
+                xi_src[point, 1] = eta
+                break
 
 
-def _deduplicate_hits(pt_idx_all: np.ndarray, src_idx_all: np.ndarray):
-    if pt_idx_all.size == 0:
-        return pt_idx_all, src_idx_all, 0
-    duplicate_hits = int(pt_idx_all.size - np.unique(pt_idx_all).size)
-    keep = np.concatenate(([True], pt_idx_all[1:] != pt_idx_all[:-1]))
-    return pt_idx_all[keep], src_idx_all[keep], duplicate_hits
+@nb.njit(parallel=True, cache=True, fastmath=True)
+def _locate_points_exhaustive_kernel(
+        points: np.ndarray,
+        aff_vecs: np.ndarray,
+        inv_aff_mats: np.ndarray,
+        src_idx: np.ndarray,
+        xi_src: np.ndarray,
+        eps: float,
+) -> None:
+    """Locate points by checking every element, used only for KD-tree misses."""
+    n_points = points.shape[0]
+    n_elements = aff_vecs.shape[0]
+    for point in nb.prange(n_points):
+        x = points[point, 0]
+        y = points[point, 1]
+        src_idx[point] = -1
+        xi_src[point, 0] = np.nan
+        xi_src[point, 1] = np.nan
+        for element in range(n_elements):
+            dx = x - aff_vecs[element, 0]
+            dy = y - aff_vecs[element, 1]
+            xi = inv_aff_mats[element, 0, 0] * dx + inv_aff_mats[element, 0, 1] * dy
+            eta = inv_aff_mats[element, 1, 0] * dx + inv_aff_mats[element, 1, 1] * dy
+            if xi >= -1.0 - eps and eta >= -1.0 - eps and xi + eta <= eps:
+                src_idx[point] = element
+                xi_src[point, 0] = xi
+                xi_src[point, 1] = eta
+                break
+
+
+def _normalize_candidate_indices(indices: np.ndarray, n_points: int) -> np.ndarray:
+    indices = np.asarray(indices, dtype=np.int64)
+    if indices.ndim == 1:
+        indices = indices.reshape(n_points, 1)
+    return np.ascontiguousarray(indices, dtype=np.int64)
+
+
+def _locate_points_in_mesh(
+        points: np.ndarray,
+        mesh,
+        *,
+        neighbors: int = 32,
+        retry_neighbors: int = 128,
+        eps: float = 1.0e-10,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, float, float]:
+    """Locate physical points in a mesh using nearest-centroid candidates.
+
+    The expensive containment and physical-to-reference mapping work is done in
+    a parallel numba kernel.  A second wider candidate search is used only for
+    points missed by the first pass.
+    """
+    points = np.ascontiguousarray(np.asarray(points, dtype=np.float64))
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError(f"points must have shape (num_points, 2); got {points.shape}")
+    n_points = points.shape[0]
+    if n_points == 0:
+        empty_i = np.empty(0, dtype=np.int64)
+        empty_x = np.empty((0, 2), dtype=np.float64)
+        return empty_i, empty_i, empty_x, 0, 0.0, 0.0
+
+    aff_vecs = np.ascontiguousarray(mesh.aff_vecs, dtype=np.float64)
+    inv_aff_mats = np.ascontiguousarray(mesh.inv_aff_mats, dtype=np.float64)
+    centroids = np.ascontiguousarray(np.mean(mesh.element_vertices, axis=1), dtype=np.float64)
+    tree_start = time.perf_counter()
+    tree = cKDTree(centroids)
+    locate_start = time.perf_counter()
+    k = min(max(1, int(neighbors)), mesh.num_tri)
+    _, candidate_elements = tree.query(points, k=k, workers=-1)
+    candidate_elements = _normalize_candidate_indices(candidate_elements, n_points)
+
+    src_all = np.full(n_points, -1, dtype=np.int64)
+    xi_all = np.empty((n_points, 2), dtype=np.float64)
+    _locate_points_from_candidates_kernel(
+        points,
+        candidate_elements,
+        aff_vecs,
+        inv_aff_mats,
+        src_all,
+        xi_all,
+        float(eps),
+    )
+
+    missed_mask = src_all < 0
+    if np.any(missed_mask) and retry_neighbors > k:
+        missed_points = np.ascontiguousarray(points[missed_mask], dtype=np.float64)
+        retry_k = min(max(k + 1, int(retry_neighbors)), mesh.num_tri)
+        _, retry_candidates = tree.query(missed_points, k=retry_k, workers=-1)
+        retry_candidates = _normalize_candidate_indices(retry_candidates, missed_points.shape[0])
+        retry_src = np.full(missed_points.shape[0], -1, dtype=np.int64)
+        retry_xi = np.empty((missed_points.shape[0], 2), dtype=np.float64)
+        _locate_points_from_candidates_kernel(
+            missed_points,
+            retry_candidates,
+            aff_vecs,
+            inv_aff_mats,
+            retry_src,
+            retry_xi,
+            float(eps),
+        )
+        missed_indices = np.nonzero(missed_mask)[0]
+        found_retry = retry_src >= 0
+        src_all[missed_indices[found_retry]] = retry_src[found_retry]
+        xi_all[missed_indices[found_retry]] = retry_xi[found_retry]
+
+    missed_mask = src_all < 0
+    if np.any(missed_mask):
+        missed_points = np.ascontiguousarray(points[missed_mask], dtype=np.float64)
+        exhaustive_src = np.full(missed_points.shape[0], -1, dtype=np.int64)
+        exhaustive_xi = np.empty((missed_points.shape[0], 2), dtype=np.float64)
+        _locate_points_exhaustive_kernel(
+            missed_points,
+            aff_vecs,
+            inv_aff_mats,
+            exhaustive_src,
+            exhaustive_xi,
+            float(eps),
+        )
+        missed_indices = np.nonzero(missed_mask)[0]
+        found_exhaustive = exhaustive_src >= 0
+        src_all[missed_indices[found_exhaustive]] = exhaustive_src[found_exhaustive]
+        xi_all[missed_indices[found_exhaustive]] = exhaustive_xi[found_exhaustive]
+
+    located_mask = src_all >= 0
+    pt_idx = np.ascontiguousarray(np.nonzero(located_mask)[0].astype(np.int64))
+    src_idx = np.ascontiguousarray(src_all[located_mask], dtype=np.int64)
+    xi_src = np.ascontiguousarray(xi_all[located_mask], dtype=np.float64)
+    locate_seconds = time.perf_counter() - locate_start
+    tree_seconds = locate_start - tree_start
+    return pt_idx, src_idx, xi_src, 0, tree_seconds + locate_seconds, 0.0
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True)
@@ -142,19 +268,11 @@ def build_transfer_plan(
     start = time.perf_counter()
     qds_flat = target.mesh.flatten_mapped_reference_points(target.quad_data.Krf_quads)
 
-    t0 = time.perf_counter()
-    pt_idx_all, src_idx_all = _points_in_triangles(qds_flat, source.mesh.element_vertices)
-    locate_seconds = time.perf_counter() - t0
-    pt_idx, src_idx, duplicate_hits = _deduplicate_hits(pt_idx_all, src_idx_all)
-    missed = int(qds_flat.shape[0] - pt_idx.size)
-
-    t0 = time.perf_counter()
-    xi_src = (
-        source.mesh.physical_to_reference(qds_flat[pt_idx], src_idx)
-        if pt_idx.size
-        else np.empty((0, 2), dtype=np.float64)
+    pt_idx, src_idx, xi_src, duplicate_hits, locate_seconds, refmap_seconds = _locate_points_in_mesh(
+        qds_flat,
+        source.mesh,
     )
-    refmap_seconds = time.perf_counter() - t0
+    missed = int(qds_flat.shape[0] - pt_idx.size)
 
     plan = TransferPlan(
         qds_flat=np.ascontiguousarray(qds_flat),
@@ -246,6 +364,60 @@ def project_field(
     return target.field(coeffs, name=field.name), diag
 
 
+def transfer_field(
+        field: DGField,
+        target: DGSpace,
+        *,
+        plan: TransferPlan | None = None,
+        name: str | None = None,
+        verbose: bool = True,
+        warn_on_miss: bool = True,
+) -> tuple[DGField, TransferDiagnostics]:
+    """Project ``field`` into ``target`` and optionally rename the result.
+
+    Parameters
+    ----------
+    field
+        Scalar DG field to evaluate on the target space quadrature points.
+    target
+        DG space on the destination mesh.
+    plan
+        Optional precomputed transfer plan from ``field.space`` to ``target``.
+        Supplying a plan avoids rebuilding point-location data when several
+        fields are transferred between the same spaces.
+    name
+        Optional output field name.  If omitted, the source field name is kept.
+    verbose
+        If true, print the underlying projection diagnostics.
+    warn_on_miss
+        If true, print a warning when target quadrature points could not be
+        located in the source mesh.
+
+    Returns
+    -------
+    projected
+        Scalar DG field in ``target``.
+    diagnostics
+        Point-location, evaluation, and projection timing/count diagnostics.
+
+    Notes
+    -----
+    This is a convenience wrapper for adaptive workflows that repeatedly
+    transfer named DG state fields to a newly generated mesh.  The returned
+    diagnostics are the same as :func:`project_field`.
+    """
+    projected, diagnostics = project_field(field, target, plan=plan, verbose=verbose)
+    if name is not None and name != projected.name:
+        projected = target.field(projected.coeffs, name=name)
+    if warn_on_miss and diagnostics.n_missed_points:
+        print(
+            f"TRANSFER_WARNING field={field.name} missed="
+            f"{diagnostics.n_missed_points}/{diagnostics.n_target_points}",
+            flush=True,
+        )
+    return projected, diagnostics
+
+
 def project_vector_field(
         field: VectorDGField,
         target: VectorDGSpace,
@@ -273,11 +445,9 @@ def evaluate_field_at_points(field: DGField, points_xy: np.ndarray, *, missing=n
     points = np.asarray(points_xy, dtype=np.float64)
     if points.ndim != 2 or points.shape[1] != 2:
         raise ValueError(f"points_xy must have shape (num_points, 2); got {points.shape}")
-    pt_idx_all, src_idx_all = _points_in_triangles(points, field.space.mesh.element_vertices)
-    pt_idx, src_idx, _ = _deduplicate_hits(pt_idx_all, src_idx_all)
+    pt_idx, src_idx, xi_src, _, _, _ = _locate_points_in_mesh(points, field.space.mesh)
     result = np.full(points.shape[0], missing, dtype=np.float64)
     if pt_idx.size == 0:
         return result
-    xi_src = field.space.mesh.physical_to_reference(points[pt_idx], src_idx)
     result[pt_idx] = _evaluate_coefficients_at_source_points(field, xi_src, src_idx)
     return result

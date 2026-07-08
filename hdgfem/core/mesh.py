@@ -10,6 +10,9 @@ the small set of legacy attribute names that are useful for numerical kernels
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
+import tempfile
+import time
 
 import numpy as np
 
@@ -349,6 +352,15 @@ def as_dg_mesh(mesh: DGMesh) -> DGMesh:
     raise TypeError(f"expected DGMesh or (node_coords, triangles), got {type(mesh)!r}")
 
 
+def mesh_edge_min_max(mesh: DGMesh) -> tuple[float, float]:
+    """Return the minimum and maximum physical edge lengths in ``mesh``."""
+    mesh = as_dg_mesh(mesh)
+    if mesh.edges.size == 0:
+        raise ValueError("mesh has no edges")
+    lengths = np.linalg.norm(mesh.node_coords[mesh.edges[:, 1]] - mesh.node_coords[mesh.edges[:, 0]], axis=1)
+    return float(np.min(lengths)), float(np.max(lengths))
+
+
 def rectangle_mesh(
         nx: int,
         ny: int | None = None,
@@ -631,6 +643,158 @@ def gmsh_smooth_star_mesh(
         algorithm=algorithm,
         write_path=write_path,
     )
+
+
+def gmsh_smooth_star_mesh_with_background_sizes(
+        *,
+        boundary_points: int,
+        radius: float,
+        amplitude: float,
+        mode: int,
+        hmin: float,
+        hmax: float,
+        background_origin: tuple[float, float],
+        background_spacing: tuple[float, float],
+        background_values: np.ndarray,
+        center: tuple[float, float] = (0.0, 0.0),
+        rotation: float = 0.0,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+        timing_prefix: str | None = None,
+) -> DGMesh:
+    """Generate a smooth-star Gmsh mesh from a structured size field.
+
+    ``background_values`` is a two-dimensional structured mesh-size field.  It
+    is written to Gmsh's text ``Structured`` field format with origin
+    ``background_origin`` and grid spacing ``background_spacing``; the field is
+    then installed as the background mesh.  This avoids Python point-callbacks
+    during Gmsh refinement and is suitable for repeated adaptive remeshing.
+
+    When ``timing_prefix`` is provided, phase timings are printed as
+    ``{timing_prefix}_PHASE_START`` / ``DONE`` lines.
+    """
+    import gmsh
+
+    boundary_points = int(boundary_points)
+    mode = int(mode)
+    radius = float(radius)
+    amplitude = float(amplitude)
+    hmin = float(hmin)
+    hmax = float(hmax)
+    if boundary_points < max(8, 4 * mode):
+        raise ValueError("boundary_points is too small for the requested star mode")
+    if radius <= abs(amplitude):
+        raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
+    if hmin <= 0.0 or hmax <= 0.0 or hmax < hmin:
+        raise ValueError("hmin and hmax must satisfy 0 < hmin <= hmax")
+
+    def start_phase(label: str, **fields) -> float:
+        if timing_prefix is not None:
+            extras = " ".join(f"{key}={value}" for key, value in fields.items())
+            print(f"{timing_prefix}_{label}_START{(' ' + extras) if extras else ''}", flush=True)
+        return time.perf_counter()
+
+    def finish_phase(label: str, phase_start: float, **fields) -> None:
+        if timing_prefix is not None:
+            extras = " ".join(f"{key}={value}" for key, value in fields.items())
+            print(
+                f"{timing_prefix}_{label}_DONE time={time.perf_counter() - phase_start:.3f}"
+                f"{(' ' + extras) if extras else ''}",
+                flush=True,
+            )
+
+    started_gmsh = not gmsh.isInitialized()
+    background_file: str | None = None
+    t_phase = start_phase("INIT")
+    if started_gmsh:
+        gmsh.initialize()
+    else:
+        gmsh.clear()
+    finish_phase("INIT", t_phase, started=started_gmsh)
+
+    try:
+        t_phase = start_phase("MODEL_SETUP")
+        gmsh.model.add("adaptive_smooth_star")
+        _set_gmsh_number_option(gmsh, "General.Verbosity", int(verbosity))
+        _set_gmsh_number_option(gmsh, "Mesh.ElementOrder", 1)
+        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMin", hmin)
+        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMax", hmax)
+        _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMin", hmin)
+        _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMax", hmax)
+        if algorithm is not None:
+            _set_gmsh_number_option(gmsh, "Mesh.Algorithm", int(algorithm))
+        finish_phase("MODEL_SETUP", t_phase)
+
+        t_phase = start_phase("GEOMETRY_BUILD", boundary_points=boundary_points)
+        cx, cy = float(center[0]), float(center[1])
+        theta = float(rotation) + np.linspace(0.0, 2.0 * np.pi, boundary_points, endpoint=False)
+        rr = radius + amplitude * np.cos(mode * (theta - float(rotation)))
+        vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
+        occ = gmsh.model.occ
+        points = [occ.addPoint(float(x), float(y), 0.0, hmax) for x, y in vertices]
+        lines = [occ.addLine(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
+        loop = occ.addCurveLoop(lines)
+        surface = occ.addPlaneSurface([loop])
+        finish_phase("GEOMETRY_BUILD", t_phase, points=len(points), lines=len(lines))
+
+        t_phase = start_phase("OCC_SYNC")
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(2, [surface], name="adaptive_smooth_star")
+        finish_phase("OCC_SYNC", t_phase)
+
+        t_phase = start_phase("BACKGROUND_FIELD")
+        bg_values = np.ascontiguousarray(background_values, dtype=np.float64)
+        if bg_values.ndim != 2:
+            raise ValueError(f"background_values must have shape (nx, ny); got {bg_values.shape}")
+        nx, ny = bg_values.shape
+        ox, oy = float(background_origin[0]), float(background_origin[1])
+        dx, dy = float(background_spacing[0]), float(background_spacing[1])
+        if nx < 2 or ny < 2 or dx <= 0.0 or dy <= 0.0:
+            raise ValueError("background grid needs nx,ny >= 2 and positive spacing")
+        fd, background_file = tempfile.mkstemp(prefix="hdgfem_gmsh_bg_", suffix=".dat")
+        with os.fdopen(fd, "w", encoding="ascii") as handle:
+            handle.write(f"{ox:.17e} {oy:.17e} 0.0\n")
+            handle.write(f"{dx:.17e} {dy:.17e} 1.0\n")
+            handle.write(f"{nx:d} {ny:d} 1\n")
+            np.savetxt(handle, bg_values.reshape(1, -1), fmt="%.17e")
+            handle.write("\n")
+        field = gmsh.model.mesh.field.add("Structured")
+        gmsh.model.mesh.field.setString(field, "FileName", background_file)
+        gmsh.model.mesh.field.setNumber(field, "TextFormat", 1)
+        gmsh.model.mesh.field.setNumber(field, "SetOutsideValue", 1)
+        gmsh.model.mesh.field.setNumber(field, "OutsideValue", hmax)
+        gmsh.model.mesh.field.setAsBackgroundMesh(field)
+        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeExtendFromBoundary", 0)
+        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeFromPoints", 0)
+        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeFromCurvature", 0)
+        finish_phase(
+            "BACKGROUND_FIELD",
+            t_phase,
+            nx=nx,
+            ny=ny,
+            min=f"{float(np.min(bg_values)):.6e}",
+            max=f"{float(np.max(bg_values)):.6e}",
+        )
+
+        t_phase = start_phase("MESH_GENERATE")
+        gmsh.model.mesh.generate(2)
+        finish_phase("MESH_GENERATE", t_phase)
+
+        t_phase = start_phase("EXTRACT")
+        mesh = _gmsh_model_to_mesh(gmsh, write_path=write_path)
+        finish_phase("EXTRACT", t_phase, nt=mesh.num_tri, nv=mesh.node_coords.shape[0])
+        return mesh
+    finally:
+        if background_file is not None:
+            try:
+                os.unlink(background_file)
+            except OSError:
+                pass
+        if started_gmsh:
+            t_phase = start_phase("FINALIZE")
+            gmsh.finalize()
+            finish_phase("FINALIZE", t_phase)
 
 
 def gmsh_triangle_mesh(

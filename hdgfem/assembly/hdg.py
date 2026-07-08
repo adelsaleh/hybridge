@@ -414,6 +414,86 @@ def element_traces(trace: np.ndarray, space: DGSpace) -> np.ndarray:
     return np.ascontiguousarray(traces.reshape(mesh.num_tri, 3 * edg_dof))
 
 
+def trace_from_field_faces(field: DGField) -> np.ndarray:
+    """Project interior element face values to global trace coefficients.
+
+    Boundary trace coefficients are left at zero.  On each interior edge the
+    returned trace polynomial is the mass projection of the two neighboring
+    element-side traces into the shared edge basis.
+    """
+    space = field.space
+    mesh = space.mesh
+    q = space.quad_data
+    rhs = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    mass = np.zeros((mesh.num_edg, q.edg_dof, q.edg_dof), dtype=np.float64)
+    oriented = q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
+    face_rhs = mesh.jacs_el_fc[:, :, None] * np.einsum("Kfai,Ki->Kfa", oriented, field.coeffs, optimize=True)
+    face_mass = mesh.jacs_el_fc[:, :, None, None] * q.M_rf_fc[None, None, :, :]
+    for face in range(3):
+        edges = mesh.loc2glob_edge[:, face]
+        interior = np.isin(edges, mesh.int_edges_inds)
+        np.add.at(rhs, edges[interior], face_rhs[interior, face])
+        np.add.at(mass, edges[interior], face_mass[interior, face])
+
+    trace = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    for edge in mesh.int_edges_inds:
+        trace[edge] = np.linalg.solve(mass[edge], rhs[edge])
+    return trace.reshape(-1)
+
+
+def h1_flux_jump_norm(field: DGField, flux_coeffs: np.ndarray, trace: np.ndarray) -> tuple[float, float, float]:
+    r"""Return ``(||q|| + ||u-\widehat u||, ||q||, ||u-\widehat u||)``.
+
+    The first component matches the HDG-style primal diagnostic used by the
+    strategy scripts: an elementwise flux :math:`L^2` norm plus the trace jump
+    :math:`L^2(\partial K)` norm.
+    """
+    space = field.space
+    mesh = space.mesh
+    q = space.quad_data
+    flux_coeffs = np.asarray(flux_coeffs, dtype=np.float64)
+    expected = (2, mesh.num_tri, q.el_dof)
+    if flux_coeffs.shape != expected:
+        raise ValueError(f"flux_coeffs must have shape {expected}; got {flux_coeffs.shape}")
+    qx_values = flux_coeffs[0] @ q.bas_of_quads
+    qy_values = flux_coeffs[1] @ q.bas_of_quads
+    flux_l2 = float(np.sqrt(np.einsum(
+        "K,Kq,q->",
+        mesh.aff_jacs,
+        qx_values * qx_values + qy_values * qy_values,
+        q.Krf_w,
+        optimize=True,
+    )))
+
+    local_trace = element_traces(trace, space).reshape(mesh.num_tri, 3, q.edg_dof)
+    u_face = np.einsum("Ki,fiq->Kfq", field.coeffs, q.bas_of_bd_quads, optimize=True)
+    trace_face = np.einsum("Kfa,aq->Kfq", local_trace, q.bas1d_of_ref_edg_qds, optimize=True)
+    jump_l2 = float(np.sqrt(np.einsum(
+        "Kf,Kfq,q->",
+        mesh.jacs_el_fc,
+        (u_face - trace_face) * (u_face - trace_face),
+        q.weights_JGL,
+        optimize=True,
+    )))
+    return flux_l2 + jump_l2, flux_l2, jump_l2
+
+
+def mixed_u_block_rhs_from_residual(residual: np.ndarray, space: DGSpace, *, num_blocks: int = 3) -> np.ndarray:
+    """Extract ``-R_u`` from an element-block residual.
+
+    Mixed HDG diffusion operators usually store local unknowns as blocks
+    ``[u_h, q_{x,h}, q_{y,h}]``.  This helper turns the first block of a flat
+    residual vector into the scalar source moments used by the next linearized
+    solve.
+    """
+    num_blocks = int(num_blocks)
+    if num_blocks <= 0:
+        raise ValueError("num_blocks must be positive")
+    local_size = space.mesh.num_tri * num_blocks * space.el_dof
+    local = np.asarray(residual[:local_size], dtype=np.float64).reshape(space.mesh.num_tri, num_blocks * space.el_dof)
+    return np.ascontiguousarray(-local[:, :space.el_dof])
+
+
 def reconstruct_local_unknowns(
         trace: np.ndarray,
         source_rhs: np.ndarray,
@@ -452,7 +532,10 @@ __all__ = [
     "element_to_trace_matrix",
     "free_trace_dofs",
     "global_rhs",
+    "h1_flux_jump_norm",
+    "mixed_u_block_rhs_from_residual",
     "trace_rhs_from_lift",
+    "trace_from_field_faces",
     "reaction_mass",
     "reconstruct_local_unknowns",
     "reconstruct_field",

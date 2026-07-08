@@ -721,6 +721,41 @@ def build_condensed_hdg_gram_inverse(
     )
 
 
+def build_flux_jump_gram_inverse(
+        space: DGSpace,
+        *,
+        cg_rtol: float = 1.0e-11,
+        cg_atol: float = 0.0,
+        cg_maxiter: int | None = None,
+        verbose_every: int = 0,
+        verify_residual: bool = True,
+) -> CondensedHDGGramInverse:
+    r"""Build the condensed inverse for the unit flux-plus-trace-jump Gram.
+
+    This is the HDG dual-norm inverse used when a residual vector is ordered as
+    local blocks ``[u_h, q_{x,h}, q_{y,h}]`` followed by interior trace degrees
+    of freedom, and the primal control norm is
+
+    .. math::
+
+        \|q_h\|_{L^2(\Omega)}^2
+        + \|u_h-\widehat u_h\|_{L^2(\partial\mathcal T_h)}^2.
+
+    It is a named wrapper around :func:`build_condensed_hdg_gram_inverse` with
+    unit face-jump weights.
+    """
+    return build_condensed_hdg_gram_inverse(
+        space,
+        sigma=1.0,
+        jump_weight="unit",
+        cg_rtol=cg_rtol,
+        cg_atol=cg_atol,
+        cg_maxiter=cg_maxiter,
+        verbose_every=verbose_every,
+        verify_residual=verify_residual,
+    )
+
+
 def build_ilu_bicgstab_inverse(
         gram: HDGGram,
         *,
@@ -753,5 +788,6 @@ __all__ = [
     "CondensedHDGGramInverse",
     "assemble_hdg_gram",
     "build_condensed_hdg_gram_inverse",
+    "build_flux_jump_gram_inverse",
     "build_ilu_bicgstab_inverse",
 ]

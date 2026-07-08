@@ -24,6 +24,7 @@ from typing import Any, Literal
 import numpy as np
 
 from ..assembly import hdg as hdg_assembly
+from ..assembly.projection import scalar_moments_from_values
 from ..linalg.system import SolveResult, eliminate_known_dofs, expand_known_dofs, solve_global_system
 from ..core.space import DGField, DGSpace, VectorDGField
 
@@ -121,6 +122,19 @@ class DiffusionReactionResult:
     scale_system: bool = True
     assembly_backend: AssemblyBackend = "numpy"
     global_solve_result: SolveResult | None = None
+
+
+def flux_coefficients(result: DiffusionReactionResult) -> np.ndarray:
+    """Return result flux coefficients with shape ``(2, num_elements, el_dof)``.
+
+    The diffusion-reaction solver stores flux as a :class:`VectorDGField`.
+    This helper gives assembly code a contiguous component-first array in the
+    mixed-HDG ordering ``(q_x, q_y)``.
+    """
+    coeffs = np.asarray(result.flux.as_component_first(), dtype=np.float64)
+    if coeffs.shape[0] != 2:
+        raise ValueError(f"expected two flux components; got shape {coeffs.shape}")
+    return np.ascontiguousarray(coeffs)
 
 
 @dataclass(frozen=True)
@@ -463,6 +477,84 @@ def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity
     return d0, d1, m_tau, m_n0, m_n1, jacs_inv
 
 
+def hdg_residual(
+        field: DGField,
+        flux_coeffs: np.ndarray,
+        trace: np.ndarray,
+        *,
+        source_values: np.ndarray,
+        stabilization,
+) -> np.ndarray:
+    r"""Assemble the mixed diffusion-reaction HDG residual.
+
+    The residual is ordered as element-local blocks ``[u_h, q_{x,h}, q_{y,h}]``
+    followed by interior trace equations.  Boundary trace equations are
+    intentionally excluded because homogeneous Dirichlet data are imposed by
+    eliminating boundary trace degrees of freedom in the solver.
+
+    ``source_values`` must be scalar samples on ``field.space`` volume
+    quadrature points.  The equation represented is the identity-diffusion,
+    zero-reaction mixed HDG form with the supplied stabilization.
+    """
+    space = field.space
+    mesh = space.mesh
+    q = space.quad_data
+    tau = _normalize_tau(stabilization, space)
+    d0, d1, m_tau, m_n0, m_n1, _ = _local_solver_pre_mats(0.0, tau, space)
+    element_boundary = diffusion_element_boundary_mats(tau, space)
+    source = hdg_assembly.block_source_moments(
+        scalar_moments_from_values(space, source_values),
+        space,
+        num_blocks=3,
+        source_block=0,
+    )
+    local_trace = hdg_assembly.element_traces(trace, space)
+
+    flux_coeffs = np.asarray(flux_coeffs, dtype=np.float64)
+    expected_flux_shape = (2, mesh.num_tri, q.el_dof)
+    if flux_coeffs.shape != expected_flux_shape:
+        raise ValueError(f"flux_coeffs must have shape {expected_flux_shape}; got {flux_coeffs.shape}")
+    qx_coeffs = np.ascontiguousarray(flux_coeffs[0])
+    qy_coeffs = np.ascontiguousarray(flux_coeffs[1])
+
+    local = np.zeros((mesh.num_tri, 3 * q.el_dof), dtype=np.float64)
+    local[:, :q.el_dof] = (
+        np.einsum("Kij,Kj->Ki", m_tau, field.coeffs, optimize=True)
+        + np.einsum("Kij,Kj->Ki", m_n0 - d0, qx_coeffs, optimize=True)
+        + np.einsum("Kij,Kj->Ki", m_n1 - d1, qy_coeffs, optimize=True)
+    )
+    mass = mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
+    local[:, q.el_dof:2 * q.el_dof] = (
+        np.einsum("Kij,Kj->Ki", d0, field.coeffs, optimize=True)
+        - np.einsum("Kij,Kj->Ki", mass, qx_coeffs, optimize=True)
+    )
+    local[:, 2 * q.el_dof:] = (
+        np.einsum("Kij,Kj->Ki", d1, field.coeffs, optimize=True)
+        - np.einsum("Kij,Kj->Ki", mass, qy_coeffs, optimize=True)
+    )
+    local -= np.einsum("Kij,Kj->Ki", element_boundary, local_trace, optimize=True)
+    local -= source
+
+    trace_residual_full = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    oriented = q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
+    u_lift = np.einsum("Kfai,Ki->Kfa", oriented, field.coeffs, optimize=True)
+    qx_lift = np.einsum("Kfai,Ki->Kfa", oriented, qx_coeffs, optimize=True)
+    qy_lift = np.einsum("Kfai,Ki->Kfa", oriented, qy_coeffs, optimize=True)
+    trace_by_edge = trace.reshape(mesh.num_edg, q.edg_dof)
+    for local_face in range(3):
+        edges = mesh.loc2glob_edge[:, local_face]
+        face_contrib = mesh.jacs_el_fc[:, local_face, None] * (
+            mesh.normals[:, local_face, 0, None] * qx_lift[:, local_face]
+            + mesh.normals[:, local_face, 1, None] * qy_lift[:, local_face]
+            + tau[:, local_face, None] * u_lift[:, local_face]
+            - tau[:, local_face, None] * (trace_by_edge[edges] @ q.M_rf_fc.T)
+        )
+        np.add.at(trace_residual_full, edges, face_contrib)
+
+    interior_trace = trace_residual_full[mesh.int_edges_inds].reshape(-1)
+    return np.concatenate((local.reshape(-1), interior_trace))
+
+
 def local_solvers_numpy(reaction, stabilization, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
     """Build local mixed diffusion-reaction solvers with vectorized NumPy."""
     q = space.quad_data
@@ -783,6 +875,8 @@ class _HDGPostprocessCache:
     primal_stiffness_rr: np.ndarray
     primal_stiffness_rs: np.ndarray
     primal_stiffness_ss: np.ndarray
+    post_grad_project_r: np.ndarray
+    post_grad_project_s: np.ndarray
     flux_ainv_constraint_t: np.ndarray | None = None
     flux_schur_lu: np.ndarray | None = None
     flux_schur_pivots: np.ndarray | None = None
@@ -921,6 +1015,8 @@ def _new_hdg_postprocess_cache(space: DGSpace) -> _HDGPostprocessCache:
     grad_r = q_post.gphi[:, :, 0]
     grad_s = q_post.gphi[:, :, 1]
     stiffness_rs = np.einsum("q,qi,qj->ij", q_post.Krf_w, grad_r, grad_s, optimize=True)
+    gradient_mass_r = np.einsum("q,qi,qj->ij", q_post.Krf_w, q_post.phi, grad_r, optimize=True)
+    gradient_mass_s = np.einsum("q,qi,qj->ij", q_post.Krf_w, q_post.phi, grad_s, optimize=True)
     return _HDGPostprocessCache(
         base_space=space,
         post_space=post_space,
@@ -939,6 +1035,8 @@ def _new_hdg_postprocess_cache(space: DGSpace) -> _HDGPostprocessCache:
         primal_stiffness_ss=np.ascontiguousarray(
             np.einsum("q,qi,qj->ij", q_post.Krf_w, grad_s, grad_s, optimize=True)
         ),
+        post_grad_project_r=np.ascontiguousarray(q_post.MKrf_inv @ gradient_mass_r),
+        post_grad_project_s=np.ascontiguousarray(q_post.MKrf_inv @ gradient_mass_s),
     )
 
 
@@ -1023,7 +1121,10 @@ def _postprocess_diffusion_solution(
     the recovered mixed flux and a mean constraint.  The flux postprocessor
     computes a degree ``p+1`` vector field whose normal moments match the HDG
     numerical flux on every face and whose interior moments match the raw HDG
-    flux against ``[P_{p-1}]^d``.
+    flux against ``[P_{p-1}]^d``.  For identity diffusion in ``"both"`` mode,
+    the constrained flux uses ``-grad(u_h_star)`` as the minimum-distance
+    reference, which improves the unconstrained high-order modes while
+    preserving the same HDG conservation constraints.
     """
     mode = _normalize_hdg_postprocess_mode(mode)
     if mode == "none":
@@ -1076,7 +1177,10 @@ def _postprocess_diffusion_solution(
         postprocessed_field = cache.post_space.field(coeffs, name="u_h_star")
 
     if want_flux:
-        from ..kernels.diff_rea_fused import solve_hdiv_flux_min_distance_postprocess_kernel
+        from ..kernels.diff_rea_fused import (
+            solve_hdiv_flux_min_distance_postprocess_kernel,
+            solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel,
+        )
 
         if (
             cache.flux_ainv_constraint_t is None
@@ -1086,27 +1190,52 @@ def _postprocess_diffusion_solution(
             raise RuntimeError("missing flux post-processing factorization")
         tau = _normalize_tau(stabilization, space)
         coeffs = np.empty((2, space.mesh.num_tri, cache.post_space.el_dof), dtype=np.float64)
-        solve_hdiv_flux_min_distance_postprocess_kernel(
-            coeffs,
-            local_unknowns,
-            trace,
-            np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
-            np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
-            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
-            tau,
-            np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
-            cache.base_to_post_mass,
-            cache.face_base_to_post,
-            cache.trace_base_to_post,
-            np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
-            cache.interior_low_to_base,
-            cache.interior_low_to_post,
-            cache.flux_ainv_constraint_t,
-            cache.flux_schur_lu,
-            cache.flux_schur_pivots,
-        )
+        if postprocessed_field is not None and _diffusion_is_identity(diffusion):
+            solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
+                coeffs,
+                local_unknowns,
+                trace,
+                np.ascontiguousarray(postprocessed_field.coeffs, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
+                np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
+                np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+                tau,
+                cache.post_grad_project_r,
+                cache.post_grad_project_s,
+                cache.face_base_to_post,
+                cache.trace_base_to_post,
+                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+                cache.interior_low_to_base,
+                cache.interior_low_to_post,
+                cache.flux_ainv_constraint_t,
+                cache.flux_schur_lu,
+                cache.flux_schur_pivots,
+            )
+        else:
+            solve_hdiv_flux_min_distance_postprocess_kernel(
+                coeffs,
+                local_unknowns,
+                trace,
+                np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
+                np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
+                np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+                tau,
+                np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
+                cache.base_to_post_mass,
+                cache.face_base_to_post,
+                cache.trace_base_to_post,
+                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+                cache.interior_low_to_base,
+                cache.interior_low_to_post,
+                cache.flux_ainv_constraint_t,
+                cache.flux_schur_lu,
+                cache.flux_schur_pivots,
+            )
         postprocessed_flux = (cache.post_space * cache.post_space).field(
             (coeffs[0], coeffs[1]),
             name="q_h_star",
@@ -2066,6 +2195,8 @@ __all__ = [
     "diffusion_inverse_mass_blocks",
     "diffusion_element_boundary_mats",
     "diffusion_trace_lift",
+    "flux_coefficients",
+    "hdg_residual",
     "interior_stabilization_mass_blocks",
     "impose_boundary_trace_on_guess",
     "local_solvers",

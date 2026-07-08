@@ -15,7 +15,7 @@ object-oriented mesh, space, and field objects through package-native modules.
     __init__.py   public package exports
     assembly/     HDG assembly helpers, NumPy matrices, projection helpers, and Gram operators
     backends/     NumPy, Numba, and CuPy backend modules
-    core/         mesh, basis, quadrature, DG spaces/fields, and transfer
+    core/         mesh, basis, quadrature, DG spaces/fields, transfer, and adaptivity
     io/           output formatting and plotting helpers
     kernels/      low-level Numba kernels
     linalg/       sparse global-system solve and graph ordering helpers
@@ -41,7 +41,7 @@ python scripts/run_diff_rea_cases.py [preset]
 Strategy A star-domain HDG Newton benchmark:
 
 ```bash
-python scripts/strategyA_hdg_newton.py [options]
+python scripts/diocotron_equilibrium_torsion_intialized.py [options]
 ```
 
 ### Common Runs
@@ -192,75 +192,63 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
 
 ### Strategy A HDG Newton Runner
 
-`scripts/strategyA_hdg_newton.py` is the fixed-mesh Strategy A benchmark for
-the smooth or polygonal star domain.  It solves the torsion design fields,
-builds the logistic density window, then applies a damped Newton solve to the
-nonlinear HDG residual.
+`scripts/diocotron_equilibrium_torsion_intialized.py` is the fixed-mesh
+Strategy A benchmark for the native smooth star domain.  It solves the torsion
+design fields, builds the logistic density window, then applies a damped Newton
+solve to the nonlinear HDG residual.
 
-The current fast PETSc path uses BiCGStab+GAMG for the first Newton correction
-and GMRES+GAMG after that:
+The runner is intentionally non-adaptive: it does not preadapt to the design
+band and does not remesh during epsilon continuation.  That keeps this script
+focused on Newton convergence and residual accounting.  Reusable adaptivity
+building blocks are available separately in `hdgfem.core.adaptivity`.
+
+Typical PETSc run:
 
 ```bash
-python scripts/strategyA_hdg_newton.py \
-  --star-n 100 --order 4 --hdg-tau 10.0 \
-  --hdg-assembly-backend numba \
-  --newton-ilu-reuse 0 \
-  --newton-petsc-initial-presets bicgstab_gamg \
-  --newton-petsc-presets gmres_gamg \
-  --newton-petsc-switch-iteration 1 \
-  --newton-petsc-levels 10 \
-  --newton-petsc-divtol 1e4 \
-  --newton-solver-atol 1e-10 \
-  --newton-petsc-option pc_gamg_threshold=0.02 \
-  --newton-petsc-option mg_levels_ksp_type=richardson \
-  --newton-petsc-option mg_levels_pc_type=sor \
-  --log-dir run_logs/strategyA_hdg_newton
+python scripts/diocotron_equilibrium_torsion_intialized.py \
+  --star-n 260 --order 4 --hdg-tau 20 -v 2 \
+  --residual-norm euclid --newton-shift-mode none
 ```
 
 Important controls:
 
 ```text
---log-dir PATH                  tee terminal output into timestamped benchmark logs
---newton-petsc-initial-presets  PETSc presets before the switch iteration
---newton-petsc-presets          PETSc presets after the switch iteration
---newton-petsc-switch-iteration first iteration using the main preset list
---newton-petsc-option KEY=VALUE repeatable PETSc option override
+--run-tag NAME                  prefix for the timestamped run directory
+--run-dir PATH                  explicit output directory; made unique if needed
+--order                         DG polynomial degree
+--hdg-tau                       HDG stabilization parameter
+--alphaT1, --alphaT2            torsion window ratios, c_iT = alphaTi*Tmax
+--betaPhi1, --betaPhi2          semilinear window ratios, c_iPhi = betaPhii*max(phiDesign)
+--eps-ratios                    comma-separated epsilon continuation ratios
+--residual-norm                 euclid, hdg-local, edp-volume, or hdg
+--newton-shift-mode             none or freefem elliptic damping mode
+--newton-initial-guess          zero or previous-correction for linear solves
 --tol-res                       outer nonlinear residual stop tolerance
 --tol-newton                    outer Newton step stop tolerance
---compute-hminus                compute HDG Gram dual norms during the Newton run
---skip-final-hminus-check       skip the final diagnostic Gram inverse application
---final-gram-cg-rtol            final diagnostic Gram CG relative tolerance
---final-gram-cg-atol            final diagnostic Gram CG absolute tolerance
---final-gram-cg-maxiter         final diagnostic Gram CG iteration cap
---final-gram-cg-verbose-every   final diagnostic Gram progress frequency
+--plot / --no-plot-*            interactive PyVista diagnostics
+--save-frames                   save enabled PyVista frames
+--skip-petsc                    force SciPy linear solves
 ```
 
-The final H-minus-like diagnostic is deliberately separate from the Newton
-line-search norm.  The default line search is Euclidean so the expensive Gram
-inverse is not applied on every Armijo trial.  At the end, the runner prints
-`FINAL_NORM_CHECK` and `RUN_SUMMARY_*` lines.  If the final Gram solve reaches
-its iteration cap, the status is `approx_infoN`, where `N` is SciPy's iterative
-solver `info` value.
+Each run creates a unique directory under `run_logs/` unless `--run-dir` is
+provided.  The directory contains `newton.csv`, `frames.csv`, and `summary.txt`.
+The Newton CSV records the split residual components `resVolumeL2`,
+`resPrimalL2`, `resFluxL2`, `resTraceL2`, and `resCoeffL2`, plus precise
+diagnostics for `rho_h=f_epsilon(phi_h)`.
 
 Recent reference run:
 
 ```text
-date/log     2026-07-06, run_logs/strategyA_hdg_newton/20260706-195222/strategyA_hdg_newton_starN100_p4_tau10_numba_gmres_gamg.log
-mesh         49,212 elements, 74,133 edges, hmax=2.610054e-02
-space        order=4, basis=dub_orth, scalar ndof=738,180
-residual     mixed HDG residual, Euclidean line search
-PETSc        k=0 bicgstab_gamg; k>=1 gmres_gamg
-GAMG opts    pc_gamg_threshold=0.02, mg_levels_ksp_type=richardson, mg_levels_pc_type=sor
-convergence  k=14, final euclid=1.022272e-10
-final Gram   condensed setup=2.6947s, CG iters=50, solve=3.301s
-comparison   hminus=3.524736e-09, hminus/euclid=34.47944
-wall time    196.153s, including plot and PETSc monitor overhead
+script       scripts/diocotron_equilibrium_torsion_intialized.py
+mesh         smooth star, generated once at startup
+residual     mixed HDG residual, Euclidean line search by default
+adaptivity   no preadapt and no scheduled remeshing
+outputs      timestamped run directory with CSV and summary files
 ```
 
-For solver timing comparisons, turn off `--plot` and
-`--newton-petsc-monitor`.  For Newton-only sweeps, add
-`--skip-final-hminus-check`; for residual-norm studies, keep the final check
-and use a bounded diagnostic tolerance such as the defaults above.
+For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
+use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
+Euclidean norm is the cheaper default for line-search comparisons.
 
 ### Optional PETSc Install Notes
 
@@ -474,6 +462,33 @@ adapted_result = solver.solve()
 
 The one-shot `solve_advection_reaction_hdg(...)` function remains available and
 uses the same numerical path.
+
+Reusable mesh-adaptivity utilities live in `hdgfem.core.adaptivity`.  They are
+PDE-agnostic helpers for future adaptive drivers: build a DG indicator, convert
+it to a native Gmsh structured background size field, remesh the smooth-star
+domain, then transfer fields with `hdgfem.core.transfer.transfer_field` when
+needed.
+
+```python
+from hdgfem.core import (
+    SmoothStarGeometry,
+    StructuredSizeOptions,
+    gradient_weighted_indicator,
+    remesh_smooth_star_from_indicator,
+)
+from hdgfem.core.mesh import mesh_edge_min_max
+
+hmin, hmax = mesh_edge_min_max(space.mesh)
+indicator = gradient_weighted_indicator(rho_h, hmin, grad_weight=10.0)
+new_mesh, info = remesh_smooth_star_from_indicator(
+    space,
+    indicator,
+    geometry=SmoothStarGeometry(),
+    hmin=hmin,
+    hmax=hmax,
+    options=StructuredSizeOptions(size_sensitivity=100.0),
+)
+```
 
 Diffusion-reaction solve:
 
@@ -958,17 +973,15 @@ Advection-reaction runner summaries are printed in named sections:
 Run / mesh, Options, Solver, Errors, Timings
 ```
 
-Strategy A emits machine-readable benchmark lines:
+The Strategy A runner emits timestamped files and machine-readable terminal
+lines:
 
 ```text
-LOG_FILE, COMMAND
-NEWTON_SOLVER_CONFIG
 SOLVER_OK
-HDG_LOG
-FINAL_NORM_CHECK
-RUN_SUMMARY_ROW
-RUN_SUMMARY_FINAL
+EPS_START, STEP, EPS_END
+FINAL, FINAL_STATUS
 TIME_TOTAL
+newton.csv, frames.csv, summary.txt
 ```
 
 ## Performance Notes
@@ -1018,7 +1031,7 @@ python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py
 Run a cheap Strategy A smoke test:
 
 ```bash
-python scripts/strategyA_hdg_newton.py --star-n 20 --mesh-size 0.5 --order 1 \
-  --max-it 1 --skip-petsc --skip-newton-petsc --hdg-assembly-backend numba \
-  --skip-final-hminus-check
+python scripts/diocotron_equilibrium_torsion_intialized.py \
+  --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
+  --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```

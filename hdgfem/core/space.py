@@ -740,6 +740,23 @@ class DGField:
         return self._scaled_by(other, reverse=True)
 
 
+def vector_fields_from_flux(space: DGSpace, flux: np.ndarray, *, name: str) -> tuple[DGField, DGField]:
+    """Build scalar component fields from a two-component flux coefficient array.
+
+    ``flux`` must have shape ``(2, num_elements, el_dof)``.  The first axis is
+    interpreted as ``x`` and ``y`` components, and the returned fields are named
+    ``f"{name}_x"`` and ``f"{name}_y"``.
+    """
+    flux = np.asarray(flux, dtype=np.float64)
+    expected = (2, space.mesh.num_tri, space.el_dof)
+    if flux.shape != expected:
+        raise ValueError(f"flux must have shape {expected}; got {flux.shape}")
+    return (
+        space.field(np.ascontiguousarray(flux[0]), name=f"{name}_x"),
+        space.field(np.ascontiguousarray(flux[1]), name=f"{name}_y"),
+    )
+
+
 @dataclass(frozen=True)
 class VectorDGSpace:
     """Cartesian product of scalar DG spaces on the same mesh.

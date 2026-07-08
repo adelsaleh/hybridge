@@ -1,3 +1,38 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+import time
+
+
+def logv(config, level: int, message: str) -> None:
+    """Print ``message`` when ``config.verbosity`` is at least ``level``.
+
+    This small helper is intended for scripts and examples that expose an
+    argparse-style ``verbosity`` attribute but do not need a full logging setup.
+    """
+    if int(getattr(config, "verbosity", 1)) >= int(level):
+        print(message, flush=True)
+
+
+@contextmanager
+def timed_section(config, level: int, label: str, **fields):
+    """Emit ``LABEL_START`` and ``LABEL_DONE time=...`` messages around a block.
+
+    Parameters in ``fields`` are printed on the ``START`` line.  The messages
+    are suppressed unless ``config.verbosity >= level``.
+    """
+    verbose = int(getattr(config, "verbosity", 1)) >= int(level)
+    if verbose:
+        extras = " ".join(f"{key}={value}" for key, value in fields.items())
+        print(f"{label}_START{(' ' + extras) if extras else ''}", flush=True)
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        if verbose:
+            print(f"{label}_DONE time={time.perf_counter() - start:.3f}", flush=True)
+
+
 def pretty_print(items, title="Results", pad_lines=1, default_fmt=".5g"):
     # format all values
     formatted = []
