@@ -222,15 +222,24 @@ Important controls:
 --eps-ratios                    comma-separated epsilon continuation ratios
 --residual-norm                 euclid, hdg-local, edp-volume, or hdg
 --newton-shift-mode             none or freefem elliptic damping mode
---newton-initial-guess          zero or previous-correction for linear solves
+--newton-initial-guess          initial guess for Newton correction solves only:
+                                zero or previous-correction
 --tol-res                       outer nonlinear residual stop tolerance
 --tol-newton                    outer Newton step stop tolerance
+--verbosity, -v                 1 major phases, 2 Armijo trials/timings,
+                                3 Krylov residual history
 --plot / --no-plot-*            interactive PyVista diagnostics
 --save-frames                   save enabled PyVista frames
 --skip-petsc                    force SciPy linear solves
 ```
 
-Each run creates a unique directory under `run_logs/` unless `--run-dir` is
+The nonlinear Newton state always starts from `phiDesign`, the Poisson solve
+with the torsion-designed density.  `--newton-initial-guess` controls only the
+initial trace vector for the linear correction system solved inside each Newton
+step.
+
+Each run creates a unique directory under
+`run_logs/diocotron_equilibrium_torsion_intialized/` unless `--run-dir` is
 provided.  The directory contains `newton.csv`, `frames.csv`, and `summary.txt`.
 The Newton CSV records the split residual components `resVolumeL2`,
 `resPrimalL2`, `resFluxL2`, `resTraceL2`, and `resCoeffL2`, plus precise
@@ -243,12 +252,64 @@ script       scripts/diocotron_equilibrium_torsion_intialized.py
 mesh         smooth star, generated once at startup
 residual     mixed HDG residual, Euclidean line search by default
 adaptivity   no preadapt and no scheduled remeshing
-outputs      timestamped run directory with CSV and summary files
+outputs      run_logs/diocotron_equilibrium_torsion_intialized/<timestamp>/
 ```
 
 For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
 use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
 Euclidean norm is the cheaper default for line-search comparisons.
+
+### Strategy A DOLFINx CG Runner
+
+`scripts/strategyA_dolfinx_noadapt_torsion_newton.py` is the fixed-mesh
+continuous-Galerkin comparison runner for the same torsion-initialized Strategy
+A problem.  It uses DOLFINx Lagrange elements, accepts arbitrary polynomial
+order supported by DOLFINx, and follows the same torsion design, Poisson
+initializer, epsilon continuation, Armijo line search, and optional elliptic
+damping controls as the no-adapt FreeFEM/HDG comparison.
+
+The clean CG/HDG timing workflow is:
+
+```bash
+# First run the HDG driver once and keep its saved mesh.
+python scripts/diocotron_equilibrium_torsion_intialized.py \
+  --run-tag hdg_star260_p2_mumps_clean \
+  --star-n 260 --order 2 --hdg-tau 10 \
+  --hdg-petsc-preset mumps_lu --residual-norm euclid
+
+# Then pass that exact mesh to DOLFINx.
+/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
+  --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
+  --mesh run_logs/diocotron_equilibrium_torsion_intialized/<hdg-run>/initial_mesh.msh \
+  --order 2 --linear-solver mumps --terminal-every 1
+```
+
+Important controls:
+
+```text
+--mesh PATH                     saved Gmsh mesh; preferred for fair comparison
+--order                         CG polynomial degree
+--linear-solver                 mumps, lu, hypre, or gamg
+--ksp-type                      optional PETSc KSP override for iterative paths
+--linear-rtol, --linear-atol    iterative-solver tolerances
+--alphaT1, --alphaT2            torsion window ratios, c_iT = alphaTi*Tmax
+--betaPhi1, --betaPhi2          semilinear window ratios, c_iPhi = betaPhii*max(phiDesign)
+--eps-ratios                    comma-separated epsilon continuation ratios
+--use-mu-shift                  enable the same elliptic damping mode
+--plot / --no-plot-*            interactive PyVista diagnostics
+--save-frames                   save enabled PyVista frames
+```
+
+Each run creates `logs/newton.csv`, `logs/frames.csv`, and `out/summary.txt`
+under `run_logs/dolfinx_torsion_noadapt/<run-tag>_<timestamp>/`.  The Newton
+loop checks the current residual before assembling and solving a new correction,
+so converged epsilon windows end with `CONVERGED_RESIDUAL` and `solveTime=0`.
+
+Recent p=2,4,5,6 comparisons used the same `nt=12288` star mesh and MUMPS for
+both CG and HDG.  The Newton accept count was identical across methods and
+orders; timing differences therefore primarily reflect the chosen discretization
+and linear algebra cost rather than different nonlinear behavior.
 
 ### Optional PETSc Install Notes
 

@@ -26,10 +26,26 @@ python scripts/diocotron_equilibrium_torsion_intialized.py \
   --residual-norm euclid --newton-shift-mode none
 ```
 
-The runner creates a timestamped directory under `run_logs/`, writes
-`newton.csv`, `frames.csv`, and `summary.txt`, and reports the split mixed HDG
-residual components.  Mesh adaptivity was removed from this comparison driver;
-reusable adaptive remeshing helpers live in `hdgfem.core.adaptivity`.
+The runner creates a timestamped directory under
+`run_logs/diocotron_equilibrium_torsion_intialized/`, writes `newton.csv`,
+`frames.csv`, and `summary.txt`, and reports the split mixed HDG residual
+components.  Mesh adaptivity was removed from this comparison driver; reusable
+adaptive remeshing helpers live in `hdgfem.core.adaptivity`.
+
+A DOLFINx continuous-Galerkin fixed-mesh comparison runner is also available
+when the `fenics-dolfinx` environment is installed:
+
+```bash
+/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
+  --mesh run_logs/diocotron_equilibrium_torsion_intialized/<run>/initial_mesh.msh \
+  --order 2 --linear-solver mumps
+```
+
+Passing the saved HDG `initial_mesh.msh` is the preferred fair-comparison path:
+both runners then use the same triangle set, while DOLFINx can vary the CG
+polynomial order independently.  DOLFINx outputs are written under
+`run_logs/dolfinx_torsion_noadapt/`.
 
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
@@ -197,11 +213,24 @@ mesh-transfer effects.
 
 ```text
 script       scripts/diocotron_equilibrium_torsion_intialized.py
-output       run_logs/<run-tag>_<timestamp>/{newton.csv,frames.csv,summary.txt}
+output       run_logs/diocotron_equilibrium_torsion_intialized/<run-tag>_<timestamp>/
 mesh         native smooth-star Gmsh mesh
 residual     selectable: euclid, hdg-local, edp-volume, or hdg
 adaptivity   not used by this driver
 ```
+
+DOLFINx CG comparison runner:
+
+```text
+script       scripts/strategyA_dolfinx_noadapt_torsion_newton.py
+output       run_logs/dolfinx_torsion_noadapt/<run-tag>_<timestamp>/
+mesh         generated smooth-star mesh or saved Gmsh mesh via --mesh
+solver       mumps, lu, hypre, or gamg
+adaptivity   not used
+```
+
+Use `--mesh` with a saved HDG `initial_mesh.msh` to remove Gmsh-version and
+mesh-generation differences from CG/HDG timing comparisons.
 
 For cleaner timing comparisons, omit `--plot`.  For residual accounting, keep
 `--residual-norm euclid` for the full mixed coefficient residual or use
