@@ -413,9 +413,16 @@ def _set_gmsh_number_option(gmsh, name: str, value: float | int) -> None:
         pass
 
 
-def _gmsh_model_to_mesh(gmsh, *, write_path: str | None = None) -> DGMesh:
+def _gmsh_model_to_mesh(
+        gmsh,
+        *,
+        write_path: str | None = None,
+        msh_file_version: float | None = None,
+) -> DGMesh:
     """Extract first-order triangular cells from the active Gmsh model."""
     if write_path is not None:
+        if msh_file_version is not None:
+            _set_gmsh_number_option(gmsh, "Mesh.MshFileVersion", float(msh_file_version))
         gmsh.write(str(write_path))
 
     node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
@@ -446,6 +453,7 @@ def _generate_gmsh_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        msh_file_version: float | None = None,
 ) -> DGMesh:
     """Generate a Gmsh model and return it as a :class:`DGMesh`."""
     import gmsh
@@ -475,7 +483,7 @@ def _generate_gmsh_mesh(
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface_tag], name=model_name)
         gmsh.model.mesh.generate(2)
-        return _gmsh_model_to_mesh(gmsh, write_path=write_path)
+        return _gmsh_model_to_mesh(gmsh, write_path=write_path, msh_file_version=msh_file_version)
     finally:
         if started_gmsh:
             gmsh.finalize()
@@ -602,6 +610,7 @@ def gmsh_smooth_star_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        msh_file_version: float | None = None,
 ) -> DGMesh:
     """Generate the sampled smooth star domain used by the FreeFEM Strategy A script.
 
@@ -642,6 +651,7 @@ def gmsh_smooth_star_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        msh_file_version=msh_file_version,
     )
 
 

@@ -11,13 +11,28 @@ initializer, and then applies the same epsilon-continuation Newton loop for
 
 The intended comparison workflow is to pass the exact ``initial_mesh.msh``
 saved by ``diocotron_equilibrium_torsion_intialized.py`` via ``--mesh``.
+
+Verbosity levels are intentionally coarse:
+
+``-v 0``
+    Only essential run status is printed.
+``-v 1``
+    Default progress output at accepted/equilibrium stages.
+``-v 2``
+    Line-search diagnostics and band-overlap metrics for tracking where the
+    designed band and final density band separate.
+``-v 3``
+    Level 2 plus PETSc KSP residual monitors for iterative linear solvers.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
+import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -148,6 +163,13 @@ def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
 
 
 def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Comm):
+    """Load a fixed mesh, or generate the smooth-star mesh on rank zero.
+
+    Mesh generation is intentionally delegated to a short subprocess.  The
+    DOLFINx process already has PETSc/MPI loaded, while the Python Gmsh module
+    may bring in a different MPI stack on some machines.  Keeping Gmsh in a
+    separate process avoids mixed-MPI runtime warnings during the actual solve.
+    """
     if args.mesh is not None:
         mesh_path = args.mesh.resolve()
         domain = read_mesh_with_meshio(mesh_path, comm)
@@ -155,18 +177,35 @@ def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Com
 
     mesh_path = run_dir / "initial_mesh.msh"
     if comm.rank == 0:
-        from hdgfem.core.mesh import gmsh_smooth_star_mesh
-
-        gmsh_smooth_star_mesh(
-            args.mesh_size,
-            boundary_points=args.star_n,
-            radius=args.star_r0,
-            amplitude=args.star_amp,
-            mode=args.star_mode,
-            verbosity=args.gmsh_verbosity,
-            algorithm=args.gmsh_algorithm,
-            write_path=str(mesh_path),
-            msh_file_version=2.2,
+        mesh_config = {
+            "mesh_size": float(args.mesh_size),
+            "boundary_points": int(args.star_n),
+            "radius": float(args.star_r0),
+            "amplitude": float(args.star_amp),
+            "mode": int(args.star_mode),
+            "verbosity": int(args.gmsh_verbosity),
+            "algorithm": None if args.gmsh_algorithm is None else int(args.gmsh_algorithm),
+            "write_path": str(mesh_path),
+            "msh_file_version": 2.2,
+        }
+        code = (
+            "import json, sys\n"
+            "sys.path.insert(0, sys.argv[1])\n"
+            "from hdgfem.core.mesh import gmsh_smooth_star_mesh\n"
+            "cfg = json.loads(sys.argv[2])\n"
+            "mesh_size = cfg.pop('mesh_size')\n"
+            "gmsh_smooth_star_mesh(mesh_size, **cfg)\n"
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = (
+            str(REPO_ROOT)
+            if not env.get("PYTHONPATH")
+            else f"{REPO_ROOT}{os.pathsep}{env['PYTHONPATH']}"
+        )
+        subprocess.run(
+            [sys.executable, "-c", code, str(REPO_ROOT), json.dumps(mesh_config, separators=(",", ":"))],
+            check=True,
+            env=env,
         )
     comm.barrier()
     domain = read_mesh_with_meshio(mesh_path, comm)
@@ -222,8 +261,15 @@ def solve_linear_form(
         rtol: float,
         atol: float,
         max_it: int | None,
+        verbosity: int = 1,
 ) -> tuple[int, float, float]:
-    """Assemble and solve a linear variational problem into ``u``."""
+    """Assemble and solve a linear variational problem into ``u``.
+
+    When an iterative PETSc solver is used, ``verbosity >= 3`` attaches a KSP
+    monitor that prints the iteration number and residual norm.  Direct solvers
+    intentionally skip this monitor because PETSc reports no useful Krylov
+    history for LU/MUMPS.
+    """
     start = time.perf_counter()
     a_form = fem.form(a)
     L_form = fem.form(L)
@@ -245,6 +291,13 @@ def solve_linear_form(
         if max_it is not None:
             opts[f"{prefix}ksp_max_it"] = max_it
     ksp.setFromOptions()
+    if verbosity >= 3 and solver not in {"mumps", "lu"}:
+        comm = u.function_space.mesh.comm
+
+        def monitor(_, iteration: int, residual_norm: float) -> None:
+            root_print(comm, f"KSP prefix={prefix} it={iteration} rnorm={float(residual_norm):.6e}")
+
+        ksp.setMonitor(monitor)
     ksp.setOperators(A)
     ksp.solve(b, u.x.petsc_vec)
     u.x.scatter_forward()
@@ -292,6 +345,14 @@ def compute_metrics(
         plateau_threshold: float,
         rho_amp: float,
 ) -> dict[str, float]:
+    """Evaluate nonlinear residual, density, and band-comparison diagnostics.
+
+    The active and plateau Jaccard values compare thresholded final-density
+    sets against the torsion-designed density sets.  These diagnostics are
+    designed for parameter sweeps: they expose whether a run only converged as
+    a nonlinear solve, or whether its converged band is geometrically close to
+    the intended design band.
+    """
     comm = u.function_space.mesh.comm
     min_u, max_u = global_minmax(comm, u)
     min_rho, max_rho = global_minmax(comm, rho)
@@ -300,7 +361,18 @@ def compute_metrics(
     energy_phi = math.sqrt(max(assemble_scalar(comm, ufl.inner(ufl.grad(u), ufl.grad(u)) * dx), 0.0))
     active_area = assemble_scalar(comm, ufl.conditional(ufl.gt(rho, active_threshold * rho_amp), 1.0, 0.0) * dx)
     plateau_area = assemble_scalar(comm, ufl.conditional(ufl.gt(rho, plateau_threshold * rho_amp), 1.0, 0.0) * dx)
-    rel_design = math.sqrt(max(assemble_scalar(comm, (rho - rho_design) ** 2 * dx), 0.0)) / max(rho_design_l2, 1.0e-30)
+    active_design = ufl.conditional(ufl.gt(rho_design, active_threshold * rho_amp), 1.0, 0.0)
+    active_final = ufl.conditional(ufl.gt(rho, active_threshold * rho_amp), 1.0, 0.0)
+    plateau_design = ufl.conditional(ufl.gt(rho_design, plateau_threshold * rho_amp), 1.0, 0.0)
+    plateau_final = ufl.conditional(ufl.gt(rho, plateau_threshold * rho_amp), 1.0, 0.0)
+    active_design_area = assemble_scalar(comm, active_design * dx)
+    active_overlap = assemble_scalar(comm, active_design * active_final * dx)
+    active_union = max(active_design_area + active_area - active_overlap, 1.0e-30)
+    plateau_design_area = assemble_scalar(comm, plateau_design * dx)
+    plateau_overlap = assemble_scalar(comm, plateau_design * plateau_final * dx)
+    plateau_union = max(plateau_design_area + plateau_area - plateau_overlap, 1.0e-30)
+    rho_design_diff_l2 = math.sqrt(max(assemble_scalar(comm, (rho - rho_design) ** 2 * dx), 0.0))
+    rel_design = rho_design_diff_l2 / max(rho_design_l2, 1.0e-30)
     return {
         "resEuclid": residual_vector_norm(residual_form, bc, comm),
         "minU": min_u,
@@ -313,7 +385,15 @@ def compute_metrics(
         "activeArea": active_area,
         "plateauArea": plateau_area,
         "plateauFrac": plateau_area / max(active_area, 1.0e-30),
+        "activeDesignArea": active_design_area,
+        "activeOverlapArea": active_overlap,
+        "activeJaccard": active_overlap / active_union,
+        "plateauDesignArea": plateau_design_area,
+        "plateauOverlapArea": plateau_overlap,
+        "plateauJaccard": plateau_overlap / plateau_union,
+        "rhoDesignDiffL2": rho_design_diff_l2,
         "relRhoDesign": rel_design,
+        "massRhoMinusDesign": mass_rho - assemble_scalar(comm, rho_design * dx),
         "annularPhiMinusC2": max_u - c2_phi,
     }
 
@@ -548,7 +628,51 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--alphaT2", dest="alpha_t2", type=float, default=None)
     parser.add_argument("--betaPhi1", dest="beta_phi1", type=float, default=None)
     parser.add_argument("--betaPhi2", dest="beta_phi2", type=float, default=None)
-    parser.add_argument("--eps-ratios", default=None)
+    parser.add_argument(
+        "--phi-window-source",
+        choices=("phi-design", "torsion"),
+        default="phi-design",
+        help=(
+            "scale the nonlinear phi window by max(phiDesign), or reuse the "
+            "absolute torsion thresholds alphaT1*Tmax and alphaT2*Tmax"
+        ),
+    )
+    parser.add_argument(
+        "--phi-window-torsion-width-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "when --phi-window-source=torsion, use "
+            "c2Phi-c1Phi = scale * (alphaT2-alphaT1) * Tmax"
+        ),
+    )
+    parser.add_argument(
+        "--phi-window-torsion-shift-scale",
+        type=float,
+        default=0.0,
+        help=(
+            "when --phi-window-source=torsion, shift both nonlinear-window "
+            "edges by scale * (alphaT2-alphaT1) * Tmax before applying the "
+            "torsion width scale"
+        ),
+    )
+    parser.add_argument(
+        "--eps-t-ratio",
+        dest="eps_t_ratio",
+        type=float,
+        default=None,
+        help="torsion design smoothing ratio: epsT = ratio * (alphaT2-alphaT1) * Tmax",
+    )
+    parser.add_argument(
+        "--eps-phi-ratios",
+        "--eps-ratios",
+        dest="eps_phi_ratios",
+        default=None,
+        help=(
+            "comma-separated nonlinear epsilon continuation ratios; each "
+            "epsPhi = ratio * (c2Phi-c1Phi). Example: 0.11,0.08,0.06"
+        ),
+    )
     parser.add_argument("--rho-amp", type=float, default=None)
     parser.add_argument("--max-it", type=int, default=None)
     parser.add_argument("--tol-res", type=float, default=None)
@@ -567,6 +691,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--mu-fail-factor", type=float, default=2.0)
     parser.add_argument("--mu-stagnation-factor", type=float, default=1.25)
     parser.add_argument("--terminal-every", type=int, default=1)
+    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2, 3), default=1)
     parser.add_argument("--verbose-ls", action="store_true")
     parser.add_argument("--plot", action="store_true", help="show PyVista plot windows at enabled stages")
     parser.add_argument("--plot-off-screen", action="store_true", help="render plot windows off-screen")
@@ -589,16 +714,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def params_from_args(args: argparse.Namespace) -> StrategyParameters:
     params = StrategyParameters()
-    for attr in ("alpha_t1", "alpha_t2", "beta_phi1", "beta_phi2", "rho_amp", "max_it", "tol_res", "tol_newton"):
+    for attr in (
+            "alpha_t1", "alpha_t2", "eps_t_ratio", "beta_phi1", "beta_phi2",
+            "rho_amp", "max_it", "tol_res", "tol_newton",
+    ):
         value = getattr(args, attr)
         if value is not None:
             setattr(params, attr, value)
-    if args.eps_ratios:
-        params.eps_phi_ratios = tuple(float(x.strip()) for x in args.eps_ratios.split(",") if x.strip())
+    if args.eps_phi_ratios:
+        params.eps_phi_ratios = tuple(float(x.strip()) for x in args.eps_phi_ratios.split(",") if x.strip())
     if not (params.alpha_t2 > params.alpha_t1):
         raise ValueError("require alphaT2 > alphaT1")
     if not (params.beta_phi2 > params.beta_phi1):
         raise ValueError("require betaPhi2 > betaPhi1")
+    if not (params.eps_t_ratio > 0.0):
+        raise ValueError("require eps_t_ratio > 0")
+    if not params.eps_phi_ratios or any(ratio <= 0.0 for ratio in params.eps_phi_ratios):
+        raise ValueError("require positive eps phi continuation ratios")
     return params
 
 
@@ -692,6 +824,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         rtol=args.linear_rtol,
         atol=args.linear_atol,
         max_it=args.linear_max_it,
+        verbosity=args.verbosity,
     )
     _, tmax = global_minmax(comm, T)
     c1_t = params.alpha_t1 * tmax
@@ -699,6 +832,12 @@ def run_strategy(args: argparse.Namespace) -> int:
     eps_t = params.eps_t_ratio * (c2_t - c1_t)
     root_print(comm, f"SOLVER_OK problem=torsion iters={its} rel={rel:.3e} time={solve_time:.3f}")
     root_print(comm, f"TORSION Tmax={tmax:.6e} c1T={c1_t:.6e} c2T={c2_t:.6e} epsT={eps_t:.6e}")
+    root_print(
+        comm,
+        "EPS_CONTINUATION "
+        f"epsTRatio={params.eps_t_ratio:.6g} "
+        f"epsPhiRatios={','.join(f'{ratio:.6g}' for ratio in params.eps_phi_ratios)}",
+    )
 
     update_interpolated(rho_design, window_ufl(T, c1_t, c2_t, eps_t, params.rho_amp))
     rho_design_l2 = math.sqrt(max(assemble_scalar(comm, rho_design * rho_design * dx), 0.0))
@@ -716,22 +855,37 @@ def run_strategy(args: argparse.Namespace) -> int:
         rtol=args.linear_rtol,
         atol=args.linear_atol,
         max_it=args.linear_max_it,
+        verbosity=args.verbosity,
     )
     _, phi_design_max = global_minmax(comm, phi_design)
-    c1_phi = params.beta_phi1 * phi_design_max
-    c2_phi = params.beta_phi2 * phi_design_max
+    if args.phi_window_source == "torsion":
+        torsion_width = c2_t - c1_t
+        c1_phi = c1_t + float(args.phi_window_torsion_shift_scale) * torsion_width
+        c2_phi = c1_phi + float(args.phi_window_torsion_width_scale) * torsion_width
+    else:
+        c1_phi = params.beta_phi1 * phi_design_max
+        c2_phi = params.beta_phi2 * phi_design_max
     width_phi = c2_phi - c1_phi
     u.x.array[:] = phi_design.x.array
     u.x.scatter_forward()
     root_print(comm, f"SOLVER_OK problem=phi_design iters={its} rel={rel:.3e} time={solve_time:.3f}")
     root_print(comm, f"PHI_DESIGN max={phi_design_max:.6e} rhoDesignMass={rho_design_mass:.6e} rhoDesignMax={rho_design_max:.6e}")
-    root_print(comm, f"PHI_WINDOW c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} widthPhi={width_phi:.6e}")
+    root_print(
+        comm,
+        f"PHI_WINDOW source={args.phi_window_source} "
+        f"torsionShiftScale={args.phi_window_torsion_shift_scale:.6e} "
+        f"torsionWidthScale={args.phi_window_torsion_width_scale:.6e} "
+        f"c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} widthPhi={width_phi:.6e}",
+    )
 
     fieldnames = [
         "record", "runTag", "ieps", "epsPhiRatio", "epsPhi", "k", "nt", "ndof",
         "resEuclid", "stepH1", "alpha", "bt", "muShift",
         "minU", "maxU", "minRho", "maxRho", "massRho", "rhoL2", "energyPhi",
         "activeArea", "plateauArea", "plateauFrac", "relRhoDesign", "annularPhiMinusC2",
+        "activeDesignArea", "activeOverlapArea", "activeJaccard",
+        "plateauDesignArea", "plateauOverlapArea", "plateauJaccard",
+        "rhoDesignDiffL2", "massRhoMinusDesign",
         "solveTime", "metricTime", "stepTime", "linearIterations", "linearResidual", "status",
     ]
     final_metrics: dict[str, float] | None = None
@@ -877,6 +1031,7 @@ def run_strategy(args: argparse.Namespace) -> int:
                     rtol=args.linear_rtol,
                     atol=args.linear_atol,
                     max_it=args.linear_max_it,
+                    verbosity=args.verbosity,
                 )
                 solve_time = time.perf_counter() - solve_start
                 step_h1 = math.sqrt(max(assemble_scalar(comm, ufl.inner(ufl.grad(du), ufl.grad(du)) * dx), 0.0))
@@ -942,12 +1097,14 @@ def run_strategy(args: argparse.Namespace) -> int:
                     metric_time = time.perf_counter() - metric_start
                     branch_ok = trial_metrics["massRho"] >= mass_floor and trial_metrics["maxRho"] >= params.rho_max_floor
                     armijo = branch_ok and trial_metrics["resEuclid"] <= (1.0 - params.armijo_c * alpha) * res_old
-                    if args.verbose_ls:
+                    if args.verbose_ls or args.verbosity >= 2:
                         root_print(
                             comm,
                             f"LS ieps={ieps} k={k} alpha={alpha:.6e} resNew={trial_metrics['resEuclid']:.6e} "
                             f"resOld={res_old:.6e} mass={trial_metrics['massRho']:.6e} "
-                            f"maxRho={trial_metrics['maxRho']:.6e} branchOK={branch_ok} armijo={armijo}",
+                            f"maxRho={trial_metrics['maxRho']:.6e} relDesign={trial_metrics['relRhoDesign']:.6e} "
+                            f"activeJ={trial_metrics['activeJaccard']:.6e} plateauJ={trial_metrics['plateauJaccard']:.6e} "
+                            f"branchOK={branch_ok} armijo={armijo}",
                         )
                     if armijo:
                         accepted = True
@@ -985,13 +1142,23 @@ def run_strategy(args: argparse.Namespace) -> int:
                               linearResidual=lin_res, status="ACCEPT", **trial_metrics)
                     newton_handle.flush()
                 if args.terminal_every > 0 and (k % args.terminal_every == 0 or trial_metrics["resEuclid"] < params.tol_res):
+                    detail = ""
+                    if args.verbosity >= 2:
+                        detail = (
+                            f" activeArea={trial_metrics['activeArea']:.6e}"
+                            f" activeJ={trial_metrics['activeJaccard']:.6e}"
+                            f" plateauJ={trial_metrics['plateauJaccard']:.6e}"
+                            f" rhoDiffL2={trial_metrics['rhoDesignDiffL2']:.6e}"
+                            f" massDiff={trial_metrics['massRhoMinusDesign']:.6e}"
+                        )
                     root_print(
                         comm,
                         f"STEP ieps={ieps} k={k} resE={trial_metrics['resEuclid']:.6e} "
                         f"alpha={alpha:.3e} bt={n_backtrack} mu={mu_shift:.6e} "
                         f"maxU={trial_metrics['maxU']:.6e} maxRho={trial_metrics['maxRho']:.6e} "
                         f"mass={trial_metrics['massRho']:.6e} relDesign={trial_metrics['relRhoDesign']:.6e} "
-                        f"solveT={solve_time:.3f} metricT={metric_time:.3f} stepT={step_time:.3f} status=ACCEPT",
+                        f"solveT={solve_time:.3f} metricT={metric_time:.3f} stepT={step_time:.3f}"
+                        f"{detail} status=ACCEPT",
                     )
                 if args.plot_newton and args.plot_newton_every > 0 and k % args.plot_newton_every == 0:
                     plotter.emit(
@@ -1115,11 +1282,16 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"alphaT2 {params.alpha_t2}\n")
             handle.write(f"c1T {c1_t}\n")
             handle.write(f"c2T {c2_t}\n")
+            handle.write(f"epsTRatio {params.eps_t_ratio}\n")
             handle.write(f"epsT {eps_t}\n")
             handle.write(f"betaPhi1 {params.beta_phi1}\n")
             handle.write(f"betaPhi2 {params.beta_phi2}\n")
+            handle.write(f"phiWindowSource {args.phi_window_source}\n")
+            handle.write(f"phiWindowTorsionShiftScale {args.phi_window_torsion_shift_scale}\n")
+            handle.write(f"phiWindowTorsionWidthScale {args.phi_window_torsion_width_scale}\n")
             handle.write(f"c1Phi {c1_phi}\n")
             handle.write(f"c2Phi {c2_phi}\n")
+            handle.write(f"epsPhiRatios {','.join(str(ratio) for ratio in params.eps_phi_ratios)}\n")
             handle.write(f"epsPhi {final_eps_phi}\n")
             handle.write(f"resEuclid {final_metrics['resEuclid']}\n")
             handle.write(f"massRho {final_metrics['massRho']}\n")
@@ -1129,7 +1301,15 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"activeArea {final_metrics['activeArea']}\n")
             handle.write(f"plateauArea {final_metrics['plateauArea']}\n")
             handle.write(f"plateauFrac {final_metrics['plateauFrac']}\n")
+            handle.write(f"activeDesignArea {final_metrics['activeDesignArea']}\n")
+            handle.write(f"activeOverlapArea {final_metrics['activeOverlapArea']}\n")
+            handle.write(f"activeJaccard {final_metrics['activeJaccard']}\n")
+            handle.write(f"plateauDesignArea {final_metrics['plateauDesignArea']}\n")
+            handle.write(f"plateauOverlapArea {final_metrics['plateauOverlapArea']}\n")
+            handle.write(f"plateauJaccard {final_metrics['plateauJaccard']}\n")
+            handle.write(f"rhoDesignDiffL2 {final_metrics['rhoDesignDiffL2']}\n")
             handle.write(f"relRhoDesign {final_metrics['relRhoDesign']}\n")
+            handle.write(f"massRhoMinusDesign {final_metrics['massRhoMinusDesign']}\n")
             handle.write(f"annularPhiMinusC2 {final_metrics['annularPhiMinusC2']}\n")
             handle.write(f"finalStatus {final_status}\n")
             handle.write(f"stopReasons {';'.join(stop_reasons)}\n")
