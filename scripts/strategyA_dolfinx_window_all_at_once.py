@@ -8,12 +8,20 @@ fixed-window Newton runners:
     scripts/strategyA_dolfinx_noadapt_torsion_newton.py
     scripts/strategyA_dolfinx_noadapt_torsion_newton_v2.py
 
-The objective is a smooth penalty problem
+The default objective is a smooth penalty problem
 
     0.5*w_phi*||phi-phi_T||^2
   + 0.5*w_rho*||W(phi;c1,c2,eps)-rho_T||^2
   + 0.5*w_mass*(int(W-rho_T))^2
   + 0.5*gamma*||F(phi,c1,c2)||_2^2,
+
+The ``--objective-mode simple-penalty`` variant instead uses the cleaner
+diagnostic problem
+
+    0.5*||phi-phi_T||^2/||phi_T||^2
+  + 0.5*gamma*||F(phi,c1,c2)||_{V_h'}^2,
+
+where the dual norm is represented by the stiffness inverse.
 
 where F is the discrete weak semilinear residual.  This is not the exact
 constrained closed-loop problem unless the residual term is driven close to
@@ -112,6 +120,18 @@ class GradientInfo:
     solve_time: float
     ksp_iterations: int
     ksp_residual: float
+
+
+@dataclass
+class NewtonPolishResult:
+    """Outcome of a fixed-window Newton polish solve."""
+
+    status: str
+    iterations: int
+    residual_euclid: float
+    step_h1: float
+    alpha: float
+    backtracks: int
 
 
 def make_run_dir(args: argparse.Namespace) -> Path:
@@ -283,6 +303,67 @@ def solve_direction_from_vector(
     return its, residual, elapsed
 
 
+def solve_vector_from_vector(
+        metric_form,
+        rhs: PETSc.Vec,
+        bcs: list,
+        *,
+        comm: MPI.Comm,
+        prefix: str,
+        solver: str,
+        ksp_type: str | None,
+        rtol: float,
+        atol: float,
+        max_it: int | None,
+) -> tuple[PETSc.Vec, int, float, float]:
+    """Solve a metric/Riesz system and return the solution vector."""
+    start = time.perf_counter()
+    mat = assemble_matrix_form(metric_form, bcs)
+    b = rhs.copy()
+    fem_petsc.set_bc(b, bcs)
+    x = b.duplicate()
+    x.set(0.0)
+    ksp = PETSc.KSP().create(comm)
+    ksp.setOptionsPrefix(prefix)
+    opts = PETSc.Options()
+    if solver == "mumps":
+        opts[f"{prefix}ksp_type"] = "preonly"
+        opts[f"{prefix}pc_type"] = "lu"
+        opts[f"{prefix}pc_factor_mat_solver_type"] = "mumps"
+    elif solver == "lu":
+        opts[f"{prefix}ksp_type"] = "preonly"
+        opts[f"{prefix}pc_type"] = "lu"
+    elif solver == "hypre":
+        opts[f"{prefix}ksp_type"] = ksp_type or "cg"
+        opts[f"{prefix}pc_type"] = "hypre"
+        opts[f"{prefix}pc_hypre_type"] = "boomeramg"
+        opts[f"{prefix}ksp_rtol"] = rtol
+        opts[f"{prefix}ksp_atol"] = atol
+    elif solver == "gamg":
+        opts[f"{prefix}ksp_type"] = ksp_type or "cg"
+        opts[f"{prefix}pc_type"] = "gamg"
+        opts[f"{prefix}ksp_rtol"] = rtol
+        opts[f"{prefix}ksp_atol"] = atol
+    else:
+        raise ValueError(f"unknown solver {solver!r}")
+    if max_it is not None and solver not in {"mumps", "lu"}:
+        opts[f"{prefix}ksp_max_it"] = max_it
+    ksp.setFromOptions()
+    ksp.setOperators(mat)
+    ksp.solve(b, x)
+    reason = ksp.getConvergedReason()
+    its = int(ksp.getIterationNumber())
+    residual = float(ksp.getResidualNorm())
+    elapsed = time.perf_counter() - start
+    ksp.destroy()
+    mat.destroy()
+    b.destroy()
+    if reason < 0:
+        x.destroy()
+        raise RuntimeError(f"vector solve {prefix!r} failed with PETSc reason {reason}")
+    return x, its, residual, elapsed
+
+
 def scale_function_in_place(function: fem.Function, scale: float) -> None:
     function.x.array[:] *= float(scale)
     function.x.scatter_forward()
@@ -409,12 +490,21 @@ def evaluate_objective(
         active_threshold: float,
         active_smooth_eps: float,
         residual_penalty: float,
+        objective_mode: str,
+        phi_target_norm_sq: float,
+        residual_metric_form,
+        residual_solver: str,
+        residual_ksp_type: str | None,
+        residual_rtol: float,
+        residual_atol: float,
+        residual_max_it: int | None,
+        residual_solve_prefix: str,
 ) -> tuple[ObjectiveParts, PETSc.Vec]:
     comm = u.function_space.mesh.comm
     rho_expr = window_ufl(u, c1, c2, eps_phi, rho_amp)
     residual_form = (ufl.inner(ufl.grad(u), ufl.grad(v)) - rho_expr * v) * dx
     residual_vec = assemble_residual_vector(residual_form, bc)
-    residual_norm = float(residual_vec.norm())
+    residual_euclid = float(residual_vec.norm())
     phi_sq = assemble_scalar(comm, (u - phi_target) ** 2 * dx)
     rho_sq = assemble_scalar(comm, (rho_expr - rho_design) ** 2 * dx)
     mass_diff = assemble_scalar(comm, (rho_expr - rho_design) * dx)
@@ -435,13 +525,34 @@ def evaluate_objective(
         miss_weight=active_miss_weight,
         spill_weight=active_spill_weight,
     )
-    data = (
-        0.5 * float(phi_weight) * phi_sq
-        + 0.5 * float(rho_weight) * rho_sq
-        + 0.5 * float(mass_weight) * mass_diff * mass_diff
-        + active_loss
-    )
-    penalty = 0.5 * float(residual_penalty) * residual_norm * residual_norm
+    if objective_mode == "simple-penalty":
+        data = 0.5 * phi_sq / max(float(phi_target_norm_sq), 1.0e-300)
+        residual_dual_vec, _, _, _ = solve_vector_from_vector(
+            residual_metric_form,
+            residual_vec,
+            [bc],
+            comm=comm,
+            prefix=residual_solve_prefix,
+            solver=residual_solver,
+            ksp_type=residual_ksp_type,
+            rtol=residual_rtol,
+            atol=residual_atol,
+            max_it=residual_max_it,
+        )
+        residual_norm_sq = max(float(residual_vec.dot(residual_dual_vec)), 0.0)
+        residual_dual_vec.destroy()
+        residual_norm = math.sqrt(residual_norm_sq)
+        active_loss = 0.0
+    else:
+        data = (
+            0.5 * float(phi_weight) * phi_sq
+            + 0.5 * float(rho_weight) * rho_sq
+            + 0.5 * float(mass_weight) * mass_diff * mass_diff
+            + active_loss
+        )
+        residual_norm = residual_euclid
+        residual_norm_sq = residual_norm * residual_norm
+    penalty = 0.5 * float(residual_penalty) * residual_norm_sq
     return ObjectiveParts(
         total=data + penalty,
         data=data,
@@ -485,6 +596,14 @@ def compute_gradient_and_direction(
         active_threshold: float,
         active_smooth_eps: float,
         residual_penalty: float,
+        objective_mode: str,
+        phi_target_norm_sq: float,
+        residual_metric_form,
+        residual_solver: str,
+        residual_ksp_type: str | None,
+        residual_rtol: float,
+        residual_atol: float,
+        residual_max_it: int | None,
         metric_mass: float,
         max_c_step_fraction: float,
         max_u_step_fraction: float,
@@ -504,55 +623,75 @@ def compute_gradient_and_direction(
     ww = window_w_derivative_ufl(u, c1, c2, eps_phi, eps_ratio, rho_amp)
     jac_form = (ufl.inner(ufl.grad(z), ufl.grad(v)) - ws * z * v) * dx
     jac = assemble_matrix_form(jac_form, [bc])
-    active_metrics = smooth_active_metrics(
-        comm=comm,
-        rho_expr=rho_expr,
-        rho_design=rho_design,
-        dx=dx,
-        threshold=active_threshold,
-        smooth_eps=active_smooth_eps,
-    )
-    active_dloss_drho = smooth_active_loss_derivative_wrt_rho(
-        metrics=active_metrics,
-        metric=active_overlap_metric,
-        threshold=active_threshold,
-        smooth_eps=active_smooth_eps,
-        overlap_weight=active_overlap_weight,
-        miss_weight=active_miss_weight,
-        spill_weight=active_spill_weight,
-    )
 
-    data_grad_form = (
-        float(phi_weight) * (u - phi_target) * v
-        + float(rho_weight) * (rho_expr - rho_design) * ws * v
-        + float(mass_weight) * parts.mass_diff * ws * v
-        + active_dloss_drho * ws * v
-    ) * dx
+    if objective_mode == "simple-penalty":
+        data_grad_form = ((u - phi_target) / max(float(phi_target_norm_sq), 1.0e-300) * v) * dx
+        grad_m_data = 0.0
+        grad_w_data = 0.0
+        penalty_vec, _, _, _ = solve_vector_from_vector(
+            residual_metric_form,
+            residual_vec,
+            [bc],
+            comm=comm,
+            prefix=f"opt_residual_dual_{iteration}_",
+            solver=residual_solver,
+            ksp_type=residual_ksp_type,
+            rtol=residual_rtol,
+            atol=residual_atol,
+            max_it=residual_max_it,
+        )
+        destroy_penalty_vec = True
+    else:
+        active_metrics = smooth_active_metrics(
+            comm=comm,
+            rho_expr=rho_expr,
+            rho_design=rho_design,
+            dx=dx,
+            threshold=active_threshold,
+            smooth_eps=active_smooth_eps,
+        )
+        active_dloss_drho = smooth_active_loss_derivative_wrt_rho(
+            metrics=active_metrics,
+            metric=active_overlap_metric,
+            threshold=active_threshold,
+            smooth_eps=active_smooth_eps,
+            overlap_weight=active_overlap_weight,
+            miss_weight=active_miss_weight,
+            spill_weight=active_spill_weight,
+        )
+        data_grad_form = (
+            float(phi_weight) * (u - phi_target) * v
+            + float(rho_weight) * (rho_expr - rho_design) * ws * v
+            + float(mass_weight) * parts.mass_diff * ws * v
+            + active_dloss_drho * ws * v
+        ) * dx
+        grad_m_data = assemble_scalar(
+            comm,
+            (
+                float(rho_weight) * (rho_expr - rho_design) * wm
+                + float(mass_weight) * parts.mass_diff * wm
+                + active_dloss_drho * wm
+            ) * dx,
+        )
+        grad_w_data = assemble_scalar(
+            comm,
+            (
+                float(rho_weight) * (rho_expr - rho_design) * ww
+                + float(mass_weight) * parts.mass_diff * ww
+                + active_dloss_drho * ww
+            ) * dx,
+        )
+        penalty_vec = residual_vec
+        destroy_penalty_vec = False
     grad_vec = assemble_vector_form(data_grad_form, bc)
     penalty_phi = grad_vec.duplicate()
-    jac.multTranspose(residual_vec, penalty_phi)
+    jac.multTranspose(penalty_vec, penalty_phi)
     grad_vec.axpy(float(residual_penalty), penalty_phi)
 
     rm_vec = assemble_vector_form((-wm * v) * dx, bc)
     rw_vec = assemble_vector_form((-ww * v) * dx, bc)
-    grad_m_data = assemble_scalar(
-        comm,
-        (
-            float(rho_weight) * (rho_expr - rho_design) * wm
-            + float(mass_weight) * parts.mass_diff * wm
-            + active_dloss_drho * wm
-        ) * dx,
-    )
-    grad_w_data = assemble_scalar(
-        comm,
-        (
-            float(rho_weight) * (rho_expr - rho_design) * ww
-            + float(mass_weight) * parts.mass_diff * ww
-            + active_dloss_drho * ww
-        ) * dx,
-    )
-    grad_m = grad_m_data + float(residual_penalty) * float(residual_vec.dot(rm_vec))
-    grad_w = grad_w_data + float(residual_penalty) * float(residual_vec.dot(rw_vec))
+    grad_m = grad_m_data + float(residual_penalty) * float(penalty_vec.dot(rm_vec))
+    grad_w = grad_w_data + float(residual_penalty) * float(penalty_vec.dot(rw_vec))
 
     rhs = grad_vec.copy()
     rhs.scale(-1.0)
@@ -590,6 +729,8 @@ def compute_gradient_and_direction(
 
     jac.destroy()
     penalty_phi.destroy()
+    if destroy_penalty_vec:
+        penalty_vec.destroy()
     rm_vec.destroy()
     rw_vec.destroy()
     rhs.destroy()
@@ -607,6 +748,297 @@ def compute_gradient_and_direction(
         ksp_iterations=its,
         ksp_residual=lin_res,
     )
+
+
+def run_newton_polish(
+        *,
+        u: fem.Function,
+        du: fem.Function,
+        rho: fem.Function,
+        phi_target: fem.Function,
+        rho_design: fem.Function,
+        rho_design_l2: float,
+        z,
+        v,
+        dx,
+        bc,
+        c1: float,
+        c2: float,
+        eps_phi: float,
+        rho_amp: float,
+        active_threshold: float,
+        plateau_threshold: float,
+        start: str,
+        max_it: int,
+        tol_res: float,
+        tol_step: float,
+        armijo_c: float,
+        beta_ls: float,
+        alpha_min: float,
+        max_backtrack: int,
+        mu_shift: float,
+        linear_solver: str,
+        ksp_type: str | None,
+        linear_rtol: float,
+        linear_atol: float,
+        linear_max_it: int | None,
+        verbosity: int,
+        terminal_every: int,
+        writer: csv.DictWriter | None,
+        handle,
+        comm: MPI.Comm,
+        nt: int,
+        ndof: int,
+) -> tuple[NewtonPolishResult, dict[str, float]]:
+    """Run damped Newton on the semilinear equation with fixed thresholds."""
+    if start == "target":
+        u.x.array[:] = phi_target.x.array
+        u.x.scatter_forward()
+    elif start == "zero":
+        u.x.array[:] = 0.0
+        u.x.scatter_forward()
+    elif start != "penalty":
+        raise ValueError(f"unknown Newton polish start {start!r}")
+
+    final_metrics: dict[str, float] | None = None
+    last_step_h1 = math.inf
+    last_alpha = 0.0
+    last_bt = 0
+    status = "MAX_IT"
+
+    for k in range(int(max_it) + 1):
+        step_start = time.perf_counter()
+        update_interpolated(rho, window_ufl(u, c1, c2, eps_phi, rho_amp))
+        residual_expr = (
+            ufl.inner(ufl.grad(u), ufl.grad(v))
+            - window_ufl(u, c1, c2, eps_phi, rho_amp) * v
+        ) * dx
+        metric_start = time.perf_counter()
+        old_metrics = compute_metrics(
+            u=u,
+            rho=rho,
+            rho_design=rho_design,
+            rho_design_l2=rho_design_l2,
+            residual_form=residual_expr,
+            bc=bc,
+            dx=dx,
+            c2_phi=c2,
+            active_threshold=active_threshold,
+            plateau_threshold=plateau_threshold,
+            rho_amp=rho_amp,
+        )
+        metric_time = time.perf_counter() - metric_start
+        final_metrics = old_metrics
+        res_old = float(old_metrics["resEuclid"])
+
+        if res_old < float(tol_res):
+            status = "CONVERGED_RESIDUAL"
+            if writer is not None:
+                writer.writerow({
+                    "record": "NEWTON_POLISH",
+                    "k": k,
+                    "nt": nt,
+                    "ndof": ndof,
+                    "resEuclid": res_old,
+                    "stepH1": "",
+                    "alpha": 0.0,
+                    "bt": 0,
+                    "muShift": mu_shift,
+                    "solveTime": 0.0,
+                    "metricTime": metric_time,
+                    "stepTime": time.perf_counter() - step_start,
+                    "linearIterations": "",
+                    "linearResidual": "",
+                    "maxPhi": old_metrics["maxU"],
+                    "maxRho": old_metrics["maxRho"],
+                    "massRho": old_metrics["massRho"],
+                    "activeJaccard": old_metrics["activeJaccard"],
+                    "plateauJaccard": old_metrics["plateauJaccard"],
+                    "relRhoDesign": old_metrics["relRhoDesign"],
+                    "status": status,
+                })
+                handle.flush()
+            root_print(comm, f"NEWTON_POLISH k={k} resE={res_old:.6e} status={status}")
+            return NewtonPolishResult(status, k, res_old, last_step_h1, last_alpha, last_bt), old_metrics
+
+        if k == int(max_it):
+            break
+
+        jac_expr = (
+            (1.0 + float(mu_shift)) * ufl.inner(ufl.grad(z), ufl.grad(v))
+            - window_derivative_ufl(u, c1, c2, eps_phi, rho_amp) * z * v
+        ) * dx
+        solve_start = time.perf_counter()
+        its, lin_res, solve_time = solve_linear_form(
+            jac_expr,
+            -residual_expr,
+            du,
+            [bc],
+            prefix=f"newton_polish_{k}_",
+            solver=linear_solver,
+            ksp_type=ksp_type,
+            rtol=linear_rtol,
+            atol=linear_atol,
+            max_it=linear_max_it,
+            verbosity=verbosity,
+        )
+        solve_time = time.perf_counter() - solve_start
+        step_h1 = math.sqrt(max(assemble_scalar(comm, ufl.inner(ufl.grad(du), ufl.grad(du)) * dx), 0.0))
+        last_step_h1 = step_h1
+
+        if step_h1 < float(tol_step):
+            status = "CONVERGED_STEP"
+            if writer is not None:
+                writer.writerow({
+                    "record": "NEWTON_POLISH",
+                    "k": k,
+                    "nt": nt,
+                    "ndof": ndof,
+                    "resEuclid": res_old,
+                    "stepH1": step_h1,
+                    "alpha": 0.0,
+                    "bt": 0,
+                    "muShift": mu_shift,
+                    "solveTime": solve_time,
+                    "metricTime": metric_time,
+                    "stepTime": time.perf_counter() - step_start,
+                    "linearIterations": its,
+                    "linearResidual": lin_res,
+                    "maxPhi": old_metrics["maxU"],
+                    "maxRho": old_metrics["maxRho"],
+                    "massRho": old_metrics["massRho"],
+                    "activeJaccard": old_metrics["activeJaccard"],
+                    "plateauJaccard": old_metrics["plateauJaccard"],
+                    "relRhoDesign": old_metrics["relRhoDesign"],
+                    "status": status,
+                })
+                handle.flush()
+            root_print(comm, f"NEWTON_POLISH k={k} resE={res_old:.6e} stepH1={step_h1:.6e} status={status}")
+            return NewtonPolishResult(status, k, res_old, step_h1, 0.0, 0), old_metrics
+
+        u_old = u.x.array.copy()
+        alpha = 1.0
+        bt = 0
+        accepted = False
+        trial_metrics = old_metrics
+        trial_metric_time = metric_time
+        while alpha >= float(alpha_min) and bt <= int(max_backtrack):
+            u.x.array[:] = u_old + alpha * du.x.array
+            u.x.scatter_forward()
+            update_interpolated(rho, window_ufl(u, c1, c2, eps_phi, rho_amp))
+            trial_residual_expr = (
+                ufl.inner(ufl.grad(u), ufl.grad(v))
+                - window_ufl(u, c1, c2, eps_phi, rho_amp) * v
+            ) * dx
+            trial_metric_start = time.perf_counter()
+            trial_metrics = compute_metrics(
+                u=u,
+                rho=rho,
+                rho_design=rho_design,
+                rho_design_l2=rho_design_l2,
+                residual_form=trial_residual_expr,
+                bc=bc,
+                dx=dx,
+                c2_phi=c2,
+                active_threshold=active_threshold,
+                plateau_threshold=plateau_threshold,
+                rho_amp=rho_amp,
+            )
+            trial_metric_time = time.perf_counter() - trial_metric_start
+            res_trial = float(trial_metrics["resEuclid"])
+            armijo = math.isfinite(res_trial) and res_trial <= (1.0 - float(armijo_c) * alpha) * res_old
+            if verbosity >= 2:
+                root_print(
+                    comm,
+                    f"NEWTON_POLISH_LS k={k} alpha={alpha:.6e} resTrial={res_trial:.6e} "
+                    f"resOld={res_old:.6e} armijo={armijo}",
+                )
+            if armijo:
+                accepted = True
+                break
+            alpha *= float(beta_ls)
+            bt += 1
+
+        if not accepted:
+            u.x.array[:] = u_old
+            u.x.scatter_forward()
+            status = "FAIL_LS"
+            final_metrics = old_metrics
+            root_print(comm, f"NEWTON_POLISH_STOP reason=FAIL_LS k={k} alpha={alpha:.3e} bt={bt}")
+            if writer is not None:
+                writer.writerow({
+                    "record": "NEWTON_POLISH",
+                    "k": k,
+                    "nt": nt,
+                    "ndof": ndof,
+                    "resEuclid": res_old,
+                    "stepH1": step_h1,
+                    "alpha": alpha,
+                    "bt": bt,
+                    "muShift": mu_shift,
+                    "solveTime": solve_time,
+                    "metricTime": metric_time,
+                    "stepTime": time.perf_counter() - step_start,
+                    "linearIterations": its,
+                    "linearResidual": lin_res,
+                    "maxPhi": old_metrics["maxU"],
+                    "maxRho": old_metrics["maxRho"],
+                    "massRho": old_metrics["massRho"],
+                    "activeJaccard": old_metrics["activeJaccard"],
+                    "plateauJaccard": old_metrics["plateauJaccard"],
+                    "relRhoDesign": old_metrics["relRhoDesign"],
+                    "status": status,
+                })
+                handle.flush()
+            return NewtonPolishResult(status, k, res_old, step_h1, alpha, bt), old_metrics
+
+        final_metrics = trial_metrics
+        last_alpha = alpha
+        last_bt = bt
+        step_time = time.perf_counter() - step_start
+        if writer is not None:
+            writer.writerow({
+                "record": "NEWTON_POLISH",
+                "k": k,
+                "nt": nt,
+                "ndof": ndof,
+                "resEuclid": trial_metrics["resEuclid"],
+                "stepH1": step_h1,
+                "alpha": alpha,
+                "bt": bt,
+                "muShift": mu_shift,
+                "solveTime": solve_time,
+                "metricTime": trial_metric_time,
+                "stepTime": step_time,
+                "linearIterations": its,
+                "linearResidual": lin_res,
+                "maxPhi": trial_metrics["maxU"],
+                "maxRho": trial_metrics["maxRho"],
+                "massRho": trial_metrics["massRho"],
+                "activeJaccard": trial_metrics["activeJaccard"],
+                "plateauJaccard": trial_metrics["plateauJaccard"],
+                "relRhoDesign": trial_metrics["relRhoDesign"],
+                "status": "ACCEPT",
+            })
+            handle.flush()
+        if terminal_every > 0 and k % int(terminal_every) == 0:
+            root_print(
+                comm,
+                f"NEWTON_POLISH k={k} resE={trial_metrics['resEuclid']:.6e} "
+                f"alpha={alpha:.3e} bt={bt} stepH1={step_h1:.6e} "
+                f"maxPhi={trial_metrics['maxU']:.6e} maxRho={trial_metrics['maxRho']:.6e} "
+                f"activeJ={trial_metrics['activeJaccard']:.6e}",
+            )
+
+    assert final_metrics is not None
+    return NewtonPolishResult(
+        status,
+        int(max_it),
+        float(final_metrics["resEuclid"]),
+        last_step_h1,
+        last_alpha,
+        last_bt,
+    ), final_metrics
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -632,6 +1064,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--c2-phi", dest="c2_phi", type=float, default=None)
     parser.add_argument("--cmax-factor", type=float, default=1.25)
     parser.add_argument("--min-width-fraction", type=float, default=1.0e-3)
+    parser.add_argument("--objective-mode", choices=("expanded", "simple-penalty"), default="expanded")
     parser.add_argument("--phi-target-weight", type=float, default=0.0)
     parser.add_argument("--rho-target-weight", type=float, default=0.0)
     parser.add_argument("--mass-target-weight", type=float, default=0.0)
@@ -652,6 +1085,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--alpha-min", type=float, default=1.0e-8)
     parser.add_argument("--max-c-step-fraction", type=float, default=0.05)
     parser.add_argument("--max-u-step-fraction", type=float, default=0.25)
+    parser.add_argument("--newton-polish-final", action="store_true")
+    parser.add_argument("--newton-polish-start", choices=("penalty", "target", "zero"), default="penalty")
+    parser.add_argument("--newton-polish-max-it", type=int, default=30)
+    parser.add_argument("--newton-polish-tol-res", type=float, default=1.0e-10)
+    parser.add_argument("--newton-polish-tol-step", type=float, default=1.0e-10)
+    parser.add_argument("--newton-polish-armijo-c", type=float, default=1.0e-4)
+    parser.add_argument("--newton-polish-max-backtrack", type=int, default=30)
+    parser.add_argument("--newton-polish-mu-shift", type=float, default=0.0)
     parser.add_argument("--fit-window-grid", type=int, default=64)
     parser.add_argument("--fit-window-refine-grid", type=int, default=25)
     parser.add_argument("--fit-window-refine-passes", type=int, default=2)
@@ -707,6 +1148,18 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("require nonnegative --metric-mass")
     if args.max_opt_it < 0:
         raise ValueError("require nonnegative --max-opt-it")
+    if args.newton_polish_max_it < 0:
+        raise ValueError("require nonnegative --newton-polish-max-it")
+    if args.newton_polish_tol_res <= 0.0:
+        raise ValueError("require positive --newton-polish-tol-res")
+    if args.newton_polish_tol_step <= 0.0:
+        raise ValueError("require positive --newton-polish-tol-step")
+    if args.newton_polish_armijo_c <= 0.0:
+        raise ValueError("require positive --newton-polish-armijo-c")
+    if args.newton_polish_max_backtrack < 0:
+        raise ValueError("require nonnegative --newton-polish-max-backtrack")
+    if args.newton_polish_mu_shift < 0.0:
+        raise ValueError("require nonnegative --newton-polish-mu-shift")
     if args.c1_phi is None and args.c2_phi is not None:
         raise ValueError("--c1-phi and --c2-phi must be supplied together")
     if args.c1_phi is not None and args.c2_phi is None:
@@ -731,6 +1184,7 @@ def run_strategy(args: argparse.Namespace) -> int:
 
     opt_csv = log_dir / "optimization.csv"
     frame_csv = log_dir / "frames.csv"
+    newton_polish_csv = log_dir / "newton_polish.csv"
     summary_path = out_dir / "summary.txt"
     total_start = time.perf_counter()
 
@@ -739,10 +1193,12 @@ def run_strategy(args: argparse.Namespace) -> int:
     root_print(comm, f"RUN_DIR {run_dir}")
     root_print(comm, f"OPT_CSV {opt_csv}")
     root_print(comm, f"FRAME_CSV {frame_csv}")
+    root_print(comm, f"NEWTON_POLISH_CSV {newton_polish_csv}")
     root_print(comm, f"SUMMARY {summary_path}")
     root_print(
         comm,
         "OBJECTIVE "
+        f"mode={args.objective_mode} "
         f"phiWeight={args.phi_target_weight:.6e} "
         f"rhoWeight={args.rho_target_weight:.6e} "
         f"massWeight={args.mass_target_weight:.6e} "
@@ -778,6 +1234,7 @@ def run_strategy(args: argparse.Namespace) -> int:
     u = fem.Function(V, name="phi")
     rho = fem.Function(V, name="rho")
     direction = fem.Function(V, name="descent")
+    du_newton = fem.Function(V, name="newtonPolishStep")
     phi_diff = fem.Function(V, name="phiMinusPhiT")
 
     frame_fields = [
@@ -847,8 +1304,10 @@ def run_strategy(args: argparse.Namespace) -> int:
         verbosity=args.verbosity,
     )
     _, phi_target_max = global_minmax(comm, phi_target)
+    phi_target_norm_sq = max(assemble_scalar(comm, phi_target * phi_target * dx), 1.0e-300)
     c_max = max(float(args.cmax_factor) * phi_target_max, 1.0e-12)
     min_width = max(float(args.min_width_fraction) * c_max, 1.0e-14)
+    residual_metric_form = ufl.inner(ufl.grad(z), ufl.grad(v)) * dx
 
     if args.c1_phi is not None:
         c1_phi = float(args.c1_phi)
@@ -963,6 +1422,15 @@ def run_strategy(args: argparse.Namespace) -> int:
                 active_threshold=active_threshold,
                 active_smooth_eps=active_smooth_eps,
                 residual_penalty=args.residual_penalty,
+                objective_mode=args.objective_mode,
+                phi_target_norm_sq=phi_target_norm_sq,
+                residual_metric_form=residual_metric_form,
+                residual_solver=args.linear_solver,
+                residual_ksp_type=args.ksp_type,
+                residual_rtol=args.linear_rtol,
+                residual_atol=args.linear_atol,
+                residual_max_it=args.linear_max_it,
+                residual_solve_prefix=f"objective_residual_dual_{k}_",
             )
             metrics = compute_metrics(
                 u=u,
@@ -1010,6 +1478,14 @@ def run_strategy(args: argparse.Namespace) -> int:
                     active_threshold=active_threshold,
                     active_smooth_eps=active_smooth_eps,
                     residual_penalty=args.residual_penalty,
+                    objective_mode=args.objective_mode,
+                    phi_target_norm_sq=phi_target_norm_sq,
+                    residual_metric_form=residual_metric_form,
+                    residual_solver=args.linear_solver,
+                    residual_ksp_type=args.ksp_type,
+                    residual_rtol=args.linear_rtol,
+                    residual_atol=args.linear_atol,
+                    residual_max_it=args.linear_max_it,
                     metric_mass=args.metric_mass,
                     max_c_step_fraction=args.max_c_step_fraction,
                     max_u_step_fraction=args.max_u_step_fraction,
@@ -1131,6 +1607,15 @@ def run_strategy(args: argparse.Namespace) -> int:
                     active_threshold=active_threshold,
                     active_smooth_eps=active_smooth_eps,
                     residual_penalty=args.residual_penalty,
+                    objective_mode=args.objective_mode,
+                    phi_target_norm_sq=phi_target_norm_sq,
+                    residual_metric_form=residual_metric_form,
+                    residual_solver=args.linear_solver,
+                    residual_ksp_type=args.ksp_type,
+                    residual_rtol=args.linear_rtol,
+                    residual_atol=args.linear_atol,
+                    residual_max_it=args.linear_max_it,
+                    residual_solve_prefix=f"trial_residual_dual_{k}_{bt}_",
                 )
                 trial_residual_vec.destroy()
                 armijo_rhs = parts.total + args.armijo_c * alpha * min(grad_info.directional_derivative, -1.0e-30)
@@ -1300,6 +1785,15 @@ def run_strategy(args: argparse.Namespace) -> int:
         active_threshold=active_threshold,
         active_smooth_eps=active_smooth_eps,
         residual_penalty=args.residual_penalty,
+        objective_mode=args.objective_mode,
+        phi_target_norm_sq=phi_target_norm_sq,
+        residual_metric_form=residual_metric_form,
+        residual_solver=args.linear_solver,
+        residual_ksp_type=args.ksp_type,
+        residual_rtol=args.linear_rtol,
+        residual_atol=args.linear_atol,
+        residual_max_it=args.linear_max_it,
+        residual_solve_prefix="final_residual_dual_",
     )
     final_residual_vec.destroy()
     final_metrics = compute_metrics(
@@ -1324,12 +1818,148 @@ def run_strategy(args: argparse.Namespace) -> int:
     elif final_status == "MAX_OPT_IT":
         final_status = "NONCONVERGED"
 
+    penalty_final_parts = final_parts
+    penalty_final_metrics = dict(final_metrics)
+    penalty_final_status = final_status
+    newton_polish_result: NewtonPolishResult | None = None
+    newton_polish_metrics: dict[str, float] | None = None
+
+    root_print(
+        comm,
+        f"PENALTY_FINAL J={penalty_final_parts.total:.6e} data={penalty_final_parts.data:.6e} "
+        f"penalty={penalty_final_parts.penalty:.6e} dualRes={penalty_final_parts.residual:.6e} "
+        f"euclidRes={penalty_final_metrics['resEuclid']:.6e} phiL2={penalty_final_parts.phi_l2:.6e} "
+        f"rhoL2={penalty_final_parts.rho_l2:.6e} activeJ={penalty_final_metrics['activeJaccard']:.6e} "
+        f"status={penalty_final_status}",
+    )
+
+    if args.newton_polish_final:
+        root_print(
+            comm,
+            f"NEWTON_POLISH_START start={args.newton_polish_start} c1={c1_phi:.6e} c2={c2_phi:.6e} "
+            f"epsPhi={eps_phi:.6e} tolRes={args.newton_polish_tol_res:.6e}",
+        )
+        polish_fields = [
+            "record", "k", "nt", "ndof", "resEuclid", "stepH1", "alpha", "bt", "muShift",
+            "solveTime", "metricTime", "stepTime", "linearIterations", "linearResidual",
+            "maxPhi", "maxRho", "massRho", "activeJaccard", "plateauJaccard", "relRhoDesign", "status",
+        ]
+        polish_handle = newton_polish_csv.open("w", newline="", encoding="utf-8") if comm.rank == 0 else None
+        polish_writer = csv.DictWriter(polish_handle, fieldnames=polish_fields) if comm.rank == 0 else None
+        if polish_writer is not None:
+            polish_writer.writeheader()
+        try:
+            newton_polish_result, newton_polish_metrics = run_newton_polish(
+                u=u,
+                du=du_newton,
+                rho=rho,
+                phi_target=phi_target,
+                rho_design=rho_design,
+                rho_design_l2=rho_design_l2,
+                z=z,
+                v=v,
+                dx=dx,
+                bc=bc,
+                c1=c1_phi,
+                c2=c2_phi,
+                eps_phi=eps_phi,
+                rho_amp=params.rho_amp,
+                active_threshold=params.active_threshold,
+                plateau_threshold=params.plateau_threshold,
+                start=args.newton_polish_start,
+                max_it=args.newton_polish_max_it,
+                tol_res=args.newton_polish_tol_res,
+                tol_step=args.newton_polish_tol_step,
+                armijo_c=args.newton_polish_armijo_c,
+                beta_ls=args.beta_ls,
+                alpha_min=args.alpha_min,
+                max_backtrack=args.newton_polish_max_backtrack,
+                mu_shift=args.newton_polish_mu_shift,
+                linear_solver=args.linear_solver,
+                ksp_type=args.ksp_type,
+                linear_rtol=args.linear_rtol,
+                linear_atol=args.linear_atol,
+                linear_max_it=args.linear_max_it,
+                verbosity=args.verbosity,
+                terminal_every=args.terminal_every,
+                writer=polish_writer,
+                handle=polish_handle,
+                comm=comm,
+                nt=nt,
+                ndof=ndof,
+            )
+        finally:
+            if polish_handle is not None:
+                polish_handle.close()
+
+        update_interpolated(rho, window_ufl(u, c1_phi, c2_phi, eps_phi, params.rho_amp))
+        residual_form = (
+            ufl.inner(ufl.grad(u), ufl.grad(v))
+            - window_ufl(u, c1_phi, c2_phi, eps_phi, params.rho_amp) * v
+        ) * dx
+        polished_parts, polished_residual_vec = evaluate_objective(
+            u=u,
+            phi_target=phi_target,
+            rho_design=rho_design,
+            v=v,
+            dx=dx,
+            bc=bc,
+            c1=c1_phi,
+            c2=c2_phi,
+            eps_phi=eps_phi,
+            rho_amp=params.rho_amp,
+            phi_weight=args.phi_target_weight,
+            rho_weight=args.rho_target_weight,
+            mass_weight=args.mass_target_weight,
+            active_overlap_metric=args.active_overlap_metric,
+            active_overlap_weight=args.active_overlap_weight,
+            active_miss_weight=args.active_miss_weight,
+            active_spill_weight=args.active_spill_weight,
+            active_threshold=active_threshold,
+            active_smooth_eps=active_smooth_eps,
+            residual_penalty=args.residual_penalty,
+            objective_mode=args.objective_mode,
+            phi_target_norm_sq=phi_target_norm_sq,
+            residual_metric_form=residual_metric_form,
+            residual_solver=args.linear_solver,
+            residual_ksp_type=args.ksp_type,
+            residual_rtol=args.linear_rtol,
+            residual_atol=args.linear_atol,
+            residual_max_it=args.linear_max_it,
+            residual_solve_prefix="newton_polished_residual_dual_",
+        )
+        polished_residual_vec.destroy()
+        polished_metrics = compute_metrics(
+            u=u,
+            rho=rho,
+            rho_design=rho_design,
+            rho_design_l2=rho_design_l2,
+            residual_form=residual_form,
+            bc=bc,
+            dx=dx,
+            c2_phi=c2_phi,
+            active_threshold=params.active_threshold,
+            plateau_threshold=params.plateau_threshold,
+            rho_amp=params.rho_amp,
+        )
+        final_parts = polished_parts
+        final_metrics = polished_metrics
+        final_status = f"{penalty_final_status}_NEWTON_{newton_polish_result.status}"
+        root_print(
+            comm,
+            f"NEWTON_POLISH_FINAL status={newton_polish_result.status} "
+            f"iters={newton_polish_result.iterations} euclidRes={newton_polish_result.residual_euclid:.6e} "
+            f"dualRes={final_parts.residual:.6e} phiL2={final_parts.phi_l2:.6e} "
+            f"rhoL2={final_parts.rho_l2:.6e} activeJ={final_metrics['activeJaccard']:.6e} "
+            f"plateauJ={final_metrics['plateauJaccard']:.6e}",
+        )
+
     if args.plot_final:
         phi_diff.x.array[:] = u.x.array - phi_target.x.array
         phi_diff.x.scatter_forward()
         plotter.emit(
             [T, rho_design, phi_target, u, rho, phi_diff],
-            ["Torsion T", "rhoDesign", "phiT", "Optimized phi", "rho(phi;c)", "phi-phiT"],
+            ["Torsion T", "rhoDesign", "phiT", "Final phi", "rho(phi;c)", "phi-phiT"],
             stage="FINAL",
             ieps=0,
             k=-1,
@@ -1402,6 +2032,34 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"rhoDiffL2 {final_parts.rho_l2}\n")
             handle.write(f"massDiff {final_parts.mass_diff}\n")
             handle.write(f"residual {final_parts.residual}\n")
+            handle.write(f"penaltyFinalObjective {penalty_final_parts.total}\n")
+            handle.write(f"penaltyFinalDataObjective {penalty_final_parts.data}\n")
+            handle.write(f"penaltyFinalPenaltyObjective {penalty_final_parts.penalty}\n")
+            handle.write(f"penaltyFinalDualResidual {penalty_final_parts.residual}\n")
+            handle.write(f"penaltyFinalEuclidResidual {penalty_final_metrics['resEuclid']}\n")
+            handle.write(f"penaltyFinalPhiDiffL2 {penalty_final_parts.phi_l2}\n")
+            handle.write(f"penaltyFinalRhoDiffL2 {penalty_final_parts.rho_l2}\n")
+            handle.write(f"penaltyFinalMassDiff {penalty_final_parts.mass_diff}\n")
+            handle.write(f"penaltyFinalActiveJaccard {penalty_final_metrics['activeJaccard']}\n")
+            handle.write(f"penaltyFinalPlateauJaccard {penalty_final_metrics['plateauJaccard']}\n")
+            handle.write(f"penaltyFinalStatus {penalty_final_status}\n")
+            handle.write(f"newtonPolishFinal {bool(args.newton_polish_final)}\n")
+            handle.write(f"newtonPolishStart {args.newton_polish_start}\n")
+            handle.write(f"newtonPolishTolRes {args.newton_polish_tol_res}\n")
+            handle.write(f"newtonPolishMaxIt {args.newton_polish_max_it}\n")
+            handle.write(f"newtonPolishMuShift {args.newton_polish_mu_shift}\n")
+            if newton_polish_result is not None:
+                handle.write(f"newtonPolishStatus {newton_polish_result.status}\n")
+                handle.write(f"newtonPolishIterations {newton_polish_result.iterations}\n")
+                handle.write(f"newtonPolishEuclidResidual {newton_polish_result.residual_euclid}\n")
+                handle.write(f"newtonPolishDualResidual {final_parts.residual}\n")
+                handle.write(f"newtonPolishPhiDiffL2 {final_parts.phi_l2}\n")
+                handle.write(f"newtonPolishRhoDiffL2 {final_parts.rho_l2}\n")
+                handle.write(f"newtonPolishMassDiff {final_parts.mass_diff}\n")
+                handle.write(f"newtonPolishActiveJaccard {final_metrics['activeJaccard']}\n")
+                handle.write(f"newtonPolishPlateauJaccard {final_metrics['plateauJaccard']}\n")
+            handle.write(f"objectiveMode {args.objective_mode}\n")
+            handle.write(f"phiTargetNormSq {phi_target_norm_sq}\n")
             handle.write(f"phiTargetWeight {args.phi_target_weight}\n")
             handle.write(f"rhoTargetWeight {args.rho_target_weight}\n")
             handle.write(f"massTargetWeight {args.mass_target_weight}\n")
@@ -1420,7 +2078,10 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"relRhoDesign {final_metrics['relRhoDesign']}\n")
             handle.write(f"finalStatus {final_status}\n")
             handle.write(f"timeTotal {elapsed}\n")
-    if args.fail_on_nonconvergence and final_status not in {"OK", "OK_RESIDUAL"}:
+    success = final_status in {"OK", "OK_RESIDUAL"}
+    if newton_polish_result is not None:
+        success = success or newton_polish_result.status in {"CONVERGED_RESIDUAL", "CONVERGED_STEP"}
+    if args.fail_on_nonconvergence and not success:
         return 2
     return 0
 

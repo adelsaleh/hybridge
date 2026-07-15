@@ -259,6 +259,99 @@ For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
 use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
 Euclidean norm is the cheaper default for line-search comparisons.
 
+### DOLFINx Strategy A Diagnostics
+
+The repository also contains DOLFINx continuous-Galerkin Strategy A scripts for
+fixed-mesh experiments.  These require a Python environment with DOLFINx,
+Basix, PETSc, and Gmsh support.  They are intended for algorithm development
+and comparison against the native HDG driver, not as replacements for the HDG
+solver package.
+
+All-at-once residual-penalty diagnostic:
+
+```bash
+python scripts/strategyA_dolfinx_window_all_at_once.py \
+  --objective-mode simple-penalty \
+  --mesh-size 0.18 --star-n 140 --order 3 \
+  --eps-ratio 0.08 --residual-penalty 1.0 \
+  --max-opt-it 20 --linear-solver lu --direction-solver lu
+```
+
+The simple-penalty mode solves the diagnostic problem
+
+```text
+0.5 ||phi_h - phi_T,h||^2 / ||phi_T,h||^2
+  + 0.5 gamma ||F_h(phi_h,c;.)||^2_{V_h'}
+```
+
+using a stiffness-inverse dual residual norm.  This is useful for globalization
+and debugging because it avoids oversolving poor threshold pairs, but it is not
+the constrained closed-loop Strategy A problem unless the residual term is
+driven close to zero.  Use `--newton-polish-final` to project the selected
+thresholds back onto the fixed-window semilinear branch and compare the
+penalty state against the Newton-polished state.
+
+Closed-loop boundary-aware refit:
+
+```bash
+python scripts/strategyA_dolfinx_closed_loop_refit.py \
+  --mesh-size 0.18 --star-n 140 --order 4 \
+  --eps-ratio 0.08 --outer-it 6 \
+  --newton-max-it 25 --newton-tol-res 1e-8 \
+  --linear-solver lu \
+  --refit-center-fraction 0.08 \
+  --refit-width-fraction 0.08 \
+  --refit-center-grid 9 \
+  --refit-width-grid 9 \
+  --refit-refine-passes 1 \
+  --push-scale-fraction 0.05 \
+  --push-scale-grid 5 \
+  --push-ray-bins 720 \
+  --tol-rho-rel 5e-2 \
+  --verbosity 1
+```
+
+This script implements the reduced closed-loop loop:
+
+```text
+1. Newton-polish the semilinear state for the current c1,c2.
+2. Measure the actual torsion-density error after projection.
+3. If the projected density error is still above tolerance, refit c1,c2 using
+   a cheap pushed scalar-coordinate search.
+4. Repeat until the Newton-projected density reaches the torsion tolerance or
+   the refit stagnates.
+```
+
+The refit push is boundary-aware.  For a point
+`x = x0 + r e(theta)` and the mesh-estimated boundary ray length `R(theta)`,
+the code uses the normalized radius
+
+```text
+eta = r / R(theta)
+eta_push = eta + beta eta (1 - eta)
+```
+
+then samples `phi(x0 + eta_push R(theta) e(theta))`.  The displacement stays
+on the ray through the point, vanishes at the origin and boundary, and scales
+with the remaining distance to the boundary on that ray.  For generated
+smooth-star meshes, the band origin is `(0,0)`; mesh-file runs fall back to the
+mesh bounding-box center.  `--push-ray-bins` controls the angular resolution of
+the mesh-derived boundary radius table.
+
+Plotting controls are deliberately simple:
+
+```bash
+python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode nonblocking
+python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode blocking
+```
+
+With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
+grids and updates DOLFINx point-data arrays in place for every Newton polish
+state and every refit push.  This is the fast path for watching the iteration
+evolve.  Blocking mode keeps the one-state inspection behavior and waits for
+Enter at each plot.  `--save-frames` remains a separate one-shot render path
+for PNG artifacts.
+
 ### Strategy A DOLFINx CG Runner
 
 `scripts/strategyA_dolfinx_noadapt_torsion_newton.py` is the fixed-mesh

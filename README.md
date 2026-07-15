@@ -47,6 +47,27 @@ both runners then use the same triangle set, while DOLFINx can vary the CG
 polynomial order independently.  DOLFINx outputs are written under
 `run_logs/dolfinx_torsion_noadapt/`.
 
+Additional DOLFINx Strategy A diagnostics live in `scripts/`:
+
+```bash
+python scripts/strategyA_dolfinx_window_all_at_once.py --objective-mode simple-penalty
+python scripts/strategyA_dolfinx_closed_loop_refit.py --plot --plot-mode nonblocking
+```
+
+`strategyA_dolfinx_window_all_at_once.py` is a residual-penalty diagnostic for
+the joint state/window problem.  It can optionally polish the final state with
+fixed-window Newton, which is useful for checking whether a penalty-selected
+threshold pair survives projection onto the semilinear solution branch.
+
+`strategyA_dolfinx_closed_loop_refit.py` is the reduced closed-loop
+implementation recommended for threshold selection experiments.  It alternates
+fixed-threshold Newton projection with a cheap boundary-aware ray refit of
+`c1,c2` against the torsion-designed density.  The ray push uses a mesh-derived
+boundary radius table, so points move along rays from the band origin by an
+amount scaled by the remaining distance to the boundary.  With
+`--plot-mode nonblocking`, the live PyVista window updates DOLFINx scalar
+arrays in place instead of opening a new window for every Newton/refit iterate.
+
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
 available presets with:
