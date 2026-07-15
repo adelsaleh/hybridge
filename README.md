@@ -52,6 +52,7 @@ Additional DOLFINx Strategy A diagnostics live in `scripts/`:
 ```bash
 python scripts/strategyA_dolfinx_window_all_at_once.py --objective-mode simple-penalty
 python scripts/strategyA_dolfinx_closed_loop_refit.py --plot --plot-mode nonblocking
+python scripts/strategyA_dolfinx_window_reduced_optimization.py --eps-ratio 0.08 -v 2
 ```
 
 `strategyA_dolfinx_window_all_at_once.py` is a residual-penalty diagnostic for
@@ -67,6 +68,19 @@ boundary radius table, so points move along rays from the band origin by an
 amount scaled by the remaining distance to the boundary.  With
 `--plot-mode nonblocking`, the live PyVista window updates DOLFINx scalar
 arrays in place instead of opening a new window for every Newton/refit iterate.
+
+`strategyA_dolfinx_window_reduced_optimization.py` implements the
+gradient-based reduced-space algorithm from
+`docs/algorithms/strategyA_window_reduced_optimization/`.  It optimizes the
+two semilinear thresholds with soft leakage/missing-area functionals, solves
+two sensitivity equations per outer iteration, takes a constrained
+trust-region step in `(c1,c2)`, and then uses a sensitivity predictor followed
+by damped Newton correction.  The final state is always projected with exact
+Newton to `--tol-res`; if that final projection fails, the script exits
+nonzero.  Verbosity level `-v 2` prints the 12 algorithm steps and timings for
+the costly assembly/solve phases.  It uses the same generated smooth-star mesh
+defaults and blocking/nonblocking PyVista paths as the closed-loop refit
+runner.
 
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the

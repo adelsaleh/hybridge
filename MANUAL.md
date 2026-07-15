@@ -338,19 +338,55 @@ smooth-star meshes, the band origin is `(0,0)`; mesh-file runs fall back to the
 mesh bounding-box center.  `--push-ray-bins` controls the angular resolution of
 the mesh-derived boundary radius table.
 
+Reduced-space leakage/missing-area optimizer:
+
+```bash
+python scripts/strategyA_dolfinx_window_reduced_optimization.py \
+  --mesh-size 0.18 --star-n 140 --order 4 \
+  --alphaT1 0.60 --alphaT2 0.70 --eps-t-ratio 0.06 \
+  --eps-mode relative --eps-ratio 0.08 \
+  --max-opt-it 25 --eta-out 0.02 --tol-area 0.05 \
+  --tol-res 1e-10 --final-newton-max-it 200 \
+  --linear-solver mumps -v 2
+```
+
+This runner follows the reduced algorithm in
+`docs/algorithms/strategyA_window_reduced_optimization/`.  At each outer
+iteration it projects the state for the current thresholds, evaluates soft
+leakage and missing-area discrepancies, solves the two sensitivity equations,
+forms reduced gradients, and takes a constrained trust-region step in
+`(c1,c2)`.  The predictor/corrector stage then filters trial steps using
+residual, geometry, branch-overlap, and collapse checks.
+
+`--inner-tol-mode inexact` may use relaxed Newton tolerances during the outer
+loop, but the reported final state is always projected again with exact Newton
+to `--tol-res`.  If that final projection fails, the process exits with code
+`3` and reports `final_status=NEWTON_NOT_CONVERGED`.  Use
+`--inner-tol-mode exact` when every accepted outer iterate should also satisfy
+the requested residual tolerance.
+
+Verbosity levels are `-v 0` for summaries, `-v 1` for iteration diagnostics,
+and `-v 2` for the numbered algorithm trace.  The highest level prints
+`ALGO_STEP` lines matching steps 1 through 12 of the algorithm note, including
+timings for Newton projection, sensitivity assembly/solves, trust-region
+selection, correction, and acceptance filtering.  Outputs are written under
+`run_logs/dolfinx_window_reduced_optimization/`.
+
 Plotting controls are deliberately simple:
 
 ```bash
 python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode nonblocking
 python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode blocking
+python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode nonblocking
+python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode blocking
 ```
 
 With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
 grids and updates DOLFINx point-data arrays in place for every Newton polish
-state and every refit push.  This is the fast path for watching the iteration
-evolve.  Blocking mode keeps the one-state inspection behavior and waits for
-Enter at each plot.  `--save-frames` remains a separate one-shot render path
-for PNG artifacts.
+state, refit push, or accepted reduced-optimization iterate.  This is the fast
+path for watching the iteration evolve.  Blocking mode keeps the one-state
+inspection behavior and waits for Enter at each plot.  `--save-frames` remains
+a separate one-shot render path for PNG artifacts.
 
 ### Strategy A DOLFINx CG Runner
 
