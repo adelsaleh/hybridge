@@ -1,15 +1,15 @@
-# Strategy A Band Parameter Study
+# Torsion-Initialized Newton Band Parameter Study
 
 Date: 2026-07-12
 
-This study checks how the Strategy A band parameters
+This study checks how the torsion-initialized Newton band parameters
 `alphaT1`, `alphaT2`, `betaPhi1`, and `betaPhi2` affect the agreement between
 the torsion-designed density band and the final converged equilibrium density
-band in `scripts/strategyA_dolfinx_noadapt_torsion_newton.py`.
+band in `scripts/dolfinx_torsion_initialized_newton.py`.
 
 ## Setup
 
-- Solver: DOLFINx Strategy A torsion/Newton runner.
+- Solver: DOLFINx torsion-initialized Newton runner.
 - Polynomial order: `p=4`.
 - Mesh: fixed smooth-star Gmsh mesh,
   `run_outputs/strategyA_band_study_20260712/fixed_mesh/smooth_star_h007_n300.msh`.
@@ -122,6 +122,95 @@ had `c1Phi` far above `max(phiDesign)` and ended nonconverged with zero or
 near-zero final density.  The successful equilibria in this study use the
 classical `phi-design` beta window above.  A compact runnable summary is kept
 in `docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md`.
+
+### Torsion-Scale `c1,c2` Retest Around the Original FreeFEM Window
+
+We retested nonlinear windows whose absolute thresholds are close to the
+original torsion fractions
+
+```text
+alphaT1 = 0.60,
+alphaT2 = 0.70,
+c1 = alphaT1 * max(T),
+c2 = alphaT2 * max(T).
+```
+
+In these runs the torsion-designed initializer stayed fixed at
+`alphaT=(0.60,0.70)`, while the semilinear nonlinear window used
+`--phi-window-source torsion`.  Thus `betaPhi1,betaPhi2` did not define the
+nonlinear thresholds.  The runs used the Dolfinx no-adapt runner with `p=4`,
+`starN=300`, `meshSize=0.07`, MUMPS, no plotting, and the same continuation
+ratios as the rest of this study.  The raw rows are in
+`docs/strategyA_band_parameter_study/torsion_window_retest_results.csv`.
+
+The result is unambiguous: these thresholds live on the torsion scale, while
+the semilinear unknown `phi` lives on the smaller `phiDesign` scale.  Here
+`max(T)=0.4677279` and `max(phiDesign)=0.04977098`, so even the lowest retested
+`c1` is more than five times larger than `max(phiDesign)`.  The nonlinear
+window therefore sees essentially no density and the solver resets to the
+design state at each continuation level.
+
+| c1/max(T) | c2/max(T) | shift | width scale | c1 | c2 | c1/max(phiDesign) | c2/max(phiDesign) | max rho | mass rho | relRhoDesign | status |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `0.58` | `0.68` | `-0.2` | `1.0` | 0.271282 | 0.318055 | 5.451 | 6.390 | 0.0 | 0.0 | 1.0 | `NONCONVERGED` |
+| `0.59` | `0.69` | `-0.1` | `1.0` | 0.275959 | 0.322732 | 5.545 | 6.484 | 0.0 | 0.0 | 1.0 | `NONCONVERGED` |
+| `0.60` | `0.70` | `0.0` | `1.0` | 0.280637 | 0.327410 | 5.639 | 6.578 | 0.0 | 0.0 | 1.0 | `NONCONVERGED` |
+| `0.61` | `0.71` | `0.1` | `1.0` | 0.285314 | 0.332087 | 5.733 | 6.672 | 0.0 | 0.0 | 1.0 | `NONCONVERGED` |
+| `0.62` | `0.72` | `0.2` | `1.0` | 0.289991 | 0.336764 | 5.827 | 6.766 | 0.0 | 0.0 | 1.0 | `NONCONVERGED` |
+
+This confirms that reusing `alpha_i*max(T)` directly as the semilinear
+`c_i` thresholds is not scale-compatible for this formulation.  The successful
+windows must be chosen on the `phiDesign` scale, or the torsion-scale thresholds
+must first be mapped through the Poisson initializer before being used as
+semilinear `phi` thresholds.
+
+### Fitted Torsion-Design Window v2
+
+The separate v2 Dolfinx runner
+
+```text
+scripts/dolfinx_torsion_initialized_window_fit_newton.py
+```
+
+has no `--phi-window-source` switch.  The fitted path is unconditional.  The
+original v1 runner, `scripts/dolfinx_torsion_initialized_newton.py`,
+keeps the previous `phi-design` and `torsion` window-source interface.  In v2,
+the fitted mode keeps the torsion-designed density `rhoDesign=f(T;c1T,c2T)`
+unchanged, solves the Poisson initializer `-Delta phiDesign=rhoDesign`, and
+then chooses `c1Phi,c2Phi` by minimizing
+
+```text
+|| f(phiDesign; c1Phi, c2Phi, epsFit) - rhoDesign ||_L2.
+```
+
+The fit is done on Dolfinx/Basix quadrature samples.  The search itself uses a
+weighted `phiDesign` histogram so the candidate scan is fast, then the selected
+pair is evaluated once against the full quadrature samples.  In the p=4,
+`starN=300`, `meshSize=0.07` comparison below, the fit used 893,090 quadrature
+samples, 4,096 histogram bins, and took 0.305 seconds.
+
+The important result is negative: fitting the initializer mismatch is not the
+same as fitting the final nonlinear fixed point.  The fitted window converges
+as a nonlinear solve, but its final density band separates badly from the
+torsion-designed band.  It is therefore not competitive with the best
+hand-shifted `phi-design` windows from the sweep.
+
+Raw rows are in
+`docs/strategyA_band_parameter_study/fitted_window_v2_comparison.csv`.
+
+| case | alphaT | phi window | c1Phi/max(phiDesign) | c2Phi/max(phiDesign) | relRhoDesign | mass diff | activeJaccard | plateauJaccard | time (s) | status |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| fitted v2 | `(0.60,0.70)` | fitted to `rhoDesign` | 0.855610 | 0.958922 | 1.262052 | -0.157657 | 0.072171 | 0.000000 | 76.01 | `OK` |
+| best balanced beta | `(0.40,0.50)` | `(0.75625,0.89375)*max(phiDesign)` | 0.756250 | 0.893750 | 0.409461 | -0.002107 | 0.664255 | 0.541667 | 60.12 | `OK` |
+| best relRhoDesign beta | `(0.40,0.50)` | `(0.80,0.95)*max(phiDesign)` | 0.800000 | 0.950000 | 0.384985 | 0.018011 | 0.582051 | 0.648425 | 92.95 | `OK` |
+| best activeJaccard beta | `(0.40,0.50)` | `(0.60625,0.69375)*max(phiDesign)` | 0.606250 | 0.693750 | 0.547906 | -0.130093 | 0.758497 | 0.364937 | 60.00 | `OK` |
+
+The fitted v2 window is useful diagnostically because it gives an automated
+map from the torsion-designed density to a `phi`-scale nonlinear window.
+However, on this test it maps to a high `phi` window and converges to a much
+smaller active overlap.  The next automated approach should therefore fit a
+closed-loop criterion, for example an outer search over `c1Phi,c2Phi` using the
+final converged density diagnostics, not only the initializer mismatch.
 
 ## Completed Runs
 
@@ -491,3 +580,97 @@ Dense-grid interpretation:
   difference.
 - If active-band overlap is the primary criterion, the best tested band is
   `gamma=0.875, delta=0.20`, i.e. `beta=(0.6062,0.6937)`.
+
+## Appendix: Tested Window Parameters
+
+The full normalized parameter and diagnostics table is recorded in
+`docs/strategyA_band_parameter_study/tested_parameter_values.csv`.  It contains
+one row per unique attempted combination of
+`alphaT1, alphaT2, betaPhi1, betaPhi2`, including completed, interrupted, and
+timed-out runs.  For completed runs the same row also records the measured
+diagnostics: runtime, final residual, density-design mismatch, mass difference,
+active-band overlap, plateau overlap, and the final annular overshoot measure.
+
+The numerical values of the thresholds are run-dependent because they are
+computed from the torsion maximum and the maximum of the torsion-designed
+semilinear initialization.  In normalized form the torsion window is
+
+```text
+c1T(alphaT1, alphaT2) = alphaT1 * Tmax,
+c2T(alphaT1, alphaT2) = alphaT2 * Tmax.
+```
+
+After solving the torsion-designed initialization for a fixed torsion window,
+let
+
+```text
+PhiDmax(alphaT1, alphaT2) = max(phiDesign).
+```
+
+The nonlinear semilinear window is then
+
+```text
+c1Phi(alphaT1, alphaT2, betaPhi1) = betaPhi1 * PhiDmax(alphaT1, alphaT2),
+c2Phi(alphaT1, alphaT2, betaPhi2) = betaPhi2 * PhiDmax(alphaT1, alphaT2).
+```
+
+Equivalently, the normalized columns in
+`tested_parameter_values.csv` satisfy
+`c1T_over_Tmax = alphaT1`, `c2T_over_Tmax = alphaT2`,
+`c1Phi_over_phiDesignMax = betaPhi1`, and
+`c2Phi_over_phiDesignMax = betaPhi2`.
+
+The diagnostic columns in the CSV are attached directly to the tested parameter
+pair.  In particular:
+
+- `diagnostic_status` is the representative run status used for the diagnostics.
+- `statuses` lists all observed statuses for that exact parameter combination
+  when it appeared in more than one sweep.
+- `resEuclid`, `relRhoDesign`, `rhoDesignDiffL2`, `massRhoMinusDesign`,
+  `activeJaccard`, `plateauJaccard`, and `annularPhiMinusC2` are copied from
+  the completed run whenever available.
+- `diagnostic_source` identifies which sweep file provided the representative
+  diagnostics, while `sources` lists every sweep file containing the parameter
+  pair.
+
+Grouped by torsion window, the tested values were:
+
+| alphaT1 | alphaT2 | c1T | c2T | unique beta windows tested | betaPhi windows |
+|---:|---:|---:|---:|---:|---|
+| `0.05` | `0.15` | `0.05*Tmax` | `0.15*Tmax` | 1 | `(0.05,0.15)` |
+| `0.10` | `0.20` | `0.10*Tmax` | `0.20*Tmax` | 2 | `(0.10,0.20)`, `(0.65,0.75)` |
+| `0.20` | `0.30` | `0.20*Tmax` | `0.30*Tmax` | 2 | `(0.20,0.30)`, `(0.65,0.75)` |
+| `0.35` | `0.45` | `0.35*Tmax` | `0.45*Tmax` | 2 | `(0.55,0.65)`, `(0.60,0.70)` |
+| `0.375` | `0.475` | `0.375*Tmax` | `0.475*Tmax` | 1 | `(0.65,0.75)` |
+| `0.40` | `0.50` | `0.40*Tmax` | `0.50*Tmax` | 151 | see `tested_parameter_values.csv` |
+| `0.425` | `0.525` | `0.425*Tmax` | `0.525*Tmax` | 2 | `(0.60,0.70)`, `(0.65,0.75)` |
+| `0.45` | `0.55` | `0.45*Tmax` | `0.55*Tmax` | 3 | `(0.55,0.65)`, `(0.60,0.70)`, `(0.65,0.75)` |
+| `0.50` | `0.60` | `0.50*Tmax` | `0.60*Tmax` | 1 | `(0.60,0.70)` |
+| `0.55` | `0.65` | `0.55*Tmax` | `0.65*Tmax` | 1 | `(0.60,0.70)` |
+| `0.60` | `0.70` | `0.60*Tmax` | `0.70*Tmax` | 5 | `(0.50,0.65)`, `(0.55,0.70)`, `(0.60,0.70)`, `(0.60,0.75)`, `(0.65,0.80)` |
+| `0.65` | `0.75` | `0.65*Tmax` | `0.75*Tmax` | 1 | `(0.60,0.70)` |
+| `0.70` | `0.80` | `0.70*Tmax` | `0.80*Tmax` | 1 | `(0.70,0.80)` |
+| `0.80` | `0.90` | `0.80*Tmax` | `0.90*Tmax` | 2 | `(0.40,0.50)`, `(0.80,0.90)` |
+| `0.90` | `0.98` | `0.90*Tmax` | `0.98*Tmax` | 1 | `(0.90,0.98)` |
+
+The following roll-up table gives the best completed diagnostics within each
+torsion window.  The complete per-pair diagnostics are in
+`tested_parameter_values.csv`.
+
+| alphaT1 | alphaT2 | pairs | OK | non-OK | best beta by relRhoDesign | relRhoDesign | mass diff | activeJaccard | best beta by activeJaccard | activeJaccard | relRhoDesign |
+|---:|---:|---:|---:|---:|---|---:|---:|---:|---|---:|---:|
+| `0.05` | `0.15` | 1 | 1 | 0 | `(0.05,0.15)` | 0.9717 | -0.386779 | 0.494615 | `(0.05,0.15)` | 0.494615 | 0.9717 |
+| `0.1` | `0.2` | 2 | 1 | 1 | `(0.1,0.2)` | 1.10557 | -0.240512 | 0.324523 | `(0.1,0.2)` | 0.324523 | 1.10557 |
+| `0.2` | `0.3` | 2 | 1 | 1 | `(0.2,0.3)` | 1.2241 | -0.0687194 | 0.19116 | `(0.2,0.3)` | 0.19116 | 1.2241 |
+| `0.35` | `0.45` | 2 | 2 | 0 | `(0.6,0.7)` | 0.694458 | -0.0941182 | 0.6596 | `(0.6,0.7)` | 0.6596 | 0.694458 |
+| `0.375` | `0.475` | 1 | 1 | 0 | `(0.65,0.75)` | 0.497609 | -0.11252 | 0.631468 | `(0.65,0.75)` | 0.631468 | 0.497609 |
+| `0.4` | `0.5` | 151 | 132 | 19 | `(0.8,0.95)` | 0.384392 | 0.0178971 | 0.583595 | `(0.60625,0.69375)` | 0.757761 | 0.548298 |
+| `0.425` | `0.525` | 2 | 2 | 0 | `(0.65,0.75)` | 0.587736 | -0.0825392 | 0.772225 | `(0.65,0.75)` | 0.772225 | 0.587736 |
+| `0.45` | `0.55` | 3 | 3 | 0 | `(0.65,0.75)` | 0.730655 | -0.0695894 | 0.747043 | `(0.65,0.75)` | 0.747043 | 0.730655 |
+| `0.5` | `0.6` | 1 | 1 | 0 | `(0.6,0.7)` | 1.22651 | -0.00878374 | 0.40818 | `(0.6,0.7)` | 0.40818 | 1.22651 |
+| `0.55` | `0.65` | 1 | 1 | 0 | `(0.6,0.7)` | 1.29509 | 0.00968927 | 0.308372 | `(0.6,0.7)` | 0.308372 | 1.29509 |
+| `0.6` | `0.7` | 5 | 3 | 2 | `(0.6,0.7)` | 1.32858 | 0.02451 | 0.241929 | `(0.6,0.7)` | 0.241929 | 1.32858 |
+| `0.65` | `0.75` | 1 | 1 | 0 | `(0.6,0.7)` | 1.34598 | 0.0358783 | 0.20153 | `(0.6,0.7)` | 0.20153 | 1.34598 |
+| `0.7` | `0.8` | 1 | 1 | 0 | `(0.7,0.8)` | 0.826071 | -0.0540661 | 0.816894 | `(0.7,0.8)` | 0.816894 | 0.826071 |
+| `0.8` | `0.9` | 2 | 1 | 1 | `(0.4,0.5)` | 1.52042 | 0.307132 | 0 | `(0.4,0.5)` | 0 | 1.52042 |
+| `0.9` | `0.98` | 1 | 0 | 1 | - | - | - | - | - | - | - |

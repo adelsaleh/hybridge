@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Reduced-space optimizer for Strategy A logistic-window thresholds.
+"""Reduced-space optimizer for torsion-initialized logistic-window thresholds.
 
 This runner implements the reduced optimization algorithm described in
-``docs/algorithms/strategyA_window_reduced_optimization``.  It keeps the
+``docs/algorithms/torsion_initialized_window_reduced_optimization``.  It keeps the
 torsion target fixed, solves the semilinear state equation for each current
 ``(c1Phi, c2Phi)``, computes reduced gradients through two sensitivity solves,
 and updates the two thresholds with a constrained trust-region step.
@@ -15,6 +15,12 @@ torsion band and the soft missing area inside that band:
 
 where ``W`` is the unscaled logistic activity.  The semilinear PDE still uses
 ``rho_amp * W`` as its density.
+
+The implementation also reports a practical certified-subband success status.
+When the whole torsion band cannot be matched on the selected semilinear
+branch, a run can still be useful if the final certified plateau is contained
+in the torsion band and has enough area.  In that case the final status is
+``CONVERGED_CERTIFIED_SUBBAND`` instead of ``CONVERGED``.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ import csv
 import math
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -42,28 +49,30 @@ for path in (REPO_ROOT, SCRIPT_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from strategyA_dolfinx_noadapt_torsion_newton_v2 import (  # noqa: E402
+from dolfinx_torsion_initialized_window_fit_newton import (  # noqa: E402
     assemble_scalar,
     boundary_bc,
     compute_metrics,
     fit_phi_window_to_torsion_design,
     global_minmax,
     load_or_generate_mesh,
+    quadrature_samples_for_fit,
     root_print,
     slug_for_path,
     solve_linear_form,
     solver_options,
     update_interpolated,
+    window_numpy,
     window_ufl,
 )
-from strategyA_dolfinx_closed_loop_refit import InPlacePyVistaStrategyPlotter  # noqa: E402
+from dolfinx_torsion_initialized_closed_loop_refit import InPlacePyVistaTorsionPlotter  # noqa: E402
 
 
-DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_window_reduced_optimization"
+DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_initialized_window_reduced_optimization"
 
 
 @dataclass
-class StrategyParameters:
+class TorsionParameters:
     """Fixed parameters defining the torsion-designed target band.
 
     These values are not optimized by this reduced-space runner.  They define
@@ -239,13 +248,84 @@ class ParameterStep:
     status: str
 
 
+@dataclass
+class InitialWindowCandidate:
+    """One automatically generated initial potential-window candidate.
+
+    The reduced optimizer is sensitive to the branch selected by the initial
+    thresholds.  The existing L2 density fit is retained, but this record lets
+    the script compare it against geometric candidates before starting the
+    nonlinear closed-loop phase.
+
+    Attributes:
+        name: Stable label identifying how the candidate was generated.
+        c1: Lower potential threshold.
+        c2: Upper potential threshold.
+        eps_phi: Smoothing width associated with ``(c1,c2)``.
+        leakage_rel: Sampled soft leakage divided by the torsion target area.
+        missing_rel: Sampled missing target area divided by the torsion target
+            area.
+        activity_area: Sampled total soft activity area.
+        area_rel: ``activity_area / target_area``.
+        active_jaccard: Sampled soft overlap Jaccard score with the torsion
+            design activity.
+        l2_rel: Relative L2 density mismatch
+            ``||rho_amp*W(phi_target)-rho_design||/||rho_design||``.
+        score: Fixed initializer score used to rank candidates.  It emphasizes
+            target coverage, leakage, and total area mismatch.
+    """
+
+    name: str
+    c1: float
+    c2: float
+    eps_phi: float
+    leakage_rel: float
+    missing_rel: float
+    activity_area: float
+    area_rel: float
+    active_jaccard: float
+    l2_rel: float
+    score: float
+
+
+@dataclass
+class ProjectedInitialCandidate:
+    """Initial window candidate after fixed-threshold Newton projection.
+
+    The algebraic fit on ``phi_target`` is only a branch-selection hint.  The
+    optimizer actually starts from a state that satisfies the semilinear PDE at
+    fixed ``(c1,c2)``.  This record stores the post-projection state and its
+    geometric diagnostics so the initializer can choose the branch that remains
+    closest to the torsion-designed band after Newton, instead of choosing only
+    from the pre-projection density fit.
+
+    Attributes:
+        base: Pre-projection candidate and its sampled ``phi_target`` metrics.
+        newton: Newton projection result for this fixed threshold pair.
+        metrics: Soft leakage/missing metrics measured on the projected state.
+        diagnostics: Legacy density and active-set diagnostics measured on the
+            projected state.
+        score: Projected initializer score.  Lower is better.
+        state: Copy of the projected finite-element state coefficients.
+        density: Copy of the projected window-density coefficients.
+    """
+
+    base: InitialWindowCandidate
+    newton: NewtonResult
+    metrics: BandMetrics
+    diagnostics: dict[str, float]
+    score: float
+    state: np.ndarray
+    density: np.ndarray
+
+
 def make_run_dir(args: argparse.Namespace) -> Path:
     """Create a unique run directory for logs, plots, and summaries.
 
     If the user supplies ``--run-dir`` and that path already exists, the
     function appends a timestamp/suffix rather than overwriting prior results.
-    This mirrors the other Strategy A runners and keeps every optimization run
-    reproducible from its generated CSV and summary files.
+    This mirrors the other torsion-initialized Newton runners and keeps every
+    optimization run reproducible from its generated CSV and summary files.
 
     Args:
         args: Parsed command-line namespace containing ``run_dir`` and
@@ -270,26 +350,26 @@ def make_run_dir(args: argparse.Namespace) -> Path:
     return candidate
 
 
-def params_from_args(args: argparse.Namespace) -> StrategyParameters:
+def params_from_args(args: argparse.Namespace) -> TorsionParameters:
     """Build validated torsion-target parameters from command-line overrides.
 
-    The dataclass carries the defaults used in the Strategy A parameter
-    studies.  This function applies optional CLI overrides and validates the
-    mathematical preconditions for the torsion band: the upper fractional
-    threshold must exceed the lower one, and the torsion smoothing ratio must
-    be positive.
+    The dataclass carries the defaults used in the torsion-initialized Newton
+    parameter studies.  This function applies optional CLI overrides and
+    validates the mathematical preconditions for the torsion band: the upper
+    fractional threshold must exceed the lower one, and the torsion smoothing
+    ratio must be positive.
 
     Args:
         args: Parsed command-line namespace.
 
     Returns:
-        ``StrategyParameters`` with user overrides applied.
+        ``TorsionParameters`` with user overrides applied.
 
     Raises:
         ValueError: If the torsion thresholds are not ordered or the torsion
             smoothing ratio is nonpositive.
     """
-    params = StrategyParameters()
+    params = TorsionParameters()
     if args.alpha_t1 is not None:
         params.alpha_t1 = float(args.alpha_t1)
     if args.alpha_t2 is not None:
@@ -318,7 +398,7 @@ def log_algorithm_step(
     """Print one detailed algorithm-step trace line at verbosity level 2.
 
     The step numbers intentionally match the numbered algorithm in
-    ``strategyA_window_reduced_optimization.tex``.  The output is therefore
+    ``torsion_initialized_window_reduced_optimization.tex``.  The output is therefore
     grep-friendly and can be used to identify which expensive phase dominates
     wall time in a run.
 
@@ -472,7 +552,7 @@ def window_c_derivatives_activity_ufl(values, c1, c2, eps, *, eps_mode: str, eps
     For a fixed epsilon, the derivatives are the formulas from the algorithm
     note: ``dW/dc1 = -q1/eps`` and ``dW/dc2 = q2/eps``.  In relative-epsilon
     mode this script uses ``eps = eps_ratio * (c2-c1)`` to match the other
-    Strategy A runners.  The total derivatives then include
+    torsion-initialized Newton runners.  The total derivatives then include
     ``dW/deps * deps/dci`` with ``deps/dc1 = -eps_ratio`` and
     ``deps/dc2 = eps_ratio``.
 
@@ -504,9 +584,9 @@ def epsilon_from_thresholds(args: argparse.Namespace, c1: float, c2: float) -> f
     """Compute the semilinear smoothing width for one threshold pair.
 
     The mathematical note is written for a fixed ``epsilon``.  The numerical
-    Strategy A runners usually use a width-relative value so the interface
-    thickness follows the band width.  This function is the single place where
-    that convention is selected.
+    torsion-initialized Newton runners usually use a width-relative value so
+    the interface thickness follows the band width.  This function is the
+    single place where that convention is selected.
 
     Args:
         args: Parsed command-line namespace containing ``eps_mode``,
@@ -595,12 +675,370 @@ def project_thresholds(
     return center - 0.5 * width, center + 0.5 * width
 
 
+def global_weighted_quantile(
+        comm: MPI.Comm,
+        values: np.ndarray,
+        weights: np.ndarray,
+        quantile: float,
+) -> float:
+    """Compute a weighted quantile from distributed NumPy samples.
+
+    The initializer uses this only once for modest quadrature sample arrays, so
+    gathering to rank zero is simpler and less error-prone than implementing a
+    distributed selection algorithm.  Nonpositive and nonfinite weights are
+    ignored.
+
+    Args:
+        comm: MPI communicator.
+        values: Local sample values.
+        weights: Local nonnegative sample weights.
+        quantile: Desired quantile in ``[0,1]``.
+
+    Returns:
+        Weighted quantile value, broadcast to every rank.  Returns ``nan`` if
+        no positive-weight samples exist.
+    """
+    q = min(max(float(quantile), 0.0), 1.0)
+    local_values = np.asarray(values, dtype=np.float64)
+    local_weights = np.asarray(weights, dtype=np.float64)
+    mask = np.isfinite(local_values) & np.isfinite(local_weights) & (local_weights > 0.0)
+    gathered = comm.gather((local_values[mask], local_weights[mask]), root=0)
+    result = math.nan
+    if comm.rank == 0:
+        value_parts = [part_values for part_values, part_weights in gathered if part_values.size and part_weights.size]
+        weight_parts = [part_weights for part_values, part_weights in gathered if part_values.size and part_weights.size]
+        if value_parts:
+            all_values = np.concatenate(value_parts)
+            all_weights = np.concatenate(weight_parts)
+            order = np.argsort(all_values)
+            sorted_values = all_values[order]
+            sorted_weights = all_weights[order]
+            cumulative = np.cumsum(sorted_weights)
+            total = float(cumulative[-1])
+            if total > 0.0:
+                target = q * total
+                index = int(np.searchsorted(cumulative, target, side="left"))
+                index = min(max(index, 0), sorted_values.size - 1)
+                result = float(sorted_values[index])
+    return float(comm.bcast(result, root=0))
+
+
+def initial_candidate_from_thresholds(
+        *,
+        comm: MPI.Comm,
+        name: str,
+        c1: float,
+        c2: float,
+        phi_values: np.ndarray,
+        rho_values: np.ndarray,
+        weights: np.ndarray,
+        rho_design_l2: float,
+        rho_amp: float,
+        target_area: float,
+        c_min: float,
+        c_max: float,
+        min_width: float,
+        args: argparse.Namespace,
+) -> InitialWindowCandidate:
+    """Project, evaluate, and score one initializer threshold pair.
+
+    Candidate metrics are sampled on ``phi_target`` before the nonlinear state
+    solve.  The target indicator is the smoothed torsion design
+    ``rho_design/rho_amp`` clipped to ``[0,1]``; this is deliberate because the
+    initializer should be robust to the same smoothing used to create the
+    Poisson target.
+
+    Args:
+        comm: MPI communicator.
+        name: Candidate label.
+        c1: Proposed lower threshold.
+        c2: Proposed upper threshold.
+        phi_values: Local quadrature samples of ``phi_target``.
+        rho_values: Local quadrature samples of ``rho_design``.
+        weights: Local physical quadrature weights.
+        rho_design_l2: Global L2 norm of ``rho_design``.
+        rho_amp: Density amplitude.
+        target_area: Crisp torsion target area used for relative metrics.
+        c_min: Lower admissible threshold.
+        c_max: Upper admissible threshold.
+        min_width: Minimum admissible threshold width.
+        args: Parsed CLI namespace.
+
+    Returns:
+        Scored ``InitialWindowCandidate``.
+    """
+    c1, c2 = project_thresholds(c1, c2, c_min=c_min, c_max=c_max, min_width=min_width)
+    eps_phi = epsilon_from_thresholds(args, c1, c2)
+    activity = window_numpy(np.asarray(phi_values, dtype=np.float64), c1, c2, eps_phi, 1.0)
+    density = float(rho_amp) * activity
+    target = np.clip(np.asarray(rho_values, dtype=np.float64) / max(float(rho_amp), 1.0e-30), 0.0, 1.0)
+    weights = np.asarray(weights, dtype=np.float64)
+    local_leakage = float(np.dot(weights, (1.0 - target) * activity))
+    local_missing = float(np.dot(weights, target * (1.0 - activity)))
+    local_activity_area = float(np.dot(weights, activity))
+    local_overlap = float(np.dot(weights, target * activity))
+    local_l2_sq = float(np.dot(weights, (density - rho_values) ** 2))
+    global_values = np.array(
+        [local_leakage, local_missing, local_activity_area, local_overlap, local_l2_sq],
+        dtype=np.float64,
+    )
+    reduced = np.empty_like(global_values)
+    comm.Allreduce(global_values, reduced, op=MPI.SUM)
+    leakage, missing, activity_area, overlap, l2_sq = map(float, reduced)
+    target_scale = max(float(target_area), 1.0e-30)
+    leakage_rel = leakage / target_scale
+    missing_rel = missing / target_scale
+    area_rel = activity_area / target_scale
+    union = max(float(target_area) + activity_area - overlap, 1.0e-30)
+    active_jaccard = overlap / union
+    l2_rel = math.sqrt(max(l2_sq, 0.0)) / max(float(rho_design_l2), 1.0e-30)
+    score = 2.0 * missing_rel + leakage_rel + abs(area_rel - 1.0)
+    return InitialWindowCandidate(
+        name=name,
+        c1=c1,
+        c2=c2,
+        eps_phi=eps_phi,
+        leakage_rel=leakage_rel,
+        missing_rel=missing_rel,
+        activity_area=activity_area,
+        area_rel=area_rel,
+        active_jaccard=active_jaccard,
+        l2_rel=l2_rel,
+        score=score,
+    )
+
+
+def area_matched_initial_thresholds(
+        *,
+        comm: MPI.Comm,
+        center: float,
+        phi_values: np.ndarray,
+        weights: np.ndarray,
+        target_area: float,
+        c_min: float,
+        c_max: float,
+        min_width: float,
+        args: argparse.Namespace,
+) -> tuple[float, float]:
+    """Choose a centered window width whose sampled activity area matches target area.
+
+    The center is usually the target-weighted median of ``phi_target``.  Width
+    is found by bisection because the sampled activity area is monotone in the
+    window width for a fixed center and positive smoothing ratio.  Projection
+    keeps the candidate admissible near search-boundary centers.
+
+    Args:
+        comm: MPI communicator.
+        center: Desired threshold center.
+        phi_values: Local quadrature samples of ``phi_target``.
+        weights: Local physical quadrature weights.
+        target_area: Desired activity area.
+        c_min: Lower admissible threshold.
+        c_max: Upper admissible threshold.
+        min_width: Minimum admissible threshold width.
+        args: Parsed CLI namespace.
+
+    Returns:
+        Area-matched admissible ``(c1,c2)``.
+    """
+
+    def projected_from_width(width: float) -> tuple[float, float]:
+        """Return projected thresholds with the requested center/width."""
+        return project_thresholds(
+            float(center) - 0.5 * float(width),
+            float(center) + 0.5 * float(width),
+            c_min=c_min,
+            c_max=c_max,
+            min_width=min_width,
+        )
+
+    def activity_area_for(c1: float, c2: float) -> float:
+        """Evaluate sampled activity area for one threshold interval."""
+        eps_phi = epsilon_from_thresholds(args, c1, c2)
+        activity = window_numpy(np.asarray(phi_values, dtype=np.float64), c1, c2, eps_phi, 1.0)
+        local_area = float(np.dot(np.asarray(weights, dtype=np.float64), activity))
+        return float(comm.allreduce(local_area, op=MPI.SUM))
+
+    lo = float(min_width)
+    hi = max(float(c_max) - float(c_min), lo)
+    best = projected_from_width(lo)
+    best_error = math.inf
+    for _ in range(48):
+        width = 0.5 * (lo + hi)
+        c1, c2 = projected_from_width(width)
+        area = activity_area_for(c1, c2)
+        error = abs(area - float(target_area))
+        if error < best_error:
+            best = (c1, c2)
+            best_error = error
+        if area < float(target_area):
+            lo = width
+        else:
+            hi = width
+    return best
+
+
+def build_initial_window_candidates(
+        *,
+        phi_target: fem.Function,
+        rho_design: fem.Function,
+        fit_candidate: tuple[str, float, float] | None,
+        rho_design_l2: float,
+        rho_amp: float,
+        target_area: float,
+        quadrature_degree: int,
+        c_min: float,
+        c_max: float,
+        min_width: float,
+        args: argparse.Namespace,
+) -> list[InitialWindowCandidate]:
+    """Generate L2, target-quantile, and area-matched initial windows.
+
+    No additional user parameters are exposed.  The quantile candidates use
+    fixed central target-weighted ranges of ``phi_target`` under the smoothed
+    target-band weights.  The area-matched candidate uses the same
+    target-weighted median as its center and chooses a width whose sampled
+    activity area is close to the torsion target area.
+
+    Args:
+        phi_target: Poisson target potential ``-Delta^{-1} rho_design``.
+        rho_design: Smoothed torsion-designed density.
+        fit_candidate: Optional ``(name,c1,c2)`` from the existing L2 fit.
+        rho_design_l2: Global L2 norm of ``rho_design``.
+        rho_amp: Density amplitude.
+        target_area: Crisp torsion target area.
+        quadrature_degree: Degree used for initialization samples.
+        c_min: Lower admissible threshold.
+        c_max: Upper admissible threshold.
+        min_width: Minimum admissible threshold width.
+        args: Parsed CLI namespace.
+
+    Returns:
+        List of scored candidates.  The caller should choose the minimum score.
+    """
+    comm = phi_target.function_space.mesh.comm
+    phi_values, rho_values, weights = quadrature_samples_for_fit(
+        phi_target,
+        rho_design,
+        quadrature_degree=int(quadrature_degree),
+    )
+    candidates: list[InitialWindowCandidate] = []
+
+    def append_candidate(name: str, c1: float, c2: float) -> None:
+        """Add one projected/scored candidate if it is finite."""
+        candidate = initial_candidate_from_thresholds(
+            comm=comm,
+            name=name,
+            c1=c1,
+            c2=c2,
+            phi_values=phi_values,
+            rho_values=rho_values,
+            weights=weights,
+            rho_design_l2=rho_design_l2,
+            rho_amp=rho_amp,
+            target_area=target_area,
+            c_min=c_min,
+            c_max=c_max,
+            min_width=min_width,
+            args=args,
+        )
+        if math.isfinite(candidate.score):
+            candidates.append(candidate)
+
+    if fit_candidate is not None:
+        name, c1_fit, c2_fit = fit_candidate
+        append_candidate(name, c1_fit, c2_fit)
+
+    target_weights = np.asarray(weights, dtype=np.float64) * np.clip(
+        np.asarray(rho_values, dtype=np.float64) / max(float(rho_amp), 1.0e-30),
+        0.0,
+        1.0,
+    )
+    q05 = global_weighted_quantile(comm, phi_values, target_weights, 0.05)
+    q10 = global_weighted_quantile(comm, phi_values, target_weights, 0.10)
+    q50 = global_weighted_quantile(comm, phi_values, target_weights, 0.50)
+    q90 = global_weighted_quantile(comm, phi_values, target_weights, 0.90)
+    q95 = global_weighted_quantile(comm, phi_values, target_weights, 0.95)
+    if math.isfinite(q05) and math.isfinite(q95) and q95 > q05:
+        append_candidate("target_quantile_05_95", q05, q95)
+    if math.isfinite(q10) and math.isfinite(q90) and q90 > q10:
+        append_candidate("target_quantile_10_90", q10, q90)
+    if math.isfinite(q50):
+        c1_area, c2_area = area_matched_initial_thresholds(
+            comm=comm,
+            center=q50,
+            phi_values=phi_values,
+            weights=weights,
+            target_area=target_area,
+            c_min=c_min,
+            c_max=c_max,
+            min_width=min_width,
+            args=args,
+        )
+        append_candidate("target_median_area", c1_area, c2_area)
+    return candidates
+
+
+def projected_initial_candidate_score(
+        *,
+        metrics: BandMetrics,
+        diagnostics: dict[str, float],
+        target_area: float,
+        converged: bool,
+) -> float:
+    """Score an initializer candidate after semilinear Newton projection.
+
+    The pre-projection density L2 fit can look acceptable on ``phi_target`` and
+    still jump to a branch whose active set misses the torsion band once the
+    fixed-threshold PDE is solved.  This score therefore emphasizes quantities
+    measured on the projected semilinear state:
+
+    * missing target area, with the largest weight, because a branch that does
+      not cover the torsion band leaves the reduced optimizer minimizing
+      leakage while the missing-area gradient can be uninformative;
+    * leakage and total activity-area mismatch as secondary controls, to avoid
+      simply selecting an overly thick global band;
+    * active-set recall/Jaccard and relative density mismatch, to keep the
+      selected state geometrically close to the torsion-designed density.
+
+    Args:
+        metrics: Soft leakage/missing metrics for the projected state.
+        diagnostics: Density diagnostics returned by ``compute_metrics`` for
+            the same projected state.
+        target_area: Crisp torsion target area used to normalize area
+            mismatch.
+        converged: Whether the initializer Newton projection reached its
+            requested residual tolerance.
+
+    Returns:
+        Nonnegative scalar score.  Lower is better; a failed projection receives
+        a finite penalty so it can still be reported if every candidate fails.
+    """
+    area_rel = metrics.activity_area / max(float(target_area), 1.0e-30)
+    active_overlap = float(diagnostics.get("activeOverlapArea", 0.0))
+    active_design_area = max(float(diagnostics.get("activeDesignArea", 0.0)), 1.0e-30)
+    active_recall = active_overlap / active_design_area
+    active_jaccard = float(diagnostics.get("activeJaccard", 0.0))
+    rho_rel = float(diagnostics.get("relRhoDesign", 0.0))
+    projection_penalty = 5.0 if not converged else 0.0
+    return (
+        projection_penalty
+        + 10.0 * max(metrics.missing_rel, 0.0)
+        + 0.5 * max(metrics.leakage_rel, 0.0)
+        + 0.5 * abs(area_rel - 1.0)
+        + max(1.0 - active_recall, 0.0)
+        + 0.5 * max(1.0 - active_jaccard, 0.0)
+        + 0.25 * max(rho_rel, 0.0)
+    )
+
+
 def assemble_vector_form(linear_form, bc) -> PETSc.Vec:
     """Assemble a linear UFL form into a PETSc vector with Dirichlet data.
 
     The helper mirrors the residual-vector assembly pattern used elsewhere in
-    the Strategy A scripts: assemble local contributions, accumulate ghosts
-    back to owners, then impose the homogeneous boundary condition entries.
+    the torsion-initialized Newton scripts: assemble local contributions,
+    accumulate ghosts back to owners, then impose the homogeneous boundary
+    condition entries.
 
     Args:
         linear_form: UFL linear form.
@@ -883,10 +1321,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line options for the reduced optimizer.
 
     The CLI intentionally follows the naming conventions of the existing
-    Strategy A DOLFINx scripts.  Defaults match the star-shaped mesh generation
-    and torsion initializer used in the current experiments, while options are
-    exposed for the reduced optimizer controls, Newton globalization, plotting,
-    and logging.
+    DOLFINx torsion-initialized Newton scripts.  Defaults match the star-shaped
+    mesh generation and torsion initializer used in the current experiments,
+    while options are exposed for the reduced optimizer controls, Newton
+    globalization, plotting, and logging.
 
     Args:
         argv: Optional argument list.  ``None`` means use ``sys.argv``.
@@ -933,11 +1371,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tol-area", type=float, default=5.0e-2)
     parser.add_argument("--tol-grad", type=float, default=1.0e-8)
     parser.add_argument("--tol-res", type=float, default=1.0e-10)
-    parser.add_argument("--inner-tol-mode", choices=("exact", "inexact"), default="inexact")
-    parser.add_argument("--inner-tol-max", type=float, default=1.0e-7)
+    parser.add_argument("--inner-newton-tol", type=float, default=None)
+    parser.add_argument("--inner-tol-max", type=float, default=1.0e-5)
     parser.add_argument("--inner-tol-gamma", type=float, default=1.0e-6)
     parser.add_argument("--max-newton-it", type=int, default=40)
+    parser.add_argument("--final-newton-tol-res", type=float, default=None)
     parser.add_argument("--final-newton-max-it", type=int, default=200)
+    parser.add_argument("--min-certified-area-fraction", type=float, default=0.50)
     parser.add_argument("--tol-step", type=float, default=1.0e-10)
     parser.add_argument("--max-backtrack", type=int, default=24)
     parser.add_argument("--alpha-min", type=float, default=1.0e-8)
@@ -978,6 +1418,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--plot-initial", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--plot-design", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--plot-optimization", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--plot-severe", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--plot-every", type=int, default=5)
     parser.add_argument("--plot-final", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--save-frames", action="store_true")
@@ -1029,10 +1470,16 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("require nonnegative --tol-area")
     if args.tol_res <= 0.0 or args.inner_tol_max <= 0.0 or args.inner_tol_gamma <= 0.0:
         raise ValueError("require positive residual tolerances")
+    if args.inner_newton_tol is not None and args.inner_newton_tol <= 0.0:
+        raise ValueError("require positive --inner-newton-tol")
     if args.max_newton_it < 1:
         raise ValueError("require positive --max-newton-it")
+    if args.final_newton_tol_res is not None and args.final_newton_tol_res <= 0.0:
+        raise ValueError("require positive --final-newton-tol-res")
     if args.final_newton_max_it < 1:
         raise ValueError("require positive --final-newton-max-it")
+    if not (0.0 <= args.min_certified_area_fraction <= 1.0):
+        raise ValueError("require 0 <= --min-certified-area-fraction <= 1")
     if args.max_backtrack < 0:
         raise ValueError("require nonnegative --max-backtrack")
     if not (0.0 < args.beta_ls < 1.0):
@@ -1056,14 +1503,18 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def inner_tolerance(args: argparse.Namespace, discrepancy_rel: float) -> float:
-    """Choose the current inexact Newton tolerance for the outer loop.
+    """Choose the adaptive Newton tolerance for outer-loop state projections.
 
-    When ``--inner-tol-mode exact`` is selected, every state projection uses
-    ``--tol-res``.  In inexact mode, early outer iterations may use a looser
-    tolerance proportional to the current geometric discrepancy.  Once leakage
-    plus missing area is near the requested final thresholds, the tolerance is
-    tightened back to ``--tol-res`` so reduced gradients are not dominated by
-    state-solve error.
+    By default the outer loop uses relaxed state solves while the geometric
+    discrepancy is far above the requested leakage/missing-area envelope.  The
+    tolerance is scaled by
+    ``discrepancy_rel / (eta_out + tol_area)``, clipped by
+    ``--inner-tol-max``, and never allowed below ``--tol-res``.  This keeps the
+    first few reduced iterations from oversolving poor threshold pairs while
+    still tightening the solve as the band becomes competitive.  Supplying
+    ``--inner-newton-tol`` disables the adaptive rule and forces every inner
+    projection and trial correction to that fixed residual tolerance; this is
+    mainly a testing and verification knob.
 
     Args:
         args: Parsed command-line namespace.
@@ -1072,12 +1523,74 @@ def inner_tolerance(args: argparse.Namespace, discrepancy_rel: float) -> float:
     Returns:
         Residual tolerance for the next fixed-threshold Newton projection.
     """
-    if args.inner_tol_mode == "exact":
-        return float(args.tol_res)
-    if discrepancy_rel <= float(args.eta_out) + float(args.tol_area):
-        return float(args.tol_res)
-    loose = min(float(args.inner_tol_max), float(args.inner_tol_gamma) * max(float(discrepancy_rel), 1.0e-14))
+    if args.inner_newton_tol is not None:
+        return float(args.inner_newton_tol)
+    target_discrepancy = max(float(args.eta_out) + float(args.tol_area), 1.0e-14)
+    discrepancy_scale = max(float(discrepancy_rel) / target_discrepancy, 1.0)
+    loose = min(float(args.inner_tol_max), float(args.inner_tol_gamma) * discrepancy_scale)
     return max(float(args.tol_res), loose)
+
+
+def final_newton_tolerance(args: argparse.Namespace) -> float:
+    """Return the residual target for the final exact Newton projection.
+
+    ``--tol-res`` remains the baseline residual tolerance used by the adaptive
+    inner policy.  ``--final-newton-tol-res`` can be set independently when the
+    outer loop should run with a looser baseline but the final projected state
+    must be certified to a tighter residual.  If the final-specific option is
+    omitted, the final projection uses ``--tol-res`` for backward-compatible
+    behavior.
+
+    Args:
+        args: Parsed command-line namespace.
+
+    Returns:
+        Positive final Newton residual tolerance.
+    """
+    if args.final_newton_tol_res is not None:
+        return float(args.final_newton_tol_res)
+    return float(args.tol_res)
+
+
+def certified_subband_success(
+        *,
+        metrics: BandMetrics,
+        target_area: float,
+        eta_out: float,
+        min_area_fraction: float,
+) -> tuple[bool, float, float]:
+    """Check the practical certified-subband success criterion.
+
+    The strict reduced objective tries to match the whole torsion-designed band:
+    small soft leakage and small soft missing area.  Some semilinear branches
+    cannot match that target well, but still produce a useful equilibrium band
+    that is safely contained in the torsion band and has nontrivial area.  This
+    helper separates that practical outcome from a true failure.
+
+    The certified region is the interior plateau
+    ``c1 + kappa*eps <= phi <= c2 - kappa*eps``.  It is intentionally stricter
+    than the soft logistic activity used by the optimizer, so passing this
+    check means the final state contains a genuine plateau sub-band rather than
+    only transition-layer mass.
+
+    Args:
+        metrics: Final soft/certified band metrics.
+        target_area: Crisp torsion target area.
+        eta_out: Allowed certified leakage as a fraction of ``target_area``.
+        min_area_fraction: Required certified area as a fraction of
+            ``target_area``.
+
+    Returns:
+        ``(ok, certified_leakage_rel, certified_area_rel)``.
+    """
+    area_scale = max(float(target_area), 1.0e-30)
+    certified_leakage_rel = metrics.certified_leakage / area_scale
+    certified_area_rel = metrics.certified_area / area_scale
+    ok = (
+        certified_leakage_rel <= float(eta_out)
+        and certified_area_rel >= float(min_area_fraction)
+    )
+    return ok, certified_leakage_rel, certified_area_rel
 
 
 def solve_equilibrium(
@@ -1100,6 +1613,7 @@ def solve_equilibrium(
         tol_res: float,
         args: argparse.Namespace,
         prefix: str,
+        plot_callback: Callable[[str, int, float, float, int, float, float, float], None] | None = None,
 ) -> NewtonResult:
     """Project the current state onto the fixed-threshold semilinear branch.
 
@@ -1136,6 +1650,10 @@ def solve_equilibrium(
             solver tolerances.
         prefix: PETSc options prefix stem for all linear solves and residual
             norm solves from this projection.
+        plot_callback: Optional hook called after each accepted Newton update.
+            The callback receives ``(prefix, newton_iteration, residual,
+            alpha, backtracks, c1, c2, eps_phi)``.  It is used only for severe
+            plotting and must not change the numerical state.
 
     Returns:
         ``NewtonResult`` describing convergence, residual, damping, and solve
@@ -1238,6 +1756,8 @@ def solve_equilibrium(
 
         last_alpha = alpha
         last_bt = bt
+        if plot_callback is not None:
+            plot_callback(prefix, k, final_residual, alpha, bt, c1, c2, eps_phi)
         if args.verbosity >= 2:
             root_print(
                 comm,
@@ -1764,33 +2284,40 @@ def run_strategy(args: argparse.Namespace) -> int:
     4. Solve the torsion problem and construct the crisp torsion band.
     5. Build the smoothed torsion-designed density and Poisson target
        potential.
-    6. Initialize potential thresholds, usually with the existing
-       ``phi_target`` window fit.
-    7. Iterate the reduced algorithm: inexact Newton projection, soft
+    6. Initialize potential thresholds by generating density-fit,
+       target-quantile, and area-matched candidates, Newton-projecting each
+       candidate, and selecting the best projected branch.
+    7. Iterate the reduced algorithm: adaptive Newton projection, soft
        discrepancy evaluation, sensitivity solves, reduced-gradient formation,
        two-variable trust-region update, sensitivity prediction, Newton
        correction, and accept/reject filtering.
-    8. Always run a final exact Newton projection to ``--tol-res`` before
-       reporting final metrics.
+    8. Always run a final exact Newton projection to
+       ``--final-newton-tol-res`` when supplied, otherwise ``--tol-res``,
+       before reporting final metrics.
 
-    The implementation deliberately keeps the outer geometric objective and
-    the final Newton feasibility status separate.  The script exits with a
-    nonzero code if the final exact Newton projection cannot reach the
-    requested tolerance, even if the geometric metrics improved.
+    The implementation deliberately keeps the outer geometric objective, final
+    Newton feasibility, and practical certified-subband status separate.  A
+    strict full-band match reports ``CONVERGED``.  A contained nontrivial
+    certified plateau reports ``CONVERGED_CERTIFIED_SUBBAND``.  The script
+    exits with a nonzero code if the final exact Newton projection cannot reach
+    the requested tolerance, even if the geometric metrics improved.
 
     Args:
         args: Parsed and already syntactically valid command-line namespace.
 
     Returns:
         Process-style return code.  ``0`` means the final Newton projection
-        reached ``--tol-res``; ``2`` means the optional
+        reached the requested final residual tolerance; ``2`` means the optional
         ``--fail-on-nonconvergence`` policy rejected the final geometric
         status; ``3`` means the final Newton projection itself did not
         converge.
     """
     validate_args(args)
+    if args.plot_severe:
+        args.plot = True
     comm = MPI.COMM_WORLD
     params = params_from_args(args)
+    final_tol_res = final_newton_tolerance(args)
     run_dir = make_run_dir(args) if comm.rank == 0 else None
     run_dir = Path(comm.bcast(str(run_dir), root=0))
     run_tag = run_dir.name
@@ -1817,7 +2344,12 @@ def run_strategy(args: argparse.Namespace) -> int:
         "REDUCED_OBJECTIVE "
         f"etaOut={args.eta_out:.6e} tolArea={args.tol_area:.6e} "
         f"epsMode={args.eps_mode} epsRatio={args.eps_ratio:.6e} epsPhi={args.eps_phi} "
-        f"kappa={args.kappa:.6e} deltaC={args.delta_c:.6e}",
+        f"kappa={args.kappa:.6e} deltaC={args.delta_c:.6e} "
+        f"tolRes={args.tol_res:.6e} finalNewtonTolRes={final_tol_res:.6e} "
+        f"innerNewtonTol={args.inner_newton_tol} innerTolMax={args.inner_tol_max:.6e} "
+        f"innerTolGamma={args.inner_tol_gamma:.6e} "
+        f"minCertifiedAreaFraction={args.min_certified_area_fraction:.6e} "
+        f"plotSevere={int(args.plot_severe)}",
     )
 
     mesh_start = time.perf_counter()
@@ -1859,7 +2391,7 @@ def run_strategy(args: argparse.Namespace) -> int:
     frame_writer = csv.DictWriter(frame_handle, fieldnames=frame_fields) if comm.rank == 0 else None
     if frame_writer is not None:
         frame_writer.writeheader()
-    plotter = InPlacePyVistaStrategyPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer, comm=comm)
+    plotter = InPlacePyVistaTorsionPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer, comm=comm)
 
     if args.plot_initial:
         mesh_field = fem.Function(V, name="mesh")
@@ -1947,6 +2479,9 @@ def run_strategy(args: argparse.Namespace) -> int:
     )
     root_print(comm, f"SEARCH_DOMAIN cMin={c_min:.6e} cMax={c_upper:.6e} minWidth={min_width:.6e}")
 
+    init_candidate_name = "manual"
+    init_candidate_score = math.nan
+    init_candidates: list[InitialWindowCandidate] = []
     if args.c1_phi is not None:
         c1_phi = float(args.c1_phi)
         c2_phi = float(args.c2_phi)
@@ -1966,26 +2501,55 @@ def run_strategy(args: argparse.Namespace) -> int:
             refine_passes=args.fit_window_refine_passes,
             histogram_bins=args.fit_window_bins,
         )
-        c1_phi = fit_result.c1
-        c2_phi = fit_result.c2
         root_print(
             comm,
             f"FIT_INIT c1={fit_result.c1:.6e} c2={fit_result.c2:.6e} "
             f"objectiveRel={fit_result.objective_rel:.6e} time={fit_result.elapsed:.3f}",
+        )
+        init_candidates = build_initial_window_candidates(
+            phi_target=phi_target,
+            rho_design=rho_design,
+            fit_candidate=("density_l2", fit_result.c1, fit_result.c2),
+            rho_design_l2=rho_design_l2,
+            rho_amp=params.rho_amp,
+            target_area=target_area,
+            quadrature_degree=fit_quad_degree,
+            c_min=c_min,
+            c_max=c_upper,
+            min_width=min_width,
+            args=args,
+        )
+        if not init_candidates:
+            raise RuntimeError("failed to generate any automatic initial window candidates")
+        for candidate in init_candidates:
+            root_print(
+                comm,
+                f"INIT_CANDIDATE name={candidate.name} c1={candidate.c1:.6e} "
+                f"c2={candidate.c2:.6e} width={candidate.c2 - candidate.c1:.6e} "
+                f"epsPhi={candidate.eps_phi:.6e} score={candidate.score:.6e} "
+                f"Lrel={candidate.leakage_rel:.6e} Mrel={candidate.missing_rel:.6e} "
+                f"areaRel={candidate.area_rel:.6e} activeJ={candidate.active_jaccard:.6e} "
+                f"l2Rel={candidate.l2_rel:.6e}",
+            )
+        selected_init = min(init_candidates, key=lambda candidate: candidate.score)
+        c1_phi = selected_init.c1
+        c2_phi = selected_init.c2
+        init_candidate_name = selected_init.name
+        init_candidate_score = selected_init.score
+        root_print(
+            comm,
+            f"INIT_PRESELECT name={selected_init.name} c1={c1_phi:.6e} c2={c2_phi:.6e} "
+            f"score={selected_init.score:.6e}",
         )
     else:
         center = c_min + 0.65 * c_scale
         width = max(0.15 * c_scale, min_width)
         c1_phi = center - 0.5 * width
         c2_phi = center + 0.5 * width
+        init_candidate_name = "fallback_center_width"
 
     c1_phi, c2_phi = project_thresholds(c1_phi, c2_phi, c_min=c_min, c_max=c_upper, min_width=min_width)
     eps_phi = epsilon_from_thresholds(args, c1_phi, c2_phi)
-    root_print(
-        comm,
-        f"WINDOW_INIT c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} "
-        f"width={c2_phi - c1_phi:.6e} epsPhi={eps_phi:.6e}",
-    )
 
     u.x.array[:] = phi_target.x.array
     u.x.scatter_forward()
@@ -1994,7 +2558,148 @@ def run_strategy(args: argparse.Namespace) -> int:
     eps_const = fem.Constant(domain, PETSc.ScalarType(eps_phi))
     update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
 
+    def project_initial_candidate(
+            candidate: InitialWindowCandidate,
+            index: int,
+    ) -> ProjectedInitialCandidate:
+        """Newton-project and score one automatic initial-window candidate.
+
+        Each candidate is projected from the same target potential ``phi_target``
+        so the comparison reflects the branch induced by its thresholds rather
+        than any previous candidate's terminal state.  The returned state arrays
+        are copies because later candidate projections reuse the same work
+        functions.
+        """
+        c1_candidate, c2_candidate = project_thresholds(
+            candidate.c1,
+            candidate.c2,
+            c_min=c_min,
+            c_max=c_upper,
+            min_width=min_width,
+        )
+        eps_candidate = epsilon_from_thresholds(args, c1_candidate, c2_candidate)
+        u.x.array[:] = phi_target.x.array
+        u.x.scatter_forward()
+        projection_tol = inner_tolerance(args, candidate.leakage_rel + candidate.missing_rel)
+        projection_start = time.perf_counter()
+        newton = solve_equilibrium(
+            u=u,
+            du=du,
+            rho=rho,
+            trial=trial,
+            test=test,
+            dx=dx,
+            bc=bc,
+            stiffness_form=stiffness_form,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            c1=c1_candidate,
+            c2=c2_candidate,
+            eps_phi=eps_candidate,
+            rho_amp=params.rho_amp,
+            tol_res=projection_tol,
+            args=args,
+            prefix=f"init_{index}_{slug_for_path(candidate.name)}",
+        )
+        projection_time = time.perf_counter() - projection_start
+        metrics = evaluate_band_metrics(
+            comm=comm,
+            u=u,
+            tau_mask=tau_mask,
+            dx=dx,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            c1=c1_candidate,
+            c2=c2_candidate,
+            eps_phi=eps_candidate,
+            kappa=args.kappa,
+            target_area=target_area,
+        )
+        residual_form_for_projection = (
+            ufl.inner(ufl.grad(u), ufl.grad(test))
+            - window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp) * test
+        ) * dx
+        update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
+        diagnostics = compute_metrics(
+            u=u,
+            rho=rho,
+            rho_design=rho_design,
+            rho_design_l2=rho_design_l2,
+            residual_form=residual_form_for_projection,
+            bc=bc,
+            dx=dx,
+            c2_phi=c2_candidate,
+            active_threshold=params.active_threshold,
+            plateau_threshold=params.plateau_threshold,
+            rho_amp=params.rho_amp,
+        )
+        projected_score = projected_initial_candidate_score(
+            metrics=metrics,
+            diagnostics=diagnostics,
+            target_area=target_area,
+            converged=newton.converged,
+        )
+        area_rel = metrics.activity_area / max(target_area, 1.0e-30)
+        root_print(
+            comm,
+            f"INIT_PROJECT name={candidate.name} c1={c1_candidate:.6e} c2={c2_candidate:.6e} "
+            f"width={c2_candidate - c1_candidate:.6e} epsPhi={eps_candidate:.6e} "
+            f"tol={projection_tol:.3e} status={newton.status} converged={int(newton.converged)} "
+            f"iters={newton.iterations} residual={newton.residual:.6e} time={projection_time:.3f} "
+            f"score={projected_score:.6e} Lrel={metrics.leakage_rel:.6e} "
+            f"Mrel={metrics.missing_rel:.6e} areaRel={area_rel:.6e} "
+            f"activeJ={diagnostics['activeJaccard']:.6e} rhoRel={diagnostics['relRhoDesign']:.6e}",
+        )
+        return ProjectedInitialCandidate(
+            base=candidate,
+            newton=newton,
+            metrics=metrics,
+            diagnostics=diagnostics,
+            score=projected_score,
+            state=u.x.array.copy(),
+            density=rho.x.array.copy(),
+        )
+
+    if init_candidates:
+        projected_candidates = [
+            project_initial_candidate(candidate, index)
+            for index, candidate in enumerate(init_candidates)
+        ]
+        selected_projected = min(projected_candidates, key=lambda candidate: candidate.score)
+        c1_phi = selected_projected.base.c1
+        c2_phi = selected_projected.base.c2
+        c1_phi, c2_phi = project_thresholds(c1_phi, c2_phi, c_min=c_min, c_max=c_upper, min_width=min_width)
+        eps_phi = epsilon_from_thresholds(args, c1_phi, c2_phi)
+        c1_const.value = PETSc.ScalarType(c1_phi)
+        c2_const.value = PETSc.ScalarType(c2_phi)
+        eps_const.value = PETSc.ScalarType(eps_phi)
+        u.x.array[:] = selected_projected.state
+        u.x.scatter_forward()
+        rho.x.array[:] = selected_projected.density
+        rho.x.scatter_forward()
+        init_candidate_name = selected_projected.base.name
+        init_candidate_score = selected_projected.score
+        root_print(
+            comm,
+            f"INIT_PROJECT_SELECT name={init_candidate_name} c1={c1_phi:.6e} c2={c2_phi:.6e} "
+            f"score={init_candidate_score:.6e} residual={selected_projected.newton.residual:.6e}",
+        )
+
+    root_print(
+        comm,
+        f"WINDOW_INIT c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} "
+        f"width={c2_phi - c1_phi:.6e} epsPhi={eps_phi:.6e} "
+        f"init={init_candidate_name} initScore={init_candidate_score:.6e}",
+    )
+
     if args.plot_design:
+        selected_u = u.x.array.copy()
+        selected_rho = rho.x.array.copy()
+        u.x.array[:] = phi_target.x.array
+        u.x.scatter_forward()
+        update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
         plotter.emit(
             [T, tau_band, rho_design, phi_target, rho],
             ["Torsion T", "tau band", "rhoDesign", "phiT", "rho(phiT; c)"],
@@ -2010,6 +2715,90 @@ def run_strategy(args: argparse.Namespace) -> int:
             nt=nt,
             ndof=ndof,
         )
+        u.x.array[:] = selected_u
+        u.x.scatter_forward()
+        rho.x.array[:] = selected_rho
+        rho.x.scatter_forward()
+
+    def emit_severe_plot(
+            *,
+            stage: str,
+            outer_k: int,
+            token: str,
+            eps_phi_value: float,
+            residual: float,
+            title_suffix: str,
+    ) -> None:
+        """Emit a high-frequency diagnostic plot for Newton/refit internals.
+
+        Severe plotting is intentionally isolated from the normal
+        ``--plot-every`` cadence.  It is meant for debugging branch following:
+        every accepted Newton update can be visualized, and the predicted or
+        accepted/rejected threshold-refit state can be inspected immediately.
+        """
+        if not args.plot_severe:
+            return
+        phi_diff.x.array[:] = u.x.array - phi_target.x.array
+        phi_diff.x.scatter_forward()
+        plotter.emit(
+            [T, tau_band, phi_target, u, rho, phi_diff],
+            [
+                "Torsion T",
+                "tau band",
+                "phiT",
+                f"phi {title_suffix}",
+                f"rho(phi) {title_suffix}",
+                "phi-phiT",
+            ],
+            stage=stage,
+            ieps=0,
+            k=outer_k,
+            eps_phi=eps_phi_value,
+            residual=residual,
+            metrics={},
+            token=token,
+            save=bool(args.save_frames),
+            show=True,
+            nt=nt,
+            ndof=ndof,
+        )
+
+    def make_newton_plot_callback(
+            *,
+            outer_k: int,
+            stage: str,
+    ) -> Callable[[str, int, float, float, int, float, float, float], None] | None:
+        """Build the severe plotting hook for one fixed-threshold Newton solve."""
+        if not args.plot_severe:
+            return None
+
+        def callback(
+                prefix: str,
+                newton_k: int,
+                residual: float,
+                alpha: float,
+                backtracks: int,
+                c1_value: float,
+                c2_value: float,
+                eps_phi_value: float,
+        ) -> None:
+            """Emit the current accepted Newton state for severe plotting."""
+            token = f"{slug_for_path(prefix)}_newton_{newton_k:03d}"
+            suffix = (
+                f"{stage} n={newton_k} "
+                f"c=({c1_value:.3e},{c2_value:.3e}) "
+                f"a={alpha:.2e} bt={backtracks}"
+            )
+            emit_severe_plot(
+                stage=stage,
+                outer_k=outer_k,
+                token=token,
+                eps_phi_value=eps_phi_value,
+                residual=residual,
+                title_suffix=suffix,
+            )
+
+        return callback
 
     fieldnames = [
         "record", "runTag", "k", "nt", "ndof", "status", "accepted",
@@ -2065,6 +2854,7 @@ def run_strategy(args: argparse.Namespace) -> int:
                 tol_res=inner_tol,
                 args=args,
                 prefix=f"outer_{k}",
+                plot_callback=make_newton_plot_callback(outer_k=k, stage="NEWTON_OUTER"),
             )
             inner_time = time.perf_counter() - inner_start
             log_algorithm_step(
@@ -2085,7 +2875,7 @@ def run_strategy(args: argparse.Namespace) -> int:
             # Algorithm step 2: evaluate the soft activity window and both
             # geometric discrepancies.  The separate diagnostic block computes
             # legacy density/active-set metrics for comparison with the other
-            # Strategy A runners.
+            # torsion-initialized Newton runners.
             band_start = time.perf_counter()
             metrics = evaluate_band_metrics(
                 comm=comm,
@@ -2158,8 +2948,12 @@ def run_strategy(args: argparse.Namespace) -> int:
             rho_ratio = math.nan
             branch_overlap = 1.0
             projected_grad_norm = math.nan
+            inner_projection_ok = (
+                newton.converged
+                or newton.residual <= max(10.0 * float(inner_tol), float(args.tol_res))
+            )
             stop_ready = (
-                newton.residual <= float(args.tol_res)
+                inner_projection_ok
                 and metrics.leakage_rel <= float(args.eta_out)
                 and metrics.missing_rel <= float(args.tol_area)
             )
@@ -2296,7 +3090,23 @@ def run_strategy(args: argparse.Namespace) -> int:
                         trial_eps = epsilon_from_thresholds(args, trial_c1, trial_c2)
                         u.x.array[:] = old_u + float(step.dc[0]) * s1.x.array + float(step.dc[1]) * s2.x.array
                         u.x.scatter_forward()
+                        c1_const.value = PETSc.ScalarType(trial_c1)
+                        c2_const.value = PETSc.ScalarType(trial_c2)
+                        eps_const.value = PETSc.ScalarType(trial_eps)
+                        update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
                         trial_inner_tol = inner_tolerance(args, previous_discrepancy_rel)
+                        emit_severe_plot(
+                            stage="REFIT_PREDICT",
+                            outer_k=k,
+                            token=f"refit_predict_{k:03d}",
+                            eps_phi_value=trial_eps,
+                            residual=newton.residual,
+                            title_suffix=(
+                                f"predict k={k} "
+                                f"c=({trial_c1:.3e},{trial_c2:.3e}) "
+                                f"dc=({step.dc[0]:.2e},{step.dc[1]:.2e})"
+                            ),
+                        )
                         predictor_time = time.perf_counter() - predictor_start
                         log_algorithm_step(
                             comm,
@@ -2332,6 +3142,7 @@ def run_strategy(args: argparse.Namespace) -> int:
                             tol_res=trial_inner_tol,
                             args=args,
                             prefix=f"outer_{k}_trial",
+                            plot_callback=make_newton_plot_callback(outer_k=k, stage="NEWTON_TRIAL"),
                         )
                         correction_time = time.perf_counter() - correction_start
                         log_algorithm_step(
@@ -2402,8 +3213,50 @@ def run_strategy(args: argparse.Namespace) -> int:
                             c1_phi = trial_c1
                             c2_phi = trial_c2
                             eps_phi = trial_eps
+                            metrics = trial_band
                             final_metrics = trial_band
                             final_newton = trial_newton
+                            residual_form_for_metrics = (
+                                ufl.inner(ufl.grad(u), ufl.grad(test))
+                                - window_density_const_ufl(
+                                    u,
+                                    c1_const,
+                                    c2_const,
+                                    eps_const,
+                                    params.rho_amp,
+                                ) * test
+                            ) * dx
+                            update_interpolated(
+                                rho,
+                                window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp),
+                            )
+                            diagnostic_metrics = compute_metrics(
+                                u=u,
+                                rho=rho,
+                                rho_design=rho_design,
+                                rho_design_l2=rho_design_l2,
+                                residual_form=residual_form_for_metrics,
+                                bc=bc,
+                                dx=dx,
+                                c2_phi=c2_phi,
+                                active_threshold=params.active_threshold,
+                                plateau_threshold=params.plateau_threshold,
+                                rho_amp=params.rho_amp,
+                            )
+                            final_compute_metrics = diagnostic_metrics
+                            active_overlap_area = diagnostic_metrics["activeOverlapArea"]
+                            active_recall = active_overlap_area / max(diagnostic_metrics["activeDesignArea"], 1.0e-30)
+                            active_precision = active_overlap_area / max(diagnostic_metrics["activeArea"], 1.0e-30)
+                            active_dice = 2.0 * active_overlap_area / max(
+                                diagnostic_metrics["activeDesignArea"] + diagnostic_metrics["activeArea"],
+                                1.0e-30,
+                            )
+                            phi_l2 = math.sqrt(max(assemble_scalar(comm, (u - phi_target) ** 2 * dx), 0.0))
+                            phi_rel = phi_l2 / max(phi_target_l2, 1.0e-30)
+                            mass_rel = diagnostic_metrics["massRhoMinusDesign"] / max(abs(rho_design_mass), 1.0e-30)
+                            previous_discrepancy_rel = metrics.leakage_rel + metrics.missing_rel
+                            newton = trial_newton
+                            inner_tol = trial_inner_tol
                             if rho_ratio < 0.25:
                                 trust_radius_abs *= float(args.trust_shrink)
                             elif rho_ratio > 0.75 and step.hit_boundary:
@@ -2425,6 +3278,18 @@ def run_strategy(args: argparse.Namespace) -> int:
                             update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
                             trust_radius_abs = max(float(args.trust_radius_min) * c_scale, trust_radius_abs * float(args.trust_shrink))
                             status = "REJECT"
+                        emit_severe_plot(
+                            stage=f"REFIT_{status}",
+                            outer_k=k,
+                            token=f"refit_{status.lower()}_{k:03d}",
+                            eps_phi_value=eps_phi,
+                            residual=trial_newton.residual if accepted else newton.residual,
+                            title_suffix=(
+                                f"{status.lower()} k={k} "
+                                f"c=({c1_phi:.3e},{c2_phi:.3e}) "
+                                f"rho={rho_ratio:.2e}"
+                            ),
+                        )
                         acceptance_time = time.perf_counter() - acceptance_start
                         log_algorithm_step(
                             comm,
@@ -2571,9 +3436,9 @@ def run_strategy(args: argparse.Namespace) -> int:
     if final_metrics is None or final_newton is None or final_compute_metrics is None:
         raise RuntimeError("optimization did not produce a final iterate")
 
-    # Final feasibility policy: no matter how loose the inexact outer Newton
-    # solves were, the reported final state must satisfy the requested residual
-    # tolerance at the final thresholds.
+    # Final feasibility policy: no matter how loose the adaptive outer Newton
+    # solves were, the reported final state must satisfy the requested final
+    # residual tolerance at the final thresholds.
     eps_phi = epsilon_from_thresholds(args, c1_phi, c2_phi)
     final_newton_args = argparse.Namespace(**vars(args))
     final_newton_args.max_newton_it = int(args.final_newton_max_it)
@@ -2594,9 +3459,10 @@ def run_strategy(args: argparse.Namespace) -> int:
         c2=c2_phi,
         eps_phi=eps_phi,
         rho_amp=params.rho_amp,
-        tol_res=float(args.tol_res),
+        tol_res=final_tol_res,
         args=final_newton_args,
         prefix="final_exact",
+        plot_callback=make_newton_plot_callback(outer_k=-1, stage="NEWTON_FINAL"),
     )
     final_exact_time = time.perf_counter() - final_exact_start
     log_algorithm_step(
@@ -2607,7 +3473,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         label="final_exact_newton_projection",
         elapsed=final_exact_time,
         detail=(
-            f"tol={args.tol_res:.3e} maxIt={args.final_newton_max_it} status={final_newton.status} "
+            f"tol={final_tol_res:.3e} maxIt={args.final_newton_max_it} status={final_newton.status} "
             f"converged={int(final_newton.converged)} iters={final_newton.iterations} "
             f"residual={final_newton.residual:.6e} linearSolveTime={final_newton.solve_time:.6f}s"
         ),
@@ -2644,35 +3510,61 @@ def run_strategy(args: argparse.Namespace) -> int:
         plateau_threshold=params.plateau_threshold,
         rho_amp=params.rho_amp,
     )
+    final_geometry_ok = (
+        final_metrics.leakage_rel <= float(args.eta_out)
+        and final_metrics.missing_rel <= float(args.tol_area)
+    )
+    # The optimizer's strict objective is a full soft-band match.  The
+    # certified-subband status is a weaker but useful success mode: a genuine
+    # plateau with small certified leakage and enough certified area.
+    certified_subband_ok, final_certified_leakage_rel, final_certified_area_rel = certified_subband_success(
+        metrics=final_metrics,
+        target_area=target_area,
+        eta_out=args.eta_out,
+        min_area_fraction=args.min_certified_area_fraction,
+    )
     if not final_newton.converged:
         final_status = "NEWTON_NOT_CONVERGED"
-    elif final_status == "MAX_OPT_IT" and final_metrics.leakage_rel <= args.eta_out and final_metrics.missing_rel <= args.tol_area:
+    elif final_geometry_ok:
         final_status = "CONVERGED"
+    elif certified_subband_ok:
+        final_status = "CONVERGED_CERTIFIED_SUBBAND"
+    elif final_status == "CONVERGED":
+        final_status = "FINAL_GEOMETRY_NOT_CONVERGED"
 
     phi_diff.x.array[:] = u.x.array - phi_target.x.array
     phi_diff.x.scatter_forward()
     if args.plot_final:
-        plotter.emit(
-            [T, tau_band, rho_design, phi_target, u, rho, phi_diff],
-            ["Torsion T", "tau band", "rhoDesign", "phiT", "phi", "rho(phi)", "phi-phiT"],
-            stage="FINAL",
-            ieps=0,
-            k=-1,
-            eps_phi=eps_phi,
-            residual=final_newton.residual,
-            metrics={
-                "massRho": final_compute_metrics["massRho"],
-                "maxRho": final_compute_metrics["maxRho"],
-                "activeArea": final_compute_metrics["activeArea"],
-                "plateauArea": final_compute_metrics["plateauArea"],
-                "relRhoDesign": final_compute_metrics["relRhoDesign"],
-            },
-            token="final",
-            save=bool(args.frame_final),
-            show=True,
-            nt=nt,
-            ndof=ndof,
-        )
+        # Intermediate optimization plots may use the live nonblocking updater,
+        # but the final state is the inspection point for the run.  Force this
+        # one emission through the blocking plot path and then restore the user
+        # selected mode in case future cleanup/extension emits more frames.
+        original_plot_mode = args.plot_mode
+        args.plot_mode = "blocking"
+        try:
+            plotter.emit(
+                [T, tau_band, rho_design, phi_target, u, rho, phi_diff],
+                ["Torsion T", "tau band", "rhoDesign", "phiT", "phi", "rho(phi)", "phi-phiT"],
+                stage="FINAL",
+                ieps=0,
+                k=-1,
+                eps_phi=eps_phi,
+                residual=final_newton.residual,
+                metrics={
+                    "massRho": final_compute_metrics["massRho"],
+                    "maxRho": final_compute_metrics["maxRho"],
+                    "activeArea": final_compute_metrics["activeArea"],
+                    "plateauArea": final_compute_metrics["plateauArea"],
+                    "relRhoDesign": final_compute_metrics["relRhoDesign"],
+                },
+                token="final",
+                save=bool(args.frame_final),
+                show=True,
+                nt=nt,
+                ndof=ndof,
+            )
+        finally:
+            args.plot_mode = original_plot_mode
     if frame_handle is not None:
         frame_handle.close()
 
@@ -2682,6 +3574,8 @@ def run_strategy(args: argparse.Namespace) -> int:
         f"FINAL status={final_status} c1={c1_phi:.6e} c2={c2_phi:.6e} epsPhi={eps_phi:.6e} "
         f"res={final_newton.residual:.6e} Lrel={final_metrics.leakage_rel:.6e} "
         f"Mrel={final_metrics.missing_rel:.6e} certifiedArea={final_metrics.certified_area:.6e} "
+        f"certifiedAreaRel={final_certified_area_rel:.6e} "
+        f"certifiedLeakRel={final_certified_leakage_rel:.6e} "
         f"activeJ={final_compute_metrics['activeJaccard']:.6e} rhoRel={final_compute_metrics['relRhoDesign']:.6e}",
     )
     root_print(comm, f"TIME_TOTAL {elapsed:.3f}")
@@ -2714,12 +3608,21 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"rhoDesignL2 {rho_design_l2}\n")
             handle.write(f"phiTargetMax {phi_target_max}\n")
             handle.write(f"phiTargetL2 {phi_target_l2}\n")
+            handle.write(f"tolRes {args.tol_res}\n")
+            handle.write(f"innerNewtonTol {args.inner_newton_tol}\n")
+            handle.write(f"innerTolMax {args.inner_tol_max}\n")
+            handle.write(f"innerTolGamma {args.inner_tol_gamma}\n")
+            handle.write(f"minCertifiedAreaFraction {args.min_certified_area_fraction}\n")
+            handle.write(f"plotSevere {int(args.plot_severe)}\n")
             handle.write(f"searchCMin {c_min}\n")
             handle.write(f"searchCMax {c_upper}\n")
             handle.write(f"minWidth {min_width}\n")
+            handle.write(f"initCandidate {init_candidate_name}\n")
+            handle.write(f"initCandidateScore {init_candidate_score}\n")
             handle.write(f"bestC1Phi {c1_phi}\n")
             handle.write(f"bestC2Phi {c2_phi}\n")
             handle.write(f"bestEpsPhi {eps_phi}\n")
+            handle.write(f"finalNewtonTolRes {final_tol_res}\n")
             handle.write(f"finalNewtonMaxIt {args.final_newton_max_it}\n")
             handle.write(f"finalNewtonStatus {final_newton.status}\n")
             handle.write(f"finalNewtonConverged {int(final_newton.converged)}\n")
@@ -2732,7 +3635,9 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"bestMissingRel {final_metrics.missing_rel}\n")
             handle.write(f"bestActivityArea {final_metrics.activity_area}\n")
             handle.write(f"bestCertifiedArea {final_metrics.certified_area}\n")
+            handle.write(f"bestCertifiedAreaRel {final_certified_area_rel}\n")
             handle.write(f"bestCertifiedLeakage {final_metrics.certified_leakage}\n")
+            handle.write(f"bestCertifiedLeakageRel {final_certified_leakage_rel}\n")
             handle.write(f"bestCertifiedMissing {final_metrics.certified_missing}\n")
             handle.write(f"bestActiveJaccard {final_compute_metrics['activeJaccard']}\n")
             handle.write(f"bestPlateauJaccard {final_compute_metrics['plateauJaccard']}\n")
@@ -2742,7 +3647,8 @@ def run_strategy(args: argparse.Namespace) -> int:
 
     if not final_newton.converged:
         return 3
-    if args.fail_on_nonconvergence and final_status != "CONVERGED":
+    successful_statuses = {"CONVERGED", "CONVERGED_CERTIFIED_SUBBAND"}
+    if args.fail_on_nonconvergence and final_status not in successful_statuses:
         return 2
     return 0
 

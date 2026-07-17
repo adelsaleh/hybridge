@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""DOLFINx fixed-mesh Strategy A torsion/Newton comparison runner.
+"""DOLFINx fixed-mesh torsion-initialized Newton comparison runner.
 
-This script mirrors the scalar CG/P2 FreeFEM runner
-``ff/stratA/strategyA_noadapt_torsion_newton.edp`` on a fixed mesh.  It uses
+This script mirrors the legacy scalar CG/P2 FreeFEM runner on a fixed mesh.  It uses
 continuous Lagrange elements of user-selected order, solves the torsion
 initializer, builds the torsion-designed density band, solves the Poisson
 initializer, and then applies the same epsilon-continuation Newton loop for
@@ -10,7 +9,7 @@ initializer, and then applies the same epsilon-continuation Newton loop for
     -Delta phi = f_epsilon(phi),  phi|_boundary = 0.
 
 The intended comparison workflow is to pass the exact ``initial_mesh.msh``
-saved by ``diocotron_equilibrium_torsion_intialized.py`` via ``--mesh``.
+saved by ``hdg_torsion_initialized_newton.py`` via ``--mesh``.
 
 Verbosity levels are intentionally coarse:
 
@@ -55,11 +54,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_noadapt"
+DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_initialized_newton"
 
 
 @dataclass
-class StrategyParameters:
+class TorsionParameters:
     alpha_t1: float = 0.60
     alpha_t2: float = 0.70
     eps_t_ratio: float = 0.06
@@ -402,11 +401,11 @@ def write_row(writer: csv.DictWriter, **row) -> None:
     writer.writerow(row)
 
 
-class PyVistaStrategyPlotter:
-    """PyVista plotting and frame writer for DOLFINx Strategy A runs.
+class PyVistaTorsionPlotter:
+    """PyVista plotting and frame writer for DOLFINx torsion-initialized runs.
 
     The layout and command-line behavior mirror
-    ``diocotron_equilibrium_torsion_intialized.py``: interactive plots stay open
+    ``hdg_torsion_initialized_newton.py``: interactive plots stay open
     until Enter is pressed in the terminal, and saved frames are written through
     the faster PyVista path.
     """
@@ -712,8 +711,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def params_from_args(args: argparse.Namespace) -> StrategyParameters:
-    params = StrategyParameters()
+def params_from_args(args: argparse.Namespace) -> TorsionParameters:
+    params = TorsionParameters()
     for attr in (
             "alpha_t1", "alpha_t2", "eps_t_ratio", "beta_phi1", "beta_phi2",
             "rho_amp", "max_it", "tol_res", "tol_newton",
@@ -781,7 +780,7 @@ def run_strategy(args: argparse.Namespace) -> int:
     frame_writer = csv.DictWriter(frame_handle, fieldnames=frame_fields) if comm.rank == 0 else None
     if frame_writer is not None:
         frame_writer.writeheader()
-    plotter = PyVistaStrategyPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer, comm=comm)
+    plotter = PyVistaTorsionPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer, comm=comm)
 
     if args.plot_initial:
         mesh_field = fem.Function(V, name="mesh")

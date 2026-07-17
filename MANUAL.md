@@ -38,10 +38,10 @@ Diffusion-reaction manufactured presets:
 python scripts/run_diff_rea_cases.py [preset]
 ```
 
-Strategy A star-domain HDG Newton benchmark:
+Torsion-initialized semilinear HDG Newton benchmark:
 
 ```bash
-python scripts/diocotron_equilibrium_torsion_intialized.py [options]
+python scripts/hdg_torsion_initialized_newton.py [options]
 ```
 
 ### Common Runs
@@ -190,12 +190,14 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
   --volume-quad-1d 7 --edge-quad-1d 7
 ```
 
-### Strategy A HDG Newton Runner
+### Torsion-Initialized HDG Newton Runner
 
-`scripts/diocotron_equilibrium_torsion_intialized.py` is the fixed-mesh
-Strategy A benchmark for the native smooth star domain.  It solves the torsion
-design fields, builds the logistic density window, then applies a damped Newton
-solve to the nonlinear HDG residual.
+`scripts/hdg_torsion_initialized_newton.py` is the fixed-mesh
+HDG driver for the torsion initialized Newton method for converging to
+semilinear local diocotron-like equilibria of the guiding-center model on
+general geometries.  It solves the torsion design fields, builds the logistic
+density window, then applies a damped Newton solve to the nonlinear HDG
+residual.
 
 The runner is intentionally non-adaptive: it does not preadapt to the design
 band and does not remesh during epsilon continuation.  That keeps this script
@@ -205,7 +207,7 @@ building blocks are available separately in `hdgfem.core.adaptivity`.
 Typical PETSc run:
 
 ```bash
-python scripts/diocotron_equilibrium_torsion_intialized.py \
+python scripts/hdg_torsion_initialized_newton.py \
   --star-n 260 --order 4 --hdg-tau 20 -v 2 \
   --residual-norm euclid --newton-shift-mode none
 ```
@@ -239,7 +241,7 @@ initial trace vector for the linear correction system solved inside each Newton
 step.
 
 Each run creates a unique directory under
-`run_logs/diocotron_equilibrium_torsion_intialized/` unless `--run-dir` is
+`run_logs/hdg_torsion_initialized_newton/` unless `--run-dir` is
 provided.  The directory contains `newton.csv`, `frames.csv`, and `summary.txt`.
 The Newton CSV records the split residual components `resVolumeL2`,
 `resPrimalL2`, `resFluxL2`, `resTraceL2`, and `resCoeffL2`, plus precise
@@ -248,53 +250,29 @@ diagnostics for `rho_h=f_epsilon(phi_h)`.
 Recent reference run:
 
 ```text
-script       scripts/diocotron_equilibrium_torsion_intialized.py
+script       scripts/hdg_torsion_initialized_newton.py
 mesh         smooth star, generated once at startup
 residual     mixed HDG residual, Euclidean line search by default
 adaptivity   no preadapt and no scheduled remeshing
-outputs      run_logs/diocotron_equilibrium_torsion_intialized/<timestamp>/
+outputs      run_logs/hdg_torsion_initialized_newton/<timestamp>/
 ```
 
 For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
 use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
 Euclidean norm is the cheaper default for line-search comparisons.
 
-### DOLFINx Strategy A Diagnostics
+### DOLFINx Torsion-Initialized Diagnostics
 
-The repository also contains DOLFINx continuous-Galerkin Strategy A scripts for
-fixed-mesh experiments.  These require a Python environment with DOLFINx,
-Basix, PETSc, and Gmsh support.  They are intended for algorithm development
-and comparison against the native HDG driver, not as replacements for the HDG
-solver package.
-
-All-at-once residual-penalty diagnostic:
-
-```bash
-python scripts/strategyA_dolfinx_window_all_at_once.py \
-  --objective-mode simple-penalty \
-  --mesh-size 0.18 --star-n 140 --order 3 \
-  --eps-ratio 0.08 --residual-penalty 1.0 \
-  --max-opt-it 20 --linear-solver lu --direction-solver lu
-```
-
-The simple-penalty mode solves the diagnostic problem
-
-```text
-0.5 ||phi_h - phi_T,h||^2 / ||phi_T,h||^2
-  + 0.5 gamma ||F_h(phi_h,c;.)||^2_{V_h'}
-```
-
-using a stiffness-inverse dual residual norm.  This is useful for globalization
-and debugging because it avoids oversolving poor threshold pairs, but it is not
-the constrained closed-loop Strategy A problem unless the residual term is
-driven close to zero.  Use `--newton-polish-final` to project the selected
-thresholds back onto the fixed-window semilinear branch and compare the
-penalty state against the Newton-polished state.
+The repository also contains DOLFINx continuous-Galerkin scripts for fixed-mesh
+experiments with the same torsion-initialized semilinear equilibrium problem.
+These require a Python environment with DOLFINx, Basix, PETSc, and Gmsh
+support.  They are intended for algorithm development and comparison against
+the native HDG driver, not as replacements for the HDG solver package.
 
 Closed-loop boundary-aware refit:
 
 ```bash
-python scripts/strategyA_dolfinx_closed_loop_refit.py \
+python scripts/dolfinx_torsion_initialized_closed_loop_refit.py \
   --mesh-size 0.18 --star-n 140 --order 4 \
   --eps-ratio 0.08 --outer-it 6 \
   --newton-max-it 25 --newton-tol-res 1e-8 \
@@ -341,44 +319,93 @@ the mesh-derived boundary radius table.
 Reduced-space leakage/missing-area optimizer:
 
 ```bash
-python scripts/strategyA_dolfinx_window_reduced_optimization.py \
+python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py \
   --mesh-size 0.18 --star-n 140 --order 4 \
   --alphaT1 0.60 --alphaT2 0.70 --eps-t-ratio 0.06 \
   --eps-mode relative --eps-ratio 0.08 \
   --max-opt-it 25 --eta-out 0.02 --tol-area 0.05 \
-  --tol-res 1e-10 --final-newton-max-it 200 \
+  --tol-res 1e-8 --final-newton-tol-res 1e-10 --final-newton-max-it 200 \
   --linear-solver mumps -v 2
 ```
 
 This runner follows the reduced algorithm in
-`docs/algorithms/strategyA_window_reduced_optimization/`.  At each outer
-iteration it projects the state for the current thresholds, evaluates soft
+`docs/algorithms/torsion_initialized_window_reduced_optimization/`.  At each
+outer iteration it projects the state for the current thresholds, evaluates soft
 leakage and missing-area discrepancies, solves the two sensitivity equations,
 forms reduced gradients, and takes a constrained trust-region step in
 `(c1,c2)`.  The predictor/corrector stage then filters trial steps using
 residual, geometry, branch-overlap, and collapse checks.
 
-`--inner-tol-mode inexact` may use relaxed Newton tolerances during the outer
-loop, but the reported final state is always projected again with exact Newton
-to `--tol-res`.  If that final projection fails, the process exits with code
-`3` and reports `final_status=NEWTON_NOT_CONVERGED`.  Use
-`--inner-tol-mode exact` when every accepted outer iterate should also satisfy
-the requested residual tolerance.
+The initializer is intentionally more robust than a direct density L2 fit.  It
+builds a small fixed set of candidate windows: the density fit on
+`phi_T=-Delta^{-1} rho_design`, target-weighted quantile windows, and an
+area-matched target-median window.  Each candidate is Newton-projected at fixed
+thresholds from `phi_T`, scored after projection, and only then selected.  The
+chosen projected state is reused as the first outer iterate.  This costs more
+startup Newton work, but avoids selecting thresholds that fit
+`W(phi_T;c1,c2,eps)` and then collapse onto the wrong semilinear branch.
+
+Inner Newton tolerances are adaptive by default.  The outer loop scales the
+tolerance with the current leakage-plus-missing discrepancy, clips it by
+`--inner-tol-max`, and never allows it below `--tol-res`.  This avoids
+oversolving poor early threshold pairs while still tightening the state solve
+near a competitive band.  Use `--inner-newton-tol` only as a testing knob when
+every inner projection and trial correction should be forced to a fixed
+residual tolerance.
+
+The reported final state is always projected again with exact Newton to
+`--final-newton-tol-res` when supplied, otherwise `--tol-res`.  This final
+projection also runs after `MAX_OPT_IT`, so a run that exhausts the outer
+optimization budget can still certify the final semilinear state.  If that
+projection fails, the process exits with code `3` and reports
+`final_status=NEWTON_NOT_CONVERGED`.
+
+There are two successful geometry statuses.  `CONVERGED` means the final
+Newton solve converged and both soft full-band conditions passed:
+`leakageRel <= --eta-out` and `missingRel <= --tol-area`.
+`CONVERGED_CERTIFIED_SUBBAND` means the full target band was not matched, but
+the certified plateau
+`c1 + kappa eps <= phi <= c2 - kappa eps` is a useful contained sub-band:
+its certified leakage fraction is within `--eta-out` and its certified area is
+at least `--min-certified-area-fraction` of the torsion target area.  This is a
+successful outcome when the practical goal is an equilibrium sub-band inside
+the torsion-initialized band rather than a full-band match.
+
+Important controls:
+
+```text
+--alphaT1, --alphaT2            torsion target band ratios
+--eps-t-ratio                   torsion design smoothing ratio
+--eps-ratio / --eps-phi         potential-window smoothing
+--include-fit-init              enable projected density/quantile/area initializer
+--eta-out                       soft leakage cap and certified-subband leakage cap
+--tol-area                      soft missing-area cap for strict full-band success
+--min-certified-area-fraction   minimum certified plateau area for sub-band success
+--max-opt-it                    reduced outer iteration budget
+--trust-radius                  initial reduced trust radius as a fraction of c-scale
+--trust-radius-min/max          trust-radius safeguards
+--eta-overlap                   branch-preservation acceptance threshold
+--min-activity-fraction         collapse rejection threshold
+--inner-newton-tol              fixed inner tolerance testing knob
+--inner-tol-max/gamma           adaptive inner tolerance safeguards
+--final-newton-tol-res          final exact Newton certification tolerance
+--plot-severe                   plot every accepted Newton update and refit state
+```
 
 Verbosity levels are `-v 0` for summaries, `-v 1` for iteration diagnostics,
 and `-v 2` for the numbered algorithm trace.  The highest level prints
 `ALGO_STEP` lines matching steps 1 through 12 of the algorithm note, including
 timings for Newton projection, sensitivity assembly/solves, trust-region
 selection, correction, and acceptance filtering.  Outputs are written under
-`run_logs/dolfinx_window_reduced_optimization/`.
+`run_logs/dolfinx_torsion_initialized_window_reduced_optimization/`.
 
 Plotting controls are deliberately simple:
 
 ```bash
-python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode nonblocking
-python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode blocking
-python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode nonblocking
-python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode blocking
+python scripts/dolfinx_torsion_initialized_closed_loop_refit.py ... --plot --plot-mode nonblocking
+python scripts/dolfinx_torsion_initialized_closed_loop_refit.py ... --plot --plot-mode blocking
+python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py ... --plot --plot-mode nonblocking
+python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py ... --plot --plot-mode blocking
 ```
 
 With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
@@ -388,29 +415,29 @@ path for watching the iteration evolve.  Blocking mode keeps the one-state
 inspection behavior and waits for Enter at each plot.  `--save-frames` remains
 a separate one-shot render path for PNG artifacts.
 
-### Strategy A DOLFINx CG Runner
+### DOLFINx CG Runner
 
-`scripts/strategyA_dolfinx_noadapt_torsion_newton.py` is the fixed-mesh
-continuous-Galerkin comparison runner for the same torsion-initialized Strategy
-A problem.  It uses DOLFINx Lagrange elements, accepts arbitrary polynomial
-order supported by DOLFINx, and follows the same torsion design, Poisson
-initializer, epsilon continuation, Armijo line search, and optional elliptic
-damping controls as the no-adapt FreeFEM/HDG comparison.
+`scripts/dolfinx_torsion_initialized_newton.py` is the fixed-mesh
+continuous-Galerkin comparison runner for the same torsion-initialized
+semilinear equilibrium problem.  It uses DOLFINx Lagrange elements, accepts
+arbitrary polynomial order supported by DOLFINx, and follows the same torsion
+design, Poisson initializer, epsilon continuation, Armijo line search, and
+optional elliptic damping controls as the no-adapt FreeFEM/HDG comparison.
 
 The clean CG/HDG timing workflow is:
 
 ```bash
 # First run the HDG driver once and keep its saved mesh.
-python scripts/diocotron_equilibrium_torsion_intialized.py \
+python scripts/hdg_torsion_initialized_newton.py \
   --run-tag hdg_star260_p2_mumps_clean \
   --star-n 260 --order 2 --hdg-tau 10 \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
 # Then pass that exact mesh to DOLFINx.
 /home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
+  scripts/dolfinx_torsion_initialized_newton.py \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
-  --mesh run_logs/diocotron_equilibrium_torsion_intialized/<hdg-run>/initial_mesh.msh \
+  --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
   --order 2 --linear-solver mumps --terminal-every 1
 ```
 
@@ -431,7 +458,7 @@ Important controls:
 ```
 
 Each run creates `logs/newton.csv`, `logs/frames.csv`, and `out/summary.txt`
-under `run_logs/dolfinx_torsion_noadapt/<run-tag>_<timestamp>/`.  The Newton
+under `run_logs/dolfinx_torsion_initialized_newton/<run-tag>_<timestamp>/`.  The Newton
 loop checks the current residual before assembling and solving a new correction,
 so converged epsilon windows end with `CONVERGED_RESIDUAL` and `solveTime=0`.
 
@@ -1072,7 +1099,7 @@ Run the package tests for this module:
 python -m pytest tests/test_hdg_gram.py
 ```
 
-The Strategy A runner uses the condensed inverse for final H-minus-like
+The torsion-initialized Newton runner uses the condensed inverse for final H-minus-like
 diagnostics and can reuse it during the Newton loop when `--compute-hminus` or
 `--line-search-norm hminus` is requested.
 
@@ -1163,8 +1190,8 @@ Advection-reaction runner summaries are printed in named sections:
 Run / mesh, Options, Solver, Errors, Timings
 ```
 
-The Strategy A runner emits timestamped files and machine-readable terminal
-lines:
+The torsion-initialized Newton runner emits timestamped files and
+machine-readable terminal lines:
 
 ```text
 SOLVER_OK
@@ -1218,10 +1245,10 @@ Run the focused Gram and solver-class checks:
 python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py
 ```
 
-Run a cheap Strategy A smoke test:
+Run a cheap torsion-initialized Newton smoke test:
 
 ```bash
-python scripts/diocotron_equilibrium_torsion_intialized.py \
+python scripts/hdg_torsion_initialized_newton.py \
   --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
   --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```

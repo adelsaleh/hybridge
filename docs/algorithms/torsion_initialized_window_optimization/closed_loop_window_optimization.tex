@@ -25,7 +25,7 @@
 \newcommand{\etap}{\eta_\Phi}
 \newcommand{\Honez}{H^1_0(\OmegaD)}
 
-\title{Closed-Loop Window Optimization for Strategy A}
+\title{Closed-Loop Window Optimization for the Torsion-Initialized Newton Method}
 \author{}
 \date{2026-07-13}
 
@@ -34,8 +34,8 @@
 
 \section{Purpose}
 
-This note formulates a closed-loop version of the Strategy A band-selection
-problem.  The input torsion thresholds are fixed through two parameters
+This note formulates a closed-loop version of the torsion-initialized Newton
+band-selection problem.  The input torsion thresholds are fixed through two parameters
 \(\alpha_1\) and \(\alpha_2\).  The output thresholds \(c_1\) and \(c_2\)
 are not chosen by matching a window applied to an already computed potential.
 Instead, they are chosen by solving the nonlinear state equation
@@ -716,7 +716,7 @@ There is also a simpler penalty alternative:
 For finite \(\gamma\), this is not the same problem as the constrained
 closed-loop formulation.  A minimizer may trade state-equation residual against
 potential matching.  This can be useful as a globalization or diagnostic
-device, but it should not be interpreted as the final Strategy A threshold
+device, but it should not be interpreted as the final torsion-initialized Newton threshold
 selection problem unless the residual term is driven sufficiently close to
 zero.
 

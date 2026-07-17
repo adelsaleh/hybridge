@@ -612,7 +612,7 @@ def gmsh_smooth_star_mesh(
         write_path: str | None = None,
         msh_file_version: float | None = None,
 ) -> DGMesh:
-    """Generate the sampled smooth star domain used by the FreeFEM Strategy A script.
+    """Generate the sampled smooth star domain used by the FreeFEM torsion/Newton script.
 
     The boundary follows ``r(theta) = radius + amplitude*cos(mode*theta)`` and
     is sampled by straight segments, matching FreeFEM's ``buildmesh`` use of

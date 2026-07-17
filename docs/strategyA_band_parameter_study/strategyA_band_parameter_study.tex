@@ -6,7 +6,7 @@
 \usepackage{siunitx}
 \usepackage{hyperref}
 
-\title{Strategy A Band Parameter Study}
+\title{Torsion-Initialized Newton Band Parameter Study}
 \author{}
 \date{2026-07-12}
 
@@ -15,11 +15,11 @@
 
 \section{Purpose}
 
-This report studies how the Strategy A band parameters
+This report studies how the torsion-initialized Newton band parameters
 \(\alpha_{T,1}\), \(\alpha_{T,2}\), \(\beta_{\Phi,1}\), and
 \(\beta_{\Phi,2}\) affect the agreement between the torsion-designed density
 band and the final converged equilibrium density band in
-\texttt{scripts/strategyA\_dolfinx\_noadapt\_torsion\_newton.py}.
+\texttt{scripts/dolfinx\_torsion\_initialized\_newton.py}.
 
 \section{Numerical Setup}
 
@@ -112,7 +112,7 @@ introduced several non-robust pockets for wider beta bands.
 
 \subsection{Recommended Run Parameters}
 
-For production Strategy A runs in this study, use the classical
+For production torsion-initialized Newton runs in this study, use the classical
 \(\phi_{\mathrm{design}}\)-scaled nonlinear window,
 \[
 c_{1,\Phi}=\beta_{\Phi,1}\max(\phi_{\mathrm{design}}),\qquad
@@ -180,7 +180,7 @@ Parameters & {$E_{\mathrm{rel}}$} & {$L^2$ diff.} & {$J_{\mathrm{active}}$} & {M
 \(\alpha=(0.60,0.70)\), \(\beta=(0.60,0.75)\) & 1.480901 & 1.083741 & 0.075095 & 0.278467 & 79.13 \\
 \bottomrule
 \end{tabular}
-\caption{Completed fixed-mesh, \(p=4\), Strategy A parameter runs.}
+\caption{Completed fixed-mesh, \(p=4\), torsion-initialized Newton parameter runs.}
 \end{table}
 
 \section{Interrupted Runs}

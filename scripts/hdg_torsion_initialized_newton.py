@@ -1,7 +1,7 @@
-"""HDG Strategy A Newton solve on the native smooth star domain.
+"""HDG torsion-initialized Newton solve on the native smooth star domain.
 
-This script mirrors the FreeFEM Strategy A torsion/Newton run at the
-algorithmic level while keeping the HDG unknowns and residuals explicit:
+This script mirrors the FreeFEM torsion/Newton run at the algorithmic level
+while keeping the HDG unknowns and residuals explicit:
 
 * torsion-designed initializer on the smooth star;
 * epsilon continuation for the semilinear window;
@@ -29,6 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "hdg_torsion_initialized_newton"
+
 from hdgfem.assembly import hdg as hdg_assembly
 from hdgfem.assembly.hdg_gram import CondensedHDGGramInverse, build_flux_jump_gram_inverse
 from hdgfem.assembly.matrices_numpy import scalar_volume_residual
@@ -53,8 +55,8 @@ from hdgfem.solvers.diff_rea import (
 
 
 @dataclass
-class StrategyParameters:
-    """FreeFEM default parameters for the native star Strategy A run."""
+class TorsionParameters:
+    """FreeFEM defaults for the native star torsion-initialized Newton run."""
 
     alpha_t1: float = 0.60
     alpha_t2: float = 0.70
@@ -132,6 +134,18 @@ def active_mu(args: argparse.Namespace, mu_shift: float) -> float:
 def damping_summary(args: argparse.Namespace, mu_shift: float) -> str:
     mu_eff = active_mu(args, mu_shift)
     return f"muEff={mu_eff:.3e} diffusion={1.0 + mu_eff:.3e}"
+
+
+def log3(args: argparse.Namespace, message: str) -> None:
+    """Print detailed strategy diagnostics at verbosity level 3."""
+    if int(args.verbosity) >= 3:
+        print(message, flush=True)
+
+
+def log2(args: argparse.Namespace, message: str) -> None:
+    """Print timing and line-search diagnostics at verbosity level 2."""
+    if int(args.verbosity) >= 2:
+        print(message, flush=True)
 
 
 @dataclass
@@ -281,9 +295,10 @@ def solve_hdg_with_fallback(
 ):
     attempts = []
     if not args.skip_petsc:
-        attempts.append(("petsc_gmres_gamg", {
+        petsc_preset = str(args.hdg_petsc_preset)
+        attempts.append((f"petsc_{petsc_preset}", {
             "solver": "petsc",
-            "petsc_preset": "gmres_gamg",
+            "petsc_preset": petsc_preset,
             "preconditioner": None,
             "solver_rtol": args.linear_rtol,
             "solver_atol": args.linear_atol,
@@ -312,15 +327,19 @@ def solve_hdg_with_fallback(
         print(f"SOLVER_TRY problem={problem_label} label={label}", flush=True)
         solve_start = time.perf_counter()
         try:
+            solver_verbose = max(int(args.hdg_solver_verbose), 3 if int(args.verbosity) >= 3 else 0)
+            petsc_preset = kwargs.get("petsc_preset")
+            is_direct_petsc = kwargs.get("solver") == "petsc" and petsc_preset in {"lu", "mumps_lu"}
             options = DiffusionReactionHDGOptions(
                 diffusion=diffusion,
                 stabilization=stabilization,
                 boundary_mode="eliminate",
                 assembly_backend=args.hdg_assembly_backend,
                 local_solver_backend=args.hdg_local_solver_backend,
-                initial_guess=initial_guess,
-                verbose=args.hdg_solver_verbose,
+                initial_guess=None if is_direct_petsc else initial_guess,
+                verbose=solver_verbose,
                 scale_system=True,
+                petsc_monitor=bool(int(args.verbosity) >= 3),
                 **kwargs,
             )
             result = DiffusionReactionHDGSolver(space, options=options).solve(
@@ -433,7 +452,7 @@ def compute_metrics(
         c1_phi: float,
         c2_phi: float,
         eps_phi: float,
-        params: StrategyParameters,
+        params: TorsionParameters,
 ) -> dict[str, float]:
     space = state.u.space
     u_values = state.u.values()
@@ -493,7 +512,7 @@ def residual_row(state: State) -> dict[str, float]:
     }
 
 
-class PyVistaStrategyPlotter:
+class PyVistaTorsionPlotter:
     """PyVista plotting and frame writer using ``hdgfem.io.plot`` helpers."""
 
     def __init__(
@@ -686,8 +705,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--rho-extrema-chunk-elements", type=int, default=2048)
     parser.add_argument("--hdg-assembly-backend", choices=("numpy", "numba", "auto"), default="numba")
     parser.add_argument("--hdg-local-solver-backend", choices=("numpy", "numba"), default="numba")
+    parser.add_argument(
+        "--hdg-petsc-preset",
+        choices=(
+            "cg_ilu",
+            "cg_icc",
+            "cg_hypre",
+            "cg_gamg",
+            "bicgstab_ilu",
+            "bicgstab_asm_ilu",
+            "bicgstab_gamg",
+            "gmres_ilu",
+            "gmres_asm_ilu",
+            "gmres_gamg",
+            "lu",
+            "mumps_lu",
+        ),
+        default="gmres_gamg",
+        help="PETSc preset used for HDG global trace solves before SciPy fallbacks",
+    )
     parser.add_argument("--newton-initial-guess", choices=("zero", "previous-correction"), default="zero",
-                        help="initial trace guess for each Newton correction linear solve")
+                        help="initial trace guess for each Newton correction linear solve; nonlinear Newton starts from phiDesign")
     parser.add_argument("--hdg-solver-verbose", type=int, default=0)
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
     parser.add_argument("--gmsh-algorithm", type=int, default=None)
@@ -738,8 +776,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def configure_params(args: argparse.Namespace) -> StrategyParameters:
-    params = StrategyParameters()
+def configure_params(args: argparse.Namespace) -> TorsionParameters:
+    params = TorsionParameters()
     if args.alpha_t1 is not None:
         params.alpha_t1 = float(args.alpha_t1)
     if args.alpha_t2 is not None:
@@ -778,7 +816,7 @@ def csv_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     if args.run_dir is None:
         prefix = f"{_slug_for_path(args.run_tag)}_" if args.run_tag else ""
-        run_dir = REPO_ROOT / "run_logs" / f"{prefix}{timestamp}"
+        run_dir = DEFAULT_RUN_LOG_ROOT / f"{prefix}{timestamp}"
     else:
         requested = args.run_dir
         if requested.exists():
@@ -805,6 +843,7 @@ def run_strategy(args: argparse.Namespace) -> State:
     newton_csv, frame_csv, summary_path = csv_paths(args)
     run_dir = newton_csv.parent
     run_tag = run_dir.name
+    initial_mesh_path = run_dir / "initial_mesh.msh"
     frame_every = args.frame_every if args.frame_every is not None else args.plot_newton_every
     total_start = time.perf_counter()
     print("========== START STRATEGY A HDG TORSION NEWTON ==========")
@@ -812,6 +851,7 @@ def run_strategy(args: argparse.Namespace) -> State:
     print(f"RUN_DIR {run_dir}")
     print(f"NEWTON_CSV {newton_csv}")
     print(f"FRAME_CSV {frame_csv}")
+    print(f"INITIAL_MESH_FILE {initial_mesh_path}")
     print(f"RESIDUAL_NORM {args.residual_norm}")
     print(f"NEWTON_SHIFT_MODE {args.newton_shift_mode}")
     print(f"VERBOSITY {args.verbosity}")
@@ -823,7 +863,9 @@ def run_strategy(args: argparse.Namespace) -> State:
         f"RHO_EXTREMA resolution={params.rho_extrema_resolution} "
         f"chunkElements={params.rho_extrema_chunk_elements}"
     )
-    print(f"NEWTON_INITIAL_GUESS {args.newton_initial_guess}")
+    print(f"HDG_PETSC_PRESET {args.hdg_petsc_preset}")
+    print("NONLINEAR_INITIAL_STATE phi_design_from_torsion_band")
+    print(f"NEWTON_CORRECTION_INITIAL_GUESS {args.newton_initial_guess}")
 
     newton_fields = [
         "record", "runTag", "ieps", "epsPhiRatio", "epsPhi", "k", "nt", "ndof",
@@ -846,7 +888,7 @@ def run_strategy(args: argparse.Namespace) -> State:
         frame_writer = csv.DictWriter(frame_handle, fieldnames=frame_fields)
         newton_writer.writeheader()
         frame_writer.writeheader()
-        plotter = PyVistaStrategyPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer)
+        plotter = PyVistaTorsionPlotter(args, run_tag=run_tag, run_dir=run_dir, frame_writer=frame_writer)
 
         mesh = gmsh_smooth_star_mesh(
             args.mesh_size,
@@ -856,6 +898,8 @@ def run_strategy(args: argparse.Namespace) -> State:
             mode=args.star_mode,
             verbosity=args.gmsh_verbosity,
             algorithm=args.gmsh_algorithm,
+            write_path=str(initial_mesh_path),
+            msh_file_version=2.2,
         )
         initial_hmin, initial_hmax = mesh_edge_min_max(mesh)
         space = DGSpace(mesh, args.order, basis_type=args.basis)
@@ -1140,6 +1184,56 @@ def run_strategy(args: argparse.Namespace) -> State:
 
             for k in range(params.max_it):
                 step_start = time.perf_counter()
+                if state.merit < params.tol_res:
+                    metric_start = time.perf_counter()
+                    log3(args, f"NEWTON_METRICS_START ieps={ieps} k={k} status=CONVERGED_RESIDUAL")
+                    metrics = compute_metrics(state, design, c1_phi=c1_phi, c2_phi=c2_phi, eps_phi=eps_phi, params=params)
+                    metric_time = time.perf_counter() - metric_start
+                    log3(args, f"NEWTON_METRICS_DONE ieps={ieps} k={k} time={metric_time:.6f}")
+                    mu_used = active_mu(args, mu_shift)
+                    write_newton_row(
+                        newton_writer,
+                        record="NEWTON",
+                        runTag=run_tag,
+                        ieps=ieps,
+                        epsPhiRatio=eps_ratio,
+                        epsPhi=eps_phi,
+                        k=k,
+                        nt=space.mesh.num_tri,
+                        ndof=space.ndof,
+                        **residual_row(state),
+                        stepHdg="NA",
+                        stepFluxL2="NA",
+                        stepJumpL2="NA",
+                        alpha=0.0,
+                        bt=0,
+                        muEff=mu_used,
+                        minU=metrics["min_u"],
+                        maxU=metrics["max_u"],
+                        minRho=metrics["min_rho"],
+                        maxRho=metrics["max_rho"],
+                        massRho=metrics["mass_rho"],
+                        rhoL2=metrics["rho_l2"],
+                        energyPhi=metrics["energy_phi"],
+                        activeArea=metrics["active_area"],
+                        plateauArea=metrics["plateau_area"],
+                        plateauFrac=metrics["plateau_frac"],
+                        relRhoDesign=metrics["rel_rho_design"],
+                        annularPhiMinusC2=metrics["annular_phi_minus_c2"],
+                        solveTime=0.0,
+                        metricTime=metric_time,
+                        stepTime=time.perf_counter() - step_start,
+                        solver="NA",
+                        status="CONVERGED_RESIDUAL",
+                    )
+                    print(
+                        f"STEP ieps={ieps} k={k} merit={state.merit:.6e} "
+                        f"{residual_summary(state)} {damping_summary(args, mu_used)} "
+                        f"{metrics_summary(metrics)} status=CONVERGED_RESIDUAL"
+                    )
+                    eps_status = "CONVERGED_RESIDUAL"
+                    break
+
                 df_values = window_derivative(state.u.values(), c1_phi, c2_phi, eps_phi, params.rho_amp)
                 source_moments = hdg_assembly.mixed_u_block_rhs_from_residual(state.residual, space)
                 reaction_values = -df_values
@@ -1147,7 +1241,7 @@ def run_strategy(args: argparse.Namespace) -> State:
                 reaction_h = project_quadrature_values(space, reaction_values, name=f"newton_reaction_{ieps}_{k}")
                 mu_used = active_mu(args, mu_shift)
                 correction_diffusion = 1.0 + mu_used
-                correction_initial_guess = np.zeros_like(state.trace)
+                correction_initial_guess = None
                 if (
                     args.newton_initial_guess == "previous-correction"
                     and previous_correction_trace is not None
@@ -1168,14 +1262,33 @@ def run_strategy(args: argparse.Namespace) -> State:
                     problem_label=f"newton_ieps{ieps}_k{k}",
                 )
                 solve_time = time.perf_counter() - solve_start
+                post_solve_start = time.perf_counter()
+                log3(args, f"NEWTON_POST_SOLVE_START ieps={ieps} k={k}")
                 du = correction.field
+                flux_extract_start = time.perf_counter()
                 flux_du = flux_coefficients(correction)
+                flux_extract_time = time.perf_counter() - flux_extract_start
+                trace_copy_start = time.perf_counter()
                 trace_du = correction.trace
                 previous_correction_trace = trace_du.copy()
+                trace_copy_time = time.perf_counter() - trace_copy_start
+                step_norm_start = time.perf_counter()
                 step_norm, step_flux_l2, step_jump_l2 = hdg_assembly.h1_flux_jump_norm(du, flux_du, trace_du)
+                step_norm_time = time.perf_counter() - step_norm_start
+                log3(
+                    args,
+                    f"NEWTON_POST_SOLVE_DONE ieps={ieps} k={k} "
+                    f"fluxExtract={flux_extract_time:.6f} traceCopy={trace_copy_time:.6f} "
+                    f"stepNorm={step_norm_time:.6f} total={time.perf_counter() - post_solve_start:.6f} "
+                    f"stepHdg={step_norm:.6e} stepFlux={step_flux_l2:.6e} stepJump={step_jump_l2:.6e}",
+                )
 
-                if state.merit < params.tol_res or step_norm < params.tol_newton:
+                if step_norm < params.tol_newton:
+                    metric_start = time.perf_counter()
+                    log3(args, f"NEWTON_METRICS_START ieps={ieps} k={k} status=CONVERGED_STEP")
                     metrics = compute_metrics(state, design, c1_phi=c1_phi, c2_phi=c2_phi, eps_phi=eps_phi, params=params)
+                    metric_time = time.perf_counter() - metric_start
+                    log3(args, f"NEWTON_METRICS_DONE ieps={ieps} k={k} time={metric_time:.6f}")
                     write_newton_row(
                         newton_writer,
                         record="NEWTON",
@@ -1206,17 +1319,17 @@ def run_strategy(args: argparse.Namespace) -> State:
                         relRhoDesign=metrics["rel_rho_design"],
                         annularPhiMinusC2=metrics["annular_phi_minus_c2"],
                         solveTime=solve_time,
-                        metricTime=0.0,
+                        metricTime=metric_time,
                         stepTime=time.perf_counter() - step_start,
                         solver=solver_label,
-                        status="CONVERGED",
+                        status="CONVERGED_STEP",
                     )
                     print(
                         f"STEP ieps={ieps} k={k} merit={state.merit:.6e} "
                         f"{residual_summary(state)} {damping_summary(args, mu_used)} "
-                        f"{metrics_summary(metrics)} status=CONVERGED"
+                        f"{metrics_summary(metrics)} status=CONVERGED_STEP"
                     )
-                    eps_status = "CONVERGED"
+                    eps_status = "CONVERGED_STEP"
                     break
 
                 old_state = state
@@ -1226,15 +1339,22 @@ def run_strategy(args: argparse.Namespace) -> State:
                 accepted = False
                 best_trial = None
 
+                line_search_start = time.perf_counter()
+                log2(args, f"LINE_SEARCH_START ieps={ieps} k={k} oldMerit={old_merit:.6e}")
                 while alpha >= params.alpha_min and n_backtrack <= params.max_backtrack:
+                    trial_start = time.perf_counter()
                     trial_u = space.field(old_state.u.coeffs + alpha * du.coeffs, name="phi")
                     trial_flux = old_state.flux + alpha * flux_du
                     trial_trace = old_state.trace + alpha * trace_du
+                    trial_values_start = time.perf_counter()
                     trial_rho_values = window_values(trial_u.values(), c1_phi, c2_phi, eps_phi, params.rho_amp)
                     trial_mass = mass_from_values(space, trial_rho_values)
                     trial_max_rho = float(np.max(trial_rho_values))
+                    trial_values_time = time.perf_counter() - trial_values_start
                     branch_ok = trial_mass >= mass_floor and trial_max_rho >= params.rho_max_floor
+                    build_state_time = 0.0
                     if branch_ok:
+                        trial_build_start = time.perf_counter()
                         trial_state = build_state(
                             space,
                             trial_u,
@@ -1251,23 +1371,41 @@ def run_strategy(args: argparse.Namespace) -> State:
                             gram_atol=args.gram_cg_atol,
                             gram_maxiter=args.gram_cg_maxiter,
                         )
+                        build_state_time = time.perf_counter() - trial_build_start
                         merit = trial_state.merit
                     else:
                         trial_state = None
                         merit = math.inf
                     armijo = branch_ok and merit <= (1.0 - params.armijo_c * alpha) * old_merit
+                    log2(
+                        args,
+                        f"LINE_SEARCH_TRIAL ieps={ieps} k={k} bt={n_backtrack} alpha={alpha:.6e} "
+                        f"branchOk={branch_ok} merit={merit:.6e} armijo={armijo} "
+                        f"rhoEvalMass={trial_values_time:.6f} buildState={build_state_time:.6f} "
+                        f"total={time.perf_counter() - trial_start:.6f} mass={trial_mass:.6e} "
+                        f"maxRho={trial_max_rho:.6e}",
+                    )
                     if armijo:
                         best_trial = trial_state
                         accepted = True
                         break
                     alpha *= params.beta_ls
                     n_backtrack += 1
+                log2(
+                    args,
+                    f"LINE_SEARCH_DONE ieps={ieps} k={k} accepted={accepted} bt={n_backtrack} "
+                    f"alpha={alpha:.6e} time={time.perf_counter() - line_search_start:.6f}",
+                )
 
                 if not accepted:
                     reject_count += 1
                     if args.newton_shift_mode == "freefem":
                         mu_shift = min(params.mu_max, 2.0 * mu_shift)
+                    metric_start = time.perf_counter()
+                    log3(args, f"NEWTON_METRICS_START ieps={ieps} k={k} status=FAIL_LS")
                     metrics = compute_metrics(old_state, design, c1_phi=c1_phi, c2_phi=c2_phi, eps_phi=eps_phi, params=params)
+                    metric_time = time.perf_counter() - metric_start
+                    log3(args, f"NEWTON_METRICS_DONE ieps={ieps} k={k} time={metric_time:.6f}")
                     write_newton_row(
                         newton_writer,
                         record="NEWTON",
@@ -1298,7 +1436,7 @@ def run_strategy(args: argparse.Namespace) -> State:
                         relRhoDesign=metrics["rel_rho_design"],
                         annularPhiMinusC2=metrics["annular_phi_minus_c2"],
                         solveTime=solve_time,
-                        metricTime=0.0,
+                        metricTime=metric_time,
                         stepTime=time.perf_counter() - step_start,
                         solver=solver_label,
                         status="FAIL_LS",
@@ -1321,8 +1459,10 @@ def run_strategy(args: argparse.Namespace) -> State:
                 reject_count = 0
                 state = best_trial
                 metrics_start = time.perf_counter()
+                log3(args, f"NEWTON_METRICS_START ieps={ieps} k={k} status=ACCEPT")
                 metrics = compute_metrics(state, design, c1_phi=c1_phi, c2_phi=c2_phi, eps_phi=eps_phi, params=params)
                 metric_time = time.perf_counter() - metrics_start
+                log3(args, f"NEWTON_METRICS_DONE ieps={ieps} k={k} time={metric_time:.6f}")
                 write_newton_row(
                     newton_writer,
                     record="NEWTON",
@@ -1513,6 +1653,7 @@ def run_strategy(args: argparse.Namespace) -> State:
     elapsed = time.perf_counter() - total_start
     with summary_path.open("w", encoding="utf-8") as handle:
         handle.write(f"runTag {run_tag}\n")
+        handle.write(f"initialMesh {initial_mesh_path}\n")
         handle.write(f"nt {space.mesh.num_tri}\n")
         handle.write(f"ndof {space.ndof}\n")
         handle.write(f"order {args.order}\n")
@@ -1528,7 +1669,9 @@ def run_strategy(args: argparse.Namespace) -> State:
         handle.write(f"c2Phi {c2_phi}\n")
         handle.write(f"rhoExtremaResolution {params.rho_extrema_resolution}\n")
         handle.write(f"rhoExtremaChunkElements {params.rho_extrema_chunk_elements}\n")
-        handle.write(f"newtonInitialGuess {args.newton_initial_guess}\n")
+        handle.write("nonlinearInitialState phi_design_from_torsion_band\n")
+        handle.write(f"newtonCorrectionInitialGuess {args.newton_initial_guess}\n")
+        handle.write(f"hdgPetscPreset {args.hdg_petsc_preset}\n")
         handle.write(f"resHdg {state.residual_hdg}\n")
         handle.write(f"resCoeffL2 {state.residual_coeff_l2}\n")
         handle.write(f"resVolumeL2 {state.residual_volume_coeff_l2}\n")

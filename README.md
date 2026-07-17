@@ -17,70 +17,12 @@ The manufactured diffusion-reaction case runner is:
 python scripts/run_diff_rea_cases.py
 ```
 
-The Strategy A star-domain HDG Newton benchmark is now a non-adaptive
-torsion-initialized run:
-
-```bash
-python scripts/diocotron_equilibrium_torsion_intialized.py \
-  --star-n 260 --order 4 --hdg-tau 20 -v 2 \
-  --residual-norm euclid --newton-shift-mode none
-```
-
-The runner creates a timestamped directory under
-`run_logs/diocotron_equilibrium_torsion_intialized/`, writes `newton.csv`,
-`frames.csv`, and `summary.txt`, and reports the split mixed HDG residual
-components.  Mesh adaptivity was removed from this comparison driver; reusable
-adaptive remeshing helpers live in `hdgfem.core.adaptivity`.
-
-A DOLFINx continuous-Galerkin fixed-mesh comparison runner is also available
-when the `fenics-dolfinx` environment is installed:
-
-```bash
-/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
-  --mesh run_logs/diocotron_equilibrium_torsion_intialized/<run>/initial_mesh.msh \
-  --order 2 --linear-solver mumps
-```
-
-Passing the saved HDG `initial_mesh.msh` is the preferred fair-comparison path:
-both runners then use the same triangle set, while DOLFINx can vary the CG
-polynomial order independently.  DOLFINx outputs are written under
-`run_logs/dolfinx_torsion_noadapt/`.
-
-Additional DOLFINx Strategy A diagnostics live in `scripts/`:
-
-```bash
-python scripts/strategyA_dolfinx_window_all_at_once.py --objective-mode simple-penalty
-python scripts/strategyA_dolfinx_closed_loop_refit.py --plot --plot-mode nonblocking
-python scripts/strategyA_dolfinx_window_reduced_optimization.py --eps-ratio 0.08 -v 2
-```
-
-`strategyA_dolfinx_window_all_at_once.py` is a residual-penalty diagnostic for
-the joint state/window problem.  It can optionally polish the final state with
-fixed-window Newton, which is useful for checking whether a penalty-selected
-threshold pair survives projection onto the semilinear solution branch.
-
-`strategyA_dolfinx_closed_loop_refit.py` is the reduced closed-loop
-implementation recommended for threshold selection experiments.  It alternates
-fixed-threshold Newton projection with a cheap boundary-aware ray refit of
-`c1,c2` against the torsion-designed density.  The ray push uses a mesh-derived
-boundary radius table, so points move along rays from the band origin by an
-amount scaled by the remaining distance to the boundary.  With
-`--plot-mode nonblocking`, the live PyVista window updates DOLFINx scalar
-arrays in place instead of opening a new window for every Newton/refit iterate.
-
-`strategyA_dolfinx_window_reduced_optimization.py` implements the
-gradient-based reduced-space algorithm from
-`docs/algorithms/strategyA_window_reduced_optimization/`.  It optimizes the
-two semilinear thresholds with soft leakage/missing-area functionals, solves
-two sensitivity equations per outer iteration, takes a constrained
-trust-region step in `(c1,c2)`, and then uses a sensitivity predictor followed
-by damped Newton correction.  The final state is always projected with exact
-Newton to `--tol-res`; if that final projection fails, the script exits
-nonzero.  Verbosity level `-v 2` prints the 12 algorithm steps and timings for
-the costly assembly/solve phases.  It uses the same generated smooth-star mesh
-defaults and blocking/nonblocking PyVista paths as the closed-loop refit
-runner.
+Experimental and comparison drivers live in `scripts/`.  Some are small
+manufactured-PDE runners; others are research scripts for the
+torsion-initialized Newton method for converging to semilinear local diocotron-like
+equilibria of the guiding-center model on general geometries.  Check each
+script's module docstring or `--help` output for the current assumptions,
+parameters, and run-log paths.
 
 Preset definitions live in the `PRESETS` dictionaries inside
 `scripts/run_adv_rea_cases.py` and `scripts/run_diff_rea_cases.py`.  List the
@@ -238,39 +180,6 @@ The package test `tests/test_hdg_gram.py` checks that the condensed Gram
 inverse matches a sparse direct solve and that the dual norm satisfies the
 energy identity.
 
-### Strategy A Run Summary
-
-The current Strategy A driver is a fixed-mesh HDG Newton comparison against the
-FreeFEM torsion/Newton formalism.  It solves the torsion initializer, builds the
-semilinear density window, then runs epsilon continuation without any preadapt
-or scheduled remesh step.  This isolates the Newton convergence behavior from
-mesh-transfer effects.
-
-```text
-script       scripts/diocotron_equilibrium_torsion_intialized.py
-output       run_logs/diocotron_equilibrium_torsion_intialized/<run-tag>_<timestamp>/
-mesh         native smooth-star Gmsh mesh
-residual     selectable: euclid, hdg-local, edp-volume, or hdg
-adaptivity   not used by this driver
-```
-
-DOLFINx CG comparison runner:
-
-```text
-script       scripts/strategyA_dolfinx_noadapt_torsion_newton.py
-output       run_logs/dolfinx_torsion_noadapt/<run-tag>_<timestamp>/
-mesh         generated smooth-star mesh or saved Gmsh mesh via --mesh
-solver       mumps, lu, hypre, or gamg
-adaptivity   not used
-```
-
-Use `--mesh` with a saved HDG `initial_mesh.msh` to remove Gmsh-version and
-mesh-generation differences from CG/HDG timing comparisons.
-
-For cleaner timing comparisons, omit `--plot`.  For residual accounting, keep
-`--residual-norm euclid` for the full mixed coefficient residual or use
-`--residual-norm hdg` when the local HDG Gram diagnostic is required.
-
 Use the reusable solver class when a driver needs to keep the mesh, space,
 latest matrix data, ordering, preconditioner, trace, and reconstructed field:
 
@@ -355,7 +264,7 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
   Gmsh background-field remeshing helpers.
 - `run_configs/`: version-controlled benchmark and solver presets.
 - `scripts/`: runnable project scripts and benchmark sweep entry points,
-  including `diocotron_equilibrium_torsion_intialized.py` and
+  including `hdg_torsion_initialized_newton.py` and
   `hdg_gram_matrix_test.py`.
 - `tests/`: focused package tests.
 
