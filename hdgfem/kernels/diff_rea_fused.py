@@ -1764,6 +1764,136 @@ def solve_hdiv_flux_min_distance_postprocess_kernel(
 
 
 @njit(cache=True, parallel=True, fastmath=True)
+def solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
+        flux_coeffs,
+        local_unknowns,
+        trace,
+        primal_coeffs,
+        loc2glob_edge,
+        orientations,
+        aff_jacs,
+        inv_aff_mats_t,
+        jacs_el_fc,
+        normals,
+        tau,
+        post_grad_project_r,
+        post_grad_project_s,
+        face_base_to_post,
+        trace_base_to_post,
+        face_post_trace,
+        interior_low_to_base,
+        interior_low_to_post,
+        ainv_constraint_t,
+        schur_lu,
+        schur_pivots,
+):
+    """Apply constrained H(div)-type flux post-processing using ``-grad(u*)``.
+
+    This variant is used for identity diffusion when primal post-processing is
+    also requested.  The unconstrained starting point is the degree ``p+1`` L2
+    projection of ``-grad(u_h_star)``.  The stored Schur factors then add the
+    minimum mass-norm correction that enforces the same HDG numerical normal
+    flux moments and low-order raw-flux interior moments as the generic flux
+    postprocessor.
+    """
+    num_elements = loc2glob_edge.shape[0]
+    base_el_dof = face_base_to_post.shape[1]
+    post_el_dof = post_grad_project_r.shape[0]
+    base_edg_dof = trace_base_to_post.shape[0]
+    post_edg_dof = trace_base_to_post.shape[1]
+    low_dof = interior_low_to_base.shape[0]
+    face_rows = 3 * post_edg_dof
+    constraints = face_rows + 2 * low_dof
+
+    for element in prange(num_elements):
+        q0x = np.empty(post_el_dof, dtype=np.float64)
+        q0y = np.empty(post_el_dof, dtype=np.float64)
+        grad_r = np.empty(post_el_dof, dtype=np.float64)
+        grad_s = np.empty(post_el_dof, dtype=np.float64)
+
+        for i in range(post_el_dof):
+            value_r = 0.0
+            value_s = 0.0
+            for j in range(post_el_dof):
+                value_r += post_grad_project_r[i, j] * primal_coeffs[element, j]
+                value_s += post_grad_project_s[i, j] * primal_coeffs[element, j]
+            grad_r[i] = value_r
+            grad_s[i] = value_s
+
+        inv00 = inv_aff_mats_t[element, 0, 0]
+        inv01 = inv_aff_mats_t[element, 0, 1]
+        inv10 = inv_aff_mats_t[element, 1, 0]
+        inv11 = inv_aff_mats_t[element, 1, 1]
+        for i in range(post_el_dof):
+            q0x[i] = -(inv00 * grad_r[i] + inv01 * grad_s[i])
+            q0y[i] = -(inv10 * grad_r[i] + inv11 * grad_s[i])
+
+        constraint_gap = np.empty((constraints, 1), dtype=np.float64)
+        for i in range(constraints):
+            constraint_gap[i, 0] = 0.0
+
+        for face in range(3):
+            edge = loc2glob_edge[element, face]
+            is_positive = orientations[element, face]
+            scale = jacs_el_fc[element, face]
+            nx = normals[element, face, 0]
+            ny = normals[element, face, 1]
+            tau_face = tau[element, face]
+
+            for trace_dof in range(post_edg_dof):
+                u_face = 0.0
+                qx_face = 0.0
+                qy_face = 0.0
+                for j in range(base_el_dof):
+                    moment = face_base_to_post[face, j, trace_dof]
+                    u_face += local_unknowns[element, j] * moment
+                    qx_face += local_unknowns[element, base_el_dof + j] * moment
+                    qy_face += local_unknowns[element, 2 * base_el_dof + j] * moment
+
+                trace_face = 0.0
+                for j in range(base_edg_dof):
+                    global_dof = edge * base_edg_dof + map_edge_dof_bool(is_positive, j, base_edg_dof)
+                    trace_face += trace[global_dof] * trace_base_to_post[j, trace_dof]
+
+                q0_face = 0.0
+                for j in range(post_el_dof):
+                    moment = face_post_trace[face, j, trace_dof]
+                    q0_face += nx * q0x[j] * moment + ny * q0y[j] * moment
+
+                row = face * post_edg_dof + trace_dof
+                target = scale * (nx * qx_face + ny * qy_face + tau_face * (u_face - trace_face))
+                constraint_gap[row, 0] = target - scale * q0_face
+
+        jac = aff_jacs[element]
+        for i in range(low_dof):
+            target_x = 0.0
+            target_y = 0.0
+            current_x = 0.0
+            current_y = 0.0
+            for j in range(base_el_dof):
+                moment = interior_low_to_base[i, j]
+                target_x += local_unknowns[element, base_el_dof + j] * moment
+                target_y += local_unknowns[element, 2 * base_el_dof + j] * moment
+            for j in range(post_el_dof):
+                moment = interior_low_to_post[i, j]
+                current_x += q0x[j] * moment
+                current_y += q0y[j] * moment
+            constraint_gap[face_rows + i, 0] = jac * (target_x - current_x)
+            constraint_gap[face_rows + low_dof + i, 0] = jac * (target_y - current_y)
+
+        lu_solve_inplace(schur_lu[element], schur_pivots[element], constraint_gap)
+
+        for i in range(post_el_dof):
+            value_x = q0x[i]
+            value_y = q0y[i]
+            for c in range(constraints):
+                value_x += ainv_constraint_t[element, i, c] * constraint_gap[c, 0]
+                value_y += ainv_constraint_t[element, post_el_dof + i, c] * constraint_gap[c, 0]
+            flux_coeffs[0, element, i] = value_x
+            flux_coeffs[1, element, i] = value_y
+
+
+@njit(cache=True, parallel=True, fastmath=True)
 def factor_primal_postprocess_kernel(
         primal_lu,
         primal_pivots,
@@ -1899,5 +2029,6 @@ __all__ = [
     "reconstruct_projected_tensor_diffusion_local_unknowns_kernel",
     "reconstruct_diffusion_local_unknowns_kernel",
     "solve_hdiv_flux_min_distance_postprocess_kernel",
+    "solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel",
     "solve_primal_postprocess_kernel",
 ]
