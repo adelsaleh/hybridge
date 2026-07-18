@@ -222,15 +222,24 @@ Important controls:
 --eps-ratios                    comma-separated epsilon continuation ratios
 --residual-norm                 euclid, hdg-local, edp-volume, or hdg
 --newton-shift-mode             none or freefem elliptic damping mode
---newton-initial-guess          zero or previous-correction for linear solves
+--newton-initial-guess          initial guess for Newton correction solves only:
+                                zero or previous-correction
 --tol-res                       outer nonlinear residual stop tolerance
 --tol-newton                    outer Newton step stop tolerance
+--verbosity, -v                 1 major phases, 2 Armijo trials/timings,
+                                3 Krylov residual history
 --plot / --no-plot-*            interactive PyVista diagnostics
 --save-frames                   save enabled PyVista frames
 --skip-petsc                    force SciPy linear solves
 ```
 
-Each run creates a unique directory under `run_logs/` unless `--run-dir` is
+The nonlinear Newton state always starts from `phiDesign`, the Poisson solve
+with the torsion-designed density.  `--newton-initial-guess` controls only the
+initial trace vector for the linear correction system solved inside each Newton
+step.
+
+Each run creates a unique directory under
+`run_logs/diocotron_equilibrium_torsion_intialized/` unless `--run-dir` is
 provided.  The directory contains `newton.csv`, `frames.csv`, and `summary.txt`.
 The Newton CSV records the split residual components `resVolumeL2`,
 `resPrimalL2`, `resFluxL2`, `resTraceL2`, and `resCoeffL2`, plus precise
@@ -243,12 +252,193 @@ script       scripts/diocotron_equilibrium_torsion_intialized.py
 mesh         smooth star, generated once at startup
 residual     mixed HDG residual, Euclidean line search by default
 adaptivity   no preadapt and no scheduled remeshing
-outputs      timestamped run directory with CSV and summary files
+outputs      run_logs/diocotron_equilibrium_torsion_intialized/<timestamp>/
 ```
 
 For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
 use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
 Euclidean norm is the cheaper default for line-search comparisons.
+
+### DOLFINx Strategy A Diagnostics
+
+The repository also contains DOLFINx continuous-Galerkin Strategy A scripts for
+fixed-mesh experiments.  These require a Python environment with DOLFINx,
+Basix, PETSc, and Gmsh support.  They are intended for algorithm development
+and comparison against the native HDG driver, not as replacements for the HDG
+solver package.
+
+All-at-once residual-penalty diagnostic:
+
+```bash
+python scripts/strategyA_dolfinx_window_all_at_once.py \
+  --objective-mode simple-penalty \
+  --mesh-size 0.18 --star-n 140 --order 3 \
+  --eps-ratio 0.08 --residual-penalty 1.0 \
+  --max-opt-it 20 --linear-solver lu --direction-solver lu
+```
+
+The simple-penalty mode solves the diagnostic problem
+
+```text
+0.5 ||phi_h - phi_T,h||^2 / ||phi_T,h||^2
+  + 0.5 gamma ||F_h(phi_h,c;.)||^2_{V_h'}
+```
+
+using a stiffness-inverse dual residual norm.  This is useful for globalization
+and debugging because it avoids oversolving poor threshold pairs, but it is not
+the constrained closed-loop Strategy A problem unless the residual term is
+driven close to zero.  Use `--newton-polish-final` to project the selected
+thresholds back onto the fixed-window semilinear branch and compare the
+penalty state against the Newton-polished state.
+
+Closed-loop boundary-aware refit:
+
+```bash
+python scripts/strategyA_dolfinx_closed_loop_refit.py \
+  --mesh-size 0.18 --star-n 140 --order 4 \
+  --eps-ratio 0.08 --outer-it 6 \
+  --newton-max-it 25 --newton-tol-res 1e-8 \
+  --linear-solver lu \
+  --refit-center-fraction 0.08 \
+  --refit-width-fraction 0.08 \
+  --refit-center-grid 9 \
+  --refit-width-grid 9 \
+  --refit-refine-passes 1 \
+  --push-scale-fraction 0.05 \
+  --push-scale-grid 5 \
+  --push-ray-bins 720 \
+  --tol-rho-rel 5e-2 \
+  --verbosity 1
+```
+
+This script implements the reduced closed-loop loop:
+
+```text
+1. Newton-polish the semilinear state for the current c1,c2.
+2. Measure the actual torsion-density error after projection.
+3. If the projected density error is still above tolerance, refit c1,c2 using
+   a cheap pushed scalar-coordinate search.
+4. Repeat until the Newton-projected density reaches the torsion tolerance or
+   the refit stagnates.
+```
+
+The refit push is boundary-aware.  For a point
+`x = x0 + r e(theta)` and the mesh-estimated boundary ray length `R(theta)`,
+the code uses the normalized radius
+
+```text
+eta = r / R(theta)
+eta_push = eta + beta eta (1 - eta)
+```
+
+then samples `phi(x0 + eta_push R(theta) e(theta))`.  The displacement stays
+on the ray through the point, vanishes at the origin and boundary, and scales
+with the remaining distance to the boundary on that ray.  For generated
+smooth-star meshes, the band origin is `(0,0)`; mesh-file runs fall back to the
+mesh bounding-box center.  `--push-ray-bins` controls the angular resolution of
+the mesh-derived boundary radius table.
+
+Reduced-space leakage/missing-area optimizer:
+
+```bash
+python scripts/strategyA_dolfinx_window_reduced_optimization.py \
+  --mesh-size 0.18 --star-n 140 --order 4 \
+  --alphaT1 0.60 --alphaT2 0.70 --eps-t-ratio 0.06 \
+  --eps-mode relative --eps-ratio 0.08 \
+  --max-opt-it 25 --eta-out 0.02 --tol-area 0.05 \
+  --tol-res 1e-10 --final-newton-max-it 200 \
+  --linear-solver mumps -v 2
+```
+
+This runner follows the reduced algorithm in
+`docs/algorithms/strategyA_window_reduced_optimization/`.  At each outer
+iteration it projects the state for the current thresholds, evaluates soft
+leakage and missing-area discrepancies, solves the two sensitivity equations,
+forms reduced gradients, and takes a constrained trust-region step in
+`(c1,c2)`.  The predictor/corrector stage then filters trial steps using
+residual, geometry, branch-overlap, and collapse checks.
+
+`--inner-tol-mode inexact` may use relaxed Newton tolerances during the outer
+loop, but the reported final state is always projected again with exact Newton
+to `--tol-res`.  If that final projection fails, the process exits with code
+`3` and reports `final_status=NEWTON_NOT_CONVERGED`.  Use
+`--inner-tol-mode exact` when every accepted outer iterate should also satisfy
+the requested residual tolerance.
+
+Verbosity levels are `-v 0` for summaries, `-v 1` for iteration diagnostics,
+and `-v 2` for the numbered algorithm trace.  The highest level prints
+`ALGO_STEP` lines matching steps 1 through 12 of the algorithm note, including
+timings for Newton projection, sensitivity assembly/solves, trust-region
+selection, correction, and acceptance filtering.  Outputs are written under
+`run_logs/dolfinx_window_reduced_optimization/`.
+
+Plotting controls are deliberately simple:
+
+```bash
+python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode nonblocking
+python scripts/strategyA_dolfinx_closed_loop_refit.py ... --plot --plot-mode blocking
+python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode nonblocking
+python scripts/strategyA_dolfinx_window_reduced_optimization.py ... --plot --plot-mode blocking
+```
+
+With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
+grids and updates DOLFINx point-data arrays in place for every Newton polish
+state, refit push, or accepted reduced-optimization iterate.  This is the fast
+path for watching the iteration evolve.  Blocking mode keeps the one-state
+inspection behavior and waits for Enter at each plot.  `--save-frames` remains
+a separate one-shot render path for PNG artifacts.
+
+### Strategy A DOLFINx CG Runner
+
+`scripts/strategyA_dolfinx_noadapt_torsion_newton.py` is the fixed-mesh
+continuous-Galerkin comparison runner for the same torsion-initialized Strategy
+A problem.  It uses DOLFINx Lagrange elements, accepts arbitrary polynomial
+order supported by DOLFINx, and follows the same torsion design, Poisson
+initializer, epsilon continuation, Armijo line search, and optional elliptic
+damping controls as the no-adapt FreeFEM/HDG comparison.
+
+The clean CG/HDG timing workflow is:
+
+```bash
+# First run the HDG driver once and keep its saved mesh.
+python scripts/diocotron_equilibrium_torsion_intialized.py \
+  --run-tag hdg_star260_p2_mumps_clean \
+  --star-n 260 --order 2 --hdg-tau 10 \
+  --hdg-petsc-preset mumps_lu --residual-norm euclid
+
+# Then pass that exact mesh to DOLFINx.
+/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
+  --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
+  --mesh run_logs/diocotron_equilibrium_torsion_intialized/<hdg-run>/initial_mesh.msh \
+  --order 2 --linear-solver mumps --terminal-every 1
+```
+
+Important controls:
+
+```text
+--mesh PATH                     saved Gmsh mesh; preferred for fair comparison
+--order                         CG polynomial degree
+--linear-solver                 mumps, lu, hypre, or gamg
+--ksp-type                      optional PETSc KSP override for iterative paths
+--linear-rtol, --linear-atol    iterative-solver tolerances
+--alphaT1, --alphaT2            torsion window ratios, c_iT = alphaTi*Tmax
+--betaPhi1, --betaPhi2          semilinear window ratios, c_iPhi = betaPhii*max(phiDesign)
+--eps-ratios                    comma-separated epsilon continuation ratios
+--use-mu-shift                  enable the same elliptic damping mode
+--plot / --no-plot-*            interactive PyVista diagnostics
+--save-frames                   save enabled PyVista frames
+```
+
+Each run creates `logs/newton.csv`, `logs/frames.csv`, and `out/summary.txt`
+under `run_logs/dolfinx_torsion_noadapt/<run-tag>_<timestamp>/`.  The Newton
+loop checks the current residual before assembling and solving a new correction,
+so converged epsilon windows end with `CONVERGED_RESIDUAL` and `solveTime=0`.
+
+Recent p=2,4,5,6 comparisons used the same `nt=12288` star mesh and MUMPS for
+both CG and HDG.  The Newton accept count was identical across methods and
+orders; timing differences therefore primarily reflect the chosen discretization
+and linear algebra cost rather than different nonlinear behavior.
 
 ### Optional PETSc Install Notes
 
