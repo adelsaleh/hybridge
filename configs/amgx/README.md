@@ -28,7 +28,7 @@ Solver summary:
 
 Focused AMGX sweeps on 2026-07-20 did not find a safer faster replacement for this default. Keep `BICGSTAB + classical AMG/ILU0 W-cycle` as the production advection-reaction config. The closest alternative is `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`, retained only as experimental: it was about 1% faster in AMGX solve on the p6/ms0.005 stress case, but with a larger post-solve residual and about 2x larger L2 error. Details are in `run_logs/adv_rea_amgx_config_findings_20260720.md`.
 
-Modal trace AMGX checks in that sweep used CuPy assembly deliberately. Do not use fused raw CUDA assembly as evidence for modal trace behavior until that path is explicitly validated for modal trace basis.
+Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation (`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
 
 
 ### Raw CUDA advection run modes

@@ -1,0 +1,87 @@
+
+----- Standalone HDGFEM GPU4-Style Advection-Reaction Solve -----
+case=test2_legacy_gpu3, mesh=rectangle, mesh_size=0.01, order=6, basis=dub_orth, volume_quad_1d=12, assembly_backend=raw-cuda, raw_local_assembly=fused, raw_lu_mode=coop, raw_block_size=32
+generating mesh ... done in 3.52752s
+building DG space/reference data ... done in 0.20078s
+h=1.36e-02, h^(p+1)=8.39e-14, triangles=92,552
+copying static data to GPU ... done in 0.58262s
+projecting beta_x ... done in 0.07360s
+projecting beta_y ... done in 0.02961s
+assembling reduced trace system (raw CUDA fused advection gpu4-style) ...
+  source projection ... done in 0.03172s
+  reaction projection ... done in 0.02946s
+  reference advection tensor ... done in 0.01655s
+  raw CUDA local assembly: fused
+  raw CUDA LU mode: coop
+  raw CUDA block size: 32
+  raw CUDA map/setup: 0.03837s
+  raw CUDA solve/emit kernel: 0.16633s
+assembly completed in 0.35254s
+solving global system with PyAMGX ...
+  CSR assembly + diagonal scaling: 0.52008s, nnz=33,836,460
+  AMGX config: configs/amgx/adv_rea_gpu4_hdg_fgmres_classical_l1_aggressive.json
+  PyAMGX setup/upload: 0.27668s
+  PyAMGX solve: 9.51189s, scaled_rel_res=3.629e-02
+augmenting traces ... done in 0.00035s
+reconstructing element field (raw CUDA) ... done in 0.12782s
+computing plot/error data ... done in 0.25522s
+
+HDGFEM GPU4 Advection-Reaction Solve Summary
+══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Run / mesh                 Options                         Solver                                                               Errors                            Timings                         
+───────────────────────    ────────────────────────────    ─────────────────────────────────────────────────────────────────    ──────────────────────────────    ────────────────────────────────
+case: test2_legacy_gpu3    basis: dub_orth                 solver: FGMRES                                                       theoretical h^(p+1): 8.391e-14    mesh generation (s): 3.5 (22.7%)
+mesh: rectangle            trace basis: legacy-lagrange    preconditioner: AMG/JACOBI_L1                                        L2 error: 1.834e-01               setup (s): 0.8 (5.0%)           
+mesh size: 0.01            volume quad 1d: 12              AMGX config: adv_rea_gpu4_hdg_fgmres_classical_l1_aggressive.json    Linf error: 6.111e+00             projections (s): 0.2 (1.1%)     
+p: 6                       edge quad 1d: default           matrix nnz: 33,836,460                                               avg max error: 1.000e-01          assembly (s): 0.4 (2.3%)        
+triangles: 92,552          error quad 1d: 24               scaled rel res: 3.629e-02                                            max-error element: 80,222         global solve (s): 10.4 (66.7%)  
+edges: 139,228             assembly backend: raw-cuda      AMGX status: not_converged                                                                             reconstruct (s): 0.1 (0.8%)     
+trace dofs: 968,996        raw local: fused                AMGX iterations: 1,500                                                                                 plot/error (s): 0.3 (1.6%)      
+                           raw LU: coop                    tol: 1.0e-14                                                                                           total (s): 15.55                
+                           raw block: 32                                                                                                                                                          
+                           trace ordering: none                                                                                                                                                   
+
+HDGFEM GPU4 Detailed Timing / Solver Info
+===================================================================================
+mesh generation (s)          :                                              3.52752
+space/reference setup (s)    :                                              0.20078
+GPU mirror/setup (s)         :                                              0.58262
+advection projection (s)     :                                              0.10321
+source projection (s)        :                                              0.03172
+reaction projection (s)      :                                              0.02946
+assembly total (s)           :                                              0.35254
+  raw block size             :                                                   32
+  raw map/setup              :                                              0.03837
+  reference adv tensor       :                                              0.01655
+  raw solve/emit kernel      :                                              0.16633
+  raw total                  :                                              0.20470
+  index arrays               :                                              0.00000
+  local matrices             :                                              0.00000
+  local solve                :                                              0.00000
+  trace blocks/data          :                                              0.00000
+  RHS/source                 :                                              0.00000
+  boundary elimination       :                                              0.00000
+trace ordering (s)           :                                              0.00000
+global solve total (s)       :                                             10.36920
+  permutation                :                                              0.00000
+  CSR+scaling                :                                              0.52008
+  AMGX setup                 :                                              0.27668
+  AMGX solve                 :                                              9.51189
+AMGX config                  : adv_rea_gpu4_hdg_fgmres_classical_l1_aggressive.json
+AMGX solver                  :                                               FGMRES
+AMGX preconditioner          :                                        AMG/JACOBI_L1
+AMGX tolerance               :                                            1.000e-14
+AMGX maxiter                 :                                                1,500
+matrix nnz                   :                                           33,836,460
+AMGX status                  :                                        not_converged
+AMGX iterations              :                                                1,500
+scaled abs residual          :                                            1.013e+01
+scaled rhs norm              :                                            2.792e+02
+scaled rel residual          :                                            3.629e-02
+reconstruct total (s)        :                                              0.12817
+  trace augment              :                                              0.00035
+  field kernel/solve         :                                              0.12782
+  local reconstruction solve :                                              0.12688
+plot/error eval (s)          :                                              0.25522
+total measured (s)           :                                             15.55169
+===================================================================================

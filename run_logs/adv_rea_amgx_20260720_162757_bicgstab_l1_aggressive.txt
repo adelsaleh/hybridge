@@ -1,0 +1,87 @@
+
+----- Standalone HDGFEM GPU4-Style Advection-Reaction Solve -----
+case=test2_legacy_gpu3, mesh=rectangle, mesh_size=0.006, order=6, basis=dub_orth, volume_quad_1d=12, assembly_backend=raw-cuda, raw_local_assembly=fused, raw_lu_mode=coop, raw_block_size=32
+generating mesh ... done in 10.90972s
+building DG space/reference data ... done in 0.28913s
+h=8.06e-03, h^(p+1)=2.21e-15, triangles=258,002
+copying static data to GPU ... done in 0.61522s
+projecting beta_x ... done in 0.09756s
+projecting beta_y ... done in 0.05743s
+assembling reduced trace system (raw CUDA fused advection gpu4-style) ...
+  source projection ... done in 0.06926s
+  reaction projection ... done in 0.05875s
+  reference advection tensor ... done in 0.01643s
+  raw CUDA local assembly: fused
+  raw CUDA LU mode: coop
+  raw CUDA block size: 32
+  raw CUDA map/setup: 0.07259s
+  raw CUDA solve/emit kernel: 0.40894s
+assembly completed in 0.69119s
+solving global system with PyAMGX ...
+  CSR assembly + diagonal scaling: 0.76174s, nnz=94,521,147
+  AMGX config: configs/amgx/adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json
+  PyAMGX setup/upload: 0.08990s
+  PyAMGX solve: 4.73274s, scaled_rel_res=8.073e-12
+augmenting traces ... done in 0.00449s
+reconstructing element field (raw CUDA) ... done in 0.35390s
+computing plot/error data ... done in 0.47565s
+
+HDGFEM GPU4 Advection-Reaction Solve Summary
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Run / mesh                 Options                         Solver                                                                 Errors                            Timings                          
+───────────────────────    ────────────────────────────    ───────────────────────────────────────────────────────────────────    ──────────────────────────────    ─────────────────────────────────
+case: test2_legacy_gpu3    basis: dub_orth                 solver: BICGSTAB                                                       theoretical h^(p+1): 2.209e-15    mesh generation (s): 10.9 (56.8%)
+mesh: rectangle            trace basis: legacy-lagrange    preconditioner: AMG/JACOBI_L1                                          L2 error: 2.485e-11               setup (s): 0.9 (4.7%)            
+mesh size: 0.006           volume quad 1d: 12              AMGX config: adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json    Linf error: 1.828e-10             projections (s): 0.3 (1.5%)      
+p: 6                       edge quad 1d: default           matrix nnz: 94,521,147                                                 avg max error: 1.125e-11          assembly (s): 0.7 (3.6%)         
+triangles: 258,002         error quad 1d: 24               scaled rel res: 8.073e-12                                              max-error element: 117,972        global solve (s): 5.7 (29.5%)    
+edges: 387,671             assembly backend: raw-cuda      AMGX status: success                                                                                     reconstruct (s): 0.4 (1.9%)      
+trace dofs: 2,704,345      raw local: fused                AMGX iterations: 808                                                                                     plot/error (s): 0.5 (2.5%)       
+                           raw LU: coop                    tol: 1.0e-14                                                                                             total (s): 19.21                 
+                           raw block: 32                                                                                                                                                             
+                           trace ordering: none                                                                                                                                                      
+
+HDGFEM GPU4 Detailed Timing / Solver Info
+=====================================================================================
+mesh generation (s)          :                                               10.90972
+space/reference setup (s)    :                                                0.28913
+GPU mirror/setup (s)         :                                                0.61522
+advection projection (s)     :                                                0.15499
+source projection (s)        :                                                0.06926
+reaction projection (s)      :                                                0.05875
+assembly total (s)           :                                                0.69119
+  raw block size             :                                                     32
+  raw map/setup              :                                                0.07259
+  reference adv tensor       :                                                0.01643
+  raw solve/emit kernel      :                                                0.40894
+  raw total                  :                                                0.48153
+  index arrays               :                                                0.00000
+  local matrices             :                                                0.00000
+  local solve                :                                                0.00000
+  trace blocks/data          :                                                0.00000
+  RHS/source                 :                                                0.00000
+  boundary elimination       :                                                0.00000
+trace ordering (s)           :                                                0.00000
+global solve total (s)       :                                                5.67183
+  permutation                :                                                0.00000
+  CSR+scaling                :                                                0.76174
+  AMGX setup                 :                                                0.08990
+  AMGX solve                 :                                                4.73274
+AMGX config                  : adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json
+AMGX solver                  :                                               BICGSTAB
+AMGX preconditioner          :                                          AMG/JACOBI_L1
+AMGX tolerance               :                                              1.000e-14
+AMGX maxiter                 :                                                  1,500
+matrix nnz                   :                                             94,521,147
+AMGX status                  :                                                success
+AMGX iterations              :                                                    808
+scaled abs residual          :                                              2.924e-09
+scaled rhs norm              :                                              3.622e+02
+scaled rel residual          :                                              8.073e-12
+reconstruct total (s)        :                                                0.35839
+  trace augment              :                                                0.00449
+  field kernel/solve         :                                                0.35390
+  local reconstruction solve :                                                0.35228
+plot/error eval (s)          :                                                0.47565
+total measured (s)           :                                               19.20571
+=====================================================================================
