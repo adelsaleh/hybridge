@@ -547,6 +547,30 @@ python -m scripts.advection_reaction.run_adv_rea_cases --help
 
 for the current runner option list.
 
+### GPU Standalone Runner
+
+High-performance advection and diffusion runs are driven by standalone scripts in
+`scripts/gpu/`:
+
+```bash
+python -m scripts.gpu.run_adv_rea_cases --help
+python -m scripts.gpu.run_adv_rea_gpu4_hdg.py --help
+python -m scripts.gpu.run_diff_rea_gpu4_hdg.py --help
+python -m scripts.gpu.sweep_adv_rea_gpu4_hdg.py --help
+```
+
+Root-level compatibility entries in `scripts/` (`run_adv_rea_gpu4_hdg.py`,
+`run_diff_rea_gpu4_hdg.py`, `sweep_adv_rea_gpu4_hdg.py`) remain as symlinks to
+these GPU scripts.
+
+The fused raw-cuda advection path is the CUDA memory-scaling default and now
+supports `p <= 8` under fused mode with both `legacy-lagrange` and
+`legendre-modal` trace bases.
+
+Mesh generation defaults to local caching (`.cache/hdgfem/meshes`) and
+emits hit/miss/fallback logs. Use `--gmsh-num-threads` to enable parallel
+CPU meshing.
+
 ## Manufactured Problem
 
 The default advection runner preset uses the same legacy `test2` problem used
