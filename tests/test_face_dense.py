@@ -54,7 +54,6 @@ def _face_dense_to_dense(blocks: np.ndarray, neighbors: np.ndarray) -> np.ndarra
             matrix[row, column] += blocks[row_face, slot]
     return matrix
 
-
 def _build_validation_case(
     *,
     nx: int,
@@ -256,6 +255,8 @@ def test_penalty_face_dense_matrix_and_rhs_match_current_coo_assembly(
         (2, 1, 1, quadratic_variable_reaction_case, "element"),
         (2, 2, 2, quadratic_poisson_case, "element_face"),
         (3, 2, 3, tensor_sine_diffusion_reaction_case, "element_face"),
+        (4, 4, 4, tensor_sine_diffusion_reaction_case, "element_face"),
+
     ],
 )
 def test_direct_dirichlet_elimination_matches_scalar_coo_elimination(
