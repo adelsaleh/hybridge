@@ -1,7 +1,26 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import sys
 import time
+
+
+def _stdout_can_encode(text: str) -> bool:
+    """Return whether the active stdout encoding can represent ``text``."""
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _heavy_rule_char() -> str:
+    return "═" if _stdout_can_encode("═") else "="
+
+
+def _light_rule_char() -> str:
+    return "─" if _stdout_can_encode("─") else "-"
 
 
 def logv(config, level: int, message: str) -> None:
@@ -47,10 +66,10 @@ def pretty_print(items, title="Results", pad_lines=1, default_fmt=".5g"):
     # print
     print("\n" * pad_lines, end="")
     print(title)
-    print("═" * (lw + vw + 3))
+    print(_heavy_rule_char() * (lw + vw + 3))
     for lbl, val in formatted:
         print(f"{lbl:<{lw}} : {val:>{vw}}")
-    print("═" * (lw + vw + 3))
+    print(_heavy_rule_char() * (lw + vw + 3))
 
 def pretty_print_2row(items, title="Results", pad_lines=1, default_fmt=".5g", sep="    "):
     """
@@ -83,7 +102,7 @@ def pretty_print_2row(items, title="Results", pad_lines=1, default_fmt=".5g", se
     # Print
     print("\n" * pad_lines, end="")
     print(title)
-    rule = "═" * (lw1 + 3 + vw1 + len(sep) + lw2 + 3 + vw2 if right else lw1 + 3 + vw1)
+    rule = _heavy_rule_char() * (lw1 + 3 + vw1 + len(sep) + lw2 + 3 + vw2 if right else lw1 + 3 + vw1)
     print(rule)
 
     for i in range(0, len(fmted), 2):
@@ -131,7 +150,7 @@ def pretty_print_2col(items, title="Results", pad_lines=1, default_fmt=".5g", se
     # Print
     print("\n" * pad_lines, end="")
     print(title)
-    rule = "═" * (lw1+3+vw1 + (len(sep)+lw2+3+vw2 if right else 0))
+    rule = _heavy_rule_char() * (lw1+3+vw1 + (len(sep)+lw2+3+vw2 if right else 0))
     print(rule)
 
     for i in range(n):
@@ -191,7 +210,7 @@ def pretty_print_ncol(items, ncols=2, title="Results", pad_lines=1, default_fmt=
 
     rule_len = sum(lab_w[c] + 3 + val_w[c] for c in range(ncols if n >= ncols else 1))
     rule_len += len(sep) * (max(0, min(ncols, (n + nrows - 1)//nrows) - 1))
-    print("═" * rule_len)
+    print(_heavy_rule_char() * rule_len)
 
     for r in range(nrows):
         parts = []
@@ -241,9 +260,9 @@ def pretty_print_sections(sections, title="Results", pad_lines=1, default_fmt=".
     ]
 
     rule_len = sum(column_widths) + len(sep) * max(0, len(column_widths) - 1)
-    print("═" * rule_len)
+    print(_heavy_rule_char() * rule_len)
     print(sep.join(pad_right(section_title, width) for (section_title, _), width in zip(formatted_sections, column_widths)))
-    print(sep.join("─" * width for width in column_widths))
+    print(sep.join(_light_rule_char() * width for width in column_widths))
 
     max_rows = max((len(items) for _, items in formatted_sections), default=0)
 
