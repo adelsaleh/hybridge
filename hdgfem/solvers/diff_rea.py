@@ -25,7 +25,14 @@ import numpy as np
 
 from ..assembly import hdg as hdg_assembly
 from ..assembly.projection import scalar_moments_from_values
-from ..linalg.system import SolveResult, eliminate_known_dofs, expand_known_dofs, solve_global_system
+from ..linalg.system import (
+    SolveResult,
+    assemble_global_matrix,
+    diagonal_scale_system,
+    eliminate_known_dofs,
+    expand_known_dofs,
+    solve_global_system,
+)
 from ..core.space import DGField, DGSpace, VectorDGField
 
 try:  # pragma: no cover - availability depends on the runtime environment.
@@ -154,6 +161,8 @@ class DiffusionReactionHDGOptions:
     petsc_options: dict | None = None
     petsc_divtol: float = 1e4
     petsc_monitor: bool = False
+    cupyx_solver: str = "bicgstab"
+    cache_device_matrix: bool = True
     ilu_drop_tol: float = 1e-10
     ilu_fill_factor: float = 35
     ilu_failure: Literal["raise", "none"] = "raise"
@@ -1274,6 +1283,14 @@ class DiffusionReactionHDGSolver:
     object.  With ``assembly_backend="numba"`` the trace system is assembled
     with strongly imposed boundary trace dofs, matching the advection-reaction
     backend's eliminated-boundary convention.
+
+    GPU global solves are selected through ``solver``, independently of the
+    assembly backend.  For example, ``assembly_backend="numba", solver="amgx"``
+    or ``solver="cupyx"`` assembles the reduced trace operator on the host and
+    then copies the global sparse matrix to the GPU for inversion.  When
+    ``cache_device_matrix=True`` and only the RHS/boundary data changes, the
+    cached Numba operator path also reuses the Cupyx device CSR matrix across
+    solves.
     """
 
     def __init__(
@@ -1426,6 +1443,10 @@ class DiffusionReactionHDGSolver:
         self.solve_rhs: np.ndarray | None = None
         self.boundary_trace: np.ndarray | None = None
         self.reduction = None
+        self._device_solve_matrix = None
+        self._device_solve_matrix_scale_system: bool | None = None
+        self._device_solve_matrix_shape: tuple[int, int] | None = None
+        self._host_solve_matrix = None
 
         self.local_solver: np.ndarray | None = None
         self.element_boundary_mats: np.ndarray | None = None
@@ -1504,6 +1525,59 @@ class DiffusionReactionHDGSolver:
         self._store_result(result)
         return result
 
+    def _cupyx_solver_selected(self) -> bool:
+        """Return True when the configured global solve uses Cupyx."""
+        solver = self.options.solver
+        normalized = "" if solver is None else str(solver).lower()
+        return normalized == "cupyx" or normalized.startswith(("cupyx_", "cupyx-"))
+
+    def _prepared_cupyx_operator(self, *, scale_system: bool):
+        """Return cached host/device matrices for a Cupyx solve when enabled.
+
+        The Numba diffusion path stores the reduced COO operator on the solver.
+        For repeated solves where only the RHS changes, this method converts
+        that host operator to a CuPy CSR matrix once and reuses it.  The device
+        matrix represents the same scaled or unscaled operator that
+        :func:`solve_global_system` will use for the solve; host diagnostics
+        are still computed inside the linear-system layer.
+        """
+        if not self.options.cache_device_matrix or not self._cupyx_solver_selected():
+            return None, None
+        if self.solve_rows is None or self.solve_cols is None or self.solve_data is None or self.solve_rhs is None:
+            return None, None
+
+        shape = (self.solve_rhs.size, self.solve_rhs.size)
+        cache_valid = (
+            self._device_solve_matrix is not None
+            and self._device_solve_matrix_scale_system == bool(scale_system)
+            and self._device_solve_matrix_shape == shape
+            and self._host_solve_matrix is not None
+        )
+        if cache_valid:
+            return self._host_solve_matrix, self._device_solve_matrix
+
+        from ..backends.cupy import scipy_csr_to_cupy
+
+        host_matrix = assemble_global_matrix(
+            self.solve_rows,
+            self.solve_cols,
+            self.solve_data,
+            self.solve_rhs.size,
+        )
+        if scale_system:
+            device_host_matrix, _ = diagonal_scale_system(
+                host_matrix,
+                np.zeros(self.solve_rhs.size, dtype=np.float64),
+                copy_matrix=True,
+            )
+        else:
+            device_host_matrix = host_matrix
+        self._host_solve_matrix = host_matrix
+        self._device_solve_matrix = scipy_csr_to_cupy(device_host_matrix)
+        self._device_solve_matrix_scale_system = bool(scale_system)
+        self._device_solve_matrix_shape = shape
+        return self._host_solve_matrix, self._device_solve_matrix
+
     def _solve_numba_with_cached_operator(self) -> DiffusionReactionResult:
         """Solve with cached numba local solvers and reduced trace matrix."""
         from ..backends.numba import (
@@ -1571,6 +1645,10 @@ class DiffusionReactionHDGSolver:
             initial_guess = impose_boundary_trace_on_guess(options.initial_guess, boundary_trace, self.space)
         solve_initial_guess = None if initial_guess is None else initial_guess[reduction.free_mask]
 
+        assembled_matrix, prepared_device_matrix = self._prepared_cupyx_operator(
+            scale_system=effective_scale_system,
+        )
+
         global_solve_result, solve_time = _timed_call(
             "solving global system",
             verbosity,
@@ -1594,8 +1672,11 @@ class DiffusionReactionHDGSolver:
                 petsc_options=options.petsc_options,
                 petsc_divtol=options.petsc_divtol,
                 petsc_monitor=options.petsc_monitor,
+                cupyx_solver=options.cupyx_solver,
                 scale_system=effective_scale_system,
-                scale_matrix_in_place=effective_scale_system,
+                scale_matrix_in_place=effective_scale_system and prepared_device_matrix is None,
+                assembled_matrix=assembled_matrix,
+                prepared_device_matrix=prepared_device_matrix,
                 raise_on_nonconvergence=True,
                 verbose=verbosity,
             ),
@@ -1741,6 +1822,8 @@ def solve_diffusion_reaction_hdg(
         petsc_options: dict | None = None,
         petsc_divtol: float = 1e4,
         petsc_monitor: bool = False,
+        cupyx_solver: str = "bicgstab",
+        cache_device_matrix: bool = False,
         ilu_drop_tol: float = 1e-10,
         ilu_fill_factor: float = 35,
         ilu_failure: Literal["raise", "none"] = "raise",
@@ -1753,7 +1836,18 @@ def solve_diffusion_reaction_hdg(
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
-    r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with HDG static condensation."""
+    r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with HDG static condensation.
+
+    ``assembly_backend`` controls how the HDG trace operator is assembled.
+    ``solver`` controls where the global trace system is inverted.  In
+    particular, ``assembly_backend="numba"`` with ``solver="amgx"`` or
+    ``solver="cupyx"`` means host Numba assembly followed by a GPU sparse
+    solve.  ``cupyx_solver`` selects the Cupyx Krylov method when
+    ``solver="cupyx"``; aliases such as ``solver="cupyx_bicgstab"`` are
+    also accepted.  ``cache_device_matrix`` is used by the stateful solver
+    class for repeated RHS-only solves and has no effect in this one-shot
+    function.
+    """
     total_start = time.perf_counter()
     verbosity = _verbosity_level(verbose)
     if verbosity:
@@ -2012,6 +2106,7 @@ def solve_diffusion_reaction_hdg(
             petsc_options=petsc_options,
             petsc_divtol=petsc_divtol,
             petsc_monitor=petsc_monitor,
+            cupyx_solver=cupyx_solver,
             scale_system=effective_scale_system,
             scale_matrix_in_place=effective_scale_system,
             raise_on_nonconvergence=True,

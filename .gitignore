@@ -1,6 +1,7 @@
 .venv/
 venv/
 __pycache__/
+.codex/
 *.py[cod]
 *.pyo
 *.pyd
@@ -27,3 +28,11 @@ docs/**/*.aux
 docs/**/*.log
 docs/**/*.out
 docs/**/*.toc
+docs/**/*.pdf
+# Local GPU benchmark scratch artifacts
+2d/cublas_magma/
+2d/amgx_config.json
+2d/check_
+2d/out.txt
+cupy_heavy_benchmark.json
+.cache/

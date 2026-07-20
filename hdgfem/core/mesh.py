@@ -10,11 +10,166 @@ the small set of legacy attribute names that are useful for numerical kernels
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 import os
+from pathlib import Path
 import tempfile
 import time
 
 import numpy as np
+
+
+_MESH_CACHE_VERSION = 2
+_MESH_CACHE_MAGIC = b"HDGFEM_MESH_CACHE_V2\n"
+_DEFAULT_MESH_CACHE_DIR = Path(".cache") / "hdgfem" / "meshes"
+
+
+def default_mesh_cache_dir() -> Path:
+    """Return the default local directory used for cached Gmsh meshes.
+
+    The path is intentionally relative to the current working directory:
+    ``.cache/hdgfem/meshes``. This keeps generated meshes local to the project
+    or run directory and avoids writing into user-global cache locations.
+    """
+    return _DEFAULT_MESH_CACHE_DIR
+
+
+def _fallback_mesh_cache_dir() -> Path:
+    """Return a process-local fallback cache directory for unwritable project caches."""
+    try:
+        project = str(Path.cwd().resolve())
+    except OSError:
+        project = str(Path.cwd())
+    digest = hashlib.sha256(project.encode("utf-8")).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / "hdgfem" / "meshes" / digest
+
+
+def _mesh_cache_log(message: str, enabled: bool) -> None:
+    """Print a mesh-cache status message when logging is enabled."""
+    if enabled:
+        print(f"[hdgfem.mesh] {message}", flush=True)
+
+
+def _normalize_mesh_cache_value(value):
+    """Return a JSON-stable representation of mesh-cache key data."""
+    if isinstance(value, np.ndarray):
+        arr = np.ascontiguousarray(value)
+        return {
+            "array_shape": list(arr.shape),
+            "array_dtype": str(arr.dtype),
+            "array_sha256": hashlib.sha256(arr.view(np.uint8)).hexdigest(),
+        }
+    if isinstance(value, dict):
+        return {str(key): _normalize_mesh_cache_value(value[key]) for key in sorted(value)}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_mesh_cache_value(item) for item in value]
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    return value
+
+
+def _mesh_cache_files(
+        model_name: str,
+        mesh_size: float,
+        *,
+        algorithm: int | None,
+        cache_key_data,
+        cache_dir: str | os.PathLike[str] | None,
+) -> tuple[list[Path], str]:
+    """Return candidate cache file paths and the serialized key for a Gmsh mesh."""
+    payload = {
+        "version": _MESH_CACHE_VERSION,
+        "model_name": str(model_name),
+        "mesh_size": float(mesh_size),
+        "algorithm": None if algorithm is None else int(algorithm),
+        "geometry": _normalize_mesh_cache_value({} if cache_key_data is None else cache_key_data),
+    }
+    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+    slug = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(model_name))
+    filename = f"{slug}-{digest}.npz"
+    if cache_dir is not None:
+        return [Path(cache_dir) / filename], payload_json
+    return [default_mesh_cache_dir() / filename, _fallback_mesh_cache_dir() / filename], payload_json
+
+
+def _load_cached_gmsh_mesh(cache_path: Path, expected_cache_key_json: str) -> DGMesh:
+    """Load a cached mesh from ``cache_path`` and rebuild derived connectivity.
+
+    Version 2 cache files are a simple streaming format: a short magic header,
+    the serialized cache key, then two ``.npy`` arrays. The streaming layout
+    avoids the ZIP central-directory writes used by ``np.savez``, which can be
+    fragile on some mounted project filesystems. Legacy version 1 ``np.savez``
+    files are still accepted when their stored key matches.
+    """
+    with cache_path.open("rb") as handle:
+        prefix = handle.read(len(_MESH_CACHE_MAGIC))
+        if prefix == _MESH_CACHE_MAGIC:
+            key_size_line = handle.readline()
+            try:
+                key_size = int(key_size_line.decode("ascii"))
+            except ValueError as exc:
+                raise ValueError("invalid mesh cache key-size header") from exc
+            cache_key_json = handle.read(key_size).decode("utf-8")
+            if cache_key_json != expected_cache_key_json:
+                raise ValueError("mesh cache key mismatch")
+            node_coords = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.float64)
+            triangles = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.int64)
+            return DGMesh.from_arrays(node_coords, triangles)
+
+        handle.seek(0)
+        with np.load(handle, allow_pickle=False) as data:
+            if "cache_key" in data:
+                cache_key_json = str(np.asarray(data["cache_key"]).item())
+                if cache_key_json != expected_cache_key_json:
+                    raise ValueError("mesh cache key mismatch")
+            node_coords = np.ascontiguousarray(data["node_coords"], dtype=np.float64)
+            triangles = np.ascontiguousarray(data["triangles"], dtype=np.int64)
+        return DGMesh.from_arrays(node_coords, triangles)
+
+
+def _write_cached_gmsh_mesh(cache_path: Path, mesh: DGMesh, cache_key_json: str) -> None:
+    """Atomically write raw mesh arrays to ``cache_path``.
+
+    The file extension remains ``.npz`` for compatibility with existing cache
+    cleanup patterns, but new files are not ZIP archives. They are a streaming
+    binary container composed of a small header followed by two ``.npy`` arrays.
+    """
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+    key_bytes = cache_key_json.encode("utf-8")
+    try:
+        with tmp_path.open("wb") as handle:
+            handle.write(_MESH_CACHE_MAGIC)
+            handle.write(f"{len(key_bytes)}\n".encode("ascii"))
+            handle.write(key_bytes)
+            np.save(handle, np.ascontiguousarray(mesh.node_coords, dtype=np.float64), allow_pickle=False)
+            np.save(handle, np.ascontiguousarray(mesh.triangles, dtype=np.int64), allow_pickle=False)
+        os.replace(tmp_path, cache_path)
+    finally:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _set_gmsh_thread_options(gmsh, num_threads: int | None) -> None:
+    """Set Gmsh CPU threading options when ``num_threads`` is provided."""
+    if num_threads is None:
+        return
+    threads = int(num_threads)
+    if threads <= 0:
+        raise ValueError("num_threads must be positive")
+    _set_gmsh_number_option(gmsh, "General.NumThreads", threads)
+    _set_gmsh_number_option(gmsh, "Mesh.MaxNumThreads1D", threads)
+    _set_gmsh_number_option(gmsh, "Mesh.MaxNumThreads2D", threads)
+    _set_gmsh_number_option(gmsh, "Mesh.MaxNumThreads3D", threads)
+    _set_gmsh_number_option(gmsh, "Geometry.OCCParallel", 1 if threads > 1 else 0)
 
 
 def _unique_edges(element_edges: np.ndarray):
@@ -413,16 +568,9 @@ def _set_gmsh_number_option(gmsh, name: str, value: float | int) -> None:
         pass
 
 
-def _gmsh_model_to_mesh(
-        gmsh,
-        *,
-        write_path: str | None = None,
-        msh_file_version: float | None = None,
-) -> DGMesh:
+def _gmsh_model_to_mesh(gmsh, *, write_path: str | None = None) -> DGMesh:
     """Extract first-order triangular cells from the active Gmsh model."""
     if write_path is not None:
-        if msh_file_version is not None:
-            _set_gmsh_number_option(gmsh, "Mesh.MshFileVersion", float(msh_file_version))
         gmsh.write(str(write_path))
 
     node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
@@ -454,13 +602,102 @@ def _generate_gmsh_mesh(
         algorithm: int | None = None,
         write_path: str | None = None,
         msh_file_version: float | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        cache_key_data=None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
-    """Generate a Gmsh model and return it as a :class:`DGMesh`."""
-    import gmsh
+    """Generate a Gmsh model and return it as a :class:`DGMesh`.
 
+    Parameters
+    ----------
+    model_name
+        Name assigned to the Gmsh model.
+    mesh_size
+        Uniform target mesh size passed to Gmsh.
+    build_geometry
+        Callable that creates the OCC geometry.  It may return either the
+        surface tag, or ``(surface_tag, boundary_tags)`` when boundary physical
+        labels should be written.
+    verbosity, algorithm
+        Gmsh verbosity and optional 2D meshing algorithm id.
+    write_path
+        Optional path to write the generated mesh before extracting it. Cache
+        hits are bypassed when ``write_path`` is set because the cache stores
+        only :class:`DGMesh` arrays, not a full Gmsh ``.msh`` file with physical
+        groups.
+    msh_file_version
+        Optional Gmsh ``Mesh.MshFileVersion`` used when ``write_path`` is set.
+        Use ``2.2`` for FreeFEM's ``gmshload`` compatibility.
+    cache
+        Whether to load/store generated meshes in the local mesh cache. The
+        default is ``True``.
+    cache_dir
+        Cache directory. ``None`` uses :func:`default_mesh_cache_dir`, currently
+        ``.cache/hdgfem/meshes`` relative to the current working directory. If
+        that default local cache cannot store the generated mesh, a fallback
+        cache under the system temporary directory is tried and logged.
+    cache_key_data
+        Geometry-defining parameters included in the cache key. Callers must
+        include every value that can change the generated geometry or sizing
+        field beyond ``mesh_size`` and ``algorithm``.
+    num_threads
+        Optional positive CPU thread count for Gmsh. The wrapper sets
+        ``General.NumThreads`` and the ``Mesh.MaxNumThreads*`` options when the
+        installed Gmsh version supports them.
+    log_cache
+        Whether to print cache-hit, cache-miss, and generation messages.
+    """
     mesh_size = float(mesh_size)
     if mesh_size <= 0.0:
         raise ValueError("mesh_size must be positive")
+    if num_threads is not None and int(num_threads) <= 0:
+        raise ValueError("num_threads must be positive")
+
+    cache_paths: list[Path] = []
+    cache_key_json: str | None = None
+    if cache and write_path is None:
+        cache_paths, cache_key_json = _mesh_cache_files(
+            model_name,
+            mesh_size,
+            algorithm=algorithm,
+            cache_key_data=cache_key_data,
+            cache_dir=cache_dir,
+        )
+        for index, cache_path in enumerate(cache_paths):
+            if cache_path.exists():
+                try:
+                    mesh = _load_cached_gmsh_mesh(cache_path, cache_key_json)
+                except Exception as exc:
+                    _mesh_cache_log(
+                        f"mesh cache read failed for {model_name!r} at {cache_path}: {exc}; regenerating",
+                        log_cache,
+                    )
+                else:
+                    tier = "fallback " if index > 0 else ""
+                    _mesh_cache_log(
+                        f"mesh cache {tier}hit for {model_name!r}: {cache_path} "
+                        f"(nodes={mesh.node_coords.shape[0]}, triangles={mesh.num_tri})",
+                        log_cache,
+                    )
+                    return mesh
+        _mesh_cache_log(
+            f"mesh cache miss for {model_name!r}: generating with mesh_size={mesh_size:g}; cache={cache_paths[0]}",
+            log_cache,
+        )
+    elif cache and write_path is not None:
+        _mesh_cache_log(
+            f"mesh cache bypass for {model_name!r}: write_path requires fresh Gmsh output",
+            log_cache,
+        )
+    else:
+        _mesh_cache_log(
+            f"generating Gmsh mesh for {model_name!r} with mesh_size={mesh_size:g}",
+            log_cache,
+        )
+
+    import gmsh
 
     started_gmsh = not gmsh.isInitialized()
     if started_gmsh:
@@ -476,14 +713,45 @@ def _generate_gmsh_mesh(
         _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMax", mesh_size)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMin", mesh_size)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMax", mesh_size)
+        _set_gmsh_thread_options(gmsh, num_threads)
+        if msh_file_version is not None:
+            _set_gmsh_number_option(gmsh, "Mesh.MshFileVersion", float(msh_file_version))
         if algorithm is not None:
             _set_gmsh_number_option(gmsh, "Mesh.Algorithm", int(algorithm))
 
-        surface_tag = build_geometry(gmsh)
+        geometry_tags = build_geometry(gmsh)
+        if isinstance(geometry_tags, tuple):
+            surface_tag = geometry_tags[0]
+            boundary_tags = geometry_tags[1]
+        else:
+            surface_tag = geometry_tags
+            boundary_tags = None
         gmsh.model.occ.synchronize()
-        gmsh.model.addPhysicalGroup(2, [surface_tag], name=model_name)
+        if boundary_tags is not None:
+            gmsh.model.addPhysicalGroup(1, list(boundary_tags), tag=1, name=f"{model_name}_boundary")
+        gmsh.model.addPhysicalGroup(2, [surface_tag], tag=1, name=model_name)
         gmsh.model.mesh.generate(2)
-        return _gmsh_model_to_mesh(gmsh, write_path=write_path, msh_file_version=msh_file_version)
+        mesh = _gmsh_model_to_mesh(gmsh, write_path=write_path)
+        _mesh_cache_log(
+            f"generated Gmsh mesh for {model_name!r} "
+            f"(nodes={mesh.node_coords.shape[0]}, triangles={mesh.num_tri})",
+            log_cache,
+        )
+        if cache_paths and cache_key_json is not None:
+            stored = False
+            for index, cache_path in enumerate(cache_paths):
+                try:
+                    _write_cached_gmsh_mesh(cache_path, mesh, cache_key_json)
+                except Exception as exc:
+                    _mesh_cache_log(f"mesh cache write failed for {model_name!r} at {cache_path}: {exc}", log_cache)
+                    continue
+                tier = "fallback " if index > 0 else ""
+                _mesh_cache_log(f"mesh cache stored in {tier}cache for {model_name!r}: {cache_path}", log_cache)
+                stored = True
+                break
+            if not stored:
+                _mesh_cache_log(f"mesh cache unavailable for {model_name!r}; continuing without cached storage", log_cache)
+        return mesh
     finally:
         if started_gmsh:
             gmsh.finalize()
@@ -497,8 +765,18 @@ def gmsh_rectangle_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
-    """Generate an unstructured triangular rectangle mesh with Gmsh."""
+    """Generate an unstructured triangular rectangle mesh with Gmsh.
+
+    Generated meshes are cached by default under
+    ``.cache/hdgfem/meshes`` using ``mesh_size``, ``xlim``, ``ylim``, and the
+    optional Gmsh algorithm as the cache key. Set ``cache=False`` to force a
+    fresh Gmsh run. Set ``num_threads`` to request CPU parallelism from Gmsh.
+    """
 
     def build(gmsh):
         return gmsh.model.occ.addRectangle(
@@ -516,6 +794,11 @@ def gmsh_rectangle_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={"geometry": "rectangle", "xlim": xlim, "ylim": ylim},
+        num_threads=num_threads,
+        log_cache=log_cache,
     )
 
 
@@ -528,8 +811,17 @@ def gmsh_disc_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
-    """Generate an unstructured triangular disk/ellipse mesh with Gmsh."""
+    """Generate an unstructured triangular disk/ellipse mesh with Gmsh.
+
+    Generated meshes are cached by default under
+    ``.cache/hdgfem/meshes`` using the geometry parameters, ``mesh_size``, and
+    the optional Gmsh algorithm as the cache key.
+    """
     ry = float(radius if radius_y is None else radius_y)
 
     def build(gmsh):
@@ -542,6 +834,16 @@ def gmsh_disc_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={
+            "geometry": "disc",
+            "center": center,
+            "radius": radius,
+            "radius_y": radius_y,
+        },
+        num_threads=num_threads,
+        log_cache=log_cache,
     )
 
 
@@ -556,6 +858,10 @@ def gmsh_star_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
     """Generate a polygonal star-shaped domain with Gmsh.
 
@@ -595,6 +901,18 @@ def gmsh_star_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={
+            "geometry": "star",
+            "corners": corners,
+            "inner_radius": inner_radius,
+            "outer_radius": outer_radius,
+            "center": center,
+            "rotation": rotation,
+        },
+        num_threads=num_threads,
+        log_cache=log_cache,
     )
 
 
@@ -611,6 +929,10 @@ def gmsh_smooth_star_mesh(
         algorithm: int | None = None,
         write_path: str | None = None,
         msh_file_version: float | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
     """Generate the sampled smooth star domain used by the FreeFEM torsion/Newton script.
 
@@ -642,7 +964,7 @@ def gmsh_smooth_star_mesh(
             for i in range(len(points))
         ]
         loop = occ.addCurveLoop(lines)
-        return occ.addPlaneSurface([loop])
+        return occ.addPlaneSurface([loop]), lines
 
     return _generate_gmsh_mesh(
         "smooth_star",
@@ -652,6 +974,19 @@ def gmsh_smooth_star_mesh(
         algorithm=algorithm,
         write_path=write_path,
         msh_file_version=msh_file_version,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={
+            "geometry": "smooth_star",
+            "boundary_points": boundary_points,
+            "radius": radius,
+            "amplitude": amplitude,
+            "mode": mode,
+            "center": center,
+            "rotation": rotation,
+        },
+        num_threads=num_threads,
+        log_cache=log_cache,
     )
 
 
@@ -672,6 +1007,7 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         algorithm: int | None = None,
         write_path: str | None = None,
         timing_prefix: str | None = None,
+        num_threads: int | None = None,
 ) -> DGMesh:
     """Generate a smooth-star Gmsh mesh from a structured size field.
 
@@ -698,6 +1034,8 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
     if hmin <= 0.0 or hmax <= 0.0 or hmax < hmin:
         raise ValueError("hmin and hmax must satisfy 0 < hmin <= hmax")
+    if num_threads is not None and int(num_threads) <= 0:
+        raise ValueError("num_threads must be positive")
 
     def start_phase(label: str, **fields) -> float:
         if timing_prefix is not None:
@@ -732,6 +1070,7 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMax", hmax)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMin", hmin)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMax", hmax)
+        _set_gmsh_thread_options(gmsh, num_threads)
         if algorithm is not None:
             _set_gmsh_number_option(gmsh, "Mesh.Algorithm", int(algorithm))
         finish_phase("MODEL_SETUP", t_phase)
@@ -818,8 +1157,15 @@ def gmsh_triangle_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
-    """Generate an unstructured triangular mesh of one triangular domain."""
+    """Generate an unstructured triangular mesh of one triangular domain.
+
+    Generated meshes are cached by default under ``.cache/hdgfem/meshes``.
+    """
 
     def build(gmsh):
         points = [
@@ -841,6 +1187,11 @@ def gmsh_triangle_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={"geometry": "triangle", "vertices": vertices},
+        num_threads=num_threads,
+        log_cache=log_cache,
     )
 
 
@@ -853,6 +1204,10 @@ def gmsh_lshape_mesh(
         verbosity: int = 0,
         algorithm: int | None = None,
         write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
 ) -> DGMesh:
     r"""Generate the legacy L-shaped reentrant-corner domain with Gmsh.
 
@@ -900,4 +1255,14 @@ def gmsh_lshape_mesh(
         verbosity=verbosity,
         algorithm=algorithm,
         write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={
+            "geometry": "lshape",
+            "half_width": half_width,
+            "corner_mesh_size": corner_mesh_size,
+            "corner_refine_radius": corner_refine_radius,
+        },
+        num_threads=num_threads,
+        log_cache=log_cache,
     )

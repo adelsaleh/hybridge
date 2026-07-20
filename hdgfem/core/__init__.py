@@ -10,6 +10,7 @@ from .adaptivity import (
 from .mesh import (
     DGMesh,
     as_dg_mesh,
+    default_mesh_cache_dir,
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
     gmsh_rectangle_mesh,
@@ -29,6 +30,7 @@ __all__ = [
     "VectorDGField",
     "VectorDGSpace",
     "as_dg_mesh",
+    "default_mesh_cache_dir",
     "gmsh_disc_mesh",
     "gmsh_lshape_mesh",
     "gmsh_rectangle_mesh",

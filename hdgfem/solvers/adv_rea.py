@@ -49,7 +49,7 @@ ReturnKey = Literal[
     "timings",
     "result",
 ]
-AssemblyBackend = Literal["numpy", "numba", "auto"]
+AssemblyBackend = Literal["numpy", "numba", "cupy", "auto"]
 
 
 _UNSET = object()
@@ -116,6 +116,8 @@ class AdvectionReactionHDGOptions:
     petsc_options: dict | None = None
     petsc_divtol: float = 1e4
     petsc_monitor: bool = False
+    cupyx_solver: str = "bicgstab"
+    amgx_config: dict | None = None
     ilu_drop_tol: float | None = None
     ilu_fill_factor: float | None = None
     ilu_failure: Literal["raise", "none"] = "raise"
@@ -712,6 +714,8 @@ def solve_advection_reaction_hdg(
         petsc_options: dict | None = None,
         petsc_divtol: float = 1e4,
         petsc_monitor: bool = False,
+        cupyx_solver: str = "bicgstab",
+        amgx_config: dict | None = None,
         ilu_drop_tol: float | None = None,
         ilu_fill_factor: float | None = None,
         ilu_failure: Literal["raise", "none"] = "raise",
@@ -758,6 +762,11 @@ def solve_advection_reaction_hdg(
     solver
         Global trace solver name.  The default is ``"BICGSTAB"`` with ILU
         preconditioning.  Use ``"direct"`` or ``None`` for sparse direct solve.
+        ``"amgx"``/``"pyamgx"`` and ``"cupyx"`` select GPU global solves
+        after whichever assembly backend produced the host trace system.
+    cupyx_solver
+        Cupyx sparse Krylov method used when ``solver="cupyx"``.  Aliases such
+        as ``solver="cupyx_bicgstab"`` select the method inline.
     preconditioner
         Preconditioner passed to :func:`hdgfem.linalg.system.solve_global_system`.
         The default ``"ilu"`` builds a SciPy ILU preconditioner.
@@ -799,6 +808,9 @@ def solve_advection_reaction_hdg(
         path.  ``"numba"`` uses the experimental fused projected-coefficient
         trace assembly backend and requires projected source/beta coefficients.
         ``"auto"`` currently keeps the stable NumPy path.
+        ``"cupy"`` assembles the dense local inverses and full trace system on
+        the GPU, then returns host arrays for the existing solve/reconstruction
+        pipeline.
     advection_stabilization
         Optional HDG advection stabilization :math:`\tau` on element faces.
         ``None`` selects the upwind value ``abs(beta_h . n)``.  The NumPy
@@ -827,8 +839,8 @@ def solve_advection_reaction_hdg(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if trace_ordering not in {"none", "upwind-scc"}:
         raise ValueError("trace_ordering must be 'none' or 'upwind-scc'")
-    if assembly_backend not in {"numpy", "numba", "auto"}:
-        raise ValueError("assembly_backend must be 'numpy', 'numba', or 'auto'")
+    if assembly_backend not in {"numpy", "numba", "cupy", "auto"}:
+        raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', or 'auto'")
     if ilu_permc_spec is None:
         ilu_permc_spec = "NATURAL" if trace_ordering == "upwind-scc" else "COLAMD"
     want = tuple(return_)
@@ -981,6 +993,7 @@ def solve_advection_reaction_hdg(
             print_trace_ordering_diagnostics(ordering_result)
 
     reduction = None
+    boundary_elimination = 0.0
     if effective_backend == "numba":
         from ..backends.numba import (
             assemble_local_advection_reaction_numba,
@@ -1068,6 +1081,68 @@ def solve_advection_reaction_hdg(
                 lambda: np.linalg.inv(numba_local.local_mats),
             )
             element_boundary_mats = numba_local.element_boundary_mats
+    elif effective_backend == "cupy":
+        from ..backends.cupy import (
+            assemble_advection_reaction_trace_system_cupy,
+            assemble_advection_reaction_trace_system_eliminated_cupy,
+        )
+
+        cupy_assembler = assemble_advection_reaction_trace_system_cupy
+        cupy_label = "assembling global trace system (cupy)"
+        cupy_kwargs = {"boundary_penalty": boundary_penalty}
+        if boundary_mode == "eliminate":
+            cupy_assembler = assemble_advection_reaction_trace_system_eliminated_cupy
+            cupy_label = "assembling reduced trace system (cupy)"
+            cupy_kwargs = {
+                "transfer_local_solver": cache_local_solvers
+                or "local_solver" in want
+                or "element_boundary_mats" in want
+            }
+
+        cupy_trace, trace_assembly = _timed_call(
+            cupy_label,
+            verbosity,
+            lambda: cupy_assembler(
+                source_moments,
+                beta_h,
+                beta_callables,
+                beta_dot_normal,
+                reaction_h,
+                boundary_condition,
+                space,
+                **cupy_kwargs,
+            ),
+            multiline=verbosity >= 2,
+        )
+        trace_system = cupy_trace.trace_system
+        rows = trace_system.rows
+        cols = trace_system.cols
+        data = trace_system.data
+        rhs = trace_system.rhs
+        boundary_trace = trace_system.boundary_trace
+        beta_dot_normal = cupy_trace.beta_dot_normal
+        reduction = cupy_trace.reduction
+        local_solver = cupy_trace.local_solver
+        element_boundary_mats = cupy_trace.element_boundary_mats
+        local_assembly = cupy_trace.timings.get("local_assembly", 0.0)
+        local_inverse = cupy_trace.timings.get("local_inverse", 0.0)
+        boundary_assembly = 0.0
+        boundary_elimination = cupy_trace.timings.get("boundary_elimination", 0.0)
+        trace_assembly = (
+            cupy_trace.timings.get("trace_assembly", 0.0)
+            + cupy_trace.timings.get("host_transfer", 0.0)
+        )
+        if verbosity >= 2:
+            timings = cupy_trace.timings
+            print(
+                "  cupy trace assembly timings: "
+                f"local={timings.get('local_assembly', 0.0):.5f}s, "
+                f"inverse={timings.get('local_inverse', 0.0):.5f}s, "
+                f"trace={timings.get('trace_assembly', 0.0):.5f}s, "
+                f"elim={timings.get('boundary_elimination', 0.0):.5f}s, "
+                f"host={timings.get('host_transfer', 0.0):.5f}s",
+                flush=True,
+            )
     else:
         tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
             space,
@@ -1188,7 +1263,6 @@ def solve_advection_reaction_hdg(
             multiline=verbosity >= 2,
         )
 
-    boundary_elimination = 0.0
     solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
     diagnostic_rows = hdg_assembly.free_trace_dofs(space)
     if boundary_mode == "eliminate" and reduction is None:
@@ -1309,6 +1383,10 @@ def solve_advection_reaction_hdg(
             matrix_pattern_plots=matrix_pattern_plots,
         )
 
+    upwind_level_widths = None
+    if ordering_result is not None and ordering_result.diagnostics.largest_component_size == 1:
+        upwind_level_widths = ordering_result.diagnostics.level_widths
+
     if boundary_mode == "penalty":
         solve_lambda = lambda: solve_global_system(
             solve_rows,
@@ -1326,10 +1404,14 @@ def solve_advection_reaction_hdg(
             petsc_options=petsc_options,
             petsc_divtol=petsc_divtol,
             petsc_monitor=petsc_monitor,
+            cupyx_solver=cupyx_solver,
+            amgx_config=amgx_config,
             ilu_drop_tol=effective_ilu_drop_tol,
             ilu_fill_factor=effective_ilu_fill_factor,
             ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
+            upwind_block_size=space.quad_data.edg_dof,
+            upwind_level_widths=upwind_level_widths,
             scale_system=effective_scale_system,
             scale_matrix_in_place=effective_scale_system,
             permutation=trace_permutation,
@@ -1355,10 +1437,14 @@ def solve_advection_reaction_hdg(
             petsc_options=petsc_options,
             petsc_divtol=petsc_divtol,
             petsc_monitor=petsc_monitor,
+            cupyx_solver=cupyx_solver,
+            amgx_config=amgx_config,
             ilu_drop_tol=effective_ilu_drop_tol,
             ilu_fill_factor=effective_ilu_fill_factor,
             ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
+            upwind_block_size=space.quad_data.edg_dof,
+            upwind_level_widths=upwind_level_widths,
             scale_system=effective_scale_system,
             scale_matrix_in_place=effective_scale_system,
             permutation=trace_permutation,
@@ -1383,11 +1469,23 @@ def solve_advection_reaction_hdg(
     else:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
-    if effective_backend == "numba":
+    can_use_projected_reconstruction = (
+        effective_backend == "numba"
+        or (
+            effective_backend == "cupy"
+            and isinstance(source, DGField)
+            and isinstance(beta_h, VectorDGField)
+            and (np.isscalar(reaction_h) or isinstance(reaction_h, DGField))
+        )
+    )
+    if can_use_projected_reconstruction:
         from ..backends.numba import reconstruct_projected_field_numba
 
+        label = "reconstructing element field (numba)"
+        if effective_backend == "cupy":
+            label = "reconstructing element field (numba after cupy assembly)"
         field, reconstruction = _timed_call(
-            "reconstructing element field (numba)",
+            label,
             verbosity,
             lambda: reconstruct_projected_field_numba(
                 trace,
@@ -1399,10 +1497,23 @@ def solve_advection_reaction_hdg(
             ),
         )
     else:
+        def reconstruct_from_local_solver():
+            nonlocal local_solver, element_boundary_mats
+            if local_solver is None or element_boundary_mats is None:
+                raise RuntimeError(
+                    "local solver cache is required for reconstruction when projected Numba reconstruction is unavailable"
+                )
+            if not isinstance(local_solver, np.ndarray) or not isinstance(element_boundary_mats, np.ndarray):
+                from ..backends.cupy import asnumpy
+
+                local_solver = np.ascontiguousarray(asnumpy(local_solver))
+                element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))
+            return hdg_assembly.reconstruct_field(trace, source_moments, local_solver, element_boundary_mats, space)
+
         field, reconstruction = _timed_call(
             "reconstructing element field",
             verbosity,
-            lambda: hdg_assembly.reconstruct_field(trace, source_moments, local_solver, element_boundary_mats, space),
+            reconstruct_from_local_solver,
         )
 
     timings = AdvectionReactionTimings(

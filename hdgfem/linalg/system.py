@@ -159,6 +159,9 @@ class SolveResult:
     petsc_converged_reason: int | None = None
     petsc_residual_norm: float | None = None
 
+    # CuPy/Cupyx diagnostics, when a GPU sparse solve is used.
+    cupyx_solver: str | None = None
+
     # Symmetric matrix permutation diagnostics.
     permutation_elapsed_seconds: float | None = None
     permutation_size: int | None = None
@@ -305,6 +308,47 @@ def assemble_global_matrix(
         (matrix_values, (row_indices, col_indices)),
         shape=(system_size, system_size),
     ).tocsr()
+
+
+def _coo_diagonal(
+    row_indices: NDArray,
+    col_indices: NDArray,
+    matrix_values: NDArray,
+    system_size: int,
+) -> NDArray:
+    """Return the diagonal of a COO matrix without constructing CSR."""
+    diagonal = np.zeros(system_size, dtype=np.float64)
+    diagonal_mask = row_indices == col_indices
+    if np.any(diagonal_mask):
+        np.add.at(diagonal, row_indices[diagonal_mask], matrix_values[diagonal_mask])
+    return diagonal
+
+
+def _coo_matvec(
+    row_indices: NDArray,
+    col_indices: NDArray,
+    matrix_values: NDArray,
+    x: NDArray,
+    system_size: int,
+) -> NDArray:
+    """Compute ``A @ x`` from COO triplets without constructing CSR."""
+    return np.bincount(
+        row_indices,
+        weights=matrix_values * x[col_indices],
+        minlength=system_size,
+    ).astype(np.float64, copy=False)
+
+
+def _coo_residual(
+    row_indices: NDArray,
+    col_indices: NDArray,
+    matrix_values: NDArray,
+    x: NDArray,
+    rhs: NDArray,
+    system_size: int,
+) -> NDArray:
+    """Compute ``A @ x - rhs`` from COO triplets without constructing CSR."""
+    return _coo_matvec(row_indices, col_indices, matrix_values, x, system_size) - rhs
 
 
 def eliminate_known_dofs(
@@ -815,6 +859,524 @@ def solve_petsc_system(
     )
 
 
+def solve_pyamgx_system(
+    matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
+    rhs: NDArray,
+    *,
+    initial_guess: NDArray | None = None,
+    config: Mapping[str, Any] | None = None,
+    rtol: float = 1e-13,
+    atol: float = 0.0,
+    maxiter: int | None = None,
+    scale_system: bool = True,
+    raise_on_nonconvergence: bool = False,
+    verbose: bool | int = 0,
+    diagnostic_rows: NDArray | None = None,
+    diagnostic_label: str | None = None,
+) -> SolveResult:
+    """Solve an assembled sparse system with PyAMGX.
+
+    The solve happens on the GPU. Diagnostics are computed on the host using the
+    same conventions as the SciPy and PETSc paths.
+    """
+    total_start = time.time()
+    from ..backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
+
+    physical_matrix = matrix.tocsr()
+    physical_rhs = np.asarray(rhs, dtype=np.float64)
+    diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, physical_rhs.size)
+    if initial_guess is not None:
+        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        if initial_guess.shape != physical_rhs.shape:
+            raise ValueError(f"initial_guess must have shape {physical_rhs.shape}; got {initial_guess.shape}")
+
+    scale_start = time.time()
+    if scale_system:
+        solve_matrix, solve_rhs = diagonal_scale_system(physical_matrix, physical_rhs, copy_matrix=True)
+    else:
+        solve_matrix = physical_matrix
+        solve_rhs = physical_rhs
+    scale_elapsed_seconds = time.time() - scale_start
+
+    matrix_start = time.time()
+    matrix_cp = scipy_csr_to_cupy(solve_matrix)
+    matrix_elapsed_seconds = time.time() - matrix_start
+    _solver_print(
+        verbose,
+        2,
+        "  PyAMGX CSR matrix copied to device in %.5fs with nnz=%d",
+        matrix_elapsed_seconds,
+        solve_matrix.nnz,
+    )
+
+    initial_residual_norm = None
+    if initial_guess is not None:
+        initial_residual_norm = compute_residual_norm(physical_matrix, initial_guess, physical_rhs)
+        _solver_print(verbose, 2, "  initial residual from supplied guess: %.3e", initial_residual_norm)
+
+    solve_start = time.time()
+    solution_cp = solve_pyamgx_csr(
+        matrix_cp,
+        solve_rhs,
+        initial_guess=initial_guess,
+        config=config,
+        tolerance=rtol,
+        maxiter=maxiter,
+        verbose=verbose,
+    )
+    solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+    solution_is_finite = bool(np.all(np.isfinite(solution)))
+    solve_elapsed_seconds = time.time() - solve_start
+
+    solver_residual = solve_matrix @ solution - solve_rhs
+    solver_residual_norm = float(np.linalg.norm(solver_residual))
+    solver_rhs_norm, solver_relative_residual_norm, solver_residual_target = residual_diagnostics(
+        solver_residual_norm,
+        solve_rhs,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    physical_residual = physical_matrix @ solution - physical_rhs
+    physical_residual_norm = float(np.linalg.norm(physical_residual))
+    physical_rhs_norm, physical_relative_residual_norm, physical_residual_target = residual_diagnostics(
+        physical_residual_norm,
+        physical_rhs,
+        rtol=rtol,
+        atol=atol,
+    )
+    diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
+        restricted_residual_diagnostics(physical_residual, physical_rhs, diagnostic_rows, rtol=rtol, atol=atol)
+    )
+
+    info = 0 if solution_is_finite and solver_residual_norm <= solver_residual_target else 1
+    total_elapsed_seconds = time.time() - total_start
+    _solver_print(
+        verbose,
+        1,
+        "  PyAMGX finished in %.5fs with solver_rel=%.3e",
+        solve_elapsed_seconds,
+        solver_relative_residual_norm,
+    )
+    _solver_print(
+        verbose,
+        2,
+        "  residuals: solver_abs=%.3e, solver_target=%.3e, physical_abs=%.3e, physical_rel=%.3e",
+        solver_residual_norm,
+        solver_residual_target,
+        physical_residual_norm,
+        physical_relative_residual_norm,
+    )
+    _solver_print(
+        verbose,
+        2,
+        "  timings: scale=%.5fs, cupy_matrix=%.5fs, amgx=%.5fs, total=%.5fs",
+        scale_elapsed_seconds,
+        matrix_elapsed_seconds,
+        solve_elapsed_seconds,
+        total_elapsed_seconds,
+    )
+
+    if info != 0 and raise_on_nonconvergence:
+        if not solution_is_finite:
+            raise RuntimeError("PyAMGX solver returned non-finite solution values")
+        raise RuntimeError(
+            "PyAMGX solver did not satisfy the requested residual target. "
+            f"residual={solver_residual_norm:.3e}, target={solver_residual_target:.3e}, "
+            f"relative_residual={solver_relative_residual_norm:.3e}"
+        )
+
+    return SolveResult(
+        x=solution,
+        residual_norm=solver_residual_norm,
+        info=info,
+        preconditioner=None,
+        total_elapsed_seconds=total_elapsed_seconds,
+        scale_elapsed_seconds=scale_elapsed_seconds,
+        preconditioner_elapsed_seconds=matrix_elapsed_seconds,
+        solve_elapsed_seconds=solve_elapsed_seconds,
+        iteration_count=None,
+        initial_residual_norm=initial_residual_norm,
+        rhs_norm=solver_rhs_norm,
+        relative_residual_norm=solver_relative_residual_norm,
+        residual_target=solver_residual_target,
+        solver_residual_norm=solver_residual_norm,
+        solver_rhs_norm=solver_rhs_norm,
+        solver_relative_residual_norm=solver_relative_residual_norm,
+        solver_residual_target=solver_residual_target,
+        physical_residual_norm=physical_residual_norm,
+        physical_rhs_norm=physical_rhs_norm,
+        physical_relative_residual_norm=physical_relative_residual_norm,
+        physical_residual_target=physical_residual_target,
+        diagnostic_residual_label=diagnostic_label,
+        diagnostic_residual_norm=diagnostic_residual_norm,
+        diagnostic_rhs_norm=diagnostic_rhs_norm,
+        diagnostic_relative_residual_norm=diagnostic_relative_residual_norm,
+        diagnostic_residual_target=diagnostic_residual_target,
+        rtol=rtol,
+        atol=atol,
+    )
+
+
+def solve_cupyx_system(
+    matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None,
+    rhs: NDArray,
+    *,
+    row_indices: NDArray | None = None,
+    col_indices: NDArray | None = None,
+    matrix_values: NDArray | None = None,
+    system_size: int | None = None,
+    cupyx_solver: str = "bicgstab",
+    preconditioner: Any = None,
+    prepared_device_matrix: Any | None = None,
+    initial_guess: NDArray | None = None,
+    rtol: float = 1e-13,
+    atol: float = 0.0,
+    maxiter: int | None = None,
+    restart: int | None = None,
+    scale_system: bool = True,
+    ilu_drop_tol: float = 1e-10,
+    ilu_fill_factor: float = 35,
+    ilu_failure: Literal["raise", "none"] = "raise",
+    ilu_permc_spec: str | None = None,
+    upwind_block_size: int | None = None,
+    upwind_level_widths: Any | None = None,
+    upwind_diagonal_regularization: float = 0.0,
+    raise_on_nonconvergence: bool = False,
+    verbose: bool | int = 0,
+    diagnostic_rows: NDArray | None = None,
+    diagnostic_label: str | None = None,
+) -> SolveResult:
+    """Solve a sparse system with Cupyx Krylov solvers.
+
+    When ``matrix`` is ``None``, host-assembled COO triplets are copied to the
+    GPU and converted to CSR there.  This avoids constructing a host CSR matrix
+    for the Cupyx path while preserving host-side residual diagnostics via COO
+    scatter operations.
+    """
+    total_start = time.time()
+    from ..backends.cupy import (
+        asnumpy,
+        build_cupyx_ilu_preconditioner,
+        scipy_coo_to_cupy_csr,
+        scipy_csr_to_cupy,
+        solve_cupyx_csr,
+    )
+
+    import os
+
+    cupy_dtype_name = os.environ.get("HDGFEM_CUPYX_DTYPE", "float64").lower()
+    if cupy_dtype_name in {"fp32", "single"}:
+        cupy_dtype_name = "float32"
+    elif cupy_dtype_name in {"fp64", "double"}:
+        cupy_dtype_name = "float64"
+    if cupy_dtype_name not in {"float32", "float64"}:
+        raise ValueError("HDGFEM_CUPYX_DTYPE must be 'float32' or 'float64'")
+    cupy_dtype = getattr(__import__("cupy"), cupy_dtype_name)
+
+    normalized_cupyx_solver = str(cupyx_solver).lower().replace("-", "_")
+    if normalized_cupyx_solver == "cg" and scale_system:
+        raise ValueError(
+            "Cupyx CG requires scale_system=False because the current scaling is "
+            "left row scaling, which does not preserve matrix symmetry. Use "
+            "cupyx_solver='bicgstab' or set scale_system=False for SPD systems."
+        )
+
+    physical_rhs = np.asarray(rhs, dtype=np.float64)
+    diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, physical_rhs.size)
+    if initial_guess is not None:
+        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        if initial_guess.shape != physical_rhs.shape:
+            raise ValueError(f"initial_guess must have shape {physical_rhs.shape}; got {initial_guess.shape}")
+
+    using_host_coo = matrix is None
+    if using_host_coo:
+        if row_indices is None or col_indices is None or matrix_values is None or system_size is None:
+            raise ValueError("row_indices, col_indices, matrix_values, and system_size are required when matrix is None")
+        row_indices = np.asarray(row_indices, dtype=np.int64)
+        col_indices = np.asarray(col_indices, dtype=np.int64)
+        physical_values = np.asarray(matrix_values, dtype=np.float64)
+        system_size = int(system_size)
+        if physical_rhs.shape != (system_size,):
+            raise ValueError(f"rhs must have shape ({system_size},), got {physical_rhs.shape}")
+        physical_matrix = None
+    else:
+        physical_matrix = matrix.tocsr()
+        system_size = physical_matrix.shape[0]
+        row_indices = col_indices = None
+        physical_values = None
+
+    scale_start = time.time()
+    if scale_system:
+        if using_host_coo:
+            diagonal = _coo_diagonal(row_indices, col_indices, physical_values, system_size)
+            diagonal[diagonal == 0.0] = 1.0
+            inverse_diagonal = 1.0 / diagonal
+            solve_values = physical_values * inverse_diagonal[row_indices]
+            solve_rhs = inverse_diagonal * physical_rhs
+            solve_matrix = None
+        else:
+            solve_matrix, solve_rhs = diagonal_scale_system(physical_matrix, physical_rhs, copy_matrix=True)
+            solve_values = None
+    else:
+        if using_host_coo:
+            solve_values = physical_values
+            solve_rhs = physical_rhs
+            solve_matrix = None
+        else:
+            solve_matrix = physical_matrix
+            solve_rhs = physical_rhs
+            solve_values = None
+    scale_elapsed_seconds = time.time() - scale_start
+
+    matrix_start = time.time()
+    if prepared_device_matrix is None:
+        if using_host_coo:
+            matrix_cp = scipy_coo_to_cupy_csr(
+                row_indices,
+                col_indices,
+                solve_values,
+                (system_size, system_size),
+                dtype=cupy_dtype,
+            )
+            matrix_message = "built from host COO on device"
+        else:
+            matrix_cp = scipy_csr_to_cupy(solve_matrix, dtype=cupy_dtype)
+            matrix_message = "copied host CSR to device"
+    else:
+        matrix_cp = prepared_device_matrix
+        matrix_message = "reused from device cache"
+    matrix_elapsed_seconds = time.time() - matrix_start
+    matrix_nnz = int(getattr(matrix_cp, "nnz", -1))
+    _solver_print(
+        verbose,
+        2,
+        "  Cupyx CSR matrix %s in %.5fs with nnz=%d",
+        matrix_message,
+        matrix_elapsed_seconds,
+        matrix_nnz,
+    )
+
+    preconditioner_operator = None
+    preconditioner_elapsed_seconds = 0.0
+    if isinstance(preconditioner, str):
+        if preconditioner == "ilu":
+            if ilu_failure not in {"raise", "none"}:
+                raise ValueError("ilu_failure must be 'raise' or 'none'")
+            _solver_print(
+                verbose,
+                2,
+                "  building Cupyx ILU preconditioner with drop_tol=%g, fill_factor=%g",
+                ilu_drop_tol,
+                ilu_fill_factor,
+            )
+            preconditioner_start = time.time()
+            try:
+                preconditioner_operator = build_cupyx_ilu_preconditioner(
+                    matrix_cp,
+                    drop_tol=ilu_drop_tol,
+                    fill_factor=ilu_fill_factor,
+                    permc_spec=ilu_permc_spec,
+                )
+            except Exception as exc:
+                preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                if ilu_failure == "none":
+                    _solver_print(
+                        verbose,
+                        1,
+                        "  Cupyx ILU preconditioner failed in %.5fs (%s); continuing without preconditioner",
+                        preconditioner_elapsed_seconds,
+                        exc,
+                    )
+                    preconditioner_operator = None
+                else:
+                    raise RuntimeError(
+                        "Cupyx ILU preconditioner failed. Try a larger fill_factor, "
+                        "a smaller drop_tol, or set ilu_failure='none' to fall back "
+                        "to an unpreconditioned Cupyx Krylov solve."
+                    ) from exc
+            else:
+                preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                _solver_print(verbose, 2, "  Cupyx ILU preconditioner built in %.5fs", preconditioner_elapsed_seconds)
+        elif preconditioner == "jacobi":
+            raise ValueError("Cupyx preconditioner currently supports only 'ilu' or None")
+        elif preconditioner == "upwind_block_gs":
+            if upwind_block_size is None or upwind_level_widths is None:
+                raise ValueError(
+                    "Cupyx upwind_block_gs preconditioner requires upwind_block_size "
+                    "and upwind_level_widths"
+                )
+            if using_host_coo:
+                host_matrix = scipy.sparse.coo_array(
+                    (solve_values, (row_indices, col_indices)),
+                    shape=(system_size, system_size),
+                ).tocsr()
+            else:
+                host_matrix = solve_matrix
+            _solver_print(
+                verbose,
+                2,
+                "  building Cupyx upwind block-GS preconditioner with block_size=%d",
+                int(upwind_block_size),
+            )
+            preconditioner_start = time.time()
+            from .cupy_upwind_block_gs import build_cupy_upwind_block_gs_preconditioner
+
+            preconditioner_operator = build_cupy_upwind_block_gs_preconditioner(
+                host_matrix,
+                block_size=int(upwind_block_size),
+                level_widths=upwind_level_widths,
+                diagonal_regularization=upwind_diagonal_regularization,
+                dtype=cupy_dtype,
+            )
+            preconditioner_elapsed_seconds = time.time() - preconditioner_start
+            stats = getattr(preconditioner_operator, "stats", None)
+            host_stats = None if stats is None else getattr(stats, "host_stats", None)
+            if host_stats is not None:
+                _solver_print(
+                    verbose,
+                    2,
+                    "  Cupyx upwind block-GS built in %.5fs: levels=%d, max_width=%d, retained=%d, dropped_fraction=%.3f",
+                    preconditioner_elapsed_seconds,
+                    host_stats.num_levels,
+                    host_stats.max_width,
+                    host_stats.retained_block_couplings,
+                    host_stats.dropped_coupling_fraction,
+                )
+        else:
+            raise ValueError(
+                "Cupyx preconditioner must be 'ilu', 'upwind_block_gs', None, or a Cupyx LinearOperator"
+            )
+    elif preconditioner is not None:
+        preconditioner_operator = preconditioner
+
+    initial_residual_norm = None
+    if initial_guess is not None:
+        if using_host_coo:
+            initial_residual = _coo_residual(row_indices, col_indices, physical_values, initial_guess, physical_rhs, system_size)
+            initial_residual_norm = float(np.linalg.norm(initial_residual))
+        else:
+            initial_residual_norm = compute_residual_norm(physical_matrix, initial_guess, physical_rhs)
+        _solver_print(verbose, 2, "  initial residual from supplied guess: %.3e", initial_residual_norm)
+
+    solve_start = time.time()
+    solution_cp, info = solve_cupyx_csr(
+        matrix_cp,
+        solve_rhs,
+        solver=cupyx_solver,
+        preconditioner=preconditioner_operator,
+        initial_guess=initial_guess,
+        rtol=rtol,
+        atol=atol,
+        maxiter=maxiter,
+        restart=restart,
+    )
+    solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+    solve_elapsed_seconds = time.time() - solve_start
+
+    if using_host_coo:
+        solver_residual = _coo_residual(row_indices, col_indices, solve_values, solution, solve_rhs, system_size)
+        physical_residual = _coo_residual(row_indices, col_indices, physical_values, solution, physical_rhs, system_size)
+    else:
+        solver_residual = solve_matrix @ solution - solve_rhs
+        physical_residual = physical_matrix @ solution - physical_rhs
+
+    solver_residual_norm = float(np.linalg.norm(solver_residual))
+    solver_rhs_norm, solver_relative_residual_norm, solver_residual_target = residual_diagnostics(
+        solver_residual_norm,
+        solve_rhs,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    physical_residual_norm = float(np.linalg.norm(physical_residual))
+    physical_rhs_norm, physical_relative_residual_norm, physical_residual_target = residual_diagnostics(
+        physical_residual_norm,
+        physical_rhs,
+        rtol=rtol,
+        atol=atol,
+    )
+    diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
+        restricted_residual_diagnostics(physical_residual, physical_rhs, diagnostic_rows, rtol=rtol, atol=atol)
+    )
+
+    total_elapsed_seconds = time.time() - total_start
+    _solver_print(
+        verbose,
+        1,
+        "  Cupyx %s finished in %.5fs with info=%s, solver_rel=%.3e",
+        cupyx_solver,
+        solve_elapsed_seconds,
+        info,
+        solver_relative_residual_norm,
+    )
+    _solver_print(
+        verbose,
+        2,
+        "  residuals: solver_abs=%.3e, solver_target=%.3e, physical_abs=%.3e, physical_rel=%.3e",
+        solver_residual_norm,
+        solver_residual_target,
+        physical_residual_norm,
+        physical_relative_residual_norm,
+    )
+    _solver_print(
+        verbose,
+        2,
+        "  timings: scale=%.5fs, cupy_matrix=%.5fs, cupyx_ilu=%.5fs, cupyx=%.5fs, total=%.5fs",
+        scale_elapsed_seconds,
+        matrix_elapsed_seconds,
+        preconditioner_elapsed_seconds,
+        solve_elapsed_seconds,
+        total_elapsed_seconds,
+    )
+
+    if info != 0 and raise_on_nonconvergence:
+        raise RuntimeError(
+            f"Cupyx {cupyx_solver} failed to converge. "
+            f"info={info}, solver_res={solver_residual_norm:.3e}, "
+            f"solver_rel={solver_relative_residual_norm:.3e}, "
+            f"solver_target={solver_residual_target:.3e}"
+        )
+
+    return SolveResult(
+        x=solution,
+        residual_norm=solver_residual_norm,
+        info=info,
+        preconditioner=preconditioner_operator,
+        total_elapsed_seconds=total_elapsed_seconds,
+        scale_elapsed_seconds=scale_elapsed_seconds,
+        preconditioner_elapsed_seconds=preconditioner_elapsed_seconds,
+        solve_elapsed_seconds=solve_elapsed_seconds,
+        iteration_count=None,
+        initial_residual_norm=initial_residual_norm,
+        rhs_norm=solver_rhs_norm,
+        relative_residual_norm=solver_relative_residual_norm,
+        residual_target=solver_residual_target,
+        solver_residual_norm=solver_residual_norm,
+        solver_rhs_norm=solver_rhs_norm,
+        solver_relative_residual_norm=solver_relative_residual_norm,
+        solver_residual_target=solver_residual_target,
+        physical_residual_norm=physical_residual_norm,
+        physical_rhs_norm=physical_rhs_norm,
+        physical_relative_residual_norm=physical_relative_residual_norm,
+        physical_residual_target=physical_residual_target,
+        diagnostic_residual_label=diagnostic_label,
+        diagnostic_residual_norm=diagnostic_residual_norm,
+        diagnostic_rhs_norm=diagnostic_rhs_norm,
+        diagnostic_relative_residual_norm=diagnostic_relative_residual_norm,
+        diagnostic_residual_target=diagnostic_residual_target,
+        rtol=rtol,
+        atol=atol,
+        preconditioner_apply_count=getattr(preconditioner_operator, "apply_count", None),
+        preconditioner_apply_seconds=getattr(preconditioner_operator, "apply_seconds", None),
+        preconditioner_local_solve_seconds=getattr(preconditioner_operator, "local_solve_seconds", None),
+        preconditioner_reduce_seconds=getattr(preconditioner_operator, "reduce_seconds", None),
+        preconditioner_copy_seconds=getattr(preconditioner_operator, "copy_seconds", None),
+        cupyx_solver=str(cupyx_solver),
+        ilu_permc_spec=ilu_permc_spec if isinstance(preconditioner, str) and preconditioner == "ilu" else None,
+    )
+
+
 def compute_residual_norm(
     matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
     x: NDArray,
@@ -1317,17 +1879,23 @@ def solve_global_system(
     ilu_fill_factor: float = 35,
     ilu_failure: Literal["raise", "none"] = "raise",
     ilu_permc_spec: str = "COLAMD",
+    upwind_block_size: int | None = None,
+    upwind_level_widths: Any | None = None,
+    upwind_diagonal_regularization: float = 0.0,
     petsc_preset: str = "cg_gamg",
     petsc_levels: int | None = None,
     petsc_options: Mapping[str, Any] | None = None,
     petsc_divtol: float = 1e4,
     petsc_monitor: bool = False,
+    amgx_config: Mapping[str, Any] | None = None,
+    cupyx_solver: str = "bicgstab",
     scale_system: bool = True,
     raise_on_nonconvergence: bool = False,
     verbose: bool | int = 0,
     assembled_matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None = None,
     prepared_scaled_matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None = None,
     prepared_inverse_diagonal: NDArray | None = None,
+    prepared_device_matrix: Any | None = None,
     scale_matrix_in_place: bool = False,
     permutation: NDArray | None = None,
     diagnostic_rows: NDArray | None = None,
@@ -1345,13 +1913,17 @@ def solve_global_system(
         Number of rows and columns in the square system.
     solver
         ``"direct"`` or ``None`` uses :func:`scipy.sparse.linalg.spsolve`.
-        ``"petsc"`` uses the PETSc backend. Other names are looked up in the
-        supported SciPy Krylov solver table.
+        ``"petsc"`` uses the PETSc backend. ``"pyamgx"`` or ``"amgx"``
+        uses the optional PyAMGX backend. ``"cupyx"`` uses a Cupyx sparse
+        Krylov solver selected by ``cupyx_solver``; aliases such as
+        ``"cupyx_bicgstab"`` select the Cupyx method inline. Other names are
+        looked up in the supported SciPy Krylov solver table.
     preconditioner
-        ``"ilu"`` builds a SciPy ILU preconditioner, ``"jacobi"`` builds a
-        cheap diagonal Jacobi preconditioner, ``None`` disables
-        preconditioning, and a supplied :class:`LinearOperator` is passed
-        directly to SciPy.
+        ``"ilu"`` builds an ILU preconditioner for the selected Krylov backend
+        (SciPy for CPU solvers, Cupyx for ``solver="cupyx"``). ``"jacobi"``
+        builds a cheap diagonal Jacobi preconditioner for CPU solvers, ``None``
+        disables preconditioning, and a supplied operator is passed directly to
+        the selected backend.
     scale_system
         Apply left Jacobi scaling before iterative solves.
     ilu_failure
@@ -1360,6 +1932,12 @@ def solve_global_system(
     ilu_permc_spec
         SuperLU column permutation used by ``spilu``.  Use ``"NATURAL"`` when
         the caller has already supplied a meaningful matrix ``permutation``.
+    prepared_device_matrix
+        Optional GPU sparse matrix for GPU solve backends.  For ``solver="cupyx"``
+        this must be a CuPy CSR matrix matching the scaled or unscaled solve
+        operator selected by ``scale_system``.  It is primarily for stateful
+        solver classes that reuse a Numba-assembled trace operator across RHS
+        updates.
     scale_matrix_in_place
         Allow in-place CSR row scaling.  This avoids an extra sparse matrix copy
         on large trace systems when the caller does not need the unscaled matrix
@@ -1389,7 +1967,18 @@ def solve_global_system(
         initial_guess = np.asarray(initial_guess)
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, system_size)
     permutation = _normalize_permutation(permutation, system_size)
+    if permutation is not None and prepared_device_matrix is not None:
+        raise ValueError("prepared_device_matrix cannot be combined with a new matrix permutation")
 
+    normalized_solver = "" if solver is None else str(solver).lower()
+    solver_is_petsc = normalized_solver == "petsc"
+    solver_is_pyamgx = normalized_solver in {"pyamgx", "amgx"}
+    solver_is_cupyx = normalized_solver == "cupyx" or normalized_solver.startswith(("cupyx_", "cupyx-"))
+    effective_cupyx_solver = cupyx_solver
+    if normalized_solver.startswith(("cupyx_", "cupyx-")):
+        effective_cupyx_solver = str(solver)[6:]
+
+    matrix = None
     if assembled_matrix is None:
         validate_global_system_inputs(
             row_indices=row_indices,
@@ -1399,20 +1988,23 @@ def solve_global_system(
             system_size=system_size,
             initial_guess=initial_guess,
         )
-        assembly_start = time.time()
-        matrix = assemble_global_matrix(
-            row_indices=row_indices,
-            col_indices=col_indices,
-            matrix_values=matrix_values,
-            system_size=system_size,
-        )
-        _solver_print(
-            verbose,
-            2,
-            "  sparse CSR matrix assembled in %.5fs with nnz=%d",
-            time.time() - assembly_start,
-            matrix.nnz,
-        )
+        if not solver_is_cupyx:
+            assembly_start = time.time()
+            matrix = assemble_global_matrix(
+                row_indices=row_indices,
+                col_indices=col_indices,
+                matrix_values=matrix_values,
+                system_size=system_size,
+            )
+            _solver_print(
+                verbose,
+                2,
+                "  sparse CSR matrix assembled in %.5fs with nnz=%d",
+                time.time() - assembly_start,
+                matrix.nnz,
+            )
+        else:
+            _solver_print(verbose, 2, "  deferring COO-to-CSR construction to Cupyx on the device")
     else:
         if not scipy.sparse.issparse(assembled_matrix):
             raise TypeError("assembled_matrix must be a SciPy sparse matrix or sparse array")
@@ -1441,7 +2033,11 @@ def solve_global_system(
     if permutation is not None:
         permutation_start = time.time()
         inverse_permutation = _inverse_permutation(permutation)
-        matrix = matrix.tocsr()[permutation][:, permutation].tocsr()
+        if matrix is None:
+            row_indices = inverse_permutation[row_indices]
+            col_indices = inverse_permutation[col_indices]
+        else:
+            matrix = matrix.tocsr()[permutation][:, permutation].tocsr()
         rhs = rhs[permutation]
         if initial_guess is not None:
             initial_guess = initial_guess[permutation]
@@ -1453,8 +2049,6 @@ def solve_global_system(
             "  symmetric matrix permutation applied in %.5fs",
             permutation_elapsed_seconds,
         )
-
-    solver_is_petsc = solver is not None and str(solver).lower() == "petsc"
 
     if solver is None or solver == "direct":
         _solver_print(verbose, 1, "  solver: scipy.sparse.linalg.spsolve")
@@ -1536,6 +2130,59 @@ def solve_global_system(
         result.diagnostic_rhs_norm = diagnostic_rhs_norm
         result.diagnostic_relative_residual_norm = diagnostic_relative_residual_norm
         result.diagnostic_residual_target = diagnostic_residual_target
+
+    elif solver_is_pyamgx:
+        _solver_print(verbose, 1, "  solver: PyAMGX BICGSTAB+AMG")
+        result = solve_pyamgx_system(
+            matrix,
+            rhs,
+            initial_guess=initial_guess,
+            config=amgx_config,
+            rtol=rtol,
+            atol=atol,
+            maxiter=maxiter,
+            scale_system=scale_system,
+            raise_on_nonconvergence=raise_on_nonconvergence,
+            verbose=verbose,
+            diagnostic_rows=diagnostic_rows,
+            diagnostic_label=diagnostic_label,
+        )
+
+    elif solver_is_cupyx:
+        if isinstance(preconditioner, str) and preconditioner == "ilu":
+            _solver_print(verbose, 1, "  solver: Cupyx %s with ILU preconditioner", str(effective_cupyx_solver).upper())
+        elif preconditioner is None:
+            _solver_print(verbose, 1, "  solver: Cupyx %s without preconditioner", str(effective_cupyx_solver).upper())
+        else:
+            _solver_print(verbose, 1, "  solver: Cupyx %s with supplied preconditioner", str(effective_cupyx_solver).upper())
+        result = solve_cupyx_system(
+            matrix,
+            rhs,
+            row_indices=row_indices if matrix is None else None,
+            col_indices=col_indices if matrix is None else None,
+            matrix_values=matrix_values if matrix is None else None,
+            system_size=system_size if matrix is None else None,
+            cupyx_solver=effective_cupyx_solver,
+            preconditioner=preconditioner,
+            prepared_device_matrix=prepared_device_matrix,
+            initial_guess=initial_guess,
+            rtol=rtol,
+            atol=atol,
+            maxiter=maxiter,
+            restart=restart,
+            scale_system=scale_system,
+            ilu_drop_tol=ilu_drop_tol,
+            ilu_fill_factor=ilu_fill_factor,
+            ilu_failure=ilu_failure,
+            ilu_permc_spec=ilu_permc_spec,
+            upwind_block_size=upwind_block_size,
+            upwind_level_widths=upwind_level_widths,
+            upwind_diagonal_regularization=upwind_diagonal_regularization,
+            raise_on_nonconvergence=raise_on_nonconvergence,
+            verbose=verbose,
+            diagnostic_rows=diagnostic_rows,
+            diagnostic_label=diagnostic_label,
+        )
 
     else:
         if isinstance(preconditioner, str) and preconditioner == "ilu":
@@ -1639,7 +2286,9 @@ __all__ = [
     "residual_diagnostics",
     "solve_direct_system",
     "solve_global_system",
+    "solve_cupyx_system",
     "solve_iterative_system",
     "solve_petsc_system",
+    "solve_pyamgx_system",
     "validate_global_system_inputs",
 ]
