@@ -22,7 +22,7 @@ The runners disable CuPy memory pools in their main paths so AMGX memory reports
 
 ## Standalone HDGFEM GPU Runners
 
-### `scripts/run_adv_rea_gpu4_hdg.py`
+### `scripts/gpu/run_adv_rea_gpu4_hdg.py`
 
 Standalone CuPy/PyAMGX advection-reaction HDG runner using `hdgfem` mesh, reference-element, quadrature, and basis data. It mirrors the fast legacy `2d/adv_rea_vec_gpu4.py` path while keeping the production preset runner isolated.
 
@@ -30,7 +30,7 @@ Useful baseline command:
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+  .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12
 ```
@@ -51,7 +51,7 @@ Current safe-default fused p6/ms0.01 working command:
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+  .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly fused --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8
@@ -62,7 +62,7 @@ Matched semi-fused comparison command:
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+  .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly precomputed --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8
@@ -160,7 +160,7 @@ Representative modal full solves with fused raw cooperative LU:
 | 8 | 0.05 | 3,704 | 49,284 | 2.192M | 0.287 s | 0.038 s | 3.132e-07 | fits |
 | 8 | 0.03 | 10,472 | 140,166 | 6.264M | 0.350 s | 0.094 s | 3.346e-09 | fits |
 
-### `scripts/sweep_adv_rea_gpu4_hdg.py`
+### `scripts/gpu/sweep_adv_rea_gpu4_hdg.py`
 
 Subprocess sweep driver for `run_adv_rea_gpu4_hdg.py`. It resets CuPy/AMGX state between cases, writes JSON/CSV logs under `run_logs`, and is the reference for basis/quadrature sweep methodology.
 
@@ -168,10 +168,10 @@ Example:
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/sweep_adv_rea_gpu4_hdg.py --quick
+  .venv/bin/python scripts/gpu/sweep_adv_rea_gpu4_hdg.py --quick
 ```
 
-### `scripts/run_diff_rea_gpu4_hdg.py`
+### `scripts/gpu/run_diff_rea_gpu4_hdg.py`
 
 Standalone CuPy/PyAMGX diffusion-reaction HDG runner using `hdgfem` core data. It mirrors the solve-based legacy `2d/diff_rea_gpu_v4.py` path and currently supports the identity-diffusion test cases used in the legacy benchmark suite.
 
@@ -179,7 +179,7 @@ Useful baseline command:
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/run_diff_rea_gpu4_hdg.py \
+  .venv/bin/python scripts/gpu/run_diff_rea_gpu4_hdg.py \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12
 ```
