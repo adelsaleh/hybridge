@@ -43,7 +43,10 @@ from hdgfem.backends.cupy_adv_rea_raw import (
 )
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.linalg.ordering import upwind_scc_trace_ordering
-from scripts.adv_rea_cases import case_definition_by_key
+try:
+    from scripts.adv_rea_cases import case_definition_by_key
+except ImportError:  # pragma: no cover
+    case_definition_by_key = None
 
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "amgx"
@@ -1203,6 +1206,9 @@ def main(argv: list[str] | None = None) -> int:
         f"assembly_backend={args.assembly_backend}, raw_local_assembly={args.raw_local_assembly}, "
         f"raw_lu_mode={args.raw_lu_mode}, raw_block_size={args.raw_block_size}"
     )
+
+    if case_definition_by_key is None:
+        raise ModuleNotFoundError("Case definitions are unavailable in this repository checkout")
 
     case = case_definition_by_key(args.case)
     beta_x, beta_y, reaction, source, exact = case.build()
