@@ -3,8 +3,8 @@
 
 This script mirrors the fast legacy 2d/adv_rea_vec_gpu4.py path, but sources
 mesh, reference-element, and basis data from hdgfem. It is intentionally
-independent of scripts/run_adv_rea_cases.py so the GPU assembly/solve path can
-be iterated on without disturbing the preset runner.
+independent of scripts/advection_reaction/run_adv_rea_cases.py so the GPU
+assembly/solve path can be iterated on without disturbing the preset runner.
 
 For advection assembly, ``--assembly-backend raw-cuda --raw-local-assembly
 fused`` is the current memory-scaling path.  It supports the default validated
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Callable
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 
@@ -43,16 +43,10 @@ from hdgfem.backends.cupy_adv_rea_raw import (
 )
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.linalg.ordering import upwind_scc_trace_ordering
-try:
-    from scripts.adv_rea_cases import case_definition_by_key
-except ImportError:
-    try:
-        from scripts.advection_reaction.adv_rea_cases import case_definition_by_key
-    except ImportError:
-        case_definition_by_key = None
+from scripts.advection_reaction.adv_rea_cases import case_definition_by_key
 
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "amgx"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "amgx"
 DEFAULT_AMGX_CONFIG_PATH = CONFIG_DIR / "adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json"
 
 
@@ -1145,7 +1139,7 @@ def print_detailed_runtime_summary(total_seconds: float, solve_info: dict) -> No
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", default="test2_legacy_gpu3", help="case key from scripts/adv_rea_cases.py")
+    parser.add_argument("--case", default="test2_legacy_gpu3", help="case key from scripts/advection_reaction/adv_rea_cases.py")
     parser.add_argument("--order", "-o", type=int, default=6)
     parser.add_argument("--mesh-size", "-ms", type=float, default=0.01)
     parser.add_argument("--mesh-type", "-mt", choices=("rectangle", "structured-rectangle"), default="rectangle")

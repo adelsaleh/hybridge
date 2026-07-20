@@ -43,7 +43,7 @@ class AdvectionReactionRunPreset:
     ilu_failure: str = "raise"
     scale_system: bool | None = None
     boundary_mode: str = "eliminate"
-    trace_ordering: str | None = None
+    trace_ordering: str = "none"
     trace_ordering_flux_tolerance: float = 0.0
     ilu_permc_spec: str | None = None
     matrix_pattern_dir: str | None = None
@@ -71,7 +71,7 @@ def _test2_solver_preset(
         order: int = 6,
         assembly_backend="numba",
         preconditioner: str | None,
-        trace_ordering: str | None = None,
+        trace_ordering: str = "none",
         petsc_preset: str = "gmres_ilu",
         ilu_drop_tol: float | None = None,
         ilu_fill_factor: float | None = None,

@@ -364,7 +364,7 @@ def _as_optional_preconditioner(value: str | None):
 
 def _summarize_solve(result: DiffusionReactionResult, exact: Callable, *, args, mesh, space) -> float:
     """Print the same compact solve summary as the plain diffusion CLI."""
-    from output import pretty_print_ncol
+    from hdgfem.io.output import pretty_print_ncol
 
     l2_error = result.field.l2_error(exact)
     numerical_values = result.field.values()

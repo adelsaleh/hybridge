@@ -6,7 +6,7 @@ AMGX, CuPy memory pools, and per-run timers are reset between cases. Launch this
 with the project venv, for example:
 
     LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-      .venv/bin/python scripts/sweep_adv_rea_gpu4_hdg.py --quick
+      .venv/bin/python -m scripts.gpu.sweep_adv_rea_gpu4_hdg --quick
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RUNNER = ROOT / "gpu" / "run_adv_rea_gpu4_hdg.py"
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_RUNNER = ROOT / "scripts" / "gpu" / "run_adv_rea_gpu4_hdg.py"
 DEFAULT_LOG_DIR = ROOT / "run_logs"
 AMGX_LIBRARY_PATHS = ("/tmp/AMGX-build", "/tmp/AMGX-install/lib")
 

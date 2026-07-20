@@ -4,10 +4,13 @@ This note documents the standalone GPU HDG runners and legacy comparison modules
 
 ## Environment
 
-Use the project virtual environment and expose the local AMGX build before running the GPU benchmarks:
+Use the project virtual environment and expose the AMGX shared-library
+directory before running the GPU benchmarks. Replace `/path/to/amgx/lib` with
+the directory containing your AMGX shared library, for example `libamgxsh.so`;
+skip the prefix when AMGX is already visible through the system loader:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   .venv/bin/python <script> <args>
 ```
 
@@ -29,7 +32,7 @@ Standalone CuPy/PyAMGX advection-reaction HDG runner using `hdgfem` mesh, refere
 Useful baseline command:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12
@@ -49,7 +52,7 @@ The advection runner has three assembly modes:
 Current safe-default fused p6/ms0.01 working command:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
   .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
@@ -60,7 +63,7 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
 Matched semi-fused comparison command:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
   .venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
@@ -167,7 +170,7 @@ Subprocess sweep driver for `run_adv_rea_gpu4_hdg.py`. It resets CuPy/AMGX state
 Example:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   .venv/bin/python scripts/gpu/sweep_adv_rea_gpu4_hdg.py --quick
 ```
 
@@ -178,7 +181,7 @@ Standalone CuPy/PyAMGX diffusion-reaction HDG runner using `hdgfem` core data. I
 Useful baseline command:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   .venv/bin/python scripts/gpu/run_diff_rea_gpu4_hdg.py \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12

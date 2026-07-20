@@ -2,6 +2,11 @@
 
 These JSON files are the readable, reusable PyAMGX configurations for the standalone GPU4 HDG runners. The Python scripts keep embedded fallback copies, but when these files are present they are loaded by default. Use `--amgx-config` to run an edited copy without changing source code.
 
+In the examples below, replace `/path/to/amgx/lib` with the directory containing
+your AMGX shared library, for example `libamgxsh.so`. If AMGX is installed in a
+system or environment path already known to the dynamic loader, the
+`LD_LIBRARY_PATH=...` prefix is not needed.
+
 ## Advection-Reaction GPU4 HDGFEM
 
 Config: `adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json`
@@ -9,8 +14,8 @@ Config: `adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json`
 Current working path:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
+  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
   -o 6 -ms 0.01 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-config configs/amgx/adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json
@@ -36,9 +41,9 @@ Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-
 The advection runner uses the same AMGX config for CuPy, semi-fused raw, and fully fused raw assembly. Use the fully fused path when testing memory scaling:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly fused --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8 \
@@ -48,9 +53,9 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
 Use the semi-fused path to compare against the Raw CUDA kernel that receives materialized local matrices:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py \
+  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly precomputed --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8 \
@@ -79,8 +84,8 @@ Working configs:
 Current recommended nodal path:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/run_diff_rea_gpu4_hdg.py \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
+  .venv/bin/python -m scripts.gpu.run_diff_rea_gpu4_hdg \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-solver PCGF \
@@ -90,8 +95,8 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
 Current recommended modal path:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-  .venv/bin/python scripts/run_diff_rea_gpu4_hdg.py \
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
+  .venv/bin/python -m scripts.gpu.run_diff_rea_gpu4_hdg \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legendre-modal \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-solver BICGSTAB \
@@ -100,7 +105,7 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
 
 Recommendation summary from the latest coarse p=4..8 sweep at `-ms 0.18`:
 
-- Nodal best: `legacy-lagrange + PCGF + Chebyshev/L1 aggressive AMG`. Fastest average solve path; default for `scripts/run_diff_rea_gpu4_hdg.py` when `--amgx-config` is omitted.
+- Nodal best: `legacy-lagrange + PCGF + Chebyshev/L1 aggressive AMG`. Fastest average solve path; default for `scripts/gpu/run_diff_rea_gpu4_hdg.py` when `--amgx-config` is omitted.
 - Nodal second best: `legacy-lagrange + PCGF + ChebPoly4/L1 aggressive AMG`. Similar accuracy and solve time, with heavier setup.
 - Nodal most robust: `legacy-lagrange + PCGF + classical V-cycle GS AMG`. Conservative SPD baseline; sometimes wins total time when Chebyshev setup dominates small/coarse runs.
 - Modal best/most robust: `legendre-modal + BICGSTAB + classical AMG`. Modal PCGF is still preconditioner-sensitive even though the assembled matrix is symmetric.

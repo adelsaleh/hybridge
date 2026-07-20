@@ -553,15 +553,14 @@ High-performance advection and diffusion runs are driven by standalone scripts i
 `scripts/gpu/`:
 
 ```bash
-python -m scripts.gpu.run_adv_rea_cases --help
-python -m scripts.gpu.run_adv_rea_gpu4_hdg.py --help
-python -m scripts.gpu.run_diff_rea_gpu4_hdg.py --help
-python -m scripts.gpu.sweep_adv_rea_gpu4_hdg.py --help
+python -m scripts.gpu.run_adv_rea_gpu4_hdg --help
+python -m scripts.gpu.run_diff_rea_gpu4_hdg --help
+python -m scripts.gpu.sweep_adv_rea_gpu4_hdg --help
 ```
 
-Root-level compatibility entries in `scripts/` (`run_adv_rea_gpu4_hdg.py`,
-`run_diff_rea_gpu4_hdg.py`, `sweep_adv_rea_gpu4_hdg.py`) remain as symlinks to
-these GPU scripts.
+There are no root-level GPU compatibility wrappers in `scripts/`; run these
+scripts through the `scripts.gpu` module paths above or by their explicit
+`scripts/gpu/*.py` file paths.
 
 The fused raw-cuda advection path is the CUDA memory-scaling default and now
 supports `p <= 8` under fused mode with both `legacy-lagrange` and

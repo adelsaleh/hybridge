@@ -1,7 +1,7 @@
 
 """Experimental Raw CUDA kernels for diffusion-reaction HDG assembly.
 
-The first implementation targets the standalone ``scripts/run_diff_rea_gpu4_hdg.py``
+The first implementation targets the standalone ``scripts/gpu/run_diff_rea_gpu4_hdg.py``
 benchmark path: identity diffusion, scalar zero reaction, nodal legacy-lagrange
 trace coordinates, and p <= 6.  It keeps the existing CuPy source and boundary
 trace evaluation, then fuses the expensive element-local HDG condensation,

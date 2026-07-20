@@ -3,8 +3,8 @@
 
 This mirrors the solve-based legacy ``2d/diff_rea_gpu_v4.py`` path, but uses
 modern hdgfem mesh, reference-element, quadrature, and basis data.  It is kept
-independent of ``scripts/run_diff_rea_cases.py`` so the GPU path can be tested
-and tuned without touching the preset runner.
+independent of ``scripts/diffusion_reaction/run_diff_rea_cases.py`` so the GPU
+path can be tested and tuned without touching the preset runner.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Callable
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 
@@ -32,13 +32,7 @@ from hdgfem.backends.cupy_diff_rea_raw import (
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGSpace
-try:
-    from scripts.diff_rea_cases import case_definition_by_key
-except ImportError:
-    try:
-        from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key
-    except ImportError:
-        case_definition_by_key = None
+from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key
 
 
 LEGACY_V4_BASELINE = {
@@ -55,7 +49,7 @@ LEGACY_V4_BASELINE = {
 }
 
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "amgx"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "amgx"
 CLASSICAL_AMG_CONFIG_PATH = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_classical_amg.json"
 CHEB_L1_AMG_CONFIG_PATH = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json"
 CHEBPOLY4_L1_AMG_CONFIG_PATH = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json"
@@ -654,7 +648,7 @@ def assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau: floa
 
 def short_config_path(path: Path) -> str:
     try:
-        return str(path.resolve().relative_to(Path(__file__).resolve().parents[1]))
+        return str(path.resolve().relative_to(Path(__file__).resolve().parents[2]))
     except ValueError:
         return str(path)
 
@@ -852,7 +846,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=RECOMMENDATION_TEXT,
     )
-    parser.add_argument("--case", default="trigonometric-poisson", help="case key from scripts/diff_rea_cases.py")
+    parser.add_argument("--case", default="trigonometric-poisson", help="case key from scripts/diffusion_reaction/diff_rea_cases.py")
     parser.add_argument("--order", "-o", type=int, default=6)
     parser.add_argument("--mesh-size", "-ms", type=float, default=0.05)
     parser.add_argument("--mesh-type", "-mt", choices=("auto", "disc", "rectangle", "unit-rectangle", "triangle", "lshape", "structured-rectangle"), default="auto")

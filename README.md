@@ -11,8 +11,8 @@ Runnable experiments and test drivers live under `scripts/`, grouped by topic:
 - `scripts/advection_reaction/`
 - `scripts/diffusion_reaction/`
 - `scripts/diffusion_reaction/experimental/`
-- `scripts/diocotron_dolfinx/`
 - `scripts/diocotron_hdg/`
+- `scripts/diocotron_dolfinx/` (optional DOLFINx comparison diagnostics)
 - `scripts/hdg_gram/`
 - `scripts/dev/`
 
@@ -48,6 +48,63 @@ source .venv/bin/activate
 python -m pip install -e .
 python -m pytest
 ```
+
+## Optional Runtime Stacks
+
+The base package uses NumPy, SciPy, and Numba.  PETSc, CuPy, PyAMGX, and
+DOLFINx are optional runtime stacks used only by specific scripts or solver
+options.  They are imported lazily, so they do not need to be present for the
+core CPU HDG tests.  DOLFINx has the lowest priority here: it is used only by
+later comparison diagnostics under `scripts/diocotron_dolfinx/`, not by the
+main `hdgfem` package.
+
+Numba is a normal Python dependency.  Tune CPU parallelism before launching
+Python when needed:
+
+```bash
+export NUMBA_NUM_THREADS=40
+export OMP_NUM_THREADS=1
+```
+
+PETSc solves require a matched PETSc / `petsc4py` install visible to the active
+Python environment:
+
+```bash
+export PETSC_DIR=$HOME/opt/petsc
+export PETSC_ARCH=arch-linux-c-opt
+export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
+python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
+```
+
+GPU scripts under `scripts/gpu/` require a CUDA-compatible CuPy install.  AMGX
+solves additionally require `pyamgx` and the AMGX shared libraries on the
+dynamic loader path.  Replace `/path/to/amgx/lib` with the directory that
+contains your AMGX shared library, for example `libamgxsh.so`; omit the export
+if AMGX is already visible through your environment, `ldconfig`, or rpath:
+
+```bash
+export AMGX_LIB_DIR=/path/to/amgx/lib
+export LD_LIBRARY_PATH=$AMGX_LIB_DIR:$LD_LIBRARY_PATH
+python -c "import cupy; print(cupy.cuda.runtime.runtimeGetVersion())"
+python -c "import pyamgx; print('pyamgx ok')"
+python -m scripts.gpu.run_adv_rea_gpu4_hdg --help
+```
+
+DOLFINx is optional and only needed for comparison diagnostics.  Prefer a
+separate conda environment so its MPI/PETSc stack does not constrain the normal
+HDG environment:
+
+```bash
+conda create -n fenicsx-dgfem -c conda-forge fenics-dolfinx mpich pyvista gmsh
+conda activate fenicsx-dgfem
+python -c "import dolfinx, basix, ufl, mpi4py, petsc4py, gmsh; print('dolfinx ok')"
+python -m pip install -e .
+```
+
+No project-local build step links these libraries into `hdgfem`.  Use the
+correct Python environment and make native shared libraries visible through
+`LD_LIBRARY_PATH` before starting Python.  See `MANUAL.md`,
+`docs/gpu_hdg_modules.md`, and `configs/amgx/README.md` for longer notes.
 
 For advection-reaction HDGFEM, the fused Raw CUDA path is the preferred high
 performance path.  Default behavior is:
