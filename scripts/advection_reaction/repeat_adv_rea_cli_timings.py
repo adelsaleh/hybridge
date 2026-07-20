@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Repeat the advection-reaction preset runner and summarize printed timings.
 
-This benchmark intentionally drives ``scripts/run_adv_rea_cases.py`` as a
+This benchmark intentionally drives ``scripts/advection_reaction/run_adv_rea_cases.py`` as a
 subprocess.  It is meant to answer "what does the preset runner itself report?"
 rather than timing a lower-level assembly function.
 """
@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-ADV_REA_SCRIPT = REPO_ROOT / "scripts" / "run_adv_rea_cases.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ADV_REA_SCRIPT = REPO_ROOT / "scripts" / "advection_reaction" / "run_adv_rea_cases.py"
 
 SUMMARY_LABELS = (
     "prep time(s)",
@@ -216,7 +216,7 @@ def _print_metric_table(results: list[RunResult]) -> None:
     ]
 
     print()
-    print("Summary from run_adv_rea_cases.py printed timings")
+    print("Summary from scripts/advection_reaction/run_adv_rea_cases.py printed timings")
     print("backend  metric                                           n  median     min        max        mean")
     print("-------  -----------------------------------------------  -  ---------  ---------  ---------  ---------")
     for backend in sorted(by_backend):
@@ -252,7 +252,7 @@ def _print_metric_table(results: list[RunResult]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run run_adv_rea_cases.py repeatedly with NumPy and/or Numba and parse its printed timings."
+        description="Run the organized advection-reaction preset runner repeatedly and parse its printed timings."
     )
     parser.add_argument("-p", "--order", type=int, default=6)
     parser.add_argument("--lc", type=float, default=0.01)
@@ -282,7 +282,8 @@ def main() -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     print(
-        f"Running run_adv_rea_cases.py repeats={args.repeats} order={args.order} lc={args.lc} "
+        f"Running scripts/advection_reaction/run_adv_rea_cases.py repeats={args.repeats} "
+        f"order={args.order} lc={args.lc} "
         f"boundary_mode={args.boundary_mode} trace_ordering={args.trace_ordering} plot={args.plot}"
     )
     print(f"Raw logs: {log_dir}")

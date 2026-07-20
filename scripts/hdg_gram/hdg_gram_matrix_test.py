@@ -26,7 +26,7 @@ import numpy as np
 from scipy.sparse import coo_array, save_npz
 from scipy.sparse.linalg import LinearOperator, cg, eigsh, gmres, spilu, spsolve, bicgstab
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

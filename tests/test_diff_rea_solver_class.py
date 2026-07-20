@@ -11,10 +11,11 @@ from hdgfem.solvers.diff_rea import (
     DiffusionReactionHDGSolver as DiffReaSolver,
     solve_diffusion_reaction_hdg,
 )
-from scripts.diff_rea_cases import (
+from scripts.diffusion_reaction.diff_rea_cases import (
     quadratic_poisson_case,
     tensor_sine_diffusion_reaction_case,
     tensor_sine_exact_gradients,
+    trigonometric_poisson_case,
 )
 
 
@@ -160,6 +161,14 @@ def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float) -> N
         )
 
 
+def _vector_l2_error(vector_field, exact_flux) -> float:
+    space = vector_field.components[0].space
+    points = space.mapped_quads()
+    exact_values = np.stack(exact_flux(points[:, :, 0], points[:, :, 1]), axis=0)
+    diff = vector_field.values() - exact_values
+    return float(np.sqrt(np.einsum("K,dKq,q->", space.mesh.aff_jacs, diff * diff, space.quad_data.Krf_w)))
+
+
 @pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
 def test_diff_rea_solver_matches_function_for_callable_problem(boundary_mode: str) -> None:
     space = _space()
@@ -289,6 +298,35 @@ def test_hdg_postprocess_primal_and_flux_outputs_and_flux_moments() -> None:
     assert result.timings.postprocessing > 0.0
     _assert_hdiv_flux_constraints(result, space, tau)
     _assert_solver_cache_matches_result(solver, result)
+
+
+def test_hdg_postprocess_flux_uses_primal_reference_for_identity_diffusion() -> None:
+    pytest.importorskip("numba")
+    mesh = rectangle_mesh(4, 4, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 3, basis_type="dub_orth")
+    problem = trigonometric_poisson_case()
+    diffusion, reaction, source, exact = problem
+
+    result = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=1.0,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        hdg_postprocess="both",
+        verbose=False,
+    )
+
+    assert result.postprocessed_flux is not None
+    raw_error = _vector_l2_error(result.flux, problem.exact_flux)
+    post_error = _vector_l2_error(result.postprocessed_flux, problem.exact_flux)
+    assert post_error < 0.45 * raw_error
+    _assert_hdiv_flux_constraints(result, space, 1.0)
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:

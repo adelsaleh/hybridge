@@ -25,7 +25,7 @@ from hdgfem.solvers.diff_rea import (
     local_solvers,
 )
 from hdgfem.solvers.diff_rea_face_dense import assemble_diffusion_face_dense_components
-from scripts.diff_rea_cases import (
+from scripts.diffusion_reaction.diff_rea_cases import (
     quadratic_poisson_case,
     quadratic_variable_reaction_case,
     tensor_sine_diffusion_reaction_case,

@@ -1,7 +1,7 @@
 # Recommended Torsion-Initialized Newton Parameters
 
 These recommendations are for
-`scripts/dolfinx_torsion_initialized_newton.py` on the fixed smooth-star
+`scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py` on the fixed smooth-star
 tests in this study.
 
 ## Preferred Phi-Design-Scaled Window
@@ -68,7 +68,7 @@ Balanced run:
 XDG_CACHE_HOME=/tmp/hdgfem_fenics_cache \
 MPLCONFIGDIR=/tmp/hdgfem_mpl_cache \
 /home/as305/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/dolfinx_torsion_initialized_newton.py \
+  scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py \
   --mesh run_outputs/strategyA_band_study_20260712/fixed_mesh/smooth_star_h010_n220.msh \
   --order 5 \
   --alphaT1 0.40 \

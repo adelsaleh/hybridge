@@ -10,14 +10,11 @@ The file name follows the requested ``diff_rea_w_boostrap`` spelling.
 
 from __future__ import annotations
 
-if __name__ == "__main__" and __package__ in {None, ""}:
-    import runpy
+if __package__ in {None, ""}:
     import sys
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("hdgfem.solvers.diff_rea_w_boostrap", run_name="__main__")
-    raise SystemExit
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
@@ -26,7 +23,7 @@ from typing import Literal
 
 import numpy as np
 
-from .diff_rea import (
+from hdgfem.solvers.diff_rea import (
     DiffusionReactionResult,
     LocalSolverBackend,
     ReturnKey,
@@ -35,7 +32,7 @@ from .diff_rea import (
     impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg as _solve_plain_diffusion_reaction_hdg,
 )
-from ..core.space import DGSpace
+from hdgfem.core.space import DGSpace
 
 
 @dataclass(frozen=True)
@@ -447,9 +444,9 @@ def _main() -> None:
     """Run the bootstrap-enabled diffusion-reaction CLI."""
     from argparse import ArgumentParser
 
-    from ..core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
-    from ..io.plot import plot_solution_comparison
-    from scripts.diff_rea_cases import case_by_legacy_id
+    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
+    from hdgfem.io.plot import plot_solution_comparison
+    from scripts.diffusion_reaction.diff_rea_cases import case_by_legacy_id
 
     parser = ArgumentParser(description="Run the bootstrap-enabled hdgfem diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")

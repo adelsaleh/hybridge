@@ -1,0 +1,615 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\newcommand{\uhat}{\widehat u}
+\newcommand{\vh}{v_h}
+\newcommand{\wh}{w_h}
+\newcommand{\muhat}{\widehat\mu}
+\newcommand{\qh}{q_h}
+\newcommand{\Th}{\mathcal T_h}
+\newcommand{\Eh}{\mathcal E_h}
+\newcommand{\Ehi}{\mathcal E_h^\circ}
+\newcommand{\R}{\mathcal R}
+\newcommand{\Vh}{V_h}
+\newcommand{\Qh}{\boldsymbol V_h}
+\newcommand{\Mh}{M_h}
+\newcommand{\dd}{\,\mathrm d}
+
+\title{Residual Accounting in the Torsion-Initialized HDG Semilinear Newton Script}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+This note records how the current Python script
+\path{scripts/diocotron_hdg/hdg_torsion_initialized_newton.py} computes and
+uses residuals.  The goal is to make explicit why, after remeshing, the
+reported Newton merit can stop decreasing even though the scalar/primal
+equation is essentially solved.
+
+The most important implementation fact is the following:
+\begin{quote}
+The Newton correction is driven by only the scalar/primal HDG residual
+block, while the default merit \texttt{residual\_norm=euclid} is the
+Euclidean norm of the full mixed HDG residual, including the flux
+equations and the interior trace equation.
+\end{quote}
+Thus a defect introduced in the transferred flux or rebuilt trace can
+remain visible in the merit even if the Newton step keeps reducing the
+scalar equation for \(u_h\).
+
+\section{Discrete Unknowns}
+
+On each element \(K \in \Th\), the script stores
+\[
+  u_h|_K = \sum_i U_{K,i}\phi_i,
+  \qquad
+  q_{x,h}|_K = \sum_i Q^x_{K,i}\phi_i,
+  \qquad
+  q_{y,h}|_K = \sum_i Q^y_{K,i}\phi_i.
+\]
+The face trace unknown is stored per mesh edge:
+\[
+  \uhat_h|_e = \sum_a \widehat U_{e,a}\psi_a,
+  \qquad e \in \Eh.
+\]
+Only interior edge residuals are included in the global trace residual;
+boundary trace values are fixed by the homogeneous Dirichlet condition.
+
+The nonlinear source is
+\[
+  \rho(u_h) =
+  A\left(
+    \sigma_{\varepsilon}(u_h-c_1)
+    -
+    \sigma_{\varepsilon}(u_h-c_2)
+  \right),
+\]
+where \(A=\texttt{rho\_amp}\), and the derivative used in the Newton
+linearization is
+\[
+  \rho'(u_h) =
+  A\left(
+    \sigma'_{\varepsilon}(u_h-c_1)
+    -
+    \sigma'_{\varepsilon}(u_h-c_2)
+  \right).
+\]
+The quadrature values of \(\rho(u_h)\) are projected only when a
+\texttt{DGField} representation is needed for metrics or plotting.  The
+residual source moments are assembled directly from quadrature values.
+
+\section{Weak HDG Residual Operators}
+
+This section states the weak residuals before choosing a basis.  It is
+the mathematical object that the coefficient residual in the script is
+sampling.  The sign convention used by the HDG solver is
+\[
+  q \approx -\nabla u,
+  \qquad
+  -\nabla\cdot q = \rho(u).
+\]
+Equivalently, the scalar second order equation is
+\(-\Delta u=\rho(u)\).
+
+For each element \(K\), define the local scalar DG space
+\[
+  \Vh(K) = \mathbb P_p(K)
+\]
+and the local vector DG space
+\[
+  \Qh(K) = [\mathbb P_p(K)]^2.
+\]
+For each edge \(e\), define the trace space
+\[
+  \Mh(e)=\mathbb P_p(e).
+\]
+The global DG spaces are products over elements:
+\[
+  \Vh(\Th)=\prod_{K\in\Th}\Vh(K),
+  \qquad
+  \Qh(\Th)=\prod_{K\in\Th}\Qh(K),
+\]
+and the hybrid trace space is a product over edges.  The boundary trace
+is prescribed by the Dirichlet data; in the present script it is zero.
+Only the interior-edge trace equations are assembled into the residual.
+
+Given an element state
+\[
+  (u_K,q_K,\widehat u_{\partial K})
+  \in
+  \Vh(K)\times\Qh(K)\times\prod_{e\subset\partial K}\Mh(e),
+\]
+the local HDG residual operator has two parts:
+\[
+  \R_K(u_K,q_K,\widehat u_{\partial K})
+  =
+  \left(
+    \R^u_K(u_K,q_K,\widehat u_{\partial K}),
+    \R^q_K(u_K,q_K,\widehat u_{\partial K})
+  \right),
+\]
+with
+\[
+  \R^u_K(u_K,q_K,\widehat u_{\partial K})\in \Vh(K)',
+  \qquad
+  \R^q_K(u_K,q_K,\widehat u_{\partial K})\in \Qh(K)'.
+\]
+
+For every scalar test function \(v\in\Vh(K)\), the primal residual is
+\[
+  \boxed{
+  \R^u_K(u_K,q_K,\widehat u_{\partial K};v)
+  =
+  -(q_K,\nabla v)_K
+  +
+  \left\langle
+    q_K\cdot n_K+\tau(u_K-\widehat u_{\partial K}),
+    v
+  \right\rangle_{\partial K}
+  -
+  (\rho(u_K),v)_K .
+  }
+\]
+This is the elementwise weak form of
+\(-\nabla\cdot q=\rho(u)\), with the HDG numerical normal flux
+\[
+  \widehat f_K
+  =
+  q_K\cdot n_K+\tau(u_K-\widehat u_{\partial K}).
+\]
+
+For every vector test function \(r=(r_x,r_y)\in\Qh(K)\), the flux
+residual is
+\[
+  \boxed{
+  \R^q_K(u_K,q_K,\widehat u_{\partial K};r)
+  =
+  (u_K,\nabla\cdot r)_K
+  -
+  (q_K,r)_K
+  -
+  \left\langle
+    \widehat u_{\partial K},r\cdot n_K
+  \right\rangle_{\partial K}.
+  }
+\]
+If the trace were exactly the element boundary value of \(u_K\), then
+integration by parts would give
+\[
+  (u_K,\nabla\cdot r)_K
+  -
+  \langle u_K,r\cdot n_K\rangle_{\partial K}
+  =
+  -(\nabla u_K,r)_K,
+\]
+so \(\R^q_K=0\) enforces \(q_K=-\nabla u_K\).
+
+The trace residual is not purely local to one element.  For each
+interior edge \(e\in\Ehi\), define
+\[
+  \R^{\widehat u}_e(u_h,q_h,\widehat u_h)\in \Mh(e)'.
+\]
+For every trace test function \(\mu\in\Mh(e)\),
+\[
+  \boxed{
+  \R^{\widehat u}_e(u_h,q_h,\widehat u_h;\mu)
+  =
+  \sum_{K:\,e\subset\partial K}
+  \left\langle
+    q_K\cdot n_K+\tau(u_K-\widehat u_h),
+    \mu
+  \right\rangle_e .
+  }
+\]
+This is the weak conservation equation for the numerical normal flux on
+the interior mesh skeleton.  There is no corresponding equation
+\(\R^{\widehat u}_e=0\) on a physical boundary edge in this Dirichlet
+formulation.  On boundary edges the trace \(\widehat u_h\) is prescribed
+by the boundary condition, while the numerical boundary flux
+\[
+  q_K\cdot n_K+\tau(u_K-\widehat u_h)
+\]
+is generally nonzero and represents the boundary flux of the solution.
+Consequently, boundary-edge flux is not included in \texttt{resTrace}.
+
+The full residual operator is therefore
+\[
+  \R_{\mathrm{HDG}}(u_h,q_h,\widehat u_h)
+  =
+  \left(
+    \{\R^u_K\}_{K\in\Th},
+    \{\R^q_K\}_{K\in\Th},
+    \{\R^{\widehat u}_e\}_{e\in\Ehi}
+  \right).
+\]
+The vector returned by \texttt{hdg\_residual(...)} is obtained by
+applying these functionals to the local basis functions:
+\[
+  (R^K_u)_i
+  =
+  \R^u_K(u_K,q_K,\widehat u_{\partial K};\phi_i),
+\]
+\[
+  (R^K_{q_x})_i
+  =
+  \R^q_K(u_K,q_K,\widehat u_{\partial K};(\phi_i,0)),
+  \qquad
+  (R^K_{q_y})_i
+  =
+  \R^q_K(u_K,q_K,\widehat u_{\partial K};(0,\phi_i)),
+\]
+and
+\[
+  (R^e_{\widehat u})_a
+  =
+  \R^{\widehat u}_e(u_h,q_h,\widehat u_h;\psi_a).
+\]
+This is why the residual is best interpreted as a coefficient vector of
+weak residual functionals.  With \texttt{residual\_norm=euclid}, the
+script takes an ordinary Euclidean norm of this coefficient vector.  It
+is not applying a mass-scaled dual norm unless \texttt{residual\_norm=hdg}
+is selected.
+
+\section{Element Matrices Used by the Residual}
+
+Let \(\{\phi_i\}\) be the element basis and \(\{\psi_a\}\) the reference
+edge basis.  The code uses affine element maps and precomputed local
+matrices.  Up to the code's orientation conventions, the relevant
+objects are:
+\[
+  M^K_{ij} = \int_K \phi_j\phi_i \dd x,
+\]
+\[
+  D^{x,K}_{ij} = \int_K \phi_j\,\partial_x\phi_i \dd x,
+  \qquad
+  D^{y,K}_{ij} = \int_K \phi_j\,\partial_y\phi_i \dd x,
+\]
+This is the legacy-oriented derivative matrix used by the code: the
+row index \(i\) belongs to the test basis function and the column index
+\(j\) belongs to the trial coefficient.  With this orientation,
+\(D^{x,K}Q^{x,K}\) represents \((q_{x,h},\partial_x\phi_i)_K\), not
+\((\partial_x q_{x,h},\phi_i)_K\).
+\[
+  B^K_{\tau,ij}
+  =
+  \int_{\partial K} \tau\,\phi_j\phi_i \dd s,
+\]
+\[
+  N^{x,K}_{ij}
+  =
+  \int_{\partial K} n_x\,\phi_j\phi_i \dd s,
+  \qquad
+  N^{y,K}_{ij}
+  =
+  \int_{\partial K} n_y\,\phi_j\phi_i \dd s.
+\]
+There is also a boundary coupling matrix \(E^K_\tau\) multiplying the
+local trace coefficients on the three faces of \(K\).  In the code this
+is \texttt{element\_boundary = diffusion\_element\_boundary\_mats(...)}.
+
+The source moment vector on \(K\) is
+\[
+  F^K_i(u_h)
+  =
+  \int_K \rho(u_h)\phi_i \dd x.
+\]
+In code this is \texttt{scalar\_moments\_from\_values(space,
+source\_values)}.
+
+\section{Full Mixed HDG Residual}
+
+The function \texttt{hdg\_residual(...)} returns one long vector
+\[
+  R_{\mathrm{mix}}
+  =
+  \begin{bmatrix}
+    R^u \\
+    R^q \\
+    R^{\widehat u}
+  \end{bmatrix}.
+\]
+The local element part has three blocks per element:
+\[
+  R^K_{\mathrm{loc}}
+  =
+  \begin{bmatrix}
+    R^K_u \\
+    R^K_{q_x} \\
+    R^K_{q_y}
+  \end{bmatrix}
+  \in \mathbb R^{3N_p}.
+\]
+
+\subsection{Primal block}
+
+The first block is the scalar/primal HDG equation:
+\[
+  R^K_u
+  =
+  B^K_\tau U^K
+  + (N^{x,K}-D^{x,K})Q^{x,K}
+  + (N^{y,K}-D^{y,K})Q^{y,K}
+  - E^K_{\tau,u}\widehat U^K
+  - F^K(U).
+\]
+This is the block reported as \texttt{resPrimal}.  It contains the
+semilinear source \(\rho(u_h)\).
+
+\subsection{Flux blocks}
+
+The second and third local blocks enforce the first order relation
+between \(q_h\) and \(u_h\):
+\[
+  R^K_{q_x}
+  =
+  D^{x,K}U^K
+  - M^K Q^{x,K}
+  - E^K_{\tau,q_x}\widehat U^K,
+\]
+\[
+  R^K_{q_y}
+  =
+  D^{y,K}U^K
+  - M^K Q^{y,K}
+  - E^K_{\tau,q_y}\widehat U^K.
+\]
+These two blocks are grouped together and reported as \texttt{resFlux}.
+They do not contain \(\rho(u_h)\).  They measure whether the stored flux
+coefficients are consistent with the stored scalar field and trace on
+the current mesh.
+
+\subsection{Trace block}
+
+For an interior edge \(e\), the script accumulates contributions from
+the adjacent elements:
+\[
+  R^{e}_{\widehat u}
+  =
+  \sum_{K\supset e}
+  \int_{e}
+  \left(
+    q_h^K\cdot n_K
+    + \tau(u_h^K-\uhat_h)
+  \right)\muhat
+  \dd s .
+\]
+Only \(e\in\Ehi\) is retained in the returned residual vector.  This is
+reported as \texttt{resTrace}.  It measures normal flux conservation and
+the stabilization jump across the hybridized skeleton.
+
+\section{Scalar Volume Residual}
+
+The script also computes a diagnostic residual called
+\texttt{resVolume}:
+\[
+  R^K_{\mathrm{vol},i}
+  =
+  \int_K \nabla u_h\cdot\nabla\phi_i\dd x
+  -
+  \int_K \rho(u_h)\phi_i\dd x.
+\]
+This is assembled by \texttt{scalar\_volume\_residual}.  It is useful for
+comparison with the scalar continuous Galerkin or FreeFEM intuition, but
+it is not the same as the full mixed HDG residual.  In particular,
+\texttt{resVolume} ignores the stored \(q_h\) and \(\uhat_h\).
+
+\section{Reported Norms}
+
+After assembling \(R_{\mathrm{mix}}\), the script splits it as follows.
+Let \(N_T\) be the number of elements and \(N_p\) the local scalar
+polynomial dimension.  The local part has size \(3N_TN_p\).  The
+remainder is the interior trace residual.
+
+The reported coefficient norms are:
+\[
+  \texttt{resPrimal}
+  =
+  \|R^u\|_2,
+\]
+\[
+  \texttt{resFlux}
+  =
+  \|R^q\|_2
+  =
+  \left\|
+    \begin{bmatrix}
+      R^{q_x}\\R^{q_y}
+    \end{bmatrix}
+  \right\|_2,
+\]
+\[
+  \texttt{resTrace}
+  =
+  \|R^{\widehat u}\|_2,
+\]
+\[
+  \texttt{resFull}
+  =
+  \|R_{\mathrm{mix}}\|_2.
+\]
+With the default command line used in the current runs,
+\[
+  \texttt{residual\_norm=euclid},
+  \qquad
+  \texttt{merit}=\texttt{resFull}.
+\]
+
+Other merit modes exist:
+\begin{align*}
+  \texttt{hdg-local}:&\quad \texttt{merit}=\texttt{resPrimal},\\
+  \texttt{edp-volume}:&\quad \texttt{merit}=\texttt{resVolume},\\
+  \texttt{hdg}:&\quad \texttt{merit}=\sqrt{R_{\mathrm{mix}}^T G^{-1}R_{\mathrm{mix}}},
+\end{align*}
+where \(G^{-1}\) is the HDG Gram inverse.  The Gram path is currently
+not the default because of the separate Gram-matrix issue.
+
+\section{Newton Correction Actually Solved}
+
+At every Newton step the code first extracts only the primal block:
+\[
+  b^K_i = -R^K_{u,i}.
+\]
+This is exactly what \texttt{mixed\_u\_block\_rhs\_from\_residual}
+returns.
+
+Then the correction \((\delta u_h,\delta q_h,\delta\uhat_h)\) is
+obtained by solving a linear HDG diffusion--reaction problem:
+\[
+  -\Delta(\delta u_h) - \rho'(u_h)\delta u_h
+  =
+  b,
+\]
+with the same HDG machinery.  In code:
+\[
+  \texttt{source\_h} \leftarrow b,
+  \qquad
+  \texttt{reaction\_h} \leftarrow -\rho'(u_h).
+\]
+The accepted trial state is then
+\[
+  u_h^{\mathrm{new}}
+  =
+  u_h+\alpha\delta u_h,
+\]
+\[
+  q_h^{\mathrm{new}}
+  =
+  q_h+\alpha\delta q_h,
+\]
+\[
+  \uhat_h^{\mathrm{new}}
+  =
+  \uhat_h+\alpha\delta\uhat_h.
+\]
+
+This explains the intended behavior on a fixed mesh.  If the current
+triple \((u_h,q_h,\uhat_h)\) is already a reasonably consistent HDG
+state, the correction generated by the scalar/primal block also carries
+compatible flux and trace increments, so all blocks can decrease
+together.
+
+\section{What Changes After Remeshing}
+
+During scheduled adaptation, the current implementation transfers the
+state as follows:
+\begin{enumerate}[label=(\arabic*)]
+  \item transfer \(u_h\) to the new space;
+  \item transfer \(q_{x,h}\) and \(q_{y,h}\) componentwise to the new
+  space;
+  \item rebuild \(\uhat_h\) by projecting the new element-face values of
+  \(u_h\) to interior edge traces:
+  \[
+    \uhat_h
+    =
+    \operatorname{argmin}_{\widehat v_h}
+    \sum_{K}\|u_h|_{\partial K}-\widehat v_h\|^2_{\partial K}.
+  \]
+\end{enumerate}
+This is not the same as solving the mixed HDG equations on the new mesh.
+It produces a geometrically reasonable scalar field and a geometrically
+reasonable trace, but it does not guarantee
+\[
+  R^q = 0,
+  \qquad
+  R^{\widehat u}=0.
+\]
+The transferred flux is especially delicate because \(q_h\) should be
+the HDG auxiliary variable associated with the current \(u_h\) and
+\(\uhat_h\), not just the \(L^2\)-projection of the old flux field.
+
+\section{Why the Current Plateau Occurs}
+
+The recent diagnostic run showed the characteristic pattern
+\[
+  \texttt{resPrimal}\approx 10^{-9},
+  \qquad
+  \texttt{resFlux}\approx 6\times 10^{-5},
+  \qquad
+  \texttt{resTrace}\approx 1.5\times 10^{-4}.
+\]
+Since the default merit is
+\[
+  \texttt{merit}
+  =
+  \sqrt{
+    \texttt{resPrimal}^2
+    +
+    \texttt{resFlux}^2
+    +
+    \texttt{resTrace}^2
+  },
+\]
+the full merit cannot go below the flux/trace floor:
+\[
+  \texttt{merit}
+  \approx
+  \sqrt{
+    (6\times 10^{-5})^2
+    +
+    (1.5\times 10^{-4})^2
+  }
+  \approx
+  1.6\times 10^{-4}.
+\]
+This matches the observed plateau.
+
+The Newton iteration keeps solving a correction whose right-hand side is
+only \(-R^u\).  Once \(R^u\) is nearly zero, the next correction is very
+small.  Therefore the update
+\[
+  (q_h,\uhat_h)
+  \leftarrow
+  (q_h,\uhat_h)+\alpha(\delta q_h,\delta\uhat_h)
+\]
+is also very small, and it has no strong mechanism left to remove a
+pre-existing transfer defect in \(R^q\) or \(R^{\widehat u}\).  The line
+search then sees no sufficient decrease in the full mixed merit and
+eventually reports \texttt{FAIL\_LS}.
+
+\section{Interpretation}
+
+The current residual accounting says:
+\begin{itemize}
+  \item \texttt{resPrimal} is the semilinear scalar HDG equation being
+  actively driven by the Newton source.
+  \item \texttt{resFlux} is consistency of the stored auxiliary flux
+  with \(u_h\) and \(\uhat_h\) on the current mesh.
+  \item \texttt{resTrace} is interior skeleton conservation of
+  \(q_h\cdot n+\tau(u_h-\uhat_h)\).
+  \item \texttt{resFull} is the Euclidean coefficient norm of all of
+  these blocks together.
+\end{itemize}
+
+On a fixed mesh, the HDG correction can reduce the full residual because
+the state remains in the same discrete space.  After adaptation, the
+state transfer can introduce flux/trace inconsistency.  Since the Newton
+right-hand side is formed only from the primal block, the algorithm can
+drive the scalar equation down while leaving the transferred auxiliary
+defect almost unchanged.
+
+\section{Implications for the Next Implementation Step}
+
+The residual split suggests that the next experiment should not focus on
+the scalar nonlinear source.  Instead, it should test how the auxiliary
+state is rebuilt after adaptation.  Natural diagnostics are:
+\begin{enumerate}[label=(\arabic*)]
+  \item after transferring \(u_h\), reconstruct \(q_h\) and \(\uhat_h\)
+  from an HDG local/global solve or projection consistent with the new
+  mesh, instead of transferring old \(q_h\);
+  \item compare the current transfer mode with a mode that discards
+  transferred \(q_h\) and recomputes auxiliary variables from the new
+  \(u_h\);
+  \item optionally run the line search merit with \texttt{hdg-local}
+  only as a diagnostic, not as a final correctness criterion, to confirm
+  that the scalar equation is what is converging.
+\end{enumerate}
+
+\end{document}

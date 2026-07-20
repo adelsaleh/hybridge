@@ -4,7 +4,7 @@
 Preset definitions live in this file, in the ``PRESETS`` dictionary below.
 
 To create a new manufactured test:
-1. Add a factory in ``scripts/diff_rea_cases.py`` that returns
+1. Add a factory in ``scripts/diffusion_reaction/diff_rea_cases.py`` that returns
    manufactured diffusion, reaction, source, exact solution, and exact flux data.
 2. Register it in ``CASE_DEFINITIONS`` in that same file.
 3. Add one or more ``DiffusionReactionRunPreset`` entries in ``PRESETS`` below.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,7 @@ class DiffusionReactionRunPreset:
 
 
 # Edit this dictionary to change existing runs or add new preset names.
-# The ``case`` value must match a key from scripts/diff_rea_cases.py.
+# The ``case`` value must match a key from scripts/diffusion_reaction/diff_rea_cases.py.
 PRESETS: dict[str, DiffusionReactionRunPreset] = {
     "quadratic_poisson": DiffusionReactionRunPreset(
         case="quadratic-poisson",
@@ -78,6 +78,20 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
     "exponential_bubble": DiffusionReactionRunPreset(
         case="exponential-bubble",
         description="Legacy exponential bubble pure-Poisson case.",
+    ),
+    "trigonometric_poisson_direct": DiffusionReactionRunPreset(
+        case="trigonometric-poisson",
+        description="Legacy trigonometric pure-Poisson case on its default disk domain.",
+        solver="direct",
+        preconditioner=None,
+        petsc_preset="cg_gamg",
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        petsc_levels=10,
+        order=6,
+        verbosity=2,
+        mesh_size=0.06,
+        tau=1.0,
     ),
     "trigonometric_poisson_cg_gamg": DiffusionReactionRunPreset(
         case="trigonometric-poisson",
@@ -90,7 +104,8 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         petsc_levels=10,
         order=6,
         verbosity=2,
-        mesh_size=0.1,
+        mesh_size=0.08,
+        tau=1.0,
     ),
     "trigonometric_poisson_cg_hypre": DiffusionReactionRunPreset(
         case="trigonometric-poisson",
@@ -210,7 +225,7 @@ def _print_presets() -> None:
     script_path = Path(__file__).resolve()
     print(f"Preset definitions: {script_path}")
     print("Edit the PRESETS dictionary in this file to change or add runs.")
-    print("Manufactured PDE cases are registered in scripts/diff_rea_cases.py.\n")
+    print("Manufactured PDE cases are registered in scripts/diffusion_reaction/diff_rea_cases.py.\n")
 
     width = max(len(key) for key in PRESETS)
     for key in sorted(PRESETS):
@@ -403,7 +418,8 @@ def _summarize_solve(
             free_trace_relative_residual = global_solve.solver_relative_residual_norm
         solver_items.extend(
             [
-                ("Krylov iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
+                ("Krylov iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count,
+                 ",d"),
                 (
                     "solver rel res",
                     np.nan
@@ -653,10 +669,11 @@ def _plot_primal_postprocess_comparison(
         "position_x": 0.225,
         "position_y": 0.02,
     }
+    exact_title = "Exact solution" if not suptitle else f"Exact solution | {suptitle}"
     panels = (
         (hdg_title, "primal", reference_points, primal_values, result.field),
         (post_title, "post_primal", reference_points, postprocessed_values, postprocessed_field),
-        ("Exact solution", "exact", exact_reference_points, exact_values, None),
+        (exact_title, "exact", exact_reference_points, exact_values, None),
     )
     for column, (panel_title, scalar_name, panel_reference_points, values, field) in enumerate(panels):
         if field is None:
@@ -688,9 +705,6 @@ def _plot_primal_postprocess_comparison(
                 scalar_bar_args=scalar_bar_args,
             )
         plotter.add_text(panel_title, position="upper_left", font_size=10, shadow=False)
-    if suptitle:
-        plotter.subplot(0, 1)
-        plotter.add_title(suptitle, font_size=14, shadow=False)
     plotter.link_views()
     plotter.show()
     return plotter
@@ -753,9 +767,9 @@ def _main() -> None:
         description="Run one manufactured diffusion-reaction preset.",
         formatter_class=RawDescriptionHelpFormatter,
         epilog=(
-            "Preset configuration lives in this file, scripts/run_diff_rea_cases.py.\n"
+            "Preset configuration lives in this file, scripts/diffusion_reaction/run_diff_rea_cases.py.\n"
             "Edit PRESETS to change numerical parameters or add a new run.\n"
-            "Add new manufactured PDE cases in scripts/diff_rea_cases.py.\n"
+            "Add new manufactured PDE cases in scripts/diffusion_reaction/diff_rea_cases.py.\n"
             "CLI flags are limited to plotting, verbosity, and preset inspection."
         ),
     )
@@ -784,7 +798,7 @@ def _main() -> None:
     preset_key = args.preset
     config = _runtime_config(preset_by_key(preset_key), args)
 
-    from scripts.diff_rea_cases import CASE_BY_KEY, case_definition_by_key
+    from scripts.diffusion_reaction.diff_rea_cases import CASE_BY_KEY, case_definition_by_key
 
     if config.case not in CASE_BY_KEY:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
@@ -881,6 +895,7 @@ def _main() -> None:
             post_title=post_title,
             show_mesh=not config.hide_mesh,
         )
+
 
 if __name__ == "__main__":
     _main()

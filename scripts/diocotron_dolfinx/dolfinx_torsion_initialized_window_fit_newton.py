@@ -56,7 +56,7 @@ from dolfinx import fem, mesh, plot as dolfinx_plot
 from dolfinx.fem import petsc as fem_petsc
 from dolfinx.io import XDMFFile
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

@@ -202,7 +202,7 @@ scipy_bicgstab_upwind_fbgs
 scipy_gmres_upwind_fbgs
 \end{lstlisting}
 
-They live in \code{scripts/benchmark_adv_rea_solvers.py}.  The script assembles
+They live in \code{scripts/advection_reaction/benchmark_adv_rea_solvers.py}.  The script assembles
 the trace matrix once, builds the reusable CSR matrix once, and then compares
 the new preconditioner with SciPy ILU and PETSc ILU/ASM configurations.
 When multiple SciPy configurations use the same upwind block-GS options, the

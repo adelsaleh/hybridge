@@ -3,11 +3,11 @@
 
 Run from a fresh clone with:
 
-    python3 scripts/install_dependencies.py
+    python3 scripts/dev/install_dependencies.py
 
 Additional arguments are forwarded to pip after ``install``. For example:
 
-    python3 scripts/install_dependencies.py --upgrade
+    python3 scripts/dev/install_dependencies.py --upgrade
 """
 
 from __future__ import annotations

@@ -37,10 +37,10 @@ _ITERATIVE_SOLVERS = {
 
 
 def _verbosity_level(verbose: bool | int) -> int:
-    """Normalize solver verbosity flags to levels 0, 1, or 2."""
+    """Normalize solver verbosity flags to levels 0 through 3."""
     if isinstance(verbose, bool):
         return 1 if verbose else 0
-    return min(2, max(0, int(verbose)))
+    return min(3, max(0, int(verbose)))
 
 
 def _solver_print(verbose: bool | int, level: int, message: str, *args) -> None:
@@ -57,11 +57,46 @@ class KrylovIterationCounter:
     For BICGSTAB/CG/CGS/MINRES/LGMRES, this counts callback calls.
     """
 
-    def __init__(self):
+    def __init__(
+            self,
+            *,
+            matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None = None,
+            rhs: NDArray | None = None,
+            verbose: bool | int = 0,
+            solver_name: str = "KRYLOV",
+    ):
         self.count = 0
+        self.matrix = matrix
+        self.rhs = rhs
+        self.verbose = verbose
+        self.solver_name = solver_name
+        self.rhs_norm = None if rhs is None else max(float(np.linalg.norm(rhs)), 1.0e-300)
+        self.residual_history: list[float] = []
 
-    def __call__(self, _):
+    def __call__(self, value):
         self.count += 1
+        residual_norm = None
+        value_array = np.asarray(value)
+        if value_array.ndim == 0:
+            # GMRES with callback_type="pr_norm" supplies the preconditioned
+            # residual norm directly.
+            residual_norm = float(value_array)
+        elif self.matrix is not None and self.rhs is not None:
+            residual_norm = float(np.linalg.norm(self.matrix @ value_array - self.rhs))
+        if residual_norm is not None:
+            self.residual_history.append(residual_norm)
+            if _verbosity_level(self.verbose) >= 3:
+                if self.rhs_norm is not None:
+                    rel = residual_norm / self.rhs_norm
+                    print(
+                        f"  {self.solver_name} iter={self.count} residual={residual_norm:.6e} rel={rel:.6e}",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"  {self.solver_name} iter={self.count} residual={residual_norm:.6e}",
+                        flush=True,
+                    )
 
 
 @dataclass
@@ -1043,7 +1078,12 @@ def solve_iterative_system(
         else:
             _solver_print(verbose, 2, "  using supplied preconditioner")
 
-    iteration_counter = KrylovIterationCounter()
+    iteration_counter = KrylovIterationCounter(
+        matrix=scaled_matrix,
+        rhs=scaled_rhs,
+        verbose=verbose,
+        solver_name=solver_name_upper,
+    )
 
     solver_kwargs = {
         "M": M,
@@ -1095,6 +1135,22 @@ def solve_iterative_system(
             "  initial residual from supplied guess: solver %.3e; physical %.3e",
             initial_residual_norm,
             initial_physical_residual_norm,
+        )
+    elif _verbosity_level(verbose) >= 3:
+        zero_guess = np.zeros_like(scaled_rhs)
+        initial_solver_residual = scaled_matrix @ zero_guess - scaled_rhs
+        zero_initial_residual_norm = float(np.linalg.norm(initial_solver_residual))
+        zero_initial_physical_residual_norm = (
+            float(np.linalg.norm(physical_diagonal * initial_solver_residual))
+            if scaled_in_place
+            else compute_residual_norm(matrix, zero_guess, rhs)
+        )
+        _solver_print(
+            verbose,
+            3,
+            "  initial residual from zero guess: solver %.3e; physical %.3e",
+            zero_initial_residual_norm,
+            zero_initial_physical_residual_norm,
         )
 
     solve_start = time.time()
@@ -1417,11 +1473,30 @@ def solve_global_system(
             _solver_print(
                 verbose,
                 2,
-                "  SciPy left scaling is disabled for PETSc; PETSc handles scaling/preconditioning internally",
+                "  diagonal scaling enabled for PETSc comparison runs",
+            )
+            scale_start = time.time()
+            petsc_matrix_input, petsc_rhs_input = diagonal_scale_system(
+                matrix,
+                rhs,
+                copy_matrix=True,
+            )
+            scale_elapsed_seconds = time.time() - scale_start
+            _solver_print(verbose, 2, "  diagonal scaling completed in %.5fs", scale_elapsed_seconds)
+        else:
+            scale_start = time.time()
+            petsc_matrix_input = matrix.tocsr()
+            petsc_rhs_input = rhs
+            scale_elapsed_seconds = time.time() - scale_start
+            _solver_print(
+                verbose,
+                2,
+                "  diagonal scaling disabled; CSR conversion completed in %.5fs",
+                scale_elapsed_seconds,
             )
         result = solve_petsc_system(
-            matrix,
-            rhs,
+            petsc_matrix_input,
+            petsc_rhs_input,
             preset=petsc_preset,
             levels=petsc_levels,
             options=petsc_options,
@@ -1436,6 +1511,31 @@ def solve_global_system(
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
         )
+        if result.total_elapsed_seconds is not None:
+            result.total_elapsed_seconds += scale_elapsed_seconds
+        result.scale_elapsed_seconds = scale_elapsed_seconds
+        physical_residual = matrix @ result.x - rhs
+        physical_residual_norm = float(np.linalg.norm(physical_residual))
+        physical_rhs_norm, physical_relative_residual_norm, physical_residual_target = residual_diagnostics(
+            physical_residual_norm,
+            rhs,
+            rtol=rtol,
+            atol=atol,
+        )
+        (
+            diagnostic_residual_norm,
+            diagnostic_rhs_norm,
+            diagnostic_relative_residual_norm,
+            diagnostic_residual_target,
+        ) = restricted_residual_diagnostics(physical_residual, rhs, diagnostic_rows, rtol=rtol, atol=atol)
+        result.physical_residual_norm = physical_residual_norm
+        result.physical_rhs_norm = physical_rhs_norm
+        result.physical_relative_residual_norm = physical_relative_residual_norm
+        result.physical_residual_target = physical_residual_target
+        result.diagnostic_residual_norm = diagnostic_residual_norm
+        result.diagnostic_rhs_norm = diagnostic_rhs_norm
+        result.diagnostic_relative_residual_norm = diagnostic_relative_residual_norm
+        result.diagnostic_residual_target = diagnostic_residual_target
 
     else:
         if isinstance(preconditioner, str) and preconditioner == "ilu":

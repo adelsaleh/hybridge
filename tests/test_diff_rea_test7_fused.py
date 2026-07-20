@@ -11,7 +11,7 @@ from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.system import expand_known_dofs, solve_global_system
 from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg, split_diffusion_unknowns
-from scripts.diff_rea_cases import tensor_sine_diffusion_reaction_case
+from scripts.diffusion_reaction.diff_rea_cases import tensor_sine_diffusion_reaction_case
 
 
 pytest.importorskip("numba")

@@ -9,7 +9,7 @@ from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver as AdvReaSolver,
     solve_advection_reaction_hdg,
 )
-from scripts.adv_rea_cases import test2 as adv_rea_test2
+from scripts.advection_reaction.adv_rea_cases import test2 as adv_rea_test2
 
 
 def _space(order: int = 2) -> DGSpace:

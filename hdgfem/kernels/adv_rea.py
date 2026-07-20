@@ -26,6 +26,7 @@ def assemble_local_mats_and_boundary_kernel(
         weighted_trace_basis,
         beta_volume_values,
         beta_normal_flux,
+        tau_face_values,
         reaction_values,
 ):
     r"""Assemble local advection-reaction blocks and element trace couplings.
@@ -36,9 +37,10 @@ def assemble_local_mats_and_boundary_kernel(
         ``(nK, nel, nel)`` output for
         :math:`\int_K r\phi_i\phi_j
         -(\beta\cdot\nabla\phi_i)\phi_j\,dx
-        +\int_{\partial K}|\beta\cdot n|\phi_i\phi_j\,ds`.
+        +\int_{\partial K}\tau\phi_i\phi_j\,ds`.
     ``element_boundary_mats``
-        ``(nK, nel, 3*ntr)`` output for the upwind trace coupling.
+        ``(nK, nel, 3*ntr)`` output for the
+        :math:`(\tau-\beta\cdot n)\widehat u_h` trace coupling.
     ``volume_basis``
         ``(nq, nel)``.
     ``volume_gradients``
@@ -93,9 +95,9 @@ def assemble_local_mats_and_boundary_kernel(
             column_offset = face * ntr
             for qf in range(nqf):
                 normal_flux = beta_normal_flux[element, face, qf]
-                abs_flux = abs(normal_flux)
-                boundary_weight = face_jac * abs_flux
-                trace_weight = face_jac * (abs_flux - normal_flux)
+                tau = tau_face_values[element, face, qf]
+                boundary_weight = face_jac * tau
+                trace_weight = face_jac * (tau - normal_flux)
 
                 for i in range(nel):
                     phi_i = face_basis[face, i, qf]

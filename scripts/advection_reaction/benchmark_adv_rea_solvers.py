@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 @dataclass(frozen=True)
@@ -146,7 +146,7 @@ def _build_mesh(mesh_size: float, gmsh_verbosity: int):
 def _assemble_trace_problem(args):
     from hdgfem.core.space import DGField, DGSpace, VectorDGField
     from hdgfem.solvers.adv_rea import AdvectionReactionHDGSolver
-    from scripts.adv_rea_cases import test2
+    from scripts.advection_reaction.adv_rea_cases import test2
 
     mesh, mesh_time = _timed(
         "generating rectangle mesh",

@@ -17,7 +17,7 @@ from hdgfem.solvers.adv_rea import (
     solve_advection_reaction_hdg,
 )
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from scripts.adv_rea_cases import test2 as adv_rea_test2
+from scripts.advection_reaction.adv_rea_cases import test2 as adv_rea_test2
 
 
 pytest.importorskip("numba")
@@ -31,6 +31,122 @@ def _projected_test2_fields(space: DGSpace):
         DGField(source, space, name="source_h"),
         exact,
     )
+
+
+def _elementwise_constant_field(space: DGSpace, values, *, name: str) -> DGField:
+    one = space.project_callable(lambda x, y: np.ones_like(x), name=f"{name}_one")
+    coeffs = np.asarray(values, dtype=np.float64)[:, None] * one.coeffs
+    return space.field(np.ascontiguousarray(coeffs), name=name)
+
+
+def _numpy_weighted_advection_trace_system(source_h, beta_h, reaction_h, boundary_condition, space: DGSpace):
+    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(space, beta_dot_normal)
+    local_mats = np.ascontiguousarray(hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face))
+    scratch = np.empty_like(local_mats)
+    hdg_mats.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
+    hdg_mats.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
+    local_solver = np.linalg.inv(local_mats)
+    element_boundary_mats = hdg_mats.element_boundary_mats_from_trace_weight(space, gamma_face)
+    source_moments = hdg_assembly.source_moments(source_h, space)
+    trace_lift = hdg_mats.advection_trace_lift_from_stabilization(space, tau_face)
+    trace_blocks = hdg_assembly.element_to_trace_matrix_from_lift(
+        trace_lift,
+        local_solver,
+        element_boundary_mats,
+        space,
+    )
+    rows, cols = hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face")
+    interior_mass_blocks = hdg_mats.advection_interior_trace_mass_blocks_from_weight(space, gamma_face)
+    data = hdg_assembly.trace_matrix_data(
+        trace_blocks,
+        space,
+        1e20,
+        interior_mass_mode="face",
+        interior_mass_blocks=interior_mass_blocks,
+    )
+    rhs, boundary_trace = hdg_assembly.trace_rhs_from_lift(
+        trace_lift,
+        source_moments,
+        local_solver,
+        boundary_condition,
+        space,
+        1e20,
+    )
+    return hdg_assembly.TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
+
+
+def test_discontinuous_beta_uses_side_weighted_trace_mass() -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    beta_h = VectorDGField(
+        (
+            _elementwise_constant_field(space, [1.0, 3.0], name="beta_x"),
+            _elementwise_constant_field(space, [0.0, 0.0], name="beta_y"),
+        ),
+        name="beta_h",
+    )
+
+    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    _, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(space, beta_dot_normal)
+    side_blocks = hdg_mats.advection_interior_trace_mass_blocks_from_weight(space, gamma_face)
+
+    assert side_blocks.shape == (mesh.interior_elements.size, space.quad_data.edg_dof, space.quad_data.edg_dof)
+    side_sum = np.zeros((mesh.int_edges_inds.size, space.quad_data.edg_dof, space.quad_data.edg_dof))
+    for side, (element, face) in enumerate(zip(mesh.interior_elements, mesh.interior_faces)):
+        edge = mesh.loc2glob_edge[element, face]
+        edge_pos = int(np.where(mesh.int_edges_inds == edge)[0][0])
+        side_sum[edge_pos] += side_blocks[side]
+
+    old_unweighted = mesh.edge_jacs[mesh.int_edges_inds, None, None] * space.quad_data.M_rf_fc[None]
+    assert not np.allclose(side_sum, old_unweighted)
+
+
+@pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
+def test_numba_solve_matches_numpy_with_dg_stabilization(boundary_mode: str) -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    source_h = _elementwise_constant_field(space, [1.0, 1.0], name="source_h")
+    reaction_h = _elementwise_constant_field(space, [1.5, 2.0], name="reaction_h")
+    beta_h = VectorDGField(
+        (
+            _elementwise_constant_field(space, [1.0, 3.0], name="beta_x"),
+            _elementwise_constant_field(space, [0.25, -0.5], name="beta_y"),
+        ),
+        name="beta_h",
+    )
+    tau_h = _elementwise_constant_field(space, [6.0, 8.0], name="tau_h")
+    zero = lambda x, y: np.zeros_like(x)
+
+    numpy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        zero,
+        space,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode=boundary_mode,
+        assembly_backend="numpy",
+        advection_stabilization=tau_h,
+        verbose=False,
+    )
+    numba_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        zero,
+        space,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode=boundary_mode,
+        assembly_backend="numba",
+        advection_stabilization=tau_h,
+        verbose=False,
+    )
+
+    np.testing.assert_allclose(numba_result.trace, numpy_result.trace, rtol=1e-11, atol=1e-11)
+    np.testing.assert_allclose(numba_result.field.coeffs, numpy_result.field.coeffs, rtol=1e-11, atol=1e-11)
 
 
 def test_numba_local_assembly_matches_numpy_projected_coefficients() -> None:
@@ -61,22 +177,7 @@ def test_numba_fused_trace_system_matches_numpy_projected_coefficients() -> None
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, exact = _projected_test2_fields(space)
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
-
-    local_mats = np.ascontiguousarray(hdg_mats.boundary_mass_from_normal_flux(space, beta_dot_normal))
-    scratch = np.empty_like(local_mats)
-    hdg_mats.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
-    hdg_mats.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
-    local_solver = np.linalg.inv(local_mats)
-    element_boundary_mats = hdg_mats.element_boundary_mats_from_normal_flux(space, beta_dot_normal)
-    source_moments = hdg_assembly.source_moments(source_h, space)
-    numpy_trace_system = hdg_assembly.assemble_trace_system(
-        local_solver,
-        element_boundary_mats,
-        source_moments,
-        exact,
-        space,
-    )
+    numpy_trace_system = _numpy_weighted_advection_trace_system(source_h, beta_h, reaction_h, exact, space)
 
     numba_trace_system = assemble_projected_trace_system_numba(
         source_h,

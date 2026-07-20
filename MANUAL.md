@@ -29,19 +29,19 @@ object-oriented mesh, space, and field objects through package-native modules.
 Advection-reaction manufactured presets:
 
 ```bash
-python scripts/run_adv_rea_cases.py [preset]
+python -m scripts.advection_reaction.run_adv_rea_cases [preset]
 ```
 
 Diffusion-reaction manufactured presets:
 
 ```bash
-python scripts/run_diff_rea_cases.py [preset]
+python -m scripts.diffusion_reaction.run_diff_rea_cases [preset]
 ```
 
 Torsion-initialized semilinear HDG Newton benchmark:
 
 ```bash
-python scripts/hdg_torsion_initialized_newton.py [options]
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton [options]
 ```
 
 ### Common Runs
@@ -49,44 +49,44 @@ python scripts/hdg_torsion_initialized_newton.py [options]
 Small smoke run:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30
 ```
 
 Verbose timing run:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
 ```
 
 Plotting run:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 --plot
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --plot
 ```
 
 PETSc BiCGStab + ILU path:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_petsc_bicgstab_ilu -p 6 --lc 0.03
+python -m scripts.advection_reaction.run_adv_rea_cases test2_petsc_bicgstab_ilu -p 6 --lc 0.03
 ```
 
 Projected-coefficient Numba path:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03 \
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 \
   --assembly-backend numba --verbosity 2
 ```
 
 Boundary elimination and upwind trace ordering:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 6 --lc 0.03
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03
 ```
 
 One-assembly advection solver benchmark:
 
 ```bash
-python scripts/benchmark_adv_rea_solvers.py -p 6 --lc 0.01
+python -m scripts.advection_reaction.benchmark_adv_rea_solvers -p 6 --lc 0.01
 ```
 
 This benchmark assembles the `test2` upwind-ordered trace matrix once, builds a
@@ -133,25 +133,25 @@ compiled.
 Diffusion-reaction manufactured solve:
 
 ```bash
-python scripts/run_diff_rea_cases.py quadratic_poisson
+python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson
 ```
 
 Manufactured run defaults are stored in the `PRESETS` dictionary inside
-`scripts/run_diff_rea_cases.py`; edit that dictionary to change case
+`scripts/diffusion_reaction/run_diff_rea_cases.py`; edit that dictionary to change case
 parameters, mesh defaults, quadrature, stabilization, or solver settings.
 Available presets can be listed with:
 
 ```bash
-python scripts/run_diff_rea_cases.py --list-presets
+python -m scripts.diffusion_reaction.run_diff_rea_cases --list-presets
 ```
 
 The runner keeps numerical settings in presets.  Command-line flags are limited
 to plotting, verbosity, and preset inspection:
 
 ```bash
-python scripts/run_diff_rea_cases.py tensor_sine_quick --plot
-python scripts/run_diff_rea_cases.py tensor_sine_gamg --print-preset
-python scripts/run_diff_rea_cases.py tensor_sine_gamg --dry-run
+python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_quick --plot
+python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --print-preset
+python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --dry-run
 ```
 
 Diffusion-reaction presets also control optional HDG post-processing with
@@ -168,9 +168,9 @@ options, solver, errors, and timings sections.  Non-total timing rows include
 their percentage of total runtime, for example `assembly (s): 4.7 (39.2%)`.
 
 To create a new manufactured PDE, add a factory and `CASE_DEFINITIONS` entry in
-`scripts/diff_rea_cases.py`.  To create a new run configuration for an existing
+`scripts/diffusion_reaction/diff_rea_cases.py`.  To create a new run configuration for an existing
 or new PDE, add a `DiffusionReactionRunPreset` entry to `PRESETS` in
-`scripts/run_diff_rea_cases.py`.
+`scripts/diffusion_reaction/run_diff_rea_cases.py`.
 
 Use the optional Numba local-solver block builder by adding or editing a preset
 with `local_backend="numba"`.
@@ -178,13 +178,13 @@ with `local_backend="numba"`.
 Tensor diffusion test7 through the main projected Numba tensor path:
 
 ```bash
-python scripts/run_diff_rea_cases.py tensor_sine_gamg
+python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg
 ```
 
 Experimental hard-coded tensor test7 fused path for kernel comparisons:
 
 ```bash
-python -m hdgfem.solvers.diff_rea_test7_fused \
+python -m scripts.diffusion_reaction.experimental.diff_rea_test7_fused \
   --domain structured-rectangle --nx 200 --ny 200 -p 6 \
   --tau 4 --petsc --petsc-preset cg_gamg \
   --volume-quad-1d 7 --edge-quad-1d 7
@@ -192,7 +192,7 @@ python -m hdgfem.solvers.diff_rea_test7_fused \
 
 ### Torsion-Initialized HDG Newton Runner
 
-`scripts/hdg_torsion_initialized_newton.py` is the fixed-mesh
+`scripts/diocotron_hdg/hdg_torsion_initialized_newton.py` is the fixed-mesh
 HDG driver for the torsion initialized Newton method for converging to
 semilinear local diocotron-like equilibria of the guiding-center model on
 general geometries.  It solves the torsion design fields, builds the logistic
@@ -207,7 +207,7 @@ building blocks are available separately in `hdgfem.core.adaptivity`.
 Typical PETSc run:
 
 ```bash
-python scripts/hdg_torsion_initialized_newton.py \
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
   --star-n 260 --order 4 --hdg-tau 20 -v 2 \
   --residual-norm euclid --newton-shift-mode none
 ```
@@ -250,7 +250,7 @@ diagnostics for `rho_h=f_epsilon(phi_h)`.
 Recent reference run:
 
 ```text
-script       scripts/hdg_torsion_initialized_newton.py
+script       scripts/diocotron_hdg/hdg_torsion_initialized_newton.py
 mesh         smooth star, generated once at startup
 residual     mixed HDG residual, Euclidean line search by default
 adaptivity   no preadapt and no scheduled remeshing
@@ -272,7 +272,7 @@ the native HDG driver, not as replacements for the HDG solver package.
 Closed-loop boundary-aware refit:
 
 ```bash
-python scripts/dolfinx_torsion_initialized_closed_loop_refit.py \
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit \
   --mesh-size 0.18 --star-n 140 --order 4 \
   --eps-ratio 0.08 --outer-it 6 \
   --newton-max-it 25 --newton-tol-res 1e-8 \
@@ -319,7 +319,7 @@ the mesh-derived boundary radius table.
 Reduced-space leakage/missing-area optimizer:
 
 ```bash
-python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py \
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization \
   --mesh-size 0.18 --star-n 140 --order 4 \
   --alphaT1 0.60 --alphaT2 0.70 --eps-t-ratio 0.06 \
   --eps-mode relative --eps-ratio 0.08 \
@@ -402,10 +402,10 @@ selection, correction, and acceptance filtering.  Outputs are written under
 Plotting controls are deliberately simple:
 
 ```bash
-python scripts/dolfinx_torsion_initialized_closed_loop_refit.py ... --plot --plot-mode nonblocking
-python scripts/dolfinx_torsion_initialized_closed_loop_refit.py ... --plot --plot-mode blocking
-python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py ... --plot --plot-mode nonblocking
-python scripts/dolfinx_torsion_initialized_window_reduced_optimization.py ... --plot --plot-mode blocking
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit ... --plot --plot-mode nonblocking
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit ... --plot --plot-mode blocking
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization ... --plot --plot-mode nonblocking
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization ... --plot --plot-mode blocking
 ```
 
 With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
@@ -417,7 +417,7 @@ a separate one-shot render path for PNG artifacts.
 
 ### DOLFINx CG Runner
 
-`scripts/dolfinx_torsion_initialized_newton.py` is the fixed-mesh
+`scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py` is the fixed-mesh
 continuous-Galerkin comparison runner for the same torsion-initialized
 semilinear equilibrium problem.  It uses DOLFINx Lagrange elements, accepts
 arbitrary polynomial order supported by DOLFINx, and follows the same torsion
@@ -428,14 +428,14 @@ The clean CG/HDG timing workflow is:
 
 ```bash
 # First run the HDG driver once and keep its saved mesh.
-python scripts/hdg_torsion_initialized_newton.py \
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
   --run-tag hdg_star260_p2_mumps_clean \
   --star-n 260 --order 2 --hdg-tau 10 \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
 # Then pass that exact mesh to DOLFINx.
 /home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/dolfinx_torsion_initialized_newton.py \
+  scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
   --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
   --order 2 --linear-solver mumps --terminal-every 1
@@ -516,7 +516,7 @@ python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.
 ### Main Runner Options
 
 ```text
-preset                   preset name from scripts/run_adv_rea_cases.py
+preset                   preset name from scripts/advection_reaction/run_adv_rea_cases.py
 --list-presets           print available advection presets
 --print-preset           print the selected preset fields
 --dry-run                validate and print the selected preset without solving
@@ -542,7 +542,7 @@ exact solution range with a capped allowance for numerical overshoot.
 Run:
 
 ```bash
-python scripts/run_adv_rea_cases.py --help
+python -m scripts.advection_reaction.run_adv_rea_cases --help
 ```
 
 for the current runner option list.
@@ -590,7 +590,7 @@ Basic solve:
 from hdgfem.core.mesh import gmsh_rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.solvers.adv_rea import solve_advection_reaction_hdg
-from scripts.adv_rea_cases import test2
+from scripts.advection_reaction.adv_rea_cases import test2
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 4, basis_type="dub_orth")
@@ -713,7 +713,7 @@ Diffusion-reaction solve:
 from hdgfem.core.mesh import gmsh_rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg
-from scripts.diff_rea_cases import quadratic_poisson_case
+from scripts.diffusion_reaction.diff_rea_cases import quadratic_poisson_case
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
 space = DGSpace(mesh, 3, basis_type="dub_orth")
@@ -943,13 +943,25 @@ bd = hdg_mats.boundary_mass(space, beta_h)
 Output-buffer accumulation functions:
 
 ```python
-local = hdg_mats.boundary_mass_from_normal_flux(space, beta_dot_normal)
+tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
+    space,
+    beta_dot_normal,
+    stabilization=None,      # upwind tau = abs(beta_h . n)
+)
+local = hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face)
 local = np.ascontiguousarray(local)
 scratch = np.empty_like(local)
 
 hdg_mats.add_reaction_mass(local, reaction, space, scratch=scratch)
 hdg_mats.add_advection_mats(local, space, beta_h, scale=-1.0)
 ```
+
+For advection-reaction, `stabilization` is the element-side trace
+stabilization `tau`.  `None` uses the upwind value `abs(beta_h . n)`.  The
+NumPy path accepts scalars, callables, `DGField` objects, coefficient arrays,
+or already evaluated face-quadrature values.  The fused Numba path accepts
+`None`, scalars, or projected same-space `DGField`/coefficient data and
+evaluates DG `tau` on face quadrature inside the kernel.
 
 The solver uses the accumulation style so it does not keep three full local
 element tensors alive at the same time.  The return-style functions are kept as
@@ -1090,7 +1102,7 @@ small validation and experiments.
 Run the focused check script:
 
 ```bash
-python scripts/hdg_gram_matrix_test.py --order 2 --nx 2 --ny 2
+python -m scripts.hdg_gram.hdg_gram_matrix_test --order 2 --nx 2 --ny 2
 ```
 
 Run the package tests for this module:
@@ -1205,8 +1217,9 @@ newton.csv, frames.csv, summary.txt
 
 - Element axis is kept first, so local tensors use shape
   `(num_elements, el_dof, el_dof)`.
-- The solver caches `beta_h . n` once per solve and reuses it for boundary mass
-  and element-to-trace coupling.
+- The solver caches `beta_h . n` once per solve.  The corrected advection trace
+  assembly forms side-wise `tau` and `tau - beta_h . n` weights, so projected
+  discontinuous beta fields do not collapse to an unweighted edge average.
 - Reference products such as `weighted_phi_phi_flat` and
   `weighted_triple_phi_flat` are precomputed once per reference element.
 - The current NumPy path is not a true fused element kernel.  It reduces
@@ -1236,7 +1249,7 @@ python -m compileall -q hdgfem tests scripts
 Run the CLI smoke test:
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
+python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
 ```
 
 Run the focused Gram and solver-class checks:
@@ -1248,7 +1261,7 @@ python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py
 Run a cheap torsion-initialized Newton smoke test:
 
 ```bash
-python scripts/hdg_torsion_initialized_newton.py \
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
   --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
   --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```

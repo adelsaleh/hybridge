@@ -19,6 +19,7 @@ from ..kernels import NUMBA_AVAILABLE
 from ..kernels.adv_rea import assemble_local_mats_and_boundary_kernel
 from ..linalg.system import KnownDofReduction
 from ..kernels.adv_rea_fused import (
+    assemble_face_trace_weights_kernel,
     assemble_projected_trace_system_eliminated_kernel,
     assemble_projected_trace_system_kernel,
     reconstruct_projected_field_kernel,
@@ -153,6 +154,7 @@ def assemble_local_advection_reaction_numba(
         beta_callables: tuple[Callable, Callable] | None,
         beta_dot_normal: np.ndarray | None,
         reaction,
+        advection_stabilization=None,
 ) -> NumbaAdvectionLocalAssembly:
     """Assemble local HDG advection-reaction data with Numba.
 
@@ -173,6 +175,11 @@ def assemble_local_advection_reaction_numba(
             raise ValueError("beta_dot_normal is required when beta is provided as callables")
         beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space)
     beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
+    tau_face = hdg_mats.advection_trace_stabilization_values(
+        space,
+        beta_dot_normal,
+        advection_stabilization,
+    )
     reaction_values = reaction_values_on_volume(reaction, space)
     timings["coefficient_values"] = time.perf_counter() - start
 
@@ -197,6 +204,7 @@ def assemble_local_advection_reaction_numba(
         np.ascontiguousarray(space.quad_data.weighted_bas1d_of_ref_edg_qds, dtype=np.float64),
         beta_volume,
         beta_dot_normal,
+        tau_face,
         reaction_values,
     )
     timings["kernel"] = time.perf_counter() - start
@@ -252,6 +260,62 @@ def _reaction_coefficients(reaction, space: DGSpace) -> tuple[np.ndarray, float,
     if np.isscalar(reaction):
         return np.zeros((1, 1), dtype=np.float64), float(reaction), True
     return _same_space_field_coefficients(reaction, space, "reaction"), 0.0, False
+
+
+def _advection_stabilization_coefficients(stabilization, space: DGSpace) -> tuple[int, float, np.ndarray]:
+    """Return a compact Numba descriptor for advection stabilization.
+
+    The fused kernels evaluate ``tau`` on face quadrature.  ``kind=0`` selects
+    the built-in upwind value ``abs(beta_h.n)``, ``kind=1`` uses a scalar, and
+    ``kind=2`` evaluates a same-space DG coefficient field.  Callable
+    stabilizations must be projected before using the fused backend.
+    """
+    if stabilization is None:
+        return 0, 0.0, np.zeros((1, 1), dtype=np.float64)
+    if np.isscalar(stabilization):
+        return 1, float(stabilization), np.zeros((1, 1), dtype=np.float64)
+    if isinstance(stabilization, DGField):
+        return 2, 0.0, _same_space_field_coefficients(
+            stabilization,
+            space,
+            "advection_stabilization",
+        )
+    if callable(stabilization):
+        raise TypeError(
+            "assembly_backend='numba' requires advection_stabilization to be "
+            "None, a scalar, a DGField, or same-space DG coefficients. Project "
+            "callable stabilizations before calling the solver."
+        )
+    return 2, 0.0, _same_space_field_coefficients(
+        stabilization,
+        space,
+        "advection_stabilization",
+    )
+
+
+def _advection_trace_weight_tables(
+        space: DGSpace,
+        beta_coeffs: np.ndarray,
+        tau_kind: int,
+        tau_scalar: float,
+        tau_coeffs: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Precompute Numba side weights ``tau`` and ``tau-beta.n``."""
+    mesh = space.mesh
+    q = space.quad_data
+    tau_face_values = np.empty((mesh.num_tri, 3, q.weights_JGL.size), dtype=np.float64)
+    gamma_face_values = np.empty_like(tau_face_values)
+    assemble_face_trace_weights_kernel(
+        tau_face_values,
+        gamma_face_values,
+        np.ascontiguousarray(mesh.normals, dtype=np.float64),
+        np.ascontiguousarray(q.bas_of_bd_quads, dtype=np.float64),
+        beta_coeffs,
+        int(tau_kind),
+        float(tau_scalar),
+        np.ascontiguousarray(tau_coeffs, dtype=np.float64),
+    )
+    return tau_face_values, gamma_face_values
 
 
 def _projected_tensor_coefficients(tensor, space: DGSpace, label: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -407,6 +471,7 @@ def assemble_projected_trace_system_numba(
         boundary_penalty: float = 1e20,
         edge_order: np.ndarray | None = None,
         beta_dot_normal: np.ndarray | None = None,
+        advection_stabilization=None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the full HDG trace system with fused Numba kernels.
 
@@ -431,6 +496,10 @@ def assemble_projected_trace_system_numba(
     source_coeffs = _same_space_field_coefficients(source, space, "source")
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
+        advection_stabilization,
+        space,
+    )
     interior_side_index = _interior_side_index(space)
     timings["coefficient_validation"] = time.perf_counter() - start
 
@@ -446,8 +515,19 @@ def assemble_projected_trace_system_numba(
     q = space.quad_data
     edg_dof = q.edg_dof
     edge_to_solve_edge = _full_edge_order_map(space, edge_order)
+
+    start = time.perf_counter()
+    tau_face_values, gamma_face_values = _advection_trace_weight_tables(
+        space,
+        beta_coeffs,
+        tau_kind,
+        tau_scalar,
+        tau_coeffs,
+    )
+    timings["trace_weights"] = time.perf_counter() - start
+
     n_interior_flux = mesh.int_edges_inds.size * 2 * edg_dof * 3 * edg_dof
-    n_interior_mass = mesh.int_edges_inds.size * edg_dof * edg_dof
+    n_interior_mass = mesh.interior_elements.size * edg_dof * edg_dof
     n_boundary = mesh.bnd_edges_inds.size * edg_dof
     nnz = n_interior_flux + n_interior_mass + n_boundary
 
@@ -486,6 +566,8 @@ def assemble_projected_trace_system_numba(
         np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -521,6 +603,7 @@ def assemble_projected_trace_system_eliminated_numba(
         *,
         edge_order: np.ndarray | None = None,
         beta_dot_normal: np.ndarray | None = None,
+        advection_stabilization=None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
     if not NUMBA_AVAILABLE:
@@ -531,6 +614,10 @@ def assemble_projected_trace_system_eliminated_numba(
     source_coeffs = _same_space_field_coefficients(source, space, "source")
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
+        advection_stabilization,
+        space,
+    )
     interior_side_index = _interior_side_index(space)
     timings["coefficient_validation"] = time.perf_counter() - start
 
@@ -547,6 +634,16 @@ def assemble_projected_trace_system_eliminated_numba(
     edg_dof = q.edg_dof
 
     start = time.perf_counter()
+    tau_face_values, gamma_face_values = _advection_trace_weight_tables(
+        space,
+        beta_coeffs,
+        tau_kind,
+        tau_scalar,
+        tau_coeffs,
+    )
+    timings["trace_weights"] = time.perf_counter() - start
+
+    start = time.perf_counter()
     edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[mesh.interior_elements], axis=1).astype(np.int64)
@@ -554,7 +651,7 @@ def assemble_projected_trace_system_eliminated_numba(
     side_flux_offsets[0] = 0
     np.cumsum(side_col_counts * edg_dof * edg_dof, out=side_flux_offsets[1:])
     n_flux = int(side_flux_offsets[-1])
-    n_mass = free_edges.size * edg_dof * edg_dof
+    n_mass = mesh.interior_elements.size * edg_dof * edg_dof
     nnz = n_flux + n_mass
     timings["reduction_map"] = time.perf_counter() - start
 
@@ -593,6 +690,8 @@ def assemble_projected_trace_system_eliminated_numba(
         np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -1238,6 +1337,7 @@ def reconstruct_projected_field_numba(
         reaction,
         space: DGSpace,
         *,
+        advection_stabilization=None,
         name: str = "u_h",
 ) -> DGField:
     """Recover element coefficients with the projected fused Numba backend."""
@@ -1247,6 +1347,10 @@ def reconstruct_projected_field_numba(
     source_coeffs = _same_space_field_coefficients(source, space, "source")
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
+        advection_stabilization,
+        space,
+    )
     trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
     expected_trace_shape = (space.mesh.num_edg * space.quad_data.edg_dof,)
     if trace.shape != expected_trace_shape:
@@ -1255,6 +1359,13 @@ def reconstruct_projected_field_numba(
     coeffs = np.empty(space.shape, dtype=np.float64)
     mesh = space.mesh
     q = space.quad_data
+    tau_face_values, gamma_face_values = _advection_trace_weight_tables(
+        space,
+        beta_coeffs,
+        tau_kind,
+        tau_scalar,
+        tau_coeffs,
+    )
     reconstruct_projected_field_kernel(
         coeffs,
         trace,
@@ -1272,6 +1383,8 @@ def reconstruct_projected_field_numba(
         np.ascontiguousarray(q.bas1d_of_ref_edg_qds, dtype=np.float64),
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),

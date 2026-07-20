@@ -576,7 +576,7 @@ def _matplotlib_pyplot(*, show: bool):
         raise RuntimeError(
             "Matplotlib is using a non-interactive backend and no interactive backend could be activated. "
             "Install PyQt/PySide or Tk support, or run with an interactive backend such as "
-            "`MPLBACKEND=QtAgg python scripts/run_diff_rea_cases.py ... --plot`.\n"
+            "`MPLBACKEND=QtAgg python scripts/diffusion_reaction/run_diff_rea_cases.py ... --plot`.\n"
             f"Tried backends:\n{message}"
         )
 

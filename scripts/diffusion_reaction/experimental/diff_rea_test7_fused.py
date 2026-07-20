@@ -2,14 +2,11 @@ r"""Experimental CLI for the hard-coded fused Numba tensor-diffusion test7 path.
 
 from __future__ import annotations
 
-if __name__ == "__main__" and __package__ in {None, ""}:
-    import runpy
+if __package__ in {None, ""}:
     import sys
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    runpy.run_module("hdgfem.solvers.diff_rea_test7_fused", run_name="__main__")
-    raise SystemExit
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import time
 import sys
@@ -19,13 +16,13 @@ from typing import Literal
 
 import numpy as np
 
-from ..backends.diff_rea_test7_fused import (
+from hdgfem.backends.diff_rea_test7_fused import (
     assemble_test7_tensor_trace_system_eliminated_numba,
     reconstruct_test7_tensor_local_unknowns_numba,
 )
-from ..core.space import DGSpace
-from ..linalg.system import expand_known_dofs, solve_global_system
-from .diff_rea import (
+from hdgfem.core.space import DGSpace
+from hdgfem.linalg.system import expand_known_dofs, solve_global_system
+from hdgfem.solvers.diff_rea import (
     DiffusionReactionResult,
     DiffusionReactionTimings,
     _diffusion_is_identity,
@@ -208,7 +205,7 @@ def solve_test7_tensor_fused_hdg(
 
 
 def _summarize_solve(result: DiffusionReactionResult, exact, *, mesh, space, tau, args) -> float:
-    from ..io.output import pretty_print_ncol
+    from hdgfem.io.output import pretty_print_ncol
 
     l2_error = result.field.l2_error(exact)
     numerical_values = result.field.values()
@@ -287,8 +284,8 @@ def _summarize_solve(result: DiffusionReactionResult, exact, *, mesh, space, tau
 
 def _main() -> None:
     """Run the experimental hard-coded test7 fused tensor solve."""
-    from ..core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-    from ..io.plot import plot_solution_comparison
+    from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+    from hdgfem.io.plot import plot_solution_comparison
 
     parser = ArgumentParser(description="Run the experimental fused Numba tensor-diffusion test7 solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")

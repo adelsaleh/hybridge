@@ -34,6 +34,145 @@ def _eval_scalar_face_coeff(coeffs, face_basis, element, face, point, nel):
     return value
 
 
+@njit(cache=True, inline="always", fastmath=True)
+def _face_normal_flux(beta_coeffs, face_basis, normals, element, face, point, nel):
+    beta_x = _eval_scalar_face_coeff(beta_coeffs[0], face_basis, element, face, point, nel)
+    beta_y = _eval_scalar_face_coeff(beta_coeffs[1], face_basis, element, face, point, nel)
+    return beta_x * normals[element, face, 0] + beta_y * normals[element, face, 1]
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _advection_tau(tau_kind, tau_scalar, tau_coeffs, face_basis, element, face, point, nel, normal_flux):
+    if tau_kind == 0:
+        return abs(normal_flux)
+    if tau_kind == 1:
+        return tau_scalar
+    return _eval_scalar_face_coeff(tau_coeffs, face_basis, element, face, point, nel)
+
+
+@njit(cache=True, fastmath=True)
+def _assemble_face_trace_weights(
+        tau_face_values,
+        gamma_face_values,
+        element,
+        normals,
+        face_basis,
+        beta_coeffs,
+        tau_kind,
+        tau_scalar,
+        tau_coeffs,
+):
+    r"""Cache ``tau`` and ``gamma=tau-beta.n`` on every side quadrature node."""
+    nel = face_basis.shape[1]
+    nqf = face_basis.shape[2]
+    for face in range(3):
+        for qf in range(nqf):
+            normal_flux = _face_normal_flux(beta_coeffs, face_basis, normals, element, face, qf, nel)
+            tau = _advection_tau(
+                tau_kind,
+                tau_scalar,
+                tau_coeffs,
+                face_basis,
+                element,
+                face,
+                qf,
+                nel,
+                normal_flux,
+            )
+            tau_face_values[element, face, qf] = tau
+            gamma_face_values[element, face, qf] = tau - normal_flux
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def assemble_face_trace_weights_kernel(
+        tau_face_values,
+        gamma_face_values,
+        normals,
+        face_basis,
+        beta_coeffs,
+        tau_kind,
+        tau_scalar,
+        tau_coeffs,
+):
+    r"""Fill side trace weights for every element before fused assembly."""
+    num_elements = tau_face_values.shape[0]
+    for element in prange(num_elements):
+        _assemble_face_trace_weights(
+            tau_face_values,
+            gamma_face_values,
+            element,
+            normals,
+            face_basis,
+            beta_coeffs,
+            tau_kind,
+            tau_scalar,
+            tau_coeffs,
+        )
+
+
+@njit(cache=True, fastmath=True)
+def _assemble_weighted_trace_lift_side(
+        lift,
+        element,
+        face,
+        is_positive_orientation,
+        jacs_el_fc,
+        face_basis,
+        face_weights,
+        trace_basis,
+        tau_face_values,
+):
+    """Assemble ``int_F tau mu phi`` for one element side."""
+    ntr = trace_basis.shape[0]
+    nel = face_basis.shape[1]
+    nqf = face_weights.shape[0]
+    face_jac = jacs_el_fc[element, face]
+    for row_dof in range(ntr):
+        local_row_dof = map_edge_dof_bool(is_positive_orientation, row_dof, ntr)
+        for i in range(nel):
+            value = 0.0
+            for qf in range(nqf):
+                value += (
+                    face_jac
+                    * tau_face_values[element, face, qf]
+                    * face_weights[qf]
+                    * trace_basis[local_row_dof, qf]
+                    * face_basis[face, i, qf]
+                )
+            lift[row_dof, i] = value
+
+
+@njit(cache=True, fastmath=True)
+def _weighted_trace_mass_value(
+        element,
+        face,
+        is_positive_orientation,
+        row_dof,
+        col_dof,
+        jacs_el_fc,
+        face_basis,
+        face_weights,
+        trace_basis,
+        gamma_face_values,
+):
+    """Return ``int_F (tau-beta.n) mu_row mu_col`` for one side block entry."""
+    ntr = trace_basis.shape[0]
+    nqf = face_weights.shape[0]
+    local_row_dof = map_edge_dof_bool(is_positive_orientation, row_dof, ntr)
+    local_col_dof = map_edge_dof_bool(is_positive_orientation, col_dof, ntr)
+    face_jac = jacs_el_fc[element, face]
+    value = 0.0
+    for qf in range(nqf):
+        value += (
+            face_jac
+            * gamma_face_values[element, face, qf]
+            * face_weights[qf]
+            * trace_basis[local_row_dof, qf]
+            * trace_basis[local_col_dof, qf]
+        )
+    return value
+
+
 @njit(cache=True, fastmath=True)
 def _assemble_projected_local_system(
         local_matrix,
@@ -51,6 +190,8 @@ def _assemble_projected_local_system(
         trace_basis,
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -106,17 +247,11 @@ def _assemble_projected_local_system(
             local_matrix[i, j] = value - jac * advection_value
 
     for face in range(3):
-        normal_x = normals[element, face, 0]
-        normal_y = normals[element, face, 1]
         face_jac = jacs_el_fc[element, face]
         column_offset = face * ntr
         for qf in range(nqf):
-            beta_x = _eval_scalar_face_coeff(beta_coeffs[0], face_basis, element, face, qf, nel)
-            beta_y = _eval_scalar_face_coeff(beta_coeffs[1], face_basis, element, face, qf, nel)
-            normal_flux = beta_x * normal_x + beta_y * normal_y
-            abs_flux = abs(normal_flux)
-            mass_weight = face_jac * abs_flux * face_weights[qf]
-            trace_weight = face_jac * (abs_flux - normal_flux) * face_weights[qf]
+            mass_weight = face_jac * tau_face_values[element, face, qf] * face_weights[qf]
+            trace_weight = face_jac * gamma_face_values[element, face, qf] * face_weights[qf]
 
             for i in range(nel):
                 phi_i = face_basis[face, i, qf]
@@ -159,6 +294,8 @@ def assemble_projected_trace_system_kernel(
         oriented_lifts,
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -167,10 +304,10 @@ def assemble_projected_trace_system_kernel(
 ):
     r"""Assemble the projected-coefficient HDG trace system in COO form.
 
-    The COO layout is intentionally identical to
-    :func:`hdgfem.assembly.hdg.trace_matrix_indices`: first all interior
-    element-side flux blocks, then one interior edge mass block per edge, then
-    one diagonal penalty entry per boundary trace dof.
+    The COO layout follows the side-weighted advection trace equation: first
+    all interior element-side Schur flux blocks, then one ``tau-beta.n`` mass
+    block per interior side, then one diagonal penalty entry per boundary trace
+    dof.
     """
     num_elements = loc2glob_edge.shape[0]
     nel = mass_matrix.shape[0]
@@ -178,11 +315,12 @@ def assemble_projected_trace_system_kernel(
     n_int = int_edges.shape[0]
     n_bnd = bnd_edges.shape[0]
     n_flux = n_int * 2 * ntr * 3 * ntr
-    n_mass = n_int * ntr * ntr
+    n_mass = n_int * 2 * ntr * ntr
 
     for element in prange(num_elements):
         local_matrix = np.empty((nel, nel), dtype=np.float64)
         local_rhs_columns = np.empty((nel, 3 * ntr + 1), dtype=np.float64)
+        weighted_lift = np.empty((ntr, nel), dtype=np.float64)
 
         _assemble_projected_local_system(
             local_matrix,
@@ -200,6 +338,8 @@ def assemble_projected_trace_system_kernel(
             trace_basis,
             source_coeffs,
             beta_coeffs,
+            tau_face_values,
+            gamma_face_values,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -219,13 +359,23 @@ def assemble_projected_trace_system_kernel(
                     rhs_values[rhs_base + row_dof] = 0.0
                 continue
 
-            oriented_face = loc2oriented_ref_face[element, row_face]
-            lift_scale = 0.5 * jacs_el_fc[element, row_face]
+            row_is_positive = orientations[element, row_face]
             row_solve_edge = edge_to_solve_edge[row_edge]
+            _assemble_weighted_trace_lift_side(
+                weighted_lift,
+                element,
+                row_face,
+                row_is_positive,
+                jacs_el_fc,
+                face_basis,
+                face_weights,
+                trace_basis,
+                tau_face_values,
+            )
             for row_dof in range(ntr):
                 rhs_value = 0.0
                 for i in range(nel):
-                    lift_value = lift_scale * oriented_lifts[oriented_face, row_dof, i]
+                    lift_value = weighted_lift[row_dof, i]
                     rhs_value += lift_value * local_rhs_columns[i, 3 * ntr]
                 rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
                 rhs_values[rhs_base + row_dof] = rhs_value
@@ -239,7 +389,7 @@ def assemble_projected_trace_system_kernel(
                         column = col_face * ntr + local_col_dof
                         schur_value = 0.0
                         for i in range(nel):
-                            lift_value = lift_scale * oriented_lifts[oriented_face, row_dof, i]
+                            lift_value = weighted_lift[row_dof, i]
                             schur_value += lift_value * local_rhs_columns[i, column]
 
                         out = (((side_id * 3 + col_face) * ntr + row_dof) * ntr + col_dof)
@@ -247,19 +397,23 @@ def assemble_projected_trace_system_kernel(
                         cols[out] = col_solve_edge * ntr + col_dof
                         data[out] = -schur_value
 
-    mass_offset = n_flux
-    for edge_pos in prange(n_int):
-        edge = int_edges[edge_pos]
-        solve_edge = edge_to_solve_edge[edge]
-        edge_scale = edge_jacs[edge]
-        base = mass_offset + edge_pos * ntr * ntr
-        for i in range(ntr):
-            row = solve_edge * ntr + i
-            for j in range(ntr):
-                out = base + i * ntr + j
-                rows[out] = row
-                cols[out] = solve_edge * ntr + j
-                data[out] = edge_scale * edge_mass[i, j]
+                mass_base = n_flux + side_id * ntr * ntr
+                for col_dof in range(ntr):
+                    out = mass_base + row_dof * ntr + col_dof
+                    rows[out] = row_solve_edge * ntr + row_dof
+                    cols[out] = row_solve_edge * ntr + col_dof
+                    data[out] = _weighted_trace_mass_value(
+                        element,
+                        row_face,
+                        row_is_positive,
+                        row_dof,
+                        col_dof,
+                        jacs_el_fc,
+                        face_basis,
+                        face_weights,
+                        trace_basis,
+                        gamma_face_values,
+                    )
 
     boundary_matrix_offset = n_flux + n_mass
     boundary_rhs_offset = num_elements * 3 * ntr
@@ -307,6 +461,8 @@ def assemble_projected_trace_system_eliminated_kernel(
         oriented_lifts,
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -322,11 +478,11 @@ def assemble_projected_trace_system_eliminated_kernel(
     num_elements = loc2glob_edge.shape[0]
     nel = mass_matrix.shape[0]
     ntr = trace_basis.shape[0]
-    n_free_edges = free_edges.shape[0]
 
     for element in prange(num_elements):
         local_matrix = np.empty((nel, nel), dtype=np.float64)
         local_rhs_columns = np.empty((nel, 3 * ntr + 1), dtype=np.float64)
+        weighted_lift = np.empty((ntr, nel), dtype=np.float64)
 
         _assemble_projected_local_system(
             local_matrix,
@@ -344,6 +500,8 @@ def assemble_projected_trace_system_eliminated_kernel(
             trace_basis,
             source_coeffs,
             beta_coeffs,
+            tau_face_values,
+            gamma_face_values,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -364,13 +522,23 @@ def assemble_projected_trace_system_eliminated_kernel(
                     rhs_values[rhs_base + row_dof] = 0.0
                 continue
 
-            oriented_face = loc2oriented_ref_face[element, row_face]
-            lift_scale = 0.5 * jacs_el_fc[element, row_face]
+            row_is_positive = orientations[element, row_face]
             side_base = side_flux_offsets[side_id]
+            _assemble_weighted_trace_lift_side(
+                weighted_lift,
+                element,
+                row_face,
+                row_is_positive,
+                jacs_el_fc,
+                face_basis,
+                face_weights,
+                trace_basis,
+                tau_face_values,
+            )
             for row_dof in range(ntr):
                 rhs_value = 0.0
                 for i in range(nel):
-                    lift_value = lift_scale * oriented_lifts[oriented_face, row_dof, i]
+                    lift_value = weighted_lift[row_dof, i]
                     rhs_value += lift_value * local_rhs_columns[i, 3 * ntr]
 
                 col_block_pos = 0
@@ -384,7 +552,7 @@ def assemble_projected_trace_system_eliminated_kernel(
                             column = col_face * ntr + local_col_dof
                             schur_value = 0.0
                             for i in range(nel):
-                                lift_value = lift_scale * oriented_lifts[oriented_face, row_dof, i]
+                                lift_value = weighted_lift[row_dof, i]
                                 schur_value += lift_value * local_rhs_columns[i, column]
 
                             out = side_base + (col_block_pos * ntr + row_dof) * ntr + col_dof
@@ -398,26 +566,30 @@ def assemble_projected_trace_system_eliminated_kernel(
                             column = col_face * ntr + local_col_dof
                             schur_value = 0.0
                             for i in range(nel):
-                                lift_value = lift_scale * oriented_lifts[oriented_face, row_dof, i]
+                                lift_value = weighted_lift[row_dof, i]
                                 schur_value += lift_value * local_rhs_columns[i, column]
                             rhs_value += schur_value * boundary_trace[col_edge, col_dof]
 
                 rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
                 rhs_values[rhs_base + row_dof] = rhs_value
 
-    mass_offset = side_flux_offsets[side_flux_offsets.shape[0] - 1]
-    for edge_pos in prange(n_free_edges):
-        edge = free_edges[edge_pos]
-        solve_edge = edge_to_solve_edge[edge]
-        edge_scale = edge_jacs[edge]
-        base = mass_offset + edge_pos * ntr * ntr
-        for i in range(ntr):
-            row = solve_edge * ntr + i
-            for j in range(ntr):
-                out = base + i * ntr + j
-                rows[out] = row
-                cols[out] = solve_edge * ntr + j
-                data[out] = edge_scale * edge_mass[i, j]
+                mass_base = side_flux_offsets[side_flux_offsets.shape[0] - 1] + side_id * ntr * ntr
+                for col_dof in range(ntr):
+                    out = mass_base + row_dof * ntr + col_dof
+                    rows[out] = row_solve_edge * ntr + row_dof
+                    cols[out] = row_solve_edge * ntr + col_dof
+                    data[out] = _weighted_trace_mass_value(
+                        element,
+                        row_face,
+                        row_is_positive,
+                        row_dof,
+                        col_dof,
+                        jacs_el_fc,
+                        face_basis,
+                        face_weights,
+                        trace_basis,
+                        gamma_face_values,
+                    )
 
 
 @njit(cache=True, parallel=True, fastmath=True)
@@ -438,6 +610,8 @@ def reconstruct_projected_field_kernel(
         trace_basis,
         source_coeffs,
         beta_coeffs,
+        tau_face_values,
+        gamma_face_values,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -467,6 +641,8 @@ def reconstruct_projected_field_kernel(
             trace_basis,
             source_coeffs,
             beta_coeffs,
+            tau_face_values,
+            gamma_face_values,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -491,6 +667,7 @@ def reconstruct_projected_field_kernel(
 
 
 __all__ = [
+    "assemble_face_trace_weights_kernel",
     "assemble_projected_trace_system_eliminated_kernel",
     "assemble_projected_trace_system_kernel",
     "reconstruct_projected_field_kernel",

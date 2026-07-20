@@ -44,13 +44,13 @@ from hdgfem.solvers.diff_rea import (
     impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg,
 )
-from hdgfem.solvers.diff_rea_w_boostrap import (
+from scripts.diffusion_reaction.experimental.diff_rea_w_boostrap import (
     prolong_trace_coefficients,
     solve_diffusion_reaction_hdg as solve_diffusion_reaction_hdg_with_bootstrap,
 )
 from hdgfem.linalg.system import eliminate_known_dofs, expand_known_dofs, solve_global_system
 from hdgfem.linalg.ordering import strongly_connected_component_order, upwind_scc_trace_ordering
-from scripts.diff_rea_cases import (
+from scripts.diffusion_reaction.diff_rea_cases import (
     lshape_singular_harmonic_case,
     quadratic_poisson_case,
     trigonometric_poisson_case,

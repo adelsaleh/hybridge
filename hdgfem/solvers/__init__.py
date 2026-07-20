@@ -63,7 +63,6 @@ __all__ = [
     "DiffusionReactionTimings",
     "adv_rea",
     "diff_rea",
-    "diff_rea_w_boostrap",
     "solve_advection_reaction_hdg",
     "solve_diffusion_reaction_hdg",
 ]

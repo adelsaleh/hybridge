@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 @dataclass(frozen=True)
@@ -41,8 +41,9 @@ class AdvectionReactionRunPreset:
     ilu_drop_tol: float | None = None
     ilu_fill_factor: float | None = None
     ilu_failure: str = "raise"
+    scale_system: bool | None = None
     boundary_mode: str = "eliminate"
-    trace_ordering: str = "upwind-scc"
+    trace_ordering: str | None = None
     trace_ordering_flux_tolerance: float = 0.0
     ilu_permc_spec: str | None = None
     matrix_pattern_dir: str | None = None
@@ -66,13 +67,16 @@ def _test2_solver_preset(
         *,
         description: str,
         solver: str | None,
-        mesh_size: float= 0.01,
+        mesh_size: float = 0.01,
         order: int = 6,
+        assembly_backend="numba",
         preconditioner: str | None,
+        trace_ordering: str | None = None,
         petsc_preset: str = "gmres_ilu",
         ilu_drop_tol: float | None = None,
         ilu_fill_factor: float | None = None,
         maxiter: int | None = None,
+        petsc_levels : int | None = None
 ) -> AdvectionReactionRunPreset:
     return AdvectionReactionRunPreset(
         case="test2",
@@ -85,9 +89,10 @@ def _test2_solver_preset(
         maxiter=maxiter,
         mesh_size=mesh_size,
         order=order,
+        petsc_levels=petsc_levels,
+        assembly_backend=assembly_backend,
         boundary_mode="eliminate",
-        trace_ordering="upwind-scc",
-        assembly_backend="numba",
+        trace_ordering=trace_ordering,
         project_source=True,
         project_beta=True,
         project_reaction=True,
@@ -100,6 +105,17 @@ PRESETS: dict[str, AdvectionReactionRunPreset] = {
         description="test2 with SciPy BICGSTAB, upwind ordering, and high-fill ILU.",
         solver="BICGSTAB",
         preconditioner="ilu",
+        trace_ordering="upwind-scc",
+        ilu_drop_tol=1.0e-10,
+        ilu_fill_factor=35.0,
+        maxiter=2000,
+    ),
+    "test2_scipy_ilu_upwind_np_ass": _test2_solver_preset(
+        description="test2 with SciPy BICGSTAB, upwind ordering, and high-fill ILU, numpy assembly",
+        solver="BICGSTAB",
+        preconditioner="ilu",
+        assembly_backend="numpy",
+        trace_ordering="upwind-scc",
         ilu_drop_tol=1.0e-10,
         ilu_fill_factor=35.0,
         maxiter=2000,
@@ -109,11 +125,13 @@ PRESETS: dict[str, AdvectionReactionRunPreset] = {
         solver="direct",
         preconditioner=None,
     ),
-    "test2_petsc_bicgstab_ilu": _test2_solver_preset(
+    "test2_petsc_bicgstab_ilu_upw": _test2_solver_preset(
         description="test2 with PETSc BiCGStab and ILU.",
         solver="petsc",
         preconditioner=None,
         petsc_preset="bicgstab_ilu",
+        trace_ordering="upwind-scc",
+        petsc_levels=1,
         maxiter=2000,
     ),
     "test2_petsc_gmres_ilu": _test2_solver_preset(
@@ -121,6 +139,7 @@ PRESETS: dict[str, AdvectionReactionRunPreset] = {
         solver="petsc",
         preconditioner=None,
         petsc_preset="gmres_ilu",
+        trace_ordering="upwind-scc",
         maxiter=2000,
     ),
     "test2_petsc_lu": _test2_solver_preset(
@@ -153,7 +172,7 @@ def _print_presets() -> None:
     script_path = Path(__file__).resolve()
     print(f"Preset definitions: {script_path}")
     print("Edit the PRESETS dictionary in this file to change or add runs.")
-    print("Manufactured advection cases are registered in scripts/adv_rea_cases.py.\n")
+    print("Manufactured advection cases are registered in scripts/advection_reaction/adv_rea_cases.py.\n")
 
     width = max(len(key) for key in PRESETS)
     for key in sorted(PRESETS):
@@ -189,8 +208,16 @@ def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReacti
         updates["trace_ordering"] = args.trace_ordering
     if args.ilu_permc_spec is not None:
         updates["ilu_permc_spec"] = args.ilu_permc_spec
+    if args.scale_system is not None:
+        updates["scale_system"] = {
+            "auto": None,
+            "on": True,
+            "off": False,
+        }[args.scale_system]
     if args.assembly_backend is not None:
         updates["assembly_backend"] = args.assembly_backend
+    if args.petsc_levels is not None:
+        updates["petsc_levels"] = args.petsc_levels
     if args.plot_matrix_pattern:
         updates["matrix_pattern_dir"] = str(args.matrix_pattern_dir)
     if args.matrix_pattern_only:
@@ -253,6 +280,15 @@ def _timing_with_percent(seconds: float, total: float, *, precision: int = 1) ->
     return f"{float(seconds):.{precision}f} ({percent:.1f}%)"
 
 
+def _numba_thread_count() -> int | None:
+    """Return the active Numba worker count when Numba is importable."""
+    try:
+        from numba import get_num_threads
+    except Exception:
+        return None
+    return int(get_num_threads())
+
+
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
@@ -292,7 +328,16 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
         ("assembly backend", result.assembly_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
         ("trace ordering", result.trace_ordering, "s"),
+        (
+            "linear scaling",
+            "auto" if config.scale_system is None else ("on" if config.scale_system else "off"),
+            "s",
+        ),
     ]
+    if result.assembly_backend == "numba":
+        numba_threads = _numba_thread_count()
+        if numba_threads is not None:
+            option_items.append(("numba threads", numba_threads, ",d"))
     total_time = result.timings.total
     timing_items = [
         ("assembly (s)", _timing_with_percent(result.timings.assembly, total_time), "s"),
@@ -320,7 +365,8 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
             free_trace_relative_residual = global_solve.solver_relative_residual_norm
         solver_items.extend(
             [
-                ("Krylov iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count, ",d"),
+                ("Krylov iterations", -1 if global_solve.iteration_count is None else global_solve.iteration_count,
+                 ",d"),
                 (
                     "solver rel res",
                     np.nan
@@ -377,9 +423,9 @@ def _main() -> None:
         description="Run one manufactured advection-reaction preset.",
         formatter_class=RawDescriptionHelpFormatter,
         epilog=(
-            "Preset configuration lives in this file, scripts/run_adv_rea_cases.py.\n"
+            "Preset configuration lives in this file, scripts/advection_reaction/run_adv_rea_cases.py.\n"
             "Edit PRESETS to change numerical parameters or add a new run.\n"
-            "Add new manufactured cases in scripts/adv_rea_cases.py."
+            "Add new manufactured cases in scripts/advection_reaction/adv_rea_cases.py."
         ),
     )
     parser.add_argument("preset", nargs="?", default=DEFAULT_PRESET, choices=tuple(sorted(PRESETS)))
@@ -407,10 +453,22 @@ def _main() -> None:
         help="override SuperLU spilu column permutation for this run only",
     )
     parser.add_argument(
+        "--scale-system",
+        choices=("auto", "on", "off"),
+        default=None,
+        help="override left Jacobi row scaling policy: auto, on, or off",
+    )
+    parser.add_argument(
         "--assembly-backend",
         choices=("numpy", "numba", "auto"),
         default=None,
         help="override assembly backend for this run only",
+    )
+    parser.add_argument(
+        "--petsc-levels",
+        type=int,
+        default=None,
+        help="override PETSc ILU/factor levels for PETSc presets",
     )
     parser.add_argument(
         "--plot-matrix-pattern",
@@ -466,7 +524,7 @@ def _main() -> None:
     preset_key = args.preset
     config = _runtime_config(preset_by_key(preset_key), args)
 
-    from scripts.adv_rea_cases import CASE_BY_KEY, case_definition_by_key
+    from scripts.advection_reaction.adv_rea_cases import CASE_BY_KEY, case_definition_by_key
 
     if config.case not in CASE_BY_KEY:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
@@ -505,6 +563,7 @@ def _main() -> None:
         ilu_drop_tol=config.ilu_drop_tol,
         ilu_fill_factor=config.ilu_fill_factor,
         ilu_failure=config.ilu_failure,
+        scale_system=config.scale_system,
         boundary_mode=config.boundary_mode,
         trace_ordering=config.trace_ordering,
         trace_ordering_flux_tolerance=config.trace_ordering_flux_tolerance,

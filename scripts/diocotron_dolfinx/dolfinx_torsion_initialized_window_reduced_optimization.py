@@ -43,7 +43,7 @@ from petsc4py import PETSc
 from dolfinx import fem
 from dolfinx.fem import petsc as fem_petsc
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = Path(__file__).resolve().parent
 for path in (REPO_ROOT, SCRIPT_DIR):
     if str(path) not in sys.path:
