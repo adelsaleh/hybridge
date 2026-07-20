@@ -511,7 +511,8 @@ _RAW_FUSED_TEMPLATE = r"""
 __device__ __forceinline__ void assemble_projected_local_advection_raw(
         double* __restrict__ local_lu,
         double* __restrict__ local_rhs,
-        double* __restrict__ face_flux,
+        double* __restrict__ tau_face,
+        double* __restrict__ gamma_face,
         double* __restrict__ source_cache,
         double* __restrict__ beta_x_cache,
         double* __restrict__ beta_y_cache,
@@ -550,8 +551,11 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     // basis index.  The fused assembly needs the same beta/source entries in
     // several independent blocks below:
     //
-    //   * face_flux:     beta_x/beta_y evaluated at every face quadrature point,
-    //   * source column: M * source_coeffs,
+    //   * tau_face:      |beta.n| on every face quadrature node, including
+    //                    discontinuous fluxes when beta is DG-elementwise
+    //                    discontinuous.
+    //   * gamma_face:    tau - beta.n on every face quadrature node.
+    //   * source column: M * source_coeffs.
     //   * volume matrix: beta . grad(phi_i) for every (i, j),
     //   * reaction mass: optional projected reaction field.
     //
@@ -586,7 +590,8 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         local_rhs[idx] = 0.0;
     }
 
-    // Precompute beta . n on each local face quadrature point once per element.
+    // Precompute per-side trace weights on each local face quadrature point once
+    // per element.
     // This removes the worst repeated coefficient evaluation from boundary mass
     // and trace RHS construction while keeping the data in shared memory.
     for (int idx = tid; idx < 3 * NQF; idx += blockDim.x) {
@@ -601,10 +606,12 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         }
         const double normal_x = normals[(element * 3 + face) * 2 + 0];
         const double normal_y = normals[(element * 3 + face) * 2 + 1];
-        face_flux[idx] = beta_x * normal_x + beta_y * normal_y;
+        const double normal_flux = beta_x * normal_x + beta_y * normal_y;
+        const double tau = fabs(normal_flux);
+        tau_face[idx] = tau;
+        gamma_face[idx] = tau - normal_flux;
     }
     __syncthreads();
-
     // Source moments use the projected source coefficient vector: J * M * f_h.
     // The index order mass_matrix[k, i] intentionally matches the Numba fused
     // implementation, even though M is symmetric for the usual bases.
@@ -653,8 +660,7 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         for (int face = 0; face < 3; ++face) {
             const double face_jac = jacs_el_fc[element * 3 + face];
             for (int qf = 0; qf < NQF; ++qf) {
-                const double normal_flux = face_flux[face * NQF + qf];
-                const double weight = face_jac * fabs(normal_flux) * face_weights[qf];
+                const double weight = face_jac * tau_face[face * NQF + qf] * face_weights[qf];
                 const double phi_i = face_basis[(face * NEL + i) * NQF + qf];
                 const double phi_j = face_basis[(face * NEL + j) * NQF + qf];
                 value += weight * phi_i * phi_j;
@@ -675,8 +681,7 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double face_jac = jacs_el_fc[element * 3 + face];
         double value = 0.0;
         for (int qf = 0; qf < NQF; ++qf) {
-            const double normal_flux = face_flux[face * NQF + qf];
-            const double weight = face_jac * (fabs(normal_flux) - normal_flux) * face_weights[qf];
+            const double weight = face_jac * gamma_face[face * NQF + qf] * face_weights[qf];
             const double phi_i = face_basis[(face * NEL + i) * NQF + qf];
             const double mu_j = trace_basis[trace_dof * NQF + qf];
             value += weight * phi_i * mu_j;
@@ -1103,8 +1108,9 @@ extern "C" __global__ void assemble_advection_raw_fused(
     double* shared = reinterpret_cast<double*>(shared_raw);
     double* local_lu = shared;                         // NEL x NEL local operator, factored in place
     double* local_rhs = local_lu + (NEL * NEL);        // NEL x (3*NTR+1) trace/source RHS columns
-    double* face_flux = local_rhs + (NEL * NCOLS);     // 3 x NQF beta.n values on element faces
-    double* source_cache = face_flux + (3 * NQF);      // NEL projected source coefficients
+    double* tau_face = local_rhs + (NEL * NCOLS);      // 3 x NQF trace tau values
+    double* gamma_face = tau_face + (3 * NQF);         // 3 x NQF trace gamma values
+    double* source_cache = gamma_face + (3 * NQF);     // NEL projected source coefficients
     double* beta_x_cache = source_cache + NEL;         // NEL projected beta_x coefficients
     double* beta_y_cache = beta_x_cache + NEL;         // NEL projected beta_y coefficients
     double* beta_ref0_cache = beta_y_cache + NEL;      // NEL beta coefficients transformed by inv_aff_mats_t column 0
@@ -1123,7 +1129,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
 
     if (element < num_elements) {
         assemble_projected_local_advection_raw(
-            local_lu, local_rhs, face_flux,
+            local_lu, local_rhs, tau_face, gamma_face,
             source_cache, beta_x_cache, beta_y_cache,
             beta_ref0_cache, beta_ref1_cache, reaction_cache,
             aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
@@ -1243,8 +1249,9 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
     double* shared = reinterpret_cast<double*>(shared_raw);
     double* local_lu = shared;                         // NEL x NEL local operator, factored in place
     double* local_rhs = local_lu + (NEL * NEL);        // NEL x (3*NTR+1) trace/source RHS columns
-    double* face_flux = local_rhs + (NEL * NCOLS);     // 3 x NQF beta.n values on element faces
-    double* source_cache = face_flux + (3 * NQF);      // NEL projected source coefficients
+    double* tau_face = local_rhs + (NEL * NCOLS);      // 3 x NQF trace tau values
+    double* gamma_face = tau_face + (3 * NQF);         // 3 x NQF trace gamma values
+    double* source_cache = gamma_face + (3 * NQF);     // NEL projected source coefficients
     double* beta_x_cache = source_cache + NEL;         // NEL projected beta_x coefficients
     double* beta_y_cache = beta_x_cache + NEL;         // NEL projected beta_y coefficients
     double* beta_ref0_cache = beta_y_cache + NEL;      // NEL beta coefficients transformed by inv_aff_mats_t column 0
@@ -1265,7 +1272,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
     }
 
     assemble_projected_local_advection_raw(
-        local_lu, local_rhs, face_flux,
+        local_lu, local_rhs, tau_face, gamma_face,
         source_cache, beta_x_cache, beta_y_cache,
         beta_ref0_cache, beta_ref1_cache, reaction_cache,
         aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
@@ -1495,14 +1502,15 @@ def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') 
     ncols = 3 * ntr + 1
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
     # The fused kernels keep the local operator, all local trace/source columns,
-    # beta.n on the face quadrature points, and six short per-element coefficient
-    # caches: source, beta_x, beta_y, transformed beta_ref0, transformed beta_ref1,
-    # and optional reaction coefficients.  The reaction cache is reserved even for
-    # scalar reaction so the CUDA shared-memory layout is compile-time fixed.
+    # trace tau and gamma on face quadrature points, and six short per-element
+    # coefficient caches: source, beta_x, beta_y, transformed beta_ref0,
+    # transformed beta_ref1, and optional reaction coefficients.  The reaction
+    # cache is reserved even for scalar reaction so the CUDA shared-memory
+    # layout is compile-time fixed.
     # The experimental cooperative LU mode adds fixed block-sized scratch arrays
     # for pivot absolute values and pivot row indices.  p=8 with legacy-lagrange
     # trace remains below common opt-in shared-memory limits.
-    doubles = nel * nel + nel * ncols + 3 * nqf + 6 * nel
+    doubles = nel * nel + nel * ncols + 6 * nqf + 6 * nel
     ints = nel
     if normalized_lu_mode == 'coop':
         doubles += _RAW_LU_SCRATCH_THREADS

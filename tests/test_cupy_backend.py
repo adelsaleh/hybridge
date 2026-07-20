@@ -197,3 +197,73 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy():
     assert bool(cp.all(raw_cols == cupy_cols).get())
     assert float(cp.max(cp.abs(raw_data - cupy_data)).get()) < 1.0e-12
     assert float(cp.max(cp.abs(raw_rhs - cupy_rhs)).get()) < 1.0e-12
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta():
+    """Check fused Raw CUDA assembly for a discontinuous vector field.
+
+    The velocity field changes sign across the mesh midline so each element-side
+    uses a different projected beta on a shared face. This exercises the explicit
+    left/right-sided trace weights introduced for discontinuous advection fields.
+    """
+    from hdgfem.backends.cupy import as_cupy_space, require_cupy
+    from scripts.run_adv_rea_gpu4_hdg import (
+        TIMINGS,
+        assemble_reduced_system,
+        beta_dot_normal_from_coeffs,
+        build_dof_maps,
+        build_trace_reference,
+        project_callable_cupy,
+    )
+
+    cp = require_cupy()
+    TIMINGS.clear()
+    mesh = rectangle_mesh(2, 1, xlim=(-1.0, 1.0), ylim=(0.0, 1.0))
+    space = DGSpace(mesh, 4, basis_type="dub_orth", volume_quad_1d=10)
+    cspace = as_cupy_space(space)
+    maps = build_dof_maps(cspace)
+    trace_ref = build_trace_reference(cspace, "legendre-modal")
+
+    beta_x = lambda x, y: np.where(x < 0.0, 2.0, -1.0) + 0.2 * y
+    beta_y = lambda x, y: 0.1 + 0.05 * x
+    source = lambda x, y: 1.0 + 0.2 * x - 0.1 * y
+    reaction = lambda x, y: 2.0 + 0.01 * x * y
+    exact = lambda x, y: 0.5 * x + 0.75 * y
+
+    beta_0 = project_callable_cupy(beta_x, cspace, "projecting beta_x ... ", "projection.beta")
+    beta_1 = project_callable_cupy(beta_y, cspace, "projecting beta_y ... ", "projection.beta")
+    beta_coeffs = cp.ascontiguousarray(cp.stack((beta_0, beta_1), axis=0))
+    beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
+    cp.cuda.get_current_stream().synchronize()
+
+    cupy_rows, cupy_cols, cupy_data, cupy_rhs, *_ = assemble_reduced_system(
+        source,
+        reaction,
+        exact,
+        beta_coeffs,
+        beta_dot_normal,
+        maps,
+        cspace,
+        trace_ref,
+        backend="cupy",
+    )
+    raw_rows, raw_cols, raw_data, raw_rhs, *_ = assemble_reduced_system(
+        source,
+        reaction,
+        exact,
+        beta_coeffs,
+        None,
+        maps,
+        cspace,
+        trace_ref,
+        backend="raw-cuda",
+        raw_block_size=64,
+        raw_local_assembly="fused",
+        raw_lu_mode="coop",
+    )
+
+    assert bool(cp.all(raw_rows == cupy_rows).get())
+    assert bool(cp.all(raw_cols == cupy_cols).get())
+    assert float(cp.max(cp.abs(raw_data - cupy_data)).get()) < 1.0e-12
+    assert float(cp.max(cp.abs(raw_rhs - cupy_rhs)).get()) < 1.0e-12
