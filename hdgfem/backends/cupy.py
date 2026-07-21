@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -85,6 +85,7 @@ class CupyReferenceElementData:
     weighted_phi: Any
     weighted_phi_phi_flat: Any
     weighted_triple_phi_flat: Any
+    projection_operator: Any
 
     @classmethod
     def from_host(cls, quad_data, *, device_id: int) -> "CupyReferenceElementData":
@@ -117,6 +118,7 @@ class CupyReferenceElementData:
             weighted_phi=_cp_array(quad_data.weighted_phi),
             weighted_phi_phi_flat=_cp_array(quad_data.weighted_phi_phi_flat),
             weighted_triple_phi_flat=_cp_array(quad_data.weighted_triple_phi_flat),
+            projection_operator=_cp_array(quad_data.MKrf_inv @ quad_data.weighted_phi.T),
         )
 
 
@@ -197,6 +199,17 @@ class CupyDGSpace:
     order: int
     el_dof: int
     edg_dof: int
+    _mapped_quads_cache: Any = field(default=None, init=False, repr=False, compare=False)
+
+    @property
+    def mapped_quads(self):
+        """Mapped volume quadrature coordinates on the CUDA device, shape ``(K, 2, q)``."""
+        cached = self._mapped_quads_cache
+        if cached is None:
+            cupy = require_cupy()
+            cached = cupy.einsum("Krc,qc->Krq", self.mesh.aff_mats, self.quad_data.Krf_quads) + self.mesh.aff_vecs[:, :, None]
+            object.__setattr__(self, "_mapped_quads_cache", cached)
+        return cached
 
     @classmethod
     def from_host(cls, space: DGSpace, *, device_id: int) -> "CupyDGSpace":

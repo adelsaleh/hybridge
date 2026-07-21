@@ -218,6 +218,17 @@ def lagrange_basis(nodes: np.ndarray, points: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(values)
 
 
+def bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
+    from math import factorial
+
+    r = 0.5 * (points + 1.0)
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        coeff = factorial(order) / (factorial(j) * factorial(order - j))
+        values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
+    return np.ascontiguousarray(values)
+
+
 def legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
     values = np.empty((order + 1, points.size), dtype=np.float64)
     for j in range(order + 1):
@@ -244,25 +255,43 @@ def build_trace_reference(cspace, kind: str) -> TraceReferenceData:
     space = cspace.host
     order = cspace.order
     normalized = kind.replace("-", "_").lower()
-    if normalized == "modern":
+    if normalized == "bernstein":
         q = cspace.quad_data
-        face_element_test_trace_trial = q.face_trace_test_element_trial_oriented[:3].transpose(0, 2, 1)
+        host_q = space.quad_data
+        edge_quads = host_q.quads_JGL
+        edge_weights = host_q.weights_JGL
+        face_basis = host_q.bas_of_bd_quads
+        negative_face_points = edge_points(-edge_quads)
+        negative_face_basis = space.basis_at(negative_face_points.reshape(-1, 2)).reshape(
+            edge_quads.size, 3, space.el_dof
+        ).transpose(1, 2, 0)
+        edge_basis = bernstein_edge_basis(order, edge_quads)
+        weighted_face_basis = np.ascontiguousarray(face_basis * edge_weights[None, None, :])
+        weighted_edge_basis = np.ascontiguousarray(edge_basis * edge_weights[None, :])
+        face_coupling = np.einsum("q,fiq,jq->fij", edge_weights, face_basis, edge_basis, optimize=True)
+        face_coupling_reversed = np.einsum(
+            "q,fiq,jq->fij", edge_weights, negative_face_basis, edge_basis, optimize=True
+        )
+        trace_lift = np.ascontiguousarray(
+            np.concatenate((face_coupling.transpose(0, 2, 1), face_coupling_reversed.transpose(0, 2, 1)), axis=0)
+        )
+        edge_mass = np.einsum("q,iq,jq->ij", edge_weights, edge_basis, edge_basis, optimize=True)
         return TraceReferenceData(
-            kind="modern",
+            kind="bernstein",
             nodal=False,
-            interpolation_nodes=q.rf_edg_lag_nodes,
-            quads=q.quads_JGL,
-            weights=q.weights_JGL,
-            bas_of_bd_quads=q.bas_of_bd_quads,
-            bas1d_of_ref_edg_qds=q.bas1d_of_ref_edg_qds,
-            weighted_bas_of_bd_quads=q.weighted_bas_of_bd_quads,
-            weighted_bas1d_of_ref_edg_qds=q.weighted_bas1d_of_ref_edg_qds,
-            face_element_test_trace_trial=cp.ascontiguousarray(face_element_test_trace_trial),
-            face_trace_test_element_trial_oriented=q.face_trace_test_element_trial_oriented,
-            M_rf_fc=q.M_rf_fc,
+            interpolation_nodes=cp.asarray(edge_quads, dtype=cp.float64),
+            quads=cp.asarray(edge_quads, dtype=cp.float64),
+            weights=cp.asarray(edge_weights, dtype=cp.float64),
+            bas_of_bd_quads=cp.asarray(face_basis, dtype=cp.float64),
+            bas1d_of_ref_edg_qds=cp.asarray(edge_basis, dtype=cp.float64),
+            weighted_bas_of_bd_quads=cp.asarray(weighted_face_basis, dtype=cp.float64),
+            weighted_bas1d_of_ref_edg_qds=cp.asarray(weighted_edge_basis, dtype=cp.float64),
+            face_element_test_trace_trial=cp.asarray(face_coupling, dtype=cp.float64),
+            face_trace_test_element_trial_oriented=cp.asarray(trace_lift, dtype=cp.float64),
+            M_rf_fc=cp.asarray(np.ascontiguousarray(edge_mass), dtype=cp.float64),
         )
     if normalized not in {"legacy_lagrange", "legendre_modal"}:
-        raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'modern'")
+        raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
 
     interpolation_nodes, _ = legendre_gauss_lobatto(order + 1)
     edge_quads, edge_weights = legendre_gauss_lobatto(2 * order + 1)
@@ -654,7 +683,7 @@ def short_config_path(path: Path) -> str:
 
 
 def print_recommended_profiles(args) -> None:
-    trace_family = "modal" if args.trace_basis in {"legendre-modal", "modern"} else "nodal"
+    trace_family = "modal" if args.trace_basis in {"legendre-modal", "bernstein"} else "nodal"
     print("\nRecommended diffusion GPU4 profiles")
     print("=" * 42)
     for family in ("nodal", "modal"):
@@ -857,7 +886,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
-    parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "modern"), default="legacy-lagrange")
+    parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="cupy")
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--plot-resolution", "-pr", type=int, default=12)

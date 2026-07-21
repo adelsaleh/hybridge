@@ -103,7 +103,7 @@ class KrylovIterationCounter:
 class SolveResult:
     """Solution vector and diagnostics returned by :func:`solve_global_system`."""
 
-    x: NDArray
+    x: NDArray | None
     residual_norm: float | None = None
     info: int | None = None
     preconditioner: scipy.sparse.linalg.LinearOperator | None = None

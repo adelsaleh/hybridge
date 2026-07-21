@@ -38,7 +38,23 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import require_cupy
+from .cupy import require_cupy, require_cupyx_sparse
+
+
+@dataclass(frozen=True)
+class ReducedTraceCsrPattern:
+    """Device-side reduced trace CSR pattern and raw-kernel lookup maps."""
+
+    indptr: Any
+    indices: Any
+    block_indptr: Any
+    block_neighbors: Any
+    side_csr_block_pos: Any
+    mass_csr_block_pos: Any
+    edge_to_solve_edge: Any
+    interior_side_index: Any
+    num_blocks: int
+    timings: dict[str, float]
 
 
 @dataclass(frozen=True)
@@ -50,12 +66,16 @@ class RawAdvectionAssemblyResult:
     leaves it at the default ``"safe"`` value.
     """
 
-    rows: Any
-    cols: Any
     data: Any
     rhs: Any
     boundary_trace: Any
     timings: dict[str, float]
+    rows: Any | None = None
+    cols: Any | None = None
+    indptr: Any | None = None
+    indices: Any | None = None
+    matrix_format: str = "coo"
+    csr_pattern: ReducedTraceCsrPattern | None = None
     local_mats: Any | None = None
     element_boundary: Any | None = None
     source_rhs: Any | None = None
@@ -69,7 +89,443 @@ class RawAdvectionAssemblyResult:
 
 
 _RAW_LU_SCRATCH_THREADS = 128
+_CSR_MAX_INCIDENT_SIDES = 4
+_CSR_MAX_NEIGHBORS = 12
 
+
+
+_RAW_CSR_PATTERN_TEMPLATE = r"""
+#define CSR_MAX_INCIDENT_SIDES __CSR_MAX_INCIDENT_SIDES__
+#define CSR_MAX_NEIGHBORS __CSR_MAX_NEIGHBORS__
+#define CSR_NTR __CSR_NTR__
+
+extern "C" __global__ void build_csr_pattern_incident(
+        const long long* __restrict__ interior_elements,
+        const long long* __restrict__ interior_faces,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
+        int* __restrict__ incident_counts,
+        long long* __restrict__ incident_sides,
+        long long* __restrict__ interior_side_index,
+        int* __restrict__ overflow,
+        const long long num_sides)
+{
+    const long long side = blockIdx.x * blockDim.x + threadIdx.x;
+    if (side >= num_sides) {
+        return;
+    }
+    const long long element = interior_elements[side];
+    const long long face = interior_faces[side];
+    interior_side_index[element * 3 + face] = side;
+    const long long edge = loc2glob_edge[element * 3 + face];
+    const long long solve_edge = edge_to_solve_edge[edge];
+    if (solve_edge < 0) {
+        return;
+    }
+    const int slot = atomicAdd(&incident_counts[solve_edge], 1);
+    if (slot < CSR_MAX_INCIDENT_SIDES) {
+        incident_sides[solve_edge * CSR_MAX_INCIDENT_SIDES + slot] = side;
+    } else {
+        overflow[0] = 1;
+    }
+}
+
+__device__ __forceinline__ void csr_add_unique_neighbor(
+        long long* __restrict__ neighbors,
+        int* __restrict__ count,
+        int* __restrict__ overflow,
+        const long long value)
+{
+    for (int i = 0; i < *count; ++i) {
+        if (neighbors[i] == value) {
+            return;
+        }
+    }
+    if (*count < CSR_MAX_NEIGHBORS) {
+        neighbors[*count] = value;
+        *count += 1;
+    } else {
+        overflow[0] = 1;
+    }
+}
+
+extern "C" __global__ void build_csr_pattern_neighbors(
+        const long long* __restrict__ interior_elements,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
+        const int* __restrict__ incident_counts,
+        const long long* __restrict__ incident_sides,
+        int* __restrict__ block_counts,
+        long long* __restrict__ fixed_neighbors,
+        int* __restrict__ overflow,
+        const long long num_free_edges)
+{
+    const long long row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= num_free_edges) {
+        return;
+    }
+
+    long long neighbors[CSR_MAX_NEIGHBORS];
+    int count = 0;
+    csr_add_unique_neighbor(neighbors, &count, overflow, row);
+
+    const int incident_count = incident_counts[row];
+    const int capped_incident_count = incident_count < CSR_MAX_INCIDENT_SIDES ? incident_count : CSR_MAX_INCIDENT_SIDES;
+    for (int slot = 0; slot < capped_incident_count; ++slot) {
+        const long long side = incident_sides[row * CSR_MAX_INCIDENT_SIDES + slot];
+        if (side < 0) {
+            continue;
+        }
+        const long long element = interior_elements[side];
+        for (int col_face = 0; col_face < 3; ++col_face) {
+            const long long col_edge = loc2glob_edge[element * 3 + col_face];
+            const long long col_solve_edge = edge_to_solve_edge[col_edge];
+            if (col_solve_edge >= 0) {
+                csr_add_unique_neighbor(neighbors, &count, overflow, col_solve_edge);
+            }
+        }
+    }
+
+    for (int i = 1; i < count; ++i) {
+        const long long value = neighbors[i];
+        int j = i - 1;
+        while (j >= 0 && neighbors[j] > value) {
+            neighbors[j + 1] = neighbors[j];
+            --j;
+        }
+        neighbors[j + 1] = value;
+    }
+
+    block_counts[row] = count;
+    for (int i = 0; i < CSR_MAX_NEIGHBORS; ++i) {
+        fixed_neighbors[row * CSR_MAX_NEIGHBORS + i] = i < count ? neighbors[i] : -1;
+    }
+}
+
+extern "C" __global__ void finalize_csr_pattern_rows(
+        const int* __restrict__ block_counts,
+        const int* __restrict__ block_indptr,
+        const long long* __restrict__ fixed_neighbors,
+        int* __restrict__ block_neighbors,
+        int* __restrict__ indptr,
+        int* __restrict__ indices,
+        int* __restrict__ mass_csr_block_pos,
+        const long long num_free_edges)
+{
+    const long long row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= num_free_edges) {
+        return;
+    }
+    const int count = block_counts[row];
+    const int block_start = block_indptr[row];
+    const int scalar_base = block_start * CSR_NTR * CSR_NTR;
+    int mass_pos = -1;
+
+    for (int p = 0; p < count; ++p) {
+        const int neighbor = (int)fixed_neighbors[row * CSR_MAX_NEIGHBORS + p];
+        block_neighbors[block_start + p] = neighbor;
+        if (neighbor == row) {
+            mass_pos = p;
+        }
+    }
+    mass_csr_block_pos[row] = mass_pos;
+
+    for (int i = 0; i < CSR_NTR; ++i) {
+        const int scalar_row = (int)(row * CSR_NTR + i);
+        const int row_start = scalar_base + i * count * CSR_NTR;
+        indptr[scalar_row] = row_start;
+        for (int p = 0; p < count; ++p) {
+            const int neighbor = (int)fixed_neighbors[row * CSR_MAX_NEIGHBORS + p];
+            for (int j = 0; j < CSR_NTR; ++j) {
+                indices[row_start + p * CSR_NTR + j] = neighbor * CSR_NTR + j;
+            }
+        }
+    }
+    if (row == num_free_edges - 1) {
+        indptr[num_free_edges * CSR_NTR] = (block_indptr[num_free_edges]) * CSR_NTR * CSR_NTR;
+    }
+}
+
+extern "C" __global__ void finalize_csr_pattern_side_positions(
+        const long long* __restrict__ interior_elements,
+        const long long* __restrict__ interior_faces,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
+        const int* __restrict__ block_counts,
+        const long long* __restrict__ fixed_neighbors,
+        int* __restrict__ side_csr_block_pos,
+        const long long num_sides)
+{
+    const long long idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= num_sides * 3) {
+        return;
+    }
+    const long long side = idx / 3;
+    const int col_face = (int)(idx - side * 3);
+    const long long element = interior_elements[side];
+    const long long row_face = interior_faces[side];
+    const long long row_edge = loc2glob_edge[element * 3 + row_face];
+    const long long row_solve_edge = edge_to_solve_edge[row_edge];
+    const long long col_edge = loc2glob_edge[element * 3 + col_face];
+    const long long col_solve_edge = edge_to_solve_edge[col_edge];
+    int position = -1;
+    if (row_solve_edge >= 0 && col_solve_edge >= 0) {
+        const int count = block_counts[row_solve_edge];
+        for (int p = 0; p < count; ++p) {
+            if (fixed_neighbors[row_solve_edge * CSR_MAX_NEIGHBORS + p] == col_solve_edge) {
+                position = p;
+                break;
+            }
+        }
+    }
+    side_csr_block_pos[side * 3 + col_face] = position;
+}
+"""
+
+
+def _csr_pattern_source(ntr: int, max_incident: int = _CSR_MAX_INCIDENT_SIDES, max_neighbors: int = _CSR_MAX_NEIGHBORS) -> str:
+    return (
+        _RAW_CSR_PATTERN_TEMPLATE
+        .replace('__CSR_NTR__', str(int(ntr)))
+        .replace('__CSR_MAX_INCIDENT_SIDES__', str(int(max_incident)))
+        .replace('__CSR_MAX_NEIGHBORS__', str(int(max_neighbors)))
+    )
+
+
+def _edge_to_solve_edge_device(cspace):
+    cupy = require_cupy()
+    edge_to_solve = cupy.full(cspace.mesh.num_edg, -1, dtype=cupy.int64)
+    edge_to_solve[cspace.mesh.int_edges_inds] = cupy.arange(cspace.mesh.int_edges_inds.size, dtype=cupy.int64)
+    return edge_to_solve
+
+
+def build_reduced_csr_pattern_raw(cspace, timings: dict[str, float] | None = None) -> ReducedTraceCsrPattern:
+    """Build the reduced trace CSR pattern with raw CUDA kernels."""
+    cupy = require_cupy()
+    mesh = cspace.mesh
+    ntr = int(cspace.edg_dof)
+    num_free = int(mesh.int_edges_inds.size)
+    num_sides = int(mesh.interior_elements.size)
+    system_size = num_free * ntr
+    local_timings: dict[str, float] = {}
+    total_start = time.perf_counter()
+
+    start = time.perf_counter()
+    edge_to_solve = _edge_to_solve_edge_device(cspace)
+    incident_counts = cupy.zeros(num_free, dtype=cupy.int32)
+    incident_sides = cupy.full((num_free, _CSR_MAX_INCIDENT_SIDES), -1, dtype=cupy.int64)
+    interior_side_index = cupy.full(cspace.mesh.num_tri * 3, -1, dtype=cupy.int64)
+    overflow = cupy.zeros(1, dtype=cupy.int32)
+    source = _csr_pattern_source(ntr)
+    incident_kernel = _compile_kernel(cupy, source, 'build_csr_pattern_incident', 0)
+    threads = 256
+    incident_kernel(
+        ((num_sides + threads - 1) // threads,),
+        (threads,),
+        (
+            mesh.interior_elements,
+            mesh.interior_faces,
+            mesh.loc2glob_edge,
+            edge_to_solve,
+            incident_counts,
+            incident_sides.reshape(-1),
+            interior_side_index,
+            overflow,
+            np.int64(num_sides),
+        ),
+    )
+    cupy.cuda.get_current_stream().synchronize()
+    local_timings['raw.csr_pattern.incident'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    block_counts = cupy.empty(num_free, dtype=cupy.int32)
+    fixed_neighbors = cupy.empty((num_free, _CSR_MAX_NEIGHBORS), dtype=cupy.int64)
+    neighbors_kernel = _compile_kernel(cupy, source, 'build_csr_pattern_neighbors', 0)
+    neighbors_kernel(
+        ((num_free + threads - 1) // threads,),
+        (threads,),
+        (
+            mesh.interior_elements,
+            mesh.loc2glob_edge,
+            edge_to_solve,
+            incident_counts,
+            incident_sides.reshape(-1),
+            block_counts,
+            fixed_neighbors.reshape(-1),
+            overflow,
+            np.int64(num_free),
+        ),
+    )
+    cupy.cuda.get_current_stream().synchronize()
+    local_timings['raw.csr_pattern.neighbors'] = time.perf_counter() - start
+
+    if int(overflow[0].get()) != 0:
+        raise RuntimeError(
+            'raw CSR pattern exceeded fixed local topology capacity; increase _CSR_MAX_INCIDENT_SIDES or _CSR_MAX_NEIGHBORS'
+        )
+
+    start = time.perf_counter()
+    block_indptr = cupy.empty(num_free + 1, dtype=cupy.int32)
+    block_indptr[0] = 0
+    cupy.cumsum(block_counts, out=block_indptr[1:])
+    num_blocks = int(block_indptr[-1].get())
+    local_timings['raw.csr_pattern.cumsum'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    scalar_nnz = num_blocks * ntr * ntr
+    indptr = cupy.empty(system_size + 1, dtype=cupy.int32)
+    indices = cupy.empty(scalar_nnz, dtype=cupy.int32)
+    block_neighbors = cupy.empty(num_blocks, dtype=cupy.int32)
+    side_csr_block_pos = cupy.empty(num_sides * 3, dtype=cupy.int32)
+    mass_csr_block_pos = cupy.empty(num_free, dtype=cupy.int32)
+    finalize_rows = _compile_kernel(cupy, source, 'finalize_csr_pattern_rows', 0)
+    finalize_rows(
+        ((num_free + threads - 1) // threads,),
+        (threads,),
+        (
+            block_counts,
+            block_indptr,
+            fixed_neighbors.reshape(-1),
+            block_neighbors,
+            indptr,
+            indices,
+            mass_csr_block_pos,
+            np.int64(num_free),
+        ),
+    )
+    finalize_positions = _compile_kernel(cupy, source, 'finalize_csr_pattern_side_positions', 0)
+    finalize_positions(
+        ((num_sides * 3 + threads - 1) // threads,),
+        (threads,),
+        (
+            mesh.interior_elements,
+            mesh.interior_faces,
+            mesh.loc2glob_edge,
+            edge_to_solve,
+            block_counts,
+            fixed_neighbors.reshape(-1),
+            side_csr_block_pos,
+            np.int64(num_sides),
+        ),
+    )
+    cupy.cuda.get_current_stream().synchronize()
+    local_timings['raw.csr_pattern.expand'] = time.perf_counter() - start
+    local_timings['raw.csr_pattern.total'] = time.perf_counter() - total_start
+    if timings is not None:
+        timings.update(local_timings)
+    return ReducedTraceCsrPattern(
+        indptr=indptr,
+        indices=indices,
+        block_indptr=block_indptr,
+        block_neighbors=block_neighbors,
+        side_csr_block_pos=side_csr_block_pos,
+        mass_csr_block_pos=mass_csr_block_pos,
+        edge_to_solve_edge=edge_to_solve,
+        interior_side_index=interior_side_index,
+        num_blocks=num_blocks,
+        timings=local_timings,
+    )
+
+
+def build_reduced_csr_pattern_cupy_reference(cspace, timings: dict[str, float] | None = None) -> ReducedTraceCsrPattern:
+    """Reference CuPy reduced trace CSR pattern builder used by tests."""
+    cupy = require_cupy()
+    sparse = require_cupyx_sparse()
+    mesh = cspace.mesh
+    ntr = int(cspace.edg_dof)
+    num_free = int(mesh.int_edges_inds.size)
+    num_sides = int(mesh.interior_elements.size)
+    system_size = num_free * ntr
+    local_timings: dict[str, float] = {}
+    total_start = time.perf_counter()
+
+    start = time.perf_counter()
+    edge_to_solve = _edge_to_solve_edge_device(cspace)
+    side_ids = cupy.arange(num_sides, dtype=cupy.int64)
+    interior_side_index = cupy.full(cspace.mesh.num_tri * 3, -1, dtype=cupy.int64)
+    interior_side_index[mesh.interior_elements * 3 + mesh.interior_faces] = side_ids
+    row_edges = mesh.loc2glob_edge[mesh.interior_elements, mesh.interior_faces]
+    row_solve = edge_to_solve[row_edges]
+    col_solve = edge_to_solve[mesh.loc2glob_edge[mesh.interior_elements]]
+    valid = col_solve >= 0
+    row_solve_b = cupy.broadcast_to(row_solve[:, None], col_solve.shape)
+    pair_keys = row_solve_b[valid] * num_free + col_solve[valid]
+    diag = cupy.arange(num_free, dtype=cupy.int64)
+    pair_keys = cupy.concatenate((pair_keys, diag * num_free + diag))
+    block_keys = cupy.unique(pair_keys)
+    block_rows = block_keys // num_free
+    block_cols = block_keys - block_rows * num_free
+    block_counts = cupy.bincount(block_rows, minlength=num_free).astype(cupy.int32)
+    block_indptr = cupy.empty(num_free + 1, dtype=cupy.int32)
+    block_indptr[0] = 0
+    cupy.cumsum(block_counts, out=block_indptr[1:])
+    block_neighbors = block_cols.astype(cupy.int32)
+    num_blocks = int(block_indptr[-1].get())
+    local_timings['raw.csr_pattern.reference_blocks'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    i_grid, j_grid = cupy.meshgrid(cupy.arange(ntr, dtype=cupy.int64), cupy.arange(ntr, dtype=cupy.int64), indexing='ij')
+    scalar_rows = (block_rows[:, None, None] * ntr + i_grid[None, :, :]).ravel()
+    scalar_cols = (block_cols[:, None, None] * ntr + j_grid[None, :, :]).ravel()
+    coo = sparse.coo_matrix(
+        (cupy.ones(scalar_rows.size, dtype=cupy.float64), (scalar_rows.astype(cupy.int32), scalar_cols.astype(cupy.int32))),
+        shape=(system_size, system_size),
+        dtype=cupy.float64,
+    )
+    csr = coo.tocsr()
+    csr.sum_duplicates()
+    indptr = csr.indptr.astype(cupy.int32, copy=False)
+    indices = csr.indices.astype(cupy.int32, copy=False)
+    local_timings['raw.csr_pattern.reference_scalar'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    side_csr_block_pos = cupy.full((num_sides, 3), -1, dtype=cupy.int32)
+    emission_keys = row_solve_b * num_free + col_solve
+    emission_valid = valid & (row_solve_b >= 0)
+    emission_pos = cupy.searchsorted(block_keys, emission_keys[emission_valid])
+    emission_rows = row_solve_b[emission_valid]
+    side_csr_block_pos[emission_valid] = (emission_pos - block_indptr[emission_rows]).astype(cupy.int32)
+    mass_keys = diag * num_free + diag
+    mass_pos = cupy.searchsorted(block_keys, mass_keys) - block_indptr[diag]
+    mass_csr_block_pos = mass_pos.astype(cupy.int32)
+    cupy.cuda.get_current_stream().synchronize()
+    local_timings['raw.csr_pattern.reference_maps'] = time.perf_counter() - start
+    local_timings['raw.csr_pattern.reference_total'] = time.perf_counter() - total_start
+    if timings is not None:
+        timings.update(local_timings)
+    return ReducedTraceCsrPattern(
+        indptr=indptr,
+        indices=indices,
+        block_indptr=block_indptr,
+        block_neighbors=block_neighbors,
+        side_csr_block_pos=side_csr_block_pos.reshape(-1),
+        mass_csr_block_pos=mass_csr_block_pos,
+        edge_to_solve_edge=edge_to_solve,
+        interior_side_index=interior_side_index,
+        num_blocks=num_blocks,
+        timings=local_timings,
+    )
+
+
+def assert_reduced_csr_patterns_equal(reference: ReducedTraceCsrPattern, actual: ReducedTraceCsrPattern) -> None:
+    """Raise ``AssertionError`` if two device CSR patterns differ."""
+    cupy = require_cupy()
+    fields = (
+        'indptr',
+        'indices',
+        'block_indptr',
+        'block_neighbors',
+        'side_csr_block_pos',
+        'mass_csr_block_pos',
+    )
+    for name in fields:
+        ref = getattr(reference, name)
+        got = getattr(actual, name)
+        if ref.shape != got.shape:
+            raise AssertionError(f'{name} shape differs: {ref.shape} != {got.shape}')
+        if not bool(cupy.all(ref == got).get()):
+            diff = int(cupy.argmax(ref != got).get())
+            raise AssertionError(f'{name} differs at flattened index {diff}')
 
 _RAW_ASSEMBLY_TEMPLATE = r"""
 extern "C" __global__ void assemble_advection_raw(
@@ -1528,6 +1984,45 @@ def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
     return kernel
 
 
+def _raw_fused_csr_template() -> str:
+    """Return the fused raw template with the assembly entry point writing CSR."""
+    source = _RAW_FUSED_TEMPLATE
+    start = source.index('extern "C" __global__ void assemble_advection_raw_fused(')
+    end = source.index('\n\nextern "C" __global__ void reconstruct_advection_raw_fused', start)
+    kernel = source[start:end]
+    kernel = kernel.replace(
+        'extern "C" __global__ void assemble_advection_raw_fused(\n        long long* __restrict__ rows,\n        long long* __restrict__ cols,\n        double* __restrict__ data,\n        double* __restrict__ rhs,',
+        'extern "C" __global__ void assemble_advection_raw_fused_csr(\n        const int* __restrict__ csr_indptr,\n        double* __restrict__ data,\n        double* __restrict__ rhs,',
+        1,
+    )
+    kernel = kernel.replace(
+        '        const long long* __restrict__ interior_side_index,\n        const long long* __restrict__ edge_to_solve_edge,\n        const long long* __restrict__ int_edges,\n        const long long* __restrict__ side_flux_offsets,',
+        '        const long long* __restrict__ interior_side_index,\n        const long long* __restrict__ edge_to_solve_edge,\n        const long long* __restrict__ int_edges,\n        const int* __restrict__ side_csr_block_pos,\n        const int* __restrict__ mass_csr_block_pos,',
+        1,
+    )
+    kernel = kernel.replace(
+        '        const long long num_elements,\n        const long long num_int_edges,\n        const long long n_flux)',
+        '        const long long num_elements,\n        const long long num_int_edges)',
+        1,
+    )
+    kernel = kernel.replace(
+        '            const long long side_base = side_flux_offsets[side_id];\n            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];',
+        '            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];',
+        1,
+    )
+    kernel = kernel.replace(
+        '                        const long long out = side_base + ((long long)col_block_pos * NTR + row_dof) * NTR + col_dof;\n                        rows[out] = row_solve_edge * NTR + row_dof;\n                        cols[out] = col_solve_edge * NTR + col_dof;\n                        data[out] = -schur_value;',
+        '                        const int block_pos = side_csr_block_pos[side_id * 3 + col_face];\n                        const long long row = row_solve_edge * NTR + row_dof;\n                        const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + col_dof);\n                        atomicAdd(&data[out], -schur_value);',
+        1,
+    )
+    kernel = kernel.replace(
+        '        const long long base = n_flux + element * NTR * NTR;\n        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {\n            const int i = idx / NTR;\n            const int j = idx - i * NTR;\n            const long long out = base + idx;\n            rows[out] = solve_edge * NTR + i;\n            cols[out] = solve_edge * NTR + j;\n            data[out] = scale * edge_mass[i * NTR + j];\n        }',
+        '        const int block_pos = mass_csr_block_pos[solve_edge];\n        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {\n            const int i = idx / NTR;\n            const int j = idx - i * NTR;\n            const long long row = solve_edge * NTR + i;\n            const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + j);\n            atomicAdd(&data[out], scale * edge_mass[i * NTR + j]);\n        }',
+        1,
+    )
+    return source[:start] + kernel + source[end:]
+
+
 def _edge_to_solve_edge(mesh) -> np.ndarray:
     edge_is_free = np.ones(mesh.num_edg, dtype=bool)
     edge_is_free[mesh.bnd_edges_inds] = False
@@ -1653,7 +2148,12 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
     cupy.cuda.get_current_stream().synchronize()
     timings['raw.kernel'] = time.perf_counter() - start
     timings['raw.block_size'] = float(block_size)
-    timings['raw.total'] = timings.get('raw.map_setup', 0.0) + timings.get('raw.kernel', 0.0)
+    timings['raw.total'] = (
+        timings.get('raw.map_setup', 0.0)
+        + timings.get('raw.kernel', 0.0)
+        + timings.get('raw.csr_zero', 0.0)
+        + timings.get('raw.csr_kernel', 0.0)
+    )
     return RawAdvectionAssemblyResult(
         rows=rows,
         cols=cols,
@@ -1680,8 +2180,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         advection_tensor,
         block_size: int = 32,
         lu_mode: str = 'safe',
+        matrix_format: str = 'coo',
 ) -> RawAdvectionAssemblyResult:
-    """Assemble the reduced advection trace COO/RHS with fused projected local assembly."""
+    """Assemble the reduced advection trace system with fused projected local assembly."""
     cupy = require_cupy()
     lu_mode = _normalize_raw_lu_mode(lu_mode)
     validate_raw_cuda_supported(
@@ -1710,78 +2211,155 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=cupy.float64)
     advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
 
-    start = time.perf_counter()
-    edge_to_solve_h = _edge_to_solve_edge(mesh_h)
-    side_index_h = _interior_side_index(mesh_h)
-    side_offsets_h = _side_flux_offsets(mesh_h, edge_to_solve_h, ntr)
-    n_flux = int(side_offsets_h[-1])
-    n_mass = int(mesh_h.int_edges_inds.size * ntr * ntr)
-    nnz = n_flux + n_mass
-    edge_to_solve = cupy.asarray(edge_to_solve_h, dtype=cupy.int64)
-    side_index = cupy.asarray(side_index_h, dtype=cupy.int64)
-    side_offsets = cupy.asarray(side_offsets_h, dtype=cupy.int64)
-    cupy.cuda.get_current_stream().synchronize()
-    timings['raw.map_setup'] = time.perf_counter() - start
+    matrix_format = str(matrix_format).lower()
+    if matrix_format not in {'coo', 'csr'}:
+        raise ValueError("matrix_format must be 'coo' or 'csr'")
 
-    rows = cupy.empty(nnz, dtype=cupy.int64)
-    cols = cupy.empty_like(rows)
-    data = cupy.empty(nnz, dtype=cupy.float64)
-    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
-    if mesh_h.bnd_edges_inds.size:
-        boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
+    csr_pattern = None
+    indptr = indices = None
+    if matrix_format == 'csr':
+        start = time.perf_counter()
+        csr_pattern = build_reduced_csr_pattern_raw(cspace, timings)
+        edge_to_solve = csr_pattern.edge_to_solve_edge
+        side_index = csr_pattern.interior_side_index
+        indptr = csr_pattern.indptr
+        indices = csr_pattern.indices
+        cupy.cuda.get_current_stream().synchronize()
+        timings['raw.map_setup'] = timings.get('raw.csr_pattern.total', 0.0)
+        timings['raw.csr_pattern.wrapper'] = time.perf_counter() - start
+        rows = cols = None
+        zero_start = time.perf_counter()
+        data = cupy.zeros(indices.size, dtype=cupy.float64)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        if mesh_h.bnd_edges_inds.size:
+            boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
+        cupy.cuda.get_current_stream().synchronize()
+        timings['raw.csr_zero'] = time.perf_counter() - zero_start
+    else:
+        start = time.perf_counter()
+        edge_to_solve_h = _edge_to_solve_edge(mesh_h)
+        side_index_h = _interior_side_index(mesh_h)
+        side_offsets_h = _side_flux_offsets(mesh_h, edge_to_solve_h, ntr)
+        n_flux = int(side_offsets_h[-1])
+        n_mass = int(mesh_h.int_edges_inds.size * ntr * ntr)
+        nnz = n_flux + n_mass
+        edge_to_solve = cupy.asarray(edge_to_solve_h, dtype=cupy.int64)
+        side_index = cupy.asarray(side_index_h, dtype=cupy.int64)
+        side_offsets = cupy.asarray(side_offsets_h, dtype=cupy.int64)
+        cupy.cuda.get_current_stream().synchronize()
+        timings['raw.map_setup'] = time.perf_counter() - start
+        rows = cupy.empty(nnz, dtype=cupy.int64)
+        cols = cupy.empty_like(rows)
+        data = cupy.empty(nnz, dtype=cupy.float64)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        if mesh_h.bnd_edges_inds.size:
+            boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
     start = time.perf_counter()
-    source = _kernel_source(
-        _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
-        lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
-    )
-    kernel = _compile_kernel(cupy, source, 'assemble_advection_raw_fused', assembly_shared)
-    grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
-    kernel(
-        grid,
-        (block_size,),
-        (
-            rows,
-            cols,
-            data,
-            rhs,
-            cspace.mesh.loc2glob_edge,
-            cspace.mesh.orientations,
-            cspace.mesh.loc2oriented_face_coupling,
-            side_index,
-            edge_to_solve,
-            cspace.mesh.int_edges_inds,
-            side_offsets,
-            cspace.mesh.aff_jacs,
-            cspace.mesh.inv_aff_mats_t,
-            cspace.mesh.jacs_el_fc,
-            cspace.mesh.edge_jacs,
-            cspace.mesh.normals,
-            cspace.quad_data.MKrf,
-            cspace.quad_data.weighted_triple_phi_flat,
-            advection_tensor,
-            trace_ref.bas_of_bd_quads,
-            trace_ref.weights,
-            trace_ref.bas1d_of_ref_edg_qds,
-            trace_ref.M_rf_fc,
-            trace_ref.face_trace_test_element_trial_oriented,
-            source_coeffs,
-            beta_coeffs,
-            reaction_coeffs,
-            boundary_trace_full.reshape(-1),
-            np.float64(reaction_scalar),
-            np.int32(1 if reaction_is_scalar else 0),
-            np.int64(cspace.mesh.num_tri),
-            np.int64(cspace.mesh.int_edges_inds.size),
-            np.int64(n_flux),
-        ),
-        shared_mem=int(assembly_shared),
-    )
+    if matrix_format == 'csr':
+        source = _kernel_source(
+            _raw_fused_csr_template(), nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
+            lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
+        )
+        kernel = _compile_kernel(cupy, source, 'assemble_advection_raw_fused_csr', assembly_shared)
+        grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+        kernel(
+            grid,
+            (block_size,),
+            (
+                indptr,
+                data,
+                rhs,
+                cspace.mesh.loc2glob_edge,
+                cspace.mesh.orientations,
+                cspace.mesh.loc2oriented_face_coupling,
+                side_index,
+                edge_to_solve,
+                cspace.mesh.int_edges_inds,
+                csr_pattern.side_csr_block_pos,
+                csr_pattern.mass_csr_block_pos,
+                cspace.mesh.aff_jacs,
+                cspace.mesh.inv_aff_mats_t,
+                cspace.mesh.jacs_el_fc,
+                cspace.mesh.edge_jacs,
+                cspace.mesh.normals,
+                cspace.quad_data.MKrf,
+                cspace.quad_data.weighted_triple_phi_flat,
+                advection_tensor,
+                trace_ref.bas_of_bd_quads,
+                trace_ref.weights,
+                trace_ref.bas1d_of_ref_edg_qds,
+                trace_ref.M_rf_fc,
+                trace_ref.face_trace_test_element_trial_oriented,
+                source_coeffs,
+                beta_coeffs,
+                reaction_coeffs,
+                boundary_trace_full.reshape(-1),
+                np.float64(reaction_scalar),
+                np.int32(1 if reaction_is_scalar else 0),
+                np.int64(cspace.mesh.num_tri),
+                np.int64(cspace.mesh.int_edges_inds.size),
+            ),
+            shared_mem=int(assembly_shared),
+        )
+    else:
+        source = _kernel_source(
+            _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
+            lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
+        )
+        kernel = _compile_kernel(cupy, source, 'assemble_advection_raw_fused', assembly_shared)
+        grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+        kernel(
+            grid,
+            (block_size,),
+            (
+                rows,
+                cols,
+                data,
+                rhs,
+                cspace.mesh.loc2glob_edge,
+                cspace.mesh.orientations,
+                cspace.mesh.loc2oriented_face_coupling,
+                side_index,
+                edge_to_solve,
+                cspace.mesh.int_edges_inds,
+                side_offsets,
+                cspace.mesh.aff_jacs,
+                cspace.mesh.inv_aff_mats_t,
+                cspace.mesh.jacs_el_fc,
+                cspace.mesh.edge_jacs,
+                cspace.mesh.normals,
+                cspace.quad_data.MKrf,
+                cspace.quad_data.weighted_triple_phi_flat,
+                advection_tensor,
+                trace_ref.bas_of_bd_quads,
+                trace_ref.weights,
+                trace_ref.bas1d_of_ref_edg_qds,
+                trace_ref.M_rf_fc,
+                trace_ref.face_trace_test_element_trial_oriented,
+                source_coeffs,
+                beta_coeffs,
+                reaction_coeffs,
+                boundary_trace_full.reshape(-1),
+                np.float64(reaction_scalar),
+                np.int32(1 if reaction_is_scalar else 0),
+                np.int64(cspace.mesh.num_tri),
+                np.int64(cspace.mesh.int_edges_inds.size),
+                np.int64(n_flux),
+            ),
+            shared_mem=int(assembly_shared),
+        )
     cupy.cuda.get_current_stream().synchronize()
-    timings['raw.kernel'] = time.perf_counter() - start
+    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = time.perf_counter() - start
     timings['raw.block_size'] = float(block_size)
-    timings['raw.total'] = timings.get('raw.map_setup', 0.0) + timings.get('raw.kernel', 0.0)
+    timings['raw.total'] = (
+        timings.get('raw.map_setup', 0.0)
+        + timings.get('raw.kernel', 0.0)
+        + timings.get('raw.csr_zero', 0.0)
+        + timings.get('raw.csr_kernel', 0.0)
+    )
     return RawAdvectionAssemblyResult(
         rows=rows,
         cols=cols,
@@ -1789,6 +2367,10 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         rhs=rhs,
         boundary_trace=boundary_trace,
         timings=timings,
+        indptr=indptr,
+        indices=indices,
+        matrix_format=matrix_format,
+        csr_pattern=csr_pattern,
         source_coeffs=source_coeffs,
         beta_coeffs=beta_coeffs,
         reaction_coeffs=reaction_coeffs,
@@ -1918,7 +2500,11 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
 
 
 __all__ = [
+    'ReducedTraceCsrPattern',
     'RawAdvectionAssemblyResult',
+    'build_reduced_csr_pattern_raw',
+    'build_reduced_csr_pattern_cupy_reference',
+    'assert_reduced_csr_patterns_equal',
     'assemble_projected_advection_trace_system_eliminated_raw_cuda',
     'assemble_projected_advection_trace_system_eliminated_raw_cuda_fused',
     'reconstruct_projected_advection_field_raw_cuda',

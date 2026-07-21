@@ -238,9 +238,17 @@ def pretty_print_sections(sections, title="Results", pad_lines=1, default_fmt=".
     def pad_right(s, w):
         s = str(s); return s + " " * max(0, w - wcswidth(s))
 
+    def format_value(value, fmt):
+        spec = fmt or default_fmt
+        if value is None:
+            return "None"
+        if spec == "s":
+            return str(value)
+        return format(value, spec)
+
     formatted_sections = []
     for section_title, items in sections:
-        formatted_items = [(lbl, format(val, fmt or default_fmt)) for lbl, val, fmt in items]
+        formatted_items = [(lbl, format_value(val, fmt)) for lbl, val, fmt in items]
         formatted_sections.append((section_title, formatted_items))
 
     print("\n" * pad_lines, end="")

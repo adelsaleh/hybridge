@@ -1,0 +1,34 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "BICGSTAB",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_INI_CORE",
+    "tolerance": 1e-14,
+    "max_iters": 1500,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "preconditioner": {
+      "solver": "AMG",
+      "algorithm": "CLASSICAL",
+      "selector": "PMIS",
+      "cycle": "W",
+      "strength_threshold": 0.5,
+      "max_iters": 1,
+      "max_levels": 20,
+      "interp_max_elements": 7,
+      "interp_truncation_factor": 0.03,
+      "smoother": {
+        "solver": "ILU0",
+        "max_row_sum": 100000.0
+      },
+      "presweeps": 6,
+      "postsweeps": 6,
+      "coarsest_sweeps": 3,
+      "coarse_solver": "DENSE_LU_SOLVER",
+      "print_grid_stats": 0
+    }
+  }
+}

@@ -33,7 +33,36 @@ Solver summary:
 
 Focused AMGX sweeps on 2026-07-20 did not find a safer faster replacement for this default. Keep `BICGSTAB + classical AMG/ILU0 W-cycle` as the production advection-reaction config. The closest alternative is `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`, retained only as experimental: it was about 1% faster in AMGX solve on the p6/ms0.005 stress case, but with a larger post-solve residual and about 2x larger L2 error. Details are in `run_logs/adv_rea_amgx_config_findings_20260720.md`.
 
+Additional raw-CSR preconditioner checks on 2026-07-21 used `p=6`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, `raw-cuda`, fused local assembly, cooperative LU, and `--amgx-tolerance 1e-10`. `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json` converged with 452 iterations and a 1.212 s global solve phase, compared with 454 iterations and 1.238 s for the default in that sample. Treat it as experimental: the gain is small enough to require repeated runs. `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json` converged but did not improve iteration count or solve phase. `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json`, `adv_rea_gpu4_hdg_fgmres_amg_d2.json`, and `adv_rea_gpu4_hdg_gmres_amg_d2.json` are failed stronger-preconditioner experiments for this case; they either did not reduce the physical residual enough or were much slower.
+
 Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation (`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
+
+Experimental advection-reaction configs retained for comparison:
+
+- `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: L1 smoother baseline candidate.
+- `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: Chebyshev/L1 smoother candidate.
+- `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json`: heavier ILU0 W-cycle candidate.
+- `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`: BICGSTAB with aggregation AMG/DILU.
+- `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json`: failed p6/ms0.01 FGMRES+DILU experiment.
+- `adv_rea_gpu4_hdg_fgmres_amg_d2.json`: failed p6/ms0.01 FGMRES+D2 experiment.
+- `adv_rea_gpu4_hdg_gmres_amg_d2.json`: failed GMRES+D2 experiment.
+
+Representative raw-CSR preconditioner sweep:
+
+```bash
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
+  .venv/bin/python scripts/gpu/sweep_adv_rea_gpu4_hdg.py \
+  --orders 6 --mesh-sizes 0.01 --bases dub_orth \
+  --trace-bases legacy-lagrange --quad-rules default \
+  --amgx-configs default \
+    configs/amgx/adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json \
+    configs/amgx/adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json \
+    configs/amgx/adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json \
+    configs/amgx/adv_rea_gpu4_hdg_fgmres_amg_d2.json \
+  --assembly-backend raw-cuda --raw-local-assembly fused \
+  --raw-lu-mode coop --raw-matrix-format csr --raw-block-size 32 \
+  --amgx-maxiter 1500 --amgx-tolerance 1e-10 --check-rtol 1e-10
+```
 
 
 ### Raw CUDA advection run modes
@@ -140,7 +169,7 @@ Representative coarse timings, all on 5,699 triangles with `dub_orth`, `volume_q
 
 Both standalone runners load the JSON config first, then apply these command-line overrides:
 
-- `--amgx-solver`
+- `--amgx-solver`, only when explicitly supplied
 - `--amgx-tolerance`
 - `--amgx-maxiter`
 

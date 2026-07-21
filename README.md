@@ -90,6 +90,14 @@ python -c "import pyamgx; print('pyamgx ok')"
 python -m scripts.gpu.run_adv_rea_gpu4_hdg --help
 ```
 
+The GPU4 advection-reaction runner is backed by the reusable package solver in
+`hdgfem.solvers.adv_rea`. Its Raw CUDA path keeps the reduced trace assembly,
+AMGX solve, trace reconstruction, field reconstruction, and error evaluation on
+device unless host materialization is explicitly requested. Fused Raw CUDA can
+emit a reduced CSR matrix directly, avoiding the older CuPy COO-to-CSR
+construction when `--raw-matrix-format csr` is selected. Use
+`configs/amgx/README.md` for the current AMGX presets and sweep commands.
+
 DOLFINx is optional and only needed for comparison diagnostics.  Prefer a
 separate conda environment so its MPI/PETSc stack does not constrain the normal
 HDG environment:

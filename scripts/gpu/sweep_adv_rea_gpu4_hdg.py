@@ -31,6 +31,7 @@ DEFAULT_LOG_DIR = ROOT / "run_logs"
 AMGX_LIBRARY_PATHS = ("/tmp/AMGX-build", "/tmp/AMGX-install/lib")
 
 KEY_VALUE_RE = re.compile(r"^\s*([^:]+?)\s*:\s*(.*?)\s*$")
+NUMBER_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 FLOAT_KEYS = {
     "h",
     "h^(p+1)",
@@ -66,9 +67,46 @@ INT_KEYS = {
     "edges",
     "interior edges",
     "global dof",
+    "element dof",
+    "edge dof",
     "max-error element",
     "AMGX iterations",
+    "iterations",
+    "maxiter",
 }
+
+FLOAT_KEYS.update({
+    "mesh setup",
+    "space setup",
+    "problem setup",
+    "solver call",
+    "package solve total",
+    "solver internal total",
+    "assembly total",
+    "global solve phase",
+    "global solve total",
+    "reconstruct total",
+    "error eval",
+    "total measured",
+    "row scaling (s)",
+    "AMGX CSR build (s)",
+    "AMGX setup (s)",
+    "AMGX iterate (s)",
+    "AMGX call total (s)",
+    "AMGX overhead (s)",
+    "finite check (s)",
+    "scaled residual check (s)",
+    "physical residual check (s)",
+    "solve validation total (s)",
+    "global solve overhead (s)",
+    "solve unaccounted (s)",
+    "backend assembly total (s)",
+    "raw kernel (s)",
+    "raw CSR kernel (s)",
+    "scaled rel residual",
+    "tol",
+    "check rtol",
+})
 
 
 @dataclass(frozen=True)
@@ -79,6 +117,7 @@ class SweepCase:
     trace_basis: str
     quad_label: str
     quad_value: int | None
+    amgx_config: Path | None
 
 
 def parse_range_spec(spec: str, *, cast=int) -> list:
@@ -146,8 +185,29 @@ def unique_preserve_order(values: Iterable) -> list:
     return out
 
 
+def resolve_amgx_configs(values: list[str] | None) -> list[Path | None]:
+    if not values:
+        return [None]
+    configs: list[Path | None] = []
+    for raw in values:
+        label = str(raw).strip()
+        if label.lower() in {"default", "none", "embedded"}:
+            configs.append(None)
+            continue
+        path = Path(label).expanduser()
+        if not path.is_absolute():
+            path = ROOT / path
+        configs.append(path.resolve())
+    return unique_preserve_order(configs)
+
+
+def amgx_config_label(path: Path | None) -> str:
+    return "default" if path is None else path.stem
+
+
 def build_cases(args: argparse.Namespace) -> list[SweepCase]:
     cases: list[SweepCase] = []
+    amgx_configs = resolve_amgx_configs(args.amgx_configs)
     for order in parse_range_spec(args.orders, cast=int):
         quad_pairs = []
         for label in args.quad_rules:
@@ -159,34 +219,66 @@ def build_cases(args: argparse.Namespace) -> list[SweepCase]:
             for basis in args.bases:
                 for trace_basis in args.trace_bases:
                     for quad_label, quad_value in quad_pairs:
-                        cases.append(SweepCase(order, mesh_size, basis, trace_basis, quad_label, quad_value))
+                        for amgx_config in amgx_configs:
+                            cases.append(SweepCase(order, mesh_size, basis, trace_basis, quad_label, quad_value, amgx_config))
     return cases
 
 
+def _first_number(value: str) -> str | None:
+    match = NUMBER_RE.search(value.replace(",", ""))
+    return None if match is None else match.group(0)
+
+
 def parse_value(label: str, value: str):
-    stripped = value.strip().replace(",", "")
     if label in FLOAT_KEYS:
+        number = _first_number(value)
+        if number is None:
+            return value.strip()
         try:
-            return float(stripped)
+            return float(number)
         except ValueError:
             return value.strip()
     if label in INT_KEYS:
+        number = _first_number(value)
+        if number is None:
+            return value.strip()
         try:
-            return int(stripped)
+            return int(float(number))
         except ValueError:
             return value.strip()
     return value.strip()
 
 
+def _parse_timing_table_cells(parsed: dict[str, object], cells: list[str]) -> bool:
+    if len(cells) != 3:
+        return False
+    label, seconds, percent = cells
+    if label in {"Timing", "Seconds"} or not (percent.endswith("%") or percent == "n/a"):
+        return False
+    number = _first_number(seconds)
+    if number is None:
+        return False
+    parsed[label] = parse_value(label, seconds)
+    return True
+
+
 def parse_runner_output(stdout: str) -> dict[str, object]:
     parsed: dict[str, object] = {}
     for line in stdout.splitlines():
-        match = KEY_VALUE_RE.match(line)
-        if not match:
+        cells = [cell.strip() for cell in re.split(r"\s{2,}", line.strip()) if cell.strip()]
+        if _parse_timing_table_cells(parsed, cells):
             continue
-        label = match.group(1).strip()
-        value = match.group(2).strip()
-        parsed[label] = parse_value(label, value)
+        matched_cell = False
+        for cell in cells if cells else [line.strip()]:
+            match = KEY_VALUE_RE.match(cell)
+            if not match:
+                continue
+            label = match.group(1).strip()
+            value = match.group(2).strip()
+            parsed[label] = parse_value(label, value)
+            matched_cell = True
+        if matched_cell:
+            continue
     residual = re.search(r"scaled_rel_res=([0-9.eE+-]+)", stdout)
     if residual:
         parsed["scaled_rel_res"] = float(residual.group(1))
@@ -215,13 +307,29 @@ def run_case(case: SweepCase, args: argparse.Namespace, env: dict[str, str]) -> 
         str(error_quad),
         "--plot-resolution",
         str(args.plot_resolution),
-        "--amgx-solver",
-        args.amgx_solver,
         "--amgx-tolerance",
         str(args.amgx_tolerance),
         "--amgx-maxiter",
         str(args.amgx_maxiter),
+        "--check-rtol",
+        str(args.check_rtol),
+        "--assembly-backend",
+        args.assembly_backend,
+        "--raw-local-assembly",
+        args.raw_local_assembly,
+        "--raw-lu-mode",
+        args.raw_lu_mode,
+        "--raw-matrix-format",
+        args.raw_matrix_format,
+        "--raw-block-size",
+        str(args.raw_block_size),
+        "--verbosity",
+        str(args.verbosity),
     ]
+    if args.amgx_solver is not None:
+        cmd.extend(["--amgx-solver", args.amgx_solver])
+    if case.amgx_config is not None:
+        cmd.extend(["--amgx-config", str(case.amgx_config)])
     if case.quad_value is not None:
         cmd.extend(["--volume-quad-1d", str(case.quad_value)])
     if args.mesh_type:
@@ -252,6 +360,8 @@ def run_case(case: SweepCase, args: argparse.Namespace, env: dict[str, str]) -> 
         "quad_label": case.quad_label,
         "quad_value_requested": case.quad_value if case.quad_value is not None else "default",
         "error_quad_requested": error_quad,
+        "amgx_config_requested": amgx_config_label(case.amgx_config),
+        "amgx_config_path": "" if case.amgx_config is None else str(case.amgx_config),
         "command": " ".join(cmd),
     }
     row.update(parsed)
@@ -262,50 +372,75 @@ def run_case(case: SweepCase, args: argparse.Namespace, env: dict[str, str]) -> 
     return row
 
 
+def row_float(row: dict[str, object], *keys: str) -> float:
+    for key in keys:
+        value = row.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return float("nan")
+
+
+def row_int(row: dict[str, object], *keys: str) -> int:
+    for key in keys:
+        value = row.get(key)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+    return -1
+
+
+def summarize_metric(rows: list[dict[str, object]], metric: str, title: str) -> None:
+    grouped: dict[tuple, list[dict[str, object]]] = {}
+    for row in rows:
+        grouped.setdefault(
+            (
+                row.get("order"),
+                row.get("mesh_size_requested"),
+                row.get("basis_requested"),
+                row.get("trace_basis_requested"),
+                row.get("quad_label"),
+            ),
+            [],
+        ).append(row)
+    print(f"\n{title}")
+    print("order mesh     config                         basis      trace            quad        iter  amgx(s) solve(s) total(s) L2")
+    for key in sorted(grouped):
+        candidates = [row for row in grouped[key] if row_float(row, metric) == row_float(row, metric)]
+        if not candidates:
+            continue
+        best = min(candidates, key=lambda row: row_float(row, metric))
+        print(
+            f"{int(best['order']):>5} {float(best['mesh_size_requested']):<8.4g} "
+            f"{str(best.get('amgx_config_requested', 'default')):<30.30} "
+            f"{str(best['basis_requested']):<10} {str(best['trace_basis_requested']):<16} "
+            f"{str(best['quad_label']):<11} {row_int(best, 'iterations', 'AMGX iterations'):>5} "
+            f"{row_float(best, 'AMGX iterate (s)', 'AMGX solve'):>7.3f} "
+            f"{row_float(best, 'global solve phase', 'global solve total (s)'):>8.3f} "
+            f"{row_float(best, 'total measured', 'total measured (s)'):>8.3f} "
+            f"{row_float(best, 'L2 error'):.3e}"
+        )
+
+
 def summarize(rows: list[dict[str, object]]) -> None:
     ok_rows = [r for r in rows if r.get("status") == "ok" and isinstance(r.get("L2 error"), float)]
     if not ok_rows:
         print("No successful rows with parsed L2 error.")
         return
-    print("\nBest by order, mesh, element basis, trace basis")
-    print("order mesh     basis      trace            quad        L2          Linf        asm(s)  amgx(s) total(s)")
-    grouped: dict[tuple, list[dict[str, object]]] = {}
-    for row in ok_rows:
-        key = (
-            row.get("order"),
-            row.get("mesh_size_requested"),
-            row.get("basis_requested"),
-            row.get("trace_basis_requested"),
-        )
-        grouped.setdefault(key, []).append(row)
-    for key in sorted(grouped):
-        best = min(grouped[key], key=lambda r: float(r["L2 error"]))
-        print(
-            f"{int(best['order']):>5} {float(best['mesh_size_requested']):<8.4g} "
-            f"{str(best['basis_requested']):<10} {str(best['trace_basis_requested']):<16} "
-            f"{str(best['quad_label']):<11} {float(best['L2 error']):.3e} "
-            f"{float(best.get('Linf error', float('nan'))):.3e} "
-            f"{float(best.get('assembly total (s)', float('nan'))):>6.3f} "
-            f"{float(best.get('AMGX solve', float('nan'))):>7.3f} "
-            f"{float(best.get('total measured (s)', float('nan'))):>7.3f}"
-        )
+    summarize_metric(ok_rows, "global solve phase", "Fastest by global solve phase")
+    summarize_metric(ok_rows, "total measured", "Fastest by total measured time")
 
-    print("\nOverall best per order and mesh")
-    print("order mesh     basis      trace            quad        L2          Linf        asm(s)  amgx(s) total(s)")
-    grouped2: dict[tuple, list[dict[str, object]]] = {}
-    for row in ok_rows:
-        grouped2.setdefault((row.get("order"), row.get("mesh_size_requested")), []).append(row)
-    for key in sorted(grouped2):
-        best = min(grouped2[key], key=lambda r: float(r["L2 error"]))
-        print(
-            f"{int(best['order']):>5} {float(best['mesh_size_requested']):<8.4g} "
-            f"{str(best['basis_requested']):<10} {str(best['trace_basis_requested']):<16} "
-            f"{str(best['quad_label']):<11} {float(best['L2 error']):.3e} "
-            f"{float(best.get('Linf error', float('nan'))):.3e} "
-            f"{float(best.get('assembly total (s)', float('nan'))):>6.3f} "
-            f"{float(best.get('AMGX solve', float('nan'))):>7.3f} "
-            f"{float(best.get('total measured (s)', float('nan'))):>7.3f}"
-        )
+
+def _jsonable_args(args: argparse.Namespace) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for key, value in vars(args).items():
+        if isinstance(value, Path):
+            out[key] = str(value)
+        elif isinstance(value, list):
+            out[key] = [str(item) if isinstance(item, Path) else item for item in value]
+        else:
+            out[key] = value
+    return out
 
 
 def write_results(rows: list[dict[str, object]], args: argparse.Namespace) -> tuple[Path, Path]:
@@ -313,7 +448,7 @@ def write_results(rows: list[dict[str, object]], args: argparse.Namespace) -> tu
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     json_path = args.log_dir / f"adv_rea_gpu4_hdg_sweep_{stamp}.json"
     csv_path = args.log_dir / f"adv_rea_gpu4_hdg_sweep_{stamp}.csv"
-    payload = {"args": vars(args) | {"runner": str(args.runner), "log_dir": str(args.log_dir)}, "rows": rows}
+    payload = {"args": _jsonable_args(args) | {"runner": str(args.runner), "log_dir": str(args.log_dir)}, "rows": rows}
     json_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
     fieldnames = sorted({key for row in rows for key in row.keys() if key not in {"output", "output_tail"}})
     with csv_path.open("w", newline="") as handle:
@@ -355,9 +490,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--error-quad-margin", type=int, default=4)
     parser.add_argument("--error-quad-extra", type=int, default=8)
     parser.add_argument("--trace-ordering", default="none", choices=("none", "upwind-scc"))
-    parser.add_argument("--amgx-solver", default="BICGSTAB")
+    parser.add_argument("--amgx-solver", default=None, help="override the solver named in each AMGX config")
+    parser.add_argument("--amgx-configs", nargs="+", default=None, help="AMGX config JSONs to sweep; use 'default' for the runner default")
     parser.add_argument("--amgx-tolerance", type=float, default=1.0e-14)
+    parser.add_argument("--check-rtol", type=float, default=1.0e-10)
     parser.add_argument("--amgx-maxiter", type=int, default=1500)
+    parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="raw-cuda")
+    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused"), default="precomputed")
+    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
+    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr"), default="auto")
+    parser.add_argument("--raw-block-size", type=int, choices=(1, 32, 64, 128), default=32)
+    parser.add_argument("--verbosity", type=int, choices=(0, 1, 2), default=0)
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--max-runs", type=int, default=None)
     parser.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR)
@@ -386,7 +529,8 @@ def main(argv: list[str] | None = None) -> int:
         quad = "default" if case.quad_value is None else str(case.quad_value)
         print(
             f"[{index:03d}/{len(cases):03d}] p={case.order} ms={case.mesh_size:g} "
-            f"basis={case.basis} trace={case.trace_basis} q={quad} ({case.quad_label})"
+            f"basis={case.basis} trace={case.trace_basis} q={quad} ({case.quad_label}) "
+            f"amgx={amgx_config_label(case.amgx_config)}"
         )
     if args.dry_run:
         return 0
@@ -398,7 +542,8 @@ def main(argv: list[str] | None = None) -> int:
         quad = "default" if case.quad_value is None else str(case.quad_value)
         print(
             f"\n[{index:03d}/{len(cases):03d}] running p={case.order} ms={case.mesh_size:g} "
-            f"basis={case.basis} trace={case.trace_basis} q={quad}",
+            f"basis={case.basis} trace={case.trace_basis} q={quad} "
+            f"amgx={amgx_config_label(case.amgx_config)}",
             flush=True,
         )
         try:
@@ -414,6 +559,8 @@ def main(argv: list[str] | None = None) -> int:
                 "trace_basis_requested": case.trace_basis,
                 "quad_label": case.quad_label,
                 "quad_value_requested": case.quad_value if case.quad_value is not None else "default",
+                "amgx_config_requested": amgx_config_label(case.amgx_config),
+                "amgx_config_path": "" if case.amgx_config is None else str(case.amgx_config),
                 "output": exc.stdout or "",
             }
         rows.append(row)
@@ -422,9 +569,10 @@ def main(argv: list[str] | None = None) -> int:
                 "  ok: "
                 f"L2={float(row.get('L2 error', float('nan'))):.3e}, "
                 f"Linf={float(row.get('Linf error', float('nan'))):.3e}, "
-                f"asm={float(row.get('assembly total (s)', float('nan'))):.3f}s, "
-                f"amgx={float(row.get('AMGX solve', float('nan'))):.3f}s, "
-                f"total={float(row.get('total measured (s)', float('nan'))):.3f}s",
+                f"asm={row_float(row, 'assembly total', 'assembly total (s)'):.3f}s, "
+                f"amgx={row_float(row, 'AMGX iterate (s)', 'AMGX solve'):.3f}s, "
+                f"solve={row_float(row, 'global solve phase', 'global solve total (s)'):.3f}s, "
+                f"total={row_float(row, 'total measured', 'total measured (s)'):.3f}s",
                 flush=True,
             )
         else:

@@ -79,6 +79,7 @@ def test_advection_reaction_cupy_assembly_matches_numpy():
         solver="direct",
         boundary_mode="eliminate",
         assembly_backend="cupy",
+        materialize_host_solution=True,
         verbose=False,
     )
 
@@ -155,7 +156,7 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy():
     of reversing the dof order used by nodal trace bases.
     """
     from hdgfem.backends.cupy import as_cupy_space, require_cupy
-    from scripts.run_adv_rea_gpu4_hdg import (
+    from hdgfem.backends.cupy_adv_rea_gpu4 import (
         TIMINGS,
         assemble_reduced_system,
         beta_dot_normal_from_coeffs,
@@ -208,7 +209,7 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta():
     left/right-sided trace weights introduced for discontinuous advection fields.
     """
     from hdgfem.backends.cupy import as_cupy_space, require_cupy
-    from scripts.run_adv_rea_gpu4_hdg import (
+    from hdgfem.backends.cupy_adv_rea_gpu4 import (
         TIMINGS,
         assemble_reduced_system,
         beta_dot_normal_from_coeffs,
@@ -267,3 +268,169 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta():
     assert bool(cp.all(raw_cols == cupy_cols).get())
     assert float(cp.max(cp.abs(raw_data - cupy_data)).get()) < 1.0e-12
     assert float(cp.max(cp.abs(raw_rhs - cupy_rhs)).get()) < 1.0e-12
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_advection_reaction_raw_cuda_solver_returns_host_result():
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    beta = (
+        lambda x, y: 1.0 + 0.1 * x,
+        lambda x, y: -0.25 + 0.1 * y,
+    )
+    source = lambda x, y: 1.0 + x - y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    boundary = lambda x, y: x + 0.5 * y
+
+    result = solve_advection_reaction_hdg(
+        source,
+        beta,
+        reaction,
+        boundary,
+        space,
+        solver="direct",
+        boundary_mode="eliminate",
+        assembly_backend="raw-cuda",
+        trace_basis="legacy-lagrange",
+        raw_local_assembly="fused",
+        raw_lu_mode="safe",
+        raw_block_size=32,
+        materialize_host_solution=True,
+        verbose=False,
+    )
+
+    assert result.assembly_backend == "raw-cuda"
+    assert isinstance(result.trace, np.ndarray)
+    assert result.trace.shape == (space.layout.trace_vector_size,)
+    assert result.field.coeffs.shape == space.shape
+    assert np.all(np.isfinite(result.trace))
+    assert np.all(np.isfinite(result.field.coeffs))
+
+
+@pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
+def test_raw_reduced_csr_pattern_matches_cupy_reference():
+    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.backends.cupy_adv_rea_raw import (
+        assert_reduced_csr_patterns_equal,
+        build_reduced_csr_pattern_cupy_reference,
+        build_reduced_csr_pattern_raw,
+    )
+
+    mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    cspace = as_cupy_space(space)
+
+    reference = build_reduced_csr_pattern_cupy_reference(cspace)
+    raw = build_reduced_csr_pattern_raw(cspace)
+
+    assert_reduced_csr_patterns_equal(reference, raw)
+
+
+@pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
+@pytest.mark.parametrize("trace_basis,raw_lu_mode", [("legacy-lagrange", "safe"), ("legacy-lagrange", "coop"), ("legendre-modal", "safe")])
+def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
+    from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse
+    from hdgfem.backends.cupy_adv_rea_gpu4 import (
+        assemble_reduced_system_gpu4,
+        as_cupy_trace_space,
+        project_callable_cupy,
+    )
+
+    cp = require_cupy()
+    sparse = require_cupyx_sparse()
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    cspace = as_cupy_space(space)
+    trace_ref = as_cupy_trace_space(space.trace_space(trace_basis), device=cspace.device_id)
+    beta = (
+        lambda x, y: 1.0 + 0.1 * x,
+        lambda x, y: -0.25 + 0.1 * y,
+    )
+    source = lambda x, y: 1.0 + x - y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    boundary = lambda x, y: x + 0.5 * y
+    beta_coeffs = cp.ascontiguousarray(
+        cp.stack((project_callable_cupy(beta[0], cspace), project_callable_cupy(beta[1], cspace)), axis=0)
+    )
+
+    coo = assemble_reduced_system_gpu4(
+        source,
+        reaction,
+        boundary,
+        beta_coeffs,
+        cspace,
+        trace_ref,
+        backend="raw-cuda",
+        raw_local_assembly="fused",
+        raw_lu_mode=raw_lu_mode,
+        raw_block_size=32,
+        raw_matrix_format="coo",
+    )
+    csr = assemble_reduced_system_gpu4(
+        source,
+        reaction,
+        boundary,
+        beta_coeffs,
+        cspace,
+        trace_ref,
+        backend="raw-cuda",
+        raw_local_assembly="fused",
+        raw_lu_mode=raw_lu_mode,
+        raw_block_size=32,
+        raw_matrix_format="csr",
+    )
+
+    shape = (coo.rhs.size, coo.rhs.size)
+    coo_matrix = sparse.coo_matrix(
+        (coo.data, (coo.rows.astype(cp.int32), coo.cols.astype(cp.int32))),
+        shape=shape,
+    ).tocsr()
+    coo_matrix.sum_duplicates()
+    csr_matrix = sparse.csr_matrix((csr.data, csr.indices, csr.indptr), shape=shape)
+
+    assert csr.matrix_format == "csr"
+    assert bool(cp.all(coo_matrix.indptr == csr_matrix.indptr).get())
+    assert bool(cp.all(coo_matrix.indices == csr_matrix.indices).get())
+    assert float(cp.max(cp.abs(coo_matrix.data - csr_matrix.data)).get()) < 1.0e-11
+    assert float(cp.max(cp.abs(coo.rhs - csr.rhs)).get()) < 1.0e-11
+
+
+@pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
+def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke():
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    beta = (
+        lambda x, y: 1.0 + 0.1 * x,
+        lambda x, y: -0.25 + 0.1 * y,
+    )
+    source = lambda x, y: 1.0 + x - y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    boundary = lambda x, y: x + 0.5 * y
+
+    amgx_config = json.loads(Path("configs/amgx/adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json").read_text())
+    result = solve_advection_reaction_hdg(
+        source,
+        beta,
+        reaction,
+        boundary,
+        space,
+        solver="amgx",
+        preconditioner=None,
+        solver_rtol=1.0e-10,
+        maxiter=200,
+        amgx_config=amgx_config,
+        boundary_mode="eliminate",
+        assembly_backend="raw-cuda",
+        trace_basis="legacy-lagrange",
+        raw_local_assembly="fused",
+        raw_lu_mode="safe",
+        raw_block_size=32,
+        raw_matrix_format="csr",
+        materialize_host_solution=False,
+        verbose=False,
+    )
+
+    assert result.field is None
+    assert result.trace is None
+    assert result.global_solve_result.info == 0
+    assert "raw.assembly.raw.csr_kernel" in result.timings.details

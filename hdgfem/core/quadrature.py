@@ -22,7 +22,6 @@ assembly kernels simple.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import factorial
 
 import numpy as np
 
@@ -130,28 +129,44 @@ def _edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
     )
 
 
-def _edge_basis(order: int, edge_points_1d: np.ndarray) -> np.ndarray:
-    """Evaluate the 1D Bernstein trace basis on reference-edge points.
+def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return Legendre-Gauss-Lobatto nodes and weights on ``[-1, 1]``."""
+    if num_points < 1:
+        raise ValueError("Gauss-Lobatto rule needs at least one point")
+    if num_points == 1:
+        return np.array([0.0]), np.array([2.0])
+    if num_points == 2:
+        return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
+    poly = np.polynomial.legendre.Legendre.basis(num_points - 1)
+    interior = np.sort(poly.deriv().roots())
+    points = np.concatenate(([-1.0], interior, [1.0]))
+    values = poly(points)
+    weights = 2.0 / ((num_points - 1) * num_points * values * values)
+    return np.ascontiguousarray(points, dtype=np.float64), np.ascontiguousarray(weights, dtype=np.float64)
 
-    Parameters
-    ----------
-    order
-        Polynomial degree on each edge.  The number of edge degrees of freedom
-        is ``order + 1``.
-    edge_points_1d
-        Points in ``[-1, 1]`` where the edge basis is evaluated.
 
-    Returns
-    -------
-    numpy.ndarray
-        Basis values with shape ``(edg_dof, num_face_quads)``.
-    """
-    r = 0.5 * (edge_points_1d + 1.0)
-    values = np.empty((order + 1, edge_points_1d.size), dtype=np.float64)
-    for j in range(order + 1):
-        coeff = factorial(order) / (factorial(j) * factorial(order - j))
-        values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
+def _lagrange_basis(nodes: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Evaluate 1D nodal Lagrange basis functions at ``points``."""
+    nodes = np.asarray(nodes, dtype=np.float64)
+    points = np.asarray(points, dtype=np.float64)
+    values = np.ones((nodes.size, points.size), dtype=np.float64)
+    for i in range(nodes.size):
+        for j in range(nodes.size):
+            if i != j:
+                values[i] *= (points - nodes[j]) / (nodes[i] - nodes[j])
     return np.ascontiguousarray(values)
+
+
+def _edge_basis(order: int, edge_points_1d: np.ndarray) -> np.ndarray:
+    """Evaluate the default nodal Lagrange trace basis on reference-edge points.
+
+    The trace degrees of freedom are located at ``order + 1``
+    Legendre-Gauss-Lobatto nodes on ``[-1, 1]``.  This keeps package solvers on
+    the same nodal trace convention as the standalone GPU runners'
+    ``legacy-lagrange`` trace basis.
+    """
+    nodes, _ = _legendre_gauss_lobatto(order + 1)
+    return _lagrange_basis(nodes, edge_points_1d)
 
 
 def _evaluate_basis(basis_type: str, order: int, points: np.ndarray) -> np.ndarray:
@@ -322,7 +337,8 @@ class ReferenceElementData:
         negative_face_basis = negative_face_basis.reshape(edge_points.size, 3, self.el_dof).transpose(1, 2, 0)
         object.__setattr__(self, "quads_JGL", edge_points)
         object.__setattr__(self, "weights_JGL", edge_weights)
-        object.__setattr__(self, "rf_edg_lag_nodes", edge_points)
+        trace_nodes, _ = _legendre_gauss_lobatto(order + 1)
+        object.__setattr__(self, "rf_edg_lag_nodes", trace_nodes)
         object.__setattr__(self, "pts_fc", face_points)
         object.__setattr__(self, "bas_of_bd_quads", np.ascontiguousarray(face_basis))
         edge_basis = _edge_basis(order, edge_points)

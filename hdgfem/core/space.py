@@ -14,10 +14,10 @@ module.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Callable, Literal, Sequence
 import numpy as np
 from .mesh import DGMesh, as_dg_mesh
-from .quadrature import ReferenceElementData
+from .quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
 
 
 def _cache_key(points: np.ndarray) -> tuple[int, tuple[int, ...], str]:
@@ -50,6 +50,214 @@ def _normalize_callable_values(values, num_elements: int, num_points: int) -> np
         f"({num_points},), or shape ({num_elements}, {num_points}); "
         f"got {values.shape}"
     )
+
+
+TraceBasisKind = Literal["legacy-lagrange", "legendre-modal", "bernstein"]
+
+
+@dataclass(frozen=True)
+class DGCoefficientLayout:
+    """Canonical host-side coefficient and trace vector shapes for a DG space."""
+
+    num_elements: int
+    num_edges: int
+    num_interior_edges: int
+    num_boundary_edges: int
+    order: int
+    el_dof: int
+    edg_dof: int
+
+    @property
+    def scalar_shape(self) -> tuple[int, int]:
+        """Element-major scalar coefficient shape ``(num_elements, el_dof)``."""
+        return self.num_elements, self.el_dof
+
+    @property
+    def vector_component_first_shape(self) -> tuple[int, int, int]:
+        """Two-component vector coefficient layout ``(dim, num_elements, el_dof)``."""
+        return 2, self.num_elements, self.el_dof
+
+    @property
+    def vector_component_last_shape(self) -> tuple[int, int, int]:
+        """Two-component vector coefficient layout ``(num_elements, el_dof, dim)``."""
+        return self.num_elements, self.el_dof, 2
+
+    @property
+    def trace_shape(self) -> tuple[int, int]:
+        """Full edge-major trace coefficient shape ``(num_edges, edg_dof)``."""
+        return self.num_edges, self.edg_dof
+
+    @property
+    def trace_vector_size(self) -> int:
+        """Flattened full trace vector size."""
+        return self.num_edges * self.edg_dof
+
+    @property
+    def reduced_trace_shape(self) -> tuple[int, int]:
+        """Interior-edge trace coefficient shape after boundary elimination."""
+        return self.num_interior_edges, self.edg_dof
+
+    @property
+    def reduced_trace_vector_size(self) -> int:
+        """Flattened reduced trace vector size after boundary elimination."""
+        return self.num_interior_edges * self.edg_dof
+
+
+def _normalize_trace_basis_kind(kind: str) -> TraceBasisKind:
+    normalized = str(kind).replace("_", "-").lower()
+    if normalized not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
+        raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
+    return normalized
+
+
+def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
+    from math import factorial
+
+    r = 0.5 * (np.asarray(points, dtype=np.float64) + 1.0)
+    values = np.empty((order + 1, r.size), dtype=np.float64)
+    for j in range(order + 1):
+        coeff = factorial(order) / (factorial(j) * factorial(order - j))
+        values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
+    return np.ascontiguousarray(values)
+
+
+def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
+    points = np.asarray(points, dtype=np.float64)
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
+    return np.ascontiguousarray(values)
+
+
+def _reference_edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
+    t = np.asarray(edge_points_1d, dtype=np.float64)
+    return np.ascontiguousarray(
+        np.stack(
+            (
+                np.stack((t, -np.ones_like(t)), axis=1),
+                np.stack((-t, t), axis=1),
+                np.stack((-np.ones_like(t), -t), axis=1),
+            ),
+            axis=1,
+        )
+    )
+
+
+@dataclass(frozen=True)
+class DGTraceSpace:
+    """Host-side trace basis and coupling formalism for one scalar DG space."""
+
+    space: "DGSpace"
+    kind: TraceBasisKind
+    nodal: bool
+    interpolation_nodes: np.ndarray
+    quads: np.ndarray
+    weights: np.ndarray
+    bas_of_bd_quads: np.ndarray
+    bas1d_of_ref_edg_qds: np.ndarray
+    weighted_bas_of_bd_quads: np.ndarray
+    weighted_bas1d_of_ref_edg_qds: np.ndarray
+    face_trace_test_element_trial_oriented: np.ndarray
+    M_rf_fc: np.ndarray
+
+    @classmethod
+    def from_space(cls, space: "DGSpace", kind: str = "legacy-lagrange") -> "DGTraceSpace":
+        """Build trace-basis data for ``space``."""
+        trace_kind = _normalize_trace_basis_kind(kind)
+        order = space.order
+        if trace_kind == "bernstein":
+            edge_quads = np.ascontiguousarray(space.quad_data.quads_JGL, dtype=np.float64)
+            edge_weights = np.ascontiguousarray(space.quad_data.weights_JGL, dtype=np.float64)
+            face_basis = np.ascontiguousarray(space.quad_data.bas_of_bd_quads, dtype=np.float64)
+            negative_face_points = _reference_edge_points(-edge_quads)
+            negative_face_basis = space.basis_at(negative_face_points.reshape(-1, 2)).reshape(
+                edge_quads.size, 3, space.el_dof
+            ).transpose(1, 2, 0)
+            edge_basis = _bernstein_edge_basis(order, edge_quads)
+            edge_basis_reversed = edge_basis
+            nodal = False
+            interpolation_nodes = edge_quads
+        else:
+            interpolation_nodes, _ = _legendre_gauss_lobatto(order + 1)
+            edge_quads, edge_weights = _legendre_gauss_lobatto(2 * order + 1)
+            face_points = _reference_edge_points(edge_quads)
+            face_basis = space.basis_at(face_points.reshape(-1, 2)).reshape(
+                edge_quads.size, 3, space.el_dof
+            ).transpose(1, 2, 0)
+            negative_face_basis = face_basis
+            if trace_kind == "legacy-lagrange":
+                edge_basis = _lagrange_basis(interpolation_nodes, edge_quads)
+                edge_basis_reversed = _lagrange_basis(interpolation_nodes, -edge_quads)
+                nodal = True
+            else:
+                edge_basis = _legendre_edge_basis(order, edge_quads)
+                edge_basis_reversed = _legendre_edge_basis(order, -edge_quads)
+                nodal = False
+
+        weighted_face_basis = np.ascontiguousarray(face_basis * edge_weights[None, None, :])
+        weighted_edge_basis = np.ascontiguousarray(edge_basis * edge_weights[None, :])
+        face_coupling = np.einsum("q,fiq,jq->fij", edge_weights, face_basis, edge_basis, optimize=True)
+        face_coupling_reversed = np.einsum(
+            "q,fiq,jq->fij",
+            edge_weights,
+            negative_face_basis,
+            edge_basis_reversed,
+            optimize=True,
+        )
+        trace_lift = np.ascontiguousarray(
+            np.concatenate((face_coupling.transpose(0, 2, 1), face_coupling_reversed.transpose(0, 2, 1)), axis=0)
+        )
+        edge_mass = np.einsum("q,iq,jq->ij", edge_weights, edge_basis, edge_basis, optimize=True)
+        return cls(
+            space=space,
+            kind=trace_kind,
+            nodal=nodal,
+            interpolation_nodes=np.ascontiguousarray(interpolation_nodes, dtype=np.float64),
+            quads=np.ascontiguousarray(edge_quads, dtype=np.float64),
+            weights=np.ascontiguousarray(edge_weights, dtype=np.float64),
+            bas_of_bd_quads=np.ascontiguousarray(face_basis, dtype=np.float64),
+            bas1d_of_ref_edg_qds=np.ascontiguousarray(edge_basis, dtype=np.float64),
+            weighted_bas_of_bd_quads=weighted_face_basis,
+            weighted_bas1d_of_ref_edg_qds=weighted_edge_basis,
+            face_trace_test_element_trial_oriented=trace_lift,
+            M_rf_fc=np.ascontiguousarray(edge_mass, dtype=np.float64),
+        )
+
+    @property
+    def edg_dof(self) -> int:
+        """Number of trace basis coefficients per edge."""
+        return self.space.layout.edg_dof
+
+    def boundary_coefficients(self, boundary_condition: Callable) -> np.ndarray:
+        """Project boundary data into this trace basis on all mesh edges."""
+        mesh = self.space.mesh
+        trace_coeffs = np.zeros(self.space.layout.trace_shape, dtype=np.float64)
+        if mesh.bnd_edges_inds.size == 0:
+            return trace_coeffs
+
+        edge_vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+        t = self.interpolation_nodes if self.nodal else self.quads
+        points = 0.5 * (
+            (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
+            + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
+        )
+        values = np.asarray(boundary_condition(points[:, :, 0], points[:, :, 1]), dtype=np.float64)
+        num_points = t.size
+        if values.ndim == 0:
+            values = np.full((mesh.bnd_edges_inds.size, num_points), float(values))
+        elif values.shape == (num_points,):
+            values = np.broadcast_to(values[None, :], (mesh.bnd_edges_inds.size, num_points))
+        if values.shape != (mesh.bnd_edges_inds.size, num_points):
+            raise ValueError(
+                "boundary_condition must return a scalar, edge-point vector, or "
+                f"({mesh.bnd_edges_inds.size}, {num_points}) array; got {values.shape}"
+            )
+        if self.nodal:
+            trace_coeffs[mesh.bnd_edges_inds] = values
+        else:
+            rhs = (values * self.weights[None, :]) @ self.bas1d_of_ref_edg_qds.T
+            trace_coeffs[mesh.bnd_edges_inds] = rhs @ np.linalg.inv(self.M_rf_fc)
+        return np.ascontiguousarray(trace_coeffs)
 
 
 def evaluate_product(
@@ -141,6 +349,16 @@ class DGSpace:
         self._basis_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
         self._gradient_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
         self._mapped_quad_points: np.ndarray | None = None
+        self._layout = DGCoefficientLayout(
+            num_elements=self.mesh.num_tri,
+            num_edges=self.mesh.num_edg,
+            num_interior_edges=self.mesh.int_edges_inds.size,
+            num_boundary_edges=self.mesh.bnd_edges_inds.size,
+            order=self.order,
+            el_dof=self.el_dof,
+            edg_dof=self.quad_data.edg_dof,
+        )
+        self._trace_space_cache: dict[TraceBasisKind, DGTraceSpace] = {}
 
     @classmethod
     def from_degree(
@@ -204,6 +422,20 @@ class DGSpace:
     def ndof(self) -> int:
         """Total scalar element-local degrees of freedom."""
         return self.mesh.num_tri * self.el_dof
+
+    @property
+    def layout(self) -> DGCoefficientLayout:
+        """Canonical coefficient and trace-vector layout for this space."""
+        return self._layout
+
+    def trace_space(self, kind: str = "legacy-lagrange") -> DGTraceSpace:
+        """Return cached host-side trace basis/coupling data for this space."""
+        trace_kind = _normalize_trace_basis_kind(kind)
+        trace_space = self._trace_space_cache.get(trace_kind)
+        if trace_space is None:
+            trace_space = DGTraceSpace.from_space(self, trace_kind)
+            self._trace_space_cache[trace_kind] = trace_space
+        return trace_space
 
     def __repr__(self) -> str:
         return (

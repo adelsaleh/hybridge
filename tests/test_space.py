@@ -14,6 +14,7 @@ from hdgfem import (
     gmsh_smooth_star_mesh,
     gmsh_star_mesh,
     gmsh_triangle_mesh,
+    rectangle_mesh,
     solve_advection_reaction_hdg,
 )
 from hdgfem.core.space import evaluate_product
@@ -817,3 +818,25 @@ def test_gmsh_basic_shape_meshes() -> None:
         assert mesh.num_tri > 0
         assert mesh.num_edg > 0
         assert np.all(mesh.aff_jacs > 0.0)
+
+
+def test_dgspace_layout_and_trace_space_formalism() -> None:
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 3, basis_type="dub_orth", volume_quad_1d=8)
+
+    layout = space.layout
+    assert layout.scalar_shape == space.shape
+    assert layout.trace_shape == (mesh.num_edg, space.quad_data.edg_dof)
+    assert layout.reduced_trace_shape == (mesh.int_edges_inds.size, space.quad_data.edg_dof)
+    assert layout.trace_vector_size == mesh.num_edg * space.quad_data.edg_dof
+
+    for kind in ("legacy-lagrange", "legendre-modal", "bernstein"):
+        trace = space.trace_space(kind)
+        assert trace is space.trace_space(kind)
+        assert trace.kind == kind
+        assert trace.bas_of_bd_quads.shape[:2] == (3, space.el_dof)
+        assert trace.bas1d_of_ref_edg_qds.shape[0] == space.quad_data.edg_dof
+        assert trace.face_trace_test_element_trial_oriented.shape == (6, space.quad_data.edg_dof, space.el_dof)
+        boundary = trace.boundary_coefficients(lambda x, y: x + 2.0 * y)
+        assert boundary.shape == layout.trace_shape
+        assert np.all(np.isfinite(boundary))

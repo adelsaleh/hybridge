@@ -19,9 +19,11 @@ from .mesh import (
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from .space import DGField, DGSpace, VectorDGField, VectorDGSpace
+from .space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
 __all__ = [
+    "DGCoefficientLayout",
+    "DGTraceSpace",
     "DGField",
     "DGMesh",
     "DGSpace",

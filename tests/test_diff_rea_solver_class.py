@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from math import comb
-
 import numpy as np
 import pytest
 
@@ -61,11 +59,24 @@ def _assert_solver_cache_matches_result(solver: DiffReaSolver, result) -> None:
     assert solver.global_solve_result is result.global_solve_result
 
 
-def _edge_bernstein_basis(order: int, points: np.ndarray) -> np.ndarray:
-    r = 0.5 * (points + 1.0)
-    values = np.empty((order + 1, points.size), dtype=np.float64)
-    for j in range(order + 1):
-        values[j] = comb(order, j) * (1.0 - r) ** (order - j) * r**j
+def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
+    if num_points == 2:
+        return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
+    poly = np.polynomial.legendre.Legendre.basis(num_points - 1)
+    interior = np.sort(poly.deriv().roots())
+    points = np.concatenate(([-1.0], interior, [1.0]))
+    values = poly(points)
+    weights = 2.0 / ((num_points - 1) * num_points * values * values)
+    return np.ascontiguousarray(points, dtype=np.float64), np.ascontiguousarray(weights, dtype=np.float64)
+
+
+def _edge_lagrange_basis(order: int, points: np.ndarray) -> np.ndarray:
+    nodes, _ = _legendre_gauss_lobatto(order + 1)
+    values = np.ones((order + 1, points.size), dtype=np.float64)
+    for i in range(order + 1):
+        for j in range(order + 1):
+            if i != j:
+                values[i] *= (points - nodes[j]) / (nodes[i] - nodes[j])
     return values
 
 
@@ -85,7 +96,7 @@ def _face_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
 
 def _trace_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
     q_post = post_space.quad_data
-    base_trace = _edge_bernstein_basis(space.order, q_post.quads_JGL)
+    base_trace = _edge_lagrange_basis(space.order, q_post.quads_JGL)
     return np.einsum(
         "q,iq,aq->ia",
         q_post.weights_JGL,

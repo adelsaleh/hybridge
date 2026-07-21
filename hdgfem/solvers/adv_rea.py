@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 import json
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal
 
@@ -49,7 +49,7 @@ ReturnKey = Literal[
     "timings",
     "result",
 ]
-AssemblyBackend = Literal["numpy", "numba", "cupy", "auto"]
+AssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda", "auto"]
 
 
 _UNSET = object()
@@ -66,6 +66,7 @@ class AdvectionReactionTimings:
     total: float
     boundary_elimination: float = 0.0
     trace_ordering: float = 0.0
+    details: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,8 @@ class AdvectionReactionResult:
     field: DGField | None
     trace: np.ndarray | None
     timings: AdvectionReactionTimings
+    field_device: Any = None
+    trace_device: Any = None
     matrix_rows: np.ndarray | None = None
     matrix_cols: np.ndarray | None = None
     matrix_data: np.ndarray | None = None
@@ -133,6 +136,13 @@ class AdvectionReactionHDGOptions:
     matrix_pattern_dpi: int = 250
     matrix_pattern_only: bool = False
     assembly_backend: AssemblyBackend = "numpy"
+    trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
+    raw_local_assembly: Literal["precomputed", "fused"] = "precomputed"
+    raw_lu_mode: Literal["safe", "coop"] = "safe"
+    raw_block_size: int = 32
+    raw_matrix_format: Literal["auto", "coo", "csr"] = "auto"
+    materialize_host_system: bool = False
+    materialize_host_solution: bool | None = None
     advection_stabilization: Any = None
     cache_local_solvers: bool = False
     verbose: bool | int = True
@@ -187,9 +197,9 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
     elapsed = time.perf_counter() - start
     if should_print:
         if multiline:
-            print(f"{label} ... done in {_format_seconds(elapsed)}")
+            print(f"{indent}done in {_format_seconds(elapsed)}", flush=True)
         else:
-            print(f"done in {_format_seconds(elapsed)}")
+            print(f"done in {_format_seconds(elapsed)}", flush=True)
     return result, elapsed
 
 
@@ -731,6 +741,13 @@ def solve_advection_reaction_hdg(
         matrix_pattern_dpi: int = 250,
         matrix_pattern_only: bool = False,
         assembly_backend: AssemblyBackend = "numpy",
+        trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
+        raw_local_assembly: Literal["precomputed", "fused"] = "precomputed",
+        raw_lu_mode: Literal["safe", "coop"] = "safe",
+        raw_block_size: int = 32,
+        raw_matrix_format: Literal["auto", "coo", "csr"] = "auto",
+        materialize_host_system: bool = False,
+        materialize_host_solution: bool | None = None,
         advection_stabilization=None,
         cache_local_solvers: bool = False,
         verbose: bool | int = True,
@@ -808,9 +825,27 @@ def solve_advection_reaction_hdg(
         path.  ``"numba"`` uses the experimental fused projected-coefficient
         trace assembly backend and requires projected source/beta coefficients.
         ``"auto"`` currently keeps the stable NumPy path.
-        ``"cupy"`` assembles the dense local inverses and full trace system on
-        the GPU, then returns host arrays for the existing solve/reconstruction
-        pipeline.
+        ``"cupy"`` assembles the dense local inverses and trace system on the
+        GPU, then currently materializes the host solve system for the legacy
+        solve/reconstruction pipeline. ``"raw-cuda"`` uses the GPU4
+        boundary-eliminated trace formalism and raw CUDA kernels; with AMGX it
+        can keep the assembled CSR, RHS, reduced trace, and reconstructed field
+        on the CUDA device unless host materialization is requested.
+    materialize_host_system
+        For the raw-CUDA AMGX path, copy the reduced trace COO/RHS and boundary
+        elimination data back to host. The default ``False`` keeps these arrays
+        device-resident unless requested by diagnostics such as ``return_=``
+        ``("matrix_rows", ...)``.
+    materialize_host_solution
+        Build host-side ``DGField`` and trace arrays from a GPU backend result.
+        The default ``None`` materializes host solution objects for CPU backends
+        and keeps GPU backend solutions device-resident. Set ``True`` for
+        host-side error norms, plotting, and package post-processing. Requesting
+        ``return_=("trace", ...)`` also forces host trace materialization.
+    raw_matrix_format
+        Raw CUDA matrix output format. ``"auto"`` uses direct CSR only for fused
+        raw CUDA with device AMGX and no host-system diagnostics; otherwise it
+        keeps the COO fallback.
     advection_stabilization
         Optional HDG advection stabilization :math:`\tau` on element faces.
         ``None`` selects the upwind value ``abs(beta_h . n)``.  The NumPy
@@ -832,6 +867,7 @@ def solve_advection_reaction_hdg(
         tuple output, request keys such as ``"trace"`` or ``"timings"``.
     """
     total_start = time.perf_counter()
+    detail_timings: dict[str, float] = {}
     verbosity = _verbosity_level(verbose)
     if verbosity:
         print("\n----- DG FEM Advection-Reaction HDG Solve -----")
@@ -839,8 +875,25 @@ def solve_advection_reaction_hdg(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if trace_ordering not in {"none", "upwind-scc"}:
         raise ValueError("trace_ordering must be 'none' or 'upwind-scc'")
-    if assembly_backend not in {"numpy", "numba", "cupy", "auto"}:
-        raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', or 'auto'")
+    if assembly_backend not in {"numpy", "numba", "cupy", "raw-cuda", "auto"}:
+        raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', 'raw-cuda', or 'auto'")
+    if assembly_backend == "raw-cuda":
+        if boundary_mode != "eliminate":
+            raise ValueError("assembly_backend='raw-cuda' requires boundary_mode='eliminate'")
+        if trace_ordering != "none":
+            raise ValueError("assembly_backend='raw-cuda' currently requires trace_ordering='none'")
+        if raw_local_assembly not in {"precomputed", "fused"}:
+            raise ValueError("raw_local_assembly must be 'precomputed' or 'fused'")
+        if raw_lu_mode not in {"safe", "coop"}:
+            raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
+        if raw_lu_mode != "safe" and raw_local_assembly != "fused":
+            raise ValueError("raw_lu_mode='coop' is only supported with raw_local_assembly='fused'")
+        if raw_lu_mode == "coop" and str(trace_basis).replace("_", "-").lower() == "legendre-modal":
+            raise ValueError("raw_lu_mode='coop' is not validated for trace_basis='legendre-modal'; use raw_lu_mode='safe' or trace_basis='legacy-lagrange'")
+        if int(raw_block_size) not in {1, 32, 64, 128}:
+            raise ValueError("raw_block_size must be one of 1, 32, 64, or 128")
+        if raw_matrix_format not in {"auto", "coo", "csr"}:
+            raise ValueError("raw_matrix_format must be 'auto', 'coo', or 'csr'")
     if ilu_permc_spec is None:
         ilu_permc_spec = "NATURAL" if trace_ordering == "upwind-scc" else "COLAMD"
     want = tuple(return_)
@@ -848,6 +901,11 @@ def solve_advection_reaction_hdg(
     effective_backend = assembly_backend
     if effective_backend == "auto":
         effective_backend = "numpy"
+    if materialize_host_solution is None:
+        wants_host_solution = effective_backend not in {"cupy", "raw-cuda"}
+    else:
+        wants_host_solution = bool(materialize_host_solution)
+    wants_host_solution = wants_host_solution or any(key in want for key in ("trace", "trace_coeffs"))
     solver_is_petsc = solver is not None and str(solver).lower() == "petsc"
     effective_scale_system = not solver_is_petsc if scale_system is None else bool(scale_system)
     effective_ilu_drop_tol = ilu_drop_tol
@@ -858,6 +916,11 @@ def solve_advection_reaction_hdg(
         effective_ilu_fill_factor = 20 if boundary_mode == "eliminate" else 35
 
     def prepare_data():
+        if effective_backend == "raw-cuda":
+            if _is_callable_beta(beta):
+                return None, None, (beta[0], beta[1]), None, reaction
+            beta_field = _as_beta_field(beta, space)
+            return beta_field, None, None, None, reaction
         if effective_backend == "numba":
             if _is_callable_beta(beta):
                 raise TypeError(
@@ -876,6 +939,7 @@ def solve_advection_reaction_hdg(
         verbosity,
         prepare_data,
     )
+    detail_timings["prepare.coefficients"] = preparation
 
     trace_permutation = None
     plot_permutation = None
@@ -994,6 +1058,10 @@ def solve_advection_reaction_hdg(
 
     reduction = None
     boundary_elimination = 0.0
+    gpu4_assembly = None
+    gpu4_beta_coeffs = None
+    raw_cuda_device_amgx = False
+    trace_reduced_cp = None
     if effective_backend == "numba":
         from ..backends.numba import (
             assemble_local_advection_reaction_numba,
@@ -1081,6 +1149,126 @@ def solve_advection_reaction_hdg(
                 lambda: np.linalg.inv(numba_local.local_mats),
             )
             element_boundary_mats = numba_local.element_boundary_mats
+    elif effective_backend == "raw-cuda":
+        from ..backends.cupy import as_cupy_space, require_cupy
+        from ..backends.cupy_adv_rea_gpu4 import (
+            assemble_reduced_system_gpu4,
+            as_cupy_trace_space,
+            beta_dot_normal_from_coeffs,
+            project_callable_cupy,
+        )
+
+        setup_start = time.perf_counter()
+        cp = require_cupy()
+        detail_timings["raw.require_cupy"] = time.perf_counter() - setup_start
+        setup_start = time.perf_counter()
+        cspace = as_cupy_space(space)
+        detail_timings["raw.cupy_space"] = time.perf_counter() - setup_start
+        setup_start = time.perf_counter()
+        trace_host = space.trace_space(trace_basis)
+        detail_timings["raw.trace_space.host"] = time.perf_counter() - setup_start
+        setup_start = time.perf_counter()
+        trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
+        detail_timings["raw.trace_space.device"] = time.perf_counter() - setup_start
+        if beta_h is not None:
+            setup_start = time.perf_counter()
+            gpu4_beta_coeffs = cp.asarray(np.ascontiguousarray(beta_h.as_component_first(), dtype=np.float64))
+            cp.cuda.get_current_stream().synchronize()
+            detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
+        elif beta_callables is not None:
+            setup_start = time.perf_counter()
+            beta_0 = project_callable_cupy(beta_callables[0], cspace)
+            detail_timings["raw.beta_projection.x"] = time.perf_counter() - setup_start
+            setup_start = time.perf_counter()
+            beta_1 = project_callable_cupy(beta_callables[1], cspace)
+            detail_timings["raw.beta_projection.y"] = time.perf_counter() - setup_start
+            setup_start = time.perf_counter()
+            gpu4_beta_coeffs = cp.ascontiguousarray(cp.stack((beta_0, beta_1), axis=0))
+            cp.cuda.get_current_stream().synchronize()
+            detail_timings["raw.beta_projection.stack"] = time.perf_counter() - setup_start
+        else:
+            raise TypeError("raw-cuda assembly requires a VectorDGField beta or two beta callables")
+        raw_fused = raw_local_assembly == "fused"
+        normalized_solver = "" if solver is None else str(solver).lower()
+        raw_cuda_device_amgx = (
+            normalized_solver in {"amgx", "pyamgx"}
+            and matrix_pattern_dir is None
+            and not matrix_pattern_only
+        )
+        wants_host_system = bool(materialize_host_system) or any(
+            key in want
+            for key in (
+                "matrix_rows",
+                "matrix_cols",
+                "matrix_data",
+                "local_solver",
+                "element_boundary_mats",
+            )
+        )
+        effective_raw_matrix_format = str(raw_matrix_format).lower()
+        if effective_raw_matrix_format == "auto":
+            effective_raw_matrix_format = "csr" if raw_fused and raw_cuda_device_amgx and not wants_host_system else "coo"
+        if effective_raw_matrix_format == "csr" and not (raw_fused and raw_cuda_device_amgx and not wants_host_system):
+            raise ValueError(
+                "raw_matrix_format='csr' requires fused raw-cuda assembly, device AMGX solve, "
+                "and no host-system materialization or matrix diagnostics"
+            )
+        beta_dot_normal_cp = None
+        if not raw_fused:
+            setup_start = time.perf_counter()
+            beta_dot_normal_cp = beta_dot_normal_from_coeffs(gpu4_beta_coeffs, cspace, trace_ref)
+            cp.cuda.get_current_stream().synchronize()
+            detail_timings["raw.beta_dot_normal"] = time.perf_counter() - setup_start
+        gpu4_assembly, trace_assembly = _timed_call(
+            "assembling reduced trace system (raw-cuda gpu4)",
+            verbosity,
+            lambda: assemble_reduced_system_gpu4(
+                source,
+                reaction_h,
+                boundary_condition,
+                gpu4_beta_coeffs,
+                cspace,
+                trace_ref,
+                backend="raw-cuda",
+                beta_dot_normal=beta_dot_normal_cp,
+                raw_block_size=int(raw_block_size),
+                raw_local_assembly=raw_local_assembly,
+                raw_lu_mode=raw_lu_mode,
+                raw_matrix_format=effective_raw_matrix_format,
+            ),
+            multiline=verbosity >= 2,
+        )
+        if raw_cuda_device_amgx and not wants_host_system:
+            reduction = None
+            rows = cols = data = rhs = boundary_trace = None
+        else:
+            reduction = gpu4_assembly.to_host_reduction()
+            rows = reduction.rows
+            cols = reduction.cols
+            data = reduction.data
+            rhs = reduction.rhs
+            boundary_trace = reduction.known_values.reshape(space.layout.trace_shape)
+        beta_dot_normal = None if gpu4_assembly.beta_dot_normal is None else cp.asnumpy(gpu4_assembly.beta_dot_normal)
+        local_assembly = 0.0
+        local_inverse = 0.0
+        boundary_assembly = 0.0
+        boundary_elimination = gpu4_assembly.timings.get("boundary_elimination", 0.0)
+        local_solver = None
+        element_boundary_mats = None
+        for key, value in gpu4_assembly.timings.items():
+            if isinstance(value, (int, float)):
+                detail_timings[f"raw.assembly.{key}"] = float(value)
+        if verbosity >= 2:
+            timings = gpu4_assembly.timings
+            raw_parts = [
+                (key, value)
+                for key, value in sorted(timings.items())
+                if key != "total" and "block_size" not in key
+            ]
+            if raw_parts:
+                print("  raw-cuda assembly timings:", flush=True)
+                for key, value in raw_parts:
+                    print(f"    {key}: {value:.5f}s", flush=True)
     elif effective_backend == "cupy":
         from ..backends.cupy import (
             assemble_advection_reaction_trace_system_cupy,
@@ -1263,35 +1451,39 @@ def solve_advection_reaction_hdg(
             multiline=verbosity >= 2,
         )
 
-    solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
-    diagnostic_rows = hdg_assembly.free_trace_dofs(space)
-    if boundary_mode == "eliminate" and reduction is None:
-        def eliminate_boundary_trace():
-            known_mask = ~hdg_assembly.free_trace_dofs(space)
-            known_values = boundary_trace.ravel()
-            return eliminate_known_dofs(rows, cols, data, rhs, known_mask, known_values)
+    if raw_cuda_device_amgx:
+        solve_rows = solve_cols = solve_data = solve_rhs = None
+        diagnostic_rows = None
+    else:
+        solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
+        diagnostic_rows = hdg_assembly.free_trace_dofs(space)
+        if boundary_mode == "eliminate" and reduction is None:
+            def eliminate_boundary_trace():
+                known_mask = ~hdg_assembly.free_trace_dofs(space)
+                known_values = boundary_trace.ravel()
+                return eliminate_known_dofs(rows, cols, data, rhs, known_mask, known_values)
 
-        reduction, boundary_elimination = _timed_call(
-            "eliminating boundary trace dofs",
-            verbosity,
-            eliminate_boundary_trace,
-        )
-        solve_rows, solve_cols, solve_data, solve_rhs = (
-            reduction.rows,
-            reduction.cols,
-            reduction.data,
-            reduction.rhs,
-        )
-        diagnostic_rows = None
-    elif boundary_mode == "eliminate":
-        solve_rows, solve_cols, solve_data, solve_rhs = (
-            reduction.rows,
-            reduction.cols,
-            reduction.data,
-            reduction.rhs,
-        )
-        diagnostic_rows = None
-    if preordered_trace_permutation is not None and preordered_trace_permutation.shape != solve_rhs.shape:
+            reduction, boundary_elimination = _timed_call(
+                "eliminating boundary trace dofs",
+                verbosity,
+                eliminate_boundary_trace,
+            )
+            solve_rows, solve_cols, solve_data, solve_rhs = (
+                reduction.rows,
+                reduction.cols,
+                reduction.data,
+                reduction.rhs,
+            )
+            diagnostic_rows = None
+        elif boundary_mode == "eliminate":
+            solve_rows, solve_cols, solve_data, solve_rhs = (
+                reduction.rows,
+                reduction.cols,
+                reduction.data,
+                reduction.rhs,
+            )
+            diagnostic_rows = None
+    if preordered_trace_permutation is not None and solve_rhs is not None and preordered_trace_permutation.shape != solve_rhs.shape:
         raise RuntimeError(
             "preordered trace assembly produced a permutation of shape "
             f"{preordered_trace_permutation.shape}, but the solve RHS has shape {solve_rhs.shape}"
@@ -1359,6 +1551,7 @@ def solve_advection_reaction_hdg(
             total=time.perf_counter() - total_start,
             boundary_elimination=boundary_elimination,
             trace_ordering=trace_ordering_time,
+            details=dict(detail_timings),
         )
         return AdvectionReactionResult(
             field=None,
@@ -1452,69 +1645,172 @@ def solve_advection_reaction_hdg(
             verbose=verbosity,
         )
 
-    global_solve_result, solve_time = _timed_call(
-        "solving global system",
-        verbosity,
-        solve_lambda,
-        multiline=verbosity >= 1,
-    )
+    if raw_cuda_device_amgx:
+        from ..backends.cupy_adv_rea_gpu4 import solve_reduced_system_amgx_device
+
+        (global_solve_result, trace_reduced_cp), solve_time = _timed_call(
+            "solving global system (raw-cuda device AMGX)",
+            verbosity,
+            lambda: solve_reduced_system_amgx_device(
+                gpu4_assembly,
+                config=amgx_config,
+                tolerance=solver_rtol,
+                check_rtol=solver_rtol,
+                atol=solver_atol,
+                maxiter=maxiter,
+                scale_system=effective_scale_system,
+                raise_on_nonconvergence=True,
+                materialize_host_solution=wants_host_solution,
+                verbose=verbosity,
+            ),
+            multiline=verbosity >= 1,
+        )
+        if wants_host_system:
+            materialize_start = time.perf_counter()
+            reduction = gpu4_assembly.to_host_reduction()
+            detail_timings["raw.host_system_materialization"] = time.perf_counter() - materialize_start
+            rows = reduction.rows
+            cols = reduction.cols
+            data = reduction.data
+            rhs = reduction.rhs
+            solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
+            boundary_trace = reduction.known_values.reshape(space.layout.trace_shape)
+        else:
+            reduction = None
+            rows = cols = data = rhs = solve_rows = solve_cols = solve_data = solve_rhs = None
+            boundary_trace = None
+    else:
+        global_solve_result, solve_time = _timed_call(
+            "solving global system",
+            verbosity,
+            solve_lambda,
+            multiline=verbosity >= 1,
+        )
     if preordered_trace_permutation is not None:
+        if global_solve_result.x is None:
+            raise RuntimeError("trace permutation requires a host-materialized solve vector")
         unpermuted = np.empty_like(global_solve_result.x)
         unpermuted[preordered_trace_permutation] = global_solve_result.x
         global_solve_result.x = unpermuted
         global_solve_result.permutation_elapsed_seconds = 0.0
         global_solve_result.permutation_size = int(preordered_trace_permutation.size)
-    if reduction is None:
+    if effective_backend == "raw-cuda" and not wants_host_solution:
+        trace = None
+    elif global_solve_result.x is None:
+        trace = None
+    elif reduction is None:
         trace = np.asarray(global_solve_result.x, dtype=np.float64)
     else:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
-    can_use_projected_reconstruction = (
-        effective_backend == "numba"
-        or (
-            effective_backend == "cupy"
-            and isinstance(source, DGField)
-            and isinstance(beta_h, VectorDGField)
-            and (np.isscalar(reaction_h) or isinstance(reaction_h, DGField))
-        )
-    )
-    if can_use_projected_reconstruction:
-        from ..backends.numba import reconstruct_projected_field_numba
+    field_device = None
+    trace_device = None
 
-        label = "reconstructing element field (numba)"
-        if effective_backend == "cupy":
-            label = "reconstructing element field (numba after cupy assembly)"
-        field, reconstruction = _timed_call(
-            label,
-            verbosity,
-            lambda: reconstruct_projected_field_numba(
-                trace,
-                source,
-                beta_h,
-                reaction_h,
-                space,
-                advection_stabilization=advection_stabilization,
-            ),
-        )
+    if effective_backend == "raw-cuda":
+        from ..backends.cupy import asnumpy, require_cupy
+        from ..backends.cupy_adv_rea_gpu4 import reconstruct_field_gpu4, reconstruct_trace_cupy
+
+        cp = require_cupy()
+        if trace_reduced_cp is None:
+            if global_solve_result.x is None:
+                raise RuntimeError("raw-cuda reconstruction requires a device or host reduced trace vector")
+            trace_reduced_cp = cp.asarray(global_solve_result.x, dtype=cp.float64)
+        trace_reconstruct_start = time.perf_counter()
+        trace_cp = reconstruct_trace_cupy(trace_reduced_cp, gpu4_assembly.boundary_trace, gpu4_assembly.cspace)
+        cp.cuda.get_current_stream().synchronize()
+        trace_reconstruction = time.perf_counter() - trace_reconstruct_start
+        detail_timings["raw.reconstruct.trace_device"] = trace_reconstruction
+        reconstruction_start = time.perf_counter()
+        uh_cp, _local_reconstruction = reconstruct_field_gpu4(trace_cp, source, reaction_h, gpu4_beta_coeffs, gpu4_assembly)
+        cp.cuda.get_current_stream().synchronize()
+        trace_device = trace_cp
+        field_device = uh_cp
+        field_reconstruction = time.perf_counter() - reconstruction_start
+        detail_timings["raw.reconstruct.field_device"] = field_reconstruction
+        reconstruction = trace_reconstruction + field_reconstruction
+        if wants_host_solution:
+            materialize_start = time.perf_counter()
+            field = space.field(np.ascontiguousarray(asnumpy(uh_cp), dtype=np.float64), name="u_h")
+            trace = np.ascontiguousarray(asnumpy(trace_cp), dtype=np.float64)
+            materialize_elapsed = time.perf_counter() - materialize_start
+            detail_timings["raw.host_solution_materialization"] = materialize_elapsed
+            reconstruction += materialize_elapsed
+        else:
+            field = None
+            trace = None
     else:
-        def reconstruct_from_local_solver():
-            nonlocal local_solver, element_boundary_mats
-            if local_solver is None or element_boundary_mats is None:
-                raise RuntimeError(
-                    "local solver cache is required for reconstruction when projected Numba reconstruction is unavailable"
+        if effective_backend == "cupy" and not wants_host_solution:
+            field = None
+            trace = None
+            reconstruction = 0.0
+        else:
+            can_use_projected_reconstruction = (
+                effective_backend == "numba"
+                or (
+                    effective_backend == "cupy"
+                    and isinstance(source, DGField)
+                    and isinstance(beta_h, VectorDGField)
+                    and (np.isscalar(reaction_h) or isinstance(reaction_h, DGField))
                 )
-            if not isinstance(local_solver, np.ndarray) or not isinstance(element_boundary_mats, np.ndarray):
-                from ..backends.cupy import asnumpy
+            )
+            if can_use_projected_reconstruction:
+                from ..backends.numba import reconstruct_projected_field_numba
 
-                local_solver = np.ascontiguousarray(asnumpy(local_solver))
-                element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))
-            return hdg_assembly.reconstruct_field(trace, source_moments, local_solver, element_boundary_mats, space)
+                label = "reconstructing element field (numba)"
+                if effective_backend == "cupy":
+                    label = "reconstructing element field (numba after cupy assembly)"
+                field, reconstruction = _timed_call(
+                    label,
+                    verbosity,
+                    lambda: reconstruct_projected_field_numba(
+                        trace,
+                        source,
+                        beta_h,
+                        reaction_h,
+                        space,
+                        advection_stabilization=advection_stabilization,
+                    ),
+                )
+            else:
+                def reconstruct_from_local_solver():
+                    nonlocal local_solver, element_boundary_mats
+                    if local_solver is None or element_boundary_mats is None:
+                        raise RuntimeError(
+                            "local solver cache is required for reconstruction when projected Numba reconstruction is unavailable"
+                        )
+                    if not isinstance(local_solver, np.ndarray) or not isinstance(element_boundary_mats, np.ndarray):
+                        from ..backends.cupy import asnumpy
 
-        field, reconstruction = _timed_call(
-            "reconstructing element field",
-            verbosity,
-            reconstruct_from_local_solver,
-        )
+                        local_solver = np.ascontiguousarray(asnumpy(local_solver))
+                        element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))
+                    return hdg_assembly.reconstruct_field(trace, source_moments, local_solver, element_boundary_mats, space)
+
+                field, reconstruction = _timed_call(
+                    "reconstructing element field",
+                    verbosity,
+                    reconstruct_from_local_solver,
+                )
+
+    if global_solve_result is not None:
+        for detail_key, attr in (
+            ("solve.scale", "scale_elapsed_seconds"),
+            ("solve.preconditioner_or_setup", "preconditioner_elapsed_seconds"),
+            ("solve.iteration", "solve_elapsed_seconds"),
+            ("solve.amgx.csr", "amgx_csr_elapsed_seconds"),
+            ("solve.amgx.setup", "amgx_setup_elapsed_seconds"),
+            ("solve.amgx.solve", "amgx_solve_elapsed_seconds"),
+            ("solve.amgx.total", "amgx_call_elapsed_seconds"),
+            ("solve.amgx.overhead", "amgx_overhead_elapsed_seconds"),
+            ("solve.validation.finite", "solve_finite_check_elapsed_seconds"),
+            ("solve.validation.solver_residual", "solve_solver_residual_elapsed_seconds"),
+            ("solve.validation.physical_residual", "solve_physical_residual_elapsed_seconds"),
+            ("solve.validation.total", "solve_validation_elapsed_seconds"),
+            ("solve.global.overhead", "solve_global_overhead_elapsed_seconds"),
+            ("solve.unaccounted", "solve_unaccounted_elapsed_seconds"),
+        ):
+            value = getattr(global_solve_result, attr, None)
+            if value is not None:
+                detail_timings[detail_key] = float(value)
 
     timings = AdvectionReactionTimings(
         preparation=preparation,
@@ -1524,11 +1820,14 @@ def solve_advection_reaction_hdg(
         total=time.perf_counter() - total_start,
         boundary_elimination=boundary_elimination,
         trace_ordering=trace_ordering_time,
+        details=dict(detail_timings),
     )
     result = AdvectionReactionResult(
         field=field,
         trace=trace,
         timings=timings,
+        field_device=field_device,
+        trace_device=trace_device,
         matrix_rows=rows,
         matrix_cols=cols,
         matrix_data=data,

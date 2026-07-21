@@ -1,0 +1,32 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "GMRES",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_INI_CORE",
+    "tolerance": 1e-14,
+    "max_iters": 1500,
+    "gmres_n_restart": 50,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2",
+    "preconditioner": {
+      "solver": "AMG",
+      "interpolator": "D2",
+      "selector": "PMIS",
+      "cycle": "V",
+      "max_iters": 1,
+      "max_levels": 50,
+      "min_coarse_rows": 2,
+      "interp_max_elements": 4,
+      "smoother": "JACOBI_L1",
+      "presweeps": 2,
+      "postsweeps": 2,
+      "coarsest_sweeps": 2,
+      "coarse_solver": "NOSOLVER",
+      "print_grid_stats": 0
+    }
+  }
+}

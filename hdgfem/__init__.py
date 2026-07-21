@@ -17,7 +17,7 @@ from .core.mesh import (
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from .core.space import DGField, DGSpace, VectorDGField, VectorDGSpace
+from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
 
 def __getattr__(name: str):
@@ -87,6 +87,8 @@ __all__ = [
     "DiffusionReactionHDGSolver",
     "DiffusionReactionResult",
     "DiffusionReactionTimings",
+    "DGCoefficientLayout",
+    "DGTraceSpace",
     "DGField",
     "DGMesh",
     "DGSpace",
