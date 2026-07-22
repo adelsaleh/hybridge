@@ -204,6 +204,67 @@ class CupyUpwindBlockGSPreconditioner:
         return out.reshape(vector.shape)
 
 
+def cupy_upwind_block_gs_from_host_preconditioner(
+        host_prec,
+        *,
+        dtype=None,
+        warm_start: bool = True,
+):
+    """Transfer an existing host upwind block-GS preconditioner to CuPy.
+
+    ``host_prec`` must be an :class:`UpwindBlockGSPreconditioner` built for the
+    already scaled and upwind-ordered matrix.  This routine does not rebuild any
+    sparsity or block data on the host; it only transfers the compact level,
+    lower-coupling, and inverse-diagonal arrays to the current CUDA device and
+    returns the Cupyx ``LinearOperator`` used by iterative solvers.
+    """
+    from ..backends.cupy import require_cupy, require_cupyx_sparse_linalg
+
+    cupy = require_cupy()
+    cupyx_linalg = require_cupyx_sparse_linalg()
+    cupy_dtype = cupy.dtype(cupy.float64 if dtype is None else dtype)
+    np_dtype = np.dtype(cupy.asnumpy(cupy.empty((), dtype=cupy_dtype)).dtype)
+    if np_dtype not in {np.dtype(np.float32), np.dtype(np.float64)}:
+        raise ValueError("upwind block-GS dtype must be float32 or float64")
+    if getattr(host_prec, "sweep", "forward") != "forward":
+        raise ValueError("CuPy upwind block-GS currently supports only forward sweeps")
+
+    build_start = time.perf_counter()
+    transfer_start = time.perf_counter()
+    level_offsets = cupy.asarray(host_prec.level_offsets, dtype=cupy.int64)
+    lower_row_ptr = cupy.asarray(host_prec.lower_row_ptr, dtype=cupy.int64)
+    lower_col_ind = cupy.asarray(host_prec.lower_col_ind, dtype=cupy.int64)
+    lower_values = cupy.asarray(host_prec.lower_values, dtype=cupy_dtype)
+    diagonal_inverse = cupy.asarray(host_prec.diagonal_inverse, dtype=cupy_dtype)
+    cupy.cuda.get_current_stream().synchronize()
+    device_transfer_seconds = time.perf_counter() - transfer_start
+
+    stats = CupyUpwindBlockGSStats(
+        host_stats=host_prec.stats,
+        host_setup_seconds=float(host_prec.stats.build_seconds),
+        device_transfer_seconds=device_transfer_seconds,
+        operator_build_seconds=time.perf_counter() - build_start,
+    )
+    preconditioner = CupyUpwindBlockGSPreconditioner(
+        cupy=cupy,
+        cupyx_linalg=cupyx_linalg,
+        level_offsets=level_offsets,
+        lower_row_ptr=lower_row_ptr,
+        lower_col_ind=lower_col_ind,
+        lower_values=lower_values,
+        diagonal_inverse=diagonal_inverse,
+        host_level_offsets=host_prec.level_offsets,
+        dtype=np_dtype,
+        stats=stats,
+    )
+    if warm_start:
+        warmup = cupy.zeros(preconditioner.shape[0], dtype=cupy_dtype)
+        preconditioner.matvec(warmup)
+        cupy.cuda.get_current_stream().synchronize()
+        preconditioner.reset_timing()
+    return preconditioner.operator
+
+
 def build_cupy_upwind_block_gs_preconditioner(
         matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
         *,
@@ -273,4 +334,5 @@ __all__ = [
     "CupyUpwindBlockGSPreconditioner",
     "CupyUpwindBlockGSStats",
     "build_cupy_upwind_block_gs_preconditioner",
+    "cupy_upwind_block_gs_from_host_preconditioner",
 ]

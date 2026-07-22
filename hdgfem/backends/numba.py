@@ -55,6 +55,9 @@ class NumbaProjectedTraceAssembly:
     beta_dot_normal: np.ndarray
     timings: dict[str, float]
     reduction: KnownDofReduction | None = None
+    block_rows: np.ndarray | None = None
+    block_cols: np.ndarray | None = None
+    block_data: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -604,6 +607,7 @@ def assemble_projected_trace_system_eliminated_numba(
         edge_order: np.ndarray | None = None,
         beta_dot_normal: np.ndarray | None = None,
         advection_stabilization=None,
+        return_block_coo: bool = False,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
     if not NUMBA_AVAILABLE:
@@ -653,6 +657,12 @@ def assemble_projected_trace_system_eliminated_numba(
     n_flux = int(side_flux_offsets[-1])
     n_mass = mesh.interior_elements.size * edg_dof * edg_dof
     nnz = n_flux + n_mass
+    side_block_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
+    side_block_offsets[0] = 0
+    np.cumsum(side_col_counts, out=side_block_offsets[1:])
+    n_flux_blocks = int(side_block_offsets[-1])
+    n_mass_blocks = int(mesh.interior_elements.size)
+    block_nnz = n_flux_blocks + n_mass_blocks if return_block_coo else 0
     timings["reduction_map"] = time.perf_counter() - start
 
     rows = np.empty(nnz, dtype=np.int64)
@@ -660,6 +670,9 @@ def assemble_projected_trace_system_eliminated_numba(
     data = np.empty(nnz, dtype=np.float64)
     rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
+    block_rows = np.empty(block_nnz, dtype=np.int64)
+    block_cols = np.empty_like(block_rows)
+    block_data = np.empty((block_nnz, edg_dof, edg_dof), dtype=np.float64)
 
     start = time.perf_counter()
     assemble_projected_trace_system_eliminated_kernel(
@@ -668,6 +681,11 @@ def assemble_projected_trace_system_eliminated_numba(
         data,
         rhs_indices,
         rhs_values,
+        block_rows,
+        block_cols,
+        block_data,
+        np.ascontiguousarray(side_block_offsets, dtype=np.int64),
+        bool(return_block_coo),
         np.ascontiguousarray(mesh.loc2glob_edge, dtype=np.int64),
         np.ascontiguousarray(mesh.orientations, dtype=np.bool_),
         np.ascontiguousarray(mesh.loc2oriented_face_coupling, dtype=np.int64),
@@ -704,6 +722,8 @@ def assemble_projected_trace_system_eliminated_numba(
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
+    if return_block_coo:
+        timings["block_coo_entries"] = float(block_nnz)
 
     reduction = _reduction_with_system(reduction_template, rows, cols, data, rhs)
     return NumbaProjectedTraceAssembly(
@@ -717,6 +737,9 @@ def assemble_projected_trace_system_eliminated_numba(
         beta_dot_normal=beta_dot_normal,
         timings=timings,
         reduction=reduction,
+        block_rows=block_rows if return_block_coo else None,
+        block_cols=block_cols if return_block_coo else None,
+        block_data=block_data if return_block_coo else None,
     )
 
 

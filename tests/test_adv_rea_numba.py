@@ -10,7 +10,7 @@ from hdgfem.backends.numba import (
     assemble_projected_trace_system_eliminated_numba,
     assemble_projected_trace_system_numba,
 )
-from hdgfem.linalg.system import eliminate_known_dofs
+from hdgfem.linalg.system import assemble_global_matrix, eliminate_known_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.solvers.adv_rea import (
     AdvectionReactionHDGSolver,
@@ -230,6 +230,54 @@ def test_numba_eliminated_trace_system_matches_generic_elimination() -> None:
     np.testing.assert_array_equal(direct_reduction.cols, generic_reduction.cols)
     np.testing.assert_allclose(direct_reduction.data, generic_reduction.data, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(direct_reduction.rhs, generic_reduction.rhs, rtol=1e-11, atol=1e-11)
+
+
+def test_numba_eliminated_block_coo_reconstructs_trace_matrix() -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    beta_h, reaction_h, source_h, exact = _projected_test2_fields(space)
+
+    assembly = assemble_projected_trace_system_eliminated_numba(
+        source_h,
+        beta_h,
+        reaction_h,
+        exact,
+        space,
+        return_block_coo=True,
+    )
+    assert assembly.block_rows is not None
+    assert assembly.block_cols is not None
+    assert assembly.block_data is not None
+
+    trace_system = assembly.trace_system
+    scalar_matrix = assemble_global_matrix(
+        trace_system.rows,
+        trace_system.cols,
+        trace_system.data,
+        trace_system.rhs.size,
+    ).tocsr()
+
+    edg_dof = space.quad_data.edg_dof
+    local_rows = np.arange(edg_dof, dtype=np.int64)
+    local_cols = np.arange(edg_dof, dtype=np.int64)
+    block_scalar_rows = np.broadcast_to(
+        assembly.block_rows[:, None, None] * edg_dof + local_rows[None, :, None],
+        assembly.block_data.shape,
+    ).ravel()
+    block_scalar_cols = np.broadcast_to(
+        assembly.block_cols[:, None, None] * edg_dof + local_cols[None, None, :],
+        assembly.block_data.shape,
+    ).ravel()
+    block_matrix = assemble_global_matrix(
+        block_scalar_rows,
+        block_scalar_cols,
+        assembly.block_data.ravel(),
+        trace_system.rhs.size,
+    ).tocsr()
+
+    diff = scalar_matrix - block_matrix
+    diff.sum_duplicates()
+    assert diff.nnz == 0 or np.max(np.abs(diff.data)) <= 1.0e-12
 
 
 @pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))

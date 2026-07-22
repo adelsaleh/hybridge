@@ -132,6 +132,27 @@ CASE_DEFINITIONS = {
         factory=test2,
         default_domain="rectangle",
     ),
+    "test2_minus10": AdvectionReactionCaseDefinition(
+        key="test2_minus10",
+        description="Legacy test2 with m, n, a, and b reduced by 10 percent.",
+        factory=test2,
+        default_domain="rectangle",
+        default_params={"m": 9.0, "n": 13.5, "a": 1.8, "b": 1.8},
+    ),
+    "test2_plus10": AdvectionReactionCaseDefinition(
+        key="test2_plus10",
+        description="Legacy test2 with m, n, a, and b increased by 10 percent.",
+        factory=test2,
+        default_domain="rectangle",
+        default_params={"m": 11.0, "n": 16.5, "a": 2.2, "b": 2.2},
+    ),
+    "test2_amp_skew": AdvectionReactionCaseDefinition(
+        key="test2_amp_skew",
+        description="Legacy test2 with mildly skewed sine/cosine amplitudes.",
+        factory=test2,
+        default_domain="rectangle",
+        default_params={"m": 10.0, "n": 15.0, "a": 2.2, "b": 1.8},
+    ),
     "test3": AdvectionReactionCaseDefinition(
         key="test3",
         description="Divergence-free vortex transport-reaction case.",

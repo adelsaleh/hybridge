@@ -1,187 +1,424 @@
 # hdgfem Manual
 
-This manual describes the current `hdgfem` package and, in particular, how to
-use the advection-reaction and diffusion-reaction HDG solvers.
+This manual describes the current `hdgfem` package, its command-line workflows,
+and the reusable Python formalism behind the solvers.  The repository is a
+research codebase for discontinuous Galerkin and hybridizable discontinuous
+Galerkin methods, with current emphasis on advection-reaction and
+diffusion-reaction HDG trace systems.
 
-The repository root contains the `hdgfem/` package directory.  The solvers keep
-the same numerical HDG structure as the older scripts, but expose
-object-oriented mesh, space, and field objects through package-native modules.
+The main package path is self-contained around NumPy, SciPy, and Numba.  PETSc,
+CuPy/Cupyx, PyAMGX/AMGX, and DOLFINx are optional stacks used by selected
+runners.  DOLFINx is not required by the core package; it appears only in the
+optional guiding-center/diocotron scripts where continuous Galerkin can be
+compared against the native HDG implementation.
 
-## Package Structure
+## Documentation Map
+
+This manual is the navigation hub for the repository's Markdown notes.  Keep
+this list updated whenever a new `.md` file is added.  Generated cache notes,
+such as `.pytest_cache/README.md`, are intentionally not listed.
+
+- [MANUAL.md](MANUAL.md): package manual, CLI notes, backend notes, API examples, and implementation guide.
+- [README.md](README.md): top-level overview, quick start, package map, and documentation pointers.
+- [TODO.md](TODO.md): current GPU, upwind-GS, solver API, and backend cleanup roadmap.
+- [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX configuration presets and recommendations.
+- [run_configs/README.md](run_configs/README.md): version-controlled benchmark and solver preset notes.
+- [docs/gpu_hdg_modules.md](docs/gpu_hdg_modules.md): standalone GPU runner status, raw-CUDA notes, and benchmark summaries.
+- [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
+- [docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md](docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md): recommended torsion-initialized Newton parameters from the Strategy A study.
+- [docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md](docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md): Strategy A band parameter study and result interpretation.
+- [run_logs/adv_rea_amgx_config_findings_20260720.md](run_logs/adv_rea_amgx_config_findings_20260720.md): AMGX configuration sweep findings for advection-reaction.
+- [run_logs/adv_rea_amgx_variability_20260722.md](run_logs/adv_rea_amgx_variability_20260722.md): AMGX variability checks for advection-reaction cases.
+- [run_logs/adv_rea_solver_benchmarks_p6_ms001_20260722.md](run_logs/adv_rea_solver_benchmarks_p6_ms001_20260722.md): p=6, mesh-size 0.01 advection solver benchmark report.
+- [run_logs/adv_rea_solver_robustness_ms0008_20260722.md](run_logs/adv_rea_solver_robustness_ms0008_20260722.md): mesh-size 0.008 robustness sweep for advection solvers.
+- [run_logs/adv_rea_upwgs_variability_20260722.md](run_logs/adv_rea_upwgs_variability_20260722.md): upwind block-GS/Cupyx variability follow-up.
+- [run_logs/raw_cuda_fused_coop_lu_findings_20260720.md](run_logs/raw_cuda_fused_coop_lu_findings_20260720.md): raw-CUDA fused cooperative LU findings.
+- [run_logs/run_logs_audit_20260722.md](run_logs/run_logs_audit_20260722.md): audit of run-log coverage and findings.
+- [run_logs/upwind_block_gs_cupyx_findings_20260722.md](run_logs/upwind_block_gs_cupyx_findings_20260722.md): upwind block-GS/Cupyx findings and notes.
+
+## Package Architecture
 
 ```text
 .
   hdgfem/
-    __init__.py   public package exports
-    assembly/     HDG assembly helpers, NumPy matrices, projection helpers, and Gram operators
-    backends/     NumPy, Numba, and CuPy backend modules
-    core/         mesh, basis, quadrature, DG spaces/fields, transfer, and adaptivity
-    io/           output formatting and plotting helpers
-    kernels/      low-level Numba kernels
-    linalg/       sparse global-system solve and graph ordering helpers
+    __init__.py   public package exports and lazy solver imports
+    core/         mesh/cache, basis, quadrature, DG spaces/fields, transfer, adaptivity
+    assembly/     HDG local/trace assembly, projections, face-dense helpers, Gram operators
+    linalg/       trace-system utilities, solves, ordering, scaling, preconditioners
     solvers/      advection-reaction and diffusion-reaction solver APIs
+    backends/     optional Numba, CuPy, raw-CUDA, PyAMGX, and fused benchmark adapters
+    kernels/      low-level Numba kernels used by backend wrappers
+    io/           output formatting and plotting helpers
+  scripts/        command-line runners and research harnesses
+  docs/           algorithm notes, GPU status notes, benchmark summaries
   run_configs/    version-controlled benchmark and solver presets
-  tests/          focused package tests
+  configs/        backend configuration files, currently AMGX presets
+  tests/          focused regression tests
 ```
 
-## Command-Line Runners
+Important module groups:
 
-Advection-reaction manufactured presets:
+- `hdgfem.core.mesh`: `DGMesh`, structured rectangle meshes, Gmsh-backed
+  rectangle/disc/star/smooth-star meshes, mesh caching, and Gmsh thread
+  controls.
+- `hdgfem.core.basis`, `hdgfem.core.quadrature`, and `hdgfem.core.space`:
+  reference bases, quadrature tables, `DGSpace`, `DGTraceSpace`, `DGField`, and
+  `VectorDGField`.
+- `hdgfem.core.transfer` and `hdgfem.core.adaptivity`: field transfer between
+  meshes and PDE-agnostic indicator/remeshing utilities.
+- `hdgfem.assembly.matrices_numpy`: reference NumPy HDG matrix builders and
+  output-buffer accumulation routines used by CPU solvers and validation code.
+- `hdgfem.assembly.hdg`: reusable static-condensation and trace-assembly
+  helpers shared by solver implementations.
+- `hdgfem.backends.numba`: projected advection-reaction trace assembly,
+  boundary-eliminated assembly, optional ordered block-COO emission, and Numba
+  reconstruction helpers.
+- `hdgfem.backends.cupy`: CuPy/Cupyx import guards, device mirrors of mesh and
+  reference data, host/device sparse conversion, Cupyx Krylov wrappers, device
+  ILU(1), host-ILU export to device triangular solves, and PyAMGX CSR handoff.
+- `hdgfem.backends.cupy_adv_rea_gpu4`, `hdgfem.backends.cupy_adv_rea_raw`, and
+  `hdgfem.backends.cupy_diff_rea_raw`: GPU benchmark support.  The `gpu4` name
+  is historical; `TODO.md` records the cleanup plan.
+- `hdgfem.linalg.system`: sparse trace matrix assembly, boundary dof
+  elimination/expansion, diagonal row scaling, SciPy/PETSc/Cupyx solve routing,
+  and residual diagnostics.
+- `hdgfem.linalg.ordering`: upwind-SCC graph ordering for trace edges and
+  sparse-pattern plotting diagnostics.
+- `hdgfem.linalg.upwind_block_gs`: CSR-reference level-scheduled upwind block
+  Gauss-Seidel preconditioner builder.
+- `hdgfem.linalg.upwind_block_gs_onfly`: scalar-COO and ordered block-COO
+  builders that construct the same forward upwind block-GS preconditioner
+  without scanning a finished CSR matrix.
+- `hdgfem.linalg.cupy_upwind_block_gs`: device application of compact host-built
+  upwind block-GS data through a Cupyx `LinearOperator`.
+
+## Environment Setup
+
+Install and run from the repository root:
 
 ```bash
-python -m scripts.advection_reaction.run_adv_rea_cases [preset]
+source .venv/bin/activate
+python -m pip install -e .
+python -m pytest
 ```
 
-Diffusion-reaction manufactured presets:
+The base package uses NumPy, SciPy, and Numba.  Tune Numba CPU parallelism
+before Python starts:
 
 ```bash
-python -m scripts.diffusion_reaction.run_diff_rea_cases [preset]
+export NUMBA_NUM_THREADS=40
+export OMP_NUM_THREADS=1
 ```
 
-Torsion-initialized semilinear HDG Newton benchmark:
+Mesh generation defaults to local caching under `.cache/hdgfem/meshes` and logs
+cache hits, misses, and fallbacks.  GPU advection runners also accept
+`--gmsh-num-threads` for parallel CPU meshing.
+
+### PETSc
+
+PETSc is optional.  `petsc4py` is imported only when a PETSc solve is requested.
+A PETSc solve needs a matched PETSc / `petsc4py` pair visible to the active
+Python environment:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton [options]
+export PETSC_DIR=$HOME/opt/petsc
+export PETSC_ARCH=arch-linux-c-opt
+export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
+python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
 ```
 
-### Common Runs
+Build or install `petsc4py` from the matching PETSc checkout or exact matching
+release.  Avoid mixing system `petsc4py` with virtualenv NumPy.  For the known
+PETSc 3.22.2 setup used in this repository, keep NumPy below the version limit
+required by the active Numba release and use a Cython/setuptools pair compatible
+with that PETSc binding.
 
-Small smoke run:
+Useful backend checks:
 
 ```bash
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); k.getPC().setType('gamg'); print('GAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('hypre'); pc.setHYPREType('boomeramg'); print('Hypre/BoomerAMG ok')"
+python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('lu'); pc.setFactorSolverType('mumps'); print('MUMPS ok')"
+```
+
+### CuPy, Cupyx, and AMGX
+
+CuPy/Cupyx and PyAMGX are separate optional GPU layers:
+
+```text
+CuPy arrays/raw kernels      device storage, element kernels, reconstruction kernels
+Cupyx sparse/linalg         CSR/COO matrices, Krylov solvers, sparse triangular solves
+PyAMGX bridge               AMGX setup/solve from CuPy CSR data and device pointers
+```
+
+Cupyx-only solves do not use AMGX.  They need a CUDA-compatible CuPy install
+whose sparse modules are present:
+
+```bash
+python -c "import cupy; print(cupy.cuda.runtime.runtimeGetVersion())"
+python -c "import cupyx.scipy.sparse, cupyx.scipy.sparse.linalg; print('cupyx sparse ok')"
+```
+
+AMGX solves additionally need `pyamgx` and the AMGX shared libraries:
+
+```bash
+export AMGX_LIB_DIR=/path/to/amgx/lib
+export LD_LIBRARY_PATH=$AMGX_LIB_DIR:$LD_LIBRARY_PATH
+python -c "import pyamgx; print('pyamgx ok')"
+```
+
+`hdgfem.backends.cupy` exposes the shared GPU utilities:
+
+```text
+require_cupy                         import guard for CuPy
+require_cupyx_sparse                 import guard for cupyx.scipy.sparse
+require_cupyx_sparse_linalg          import guard for cupyx.scipy.sparse.linalg
+scipy_csr_to_cupy                    copy a SciPy CSR matrix to CuPy CSR
+scipy_coo_to_cupy_csr                copy host COO arrays and build CuPy CSR on device
+solve_cupyx_csr                      run Cupyx cg, bicgstab, cgs, or gmres
+build_cupyx_ilu_preconditioner       build device ILU(1) with Cupyx spilu
+build_cupyx_exported_host_ilu_preconditioner
+                                     build SciPy SuperLU ILU and apply L/U on device
+solve_pyamgx_csr                     run AMGX through PyAMGX from CuPy CSR data
+```
+
+Cupyx solves default to double precision.  Set `HDGFEM_CUPYX_DTYPE=float32` or
+`HDGFEM_CUPYX_DTYPE=float64` before starting Python to force the device matrix
+dtype in `solve_cupyx_system`:
+
+```bash
+HDGFEM_CUPYX_DTYPE=float64 python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py -o 6 -ms 0.01
+```
+
+Do not use Cupyx CG with the default left row scaling: left scaling does not
+preserve symmetry.  The code rejects `cupyx_solver="cg"` when
+`scale_system=True`; use BiCGSTAB/GMRES or disable scaling for a genuinely SPD
+operator.
+
+### DOLFINx
+
+DOLFINx is optional and only used by scripts under `scripts/diocotron_dolfinx/`
+for continuous-Galerkin comparison diagnostics on the guiding-center equilibrium
+problem.  Prefer a separate environment so its MPI/PETSc stack does not
+constrain the normal `hdgfem` environment:
+
+```bash
+conda create -n fenicsx-dgfem -c conda-forge fenics-dolfinx mpich pyvista gmsh
+conda activate fenicsx-dgfem
+python -c "import dolfinx, basix, ufl, mpi4py, petsc4py, gmsh; print('dolfinx ok')"
+python -m pip install -e .
+```
+
+## Command-Line Workflows
+
+### Advection-Reaction Presets
+
+Manufactured advection-reaction presets live in
+`scripts/advection_reaction/run_adv_rea_cases.py` and problem factories live in
+`scripts/advection_reaction/adv_rea_cases.py`.
+
+```bash
+python -m scripts.advection_reaction.run_adv_rea_cases --list-presets
+python -m scripts.advection_reaction.run_adv_rea_cases --print-preset --dry-run
 python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30
-```
-
-Verbose timing run:
-
-```bash
 python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
 ```
 
-Plotting run:
+The default manufactured `test2` problem solves
 
-```bash
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --plot
+```text
+beta . grad(u) + r u = f
+beta_x = x
+beta_y = -y
+r      = y**2
+f      = y**2
+u(x,y) = (a cos(m pi x y) + b sin(n pi x y)) exp(y**2 / 2) + 1
 ```
 
-PETSc BiCGStab + ILU path:
+with default parameters:
 
-```bash
-python -m scripts.advection_reaction.run_adv_rea_cases test2_petsc_bicgstab_ilu -p 6 --lc 0.03
+```text
+m = 10
+n = 15
+a = 2
+b = 2
 ```
 
-Projected-coefficient Numba path:
+Sensitivity variants around `test2` are available for solver/preconditioner
+robustness checks:
 
-```bash
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 \
-  --assembly-backend numba --verbosity 2
+```text
+test2_minus10    m, n, a, b reduced by 10 percent
+test2_plus10     m, n, a, b increased by 10 percent
+test2_amp_skew   same frequencies as test2 with mildly skewed amplitudes
 ```
 
-Boundary elimination and upwind trace ordering:
+Useful runner options:
 
-```bash
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03
+```text
+preset                   preset name from run_adv_rea_cases.py
+--list-presets           print available advection presets
+--print-preset           print selected preset fields
+--dry-run                validate and print the selected preset without solving
+-p, --order              override uniform DG polynomial degree
+--lc, --mesh-size        override Gmsh target mesh size
+--boundary-mode          penalty or eliminate
+--trace-ordering         none or upwind-scc
+--ilu-permc-spec         SuperLU column permutation for SciPy ILU
+--assembly-backend       numpy, numba, or auto
+--plot                   show numerical/exact/error plots
+--plot-resolution        samples per reference direction for plotting
+--verbosity              0 quiet, 1 major phases, 2 substeps
 ```
 
-One-assembly advection solver benchmark:
+A one-assembly solver benchmark is available for preconditioner work:
 
 ```bash
 python -m scripts.advection_reaction.benchmark_adv_rea_solvers -p 6 --lc 0.01
 ```
 
-This benchmark assembles the `test2` upwind-ordered trace matrix once, builds a
-reusable SciPy CSR matrix, and then runs selected global solver configurations
-against exactly the same matrix and right-hand side.  This removes mesh
-generation and trace assembly from the per-solver comparison, which is the
-right timing scope when developing preconditioners.
+It assembles the `test2` upwind-ordered trace matrix once, builds a reusable
+SciPy CSR matrix, and runs selected global solver configurations against the
+same matrix and RHS.  That removes mesh generation and assembly from the
+per-solver comparison.
 
-Default iterative configurations:
+Default iterative benchmark configurations include SciPy BICGSTAB/GMRES with
+ILU or upwind block-GS, PETSc BICGSTAB/GMRES with ILU, and PETSc ASM/ILU
+variants.  Use `--config NAME`, `--include-direct`, `--json-out PATH`,
+`--upwind-bgs-apply-mode MODE`, and `--upwind-bgs-sweep SWEEP` to narrow or
+expand a benchmark run.
 
-```text
-scipy_bicgstab_ilu             SciPy BICGSTAB with high-fill SuperLU ILU
-scipy_bicgstab_upwind_bgs      forward level-scheduled block-GS
-scipy_gmres_upwind_bgs         forward level-scheduled block-GS
-scipy_bicgstab_upwind_fbgs     forward/backward block-GS diagnostic
-scipy_gmres_upwind_fbgs        forward/backward block-GS diagnostic
-petsc_bicgstab_ilu             PETSc BICGSTAB with ILU
-petsc_gmres_ilu                PETSc GMRES with ILU
-petsc_bicgstab_asm_ilu         PETSc BICGSTAB with ASM subdomain ILU
-petsc_gmres_asm_ilu            PETSc GMRES with ASM subdomain ILU
-```
+### Fast Upwind-GS/Cupyx Advection Runner
 
-Useful benchmark controls:
+`scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py` is the current
+narrow performance path for upwind-SCC ordered advection-reaction trace solves.
+It is separate from `run_adv_rea_cases.py` while the reusable API is still being
+shaped.
+
+Pipeline:
 
 ```text
---config NAME                  run one config; repeat for multiple configs
---include-direct               also include sparse direct/PETSc LU configs
---json-out PATH                write timing and residual diagnostics as JSON
---upwind-bgs-apply-mode MODE   auto, serial, or parallel Numba apply kernel
---upwind-bgs-sweep SWEEP       forward or forward_backward block-GS sweep
+1. Build a rectangle mesh and DG space.
+2. Project source, beta, and reaction onto the DG space.
+3. Compute upwind-SCC ordering for free trace edges.
+4. Assemble the boundary-eliminated trace system in that order with Numba.
+5. Emit dense ordered edge-block COO entries during the same assembly pass.
+6. Build forward upwind block-GS from the block stream and reuse its row scale.
+7. Build a CuPy CSR matrix from scaled COO and solve with Cupyx Krylov.
+8. Copy the reduced trace back for reconstruction and field-error checks.
 ```
 
-Performance notes in this manual refer to runs on host `23G82`, Ubuntu 22.04
-with Linux 6.8, Intel Core i5-10210U CPU, 4 physical cores / 8 hardware
-threads, and 15 GiB RAM.  On that machine, the `p=6`, `lc=0.01` `test2`
-benchmark showed that upwind block-GS setup can be cheaper than high-fill
-SciPy ILU setup after Numba warm-up, but the preconditioner is weaker: it
-needs many Krylov iterations because same-level trace-block couplings are
-dropped.  High-fill SciPy ILU and PETSc ILU remain the practical choices for
-this case.  If you record or compare absolute timings, include the CPU core
-count, thread count, memory size, and whether Numba kernels were already JIT
-compiled.
-
-Diffusion-reaction manufactured solve:
+Typical GMRES run:
 
 ```bash
-python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson
+python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+  -o 6 -ms 0.01 \
+  --basis dub_orth \
+  --trace-basis legacy-lagrange \
+  --cupyx-solver gmres \
+  --gmres-restart 50 \
+  --maxiter 1500 \
+  --rtol 1e-13 \
+  --check-rtol 1e-10 \
+  -v 2
 ```
 
-Manufactured run defaults are stored in the `PRESETS` dictionary inside
-`scripts/diffusion_reaction/run_diff_rea_cases.py`; edit that dictionary to change case
-parameters, mesh defaults, quadrature, stabilization, or solver settings.
-Available presets can be listed with:
+Typical BiCGSTAB run:
+
+```bash
+python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+  -o 6 -ms 0.008 \
+  --basis dub_orth \
+  --trace-basis legacy-lagrange \
+  --cupyx-solver bicgstab \
+  --maxiter 1500 \
+  --rtol 1e-13 \
+  --check-rtol 1e-10 \
+  -v 2
+```
+
+Important controls:
+
+```text
+--case                         manufactured case key from adv_rea_cases.py
+--mesh-type                    rectangle or structured-rectangle
+--basis                        dub_orth, hierarchical C0, or bernstein element basis
+--trace-basis                  legacy-lagrange, legendre-modal, or bernstein trace basis
+--cupyx-solver                 bicgstab, gmres, cg, or cgs
+--gmres-restart                restart length for Cupyx GMRES
+--apply-mode                   auto, serial, or parallel preconditioner application
+--parallel-min-width           minimum level width for parallel apply in auto mode
+--max-couplings-per-block      bounded builder capacity for retained block couplings
+--numba-threads                runtime Numba thread count within NUMBA_NUM_THREADS
+--json-output                  write inputs, diagnostics, timings, and errors
+```
+
+This runner requires Numba, CuPy, and Cupyx sparse linear algebra.  It does not
+require PyAMGX.  The preconditioner is still built on the host and transferred
+to device; `TODO.md` records the planned CuPy/raw-CUDA builders.
+
+The structural check harness compares the CSR-reference, scalar-COO, and
+ordered block-COO preconditioner builders:
+
+```bash
+python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py \
+  -o 6 -ms 0.01 \
+  --basis dub_orth \
+  --trace-basis legacy-lagrange \
+  --skip-solve \
+  -v 2
+```
+
+It can also export the host-built block-GS object to CuPy and run a Cupyx solve:
+
+```bash
+python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py \
+  -o 6 -ms 0.01 \
+  --basis dub_orth \
+  --trace-basis legacy-lagrange \
+  --cupyx-solve \
+  --rtol 1e-13 \
+  --check-rtol 1e-10 \
+  -v 2
+```
+
+### Diffusion-Reaction Presets
+
+Manufactured diffusion-reaction presets live in
+`scripts/diffusion_reaction/run_diff_rea_cases.py` and problem factories live in
+`scripts/diffusion_reaction/diff_rea_cases.py`.
 
 ```bash
 python -m scripts.diffusion_reaction.run_diff_rea_cases --list-presets
-```
-
-The runner keeps numerical settings in presets.  Command-line flags are limited
-to plotting, verbosity, and preset inspection:
-
-```bash
+python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson
 python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_quick --plot
 python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --print-preset
 python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --dry-run
 ```
 
-Diffusion-reaction presets also control optional HDG post-processing with
+Diffusion-reaction presets control optional HDG post-processing with
 `hdg_postprocess="none"`, `"primal"`, `"flux"`, or `"both"`.  The primal
 postprocessor recovers a degree `p+1` scalar field.  The flux postprocessor
 recovers a degree `p+1` vector field whose normal moments match the HDG
 numerical flux and whose interior moments match the raw HDG flux against
 `[P_{p-1}]^d`.  Manufactured cases return the exact conservative flux
-`q=-kappa grad u`; the runner uses it to report raw flux and postprocessed flux
-errors alongside primal errors.
+`q=-kappa grad u`; the runner reports raw and postprocessed flux errors when
+available.
 
-Diffusion and advection runner summary tables are grouped into run/mesh,
-options, solver, errors, and timings sections.  Non-total timing rows include
-their percentage of total runtime, for example `assembly (s): 4.7 (39.2%)`.
-
-To create a new manufactured PDE, add a factory and `CASE_DEFINITIONS` entry in
-`scripts/diffusion_reaction/diff_rea_cases.py`.  To create a new run configuration for an existing
-or new PDE, add a `DiffusionReactionRunPreset` entry to `PRESETS` in
+Create a new manufactured PDE by adding a factory and `CASE_DEFINITIONS` entry
+in `scripts/diffusion_reaction/diff_rea_cases.py`.  Create a new run
+configuration by adding a `DiffusionReactionRunPreset` entry to `PRESETS` in
 `scripts/diffusion_reaction/run_diff_rea_cases.py`.
 
-Use the optional Numba local-solver block builder by adding or editing a preset
-with `local_backend="numba"`.
-
-Tensor diffusion test7 through the main projected Numba tensor path:
+Use the optional Numba local-solver block builder by setting
+`local_backend="numba"` in a preset.  Tensor diffusion test7 through the main
+projected Numba tensor path is available with:
 
 ```bash
 python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg
 ```
 
-Experimental hard-coded tensor test7 fused path for kernel comparisons:
+Experimental hard-coded tensor test7 fused path:
 
 ```bash
 python -m scripts.diffusion_reaction.experimental.diff_rea_test7_fused \
@@ -190,435 +427,126 @@ python -m scripts.diffusion_reaction.experimental.diff_rea_test7_fused \
   --volume-quad-1d 7 --edge-quad-1d 7
 ```
 
-### Torsion-Initialized HDG Newton Runner
+### Standalone GPU Runners
 
-`scripts/diocotron_hdg/hdg_torsion_initialized_newton.py` is the fixed-mesh
-HDG driver for the torsion initialized Newton method for converging to
-semilinear local diocotron-like equilibria of the guiding-center model on
-general geometries.  It solves the torsion design fields, builds the logistic
-density window, then applies a damped Newton solve to the nonlinear HDG
-residual.
-
-The runner is intentionally non-adaptive: it does not preadapt to the design
-band and does not remesh during epsilon continuation.  That keeps this script
-focused on Newton convergence and residual accounting.  Reusable adaptivity
-building blocks are available separately in `hdgfem.core.adaptivity`.
-
-Typical PETSc run:
-
-```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
-  --star-n 260 --order 4 --hdg-tau 20 -v 2 \
-  --residual-norm euclid --newton-shift-mode none
-```
-
-Important controls:
-
-```text
---run-tag NAME                  prefix for the timestamped run directory
---run-dir PATH                  explicit output directory; made unique if needed
---order                         DG polynomial degree
---hdg-tau                       HDG stabilization parameter
---alphaT1, --alphaT2            torsion window ratios, c_iT = alphaTi*Tmax
---betaPhi1, --betaPhi2          semilinear window ratios, c_iPhi = betaPhii*max(phiDesign)
---eps-ratios                    comma-separated epsilon continuation ratios
---residual-norm                 euclid, hdg-local, edp-volume, or hdg
---newton-shift-mode             none or freefem elliptic damping mode
---newton-initial-guess          initial guess for Newton correction solves only:
-                                zero or previous-correction
---tol-res                       outer nonlinear residual stop tolerance
---tol-newton                    outer Newton step stop tolerance
---verbosity, -v                 1 major phases, 2 Armijo trials/timings,
-                                3 Krylov residual history
---plot / --no-plot-*            interactive PyVista diagnostics
---save-frames                   save enabled PyVista frames
---skip-petsc                    force SciPy linear solves
-```
-
-The nonlinear Newton state always starts from `phiDesign`, the Poisson solve
-with the torsion-designed density.  `--newton-initial-guess` controls only the
-initial trace vector for the linear correction system solved inside each Newton
-step.
-
-Each run creates a unique directory under
-`run_logs/hdg_torsion_initialized_newton/` unless `--run-dir` is
-provided.  The directory contains `newton.csv`, `frames.csv`, and `summary.txt`.
-The Newton CSV records the split residual components `resVolumeL2`,
-`resPrimalL2`, `resFluxL2`, `resTraceL2`, and `resCoeffL2`, plus precise
-diagnostics for `rho_h=f_epsilon(phi_h)`.
-
-Recent reference run:
-
-```text
-script       scripts/diocotron_hdg/hdg_torsion_initialized_newton.py
-mesh         smooth star, generated once at startup
-residual     mixed HDG residual, Euclidean line search by default
-adaptivity   no preadapt and no scheduled remeshing
-outputs      run_logs/hdg_torsion_initialized_newton/<timestamp>/
-```
-
-For solver timing comparisons, turn off `--plot`.  For residual-norm studies,
-use `--residual-norm hdg` only when the local Gram diagnostic is needed; the
-Euclidean norm is the cheaper default for line-search comparisons.
-
-### DOLFINx Torsion-Initialized Diagnostics
-
-The repository also contains DOLFINx continuous-Galerkin scripts for fixed-mesh
-experiments with the same torsion-initialized semilinear equilibrium problem.
-These require a Python environment with DOLFINx, Basix, PETSc, and Gmsh
-support.  They are intended for algorithm development and comparison against
-the native HDG driver, not as replacements for the HDG solver package.
-
-Closed-loop boundary-aware refit:
-
-```bash
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit \
-  --mesh-size 0.18 --star-n 140 --order 4 \
-  --eps-ratio 0.08 --outer-it 6 \
-  --newton-max-it 25 --newton-tol-res 1e-8 \
-  --linear-solver lu \
-  --refit-center-fraction 0.08 \
-  --refit-width-fraction 0.08 \
-  --refit-center-grid 9 \
-  --refit-width-grid 9 \
-  --refit-refine-passes 1 \
-  --push-scale-fraction 0.05 \
-  --push-scale-grid 5 \
-  --push-ray-bins 720 \
-  --tol-rho-rel 5e-2 \
-  --verbosity 1
-```
-
-This script implements the reduced closed-loop loop:
-
-```text
-1. Newton-polish the semilinear state for the current c1,c2.
-2. Measure the actual torsion-density error after projection.
-3. If the projected density error is still above tolerance, refit c1,c2 using
-   a cheap pushed scalar-coordinate search.
-4. Repeat until the Newton-projected density reaches the torsion tolerance or
-   the refit stagnates.
-```
-
-The refit push is boundary-aware.  For a point
-`x = x0 + r e(theta)` and the mesh-estimated boundary ray length `R(theta)`,
-the code uses the normalized radius
-
-```text
-eta = r / R(theta)
-eta_push = eta + beta eta (1 - eta)
-```
-
-then samples `phi(x0 + eta_push R(theta) e(theta))`.  The displacement stays
-on the ray through the point, vanishes at the origin and boundary, and scales
-with the remaining distance to the boundary on that ray.  For generated
-smooth-star meshes, the band origin is `(0,0)`; mesh-file runs fall back to the
-mesh bounding-box center.  `--push-ray-bins` controls the angular resolution of
-the mesh-derived boundary radius table.
-
-Reduced-space leakage/missing-area optimizer:
-
-```bash
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization \
-  --mesh-size 0.18 --star-n 140 --order 4 \
-  --alphaT1 0.60 --alphaT2 0.70 --eps-t-ratio 0.06 \
-  --eps-mode relative --eps-ratio 0.08 \
-  --max-opt-it 25 --eta-out 0.02 --tol-area 0.05 \
-  --tol-res 1e-8 --final-newton-tol-res 1e-10 --final-newton-max-it 200 \
-  --linear-solver mumps -v 2
-```
-
-This runner follows the reduced algorithm in
-`docs/algorithms/torsion_initialized_window_reduced_optimization/`.  At each
-outer iteration it projects the state for the current thresholds, evaluates soft
-leakage and missing-area discrepancies, solves the two sensitivity equations,
-forms reduced gradients, and takes a constrained trust-region step in
-`(c1,c2)`.  The predictor/corrector stage then filters trial steps using
-residual, geometry, branch-overlap, and collapse checks.
-
-The initializer is intentionally more robust than a direct density L2 fit.  It
-builds a small fixed set of candidate windows: the density fit on
-`phi_T=-Delta^{-1} rho_design`, target-weighted quantile windows, and an
-area-matched target-median window.  Each candidate is Newton-projected at fixed
-thresholds from `phi_T`, scored after projection, and only then selected.  The
-chosen projected state is reused as the first outer iterate.  This costs more
-startup Newton work, but avoids selecting thresholds that fit
-`W(phi_T;c1,c2,eps)` and then collapse onto the wrong semilinear branch.
-
-Inner Newton tolerances are adaptive by default.  The outer loop scales the
-tolerance with the current leakage-plus-missing discrepancy, clips it by
-`--inner-tol-max`, and never allows it below `--tol-res`.  This avoids
-oversolving poor early threshold pairs while still tightening the state solve
-near a competitive band.  Use `--inner-newton-tol` only as a testing knob when
-every inner projection and trial correction should be forced to a fixed
-residual tolerance.
-
-The reported final state is always projected again with exact Newton to
-`--final-newton-tol-res` when supplied, otherwise `--tol-res`.  This final
-projection also runs after `MAX_OPT_IT`, so a run that exhausts the outer
-optimization budget can still certify the final semilinear state.  If that
-projection fails, the process exits with code `3` and reports
-`final_status=NEWTON_NOT_CONVERGED`.
-
-There are two successful geometry statuses.  `CONVERGED` means the final
-Newton solve converged and both soft full-band conditions passed:
-`leakageRel <= --eta-out` and `missingRel <= --tol-area`.
-`CONVERGED_CERTIFIED_SUBBAND` means the full target band was not matched, but
-the certified plateau
-`c1 + kappa eps <= phi <= c2 - kappa eps` is a useful contained sub-band:
-its certified leakage fraction is within `--eta-out` and its certified area is
-at least `--min-certified-area-fraction` of the torsion target area.  This is a
-successful outcome when the practical goal is an equilibrium sub-band inside
-the torsion-initialized band rather than a full-band match.
-
-Important controls:
-
-```text
---alphaT1, --alphaT2            torsion target band ratios
---eps-t-ratio                   torsion design smoothing ratio
---eps-ratio / --eps-phi         potential-window smoothing
---include-fit-init              enable projected density/quantile/area initializer
---eta-out                       soft leakage cap and certified-subband leakage cap
---tol-area                      soft missing-area cap for strict full-band success
---min-certified-area-fraction   minimum certified plateau area for sub-band success
---max-opt-it                    reduced outer iteration budget
---trust-radius                  initial reduced trust radius as a fraction of c-scale
---trust-radius-min/max          trust-radius safeguards
---eta-overlap                   branch-preservation acceptance threshold
---min-activity-fraction         collapse rejection threshold
---inner-newton-tol              fixed inner tolerance testing knob
---inner-tol-max/gamma           adaptive inner tolerance safeguards
---final-newton-tol-res          final exact Newton certification tolerance
---plot-severe                   plot every accepted Newton update and refit state
-```
-
-Verbosity levels are `-v 0` for summaries, `-v 1` for iteration diagnostics,
-and `-v 2` for the numbered algorithm trace.  The highest level prints
-`ALGO_STEP` lines matching steps 1 through 12 of the algorithm note, including
-timings for Newton projection, sensitivity assembly/solves, trust-region
-selection, correction, and acceptance filtering.  Outputs are written under
-`run_logs/dolfinx_torsion_initialized_window_reduced_optimization/`.
-
-Plotting controls are deliberately simple:
-
-```bash
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit ... --plot --plot-mode nonblocking
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_closed_loop_refit ... --plot --plot-mode blocking
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization ... --plot --plot-mode nonblocking
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_window_reduced_optimization ... --plot --plot-mode blocking
-```
-
-With `--plot-mode nonblocking`, the live PyVista window reuses existing VTK
-grids and updates DOLFINx point-data arrays in place for every Newton polish
-state, refit push, or accepted reduced-optimization iterate.  This is the fast
-path for watching the iteration evolve.  Blocking mode keeps the one-state
-inspection behavior and waits for Enter at each plot.  `--save-frames` remains
-a separate one-shot render path for PNG artifacts.
-
-### DOLFINx CG Runner
-
-`scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py` is the fixed-mesh
-continuous-Galerkin comparison runner for the same torsion-initialized
-semilinear equilibrium problem.  It uses DOLFINx Lagrange elements, accepts
-arbitrary polynomial order supported by DOLFINx, and follows the same torsion
-design, Poisson initializer, epsilon continuation, Armijo line search, and
-optional elliptic damping controls as the no-adapt FreeFEM/HDG comparison.
-
-The clean CG/HDG timing workflow is:
-
-```bash
-# First run the HDG driver once and keep its saved mesh.
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
-  --run-tag hdg_star260_p2_mumps_clean \
-  --star-n 260 --order 2 --hdg-tau 10 \
-  --hdg-petsc-preset mumps_lu --residual-norm euclid
-
-# Then pass that exact mesh to DOLFINx.
-/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py \
-  --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
-  --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
-  --order 2 --linear-solver mumps --terminal-every 1
-```
-
-Important controls:
-
-```text
---mesh PATH                     saved Gmsh mesh; preferred for fair comparison
---order                         CG polynomial degree
---linear-solver                 mumps, lu, hypre, or gamg
---ksp-type                      optional PETSc KSP override for iterative paths
---linear-rtol, --linear-atol    iterative-solver tolerances
---alphaT1, --alphaT2            torsion window ratios, c_iT = alphaTi*Tmax
---betaPhi1, --betaPhi2          semilinear window ratios, c_iPhi = betaPhii*max(phiDesign)
---eps-ratios                    comma-separated epsilon continuation ratios
---use-mu-shift                  enable the same elliptic damping mode
---plot / --no-plot-*            interactive PyVista diagnostics
---save-frames                   save enabled PyVista frames
-```
-
-Each run creates `logs/newton.csv`, `logs/frames.csv`, and `out/summary.txt`
-under `run_logs/dolfinx_torsion_initialized_newton/<run-tag>_<timestamp>/`.  The Newton
-loop checks the current residual before assembling and solving a new correction,
-so converged epsilon windows end with `CONVERGED_RESIDUAL` and `solveTime=0`.
-
-Recent p=2,4,5,6 comparisons used the same `nt=12288` star mesh and MUMPS for
-both CG and HDG.  The Newton accept count was identical across methods and
-orders; timing differences therefore primarily reflect the chosen discretization
-and linear algebra cost rather than different nonlinear behavior.
-
-### Optional PETSc Install Notes
-
-PETSc is an optional backend.  The rest of `hdgfem` runs without it because
-`petsc4py` is imported only when a PETSc solve is requested.
-
-Build PETSc and `petsc4py` as a matched pair.  A working PETSc 3.22.2 setup
-with MUMPS, Hypre/BoomerAMG, and GAMG uses:
-
-```bash
-source .venv/bin/activate
-
-python -m pip install --force-reinstall \
-  "numpy<2.5,>=2.4" "Cython>=3.0,<3.1" "setuptools<75" "wheel<0.46"
-
-export PETSC_DIR=$HOME/opt/petsc
-export PETSC_ARCH=arch-linux-c-opt
-export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
-
-cd "$PETSC_DIR/src/binding/petsc4py"
-python setup.py clean --all
-
-cd /path/to/hdgfem
-python -m pip install --no-build-isolation --no-deps \
-  "$PETSC_DIR/src/binding/petsc4py"
-```
-
-The important constraints are:
-
-- install the `petsc4py` source bundled with the PETSc checkout, or install the
-  exact matching `petsc4py` release;
-- keep NumPy below 2.5 while the project depends on the current Numba release;
-- use `Cython>=3.0,<3.1` for `petsc4py` 3.22.2, because newer Cython versions
-  can crash while generating `PETSc.c`;
-- use an older setuptools/wheel pair, because newer setuptools releases removed
-  compatibility expected by this `petsc4py` build;
-- avoid mixing a system `petsc4py` package with virtualenv NumPy.
-
-Verify with real imports, not just `pip show`:
-
-```bash
-python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
-python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); k.getPC().setType('gamg'); print('GAMG ok')"
-python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('hypre'); pc.setHYPREType('boomeramg'); print('Hypre/BoomerAMG ok')"
-python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('lu'); pc.setFactorSolverType('mumps'); print('MUMPS ok')"
-```
-
-### Main Runner Options
-
-```text
-preset                   preset name from scripts/advection_reaction/run_adv_rea_cases.py
---list-presets           print available advection presets
---print-preset           print the selected preset fields
---dry-run                validate and print the selected preset without solving
--p, --order              override uniform DG polynomial degree
---lc, --mesh-size        override Gmsh target mesh size
---boundary-mode          penalty or eliminate
---trace-ordering         none or upwind-scc
---ilu-permc-spec         SuperLU column permutation for SciPy ILU
---assembly-backend       numpy, numba, or auto
---verbosity              0 quiet, 1 major phases, 2 substeps
---plot                   show numerical/exact/error plots
---plot-resolution        samples per reference direction for plotting
-```
-
-For diffusion-reaction plots, small meshes (`<=100` triangles) use Matplotlib
-discontinuous `tricontourf` panels with duplicated per-element vertices and the
-`jet` colormap.  Larger meshes use the PyVista refined-mesh path.  The plot
-resolution is automatically raised to be faithful to the displayed polynomial
-degree; `--plot-resolution` acts as a lower bound.  The exact panel is sampled
-more densely than the HDG panels, and shared color limits are dominated by the
-exact solution range with a capped allowance for numerical overshoot.
-
-Run:
-
-```bash
-python -m scripts.advection_reaction.run_adv_rea_cases --help
-```
-
-for the current runner option list.
-
-### GPU Standalone Runner
-
-High-performance advection and diffusion runs are driven by standalone scripts in
-`scripts/gpu/`:
+High-performance advection and diffusion runs are driven by standalone scripts
+in `scripts/gpu/`:
 
 ```bash
 python -m scripts.gpu.run_adv_rea_gpu4_hdg --help
 python -m scripts.gpu.run_diff_rea_gpu4_hdg --help
 python -m scripts.gpu.sweep_adv_rea_gpu4_hdg --help
+python -m scripts.gpu.check_upwind_scc_host_pyamgx_adv_rea --help
 ```
 
 There are no root-level GPU compatibility wrappers in `scripts/`; run these
-scripts through the `scripts.gpu` module paths above or by their explicit
+scripts through the `scripts.gpu` module paths above or by explicit
 `scripts/gpu/*.py` file paths.
 
-The fused raw-cuda advection path is the CUDA memory-scaling default and now
-supports `p <= 8` under fused mode with both `legacy-lagrange` and
-`legendre-modal` trace bases.
-
-Mesh generation defaults to local caching (`.cache/hdgfem/meshes`) and
-emits hit/miss/fallback logs. Use `--gmsh-num-threads` to enable parallel
-CPU meshing.
-
-## Manufactured Problem
-
-The default advection runner preset uses the same legacy `test2` problem used
-for comparison with `adv_rea_vec_msh4.py`.
-
-The PDE is:
+The fused raw-CUDA advection path is the CUDA memory-scaling default.  It
+supports `p <= 8` under fused mode with `legacy-lagrange` and `legendre-modal`
+trace bases.  Default behavior is:
 
 ```text
-beta . grad(u) + r u = f
+--raw-lu-mode safe       stable baseline
+--raw-lu-mode coop       optional cooperative LU stage
+--raw-local-assembly fused
+--raw-matrix-format csr  direct reduced CSR emission when selected
 ```
 
-with:
+The CuPy/PyAMGX advection runner is backed by the reusable package solver in
+`hdgfem.solvers.adv_rea`.  Its raw-CUDA path keeps reduced trace assembly, AMGX
+solve, trace reconstruction, field reconstruction, and error evaluation on
+device unless host materialization is explicitly requested.
+
+`configs/amgx/README.md` contains current AMGX presets.  The current
+advection-reaction solver ranking and caveats are summarized in
+`docs/algorithms/advection_reaction_solver_configurations.md`.
+
+`check_upwind_scc_host_pyamgx_adv_rea.py` is the broader ordering/solver
+comparison harness.  Despite the historical filename, it also covers Cupyx-only
+solves.  Its `--cupyx-preconditioner` options are:
 
 ```text
-beta_x = x
-beta_y = -y
-r      = y**2
-f      = y**2
-```
-
-and exact solution:
-
-```text
-u(x,y) = (a cos(m pi x y) + b sin(n pi x y)) exp(y**2 / 2) + 1
-```
-
-The default parameters are:
-
-```text
-m = 5
-n = 5
-a = 2
-b = 0
+none              unpreconditioned Cupyx Krylov
+host-ilu-export   build SciPy SuperLU ILU on host, export L/U/permutations to device
+cupyx-ilu1        build fill_factor=1 ILU directly with Cupyx on device
 ```
 
 ## Programmatic Use
 
-Basic solve:
+The reusable formalism is intentionally explicit.  User code builds the same
+objects that the command-line runners use, so solver internals can be reused in
+new experiments without copying legacy scripts.
+
+The normal data flow is:
+
+```text
+DGMesh -> DGSpace -> DGField/VectorDGField -> local HDG assembly
+       -> static condensation to a trace system
+       -> optional boundary elimination and trace ordering
+       -> sparse global trace solve
+       -> local reconstruction into DGField/VectorDGField
+       -> diagnostics, plotting, transfer, or adaptivity
+```
+
+### Core Objects
+
+A `DGMesh` owns geometry and connectivity.  A `DGSpace` pairs one mesh with a
+reference basis and quadrature rule.  A `DGField` stores element-major
+coefficients with shape `(num_elements, el_dof)`.  A `VectorDGField` is a tuple
+of scalar DG fields on the same mesh.  A `DGTraceSpace` stores the per-edge
+trace basis and face-coupling tables used by HDG static condensation.
 
 ```python
-from hdgfem.core.mesh import gmsh_rectangle_mesh
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.solvers.adv_rea import solve_advection_reaction_hdg
-from scripts.advection_reaction.adv_rea_cases import test2
+from hdgfem import DGField, DGSpace, gmsh_rectangle_mesh
 
 mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
-space = DGSpace(mesh, 4, basis_type="dub_orth")
+space = DGSpace(
+    mesh,
+    4,
+    basis_type="dub_orth",
+    volume_quad_1d=None,
+    edge_quad_1d=None,
+)
+trace_space = space.trace_space("legacy-lagrange")
+
+u_h = space.project_callable(lambda x, y: x + y, name="u_h")
+values = u_h.values()
+du_dx, du_dy = u_h.grad_values()
+error = u_h.l2_error(lambda x, y: x + y)
+```
+
+Prefer `space.project_callable(...)`, `space.field(...)`, and
+`(space * space).field(...)` in new code.  The direct `DGField(data, space)`
+constructor is also supported for callables and coefficient arrays.
+
+### Coefficient Ownership
+
+Solvers accept callables for convenience, but performance-oriented workflows
+should project coefficients explicitly when they will be reused.  This makes
+quadrature, basis, and coefficient ownership clear:
+
+```python
+from scripts.advection_reaction.adv_rea_cases import test2
 
 beta_x, beta_y, reaction, source, exact = test2()
+
+source_h = space.project_callable(source, name="source_h")
+beta_x_h = space.project_callable(beta_x, name="beta_x_h")
+beta_y_h = space.project_callable(beta_y, name="beta_y_h")
+beta_h = (space * space).field((beta_x_h, beta_y_h), name="beta_h")
+reaction_h = space.project_callable(reaction, name="reaction_h")
+```
+
+Callable coefficients are evaluated directly on the quadrature rules used by
+assembly.  Projected `DGField` coefficients use cached basis products, which can
+be much cheaper when a coefficient is reused across solves.
+
+### One-Shot Advection-Reaction Solve
+
+```python
+from hdgfem import solve_advection_reaction_hdg
 
 result = solve_advection_reaction_hdg(
     source,
@@ -628,6 +556,7 @@ result = solve_advection_reaction_hdg(
     space,
     solver="BICGSTAB",
     preconditioner="ilu",
+    boundary_mode="penalty",
     verbose=2,
 )
 
@@ -636,12 +565,27 @@ print(result.trace.shape)
 print(result.timings)
 ```
 
-`solve_advection_reaction_hdg` does not project PDE coefficients internally.
-Callable coefficients are evaluated directly on the quadrature rules used by
-assembly.  If you want polynomial coefficients, project them first and pass
-the resulting DG fields.
+Use projected coefficients and the projected Numba backend when projection is
+managed outside the solver:
 
-Request legacy-like tuple output:
+```python
+result = solve_advection_reaction_hdg(
+    source_h,
+    beta_h,
+    reaction_h,
+    exact,
+    space,
+    assembly_backend="numba",
+    boundary_mode="eliminate",
+    trace_ordering="upwind-scc",
+    solver="BICGSTAB",
+    preconditioner="ilu",
+    verbose=2,
+)
+```
+
+Request legacy-like arrays or matrix-only output with `return_` and
+`matrix_pattern_only`:
 
 ```python
 trace, rows, cols, data = solve_advection_reaction_hdg(
@@ -653,42 +597,64 @@ trace, rows, cols, data = solve_advection_reaction_hdg(
     return_=("trace", "matrix_rows", "matrix_cols", "matrix_data"),
     verbose=False,
 )
+
+assembled = solve_advection_reaction_hdg(
+    source_h,
+    beta_h,
+    reaction_h,
+    exact,
+    space,
+    assembly_backend="numba",
+    boundary_mode="eliminate",
+    matrix_pattern_only=True,
+)
 ```
 
-### Reusable Stateful Solver
+### Stateful Advection-Reaction Solver
 
-Use `AdvectionReactionHDGSolver` when a driver solves related advection-reaction
-problems repeatedly and needs a stable object that stores the latest assembled
-arrays, boundary reduction, graph ordering, linear-solve diagnostics,
-preconditioner, trace, and reconstructed field.
+Use `AdvectionReactionHDGSolver` for continuation, sweeps, adaptivity, and
+benchmarks that need to keep the latest matrices, ordering, preconditioner,
+trace, and reconstructed field attached to one object.
 
 ```python
-from hdgfem import AdvectionReactionHDGSolver
+from hdgfem import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
 
-solver = AdvectionReactionHDGSolver(
-    space,
+options = AdvectionReactionHDGOptions(
     assembly_backend="numba",
     boundary_mode="eliminate",
     trace_ordering="upwind-scc",
     solver="BICGSTAB",
+    preconditioner="ilu",
+    verbose=2,
 )
+solver = AdvectionReactionHDGSolver(space, options=options)
 solver.set_discrete_problem(source_h, beta_h, reaction_h, exact)
 result = solver.solve()
 
 rows = solver.solve_rows
 cols = solver.solve_cols
 data = solver.solve_data
+rhs = solver.solve_rhs
+ordering = solver.ordering_result
 preconditioner = solver.preconditioner
-trace = solver.trace
 field = solver.field
 ```
 
-The class invalidates cached assembled data conservatively.  Updating any
-coefficient clears the previous matrix, preconditioner, trace, and field:
+The class invalidates cached data conservatively.  Updating coefficients clears
+assembled matrices, preconditioners, traces, and fields:
 
 ```python
 solver.set_source(next_source_h)
 next_result = solver.solve()
+```
+
+Change solver controls in place with `with_options` or per-call overrides:
+
+```python
+solver.with_options(solver="GMRES", preconditioner="ilu", maxiter=500)
+gmres_result = solver.solve()
+
+matrix_only = solver.assemble_trace_system()
 ```
 
 For mesh adaptivity, install a new space and then provide coefficient data on
@@ -700,46 +666,11 @@ solver.set_discrete_problem(new_source_h, new_beta_h, new_reaction_h, exact)
 adapted_result = solver.solve()
 ```
 
-The one-shot `solve_advection_reaction_hdg(...)` function remains available and
-uses the same numerical path.
-
-Reusable mesh-adaptivity utilities live in `hdgfem.core.adaptivity`.  They are
-PDE-agnostic helpers for future adaptive drivers: build a DG indicator, convert
-it to a native Gmsh structured background size field, remesh the smooth-star
-domain, then transfer fields with `hdgfem.core.transfer.transfer_field` when
-needed.
+### Diffusion-Reaction Solve and Postprocessing
 
 ```python
-from hdgfem.core import (
-    SmoothStarGeometry,
-    StructuredSizeOptions,
-    gradient_weighted_indicator,
-    remesh_smooth_star_from_indicator,
-)
-from hdgfem.core.mesh import mesh_edge_min_max
-
-hmin, hmax = mesh_edge_min_max(space.mesh)
-indicator = gradient_weighted_indicator(rho_h, hmin, grad_weight=10.0)
-new_mesh, info = remesh_smooth_star_from_indicator(
-    space,
-    indicator,
-    geometry=SmoothStarGeometry(),
-    hmin=hmin,
-    hmax=hmax,
-    options=StructuredSizeOptions(size_sensitivity=100.0),
-)
-```
-
-Diffusion-reaction solve:
-
-```python
-from hdgfem.core.mesh import gmsh_rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diff_rea import solve_diffusion_reaction_hdg
+from hdgfem import DiffusionReactionHDGSolver, solve_diffusion_reaction_hdg
 from scripts.diffusion_reaction.diff_rea_cases import quadratic_poisson_case
-
-mesh = gmsh_rectangle_mesh(0.05, verbosity=0)
-space = DGSpace(mesh, 3, basis_type="dub_orth")
 
 diffusion, reaction, source, exact = quadratic_poisson_case()
 
@@ -751,70 +682,296 @@ result = solve_diffusion_reaction_hdg(
     diffusion=diffusion,
     stabilization=1.0,
     solver="BICGSTAB",
+    hdg_postprocess="both",
 )
 
 print(result.field.l2_error(exact))
 print(result.flux.as_component_first().shape)
+print(result.postprocessed_field)
+print(result.postprocessed_flux)
 ```
 
-Use an explicitly projected reaction field:
+The stateful diffusion solver can reuse a cached Numba operator and, for Cupyx
+repeated RHS-only solves, a cached device CSR matrix when `cache_device_matrix`
+is enabled:
 
 ```python
-reaction_h = DGField(reaction, space, name="reaction_h")
-result = solve_advection_reaction_hdg(
-    source,
-    (beta_x, beta_y),
-    reaction_h,
-    exact,
+diff_solver = DiffusionReactionHDGSolver(
     space,
-)
-```
-
-Use explicitly projected source, advection, and reaction fields:
-
-```python
-source_h = DGField(source, space, name="source_h")
-beta_h = VectorDGField((beta_x, beta_y), space, name="beta_h")
-reaction_h = DGField(reaction, space, name="reaction_h")
-result = solve_advection_reaction_hdg(
-    source_h,
-    beta_h,
-    reaction_h,
-    exact,
-    space,
-)
-```
-
-Use the projected Numba backend programmatically:
-
-```python
-source_h = DGField(source, space, name="source_h")
-beta_h = VectorDGField((beta_x, beta_y), space, name="beta_h")
-reaction_h = DGField(reaction, space, name="reaction_h")
-
-result = solve_advection_reaction_hdg(
-    source_h,
-    beta_h,
-    reaction_h,
-    exact,
-    space,
+    source=source,
+    reaction=reaction,
+    boundary_condition=exact,
+    diffusion=1.0,
+    stabilization=1.0,
     assembly_backend="numba",
+    solver="cupyx_bicgstab",
+    cache_device_matrix=True,
     boundary_mode="eliminate",
-    trace_ordering="upwind-scc",
-    verbose=2,
+)
+first = diff_solver.solve()
+
+diff_solver.set_source(next_source)
+second = diff_solver.solve()
+```
+
+### Static Condensation by Hand
+
+`hdgfem.assembly.hdg` exposes the reusable formalism beneath the solver
+classes.  This is the right level when a user wants to build a new PDE driver
+that still uses the package's trace-system conventions.
+
+```python
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.linalg.system import solve_global_system
+
+source_rhs = hdg_assembly.source_moments(source, space)
+trace_blocks = hdg_assembly.element_to_trace_matrix(
+    local_solver,
+    element_boundary_mats,
+    space,
+)
+rows, cols = hdg_assembly.trace_matrix_indices(space)
+data = hdg_assembly.trace_matrix_data(
+    trace_blocks,
+    space,
+    boundary_penalty=1e20,
+)
+rhs, boundary_trace = hdg_assembly.global_rhs(
+    source_rhs,
+    local_solver,
+    boundary_condition,
+    space,
+    1e20,
+)
+
+solve_result = solve_global_system(
+    rows,
+    cols,
+    data,
+    rhs,
+    rhs.size,
+    solver="BICGSTAB",
+    preconditioner="ilu",
+    scale_system=True,
+    raise_on_nonconvergence=True,
+)
+u_h = hdg_assembly.reconstruct_field(
+    solve_result.x,
+    source_rhs,
+    local_solver,
+    element_boundary_mats,
+    space,
 )
 ```
 
-The Numba backend currently requires projected source and beta data.  It
-accepts a scalar reaction coefficient or a projected reaction field.  It
-assembles the global trace system directly and does not materialize the full
-set of dense local tensors in Python.
+For callers that already have local solver and element-boundary matrices, the
+same trace system can be assembled in one call:
 
-## Data Model
+```python
+trace_system = hdg_assembly.assemble_trace_system(
+    local_solver,
+    element_boundary_mats,
+    source_rhs,
+    boundary_condition,
+    space,
+)
+```
+
+Mixed local systems, such as diffusion-reaction, use block helpers:
+
+```python
+source_rhs = hdg_assembly.block_source_moments(source, space, num_blocks=3)
+unknowns = hdg_assembly.reconstruct_local_unknowns(
+    trace,
+    source_rhs,
+    local_solver,
+    element_boundary_mats,
+    space,
+)
+```
+
+`trace_matrix_indices(..., interior_mass_mode="face")` and
+`trace_matrix_data(..., interior_mass_mode="face", interior_mass_blocks=...)`
+support operators whose stabilization trace mass is contributed once per
+element-side incidence rather than once per global edge.
+
+### Sparse Solves and Cupyx Routes
+
+`hdgfem.linalg.system.solve_global_system` is the common global trace solver
+entry point.  It can build a SciPy sparse matrix from COO data, apply diagonal
+row scaling, eliminate/expand known dofs through helper functions, and route to
+SciPy, PETSc, AMGX, or Cupyx solve paths.
+
+Cupyx aliases include `solver="cupyx"`, `solver="cupyx_bicgstab"`,
+`solver="cupyx_gmres"`, `solver="cupyx_cg"`, and `solver="cupyx_cgs"`.
+The `cupyx_solver` argument is used when `solver="cupyx"` is selected directly.
+
+Supported Cupyx preconditioner strings:
+
+```text
+None                         unpreconditioned Cupyx Krylov
+host_ilu_export              SciPy SuperLU ILU on host, apply exported L/U on device
+host_ilu                     alias for host_ilu_export
+ilu                          host export unless ilu_fill_factor is exactly 1.0
+cupyx_ilu1 / device_ilu1     Cupyx device-side ILU with fill_factor=1.0
+upwind_block_gs              host-built upwind block-GS exported to a Cupyx LinearOperator
+```
+
+Use `host_ilu_export` for stronger SuperLU-style ILU with
+`ilu_fill_factor > 1`.  Use `cupyx_ilu1` only for the device ILU(1) experiment;
+it rejects fill factors other than `1.0`.  `solve_cupyx_csr` returns
+`(solution, info, iteration_count)`.  For restarted GMRES, the iteration count
+is a callback/restart count, not necessarily every inner Arnoldi step.
+
+### Upwind Ordering and Block-GS Reuse
+
+The upwind-SCC ordering is an edge-block ordering.  For boundary-eliminated
+advection-reaction systems, pass only interior/free trace edges as active edges:
+
+```python
+import numpy as np
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.linalg.ordering import upwind_scc_trace_ordering
+
+beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+active = np.ones(space.mesh.num_edg, dtype=bool)
+active[space.mesh.bnd_edges_inds] = False
+ordering = upwind_scc_trace_ordering(
+    space.mesh,
+    beta_dot_normal,
+    space.quad_data.edg_dof,
+    active_edges=np.flatnonzero(active),
+)
+```
+
+The CSR-reference preconditioner builder expects the matrix to already be in
+the ordered scalar trace layout:
+
+```python
+from hdgfem.linalg.upwind_block_gs import build_upwind_block_gs_preconditioner
+
+preconditioner = build_upwind_block_gs_preconditioner(
+    ordered_scaled_csr,
+    block_size=space.quad_data.edg_dof,
+    level_widths=ordering.diagnostics.level_widths,
+    sweep="forward",
+    apply_mode="auto",
+)
+M = preconditioner.operator
+```
+
+The on-the-fly module builds the same `UpwindBlockGSPreconditioner` from matrix
+triplets or assembly-emitted block data.  Use scalar COO when the matrix stream
+is natural-order scalar triplets:
+
+```python
+from hdgfem.linalg.upwind_block_gs_onfly import build_forward_upwind_block_gs_from_coo
+
+preconditioner = build_forward_upwind_block_gs_from_coo(
+    rows,
+    cols,
+    data,
+    rhs.size,
+    dof_permutation=ordering.dof_permutation,
+    block_size=space.quad_data.edg_dof,
+    level_widths=ordering.diagnostics.level_widths,
+)
+```
+
+Use ordered block COO when the Numba assembly kernel emits dense trace blocks:
+
+```python
+from hdgfem.backends.numba import assemble_projected_trace_system_eliminated_numba
+from hdgfem.linalg.upwind_block_gs_onfly import (
+    build_forward_upwind_block_gs_from_ordered_block_coo,
+    scale_ordered_trace_coo_from_block_gs,
+)
+
+assembly = assemble_projected_trace_system_eliminated_numba(
+    source_h,
+    beta_h,
+    reaction_h,
+    exact,
+    space,
+    edge_order=ordering.edge_order,
+    return_block_coo=True,
+)
+trace_system = assembly.trace_system
+num_blocks = trace_system.rhs.size // space.quad_data.edg_dof
+
+preconditioner = build_forward_upwind_block_gs_from_ordered_block_coo(
+    assembly.block_rows,
+    assembly.block_cols,
+    assembly.block_data,
+    num_blocks,
+    level_widths=ordering.diagnostics.level_widths,
+)
+scaled_data, scaled_rhs = scale_ordered_trace_coo_from_block_gs(
+    trace_system.rows,
+    trace_system.data,
+    trace_system.rhs,
+    preconditioner,
+)
+```
+
+The ordered block-COO builder computes the same left Jacobi row scale used by
+`hdgfem.linalg.system.diagonal_scale_system`.  Reuse that scale so the
+preconditioner and Cupyx matrix see the same scaled operator.
+
+Export a host-built forward upwind block-GS preconditioner to CuPy with:
+
+```python
+from hdgfem.linalg.cupy_upwind_block_gs import cupy_upwind_block_gs_from_host_preconditioner
+
+M_cp = cupy_upwind_block_gs_from_host_preconditioner(preconditioner, warm_start=True)
+```
+
+The returned object is a Cupyx `LinearOperator`.  Only forward sweeps are
+supported on the CuPy export path at the moment.
+
+### Transfer and Adaptivity
+
+Reusable mesh-adaptivity utilities live in `hdgfem.core.adaptivity`.  They are
+PDE-agnostic helpers: build an indicator, convert it to a native Gmsh structured
+background size field, remesh, then transfer fields with `hdgfem.core.transfer`.
+
+```python
+from hdgfem.core import (
+    SmoothStarGeometry,
+    StructuredSizeOptions,
+    gradient_weighted_indicator,
+    remesh_smooth_star_from_indicator,
+)
+from hdgfem.core.mesh import mesh_edge_min_max
+
+hmin, hmax = mesh_edge_min_max(space.mesh)
+indicator = gradient_weighted_indicator(u_h, hmin, grad_weight=10.0)
+new_mesh, info = remesh_smooth_star_from_indicator(
+    space,
+    indicator,
+    geometry=SmoothStarGeometry(),
+    hmin=hmin,
+    hmax=hmax,
+    options=StructuredSizeOptions(size_sensitivity=100.0),
+)
+new_space = DGSpace(new_mesh, space.order, basis_type="dub_orth")
+u_new, plan = u_h.project_to(new_space)
+```
+
+Reuse a transfer plan when moving multiple fields between the same source and
+target spaces:
+
+```python
+plan = new_space.transfer_plan_from(space)
+u_new, _ = u_h.project_to(new_space, plan=plan)
+reaction_new, _ = reaction_h.project_to(new_space, plan=plan)
+```
+
+## Data Model and Assembly Details
 
 ### DGMesh
 
-`DGMesh` stores all mesh geometry and connectivity needed by HDG assembly:
+`DGMesh` stores geometry and connectivity needed by HDG assembly:
 
 ```text
 node_coords       (num_nodes, 2)
@@ -829,13 +986,11 @@ normals           (num_elements, 3, 2)
 jacs_el_fc        (num_elements, 3)
 ```
 
-The mesh also caches global trace assembly helpers such as
-`loc2oriented_face_coupling`, `interior_elements`, `interior_faces`, and
-`edge_jacs`.  The legacy aliases `sigma`, `sigma_1`, and `eta` are still
-available for compatibility, but new code should prefer `loc2glob_edge`,
-`loc2oriented_face_coupling`, and `edge_to_elements`.
+The mesh also caches `loc2oriented_face_coupling`, `interior_elements`,
+`interior_faces`, and `edge_jacs`.  Legacy aliases `sigma`, `sigma_1`, and
+`eta` remain available, but new code should prefer explicit attribute names.
 
-### ReferenceElementData
+### ReferenceElementData and DGSpace
 
 `ReferenceElementData` stores quadrature, basis values, and reference tensors.
 Important attributes include:
@@ -858,106 +1013,28 @@ weighted_phi_phi_flat      (num_volume_quads, el_dof * el_dof)
 weighted_triple_phi_flat   (el_dof, el_dof * el_dof)
 ```
 
-The face-coupling table names encode test/trial convention.  For example,
-`face_element_test_trace_trial[f, i, a]` couples element test basis `phi_i`
-to trace trial basis `mu_a` on local face `f`, while
+Face-coupling table names encode test/trial convention.  For example,
+`face_element_test_trace_trial[f, i, a]` couples element test basis `phi_i` to
+trace trial basis `mu_a` on local face `f`, while
 `face_trace_test_element_trial_oriented[o, a, i]` is the orientation-aware
-transpose used for trace-tested assembly.  Legacy aliases `MKrfe_lst_p`,
-`MKrfe_lst_n`, `MKrfe_lst`, and `MbdeKrf_lst` are still available.
-
-The weighted tables are there to avoid repeatedly rebuilding reference
-products during local matrix assembly.
+transpose used for trace-tested assembly.
 
 By default, volume and edge quadrature use `2 * order + 2` one-dimensional
-Gauss points.  For experiments that need a different rule, pass explicit counts
-through `DGSpace`:
+Gauss points.  Override counts through `DGSpace` when needed:
 
 ```python
 space = DGSpace(mesh, 6, basis_type="dub_orth", volume_quad_1d=7, edge_quad_1d=7)
 ```
 
-### DGSpace and DGField
+### Local Matrix Assembly
 
-`DGSpace(mesh, order, basis_type="dub_orth")` creates a scalar uniform-order DG
-space.  Optional `volume_quad_1d` and `edge_quad_1d` arguments override the
-default quadrature point counts without changing the polynomial basis degree.
-A `DGField` is a coefficient array plus its owning space:
-
-```python
-u = space.project_callable(lambda x, y: x + y)
-values_on_quads = u.values()
-error = u.l2_error(lambda x, y: x + y)
-```
-
-Vector fields use Cartesian product syntax:
-
-```python
-vector_space = space * space
-beta_h = vector_space.field((beta_x_coeffs, beta_y_coeffs))
-```
-
-## Plotting DG Fields
-
-The plotting helpers are generic over `DGField`; they are not tied to
-`adv_rea.py`.
-
-Plot one field:
-
-```python
-from hdgfem.io.plot import plot_field
-
-plot_field(result.field, resolution=20, title="u_h")
-```
-
-Plot several fields in one window:
-
-```python
-from hdgfem.io.plot import plot_fields
-
-plot_fields((u_h, v_h), titles=("u_h", "v_h"), share_clim=True)
-```
-
-Get sampled data or a refined PyVista mesh for a custom plot:
-
-```python
-from hdgfem.io.plot import refined_field_polydata, sample_field_on_elements
-
-ref_points, xy, values = sample_field_on_elements(result.field, resolution=16)
-poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
-```
-
-The solver-specific helper remains available:
-
-```python
-from hdgfem.io.plot import plot_solution_comparison
-
-plot_solution_comparison(result.field, exact)
-```
-
-Small-mesh Matplotlib contour panels are also available directly:
-
-```python
-from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib, reference_plot_points
-
-ref = reference_plot_points(16)
-values = result.field.values_at_ref(ref)
-plot_scalar_sample_panels_matplotlib(
-    result.field.space.mesh,
-    [("u_h", ref, values)],
-    cmap="jet",
-)
-```
-
-This helper duplicates refined vertices per physical element, so discontinuous
-DG fields are not averaged across element boundaries.
-
-## Local Matrix Assembly
-
-`hdgfem/assembly/matrices_numpy.py` keeps two styles of APIs.
+`hdgfem.assembly.matrices_numpy` keeps two API styles.
 
 Return-style reference functions:
 
 ```python
+from hdgfem.assembly import matrices_numpy as hdg_mats
+
 mass = hdg_mats.weighted_mass(space, reaction)
 adv = hdg_mats.advection_mats(space, beta_h)
 bd = hdg_mats.boundary_mass(space, beta_h)
@@ -969,34 +1046,34 @@ Output-buffer accumulation functions:
 tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
     space,
     beta_dot_normal,
-    stabilization=None,      # upwind tau = abs(beta_h . n)
+    stabilization=None,
 )
 local = hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face)
 local = np.ascontiguousarray(local)
 scratch = np.empty_like(local)
 
-hdg_mats.add_reaction_mass(local, reaction, space, scratch=scratch)
+hdg_mats.add_reaction_mass(local, reaction_h, space, scratch=scratch)
 hdg_mats.add_advection_mats(local, space, beta_h, scale=-1.0)
 ```
 
-For advection-reaction, `stabilization` is the element-side trace
-stabilization `tau`.  `None` uses the upwind value `abs(beta_h . n)`.  The
-NumPy path accepts scalars, callables, `DGField` objects, coefficient arrays,
-or already evaluated face-quadrature values.  The fused Numba path accepts
-`None`, scalars, or projected same-space `DGField`/coefficient data and
-evaluates DG `tau` on face quadrature inside the kernel.
+For advection-reaction, `stabilization` is the element-side trace stabilization
+`tau`.  `None` uses the upwind value `abs(beta_h . n)`.  The NumPy path accepts
+scalars, callables, `DGField` objects, coefficient arrays, or already evaluated
+face-quadrature values.  The fused Numba path accepts `None`, scalars, or
+projected same-space `DGField`/coefficient data and evaluates DG `tau` on face
+quadrature inside the kernel.
 
-The solver uses the accumulation style so it does not keep three full local
-element tensors alive at the same time.  The return-style functions are kept as
-readable reference paths and are often useful for tests and profiling.
+The solver uses accumulation style so it does not keep three full local element
+tensors alive at the same time.  Return-style functions remain useful for tests
+and profiling.
 
-## Projected Numba Assembly
+### Projected Numba Assembly
 
-`hdgfem/backends/numba.py` adapts package objects to the low-level kernels in
-`hdgfem/kernels/`.  The fused projected trace assembly path performs the local
-operator build, local solve, and global COO scatter inside the Numba kernel.
+`hdgfem.backends.numba` adapts package objects to kernels in `hdgfem.kernels`.
+The fused projected trace assembly path performs local operator build, local
+solve, and global COO scatter inside the Numba kernel.
 
-At `--verbosity 2`, the Numba assembly timing line is split into:
+At `--verbosity 2`, Numba assembly timing is split into:
 
 ```text
 coefficients     shape validation and coefficient normalization
@@ -1005,90 +1082,34 @@ kernel           fused local assembly, local solve, and COO scatter
 rhs              dense RHS finalization from indexed contributions
 ```
 
-`boundary/flux` is intentionally outside the fused kernel because
-`beta_h . n` is also reused by boundary elimination, upwind SCC ordering, and
-diagnostics.  When comparing timings with legacy scripts, compare the `kernel`
-entry with the legacy fused assembly timer; the package-level assembly timer
-also includes wrapper work needed by the higher-level solver.
+`boundary/flux` is outside the fused kernel because `beta_h . n` is also reused
+by boundary elimination, upwind-SCC ordering, and diagnostics.  When comparing
+with legacy scripts, compare the `kernel` entry with the legacy fused assembly
+timer; package-level assembly also includes wrapper work needed by solvers.
 
-## Static Condensation and Trace Assembly
+### Boundary Elimination and Upwind Ordering
 
-`hdgfem/assembly/hdg.py` contains the reusable HDG steps that are not specific
-to the advection-reaction manufactured test.  In code examples it is imported
-as `hdg_assembly`:
+The advection-reaction solver supports two boundary modes:
 
-```python
-from hdgfem.assembly import hdg as hdg_assembly
-
-source_rhs = hdg_assembly.source_moments(source, space)
-trace_blocks = hdg_assembly.element_to_trace_matrix(local_solver, element_boundary_mats, space)
-rows, cols = hdg_assembly.trace_matrix_indices(space)
-data = hdg_assembly.trace_matrix_data(trace_blocks, space, boundary_penalty=1e20)
-rhs, boundary_trace = hdg_assembly.global_rhs(source_rhs, local_solver, boundary_condition, space, 1e20)
+```text
+penalty     keep all trace unknowns and impose Dirichlet values with a large diagonal penalty
+eliminate   remove known boundary trace dofs before the global solve
 ```
 
-For callers that do not need substep timings, the same trace system can be
-assembled in one call:
+`trace_ordering="upwind-scc"` builds a directed graph from signs of
+`beta_h . n`, computes strongly connected components, topologically orders the
+component DAG, and converts that order to a trace-dof permutation.  On acyclic
+advection-dominated cases this can expose nearly triangular structure to ILU or
+upwind block-GS.
 
-```python
-trace_system = hdg_assembly.assemble_trace_system(
-    local_solver,
-    element_boundary_mats,
-    source_rhs,
-    boundary_condition,
-    space,
-)
-```
+Matrix-pattern diagnostics can be generated with `--plot-matrix-pattern`.  Those
+images are run artifacts and should generally not be committed unless a specific
+documentation change needs them.
 
-The solved trace can then be used to recover the element field:
+### HDG Gram Dual Norms
 
-```python
-from hdgfem.linalg.system import solve_global_system
-
-solve_result = solve_global_system(
-    trace_system.rows,
-    trace_system.cols,
-    trace_system.data,
-    trace_system.rhs,
-    trace_system.rhs.size,
-    solver="BICGSTAB",
-    preconditioner="ilu",
-    scale_system=True,
-    scale_matrix_in_place=True,
-    raise_on_nonconvergence=True,
-)
-u_h = hdg_assembly.reconstruct_field(
-    solve_result.x,
-    source_rhs,
-    local_solver,
-    element_boundary_mats,
-    space,
-)
-```
-
-Mixed local systems such as diffusion-reaction use two additional generic
-helpers:
-
-```python
-source_rhs = hdg_assembly.block_source_moments(source, space, num_blocks=3)
-unknowns = hdg_assembly.reconstruct_local_unknowns(
-    trace,
-    source_rhs,
-    local_solver,
-    element_boundary_mats,
-    space,
-)
-```
-
-`trace_matrix_indices(..., interior_mass_mode="face")` and
-`trace_matrix_data(..., interior_mass_mode="face", interior_mass_blocks=...)`
-support operators whose stabilization trace mass is contributed once per
-element-side incidence rather than once per global edge.
-
-## HDG Gram Dual Norms
-
-`hdgfem/assembly/hdg_gram.py` builds the Gram matrix associated with the HDG
-tuple `(q_x, q_y, u, uhat)`:
+`hdgfem.assembly.hdg_gram` builds the Gram matrix associated with the HDG tuple
+`(q_x, q_y, u, uhat)`:
 
 ```text
 sum_K ||q||^2_K + sum_K ||grad u||^2_K
@@ -1118,146 +1139,141 @@ hminus2, diagnostics = inverse.dual_norm_squared(residual)
 
 `build_condensed_hdg_gram_inverse` never forms or factors the full Gram matrix.
 It inverts the local flux/scalar block elementwise and applies CG to the trace
-Schur complement with an edge-block Jacobi preconditioner.  The sparse
-`assemble_hdg_gram` plus `build_ilu_bicgstab_inverse` path is mostly useful for
-small validation and experiments.
+Schur complement with an edge-block Jacobi preconditioner.
 
-Run the focused check script:
+Focused checks:
 
 ```bash
 python -m scripts.hdg_gram.hdg_gram_matrix_test --order 2 --nx 2 --ny 2
-```
-
-Run the package tests for this module:
-
-```bash
 python -m pytest tests/test_hdg_gram.py
 ```
 
-The torsion-initialized Newton runner uses the condensed inverse for final H-minus-like
-diagnostics and can reuse it during the Newton loop when `--compute-hminus` or
-`--line-search-norm hminus` is requested.
+## Plotting and Output Interpretation
 
-## Exact vs Projected Reaction
+Plotting helpers are generic over `DGField`:
 
-By default, callable coefficient data is assembled directly on the quadrature
-points:
+```python
+from hdgfem.io.plot import (
+    plot_field,
+    plot_fields,
+    plot_solution_comparison,
+    refined_field_polydata,
+    sample_field_on_elements,
+)
 
-```text
-source   = exact callable -> int_K f(x,y) phi_i dx
-beta     = exact callable -> volume/face quadrature samples
-reaction = exact callable -> int_K r(x,y) phi_i phi_j dx
+plot_field(result.field, resolution=20, title="u_h")
+plot_fields((result.field, result.postprocessed_field), titles=("u_h", "u_star"), share_clim=True)
+plot_solution_comparison(result.field, exact)
+
+ref_points, xy, values = sample_field_on_elements(result.field, resolution=16)
+poly = refined_field_polydata(result.field, resolution=16, scalar_name="u_h")
 ```
 
-With the CLI options `--project-source`, `--project-beta`, or
-`--project-reaction`, the corresponding callable is projected before
-`solve_advection_reaction_hdg` is called:
+Small-mesh Matplotlib contour panels duplicate refined vertices per physical
+element, so discontinuous DG fields are not averaged across element boundaries.
+
+At `--verbosity 2`, solver output separates preparation, assembly, global solve,
+reconstruction, residual diagnostics, and timing percentages.  Summary tables
+are grouped into run/mesh, options, solver, errors, and timings sections.
+Non-total timing rows include their percentage of total runtime.
+
+The default advection `BICGSTAB` path uses `hdgfem.linalg.system.solve_global_system`
+with diagonal scaling and ILU.  Explicit sparse zeros are removed before ILU
+factorization; this matters for large trace systems.
+
+## Optional Guiding-Center and Diocotron Equilibria
+
+This section is for interested readers.  It is not required for the main
+advection-reaction or diffusion-reaction HDG workflows.
+
+The guiding-center scripts compute diocotron-like equilibria through a
+semilinear elliptic equation of the form
 
 ```text
-source_h   = Pi_h source
-beta_h     = Pi_h beta
-reaction_h = Pi_h reaction
+-Delta phi = f(phi)
 ```
 
-and the reaction mass is assembled from cached triple products:
+The native HDG runner is
+`scripts/diocotron_hdg/hdg_torsion_initialized_newton.py`.  It uses a
+torsion-initialized Newton method: solve torsion design fields, build a density
+window, solve a Poisson initializer `phiDesign`, and then apply damped Newton
+continuation to the semilinear HDG residual.
+
+Typical HDG diagnostic run:
+
+```bash
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+  --star-n 260 --order 4 --hdg-tau 20 -v 2 \
+  --residual-norm euclid --newton-shift-mode none
+```
+
+Important controls include `--alphaT1`, `--alphaT2`, `--betaPhi1`,
+`--betaPhi2`, `--eps-ratios`, `--residual-norm`, `--newton-shift-mode`,
+`--newton-initial-guess`, `--tol-res`, `--tol-newton`, plotting flags, and
+`--skip-petsc`.  Runs create timestamped output under
+`run_logs/hdg_torsion_initialized_newton/` unless `--run-dir` is provided.
+
+The DOLFINx scripts under `scripts/diocotron_dolfinx/` implement
+continuous-Galerkin diagnostics for the same semilinear equilibrium problem.
+They can be used to compare CG and HDG on the same mesh, but they are not
+replacements for the HDG package solver path.
+
+Fair CG/HDG comparison workflow:
+
+```bash
+python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+  --run-tag hdg_star260_p2_mumps_clean \
+  --star-n 260 --order 2 --hdg-tau 10 \
+  --hdg-petsc-preset mumps_lu --residual-norm euclid
+
+/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py \
+  --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
+  --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
+  --order 2 --linear-solver mumps --terminal-every 1
+```
+
+"Strategy A" is a historical label for the torsion-initialized Newton
+parameter-study line.  In this repository it refers to the studies and scripts
+around choosing torsion and nonlinear density-window parameters for the same
+semilinear guiding-center equilibrium solve, not to a separate core HDG solver
+family.  The relevant Markdown docs are
+`docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md` and
+`docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md`.
+
+Two DOLFINx diagnostic variants are worth knowing about:
 
 ```text
-int_K reaction_h phi_i phi_j dx
+closed-loop refit       Newton-polish a state, measure density mismatch, refit c1/c2, repeat
+reduced optimization    optimize leakage/missing-area objectives with sensitivity solves
 ```
 
-This can substantially reduce reaction assembly time when `reaction_h` already
-exists or is reused.  Programmatic callers should do this projection explicitly
-and pass the resulting :class:`DGField` to the solver.
-
-## Boundary Elimination and Upwind Ordering
-
-The advection-reaction solver supports two boundary modes:
-
-```text
-penalty     keep all trace unknowns and impose Dirichlet values with a large diagonal penalty
-eliminate   remove known boundary trace dofs before the global solve
-```
-
-`--trace-ordering upwind-scc` builds a directed graph from the sign of
-`beta_h . n`, computes strongly connected components, topologically orders the
-component DAG, and converts that order to a trace-dof permutation.  On
-acyclic advection-dominated test cases this can expose nearly triangular
-structure to ILU.
-
-Matrix-pattern diagnostics can be generated with `--plot-matrix-pattern`.
-Those images are run artifacts and should generally not be committed unless a
-specific documentation change needs them.
-
-## Output Interpretation
-
-At `--verbosity 2`, the solver prints substep timings:
-
-```text
-preparing coefficient data
-assembling local element matrices
-  assembling boundary mass matrices
-  accumulating reaction mass matrices
-  assembling advection matrices
-inverting local element matrices
-assembling element boundary coupling
-assembling global trace system
-solving global system
-reconstructing element field
-```
-
-The summary includes:
-
-```text
-L2 error, Linf error, average sampled max error
-setup, global solve, reconstruction, total timings
-Krylov iterations
-solver and physical residual diagnostics
-ILU and Krylov solve timings
-```
-
-The default `BICGSTAB` path uses `hdgfem.linalg.system.solve_global_system` with
-diagonal scaling and ILU.  Explicit sparse zeros are removed before ILU
-factorization in that helper; this matters for large trace systems.
-
-Advection-reaction runner summaries are printed in named sections:
-
-```text
-Run / mesh, Options, Solver, Errors, Timings
-```
-
-The torsion-initialized Newton runner emits timestamped files and
-machine-readable terminal lines:
-
-```text
-SOLVER_OK
-EPS_START, STEP, EPS_END
-FINAL, FINAL_STATUS
-TIME_TOTAL
-newton.csv, frames.csv, summary.txt
-```
+Detailed algorithm notes for these variants live in the LaTeX docs under
+`docs/algorithms/torsion_initialized_window_reduced_optimization/` and
+`docs/algorithms/torsion_initialized_window_optimization/`.
 
 ## Performance Notes
 
 - Element axis is kept first, so local tensors use shape
   `(num_elements, el_dof, el_dof)`.
-- The solver caches `beta_h . n` once per solve.  The corrected advection trace
-  assembly forms side-wise `tau` and `tau - beta_h . n` weights, so projected
-  discontinuous beta fields do not collapse to an unweighted edge average.
 - Reference products such as `weighted_phi_phi_flat` and
   `weighted_triple_phi_flat` are precomputed once per reference element.
-- The current NumPy path is not a true fused element kernel.  It reduces
-  persistent temporaries and memory pressure, but separate contractions still
-  stream large local tensors through memory.
+- Advection assembly caches `beta_h . n` once per solve.  The corrected trace
+  assembly forms side-wise `tau` and `tau - beta_h . n` weights, so projected
+  discontinuous beta fields do not collapse to an unweighted edge average.
+- The NumPy path reduces persistent temporaries and memory pressure, but it is
+  not a true fused element kernel.
 - The projected Numba advection-reaction backend is the current fused package
-  path.  It is fastest when source, beta, and reaction fields are already
+  path and is fastest when source, beta, and reaction fields are already
   projected and reused across solves.
 - Projection costs are intentionally reported separately from solve time in
-  benchmark scripts.  Package CLI totals start after CLI input objects have
-  been constructed, so compare timing scopes carefully.
+  benchmark scripts.  Compare timing scopes carefully.
+- Absolute timings should record CPU model/core count, thread count, memory,
+  CUDA device, and whether Numba kernels were already JIT compiled.
 
 ## Development Checks
 
-Run the current hdgfem tests:
+Run the full focused test suite:
 
 ```bash
 env MPLCONFIGDIR=/tmp python -m pytest tests -q
@@ -1269,19 +1285,21 @@ Run syntax checks:
 python -m compileall -q hdgfem tests scripts
 ```
 
-Run the CLI smoke test:
+Run CLI smoke tests:
 
 ```bash
 python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
+python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson --dry-run
 ```
 
-Run the focused Gram and solver-class checks:
+Run focused Gram and solver-class checks:
 
 ```bash
-python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py
+python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py tests/test_diff_rea_solver_class.py
 ```
 
-Run a cheap torsion-initialized Newton smoke test:
+Run a cheap guiding-center HDG smoke test only when that optional path is being
+changed:
 
 ```bash
 python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \

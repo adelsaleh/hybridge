@@ -7,6 +7,7 @@
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage{listings}
+\usepackage{array}
 
 \hypersetup{
   colorlinks=true,
@@ -17,6 +18,10 @@
 
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \newcommand{\R}{\mathbb{R}}
+\newcommand{\level}{\ell}
+\newcommand{\trace}{\lambda}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\nnz}{\operatorname{nnz}}
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -27,194 +32,803 @@
   backgroundcolor=\color{black!3}
 }
 
-\title{Level-Scheduled Upwind Block Gauss-Seidel Preconditioning}
-\author{\code{hdgfem.linalg.upwind_block_gs}}
-\date{\today}
+\title{Upwind Block Gauss-Seidel Preconditioners for HDG Trace Systems}
+\author{HDGFEM implementation note}
+\date{2026-07-22}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This note documents the first implementation of a flow-aware block
-Gauss-Seidel preconditioner for advection-reaction HDG trace systems.  The
-method assumes the global trace matrix has already been ordered by the upwind
-SCC graph ordering.  It builds a reusable SciPy \code{LinearOperator} from the
-assembled CSR matrix, using dense edge-block diagonal inverses and strictly
-upstream cross-level block couplings.  Couplings within the same topological
-level and couplings to downstream levels are dropped, which makes each level
-parallelizable with Numba.
+This document explains the level-scheduled upwind block Gauss-Seidel
+preconditioner used in the advection-reaction HDG experiments.  It is written
+as an onboarding note: first we describe the trace system and the upwind graph,
+then we derive the forward block-GS approximation, then we map the mathematics
+to the arrays in \code{hdgfem}.  The same mathematical preconditioner currently
+has four practical implementations: a CSR/NumPy reference builder, a scalar COO
+on-the-fly builder, an assembly-emitted dense block COO builder, and a CuPy
+operator that applies a host-built preconditioner on the device.
 \end{abstract}
 
 \tableofcontents
 
-\section{Context}
+\section{Reading Guide For A New Intern}
 
-For a boundary-eliminated HDG advection-reaction trace system, the global solve
-has the form
-\[
-  A \lambda = b,
-\]
-where each active mesh edge contributes
-\[
-  n_{\partial} = p + 1
-\]
-trace degrees of freedom.  After upwind SCC ordering, the unknown vector is
-viewed as a sequence of edge blocks,
-\[
-  \lambda =
-  \begin{bmatrix}
-    \lambda_0 & \lambda_1 & \cdots & \lambda_{N_b-1}
-  \end{bmatrix}^T,
-  \qquad
-  \lambda_i \in \R^{n_{\partial}}.
-\]
-The ordering module also computes topological level widths
-\[
-  w_0,\ldots,w_{L-1},
-\]
-where blocks in the same level are intended to be independent with respect to
-the directed upwind dependency graph.
+The purpose of this preconditioner is not to be the strongest possible
+approximate inverse.  Its purpose is to exploit the transport direction in an
+advection-dominated HDG trace matrix and to produce a cheap triangular-like
+operator that is easy to build and easy to apply on a GPU.
 
-\section{Preconditioner Approximation}
+If you are new to this code, read in this order:
+\begin{enumerate}[nosep]
+  \item Sections~\ref{sec:trace-system} and~\ref{sec:motivation} for the
+        problem and the high-level idea.
+  \item Sections~\ref{sec:ordering} and~\ref{sec:forward-gs} for the actual
+        mathematical definition.
+  \item Section~\ref{sec:data-structures} before touching code.  Most bugs in
+        this area are indexing bugs.
+  \item Section~\ref{sec:implementations} to know which builder is a reference,
+        which one is for performance, and which one runs on the device.
+  \item Section~\ref{sec:pitfalls} before changing the algorithm.
+\end{enumerate}
 
-Let \(A_{ij}\in\R^{n_{\partial}\times n_{\partial}}\) denote the dense block of
-the trace matrix coupling block \(j\) into block row \(i\).  The version-1
-preconditioner forms
+The important files are:
+\begin{description}[leftmargin=3.0cm,style=nextline]
+  \item[Ordering]
+  \path{hdgfem/linalg/ordering.py}.  Builds the upwind-SCC edge ordering.
+
+  \item[CSR reference]
+  \path{hdgfem/linalg/upwind_block_gs.py}.  Builds the reference host
+  preconditioner and SciPy \code{LinearOperator}.
+
+  \item[Direct builders]
+  \path{hdgfem/linalg/upwind_block_gs_onfly.py}.  Builds the scalar COO and
+  ordered block COO variants.
+
+  \item[CuPy apply]
+  \path{hdgfem/linalg/cupy_upwind_block_gs.py}.  Exports compact host data and
+  applies the preconditioner on device.
+
+  \item[Experiment]
+  \begin{lstlisting}
+scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py
+  \end{lstlisting}
+  Runs end-to-end consistency and timing checks.
+\end{description}
+
+\section{Trace-System Setting}
+\label{sec:trace-system}
+
+After local HDG elimination, the advection-reaction problem is reduced to a
+trace problem on mesh edges:
 \[
-  M = D + L_{\rm up},
+  A \trace = b.
+\]
+Here \(\trace\) is the vector of active trace unknowns.  For the
+boundary-eliminated advection-reaction path, boundary trace unknowns are not
+part of the reduced solve; their contribution has already been moved into the
+right-hand side.
+
+For polynomial order \(p\), each active edge contributes
+\[
+  m = p + 1
+\]
+trace degrees of freedom in the current scalar trace basis.  If there are
+\(N_b\) active trace edges, then
+\[
+  A \in \R^{(mN_b)\times(mN_b)}, \qquad
+  \trace = \begin{bmatrix}\trace_0 & \trace_1 & \cdots & \trace_{N_b-1}\end{bmatrix}^T,
+  \qquad \trace_i\in\R^m.
+\]
+The matrix can therefore be viewed as an edge-block matrix:
+\[
+  A = \begin{bmatrix}
+    A_{00} & A_{01} & \cdots \\
+    A_{10} & A_{11} & \cdots \\
+    \vdots & \vdots & \ddots
+  \end{bmatrix},
+  \qquad A_{ij}\in\R^{m\times m}.
+\]
+
+The preconditioner is built in this edge-block view.  A ``block'' always means
+one active trace edge, and a ``scalar dof'' means one of the \(m\) basis
+coefficients on that edge.
+
+\subsection{Natural Scalar Indexing}
+
+Before ordering, the natural scalar index for local degree of freedom \(a\) on
+active edge block \(i\) is
+\[
+  r = mi + a, \qquad a=0,\ldots,m-1.
+\]
+Given a scalar index \(r\), the block id and local dof are
+\[
+  i = \left\lfloor r/m \right\rfloor, \qquad a = r - mi.
+\]
+The implementation uses this relationship constantly.  Whenever a builder
+switches between scalar COO/CSR data and dense edge-block data, this is the
+conversion being used.
+
+\subsection{Row Scaling}
+
+The advection-reaction solve path often applies scalar diagonal left scaling
+before the Krylov solve:
+\[
+  A_s = S A, \qquad b_s = S b,
 \]
 where
 \[
-  D_{ii} = A_{ii},
+  S_{rr} = \begin{cases}
+    1 / A_{rr}, & A_{rr}\neq 0,\\
+    1, & A_{rr}=0.
+  \end{cases}
 \]
-and \(L_{\rm up}\) contains only block couplings satisfying
-\[
-  \ell(j) < \ell(i),
-\]
-with \(\ell(i)\) the topological level of block \(i\).  All couplings with
-\(\ell(j)=\ell(i)\) and \(\ell(j)>\ell(i)\) are dropped.
+This is a scalar row scaling, not a block scaling.  If local row \(a\) of block
+\(i\) has scalar row index \(r=mi+a\), then every entry in that local row is
+multiplied by \(S_{rr}\).  The preconditioner must be built from the same
+scaled matrix that the Krylov solver sees.  Otherwise the iteration count and
+residual checks are not meaningful.
 
-The default preconditioner apply computes
+\section{Motivation}
+\label{sec:motivation}
+
+A direct global trace solve is too expensive for large GPU-oriented HDG runs.
+A Krylov method such as BiCGSTAB needs a preconditioner.  Classical ILU can be
+very strong, but our experiments showed that host-side SciPy \code{spilu}
+setup time stayed expensive even after weakening fill and drop tolerance.
+That is the wrong direction if the goal is to shift repeated work to the GPU.
+
+Advection gives us extra structure: information primarily moves along the flow
+direction.  If the trace edges are ordered from upstream to downstream, the
+matrix should look closer to block lower triangular.  A forward block
+Gauss-Seidel sweep along that ordering is then a cheap approximation to a solve
+with the transport-dominated part of the matrix.
+
+The design target is therefore:
+\begin{itemize}[nosep]
+  \item build a preconditioner using the upwind graph structure;
+  \item keep setup cheap enough that we are not replacing ILU with another
+        expensive host bottleneck;
+  \item apply the preconditioner in a level-scheduled form that can run on the
+        device;
+  \item preserve an exact CSR reference builder so new optimized builders can
+        be checked rigorously.
+\end{itemize}
+
+\section{Upwind-SCC Ordering}
+\label{sec:ordering}
+
+The ordering is computed by
+\code{hdgfem.linalg.ordering.upwind_scc_trace_ordering}.  The input is the mesh,
+edge trace degree count, and an approximation to the advective normal flux on
+faces.  The output is an ordering of active trace edges and a topological level
+structure.
+
+\subsection{The Directed Edge Graph}
+
+Think of each active trace edge as a node in a graph.  For each element, the
+advection field tells us which face is upstream and which face is downstream.
+The ordering code adds directed graph edges that encode this dependency.  A
+directed graph edge
 \[
-  z = M^{-1} r
+  j \rightarrow i
 \]
-by a forward level sweep.  For each level \(\ell=0,\ldots,L-1\), every block in
-that level is processed in parallel:
+means that block \(j\) is upstream of block \(i\), so a forward upwind sweep is
+allowed to use the already-computed value of block \(j\) when solving block
+\(i\).
+
+\subsection{Strongly Connected Components}
+
+Real meshes and changing velocity fields can produce cycles.  A cycle means
+there is no strict scalar topological ordering of individual edges.  The graph
+is therefore condensed into strongly connected components (SCCs).  The
+condensed graph is acyclic, so it can be topologically ordered.
+
+The implementation then reports level widths
 \[
-  z_i =
-  A_{ii}^{-1}
+  w_0,w_1,\ldots,w_{L-1}.
+\]
+The level map \(\level(i)\) tells us which topological level block \(i\) belongs
+to after ordering.  Blocks with smaller \(\level\) are earlier, hence more
+upstream.  Blocks with the same \(\level\) are treated as independent by the
+forward preconditioner.
+
+\subsection{Ordering Outputs Used By Builders}
+
+The ordering result provides two related permutations:
+\begin{itemize}[nosep]
+  \item \code{edge_order}: maps ordered edge-block ids to natural edge ids;
+  \item \code{dof_permutation}: maps ordered scalar dof ids to natural scalar
+        dof ids.
+\end{itemize}
+
+The CSR reference path uses the scalar permutation as
+\begin{lstlisting}
+ordered_matrix = scaled_matrix[permutation][:, permutation].tocsr()
+ordered_rhs = scaled_rhs[permutation]
+\end{lstlisting}
+The assembly block-COO path passes \code{edge_order} into Numba assembly so the
+kernel emits block ids directly in ordered edge space.
+
+\section{Forward Upwind Block-GS Approximation}
+\label{sec:forward-gs}
+
+Let \(A^o\) be the scaled matrix after applying the upwind ordering.  Its
+\((i,j)\) edge block is \(A^o_{ij}\in\R^{m\times m}\).  The forward upwind block
+Gauss-Seidel preconditioner keeps:
+\begin{itemize}[nosep]
+  \item every dense diagonal block \(A^o_{ii}\);
+  \item off-diagonal blocks \(A^o_{ij}\) only when \(j\) is in an earlier
+        topological level than \(i\):
+        \[
+          \level(j) < \level(i).
+        \]
+\end{itemize}
+It drops:
+\begin{itemize}[nosep]
+  \item same-level couplings, \(\level(j)=\level(i)\);
+  \item downstream couplings, \(\level(j)>\level(i)\).
+\end{itemize}
+
+The resulting approximate matrix is
+\[
+  M_f = D + L_{\rm up},
+\]
+where \(D\) is the dense block diagonal and \(L_{\rm up}\) is the retained
+strictly upstream block lower part.
+
+Applying the preconditioner means solving
+\[
+  M_f z = r.
+\]
+For each block \(i\), the formula is
+\[
+  z_i = \left(A^o_{ii}\right)^{-1}
   \left(
-    r_i -
-    \sum_{\substack{j\\ \ell(j)<\ell(i)}} A_{ij}z_j
+    r_i - \sum_{j:\level(j)<\level(i)} A^o_{ij} z_j
   \right).
 \]
-Because all retained dependencies point from earlier levels into later levels,
-the loop over levels is sequential, while the loop over blocks inside a level
-is parallel.
+This is a block triangular solve in topological-level order.  Earlier-level
+values \(z_j\) are already available.  Same-level values are intentionally not
+used, which lets all blocks in one level be processed independently.
 
-An experimental \code{forward_backward} sweep also stores downstream
-cross-level couplings.  It applies a forward sweep, multiplies by the dense
-block diagonal, and then applies a backward sweep.  In matrix form, this is the
-block analogue of
+\subsection{Why Dense Edge Blocks?}
+
+For \(p=6\), \(m=7\), so each edge block is only \(7\times 7\).  It is cheaper
+and clearer to store retained couplings as dense small blocks than as scalar
+CSR.  A preconditioner application then performs many tiny dense matrix-vector
+products:
 \[
-  (D+U_{\rm down})^{-1}D(D+L_{\rm up})^{-1}.
+  A^o_{ij} z_j, \qquad A^o_{ij}\in\R^{m\times m}.
 \]
-This uses both cross-level directions, but it still drops same-level couplings.
-It is therefore mainly a diagnostic for whether downstream couplings are the
-missing ingredient.
+The diagonal block inverse \((A^o_{ii})^{-1}\) is precomputed once during
+setup, so the apply stage does not factor or solve small systems repeatedly.
 
-\section{Version-1 Builder}
-
-The first implementation deliberately builds the preconditioner after CSR
-assembly.  This gives a simple correctness path:
-\begin{enumerate}[nosep]
-  \item assemble the trace matrix normally;
-  \item sum duplicate COO entries by converting to CSR;
-  \item extract dense diagonal edge blocks;
-  \item extract retained upstream block couplings into a block-CSR structure;
-  \item invert every dense diagonal block;
-  \item expose the Numba level sweep as a SciPy \code{LinearOperator}.
-\end{enumerate}
-
-This route avoids changing the fused trace-assembly kernel while we evaluate
-the numerical quality of the preconditioner.
-
-\section{Parallel Structure}
-
-The apply kernel has the following structure:
+\subsection{Pseudocode}
 
 \begin{lstlisting}
+# Input: residual r in ordered scalar dof layout.
+# Output: z = M_f^{-1} r in the same ordered layout.
+z = zeros_like(r)
 for level in range(num_levels):
-    for block in prange(level_offsets[level], level_offsets[level + 1]):
+    for block in blocks_in_level[level]:
         residual = r[block]
-        for retained upstream neighbor j:
-            residual -= A[block, j] @ z[j]
-        z[block] = inverse_diagonal_block[block] @ residual
+        for pos in lower_row_ptr[block]:lower_row_ptr[block + 1]:
+            upstream_block = lower_col_ind[pos]
+            residual -= lower_values[pos] @ z[upstream_block]
+        z[block] = diagonal_inverse[block] @ residual
 \end{lstlisting}
 
-The computation is race-free because every retained neighbor \(j\) lies in an
-earlier level, so \(z_j\) has already been computed before the current level
-starts.  The diagnostics from the trigonometric-style \code{test2} advection
-case with \(p=6\) and \(\code{lc}=0.01\) showed 439 levels and maximum width
-599, which is a useful amount of level parallelism.
+The host implementation can run the inner loop either serially or with Numba
+\code{prange}.  The current CuPy implementation launches one RawKernel per
+level and assigns one CUDA thread to one edge block.
 
-In practice, launching a threaded region once per level has overhead.  The
-implementation therefore supports three apply modes:
+\section{A Small Example}
+\label{sec:small-example}
+
+Suppose the upwind ordering gives five edge blocks with levels
+\[
+  \level(0)=0,\quad \level(1)=0,\quad
+  \level(2)=1,\quad \level(3)=1,\quad \level(4)=2.
+\]
+Blocks 0 and 1 can be processed first.  Blocks 2 and 3 may depend on 0 and 1,
+but not on each other.  Block 4 may depend on any earlier block.
+
+A typical retained pattern might be
+\[
+\begin{array}{c|ccccc}
+       & 0 & 1 & 2 & 3 & 4 \\
+\hline
+  0    & D &   &   &   &   \\
+  1    &   & D &   &   &   \\
+  2    & L & L & D &   &   \\
+  3    & L &   &   & D &   \\
+  4    & L & L & L & L & D
+\end{array}
+\]
+where \(D\) means diagonal block and \(L\) means retained upstream block.
+If the true matrix also had a nonzero block \(A^o_{23}\), that block would be
+dropped because \(2\) and \(3\) are in the same level.  If it had \(A^o_{14}\),
+that block would be dropped in the forward preconditioner because block 4 is
+downstream of block 1.
+
+The apply order is:
+\begin{enumerate}[nosep]
+  \item solve blocks 0 and 1 independently;
+  \item solve blocks 2 and 3 independently using any retained values from 0
+        and 1;
+  \item solve block 4 using retained values from levels 0 and 1.
+\end{enumerate}
+This example is the whole algorithm.  The production code only adds sparse data
+structures, row scaling, and device execution.
+
+\section{Forward-Backward Variant}
+\label{sec:forward-backward}
+
+The CSR reference module also contains an experimental
+\code{forward_backward} sweep.  It stores downstream cross-level couplings in
+addition to upstream ones and applies an SSOR-like operation:
+\[
+  M_{fb}^{-1} \approx (D+U_{\rm down})^{-1}D(D+L_{\rm up})^{-1}.
+\]
+The first factor is the forward sweep described above.  Then the result is
+multiplied by the dense block diagonal \(D\).  Finally, a backward sweep uses
+retained downstream blocks in reverse level order.
+
+This is a stronger approximation than the forward sweep, but it has costs:
 \begin{itemize}[nosep]
-  \item \code{serial}: a single-threaded Numba level sweep;
-  \item \code{parallel}: a \code{prange} loop inside each level;
-  \item \code{auto}: select \code{parallel} only when the maximum level width
-        is above a configurable threshold.
+  \item it stores downstream block data as well as upstream block data;
+  \item it performs two level sweeps per preconditioner application;
+  \item it still drops same-level couplings;
+  \item it is not yet implemented in the CuPy exported operator.
 \end{itemize}
-For the current \code{test2} diagnostics, the serial Numba sweep is often the
-better baseline because level widths are in the hundreds rather than the
-thousands.
+Use it as a diagnostic for iteration count, not as the default production path.
 
-\section{Diagnostics}
+\section{Data Structures}
+\label{sec:data-structures}
 
-The builder reports:
+The reusable host object is \code{UpwindBlockGSPreconditioner}.  It stores a
+block sparse lower structure plus dense diagonal inverses.  All arrays are in
+ordered edge-block layout.
+
+\subsection{Level Arrays}
+
+\begin{center}
+\begin{tabular}{llp{0.55\linewidth}}
+\toprule
+Array & Shape & Meaning \\
+\midrule
+\code{level_offsets} & \((L+1,)\) & Prefix sum of level widths.  Blocks in level \(q\) occupy \code{level_offsets[q]:level_offsets[q+1]}. \\
+\code{block_levels} & \((N_b,)\) & Temporary builder array mapping block id to topological level. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Retained Upstream Couplings}
+
+The retained upstream blocks are stored in block-CSR form:
+\begin{center}
+\begin{tabular}{llp{0.55\linewidth}}
+\toprule
+Array & Shape & Meaning \\
+\midrule
+\code{lower_row_ptr} & \((N_b+1,)\) & Prefix sum over retained upstream neighbor blocks per row block. \\
+\code{lower_col_ind} & \((N_L,)\) & Ordered block ids of retained upstream neighbors. \\
+\code{lower_values} & \((N_L,m,m)\) & Dense retained coupling blocks. \\
+\bottomrule
+\end{tabular}
+\end{center}
+Here \(N_L\) is the number of retained upstream block couplings.
+
+For a row block \(i\), retained neighbor positions are
+\begin{lstlisting}
+for pos in range(lower_row_ptr[i], lower_row_ptr[i + 1]):
+    j = lower_col_ind[pos]
+    B = lower_values[pos]
+\end{lstlisting}
+The invariant is
+\[
+  \level(j) < \level(i)
+\]
+for every stored pair \((i,j)\).
+
+\subsection{Diagonal Blocks}
+
+\begin{center}
+\begin{tabular}{llp{0.55\linewidth}}
+\toprule
+Array & Shape & Meaning \\
+\midrule
+\code{diagonal_blocks} & \((N_b,m,m)\) & Scaled diagonal blocks \(A^o_{ii}\). \\
+\code{diagonal_inverse} & \((N_b,m,m)\) & Precomputed dense inverses \((A^o_{ii})^{-1}\). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diagonal inverse is the main dense linear algebra cost in the current host
+builder.  For p6/ms0.01 it took about 0.38 seconds for 138,428 independent
+\(7\times7\) inversions.
+
+\subsection{Diagnostics And Counters}
+
+Each builder reports:
 \begin{itemize}[nosep]
-  \item number of edge blocks;
-  \item trace block size;
-  \item number of topological levels;
-  \item maximum, median, and mean level width;
   \item retained upstream block couplings;
   \item dropped same-level block couplings;
   \item dropped downstream block couplings;
-  \item fraction of off-diagonal block couplings dropped;
-  \item selected apply mode;
-  \item setup timings for CSR preparation, coupling counting, block filling,
-        diagonal-block inversion, and warm-up.
+  \item dropped off-diagonal coupling fraction;
+  \item setup timings for pattern construction, dense block fill, diagonal
+        inversion, and warmup;
+  \item preconditioner apply count and cumulative apply time during Krylov.
 \end{itemize}
+These numbers are not just performance decoration.  They catch wrong ordering,
+wrong row scaling, wrong block-size assumptions, and accidental changes in the
+preconditioner definition.
 
-The dropped-coupling counts are important.  A high same-level count means the
-upwind graph levels are not sufficient to represent the matrix-level
-dependencies exactly.  In that case the preconditioner is still valid, but it
-is more like a level block-Jacobi/Gauss-Seidel hybrid.
+\section{Implementation Families}
+\label{sec:implementations}
 
-\section{Benchmark Entry Points}
+All implementations below are supposed to build the same forward
+preconditioner.  The differences are only how much intermediate sparse data
+they scan and where the apply runs.
 
-The current benchmark script adds two configurations:
+\subsection{CSR/NumPy Reference Builder}
+
+Function:
+\[
+  \code{hdgfem.linalg.upwind_block_gs.build_upwind_block_gs_preconditioner}.
+\]
+It expects an already scaled and upwind-ordered SciPy sparse matrix:
 \begin{lstlisting}
-scipy_bicgstab_upwind_bgs
-scipy_gmres_upwind_bgs
-scipy_bicgstab_upwind_fbgs
-scipy_gmres_upwind_fbgs
+scaled_matrix, scaled_rhs = diagonal_scale_system(A, b)
+ordered_matrix = scaled_matrix[permutation][:, permutation].tocsr()
+ordered_rhs = scaled_rhs[permutation]
+
+M = build_upwind_block_gs_preconditioner(
+    ordered_matrix,
+    block_size=edge_dof,
+    level_widths=ordering.diagnostics.level_widths,
+    sweep="forward",
+)
 \end{lstlisting}
 
-They live in \code{scripts/advection_reaction/benchmark_adv_rea_solvers.py}.  The script assembles
-the trace matrix once, builds the reusable CSR matrix once, and then compares
-the new preconditioner with SciPy ILU and PETSc ILU/ASM configurations.
-When multiple SciPy configurations use the same upwind block-GS options, the
-benchmark caches and reuses the scaled matrix and preconditioner.  This avoids
-charging the setup cost separately to BICGSTAB and GMRES.
+Why it exists:
+\begin{itemize}[nosep]
+  \item It is the correctness reference.
+  \item It scans the final compressed CSR matrix after duplicate COO entries
+        have been summed.
+  \item It supports both \code{forward} and \code{forward_backward} on host.
+\end{itemize}
 
-\section{Next Optimization}
+What it costs:
+\begin{itemize}[nosep]
+  \item a CSR matrix must already exist;
+  \item the matrix must be explicitly permuted;
+  \item setup scans the CSR scalar structure to recover dense blocks.
+\end{itemize}
 
-If the CSR-built version is competitive, the next optimization is to build the
-same block-CSR preconditioner data during the Numba trace assembly.  That
-should reduce memory traffic and avoid scanning the scalar CSR matrix.  The
-apply kernel should remain in \code{hdgfem.linalg.upwind_block_gs}; only the
-builder should move closer to the fused assembly path.
+\subsection{Scalar COO On-The-Fly Builder}
+
+Function:
+\[
+  \code{hdgfem.linalg.upwind_block_gs_onfly.build_forward_upwind_block_gs_from_coo}.
+\]
+It consumes natural-order scalar COO triplets plus the scalar permutation:
+\begin{lstlisting}
+M = build_forward_upwind_block_gs_from_coo(
+    rows, cols, data, system_size,
+    permutation=ordering.dof_permutation,
+    level_widths=ordering.diagnostics.level_widths,
+    block_size=edge_dof,
+    row_scale=row_scale,
+)
+\end{lstlisting}
+
+What happens internally:
+\begin{enumerate}[nosep]
+  \item invert the scalar permutation so natural scalar ids map to ordered
+        scalar ids;
+  \item convert ordered scalar ids to ordered edge-block ids and local dofs;
+  \item apply scalar row scaling to each contribution;
+  \item classify each contribution as diagonal, upstream, same-level, or
+        downstream;
+  \item accumulate diagonal and retained upstream contributions into dense
+        blocks;
+  \item compact the bounded temporary tables into block-CSR arrays;
+  \item invert every dense diagonal block.
+\end{enumerate}
+
+Why it exists:
+\begin{itemize}[nosep]
+  \item It proves that direct triplet accumulation can reproduce the CSR
+        reference preconditioner.
+  \item It is easier to debug than changing the assembly kernel first.
+\end{itemize}
+
+Why it is not the performance target:
+\begin{itemize}[nosep]
+  \item It still scans every raw scalar triplet.  On the p6/ms0.01 benchmark,
+        that was 54.19M scalar triplets.
+\end{itemize}
+
+\subsection{Assembly-Emitted Ordered Block COO Builder}
+
+Function:
+\begin{lstlisting}
+hdgfem.linalg.upwind_block_gs_onfly.build_forward_upwind_block_gs_from_ordered_block_coo
+\end{lstlisting}
+It consumes dense ordered edge-block COO emitted by Numba assembly:
+\begin{lstlisting}
+result = assemble_projected_trace_system_eliminated_numba(
+    source_h, beta_h, reaction_h, exact, space,
+    edge_order=ordering.edge_order,
+    return_block_coo=True,
+)
+
+M = build_forward_upwind_block_gs_from_ordered_block_coo(
+    result.block_rows,
+    result.block_cols,
+    result.block_data,
+    num_blocks,
+    level_widths=ordering.diagnostics.level_widths,
+)
+\end{lstlisting}
+
+Each entry has the form
+\[
+  (i_b,j_b,B_{ij}), \qquad B_{ij}\in\R^{m\times m},
+\]
+where \(i_b\) and \(j_b\) are already ordered edge-block ids.  The builder no
+longer needs to map scalar ids through a permutation for every scalar entry.
+It only classifies and accumulates dense block entries.
+
+Important detail: this builder still reproduces scalar Jacobi row scaling.  It
+first accumulates the block diagonal, reads the scalar diagonal entries inside
+those blocks, and scales local rows of all retained blocks by the same scalar
+row factors used by \code{diagonal_scale_system}.
+
+This is the preferred host performance builder today.
+
+\subsection{CuPy Exported Operator}
+
+Function:
+\begin{lstlisting}
+hdgfem.linalg.cupy_upwind_block_gs.cupy_upwind_block_gs_from_host_preconditioner
+\end{lstlisting}
+It takes a host-built \code{UpwindBlockGSPreconditioner} and transfers compact
+arrays to the current CUDA device:
+\begin{lstlisting}
+M_cp = cupy_upwind_block_gs_from_host_preconditioner(
+    host_preconditioner,
+    dtype=matrix_cp.dtype,
+)
+
+x_cp, info, iters = solve_cupyx_csr(
+    matrix_cp,
+    rhs_cp,
+    solver="bicgstab",
+    preconditioner=M_cp,
+)
+\end{lstlisting}
+
+The device operator owns only the repeated apply:
+\begin{itemize}[nosep]
+  \item the matrix and RHS are Cupy/Cupyx objects;
+  \item \code{lower_row_ptr}, \code{lower_col_ind}, \code{lower_values}, and
+        \code{diagonal_inverse} are device arrays;
+  \item one RawKernel launch is issued per topological level;
+  \item one CUDA thread processes one edge block.
+\end{itemize}
+
+This keeps the host/device role clear.  The current builder still uses host
+setup, but the Krylov sparse matvecs and preconditioner applications run on the
+GPU.  Host/device transfer timings are reported separately in the experimental
+script because future raw CUDA assembly should avoid most of that traffic.
+
+\subsection{Raw CUDA Direct Builder}
+
+This is the intended future production direction.  The raw GPU assembly path
+should eventually write either:
+\begin{itemize}[nosep]
+  \item dense ordered block COO on device, followed by a device-side compacting
+        builder; or
+  \item the final compact block-GS arrays directly.
+\end{itemize}
+The mathematical preconditioner should not change.  Only the location of the
+builder changes.
+
+\section{Implementation Comparison}
+
+\begin{center}
+\begin{tabular}{p{0.20\linewidth}p{0.24\linewidth}p{0.24\linewidth}p{0.20\linewidth}}
+\toprule
+Implementation & Input representation & Primary role & Main limitation \\
+\midrule
+CSR/NumPy reference & Ordered SciPy CSR matrix & Ground truth for structure and residual behavior & Requires CSR build and CSR scan \\
+Scalar COO on-fly & Natural scalar COO plus scalar permutation & Debug bridge for direct accumulation & Still scans all scalar triplets \\
+Ordered block COO on-fly & Dense ordered edge-block COO from Numba assembly & Current best host setup path & Diagonal inversions and compacting still on host \\
+CuPy exported operator & Compact host arrays copied to CUDA & Moves repeated BiCGSTAB work to device & One kernel launch per level; setup still host-side \\
+Raw CUDA direct builder & Future device block COO or compact arrays & Target production GPU setup path & Not implemented yet \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Testing And Correctness Strategy}
+\label{sec:testing}
+
+Any new implementation should be tested against the CSR reference in three
+layers.
+
+\subsection{Structural Equality}
+
+Compare the actual preconditioner data:
+\begin{itemize}[nosep]
+  \item diagonal block max absolute difference;
+  \item \code{lower_row_ptr} equality;
+  \item \code{lower_col_ind} equality;
+  \item retained \code{lower_values} max absolute difference;
+  \item retained, same-level, and downstream coupling counts.
+\end{itemize}
+
+This catches wrong ordering, missed row scaling, and duplicate accumulation
+mistakes before a Krylov solve hides the source of the error.
+
+\subsection{Operator Equality}
+
+Apply both preconditioners to the same deterministic random vector and compare
+\[
+  \frac{\|M_{\rm ref}^{-1}v - M_{\rm new}^{-1}v\|_2}
+       {\max(\|M_{\rm ref}^{-1}v\|_2,1)}.
+\]
+This is useful because the same sparse pattern can still contain wrong dense
+block values.
+
+\subsection{Krylov Equality}
+
+Run BiCGSTAB with the same ordered matrix and RHS.  Check:
+\begin{itemize}[nosep]
+  \item solver status \code{info};
+  \item iteration count;
+  \item scaled residual in ordered/scaled coordinates;
+  \item physical residual after unpermuting, when available;
+  \item solution difference relative to the reference path.
+\end{itemize}
+
+The experimental checker performs these checks for the current host and CuPy
+paths:
+\begin{lstlisting}
+scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py
+\end{lstlisting}
+
+\section{Current Benchmark Snapshot}
+\label{sec:benchmark}
+
+The detailed performance report is
+\code{run_logs/upwind_block_gs_cupyx_findings_20260722.md}.  The raw data are in
+\code{run_logs/upwind_block_gs_cupyx_p6_ms001_20260722.json}.
+
+For the p6/ms0.01 \code{test2_legacy_gpu3} case with \code{dub_orth} volume
+basis and \code{legacy-lagrange} trace basis:
+\begin{itemize}[nosep]
+  \item reduced trace unknowns: 968,996;
+  \item scalar COO triplets: 54,185,376;
+  \item CSR nonzeros: 33,836,460;
+  \item ordered dense block COO entries: 1,105,824;
+  \item retained upstream couplings: 195,023;
+  \item same-level dropped couplings: 162,066;
+  \item downstream dropped couplings: 195,023.
+\end{itemize}
+
+The assembly block-COO builder matched the CSR reference with lower pattern
+mismatches equal to zero and a deterministic matvec relative difference of
+\(7.9\times10^{-16}\).  Host SciPy and Cupyx BiCGSTAB both took 27 iterations.
+Host SciPy solve time with the assembly block preconditioner was 6.657 s;
+Cupyx solve time with the exported preconditioner was 0.844 s.  The cumulative
+preconditioner application time fell from 2.736 s on host to 0.384 s on device.
+
+The builder timing lesson is equally important:
+\begin{itemize}[nosep]
+  \item CSR reference preconditioner setup: 1.111 s;
+  \item scalar COO on-fly setup: 1.942 s;
+  \item assembly block-COO setup: 0.911 s.
+\end{itemize}
+The scalar COO path is slower because it scans all raw triplets.  The assembly
+block-COO path is faster because it avoids that scalar triplet rescan.
+
+\section{Common Pitfalls}
+\label{sec:pitfalls}
+
+\subsection{Mixing Natural And Ordered Indices}
+
+The most common bug is using a natural edge id where an ordered block id is
+expected, or using an ordered scalar id where a natural scalar id is expected.
+The rule is:
+\begin{itemize}[nosep]
+  \item CSR reference after permutation: all scalar ids are ordered;
+  \item scalar COO on-fly input: COO ids are natural, but accumulated blocks are
+        ordered;
+  \item ordered block COO input: block ids are already ordered;
+  \item preconditioner arrays: always ordered block ids.
+\end{itemize}
+
+\subsection{Forgetting Scalar Row Scaling}
+
+The solver often uses \(A_s=S A\).  Building \(M\) from unscaled \(A\) and then
+using it with \(A_s\) changes the preconditioned operator.  The iteration count
+can change dramatically, and residual comparisons become misleading.
+
+\subsection{Treating Same-Level Couplings As Upstream}
+
+Same-level couplings are intentionally dropped in the forward preconditioner.
+Keeping them would either introduce within-level dependencies or require a
+second local solver inside each level.  That is a different preconditioner.
+
+\subsection{Comparing Only Krylov Iteration Counts}
+
+Equal iteration counts do not prove that two builders are equivalent.  Always
+compare structure and one deterministic preconditioner matvec first.
+
+\subsection{Charging JIT Compilation To The Solve}
+
+Host Numba and CuPy RawKernel compilation can distort the first application.
+The builders support warmup so compile time is charged to setup rather than to
+Krylov solve timing.  Benchmark reports should say whether warmup was enabled.
+
+\section{Glossary}
+
+\begin{description}[leftmargin=2.8cm,style=nextline]
+  \item[Active trace edge]
+  An edge whose trace unknowns remain in the reduced global system after
+  boundary elimination.
+
+  \item[Block]
+  One active trace edge and its \(m=p+1\) scalar trace degrees of freedom.
+
+  \item[Scalar dof]
+  One basis coefficient on one trace edge.
+
+  \item[Upwind-SCC ordering]
+  A topological ordering of the directed edge dependency graph after strongly
+  connected components are condensed.
+
+  \item[Level]
+  A group of ordered edge blocks with no retained dependency ordering within
+  the group.  Levels are processed sequentially; blocks within a level can be
+  processed independently by the forward sweep.
+
+  \item[Retained upstream coupling]
+  A dense block \(A^o_{ij}\) stored in the preconditioner because
+  \(\level(j)<\level(i)\).
+
+  \item[Same-level coupling]
+  A dense block \(A^o_{ij}\) with \(\level(j)=\level(i)\).  The forward
+  preconditioner drops it.
+
+  \item[Downstream coupling]
+  A dense block \(A^o_{ij}\) with \(\level(j)>\level(i)\).  The forward
+  preconditioner drops it; the forward-backward variant may use the downstream
+  direction in the backward sweep.
+\end{description}
+
+\section{Recommended Development Path}
+
+For new work, use the following order:
+\begin{enumerate}[nosep]
+  \item keep the CSR reference builder as the correctness oracle;
+  \item use the scalar COO on-fly builder only when debugging direct
+        accumulation logic;
+  \item use the assembly-emitted ordered block COO builder for current host
+        performance experiments;
+  \item use the host-to-CuPy export helper
+        \path{cupy_upwind_block_gs_from_host_preconditioner} when measuring
+        Cupyx BiCGSTAB solve time with host-built preconditioner data;
+  \item move block diagonal inversion and bounded block accumulation to CUDA
+        only after the host/device data contract is stable.
+\end{enumerate}
+
+The next algorithmic experiment should be the forward-backward variant after
+the forward path is integrated cleanly with the GPU assembly workflow.  The
+next performance experiment should move the independent dense diagonal block
+inversions and compact block accumulation closer to the raw CUDA assembly path.
 
 \end{document}

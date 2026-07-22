@@ -1057,6 +1057,7 @@ def solve_cupyx_system(
     total_start = time.time()
     from ..backends.cupy import (
         asnumpy,
+        build_cupyx_exported_host_ilu_preconditioner,
         build_cupyx_ilu_preconditioner,
         scipy_coo_to_cupy_csr,
         scipy_csr_to_cupy,
@@ -1159,48 +1160,110 @@ def solve_cupyx_system(
 
     preconditioner_operator = None
     preconditioner_elapsed_seconds = 0.0
+    preconditioner_uses_ilu = False
     if isinstance(preconditioner, str):
-        if preconditioner == "ilu":
+        preconditioner_key = str(preconditioner).lower().replace("-", "_")
+        if preconditioner_key in {"ilu", "host_ilu", "host_ilu_export", "cupyx_ilu1", "device_ilu1"}:
             if ilu_failure not in {"raise", "none"}:
                 raise ValueError("ilu_failure must be 'raise' or 'none'")
-            _solver_print(
-                verbose,
-                2,
-                "  building Cupyx ILU preconditioner with drop_tol=%g, fill_factor=%g",
-                ilu_drop_tol,
-                ilu_fill_factor,
-            )
-            preconditioner_start = time.time()
-            try:
-                preconditioner_operator = build_cupyx_ilu_preconditioner(
-                    matrix_cp,
-                    drop_tol=ilu_drop_tol,
-                    fill_factor=ilu_fill_factor,
-                    permc_spec=ilu_permc_spec,
+            preconditioner_uses_ilu = True
+            unit_fill = abs(float(ilu_fill_factor) - 1.0) <= 1e-12
+            device_ilu = preconditioner_key in {"cupyx_ilu1", "device_ilu1"} or (preconditioner_key == "ilu" and unit_fill)
+            if preconditioner_key in {"cupyx_ilu1", "device_ilu1"} and not unit_fill:
+                raise ValueError("cupyx-ilu1 requires ilu_fill_factor=1.0; use host-ilu-export for other ILU strengths")
+
+            if device_ilu:
+                _solver_print(
+                    verbose,
+                    2,
+                    "  building device Cupyx ILU(1) preconditioner with drop_tol=%g",
+                    ilu_drop_tol,
                 )
-            except Exception as exc:
-                preconditioner_elapsed_seconds = time.time() - preconditioner_start
-                if ilu_failure == "none":
-                    _solver_print(
-                        verbose,
-                        1,
-                        "  Cupyx ILU preconditioner failed in %.5fs (%s); continuing without preconditioner",
-                        preconditioner_elapsed_seconds,
-                        exc,
+                preconditioner_start = time.time()
+                try:
+                    preconditioner_operator = build_cupyx_ilu_preconditioner(
+                        matrix_cp,
+                        drop_tol=ilu_drop_tol,
+                        fill_factor=1.0,
+                        permc_spec=ilu_permc_spec,
                     )
-                    preconditioner_operator = None
+                except Exception as exc:
+                    preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                    if ilu_failure == "none":
+                        _solver_print(
+                            verbose,
+                            1,
+                            "  Cupyx ILU(1) preconditioner failed in %.5fs (%s); continuing without preconditioner",
+                            preconditioner_elapsed_seconds,
+                            exc,
+                        )
+                        preconditioner_operator = None
+                    else:
+                        raise RuntimeError(
+                            "Cupyx ILU(1) preconditioner failed. Set ilu_failure='none' "
+                            "to fall back to an unpreconditioned Cupyx Krylov solve."
+                        ) from exc
                 else:
-                    raise RuntimeError(
-                        "Cupyx ILU preconditioner failed. Try a larger fill_factor, "
-                        "a smaller drop_tol, or set ilu_failure='none' to fall back "
-                        "to an unpreconditioned Cupyx Krylov solve."
-                    ) from exc
+                    preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                    _solver_print(verbose, 2, "  Cupyx ILU(1) preconditioner built in %.5fs", preconditioner_elapsed_seconds)
             else:
-                preconditioner_elapsed_seconds = time.time() - preconditioner_start
-                _solver_print(verbose, 2, "  Cupyx ILU preconditioner built in %.5fs", preconditioner_elapsed_seconds)
-        elif preconditioner == "jacobi":
-            raise ValueError("Cupyx preconditioner currently supports only 'ilu' or None")
-        elif preconditioner == "upwind_block_gs":
+                _solver_print(
+                    verbose,
+                    2,
+                    "  building host ILU and exporting factors to device with drop_tol=%g, fill_factor=%g",
+                    ilu_drop_tol,
+                    ilu_fill_factor,
+                )
+                preconditioner_start = time.time()
+                try:
+                    if using_host_coo:
+                        host_matrix = scipy.sparse.csr_array(
+                            (solve_values, (row_indices, col_indices)),
+                            shape=(system_size, system_size),
+                        )
+                    else:
+                        host_matrix = solve_matrix
+
+                    preconditioner_operator = build_cupyx_exported_host_ilu_preconditioner(
+                        host_matrix,
+                        drop_tol=ilu_drop_tol,
+                        fill_factor=ilu_fill_factor,
+                        permc_spec=ilu_permc_spec,
+                        dtype=matrix_cp.dtype,
+                    )
+                except Exception as exc:
+                    preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                    if ilu_failure == "none":
+                        _solver_print(
+                            verbose,
+                            1,
+                            "  Host ILU export preconditioner failed in %.5fs (%s); continuing without preconditioner",
+                            preconditioner_elapsed_seconds,
+                            exc,
+                        )
+                        preconditioner_operator = None
+                    else:
+                        raise RuntimeError(
+                            "Host ILU export preconditioner failed. Try a larger fill_factor, "
+                            "a smaller drop_tol, or set ilu_failure='none' to fall back "
+                            "to an unpreconditioned Cupyx Krylov solve."
+                        ) from exc
+                else:
+                    preconditioner_elapsed_seconds = time.time() - preconditioner_start
+                    fill_ratio = getattr(preconditioner_operator, "host_ilu_fill_ratio", None)
+                    if fill_ratio is None:
+                        _solver_print(verbose, 2, "  Host ILU factors exported to device in %.5fs", preconditioner_elapsed_seconds)
+                    else:
+                        _solver_print(
+                            verbose,
+                            2,
+                            "  Host ILU factors exported to device in %.5fs with factor_fill=%.2f",
+                            preconditioner_elapsed_seconds,
+                            fill_ratio,
+                        )
+        elif preconditioner_key == "jacobi":
+            raise ValueError("Cupyx preconditioner currently supports only ILU routes or None")
+        elif preconditioner_key == "upwind_block_gs":
             if upwind_block_size is None or upwind_level_widths is None:
                 raise ValueError(
                     "Cupyx upwind_block_gs preconditioner requires upwind_block_size "
@@ -1245,7 +1308,7 @@ def solve_cupyx_system(
                 )
         else:
             raise ValueError(
-                "Cupyx preconditioner must be 'ilu', 'upwind_block_gs', None, or a Cupyx LinearOperator"
+                "Cupyx preconditioner must be 'host_ilu_export', 'cupyx_ilu1', 'ilu', 'upwind_block_gs', None, or a Cupyx LinearOperator"
             )
     elif preconditioner is not None:
         preconditioner_operator = preconditioner
@@ -1260,7 +1323,7 @@ def solve_cupyx_system(
         _solver_print(verbose, 2, "  initial residual from supplied guess: %.3e", initial_residual_norm)
 
     solve_start = time.time()
-    solution_cp, info = solve_cupyx_csr(
+    solution_cp, info, cupyx_iteration_count = solve_cupyx_csr(
         matrix_cp,
         solve_rhs,
         solver=cupyx_solver,
@@ -1347,7 +1410,7 @@ def solve_cupyx_system(
         scale_elapsed_seconds=scale_elapsed_seconds,
         preconditioner_elapsed_seconds=preconditioner_elapsed_seconds,
         solve_elapsed_seconds=solve_elapsed_seconds,
-        iteration_count=None,
+        iteration_count=cupyx_iteration_count,
         initial_residual_norm=initial_residual_norm,
         rhs_norm=solver_rhs_norm,
         relative_residual_norm=solver_relative_residual_norm,
@@ -1373,7 +1436,7 @@ def solve_cupyx_system(
         preconditioner_reduce_seconds=getattr(preconditioner_operator, "reduce_seconds", None),
         preconditioner_copy_seconds=getattr(preconditioner_operator, "copy_seconds", None),
         cupyx_solver=str(cupyx_solver),
-        ilu_permc_spec=ilu_permc_spec if isinstance(preconditioner, str) and preconditioner == "ilu" else None,
+        ilu_permc_spec=ilu_permc_spec if preconditioner_uses_ilu else None,
     )
 
 
@@ -2149,8 +2212,8 @@ def solve_global_system(
         )
 
     elif solver_is_cupyx:
-        if isinstance(preconditioner, str) and preconditioner == "ilu":
-            _solver_print(verbose, 1, "  solver: Cupyx %s with ILU preconditioner", str(effective_cupyx_solver).upper())
+        if isinstance(preconditioner, str) and str(preconditioner).lower().replace("-", "_") in {"ilu", "host_ilu", "host_ilu_export", "cupyx_ilu1", "device_ilu1"}:
+            _solver_print(verbose, 1, "  solver: Cupyx %s with %s preconditioner", str(effective_cupyx_solver).upper(), str(preconditioner))
         elif preconditioner is None:
             _solver_print(verbose, 1, "  solver: Cupyx %s without preconditioner", str(effective_cupyx_solver).upper())
         else:

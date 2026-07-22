@@ -25,6 +25,12 @@ from .upwind_block_gs import (
     UpwindBlockGSStats,
     build_upwind_block_gs_preconditioner,
 )
+from .upwind_block_gs_onfly import (
+    UpwindBlockGSOnTheFlyTimings,
+    build_forward_upwind_block_gs_from_coo,
+    build_forward_upwind_block_gs_from_ordered_block_coo,
+)
+from .cupy_upwind_block_gs import cupy_upwind_block_gs_from_host_preconditioner
 
 __all__ = [
     "GraphOrderingDiagnostics",
@@ -35,9 +41,13 @@ __all__ = [
     "SolveResult",
     "SparsePatternPlotResult",
     "UpwindBlockGSPreconditioner",
+    "UpwindBlockGSOnTheFlyTimings",
     "UpwindBlockGSStats",
     "assemble_global_matrix",
+    "build_forward_upwind_block_gs_from_coo",
+    "build_forward_upwind_block_gs_from_ordered_block_coo",
     "build_upwind_block_gs_preconditioner",
+    "cupy_upwind_block_gs_from_host_preconditioner",
     "eliminate_known_dofs",
     "expand_known_dofs",
     "save_sparse_pattern_plot",

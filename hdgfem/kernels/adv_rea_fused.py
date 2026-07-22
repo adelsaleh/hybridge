@@ -439,6 +439,11 @@ def assemble_projected_trace_system_eliminated_kernel(
         data,
         rhs_indices,
         rhs_values,
+        block_rows,
+        block_cols,
+        block_data,
+        block_side_offsets,
+        emit_block_coo,
         loc2glob_edge,
         orientations,
         loc2oriented_ref_face,
@@ -524,6 +529,9 @@ def assemble_projected_trace_system_eliminated_kernel(
 
             row_is_positive = orientations[element, row_face]
             side_base = side_flux_offsets[side_id]
+            block_side_base = 0
+            if emit_block_coo:
+                block_side_base = block_side_offsets[side_id]
             _assemble_weighted_trace_lift_side(
                 weighted_lift,
                 element,
@@ -547,6 +555,11 @@ def assemble_projected_trace_system_eliminated_kernel(
                     col_solve_edge = edge_to_solve_edge[col_edge]
                     col_is_positive = orientations[element, col_face]
                     if col_solve_edge >= 0:
+                        block_out = 0
+                        if emit_block_coo:
+                            block_out = block_side_base + col_block_pos
+                            block_rows[block_out] = row_solve_edge
+                            block_cols[block_out] = col_solve_edge
                         for col_dof in range(ntr):
                             local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
                             column = col_face * ntr + local_col_dof
@@ -559,6 +572,8 @@ def assemble_projected_trace_system_eliminated_kernel(
                             rows[out] = row_solve_edge * ntr + row_dof
                             cols[out] = col_solve_edge * ntr + col_dof
                             data[out] = -schur_value
+                            if emit_block_coo:
+                                block_data[block_out, row_dof, col_dof] = -schur_value
                         col_block_pos += 1
                     else:
                         for col_dof in range(ntr):
@@ -574,11 +589,14 @@ def assemble_projected_trace_system_eliminated_kernel(
                 rhs_values[rhs_base + row_dof] = rhs_value
 
                 mass_base = side_flux_offsets[side_flux_offsets.shape[0] - 1] + side_id * ntr * ntr
+                mass_block_out = 0
+                if emit_block_coo:
+                    mass_block_out = block_side_offsets[block_side_offsets.shape[0] - 1] + side_id
+                    block_rows[mass_block_out] = row_solve_edge
+                    block_cols[mass_block_out] = row_solve_edge
                 for col_dof in range(ntr):
                     out = mass_base + row_dof * ntr + col_dof
-                    rows[out] = row_solve_edge * ntr + row_dof
-                    cols[out] = row_solve_edge * ntr + col_dof
-                    data[out] = _weighted_trace_mass_value(
+                    mass_value = _weighted_trace_mass_value(
                         element,
                         row_face,
                         row_is_positive,
@@ -590,6 +608,11 @@ def assemble_projected_trace_system_eliminated_kernel(
                         trace_basis,
                         gamma_face_values,
                     )
+                    rows[out] = row_solve_edge * ntr + row_dof
+                    cols[out] = row_solve_edge * ntr + col_dof
+                    data[out] = mass_value
+                    if emit_block_coo:
+                        block_data[mass_block_out, row_dof, col_dof] = mass_value
 
 
 @njit(cache=True, parallel=True, fastmath=True)

@@ -15,6 +15,7 @@ from typing import Any
 
 import numpy as np
 import scipy.sparse
+import scipy.sparse.linalg
 
 from ..assembly import hdg as hdg_assembly
 from ..core.space import DGField, DGSpace, VectorDGField
@@ -855,8 +856,9 @@ def build_cupyx_ilu_preconditioner(
         fill_factor: float,
         permc_spec: str | None,
 ):
-    """Build a Cupyx ILU preconditioner as a GPU LinearOperator."""
+    """Build a CuPy ILU preconditioner directly on the device."""
     linalg = require_cupyx_sparse_linalg()
+    cupy = require_cupy()
     kwargs = {
         "drop_tol": float(drop_tol),
         "fill_factor": float(fill_factor),
@@ -864,7 +866,70 @@ def build_cupyx_ilu_preconditioner(
     if permc_spec is not None:
         kwargs["permc_spec"] = permc_spec
     ilu = linalg.spilu(matrix, **kwargs)
-    return linalg.LinearOperator(matrix.shape, matvec=ilu.solve, dtype=matrix.dtype)
+    state = {"count": 0, "seconds": 0.0}
+
+    def matvec(vec):
+        start = time.perf_counter()
+        out = ilu.solve(vec)
+        cupy.cuda.get_current_stream().synchronize()
+        state["count"] += 1
+        state["seconds"] += time.perf_counter() - start
+        operator.apply_count = state["count"]
+        operator.apply_seconds = state["seconds"]
+        return out
+
+    operator = linalg.LinearOperator(matrix.shape, matvec=matvec, dtype=matrix.dtype)
+    operator.apply_count = 0
+    operator.apply_seconds = 0.0
+    return operator
+
+
+def build_cupyx_exported_host_ilu_preconditioner(
+        matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
+        *,
+        drop_tol: float,
+        fill_factor: float,
+        permc_spec: str | None,
+        dtype=None,
+):
+    """Build SciPy ILU on host, then apply its factors on the GPU.
+
+    SciPy SuperLU stores factors satisfying ``Pr A Pc = L U``.  The returned
+    CuPy ``LinearOperator`` applies ``M^{-1}`` as two device sparse triangular
+    solves with the exported ``L`` and ``U`` factors.  Host memory is touched
+    only while constructing and transferring the factorization.
+    """
+    cupy = require_cupy()
+    linalg = require_cupyx_sparse_linalg()
+    if dtype is None:
+        dtype = cupy.float64
+
+    matrix_csc = matrix.tocsc()
+    matrix_csc.eliminate_zeros()
+    kwargs = {
+        "drop_tol": float(drop_tol),
+        "fill_factor": float(fill_factor),
+    }
+    if permc_spec is not None:
+        kwargs["permc_spec"] = permc_spec
+    ilu = scipy.sparse.linalg.spilu(matrix_csc, **kwargs)
+
+    lower = scipy_csr_to_cupy(ilu.L.tocsr(), dtype=dtype)
+    upper = scipy_csr_to_cupy(ilu.U.tocsr(), dtype=dtype)
+    inv_perm_r = cupy.asarray(np.argsort(np.asarray(ilu.perm_r, dtype=np.int64)), dtype=cupy.int64)
+    perm_c = cupy.asarray(np.asarray(ilu.perm_c, dtype=np.int64), dtype=cupy.int64)
+    cupy.cuda.get_current_stream().synchronize()
+
+    def matvec(vec):
+        rhs_perm = vec[inv_perm_r]
+        y = linalg.spsolve_triangular(lower, rhs_perm, lower=True, unit_diagonal=True)
+        z = linalg.spsolve_triangular(upper, y, lower=False)
+        return z[perm_c]
+
+    operator = linalg.LinearOperator(matrix.shape, matvec=matvec, dtype=dtype)
+    operator.host_ilu_nnz = int(ilu.L.nnz + ilu.U.nnz)
+    operator.host_ilu_fill_ratio = float(operator.host_ilu_nnz) / max(int(matrix_csc.nnz), 1)
+    return operator
 
 
 def solve_cupyx_csr(
@@ -923,13 +988,22 @@ def solve_cupyx_csr(
     if preconditioner is not None:
         kwargs["M"] = preconditioner
 
+    class _IterationCounter:
+        def __init__(self):
+            self.count = 0
+
+        def __call__(self, *_args, **_kwargs):
+            self.count += 1
+
+    counter = _IterationCounter()
+    kwargs["callback"] = counter
+
     try:
         solution, info = solver_fn(matrix, rhs_cp, rtol=rtol, atol=atol, **kwargs)
     except TypeError:
         solution, info = solver_fn(matrix, rhs_cp, tol=rtol, **kwargs)
     cupy.cuda.get_current_stream().synchronize()
-    return solution, int(info)
-
+    return solution, int(info), counter.count
 
 def default_pyamgx_config(*, tolerance: float, maxiter: int | None, verbose: bool | int = 0) -> dict[str, Any]:
     """Return the default AMGX BICGSTAB+AMG configuration."""
@@ -1028,6 +1102,7 @@ __all__ = [
     "require_cupyx_sparse_linalg",
     "require_pyamgx",
     "build_cupyx_ilu_preconditioner",
+    "build_cupyx_exported_host_ilu_preconditioner",
     "scipy_coo_to_cupy_csr",
     "scipy_csr_to_cupy",
     "solve_cupyx_csr",
