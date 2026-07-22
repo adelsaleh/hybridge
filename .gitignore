@@ -1,4 +1,9 @@
 .venv/
+.venv-cupy/
+.uv-python/
+.uv-cache/
+.cupy-cache/
+.tmp/
 venv/
 __pycache__/
 *.py[cod]
