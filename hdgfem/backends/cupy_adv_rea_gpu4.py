@@ -651,6 +651,26 @@ def _residual_stats_cp(residual, rhs, *, rtol: float, atol: float):
     return residual_norm, rhs_norm, relative, target
 
 
+@dataclass(frozen=True)
+class _DeviceCsrMatrixView:
+    """Device-owned scalar CSR arrays accepted by PyAMGX Matrix.upload."""
+
+    data: Any
+    indices: Any
+    indptr: Any
+    shape: tuple[int, int]
+
+
+def _as_cupyx_csr_matrix(matrix, sparse, cp):
+    if isinstance(matrix, _DeviceCsrMatrixView):
+        return sparse.csr_matrix(
+            (matrix.data, matrix.indices, matrix.indptr),
+            shape=matrix.shape,
+            dtype=cp.float64,
+        )
+    return matrix
+
+
 _CSR_ROW_SCALE_SOURCE = r"""
 extern "C" __global__ void diagonal_scale_csr_rows(
         const int* __restrict__ indptr,
@@ -710,7 +730,7 @@ def _diagonal_scale_csr_rows_in_place(matrix, rhs):
 
 
 def _pyamgx_solve_csr_device(matrix, rhs, *, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0):
-    """Solve a CuPy CSR system with PyAMGX without staging through host CSR."""
+    """Solve a device CSR system with PyAMGX without staging through host CSR."""
     cp = require_cupy()
     pyamgx = require_pyamgx()
     from .cupy import default_pyamgx_config
@@ -739,7 +759,7 @@ def _pyamgx_solve_csr_device(matrix, rhs, *, config=None, tolerance: float = 1e-
         vec_b = pyamgx.Vector().create(rsrc, mode="dDDI")
         vec_x = pyamgx.Vector().create(rsrc, mode="dDDI")
         setup_start = time.perf_counter()
-        mat.upload_CSR(matrix)
+        mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
         vec_b.upload_raw(rhs.data.ptr, rhs.size)
         vec_x.upload_raw(x.data.ptr, x.size)
         solver = pyamgx.Solver().create(rsrc, cfg)
@@ -786,7 +806,7 @@ def solve_reduced_system_amgx_device(
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
 ):
-    """Solve a GPU4 reduced trace system with CuPy CSR and PyAMGX on device."""
+    """Solve a GPU4 reduced trace system with device CSR and PyAMGX."""
     cp = require_cupy()
     sparse = require_cupyx_sparse()
     total_start = time.perf_counter()
@@ -796,14 +816,11 @@ def solve_reduced_system_amgx_device(
     if getattr(assembly, "matrix_format", "coo") == "csr":
         if assembly.indptr is None or assembly.indices is None:
             raise RuntimeError("CSR assembly is missing indptr/indices")
-        matrix = sparse.csr_matrix(
-            (
-                assembly.data,
-                assembly.indices.astype(cp.int32, copy=False),
-                assembly.indptr.astype(cp.int32, copy=False),
-            ),
+        matrix = _DeviceCsrMatrixView(
+            data=assembly.data,
+            indices=assembly.indices.astype(cp.int32, copy=False),
+            indptr=assembly.indptr.astype(cp.int32, copy=False),
             shape=(system_size, system_size),
-            dtype=cp.float64,
         )
     else:
         matrix = sparse.coo_matrix(
@@ -852,7 +869,8 @@ def solve_reduced_system_amgx_device(
     finite_elapsed = time.perf_counter() - finite_start
 
     solver_residual_start = time.perf_counter()
-    solver_residual = solve_matrix @ x_cp - solve_rhs
+    residual_matrix = _as_cupyx_csr_matrix(solve_matrix, sparse, cp)
+    solver_residual = residual_matrix @ x_cp - solve_rhs
     solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
         solver_residual,
         solve_rhs,
@@ -866,7 +884,7 @@ def solve_reduced_system_amgx_device(
         physical_residual = row_diagonal * solver_residual
         physical_residual_rhs = row_diagonal * solve_rhs
     else:
-        physical_residual = solve_matrix @ x_cp - physical_rhs
+        physical_residual = residual_matrix @ x_cp - physical_rhs
         physical_residual_rhs = physical_rhs
     physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
         physical_residual,
