@@ -32,21 +32,8 @@ from hdgfem.backends.cupy_diff_rea_raw import (
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGSpace
+from hdgfem.io.output import pretty_print_sections
 from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key
-
-
-LEGACY_V4_BASELINE = {
-    "command": "2d/diff_rea_gpu_v4.py -o 6 -ms 0.05 -test 3 -pr 12",
-    "triangles": 72969,
-    "global_dof": 763973,
-    "setup": 1.488,
-    "global_solve": 1.875,
-    "amgx_solve": 1.159,
-    "reconstruct_solve": 0.441,
-    "l2_error": 9.95e-10,
-    "linf_error": 1.852e-08,
-    "wall": 10.35,
-}
 
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "amgx"
@@ -155,6 +142,19 @@ class TraceReferenceData:
 
 
 TIMINGS: dict[str, float] = {}
+RUN_METADATA: dict[str, object] = {}
+VERBOSITY = 1
+RAW_CUDA_MAX_EL_DOF = 28
+
+
+def set_verbosity(value: int) -> None:
+    global VERBOSITY
+    VERBOSITY = int(value)
+
+
+def log(message: str = "", *, level: int = 1, end: str = "\n", flush: bool = True) -> None:
+    if VERBOSITY >= int(level):
+        print(message, end=end, flush=flush)
 
 
 def record_timing(key: str, seconds: float) -> float:
@@ -172,26 +172,8 @@ def sync_time(cp, start: float, key: str) -> float:
     return record_timing(key, time.perf_counter() - start)
 
 
-def print_done(seconds: float) -> None:
-    print(f"done in {seconds:.5f}s", flush=True)
-
-
-def pretty_print(items, title: str = "Results", pad_lines: int = 1, default_fmt: str = ".5g") -> None:
-    formatted = []
-    for label, value, fmt in items:
-        if isinstance(value, str):
-            rendered = value
-        else:
-            rendered = format(value, fmt or default_fmt)
-        formatted.append((label, rendered))
-    label_width = max(len(label) for label, _ in formatted)
-    value_width = max(len(value) for _, value in formatted)
-    print("\n" * pad_lines, end="")
-    print(title)
-    print("=" * (label_width + value_width + 3))
-    for label, value in formatted:
-        print(f"{label:<{label_width}} : {value:>{value_width}}")
-    print("=" * (label_width + value_width + 3))
+def print_done(seconds: float, *, level: int = 1) -> None:
+    log(f"done in {seconds:.5f}s", level=level)
 
 
 def legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
@@ -350,7 +332,7 @@ def _callable_is_zero(func: Callable, cp) -> bool:
 
 def reaction_mass_cupy(reaction: Callable, cspace):
     cp = require_cupy()
-    print("  reaction mass ... ", end="", flush=True)
+    log("  reaction mass ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
@@ -388,7 +370,7 @@ def face_element_mass(trace_ref):
 
 def local_lhs_mats_cupy(reaction: Callable, cspace, trace_ref, tau: float):
     cp = require_cupy()
-    print("  local mixed LHS matrices ... ", end="", flush=True)
+    log("  local mixed LHS matrices ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
@@ -420,7 +402,7 @@ def local_lhs_mats_cupy(reaction: Callable, cspace, trace_ref, tau: float):
 
 def element_boundary_mats_cupy(cspace, trace_ref, tau: float):
     cp = require_cupy()
-    print("  poisson boundary matrices ... ", end="", flush=True)
+    log("  poisson boundary matrices ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     el_dof = cspace.el_dof
@@ -440,7 +422,7 @@ def element_boundary_mats_cupy(cspace, trace_ref, tau: float):
 
 def source_moments_cupy(source: Callable, cspace):
     cp = require_cupy()
-    print("  source moments ... ", end="", flush=True)
+    log("  source moments ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
@@ -455,7 +437,7 @@ def source_moments_cupy(source: Callable, cspace):
 
 def solve_local_mats(local_lhs, rhs, label: str, key: str):
     cp = require_cupy()
-    print(label, end="", flush=True)
+    log(label, end="")
     start = time.perf_counter()
     result = cp.linalg.solve(local_lhs, rhs)
     elapsed = sync_time(cp, start, key)
@@ -465,7 +447,7 @@ def solve_local_mats(local_lhs, rhs, label: str, key: str):
 
 def b_trace_mats_cupy(cspace, trace_ref, tau: float):
     cp = require_cupy()
-    print("  B trace matrices ... ", end="", flush=True)
+    log("  B trace matrices ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     el_dof = cspace.el_dof
@@ -482,7 +464,7 @@ def b_trace_mats_cupy(cspace, trace_ref, tau: float):
 
 def trace_blocks_cupy(B_el_fc, solved_el_bd, cspace, trace_ref):
     cp = require_cupy()
-    print("  trace blocks ... ", end="", flush=True)
+    log("  trace blocks ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -496,7 +478,7 @@ def trace_blocks_cupy(B_el_fc, solved_el_bd, cspace, trace_ref):
 
 def trace_data_cupy(trace_blocks, cspace, trace_ref, tau: float):
     cp = require_cupy()
-    print("  COO data ... ", end="", flush=True)
+    log("  COO data ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -514,7 +496,7 @@ def trace_data_cupy(trace_blocks, cspace, trace_ref, tau: float):
 
 def face_rhs_cupy(B_el_fc, solved_src, cspace):
     cp = require_cupy()
-    print("  face RHS ... ", end="", flush=True)
+    log("  face RHS ... ", end="")
     start = time.perf_counter()
     result = (B_el_fc @ solved_src[:, None, :, None]).squeeze(-1)
     elapsed = sync_time(cp, start, "assembly.rhs_faces")
@@ -524,7 +506,7 @@ def face_rhs_cupy(B_el_fc, solved_src, cspace):
 
 def setup_reduced_indices(cspace):
     cp = require_cupy()
-    print("  reduced COO indices ... ", end="", flush=True)
+    log("  reduced COO indices ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -583,7 +565,7 @@ def build_dof_maps(cspace):
 
 def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace):
     cp = require_cupy()
-    print("  boundary elimination ... ", end="", flush=True)
+    log("  boundary elimination ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -612,12 +594,56 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace)
     return reduced_rows, reduced_cols, reduced_data, reduced_rhs
 
 
-def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, tau: float, backend: str = "cupy"):
-    cp = require_cupy()
-    if backend == "raw-cuda":
-        return assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau)
+def raw_cuda_diffusion_fallback_reason(cspace, trace_ref) -> tuple[str, str] | None:
+    trace_kind = str(getattr(trace_ref, "kind", "unknown"))
+    if not getattr(trace_ref, "nodal", False) or trace_kind != "legacy-lagrange":
+        label = f"raw-cuda trace={trace_kind} unsupported"
+        detail = (
+            "raw CUDA diffusion assembly supports only legacy-lagrange nodal trace basis; "
+            f"got trace={trace_kind}"
+        )
+        return label, detail
+    if int(cspace.el_dof) <= RAW_CUDA_MAX_EL_DOF:
+        return None
+    order = int(cspace.order)
+    label = f"raw-cuda p={order} > 6"
+    detail = (
+        f"raw CUDA diffusion assembly supports p <= 6 "
+        f"(el_dof <= {RAW_CUDA_MAX_EL_DOF}); got p={order}, el_dof={int(cspace.el_dof)}"
+    )
+    return label, detail
 
-    print("assembling reduced trace system (hdgfem/cupy diffusion gpu4-style) ...", flush=True)
+
+def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, tau: float, backend: str = "cupy", raw_matrix_format: str = "coo", raw_block_size: int = 1):
+    cp = require_cupy()
+    requested_backend = str(backend)
+    RUN_METADATA["requested_assembly_backend"] = requested_backend
+    if requested_backend == "raw-cuda":
+        fallback = raw_cuda_diffusion_fallback_reason(cspace, trace_ref)
+        if fallback is None:
+            RUN_METADATA["assembly_backend"] = "raw-cuda"
+            RUN_METADATA.pop("assembly_fallback", None)
+            RUN_METADATA.pop("assembly_fallback_detail", None)
+            return assemble_reduced_system_raw_cuda(
+                source,
+                exact,
+                cspace,
+                trace_ref,
+                tau,
+                matrix_format=raw_matrix_format,
+                block_size=raw_block_size,
+            )
+        fallback_label, fallback_detail = fallback
+        RUN_METADATA["assembly_backend"] = "cupy"
+        RUN_METADATA["assembly_fallback"] = fallback_label
+        RUN_METADATA["assembly_fallback_detail"] = fallback_detail
+        log(f"raw CUDA diffusion assembly fallback: {fallback_detail}; using CuPy assembly.")
+    else:
+        RUN_METADATA["assembly_backend"] = requested_backend
+        RUN_METADATA.pop("assembly_fallback", None)
+        RUN_METADATA.pop("assembly_fallback_detail", None)
+
+    log("assembling reduced trace system (hdgfem/cupy diffusion gpu4-style) ...")
     start_total = time.perf_counter()
     rows, cols = setup_reduced_indices(cspace)
     local_lhs = local_lhs_mats_cupy(reaction, cspace, trace_ref, tau)
@@ -643,13 +669,13 @@ def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, ta
     boundary_trace = boundary_trace_values_cupy(exact, cspace, trace_ref)
     rows, cols, data, rhs = eliminate_boundary_cupy(rows, cols, data, rhs_full, boundary_trace, maps, cspace)
     total = sync_time(cp, start_total, "assembly.total")
-    print(f"assembly completed in {total:.5f}s", flush=True)
+    log(f"assembly completed in {total:.5f}s")
     return rows, cols, data, rhs, local_lhs, element_boundary, source_rhs, boundary_trace, None
 
 
-def assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau: float):
+def assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau: float, *, matrix_format: str = "coo", block_size: int = 1):
     cp = require_cupy()
-    print("assembling reduced trace system (raw CUDA fused diffusion gpu4-style) ...", flush=True)
+    log("assembling reduced trace system (raw CUDA fused diffusion gpu4-style) ...")
     start_total = time.perf_counter()
     source_rhs = source_moments_cupy(source, cspace)
     boundary_trace = boundary_trace_values_cupy(exact, cspace, trace_ref)
@@ -664,13 +690,21 @@ def assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau: floa
         d1_reference=D1T,
         face_element_mass=face_mass,
         tau=tau,
+        matrix_format=matrix_format,
+        block_size=block_size,
     )
     for key, value in raw.timings.items():
         record_timing(f"assembly.{key}", value)
     total = sync_time(cp, start_total, "assembly.total")
-    print(f"  raw CUDA map/setup: {raw.timings.get('raw.map_setup', 0.0):.5f}s", flush=True)
-    print(f"  raw CUDA fused kernel: {raw.timings.get('raw.kernel', 0.0):.5f}s", flush=True)
-    print(f"assembly completed in {total:.5f}s", flush=True)
+    log(f"  raw CUDA matrix format: {raw.matrix_format}")
+    log(f"  raw CUDA block size: {int(raw.timings.get('raw.block_size', 1.0))}")
+    log(f"  raw CUDA map/setup: {raw.timings.get('raw.map_setup', 0.0):.5f}s")
+    if raw.matrix_format == "csr":
+        log(f"  raw CUDA csr zero: {raw.timings.get('raw.csr_zero', 0.0):.5f}s")
+        log(f"  raw CUDA fused CSR kernel: {raw.timings.get('raw.csr_kernel', 0.0):.5f}s")
+    else:
+        log(f"  raw CUDA fused kernel: {raw.timings.get('raw.kernel', 0.0):.5f}s")
+    log(f"assembly completed in {total:.5f}s")
     return raw.rows, raw.cols, raw.data, raw.rhs, None, None, raw.source_rhs, raw.boundary_trace, raw
 
 
@@ -683,16 +717,18 @@ def short_config_path(path: Path) -> str:
 
 
 def print_recommended_profiles(args) -> None:
+    if VERBOSITY < 2:
+        return
     trace_family = "modal" if args.trace_basis in {"legendre-modal", "bernstein"} else "nodal"
-    print("\nRecommended diffusion GPU4 profiles")
-    print("=" * 42)
+    log("\nRecommended diffusion GPU4 profiles", level=2)
+    log("=" * 42, level=2)
     for family in ("nodal", "modal"):
         marker = " (selected trace family)" if family == trace_family else ""
-        print(f"{family}{marker}:")
+        log(f"{family}{marker}:", level=2)
         for rank, (label, config_path, note) in RECOMMENDED_PROFILES[family].items():
-            print(f"  {rank:<11}: {label}")
-            print(f"               config={short_config_path(config_path)}; {note}")
-    print("=" * 42)
+            log(f"  {rank:<11}: {label}", level=2)
+            log(f"               config={short_config_path(config_path)}; {note}", level=2)
+    log("=" * 42, level=2)
 
 
 def load_amgx_config(args):
@@ -705,26 +741,57 @@ def load_amgx_config(args):
         raise FileNotFoundError(f"AMGX config file not found: {config_path}")
     return copy.deepcopy(AMGX_CONFIG), None
 
-def solve_amgx(rows, cols, data, rhs, args):
+def _cupyx_csr_from_coo(rows, cols, data, rhs):
     cp = require_cupy()
     cpsp = require_cupyx_sparse()
-    pyamgx = require_pyamgx()
-    print("solving global system with PyAMGX ...", flush=True)
-    solve_total_start = time.perf_counter()
     n = int(rhs.size)
-    csr_start = time.perf_counter()
     matrix = cpsp.coo_matrix((data, (rows, cols)), shape=(n, n), dtype=cp.float64).tocsr()
     matrix.sum_duplicates()
-    csr_elapsed = sync_time(cp, csr_start, "solve.csr_scale")
-    print(f"  CSR assembly without diagonal scaling: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}", flush=True)
+    return _cupyx_csr_from_arrays(matrix.data, matrix.indptr, matrix.indices, shape=matrix.shape)
+
+
+def _cupyx_csr_from_arrays(data, indptr, indices, *, shape):
+    cp = require_cupy()
+    cpsp = require_cupyx_sparse()
+    if indices.dtype != cp.int32 or indptr.dtype != cp.int32:
+        indices = indices.astype(cp.int32, copy=False)
+        indptr = indptr.astype(cp.int32, copy=False)
+    return cpsp.csr_matrix((data, indices, indptr), shape=shape, dtype=cp.float64)
+
+
+def _upload_device_csr_to_amgx(mat, matrix) -> None:
+    mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
+
+
+def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
+    cp = require_cupy()
+    pyamgx = require_pyamgx()
+    log("solving global system with PyAMGX ...")
+    solve_total_start = time.perf_counter()
+    csr_start = time.perf_counter()
+    if indptr is None or indices is None:
+        matrix = _cupyx_csr_from_coo(rows, cols, data, rhs)
+        csr_elapsed = sync_time(cp, csr_start, "solve.csr_scale")
+        matrix_format = "coo->csr"
+        log(f"  CSR assembly without diagonal scaling: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}")
+    else:
+        matrix = _cupyx_csr_from_arrays(data, indptr, indices, shape=(int(rhs.size), int(rhs.size)))
+        csr_elapsed = sync_time(cp, csr_start, "solve.csr_scale")
+        matrix_format = "direct csr"
+        log(f"  direct CSR view setup: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}")
+    RUN_METADATA["matrix_nnz"] = int(matrix.nnz)
+    RUN_METADATA["solve_matrix_format"] = matrix_format
 
     config, config_path = load_amgx_config(args)
-    print(f"  AMGX config: {config_path if config_path is not None else 'embedded default'}", flush=True)
+    log(f"  AMGX config: {config_path if config_path is not None else 'embedded default'}")
     config["solver"]["solver"] = str(args.amgx_solver)
     config["solver"]["tolerance"] = float(args.amgx_tolerance)
     config["solver"]["max_iters"] = int(args.amgx_maxiter)
-    verbose_amgx = int(os.environ.get("HDGFEM_GPU4_AMGX_MONITOR", "1") == "1")
+    monitor_env = os.environ.get("HDGFEM_GPU4_AMGX_MONITOR")
+    verbose_amgx = int((VERBOSITY >= 2) if monitor_env is None else monitor_env == "1")
     solver_name = str(args.amgx_solver).upper()
+    RUN_METADATA["amgx_config"] = str(config_path) if config_path is not None else "embedded default"
+    RUN_METADATA["amgx_solver"] = solver_name
     # AMGX CG-family solvers need residual monitoring even in quiet mode;
     # otherwise they can run to max_iters after convergence and produce NaNs.
     needs_residual_monitor = solver_name in {"CG", "PCG", "PCGF"}
@@ -738,19 +805,43 @@ def solve_amgx(rows, cols, data, rhs, args):
     cfg = rsrc = mat = vec_b = vec_x = solver = None
     try:
         setup_start = time.perf_counter()
+        phase_start = time.perf_counter()
         cfg = pyamgx.Config().create_from_dict(config)
         rsrc = pyamgx.Resources().create_simple(cfg)
         mat = pyamgx.Matrix().create(rsrc, mode="dDDI")
         vec_b = pyamgx.Vector().create(rsrc, mode="dDDI")
         vec_x = pyamgx.Vector().create(rsrc, mode="dDDI")
-        mat.upload_CSR(matrix)
+        cp.cuda.get_current_stream().synchronize()
+        setup_objects_elapsed = record_timing("solve.amgx_setup.objects", time.perf_counter() - phase_start)
+
+        phase_start = time.perf_counter()
+        _upload_device_csr_to_amgx(mat, matrix)
+        cp.cuda.get_current_stream().synchronize()
+        matrix_upload_elapsed = record_timing("solve.amgx_setup.matrix_upload", time.perf_counter() - phase_start)
+
+        phase_start = time.perf_counter()
         vec_b.upload_raw(rhs.data.ptr, rhs.size)
         trace = cp.zeros(rhs.size, dtype=cp.float64)
         vec_x.upload_raw(trace.data.ptr, trace.size)
+        cp.cuda.get_current_stream().synchronize()
+        vector_upload_elapsed = record_timing("solve.amgx_setup.vector_upload", time.perf_counter() - phase_start)
+
+        phase_start = time.perf_counter()
         solver = pyamgx.Solver().create(rsrc, cfg)
         solver.setup(mat)
-        setup_elapsed = sync_time(cp, setup_start, "solve.amgx_setup")
-        print(f"  PyAMGX setup/upload: {setup_elapsed:.5f}s", flush=True)
+        cp.cuda.get_current_stream().synchronize()
+        solver_setup_elapsed = record_timing("solve.amgx_setup.solver_setup", time.perf_counter() - phase_start)
+
+        setup_elapsed = record_timing("solve.amgx_setup", time.perf_counter() - setup_start)
+        log(f"  PyAMGX setup/upload: {setup_elapsed:.5f}s")
+        log(
+            "    setup breakdown: "
+            f"objects={setup_objects_elapsed:.5f}s "
+            f"matrix_upload={matrix_upload_elapsed:.5f}s "
+            f"vectors={vector_upload_elapsed:.5f}s "
+            f"solver_setup={solver_setup_elapsed:.5f}s",
+            level=2,
+        )
 
         amgx_start = time.perf_counter()
         solver.solve(vec_b, vec_x)
@@ -762,7 +853,10 @@ def solve_amgx(rows, cols, data, rhs, args):
         residual_value = float(residual.get())
         rhs_norm_value = float(rhs_norm.get())
         rel_residual = residual_value / rhs_norm_value if rhs_norm_value else float("nan")
-        print(f"  PyAMGX solve: {solve_elapsed:.5f}s, scaled_rel_res={rel_residual:.3e}", flush=True)
+        RUN_METADATA["amgx_scaled_rel_residual"] = rel_residual
+        RUN_METADATA["amgx_residual_norm"] = residual_value
+        RUN_METADATA["amgx_rhs_norm"] = rhs_norm_value
+        log(f"  PyAMGX solve: {solve_elapsed:.5f}s, scaled_rel_res={rel_residual:.3e}")
     finally:
         for obj in (solver, mat, vec_x, vec_b, rsrc, cfg):
             if obj is not None:
@@ -777,7 +871,7 @@ def solve_amgx(rows, cols, data, rhs, args):
 
 def reconstruct_trace(trace_reduced, boundary_trace, cspace):
     cp = require_cupy()
-    print("augmenting traces ... ", end="", flush=True)
+    log("augmenting traces ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -792,7 +886,7 @@ def reconstruct_trace(trace_reduced, boundary_trace, cspace):
 
 def reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref):
     cp = require_cupy()
-    print("reconstructing element field ...", flush=True)
+    log("reconstructing element field ...")
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -807,9 +901,9 @@ def reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, tr
     return cp.ascontiguousarray(uh)
 
 
-def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: float):
+def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: float, raw_block_size: int = 1):
     cp = require_cupy()
-    print("reconstructing element field (raw CUDA) ... ", end="", flush=True)
+    log("reconstructing element field (raw CUDA) ... ", end="")
     start = time.perf_counter()
     uh, kernel_elapsed = reconstruct_projected_diffusion_field_raw_cuda(
         trace=trace,
@@ -820,6 +914,7 @@ def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: floa
         d1_reference=raw_assembly.d1_reference,
         face_element_mass=raw_assembly.face_element_mass,
         tau=tau,
+        block_size=raw_block_size,
     )
     record_timing("local.solve.reconstruction", kernel_elapsed)
     elapsed = sync_time(cp, start, "reconstruct.field")
@@ -829,7 +924,7 @@ def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: floa
 
 def evaluate_errors(uh, exact: Callable, cspace, plot_resolution: int, error_volume_quad_1d: int | None = None):
     cp = require_cupy()
-    print("computing plot/error data ... ", end="", flush=True)
+    log("computing plot/error data ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
@@ -888,6 +983,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="cupy")
+    parser.add_argument("--raw-matrix-format", choices=("coo", "csr"), default="coo")
+    parser.add_argument("--raw-block-size", type=int, choices=(1, 32, 64, 128), default=1)
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--plot-resolution", "-pr", type=int, default=12)
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
@@ -901,6 +998,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--amgx-tolerance", type=float, default=1.0e-13)
     parser.add_argument("--amgx-maxiter", type=int, default=2000)
     parser.add_argument("--show-cupy-config", action="store_true")
+    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2), default=1)
     return parser
 
 
@@ -908,21 +1006,84 @@ def build_mesh(args, case):
     domain = args.mesh_type
     if domain == "auto":
         domain = case.default_domain
+    log_cache = int(getattr(args, "verbosity", 1)) >= 1
     if domain == "structured-rectangle":
         return rectangle_mesh(args.nx, args.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0)), domain
     if domain == "unit-rectangle":
-        return gmsh_rectangle_mesh(args.mesh_size, xlim=(0.0, 1.0), ylim=(0.0, 1.0), verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm), domain
+        return gmsh_rectangle_mesh(
+            args.mesh_size,
+            xlim=(0.0, 1.0),
+            ylim=(0.0, 1.0),
+            verbosity=args.gmsh_verbosity,
+            algorithm=args.gmsh_algorithm,
+            log_cache=log_cache,
+        ), domain
     if domain == "rectangle":
-        return gmsh_rectangle_mesh(args.mesh_size, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0), verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm), domain
+        return gmsh_rectangle_mesh(
+            args.mesh_size,
+            xlim=(-1.0, 1.0),
+            ylim=(-1.0, 1.0),
+            verbosity=args.gmsh_verbosity,
+            algorithm=args.gmsh_algorithm,
+            log_cache=log_cache,
+        ), domain
     if domain == "disc":
         radius = args.disc_radius if args.disc_radius is not None else (5.0 if case.key == "trigonometric-poisson" else 1.0)
-        return gmsh_disc_mesh(args.mesh_size, center=(0.0, 0.0), radius=radius, verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm), domain
+        return gmsh_disc_mesh(
+            args.mesh_size,
+            center=(0.0, 0.0),
+            radius=radius,
+            verbosity=args.gmsh_verbosity,
+            algorithm=args.gmsh_algorithm,
+            log_cache=log_cache,
+        ), domain
     if domain == "lshape":
-        return gmsh_lshape_mesh(args.mesh_size, verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm), domain
-    return gmsh_triangle_mesh(args.mesh_size, vertices=((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)), verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm), "triangle"
+        return gmsh_lshape_mesh(
+            args.mesh_size,
+            verbosity=args.gmsh_verbosity,
+            algorithm=args.gmsh_algorithm,
+            log_cache=log_cache,
+        ), domain
+    return gmsh_triangle_mesh(
+        args.mesh_size,
+        vertices=((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)),
+        verbosity=args.gmsh_verbosity,
+        algorithm=args.gmsh_algorithm,
+        log_cache=log_cache,
+    ), "triangle"
 
 
-def print_runtime_summary(total_seconds: float) -> None:
+def _display_optional_int(value) -> str:
+    return "default" if value is None else f"{int(value):,d}"
+
+
+def _display_amgx_config() -> str:
+    value = RUN_METADATA.get("amgx_config", "embedded default")
+    if value == "embedded default":
+        return "embedded default"
+    return short_config_path(Path(str(value)))
+
+
+def _format_timing_cell(seconds: float, total_seconds: float) -> str:
+    seconds = float(seconds)
+    if total_seconds > 0.0:
+        return f"{seconds:.3f}s ({100.0 * seconds / total_seconds:.1f}%)"
+    return f"{seconds:.3f}s"
+
+
+def print_final_summary(
+        *,
+        args,
+        domain: str,
+        mesh,
+        space,
+        cspace,
+        l2: float,
+        linf: float,
+        avg_max: float,
+        max_element: int,
+        total_seconds: float,
+) -> None:
     mesh_total = timing_value("mesh.generate")
     space_total = timing_value("space.setup")
     gpu_setup_total = timing_value("gpu.setup")
@@ -934,68 +1095,129 @@ def print_runtime_summary(total_seconds: float) -> None:
     solve_total = timing_value("solve.total")
     reconstruct_total = timing_value("reconstruct.trace") + timing_value("reconstruct.field")
     plot_total = timing_value("plot_error")
-    amgx_total = csr_total + amgx_setup_total + amgx_solve_total
-    gpu_core_total = assembly_total + amgx_total + reconstruct_total
-    accounted_total = setup_total + assembly_total + solve_total + reconstruct_total + plot_total
+    global_dof = int(cspace.mesh.int_edges_inds.size * cspace.edg_dof)
+    raw_kernel_total = timing_value("assembly.raw.csr_kernel") or timing_value("assembly.raw.kernel")
+    amgx_subtotal = csr_total + amgx_setup_total + amgx_solve_total
+    effective_backend = str(RUN_METADATA.get("assembly_backend", args.assembly_backend))
+    requested_backend = str(RUN_METADATA.get("requested_assembly_backend", args.assembly_backend))
+    fallback_label = RUN_METADATA.get("assembly_fallback")
 
-    def pct(seconds: float) -> str:
-        return f"{100.0 * seconds / total_seconds:.1f}%" if total_seconds else "nan%"
-
-    items = [
-        ("mesh generation (s)", mesh_total, ".3f"),
-        ("space/reference setup (s)", space_total, ".3f"),
-        ("GPU mirror/setup (s)", gpu_setup_total, ".3f"),
-        ("host/setup subtotal (s)", setup_total, ".3f"),
-        ("host/setup share", pct(setup_total), ""),
-        ("assembly total (s)", assembly_total, ".3f"),
-        ("assembly share", pct(assembly_total), ""),
-        ("  raw map/setup", timing_value("assembly.raw.map_setup"), ".3f"),
-        ("  raw fused kernel", timing_value("assembly.raw.kernel"), ".3f"),
-        ("  raw total", timing_value("assembly.raw.total"), ".3f"),
-        ("  index arrays", timing_value("assembly.indices"), ".3f"),
-        ("  local LHS", timing_value("local.lhs"), ".3f"),
-        ("  local solve", timing_value("local.solve.assembly"), ".3f"),
-        (
-            "  B/trace blocks/data",
-            timing_value("assembly.b_trace") + timing_value("assembly.trace_blocks") + timing_value("assembly.data"),
-            ".3f",
-        ),
-        ("  RHS/source", timing_value("source_moments") + timing_value("assembly.rhs_faces"), ".3f"),
-        ("  boundary elimination", timing_value("assembly.boundary_elimination"), ".3f"),
-        ("global solve total (s)", solve_total, ".3f"),
-        ("global solve share", pct(solve_total), ""),
-        ("  CSR assembly", csr_total, ".3f"),
-        ("  AMGX setup/upload", amgx_setup_total, ".3f"),
-        ("  AMGX solve", amgx_solve_total, ".3f"),
-        ("  AMGX subtotal", amgx_total, ".3f"),
-        ("reconstruct total (s)", reconstruct_total, ".3f"),
-        ("reconstruct share", pct(reconstruct_total), ""),
-        ("  trace augmentation", timing_value("reconstruct.trace"), ".3f"),
-        ("  local solve recon", timing_value("local.solve.reconstruction"), ".3f"),
-        ("plot/error eval (s)", plot_total, ".3f"),
-        ("plot/error share", pct(plot_total), ""),
-        ("GPU core subtotal (s)", gpu_core_total, ".3f"),
-        ("GPU core share", pct(gpu_core_total), ""),
-        ("accounted subtotal (s)", accounted_total, ".3f"),
-        ("total measured (s)", total_seconds, ".3f"),
+    run_options = [
+        ("case", args.case, "s"),
+        ("domain", domain, "s"),
+        ("backend", effective_backend, "s"),
     ]
-    pretty_print(items, title="HDGFEM Diffusion GPU4-Style Timing Summary")
-
-
-def print_baseline_comparison() -> None:
-    items = [
-        ("baseline command", LEGACY_V4_BASELINE["command"], ""),
-        ("baseline setup (s)", LEGACY_V4_BASELINE["setup"], ".3f"),
-        ("this assembly / baseline", timing_value("assembly.total") / LEGACY_V4_BASELINE["setup"], ".3f"),
-        ("baseline AMGX solve (s)", LEGACY_V4_BASELINE["amgx_solve"], ".3f"),
-        ("this AMGX / baseline", timing_value("solve.amgx_solve") / LEGACY_V4_BASELINE["amgx_solve"], ".3f"),
-        ("baseline wall (s)", LEGACY_V4_BASELINE["wall"], ".3f"),
+    if requested_backend != effective_backend:
+        run_options.append(("requested backend", requested_backend, "s"))
+    if fallback_label:
+        run_options.append(("fallback", str(fallback_label), "s"))
+    run_options.extend(
+        [
+            ("basis", args.basis, "s"),
+            ("trace basis", args.trace_basis, "s"),
+            ("raw matrix", args.raw_matrix_format if effective_backend == "raw-cuda" else "n/a", "s"),
+            ("raw block", str(args.raw_block_size) if effective_backend == "raw-cuda" else "n/a", "s"),
+            ("verbosity", args.verbosity, ",d"),
+        ]
+    )
+    mesh_details = [
+        ("order", args.order, ",d"),
+        ("mesh size", args.mesh_size, ".4f"),
+        ("h", mesh.h, ".3e"),
+        ("h^(p+1)", mesh.h ** (args.order + 1), ".3e"),
+        ("triangles", mesh.num_tri, ",d"),
+        ("edges", mesh.num_edg, ",d"),
+        ("interior edges", int(mesh.int_edges_inds.size), ",d"),
+        ("global dof", global_dof, ",d"),
+        ("element dof", int(cspace.el_dof), ",d"),
+        ("edge dof", int(cspace.edg_dof), ",d"),
+        ("volume quad pts", int(space.quad_data.Krf_w.size), ",d"),
+        ("error quad 1d", _display_optional_int(args.error_volume_quad_1d), "s"),
     ]
-    pretty_print(items, title="Remembered Legacy Diffusion V4 Baseline")
+    solver_details = [
+        ("config", _display_amgx_config(), "s"),
+        ("solver", str(RUN_METADATA.get("amgx_solver", args.amgx_solver)), "s"),
+        ("tol", args.amgx_tolerance, ".1e"),
+        ("maxiter", args.amgx_maxiter, ",d"),
+        ("matrix input", str(RUN_METADATA.get("solve_matrix_format", "unknown")), "s"),
+        ("matrix nnz", int(RUN_METADATA.get("matrix_nnz", 0)), ",d"),
+        ("scaled residual", float(RUN_METADATA.get("amgx_scaled_rel_residual", float("nan"))), ".3e"),
+    ]
+    errors = [
+        ("L2", l2, ".3e"),
+        ("Linf", linf, ".3e"),
+        ("avg max", avg_max, ".3e"),
+        ("max element", max_element, ",d"),
+    ]
+    timings = [
+        ("setup subtotal", _format_timing_cell(setup_total, total_seconds), "s"),
+        ("mesh setup", _format_timing_cell(mesh_total, total_seconds), "s"),
+        ("space setup", _format_timing_cell(space_total, total_seconds), "s"),
+        ("GPU setup", _format_timing_cell(gpu_setup_total, total_seconds), "s"),
+        ("assembly", _format_timing_cell(assembly_total, total_seconds), "s"),
+    ]
+    if effective_backend == "raw-cuda":
+        timings.extend(
+            [
+                ("raw map/setup", _format_timing_cell(timing_value("assembly.raw.map_setup"), total_seconds), "s"),
+                ("raw zero", _format_timing_cell(timing_value("assembly.raw.csr_zero"), total_seconds), "s"),
+                ("raw kernel", _format_timing_cell(raw_kernel_total, total_seconds), "s"),
+                ("raw total", _format_timing_cell(timing_value("assembly.raw.total"), total_seconds), "s"),
+            ]
+        )
+    else:
+        timings.extend(
+            [
+                ("index arrays", _format_timing_cell(timing_value("assembly.indices"), total_seconds), "s"),
+                ("local LHS", _format_timing_cell(timing_value("local.lhs"), total_seconds), "s"),
+                ("local solve", _format_timing_cell(timing_value("local.solve.assembly"), total_seconds), "s"),
+                (
+                    "trace blocks/data",
+                    _format_timing_cell(
+                        timing_value("assembly.b_trace")
+                        + timing_value("assembly.trace_blocks")
+                        + timing_value("assembly.data"),
+                        total_seconds,
+                    ),
+                    "s",
+                ),
+                (
+                    "RHS/source",
+                    _format_timing_cell(timing_value("source_moments") + timing_value("assembly.rhs_faces"), total_seconds),
+                    "s",
+                ),
+                ("boundary elim", _format_timing_cell(timing_value("assembly.boundary_elimination"), total_seconds), "s"),
+            ]
+        )
+    timings.extend(
+        [
+            ("global solve", _format_timing_cell(solve_total, total_seconds), "s"),
+            ("CSR/view", _format_timing_cell(csr_total, total_seconds), "s"),
+            ("AMGX setup", _format_timing_cell(amgx_setup_total, total_seconds), "s"),
+            ("AMGX solve", _format_timing_cell(amgx_solve_total, total_seconds), "s"),
+            ("AMGX subtotal", _format_timing_cell(amgx_subtotal, total_seconds), "s"),
+            ("reconstruct", _format_timing_cell(reconstruct_total, total_seconds), "s"),
+            ("local recon solve", _format_timing_cell(timing_value("local.solve.reconstruction"), total_seconds), "s"),
+            ("plot/error", _format_timing_cell(plot_total, total_seconds), "s"),
+            ("total measured", f"{total_seconds:.3f}s", "s"),
+        ]
+    )
+
+    sections = [
+        ("Run / Options", run_options),
+        ("Mesh / DOF", mesh_details),
+        ("Solver", solver_details),
+        ("Errors", errors),
+        ("Timings", timings),
+    ]
+    pretty_print_sections(sections, title="HDGFEM GPU4 Diffusion-Reaction Solve Summary")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    set_verbosity(args.verbosity)
+    TIMINGS.clear()
+    RUN_METADATA.clear()
     cp = require_cupy()
     require_cupyx_sparse()
     require_pyamgx()
@@ -1007,11 +1229,12 @@ def main(argv: list[str] | None = None) -> int:
         cp.show_config()
 
     run_start = time.perf_counter()
-    print("\n----- Standalone HDGFEM GPU4-Style Diffusion-Reaction Solve -----")
-    print(
+    log("\n----- Standalone HDGFEM GPU4-Style Diffusion-Reaction Solve -----")
+    log(
         f"case={args.case}, mesh={args.mesh_type}, mesh_size={args.mesh_size:g}, "
         f"order={args.order}, basis={args.basis}, trace_basis={args.trace_basis}, "
-        f"volume_quad_1d={args.volume_quad_1d}, assembly_backend={args.assembly_backend}"
+        f"volume_quad_1d={args.volume_quad_1d}, assembly_backend={args.assembly_backend}, "
+        f"raw_matrix_format={args.raw_matrix_format}, raw_block_size={args.raw_block_size}"
     )
     print_recommended_profiles(args)
     if case_definition_by_key is None:
@@ -1023,13 +1246,13 @@ def main(argv: list[str] | None = None) -> int:
     if diffusion != (1.0, 0.0, 1.0):
         raise NotImplementedError("this gpu4-style runner currently supports identity diffusion only")
 
-    print("generating mesh ... ", end="", flush=True)
+    log("generating mesh ... ", end="")
     start = time.perf_counter()
     mesh, domain = build_mesh(args, case)
     mesh_time = record_timing("mesh.generate", time.perf_counter() - start)
     print_done(mesh_time)
 
-    print("building DG space/reference data ... ", end="", flush=True)
+    log("building DG space/reference data ... ", end="")
     start = time.perf_counter()
     space = DGSpace(
         mesh,
@@ -1040,9 +1263,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     space_time = record_timing("space.setup", time.perf_counter() - start)
     print_done(space_time)
-    print(f"h={mesh.h:.2e}, h^(p+1)={mesh.h ** (args.order + 1):.2e}, triangles={mesh.num_tri:,}")
+    log(f"h={mesh.h:.2e}, h^(p+1)={mesh.h ** (args.order + 1):.2e}, triangles={mesh.num_tri:,}")
 
-    print("copying static data to GPU ... ", end="", flush=True)
+    log("copying static data to GPU ... ", end="")
     start = time.perf_counter()
     cspace = as_cupy_space(space)
     maps = build_dof_maps(cspace)
@@ -1059,11 +1282,21 @@ def main(argv: list[str] | None = None) -> int:
         trace_ref,
         args.tau,
         backend=args.assembly_backend,
+        raw_matrix_format=args.raw_matrix_format,
+        raw_block_size=args.raw_block_size,
     )
-    trace_reduced = solve_amgx(rows, cols, data, rhs, args)
+    trace_reduced = solve_amgx(
+        rows,
+        cols,
+        data,
+        rhs,
+        args,
+        indptr=getattr(raw_assembly, "indptr", None),
+        indices=getattr(raw_assembly, "indices", None),
+    )
     trace = reconstruct_trace(trace_reduced, boundary_trace, cspace)
-    if args.assembly_backend == "raw-cuda":
-        uh = reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, args.tau)
+    if raw_assembly is not None:
+        uh = reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, args.tau, args.raw_block_size)
     else:
         uh = reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref)
     l2, linf, avg_max, max_element = evaluate_errors(
@@ -1075,30 +1308,18 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     total = time.perf_counter() - run_start
-    global_dof = int(cspace.mesh.int_edges_inds.size * cspace.edg_dof)
-    items = [
-        ("case", args.case, ""),
-        ("domain", domain, ""),
-        ("basis", args.basis, ""),
-        ("trace basis", args.trace_basis, ""),
-        ("volume quad points", int(space.quad_data.Krf_w.size), ",d"),
-        ("error quad", args.error_volume_quad_1d or "same", ""),
-        ("order", args.order, ",d"),
-        ("triangles", mesh.num_tri, ",d"),
-        ("edges", mesh.num_edg, ",d"),
-        ("interior edges", int(mesh.int_edges_inds.size), ",d"),
-        ("global dof", global_dof, ",d"),
-        ("mesh size", args.mesh_size, ".4f"),
-        ("h", mesh.h, ".3e"),
-        ("h^(p+1)", mesh.h ** (args.order + 1), ".3e"),
-        ("L2 error", l2, ".3e"),
-        ("Linf error", linf, ".3e"),
-        ("avg max error", avg_max, ".3e"),
-        ("max-error element", max_element, ",d"),
-    ]
-    pretty_print(items, title="Solve Summary")
-    print_runtime_summary(total)
-    print_baseline_comparison()
+    print_final_summary(
+        args=args,
+        domain=domain,
+        mesh=mesh,
+        space=space,
+        cspace=cspace,
+        l2=l2,
+        linf=linf,
+        avg_max=avg_max,
+        max_element=max_element,
+        total_seconds=total,
+    )
     return 0
 
 
