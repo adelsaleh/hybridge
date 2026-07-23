@@ -6,7 +6,7 @@ import pytest
 from hdgfem.backends.cupy import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
-from hdgfem.backends.cupy_preconditioners import (
+from hdgfem.backends.cupy_preconditionners import (
     CuPyFaceAdditiveSchwarzPreconditioner,
     prepare_face_additive_schwarz_batch_layout,
 )
@@ -58,6 +58,12 @@ def test_prepare_cupy_asm_layout_matches_cpu_reference(
     boundary_mode: str,
     dtype: type,
 ) -> None:
+    """
+    It builds the preconditioner twice:
+        cpu = build_face_additive_schwarz_preconditioner(...)
+        layout = prepare_face_additive_schwarz_batch_layout(...)
+    The second call does not yet use CUDA. It takes the CPU reference construction and prepares arrays suitable for GPU transfer.
+    """
     space, direct = _small_face_problem(
         boundary_mode,
         nx=2,
@@ -119,6 +125,13 @@ def test_prepare_cupy_asm_layout_rejects_unsupported_dtype() -> None:
 def test_cupy_asm_restriction_and_prolongation_match_cpu(
     boundary_mode: str,
 ) -> None:
+    """
+    Restriction of a reproducible random global vector is compared.
+    Restriction is a pure gather, so exact equality is expected.
+    Next, arbitrary element-local values are generated.
+    Their prolongation is a scatter-add. GPU uses atomic additions, so its
+        addition order may differ slightly from NumPy’s.
+    """
     cp = _cupy_or_skip()
     space, direct = _small_face_problem(
         boundary_mode,
@@ -200,6 +213,15 @@ def test_cupy_asm_application_matches_cpu_reference(
 
 
 def test_cupy_asm_apply_into_reuses_preallocated_buffers() -> None:
+    """
+    The GPU preconditioner allocates two internal workspaces during construction:
+    - restricted_buffer: the gathered per-element residuals.
+    - local_solution_buffer: the per-element local solutions.
+    The test saves their CUDA memory addresses, applies the preconditioner twice,
+        and verifies that the addresses do not change
+    This confirms those work buffers are reused during repeated GMRES iterations.
+    It also verifies that repeated calls produce the same result and that input/output aliasing is rejected.
+    """
     cp = _cupy_or_skip()
     space, direct = _small_face_problem("eliminate", nx=2, ny=2, order=2)
     gpu = CuPyFaceAdditiveSchwarzPreconditioner.from_system(

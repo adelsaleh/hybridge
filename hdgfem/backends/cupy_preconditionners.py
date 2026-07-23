@@ -153,7 +153,7 @@ class AdditiveSchwarzBatchLayout:
 
     inverse_matrices: np.ndarray
     element_system_faces: np.ndarray
-    inverse_residuals: np.ndarray
+    inverse_residuals: np.ndarray # Per-element errors of the CPU-computed local inverses, measured as ``||P_e @ inverse_matrices[e] - I||_inf``
     block_size: int
     num_system_faces: int
 
