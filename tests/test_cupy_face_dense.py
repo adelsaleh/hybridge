@@ -43,6 +43,14 @@ def _cupy_or_skip():
 
 
 def test_prepare_face_dense_batch_layout_matches_slot_concatenation() -> None:
+    """
+    Verifies that prepare_face_dense_batch_layout() correctly converts:
+    blocks[f, s, :, :]
+    into one horizontally concatenated matrix:
+    [blocks[f, 0] blocks[f, 1] ... blocks[f, S-1]
+    It also checks that arrays are C-contiguous and that neighbor indices are converted to int32
+    """
+
     rng = np.random.default_rng(1024)
     num_rows = 7
     num_slots = 5
@@ -76,6 +84,14 @@ def test_prepare_face_dense_batch_layout_matches_slot_concatenation() -> None:
 
 
 def test_prepared_batches_reproduce_cpu_face_matvec() -> None:
+    """
+    Manually performs the same batched operation that the GPU will do:
+    1) gather neighbor vectors into gathered
+    2) zero-fill invalid -1 slots
+    3) multiply layout.matrix_batches @ gathered
+    Then it compares the result to the CPU reference function:
+    face_dense_matvec(system.blocks, system.neighbors, x)
+    """
     system = _small_face_system("eliminate")
     layout = prepare_face_dense_batch_layout(
         system.blocks,
@@ -98,9 +114,12 @@ def test_prepared_batches_reproduce_cpu_face_matvec() -> None:
     expected = face_dense_matvec(system.blocks, system.neighbors, x)
     np.testing.assert_allclose(from_batches, expected, rtol=3.0e-16, atol=1.0e-15)
 
-
-
 def test_prepare_face_dense_batch_layout_rejects_invalid_connectivity() -> None:
+    """
+    Checks validation errors for bad neighbor tables:
+    1) neighbor index outside the system, e.g. 3 when only rows 0, 1 , 2 exist
+    2) invalid negative values other than -1, e.g. -2
+    """
     blocks = np.zeros((3, 2, 2, 2), dtype=np.float64)
 
     with pytest.raises(ValueError, match="outside"):
@@ -122,6 +141,17 @@ def test_gpu_face_dense_matvec_matches_cpu_reference(
     boundary_mode: str,
     implementation: str,
 ) -> None:
+    """
+    Runs the actual GPU operator:
+    operator = CuPyFaceDenseOperator.from_system(...)
+    y_device = operator.matvec(x_device)
+
+    It compares GPU output to the CPU reference for:
+    1) boundary modes: "eliminate" and "penalty"
+    2) GPU implementations: "matmul" and "raw"
+    3) input shapes: flat vector (num_dofs,) and face-major matrix (num_rows, block_size)
+    """
+
     cp = _cupy_or_skip()
     system = _small_face_system(boundary_mode)
     operator = CuPyFaceDenseOperator.from_system(
@@ -154,6 +184,9 @@ def test_gpu_face_dense_matvec_matches_cpu_reference(
 
 @pytest.mark.parametrize("boundary_mode", ["eliminate", "penalty"])
 def test_gpu_neighbor_gather_zero_fills_unused_slots(boundary_mode: str) -> None:
+    """
+    Verifies the GPU neighbor-gather step specifically. For valid neighbor indices it copies x[neighbor]; for -1 slots it writes zeros.
+    """
     _cupy_or_skip()
     system = _small_face_system(boundary_mode)
     operator = CuPyFaceDenseOperator.from_system(system)
@@ -172,6 +205,10 @@ def test_gpu_neighbor_gather_zero_fills_unused_slots(boundary_mode: str) -> None
 
 
 def test_gpu_matvec_into_reuses_preallocated_output() -> None:
+    """
+    Tests the allocation-saving API: operator.matvec_into(x, out)
+    It confirms that out is filled correctly, and also verifies that using the same array for input and output is rejected: operator.matvec_into(x, x)
+    """
     cp = _cupy_or_skip()
     system = _small_face_system("eliminate")
     operator = CuPyFaceDenseOperator.from_system(system)

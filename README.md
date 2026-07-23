@@ -334,7 +334,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
   degree `p+1` primal and H(div)-style flux post-processing.
 - `hdgfem/backends/numba.py`: package adapter for the projected Numba backend.
 - `hdgfem/backends/numpy.py`: NumPy backend exports.
-- `hdgfem/backends/cupy.py`: placeholder for a supported CuPy backend.
+- `hdgfem/backends/cupy.py`: optional CuPy loader, CUDA component-wheel
+  bootstrap, and device validation helpers.
 - `hdgfem/assembly/hdg.py`: reusable HDG static-condensation and trace assembly helpers.
 - `hdgfem/assembly/hdg_gram.py`: sparse and statically condensed HDG Gram
   inverse applications for dual residual norms.
@@ -367,6 +368,31 @@ mode so `hdgfem` is importable from any working directory:
 ```bash
 python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
 python -m pip install -e .
+```
+
+### Windows CUDA 11 dense-GMRES development
+
+The face-dense GMRES CUDA backend uses Python 3.13 and the `gpu-cu11` optional
+dependency set. The locked environment includes the cuBLAS and NVRTC
+components used by this backend; unrelated CuPy features can require a full
+CUDA 11.8 Toolkit. The following PowerShell commands create the environment in
+`.venv`, install the project in editable mode, and include the development
+packaging tools PyCharm uses for package inspection:
+
+```powershell
+$env:UV_CACHE_DIR = "$PWD\.uv-cache"
+$env:UV_PYTHON_INSTALL_DIR = "$PWD\.uv-python"
+uv python install 3.13.12
+uv sync --python 3.13.12 --group dev --extra all --extra gpu-cu11
+.\.venv\Scripts\python.exe -m pip check
+```
+
+Select `.venv\Scripts\python.exe` as the PyCharm project interpreter. Run the
+GPU validation module from the repository root with:
+
+```powershell
+$env:CUPY_CACHE_DIR = "$PWD\.cupy-cache"
+.\.venv\Scripts\python.exe -m scripts.validate_face_dense_gpu_gmres
 ```
 
 ## Generic Field Plotting

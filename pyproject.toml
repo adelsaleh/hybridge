@@ -19,6 +19,21 @@ mesh = ["gmsh"]
 plot = ["pyvista"]
 test = ["pytest"]
 all = ["gmsh", "pyvista", "pytest"]
+gpu-cu11 = [
+    "cupy-cuda11x>=13.6,<14",
+    "numba>=0.66,<0.67",
+    "nvidia-cublas-cu11>=11.11.3.6,<12",
+    "nvidia-cuda-nvrtc-cu11>=11.8.89,<12",
+    "numpy>=2.2,<2.3",
+    "scipy>=1.14,<1.15",
+]
+
+[dependency-groups]
+dev = [
+    "pip>=25.3",
+    "setuptools>=69",
+    "wheel",
+]
 
 [tool.setuptools]
 packages = [
