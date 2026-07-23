@@ -100,13 +100,37 @@ def test_dgspace_accepts_explicit_quadrature_counts() -> None:
     mesh = reference_triangle_mesh()
     default = DGSpace(mesh, 3, basis_type="dub_orth")
     custom = DGSpace(mesh, 3, basis_type="dub_orth", volume_quad_1d=5, edge_quad_1d=4)
+    legacy = DGSpace(mesh, 3, basis_type="dub_orth", volume_quadrature="duffy")
 
-    assert default.quad_data.Krf_w.size == (2 * default.order + 2) ** 2
+    assert default.quad_data.volume_quadrature == "symmetric"
+    assert default.quad_data.Krf_w.size == 12
+    assert legacy.quad_data.Krf_w.size == (2 * legacy.order + 2) ** 2
     assert default.quad_data.weights_JGL.size == 2 * default.order + 2
     assert custom.quad_data.Krf_w.size == 25
     assert custom.quad_data.weights_JGL.size == 4
     assert custom.el_dof == default.el_dof
     assert custom.quad_data.edg_dof == default.quad_data.edg_dof
+
+
+def test_auto_quadrature_uses_compact_p7_and_duffy_above_table() -> None:
+    p7 = DGSpace(reference_triangle_mesh(), 7)
+    p8 = DGSpace(reference_triangle_mesh(), 8)
+
+    assert p7.quad_data.volume_quadrature == "symmetric"
+    assert p7.quad_data.Krf_w.size == 42
+    assert p8.quad_data.volume_quadrature == "duffy"
+    assert p8.quad_data.Krf_w.size == (2 * p8.order + 2) ** 2
+    np.testing.assert_allclose(np.sum(p7.quad_data.Krf_w), 2.0, rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(np.sum(p8.quad_data.Krf_w), 2.0, rtol=0.0, atol=1.0e-14)
+
+
+def test_explicit_symmetric_quadrature_is_generated_above_compact_table() -> None:
+    space = DGSpace(reference_triangle_mesh(), 8, volume_quadrature="symmetric")
+
+    assert space.quad_data.volume_quadrature == "symmetric"
+    assert space.quad_data.Krf_w.size <= 6 * (space.order + 1) ** 2
+    assert space.quad_data.Krf_w.size > (2 * space.order + 2) ** 2
+    np.testing.assert_allclose(np.sum(space.quad_data.Krf_w), 2.0, rtol=0.0, atol=1.0e-14)
 
 
 def test_project_callable_constant() -> None:

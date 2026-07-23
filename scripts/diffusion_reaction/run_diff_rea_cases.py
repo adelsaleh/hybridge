@@ -40,6 +40,7 @@ class DiffusionReactionRunPreset:
     gmsh_verbosity: int = 0
     basis: str = "dub_orth"
     order: int = 4
+    volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
     edge_quad_1d: int | None = None
     tau: float = 1.0
@@ -104,7 +105,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         petsc_levels=10,
         order=6,
         verbosity=2,
-        mesh_size=0.08,
+        mesh_size=1.5,
         tau=1.0,
     ),
     "trigonometric_poisson_cg_hypre": DiffusionReactionRunPreset(
@@ -253,6 +254,8 @@ def _print_preset_details(preset_key: str, config: DiffusionReactionRunPreset) -
 def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReactionRunPreset:
     """Apply CLI presentation/diagnostic choices without changing numerical inputs."""
     updates = {}
+    if args.volume_quadrature is not None:
+        updates["volume_quadrature"] = args.volume_quadrature
     if args.verbosity is not None:
         updates["verbosity"] = args.verbosity
     if args.quiet:
@@ -777,6 +780,12 @@ def _main() -> None:
     parser.add_argument("--list-presets", action="store_true", help="print available presets and where to edit them")
     parser.add_argument("--print-preset", action="store_true", help="print the selected preset fields and exit")
     parser.add_argument("--dry-run", action="store_true", help="validate and print the selected preset without solving")
+    parser.add_argument(
+        "--volume-quadrature",
+        choices=("auto", "symmetric", "duffy"),
+        default=None,
+        help="override the triangle volume quadrature family for this run only",
+    )
     parser.add_argument("--verbosity", "-v", type=int, default=None,
                         help="override logging verbosity for this run only")
     parser.add_argument("--quiet", action="store_true", help="run with verbosity 0 for this run only")
@@ -823,6 +832,7 @@ def _main() -> None:
         mesh,
         config.order,
         basis_type=config.basis,
+        volume_quadrature=config.volume_quadrature,
         volume_quad_1d=config.volume_quad_1d,
         edge_quad_1d=config.edge_quad_1d,
     )

@@ -322,6 +322,12 @@ class DGSpace:
         lower-level basis routines.
     name
         Human-readable label used in reprs and diagnostics.
+    volume_quadrature
+        Triangle volume rule: ``"auto"`` (the default; compact admissible
+        Dunavant data when available, then legacy Duffy at higher order),
+        ``"symmetric"`` (compact Dunavant when available, otherwise generated
+        symmetric), or
+        ``"duffy"`` (the legacy collapsed tensor-product rule).
     """
 
     def __init__(
@@ -333,6 +339,7 @@ class DGSpace:
             verbosity: int = 0,
             cache: bool = True,
             name: str = "Vh",
+            volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
     ) -> None:
@@ -342,6 +349,7 @@ class DGSpace:
             basis_type=basis_type,
             verbosity=verbosity,
             cache=cache,
+            volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
         )
@@ -369,6 +377,7 @@ class DGSpace:
             basis_type: str = "bernstein",
             verbosity: int = 0,
             name: str = "Vh",
+            volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
     ) -> "DGSpace":
@@ -385,6 +394,7 @@ class DGSpace:
             verbosity=verbosity,
             cache=True,
             name=name,
+            volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
         )

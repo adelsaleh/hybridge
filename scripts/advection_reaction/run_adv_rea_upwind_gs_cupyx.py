@@ -130,6 +130,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Numba worker threads; default uses all Numba-configured threads",
     )
     parser.add_argument("--json-output", type=Path, default=None)
+    parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots after a successful solve")
+    parser.add_argument("--plot-resolution", type=int, default=10, help="HDG/error plot sampling resolution per element")
+    parser.add_argument(
+        "--exact-plot-resolution",
+        type=int,
+        default=None,
+        help="exact-solution panel resolution per element; default is twice --plot-resolution",
+    )
+    parser.add_argument("--hide-mesh", action="store_true", help="hide mesh overlay in plots")
     parser.add_argument(
         "--verbosity",
         "-v",
@@ -313,6 +322,81 @@ def print_detail_table(logger: StageLogger, total_seconds: float) -> None:
     print(f"{'-' * widths[0]}  {'-' * widths[1]}  {'-' * widths[2]}")
     for stage, seconds, percent in rows:
         print(f"{stage.ljust(widths[0])}  {seconds.rjust(widths[1])}  {percent.rjust(widths[2])}")
+
+
+def dense_exact_plot_resolution(
+        exact_resolution: int | str | None,
+        *,
+        numerical_resolution: int,
+        num_elements: int,
+) -> int | str | None:
+    """Choose an exact-panel resolution denser than the HDG/error panels."""
+    if exact_resolution is not None:
+        return exact_resolution
+    return max(2 * int(numerical_resolution), int(numerical_resolution) + 1)
+
+
+def plot_resolution(requested_resolution: int | None) -> int:
+    """Return the requested per-element HDG/error plotting grid resolution."""
+    if requested_resolution is None:
+        return 10
+    return max(2, int(requested_resolution))
+
+
+def plot_solution(field, exact, *, resolution: int, exact_resolution: int | str | None, title: str, show_mesh: bool):
+    """Plot numerical, exact, and absolute-error panels for the reconstructed field."""
+    from hdgfem.io.plot import (
+        _resolve_exact_plot_resolution,
+        plot_scalar_sample_panels_matplotlib,
+        plot_solution_comparison,
+        sample_callable_on_elements,
+        sample_field_on_elements,
+    )
+
+    mesh = field.space.mesh
+    if mesh.num_tri > 100:
+        return plot_solution_comparison(
+            field,
+            exact,
+            resolution=resolution,
+            exact_resolution=exact_resolution,
+            title=title,
+            show_mesh=show_mesh,
+        )
+
+    reference_points, _, numerical_values = sample_field_on_elements(
+        field,
+        resolution=resolution,
+    )
+    _, _, exact_values_for_error = sample_callable_on_elements(
+        mesh,
+        exact,
+        reference_points=reference_points,
+    )
+    absolute_error = np.abs(numerical_values - exact_values_for_error)
+    exact_panel_resolution = _resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=resolution,
+        num_elements=mesh.num_tri,
+    )
+    exact_reference_points, _, exact_display_values = sample_callable_on_elements(
+        mesh,
+        exact,
+        resolution=exact_panel_resolution,
+    )
+    return plot_scalar_sample_panels_matplotlib(
+        mesh,
+        (
+            ("Numerical solution", reference_points, numerical_values),
+            ("Exact solution", exact_reference_points, exact_display_values),
+            ("Absolute error", reference_points, absolute_error),
+        ),
+        suptitle=title,
+        show_mesh=show_mesh,
+        cmap="jet",
+        levels=128,
+        share_clim=False,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -586,6 +670,28 @@ def main(argv: list[str] | None = None) -> int:
         args.json_output.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
         if args.verbosity >= 1:
             print(f"\nwrote JSON summary to {args.json_output}", flush=True)
+
+    if args.plot:
+        plot_resolution_value = plot_resolution(args.plot_resolution)
+        exact_plot_resolution = dense_exact_plot_resolution(
+            args.exact_plot_resolution,
+            numerical_resolution=plot_resolution_value,
+            num_elements=mesh.num_tri,
+        )
+        title = (
+            f"{args.case}, p={space.order}, elements={mesh.num_tri:,}, "
+            f"L2={l2_error:.2e}, Cupyx {args.cupyx_solver}"
+        )
+        plot_start = logger.start("plot", "plotting numerical/exact/error panels", level=1)
+        plot_solution(
+            field,
+            exact,
+            resolution=plot_resolution_value,
+            exact_resolution=exact_plot_resolution,
+            title=title,
+            show_mesh=not args.hide_mesh,
+        )
+        logger.done("plot", plot_start, "plotting numerical/exact/error panels", level=1)
 
     return 0
 

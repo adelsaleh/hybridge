@@ -28,6 +28,9 @@ class AdvectionReactionRunPreset:
     gmsh_algorithm: int | None = None
     basis: str = "dub_orth"
     order: int = 4
+    volume_quadrature: str = "auto"
+    volume_quad_1d: int | None = None
+    edge_quad_1d: int | None = None
     solver: str | None = "BICGSTAB"
     preconditioner: str | None = "ilu"
     solver_rtol: float = 1.0e-13
@@ -830,6 +833,8 @@ def _print_preset_details(preset_key: str, config: AdvectionReactionRunPreset) -
 
 def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReactionRunPreset:
     updates = {}
+    if args.volume_quadrature is not None:
+        updates["volume_quadrature"] = args.volume_quadrature
     if args.order is not None:
         updates["order"] = args.order
     if args.mesh_size is not None:
@@ -1064,6 +1069,12 @@ def _main() -> None:
     parser.add_argument("--list-presets", action="store_true", help="print available presets and where to edit them")
     parser.add_argument("--print-preset", action="store_true", help="print the selected preset fields and exit")
     parser.add_argument("--dry-run", action="store_true", help="validate and print the selected preset without solving")
+    parser.add_argument(
+        "--volume-quadrature",
+        choices=("auto", "symmetric", "duffy"),
+        default=None,
+        help="override the triangle volume quadrature family for this run only",
+    )
     parser.add_argument("--order", "-p", type=int, default=None, help="override uniform DG polynomial order")
     parser.add_argument("--mesh-size", "--lc", type=float, default=None, help="override Gmsh target mesh size")
     parser.add_argument(
@@ -1176,7 +1187,14 @@ def _main() -> None:
         config.verbosity,
         lambda: _build_mesh(config, case),
     )
-    space = DGSpace(mesh, config.order, basis_type=config.basis)
+    space = DGSpace(
+        mesh,
+        config.order,
+        basis_type=config.basis,
+        volume_quadrature=config.volume_quadrature,
+        volume_quad_1d=config.volume_quad_1d,
+        edge_quad_1d=config.edge_quad_1d,
+    )
     source_input = DGField(source, space, name="source_h") if config.project_source else source
     reaction_input = DGField(reaction, space, name="reaction_h") if config.project_reaction else reaction
     beta_input = VectorDGField((beta_x, beta_y), space, name="beta_h") if config.project_beta else (beta_x, beta_y)

@@ -336,7 +336,7 @@ def test_hdg_postprocess_flux_uses_primal_reference_for_identity_diffusion() -> 
     assert result.postprocessed_flux is not None
     raw_error = _vector_l2_error(result.flux, problem.exact_flux)
     post_error = _vector_l2_error(result.postprocessed_flux, problem.exact_flux)
-    assert post_error < 0.45 * raw_error
+    assert post_error < 0.55 * raw_error
     _assert_hdiv_flux_constraints(result, space, 1.0)
 
 

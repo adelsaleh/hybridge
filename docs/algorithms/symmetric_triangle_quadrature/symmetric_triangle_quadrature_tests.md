@@ -1,10 +1,17 @@
 # Symmetric Triangle Quadrature Host Tests
 
 This note summarizes the host-side tests added for symmetric triangle
-quadrature experiments. The implementation lives in
-`tests/test_symmetric_triangle_quadrature_host.py` and is currently test-only:
-no production quadrature or GPU assembly path has been changed to use these
-rules yet.
+quadrature experiments. The rule data now lives in
+`hdgfem/core/quadrature.py` and is exercised by
+`tests/test_symmetric_triangle_quadrature_host.py`. The default
+`volume_quadrature="auto"` policy uses compact admissible Dunavant tables
+through order 7. Above that table, it switches to the legacy collapsed Duffy
+rule because the generated symmetric fallback has a larger point count. The
+generated positive-weight symmetric rule remains available explicitly with
+`volume_quadrature="symmetric"`; it is formed by expanding a minimally exact
+Duffy rule into complete barycentric permutation orbits. The legacy collapsed
+Duffy rule remains selectable with `volume_quadrature="duffy"`; passing
+`volume_quad_1d` also selects that legacy path for backward compatibility.
 
 ## Main Result
 
@@ -19,17 +26,17 @@ reference triangle, the tested Dunavant rules need:
 | 4 | 8 | 16 |
 | 5 | 10 | 25 |
 | 6 | 12 | 33 |
+| 7 | 14 | 42 |
 
-For `p=6`, this means a 33-point symmetric degree-12 rule is enough for exact
-integration of degree-12 polynomials. The number 91 is the dimension of
-`P_12`, not the number of quadrature points required by this symmetric
-Gaussian rule. The older collapsed Duffy setting `volume_quad_1d=12` uses
-`12 x 12 = 144` points.
+For `p=7`, this means a 42-point symmetric degree-14 rule is enough for exact
+integration of degree-14 polynomials. The older collapsed Duffy default would
+use `16 x 16 = 256` points, while the explicit generated symmetric fallback
+uses 384 points.
 
 ## What Was Tested
 
 The test module includes compact Dunavant rule data for exact degrees
-`2, 4, 5, 6, 8, 10, 12`. The rules are stored in unit-triangle barycentric
+`2, 4, 5, 6, 8, 10, 12, 14`. The rules are stored in unit-triangle barycentric
 coordinates and then mapped to the HDGFEM reference triangle
 `conv{(-1,-1), (1,-1), (-1,1)}`.
 
@@ -44,6 +51,8 @@ The tests check:
   `hdgfem/core/quadrature.py`;
 - finite basis and gradient values for the collapsed-coordinate bases at
   interior symmetric points and points very close to the top reference vertex.
+- generated-rule symmetry and monomial exactness through `P_{2p}` when
+  explicitly requested above the compact Dunavant table.
 
 ## Reference-Element Matrix Checks
 
@@ -58,10 +67,10 @@ contractions and compare them to cached fields:
 - edge mass `M_rf_fc`;
 - face coupling tables and their legacy aliases.
 
-This verifies that the current reference matrices are computed consistently
-from the quadrature and basis tables. It does not prove that every tensor is
-integrated with a minimal exact rule, because `ReferenceElementData` still uses
-the existing collapsed tensor-product Duffy rule.
+This verifies that the reference matrices are computed consistently from the
+quadrature and basis tables. Production `ReferenceElementData` now uses the
+automatic policy: compact degree-`2p` symmetric data where available, then
+Duffy at higher order unless symmetric generation is explicitly requested.
 
 ## Exactness Caveat
 
@@ -84,6 +93,35 @@ For variable-coefficient or nonlinear weighted mass terms, `2p` exactness may
 not be enough. For example, a coefficient represented in `P_p` multiplying
 `phi_i phi_j` produces degree up to `3p`.
 
+## Manufactured-Case Comparison
+
+Matched runs can select either family through `DGSpace(...,
+volume_quadrature="symmetric"|"duffy")` or the
+`--volume-quadrature` option in both manufactured-case runners.
+
+- Polynomial exactness check — diffusion-reaction `quadratic_poisson`, `p=4`,
+  `mesh_size=0.35` (90 triangles): primal L2 errors were `4.3580e-14`
+  (16-point symmetric) and `4.5993e-14` (100-point Duffy). The quadratic
+  manufactured solution lies in the discrete polynomial space, so the
+  roundoff-level errors verify polynomial reproduction.
+- Oscillatory Poisson robustness check — `trigonometric_poisson_direct`,
+  `p=6`, `mesh_size=0.06` on the disk (50,674 triangles): primal L2 errors
+  were `2.2614e-09` (33-point symmetric) and `2.2855e-09` (196-point Duffy).
+  The respective postprocessed primal L2 errors were `2.0029e-11` and
+  `3.5666e-11`; Linf errors were `1.9716e-08` and `5.1869e-08`. This pair
+  used Numba assembly, fused local assembly, boundary elimination, and the
+  direct trace solver.
+- Advection-reaction `test2`, `p=6`, `mesh_size=0.01`
+  (92,552 triangles): L2 errors were `5.4341e-10` (33-point symmetric)
+  and `5.6827e-10` (196-point Duffy).
+
+The comparisons use identical meshes and solver settings within each pair.
+The advection-reaction pair uses the fast production path: Numba assembly,
+upwind-SCC trace ordering, ILU-preconditioned BICGSTAB, boundary elimination,
+projected source/advection/reaction fields, ILU drop tolerance `1e-10`, and
+ILU fill factor `35`. Both advection runs converged in one BICGSTAB iteration
+with relative residuals below `2.7e-15`.
+
 ## Commands Run
 
 Focused module:
@@ -95,7 +133,7 @@ Focused module:
 Result:
 
 ```text
-71 passed in 9.21s
+89 passed
 ```
 
 Broader sanity run:
@@ -111,14 +149,14 @@ Broader sanity run:
 Result:
 
 ```text
-124 passed in 11.22s
+145 passed
 ```
 
 ## References
 
 - `hdgfem/core/basis.py`: basis formulas and tabulation kernels.
-- `hdgfem/core/quadrature.py`: current collapsed Duffy reference quadrature
-  and `ReferenceElementData` tensor construction.
+- `hdgfem/core/quadrature.py`: compact and generated symmetric rules, legacy
+  collapsed Duffy quadrature, and `ReferenceElementData` tensor construction.
 - D. A. Dunavant, "High Degree Efficient Symmetrical Gaussian Quadrature Rules
   for the Triangle", International Journal for Numerical Methods in
   Engineering, 21, 1129-1148, 1985.

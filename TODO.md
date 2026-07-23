@@ -60,3 +60,9 @@
 - [ ] Test the new direct CSR assembly kernels against the COO path for numerical equivalence.
 - [ ] Verify direct CSR assembly gives actual performance improvement when AMGX can consume/exchange device pointers instead of forcing CSR reconstruction.
 - [ ] Keep COO and CSR validation tests paired so correctness regressions are caught before performance comparisons.
+
+## High Level API Solver Design
+
+- [ ] Reusable GPU solvers acorss all host/device combinations.
+- [ ] All solver classes and solve functions must cleanly handle  parameters for backend choice whether on host/device or 
+a mix of both, and clearly signal unsupported paths.  

@@ -22,10 +22,145 @@ assembly kernels simple.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from itertools import permutations
 
 import numpy as np
 
 from . import basis as basis_module
+
+
+_VOLUME_QUADRATURE_ALIASES = {
+    "auto": "auto",
+    "default": "auto",
+    "symmetric": "symmetric",
+    "dunavant": "symmetric",
+    "duffy": "duffy",
+    "legacy": "duffy",
+    "collapsed": "duffy",
+}
+
+# Positive-weight Dunavant rules on the unit triangle.  Each entry is
+# ``(barycentric representative, weight per orbit point)``; permutations are
+# expanded below and weights are scaled by two for our area-two reference
+# triangle.
+_DUNAVANT_RULE_BLOCKS = {
+    2: (((2 / 3, 1 / 6, 1 / 6), 1 / 3),),
+    4: (
+        ((0.108103018168070, 0.445948490915965, 0.445948490915965), 0.223381589678011),
+        ((0.816847572980459, 0.091576213509771, 0.091576213509771), 0.109951743655322),
+    ),
+    6: (
+        ((0.501426509658179, 0.249286745170910, 0.249286745170910), 0.116786275726379),
+        ((0.873821971016996, 0.063089014491502, 0.063089014491502), 0.050844906370207),
+        ((0.053145049844816, 0.310352451033785, 0.636502499121399), 0.082851075618374),
+    ),
+    8: (
+        ((1 / 3, 1 / 3, 1 / 3), 0.144315607677787),
+        ((0.081414823414554, 0.459292588292723, 0.459292588292723), 0.095091634267285),
+        ((0.658861384496480, 0.170569307751760, 0.170569307751760), 0.103217370534718),
+        ((0.898905543365938, 0.050547228317031, 0.050547228317031), 0.032458497623198),
+        ((0.008394777409958, 0.263112829634638, 0.728492392955404), 0.027230314174435),
+    ),
+    10: (
+        ((1 / 3, 1 / 3, 1 / 3), 0.090817990382754),
+        ((0.028844733232685, 0.485577633383657, 0.485577633383657), 0.036725957756467),
+        ((0.781036849029926, 0.109481575485037, 0.109481575485037), 0.045321059435528),
+        ((0.141707219414880, 0.307939838764121, 0.550352941820999), 0.072757916845420),
+        ((0.025003534762686, 0.246672560639903, 0.728323904597411), 0.028327242531057),
+        ((0.009540815400299, 0.066803251012200, 0.923655933587500), 0.009421666963733),
+    ),
+    12: (
+        ((0.023565220452390, 0.488217389773805, 0.488217389773805), 0.025731066440455),
+        ((0.120551215411080, 0.439724392294460, 0.439724392294460), 0.043692544538038),
+        ((0.457579229975768, 0.271210385012116, 0.271210385012116), 0.062858224217885),
+        ((0.744847708916828, 0.127576145541586, 0.127576145541586), 0.034796112930709),
+        ((0.957365299093580, 0.021317350453210, 0.021317350453210), 0.006166261051559),
+        ((0.115343494534698, 0.275713269685514, 0.608943235779788), 0.040371557766381),
+        ((0.022838332222257, 0.281325580989940, 0.695836086787803), 0.022356773202303),
+        ((0.025734050548330, 0.116251915907597, 0.858014033544073), 0.017316231108659),
+    ),
+    14: (
+        ((0.022072179275643, 0.488963910362179, 0.488963910362179), 0.021883581369429),
+        ((0.164710561319092, 0.417644719340454, 0.417644719340454), 0.032788353544125),
+        ((0.453044943382323, 0.273477528308839, 0.273477528308839), 0.051774104507292),
+        ((0.645588935174913, 0.177205532412543, 0.177205532412543), 0.042162588736993),
+        ((0.876400233818255, 0.061799883090873, 0.061799883090873), 0.014433699669777),
+        ((0.961218077502598, 0.019390961248701, 0.019390961248701), 0.004923403602400),
+        ((0.057124757403648, 0.172266687821356, 0.770608554774996), 0.024665753212564),
+        ((0.092916249356972, 0.336861459796345, 0.570222290846683), 0.038571510787061),
+        ((0.014646950055654, 0.298372882136258, 0.686980167808088), 0.014436308113534),
+        ((0.001268330932872, 0.118974497696957, 0.879757171370171), 0.005010228838501),
+    ),
+}
+
+
+def _normalize_volume_quadrature(name: str) -> str:
+    try:
+        return _VOLUME_QUADRATURE_ALIASES[str(name).strip().lower()]
+    except KeyError as exc:
+        raise ValueError("volume_quadrature must be 'auto', 'symmetric', or 'duffy'") from exc
+
+
+def _symmetric_triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return a positive-weight symmetric rule exact for ``P_(2*order)``.
+
+    Compact Dunavant data is used when available.  At higher orders, a
+    minimally exact ``(order + 1)^2`` Duffy rule is expanded into complete
+    barycentric permutation orbits.  Orbit symmetrization preserves the
+    original rule's polynomial exactness and positivity while providing a
+    fully symmetric rule for arbitrary nonnegative ``order``.
+    """
+    exact_degree = max(2, 2 * order)
+    blocks = _DUNAVANT_RULE_BLOCKS.get(exact_degree)
+    if blocks is None:
+        points, base_weights = _triangle_quadrature(order, order + 1)
+        barycentric = np.column_stack(
+            (
+                -0.5 * (points[:, 0] + points[:, 1]),
+                0.5 * (points[:, 0] + 1.0),
+                0.5 * (points[:, 1] + 1.0),
+            )
+        )
+        orbit_points = []
+        orbit_weights = []
+        for bary, weight in zip(barycentric, base_weights):
+            orbit = sorted(set(permutations(map(float, bary))))
+            orbit = np.asarray(orbit, dtype=np.float64)
+            orbit_points.append(
+                np.column_stack((-1.0 + 2.0 * orbit[:, 1], -1.0 + 2.0 * orbit[:, 2]))
+            )
+            orbit_weights.append(np.full(len(orbit), weight / len(orbit), dtype=np.float64))
+        return (
+            np.ascontiguousarray(np.vstack(orbit_points)),
+            np.ascontiguousarray(np.concatenate(orbit_weights)),
+        )
+
+    barycentric = []
+    weights = []
+    for bary, weight in blocks:
+        orbit = sorted(set(permutations(map(float, bary))))
+        barycentric.extend(orbit)
+        weights.extend([2.0 * weight] * len(orbit))
+    barycentric = np.asarray(barycentric, dtype=np.float64)
+    points = np.column_stack((-1.0 + 2.0 * barycentric[:, 1], -1.0 + 2.0 * barycentric[:, 2]))
+    return np.ascontiguousarray(points), np.ascontiguousarray(weights, dtype=np.float64)
+
+
+def _automatic_triangle_quadrature(order: int) -> tuple[str, np.ndarray, np.ndarray]:
+    """Select the default volume rule for one polynomial order.
+
+    The automatic policy prefers compact admissible Dunavant data.  Once that
+    table is exhausted, it returns the legacy collapsed tensor-product rule
+    rather than the generated symmetric rule, whose point count is larger than
+    Duffy at high order.  Callers can still force the generated rule with
+    ``volume_quadrature="symmetric"``.
+    """
+    exact_degree = max(2, 2 * order)
+    if exact_degree in _DUNAVANT_RULE_BLOCKS:
+        points, weights = _symmetric_triangle_quadrature(order)
+        return "symmetric", points, weights
+    points, weights = _triangle_quadrature(order, None)
+    return "duffy", points, weights
 
 
 _BASIS_ALIASES = {
@@ -264,6 +399,7 @@ class ReferenceElementData:
     basis_type: str = "bernstein"
     verbosity: int = 0
     cache: bool = True
+    volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
     edge_quad_1d: int | None = None
     el_dof: int = field(init=False)
@@ -308,10 +444,19 @@ class ReferenceElementData:
         basis_type = _normalize_basis_type(self.basis_type)
         object.__setattr__(self, "order", order)
         object.__setattr__(self, "basis_type", basis_type)
+        volume_quadrature = _normalize_volume_quadrature(self.volume_quadrature)
+        if self.volume_quad_1d is not None:
+            volume_quadrature = "duffy"
         object.__setattr__(self, "el_dof", (order + 1) * (order + 2) // 2)
         object.__setattr__(self, "edg_dof", order + 1)
 
-        q_points, q_weights = _triangle_quadrature(order, self.volume_quad_1d)
+        if volume_quadrature == "auto":
+            volume_quadrature, q_points, q_weights = _automatic_triangle_quadrature(order)
+        elif volume_quadrature == "symmetric":
+            q_points, q_weights = _symmetric_triangle_quadrature(order)
+        else:
+            q_points, q_weights = _triangle_quadrature(order, self.volume_quad_1d)
+        object.__setattr__(self, "volume_quadrature", volume_quadrature)
         basis = _evaluate_basis(basis_type, order, q_points)
         gradients = _evaluate_gradients(basis_type, order, q_points)
         phi = np.ascontiguousarray(basis)
@@ -450,6 +595,7 @@ class ReferenceElementData:
             basis_type: str = "bernstein",
             verbosity: int = 0,
             cache: bool = True,
+            volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
     ) -> "ReferenceElementData":
@@ -465,6 +611,7 @@ class ReferenceElementData:
             basis_type=basis_type,
             verbosity=verbosity,
             cache=cache,
+            volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
         )
