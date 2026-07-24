@@ -229,7 +229,11 @@ class DGTraceSpace:
         return self.space.layout.edg_dof
 
     def boundary_coefficients(self, boundary_condition: Callable) -> np.ndarray:
-        """Project boundary data into this trace basis on all mesh edges."""
+        """Return boundary data coefficients for this trace basis.
+
+        Nodal trace spaces store point values at interpolation nodes.  Non-nodal
+        trace spaces store L2-projected coefficients in the edge basis.
+        """
         mesh = self.space.mesh
         trace_coeffs = np.zeros(self.space.layout.trace_shape, dtype=np.float64)
         if mesh.bnd_edges_inds.size == 0:
@@ -258,6 +262,25 @@ class DGTraceSpace:
             rhs = (values * self.weights[None, :]) @ self.bas1d_of_ref_edg_qds.T
             trace_coeffs[mesh.bnd_edges_inds] = rhs @ np.linalg.inv(self.M_rf_fc)
         return np.ascontiguousarray(trace_coeffs)
+
+    def element_coefficients(self, trace: np.ndarray) -> np.ndarray:
+        """Return element-local trace coefficients with local face orientation."""
+        mesh = self.space.mesh
+        edg_dof = self.edg_dof
+        trace = np.asarray(trace, dtype=np.float64)
+        expected = (mesh.num_edg * edg_dof,)
+        if trace.shape != expected:
+            raise ValueError(f"trace must have shape {expected}; got {trace.shape}")
+
+        traces = trace.reshape(mesh.num_edg, edg_dof)[mesh.loc2glob_edge].copy()
+        negative = ~mesh.orientations
+        if np.any(negative):
+            if self.kind == "legendre-modal":
+                signs = np.where(np.arange(edg_dof) % 2 == 0, 1.0, -1.0)
+                traces[negative] *= signs[None, :]
+            else:
+                traces[negative] = traces[negative][:, ::-1]
+        return np.ascontiguousarray(traces.reshape(mesh.num_tri, 3 * edg_dof))
 
 
 def evaluate_product(

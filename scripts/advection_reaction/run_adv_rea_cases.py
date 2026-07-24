@@ -27,6 +27,7 @@ class AdvectionReactionRunPreset:
     gmsh_verbosity: int = 0
     gmsh_algorithm: int | None = None
     basis: str = "dub_orth"
+    trace_basis: str = "legacy-lagrange"
     order: int = 4
     volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
@@ -55,6 +56,7 @@ class AdvectionReactionRunPreset:
     matrix_pattern_dpi: int = 250
     matrix_pattern_only: bool = False
     assembly_backend: str = "numba"
+    materialize_host_solution: bool | None = True
     project_source: bool = True
     project_beta: bool = True
     project_reaction: bool = True
@@ -841,6 +843,8 @@ def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReacti
         updates["mesh_size"] = args.mesh_size
     if args.boundary_mode is not None:
         updates["boundary_mode"] = args.boundary_mode
+    if args.trace_basis is not None:
+        updates["trace_basis"] = args.trace_basis
     if args.trace_ordering is not None:
         updates["trace_ordering"] = args.trace_ordering
     if args.ilu_permc_spec is not None:
@@ -964,6 +968,7 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
     option_items = [
         ("assembly backend", result.assembly_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
+        ("trace basis", config.trace_basis, "s"),
         ("trace ordering", result.trace_ordering, "s"),
         (
             "linear scaling",
@@ -1084,6 +1089,12 @@ def _main() -> None:
         help="override Dirichlet trace treatment for this run only",
     )
     parser.add_argument(
+        "--trace-basis",
+        choices=("legacy-lagrange", "legendre-modal", "bernstein"),
+        default=None,
+        help="override trace basis for this run only; non-legacy currently requires raw-cuda assembly",
+    )
+    parser.add_argument(
         "--trace-ordering",
         choices=("none", "upwind-scc"),
         default=None,
@@ -1103,7 +1114,7 @@ def _main() -> None:
     )
     parser.add_argument(
         "--assembly-backend",
-        choices=("numpy", "numba", "auto"),
+        choices=("numpy", "numba", "cupy", "raw-cuda", "auto"),
         default=None,
         help="override assembly backend for this run only",
     )
@@ -1228,6 +1239,8 @@ def _main() -> None:
         matrix_pattern_dpi=config.matrix_pattern_dpi,
         matrix_pattern_only=config.matrix_pattern_only,
         assembly_backend=config.assembly_backend,
+        trace_basis=config.trace_basis,
+        materialize_host_solution=config.materialize_host_solution,
         cache_local_solvers=config.cache_local_solvers,
         verbose=config.verbosity,
     )

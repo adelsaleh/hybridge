@@ -46,6 +46,7 @@ def __getattr__(name: str):
         }
         return symbols[name]
     if name in {
+        "DiffusionReactionAssemblyResult",
         "DiffusionReactionHDGOptions",
         "DiffusionReactionHDGSolver",
         "DiffusionReactionResult",
@@ -53,6 +54,7 @@ def __getattr__(name: str):
         "solve_diffusion_reaction_hdg",
     }:
         from .solvers.diff_rea import (
+            DiffusionReactionAssemblyResult,
             DiffusionReactionHDGOptions,
             DiffusionReactionHDGSolver,
             DiffusionReactionResult,
@@ -61,6 +63,7 @@ def __getattr__(name: str):
         )
 
         symbols = {
+            "DiffusionReactionAssemblyResult": DiffusionReactionAssemblyResult,
             "DiffusionReactionHDGOptions": DiffusionReactionHDGOptions,
             "DiffusionReactionHDGSolver": DiffusionReactionHDGSolver,
             "DiffusionReactionResult": DiffusionReactionResult,
@@ -83,6 +86,7 @@ __all__ = [
     "AdvectionReactionTimings",
     "AdvectionReactionHDGOptions",
     "AdvectionReactionHDGSolver",
+    "DiffusionReactionAssemblyResult",
     "DiffusionReactionHDGOptions",
     "DiffusionReactionHDGSolver",
     "DiffusionReactionResult",

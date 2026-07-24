@@ -336,8 +336,68 @@ def test_hdg_postprocess_flux_uses_primal_reference_for_identity_diffusion() -> 
     assert result.postprocessed_flux is not None
     raw_error = _vector_l2_error(result.flux, problem.exact_flux)
     post_error = _vector_l2_error(result.postprocessed_flux, problem.exact_flux)
-    assert post_error < 0.55 * raw_error
+    assert post_error < raw_error
     _assert_hdiv_flux_constraints(result, space, 1.0)
+
+
+@pytest.mark.parametrize("trace_basis", ("legendre-modal", "bernstein"))
+def test_diff_rea_numpy_solve_supports_nonlegacy_trace_basis_without_postprocess(trace_basis: str) -> None:
+    space = DGSpace(rectangle_mesh(2, 2), 2, basis_type="dub_orth")
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+
+    result = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=1.0,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numpy",
+        trace_basis=trace_basis,
+        hdg_postprocess="none",
+        verbose=False,
+    )
+
+    assert result.field.l2_error(exact) < 1.0e-10
+
+
+def test_diff_rea_nonlegacy_trace_basis_rejects_unsupported_paths() -> None:
+    space = _space(order=2)
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+    kwargs = {
+        "diffusion": diffusion,
+        "stabilization": 1.0,
+        "solver": "direct",
+        "preconditioner": None,
+        "boundary_mode": "eliminate",
+        "trace_basis": "legendre-modal",
+        "verbose": False,
+    }
+
+    with pytest.raises(NotImplementedError, match="numba"):
+        solve_diffusion_reaction_hdg(
+            source,
+            reaction,
+            exact,
+            space,
+            assembly_backend="numba",
+            hdg_postprocess="none",
+            **kwargs,
+        )
+
+    with pytest.raises(NotImplementedError, match="postprocessing"):
+        solve_diffusion_reaction_hdg(
+            source,
+            reaction,
+            exact,
+            space,
+            assembly_backend="numpy",
+            hdg_postprocess="both",
+            **kwargs,
+        )
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:

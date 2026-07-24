@@ -875,6 +875,9 @@ def solve_advection_reaction_hdg(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if trace_ordering not in {"none", "upwind-scc"}:
         raise ValueError("trace_ordering must be 'none' or 'upwind-scc'")
+    trace_basis = str(trace_basis).replace("_", "-").lower()
+    if trace_basis not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
+        raise ValueError("trace_basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
     if assembly_backend not in {"numpy", "numba", "cupy", "raw-cuda", "auto"}:
         raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', 'raw-cuda', or 'auto'")
     if assembly_backend == "raw-cuda":
@@ -901,6 +904,8 @@ def solve_advection_reaction_hdg(
     effective_backend = assembly_backend
     if effective_backend == "auto":
         effective_backend = "numpy"
+    if trace_basis != "legacy-lagrange" and effective_backend != "raw-cuda":
+        raise NotImplementedError("advection non-legacy trace bases currently require assembly_backend='raw-cuda'")
     if materialize_host_solution is None:
         wants_host_solution = effective_backend not in {"cupy", "raw-cuda"}
     else:

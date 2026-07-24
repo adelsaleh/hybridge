@@ -21,6 +21,7 @@ from hdgfem.core.space import evaluate_product
 from hdgfem.assembly.hdg import (
     assemble_trace_system,
     as_vector_field,
+    boundary_trace_coefficients,
     element_to_trace_matrix,
     global_rhs,
     reconstruct_field,
@@ -864,3 +865,36 @@ def test_dgspace_layout_and_trace_space_formalism() -> None:
         boundary = trace.boundary_coefficients(lambda x, y: x + 2.0 * y)
         assert boundary.shape == layout.trace_shape
         assert np.all(np.isfinite(boundary))
+
+
+def test_trace_boundary_coefficients_separate_nodal_and_modal_paths() -> None:
+    mesh = rectangle_mesh(1, 1, xlim=(-0.5, 1.25), ylim=(-1.0, 0.75))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+
+    def boundary_condition(x, y):
+        return 0.2 + x**3 - 0.35 * y**3 + 0.1 * x * y
+
+    legacy = space.trace_space("legacy-lagrange")
+    legacy_coeffs = legacy.boundary_coefficients(boundary_condition)
+    edge_vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+    t = legacy.interpolation_nodes
+    nodal_points = 0.5 * (
+        (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
+        + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
+    )
+    expected_nodal = boundary_condition(nodal_points[:, :, 0], nodal_points[:, :, 1])
+    np.testing.assert_allclose(legacy_coeffs[mesh.bnd_edges_inds], expected_nodal, rtol=1.0e-14, atol=1.0e-14)
+    np.testing.assert_allclose(boundary_trace_coefficients(boundary_condition, space), legacy_coeffs)
+
+    for kind in ("legendre-modal", "bernstein"):
+        trace = space.trace_space(kind)
+        coeffs = trace.boundary_coefficients(boundary_condition)
+        t = trace.quads
+        quad_points = 0.5 * (
+            (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
+            + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
+        )
+        values = boundary_condition(quad_points[:, :, 0], quad_points[:, :, 1])
+        rhs = (values * trace.weights[None, :]) @ trace.bas1d_of_ref_edg_qds.T
+        expected_projected = rhs @ np.linalg.inv(trace.M_rf_fc)
+        np.testing.assert_allclose(coeffs[mesh.bnd_edges_inds], expected_projected, rtol=1.0e-14, atol=1.0e-14)

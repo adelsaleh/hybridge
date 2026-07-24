@@ -25,6 +25,7 @@ import numpy as np
 from ..assembly import hdg as hdg_assembly
 from ..assembly.projection import scalar_moments_from_values
 from ..linalg.system import (
+    KnownDofReduction,
     SolveResult,
     assemble_global_matrix,
     diagonal_scale_system,
@@ -32,7 +33,7 @@ from ..linalg.system import (
     expand_known_dofs,
     solve_global_system,
 )
-from ..core.space import DGField, DGSpace, VectorDGField
+from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 try:  # pragma: no cover - availability depends on the runtime environment.
     from numba import njit, prange
@@ -43,6 +44,7 @@ except ImportError:  # pragma: no cover
 
 LocalSolverBackend = Literal["numpy", "numba"]
 AssemblyBackend = Literal["numpy", "numba", "auto"]
+TraceAssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda", "auto"]
 HDGPostprocessMode = Literal["none", "primal", "flux", "both"]
 ReturnKey = Literal[
     "result",
@@ -130,6 +132,23 @@ class DiffusionReactionResult:
     global_solve_result: SolveResult | None = None
 
 
+@dataclass(frozen=True)
+class DiffusionReactionAssemblyResult:
+    """Reduced diffusion-reaction trace system assembled without solving it."""
+
+    rows: np.ndarray | None
+    cols: np.ndarray | None
+    data: np.ndarray
+    rhs: np.ndarray
+    boundary_trace: np.ndarray
+    reduction: Any
+    assembly_backend: TraceAssemblyBackend
+    matrix_format: Literal["coo", "csr"] = "coo"
+    indptr: np.ndarray | None = None
+    indices: np.ndarray | None = None
+    timings: dict[str, float] | None = None
+
+
 def flux_coefficients(result: DiffusionReactionResult) -> np.ndarray:
     """Return result flux coefficients with shape ``(2, num_elements, el_dof)``.
 
@@ -167,7 +186,10 @@ class DiffusionReactionHDGOptions:
     ilu_failure: Literal["raise", "none"] = "raise"
     initial_guess: np.ndarray | None = None
     local_solver_backend: LocalSolverBackend = "numpy"
-    assembly_backend: AssemblyBackend = "numpy"
+    assembly_backend: TraceAssemblyBackend = "numpy"
+    trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
+    raw_matrix_format: Literal["coo", "csr"] = "coo"
+    raw_block_size: int = 128
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
     hdg_postprocess: HDGPostprocessMode = "none"
@@ -404,7 +426,12 @@ def _reference_derivative_matrices(space: DGSpace) -> tuple[np.ndarray, np.ndarr
     return np.ascontiguousarray(d0.T), np.ascontiguousarray(d1.T)
 
 
-def diffusion_trace_lift(stabilization, space: DGSpace) -> np.ndarray:
+def diffusion_trace_lift(
+        stabilization,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Build the diffusion trace-lift tensor.
 
     The result has shape ``(num_elements, 3, edg_dof, 3*el_dof)`` and maps the
@@ -413,23 +440,30 @@ def diffusion_trace_lift(stabilization, space: DGSpace) -> np.ndarray:
     tau = _normalize_tau(stabilization, space)
     mesh = space.mesh
     q = space.quad_data
-    oriented_restriction = q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling].copy()
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    oriented_restriction = trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling].copy()
     oriented_restriction *= mesh.jacs_el_fc[..., None, None]
-    lift = np.empty((mesh.num_tri, 3, q.edg_dof, 3 * q.el_dof), dtype=np.float64)
+    lift = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, 3 * q.el_dof), dtype=np.float64)
     lift[..., :q.el_dof] = tau[..., None, None] * oriented_restriction
     lift[..., q.el_dof:2 * q.el_dof] = mesh.normals[..., 0, None, None] * oriented_restriction
     lift[..., 2 * q.el_dof:] = mesh.normals[..., 1, None, None] * oriented_restriction
     return np.ascontiguousarray(lift)
 
 
-def diffusion_element_boundary_mats(stabilization, space: DGSpace) -> np.ndarray:
+def diffusion_element_boundary_mats(
+        stabilization,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Assemble local trace-coupling matrices for diffusion-reaction."""
     tau = _normalize_tau(stabilization, space)
     mesh = space.mesh
     q = space.quad_data
-    result = np.zeros((mesh.num_tri, 3 * q.el_dof, 3 * q.edg_dof), dtype=np.float64)
-    result_r = result.reshape(mesh.num_tri, 3, q.el_dof, 3, q.edg_dof)
-    face_element_trace = q.face_element_test_trace_trial.swapaxes(0, 1)
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    result = np.zeros((mesh.num_tri, 3 * q.el_dof, 3 * trace_ref.edg_dof), dtype=np.float64)
+    result_r = result.reshape(mesh.num_tri, 3, q.el_dof, 3, trace_ref.edg_dof)
+    face_element_trace = trace_ref.face_trace_test_element_trial_oriented[:3].transpose(2, 0, 1)
     result_r[:, 0] = (tau * mesh.jacs_el_fc)[:, None, :, None] * face_element_trace[None, :, :, :]
     result_r[:, 1] = (
         mesh.normals[..., 0][:, None, :, None]
@@ -765,15 +799,20 @@ def impose_boundary_trace_on_guess(
     return np.ascontiguousarray(guess)
 
 
-def interior_stabilization_mass_blocks(stabilization, space: DGSpace) -> np.ndarray:
+def interior_stabilization_mass_blocks(
+        stabilization,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Return per-element-side trace mass blocks on interior faces."""
     tau = _normalize_tau(stabilization, space)
     mesh = space.mesh
-    q = space.quad_data
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
     return np.ascontiguousarray(
-        (tau * mesh.jacs_el_fc)[valid_elements, valid_faces, None, None] * q.M_rf_fc[None]
+        (tau * mesh.jacs_el_fc)[valid_elements, valid_faces, None, None] * trace_ref.M_rf_fc[None]
     )
 
 
@@ -787,12 +826,14 @@ def assemble_diffusion_trace_system(
         *,
         boundary_penalty: float = 1e20,
         verbosity: bool | int = 0,
+        trace_space: DGTraceSpace | None = None,
 ) -> hdg_assembly.TraceSystem:
     """Assemble the HDG trace system for diffusion-reaction."""
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     trace_lift, _ = _timed_call(
         "building diffusion trace lift",
         verbosity,
-        lambda: diffusion_trace_lift(stabilization, space),
+        lambda: diffusion_trace_lift(stabilization, space, trace_space=trace_ref),
         level=2,
     )
     trace_blocks, _ = _timed_call(
@@ -803,6 +844,7 @@ def assemble_diffusion_trace_system(
             local_solver,
             element_boundary_mats,
             space,
+            trace_space=trace_ref,
         ),
         level=2,
     )
@@ -815,7 +857,7 @@ def assemble_diffusion_trace_system(
     interior_mass_blocks, _ = _timed_call(
         "assembling interior stabilization trace masses",
         verbosity,
-        lambda: interior_stabilization_mass_blocks(stabilization, space),
+        lambda: interior_stabilization_mass_blocks(stabilization, space, trace_space=trace_ref),
         level=2,
     )
     data, _ = _timed_call(
@@ -840,6 +882,7 @@ def assemble_diffusion_trace_system(
             boundary_condition,
             space,
             boundary_penalty,
+            trace_space=trace_ref,
         ),
         level=2,
     )
@@ -1292,6 +1335,90 @@ def _result_with_hdg_postprocessing(
     return DiffusionReactionResult(**result_values)
 
 
+def _host_array(value, *, dtype=None) -> np.ndarray | None:
+    """Return a contiguous host NumPy array from a NumPy/CuPy-like input."""
+    if value is None:
+        return None
+    try:
+        from ..backends.cupy import require_cupy
+
+        cupy = require_cupy()
+        if isinstance(value, cupy.ndarray):
+            value = cupy.asnumpy(value)
+    except Exception:
+        pass
+    return np.ascontiguousarray(np.asarray(value, dtype=dtype))
+
+
+def _full_boundary_trace_from_compact(boundary_trace, space: DGSpace) -> np.ndarray:
+    """Normalize full-edge or compact boundary-edge trace data to full-edge shape."""
+    trace = _host_array(boundary_trace, dtype=np.float64)
+    mesh = space.mesh
+    edg_dof = space.quad_data.edg_dof
+    full_shape = (mesh.num_edg, edg_dof)
+    if trace.shape == full_shape:
+        return trace
+    compact_shape = (mesh.bnd_edges_inds.size, edg_dof)
+    if trace.shape != compact_shape:
+        raise ValueError(f"boundary_trace must have shape {full_shape} or {compact_shape}; got {trace.shape}")
+    full = np.zeros(full_shape, dtype=np.float64)
+    full[mesh.bnd_edges_inds] = trace
+    return np.ascontiguousarray(full)
+
+
+def _reduction_from_reduced_trace_system(
+        rows: np.ndarray | None,
+        cols: np.ndarray | None,
+        data: np.ndarray,
+        rhs: np.ndarray,
+        boundary_trace: np.ndarray,
+        space: DGSpace,
+) -> KnownDofReduction:
+    """Build reduction metadata for an already reduced trace system."""
+    mesh = space.mesh
+    edg_dof = space.quad_data.edg_dof
+    edge_is_free = np.ones(mesh.num_edg, dtype=bool)
+    edge_is_free[mesh.bnd_edges_inds] = False
+    free_mask = np.repeat(edge_is_free, edg_dof)
+    known_mask = ~free_mask
+    old_to_new = np.full(mesh.num_edg * edg_dof, -1, dtype=np.int64)
+    old_to_new[free_mask] = np.arange(np.count_nonzero(free_mask), dtype=np.int64)
+    empty_i = np.empty(0, dtype=np.int64)
+    empty_f = np.empty(0, dtype=np.float64)
+    return KnownDofReduction(
+        rows=empty_i if rows is None else np.ascontiguousarray(rows, dtype=np.int64),
+        cols=empty_i if cols is None else np.ascontiguousarray(cols, dtype=np.int64),
+        data=empty_f if rows is None else np.ascontiguousarray(data, dtype=np.float64),
+        rhs=np.ascontiguousarray(rhs, dtype=np.float64),
+        free_mask=np.ascontiguousarray(free_mask),
+        known_mask=np.ascontiguousarray(known_mask),
+        known_values=np.ascontiguousarray(boundary_trace.ravel(), dtype=np.float64),
+        old_to_new=np.ascontiguousarray(old_to_new),
+    )
+
+
+def _reduced_result_from_full_trace_system(trace_system, space: DGSpace) -> tuple[hdg_assembly.TraceSystem, KnownDofReduction]:
+    """Eliminate boundary dofs from a full trace system."""
+    boundary_trace = np.asarray(trace_system.boundary_trace, dtype=np.float64)
+    known_mask = ~hdg_assembly.free_trace_dofs(space)
+    reduction = eliminate_known_dofs(
+        trace_system.rows,
+        trace_system.cols,
+        trace_system.data,
+        trace_system.rhs,
+        known_mask,
+        boundary_trace.ravel(),
+    )
+    reduced = hdg_assembly.TraceSystem(
+        rows=reduction.rows,
+        cols=reduction.cols,
+        data=reduction.data,
+        rhs=reduction.rhs,
+        boundary_trace=boundary_trace,
+    )
+    return reduced, reduction
+
+
 class DiffusionReactionHDGSolver:
     r"""Stateful HDG solver/cache for scalar diffusion-reaction problems.
 
@@ -1493,6 +1620,183 @@ class DiffusionReactionHDGSolver:
         self.solve_rhs = None
         self.boundary_trace = None
         return self
+
+    def assemble_global_matrix(
+            self,
+            *,
+            source: Any = _UNSET,
+            reaction: Any = _UNSET,
+            boundary_condition: Callable | object = _UNSET,
+            **option_overrides,
+    ) -> DiffusionReactionAssemblyResult:
+        """Assemble the reduced HDG trace system without solving it."""
+        provided = (
+            source is not _UNSET,
+            reaction is not _UNSET,
+            boundary_condition is not _UNSET,
+        )
+        if any(provided):
+            if not all(provided):
+                raise ValueError("source, reaction, and boundary_condition must be provided together")
+            self.set_problem(source, reaction, boundary_condition)
+
+        if option_overrides:
+            self.with_options(**option_overrides)
+
+        self._require_problem()
+        options = self.options
+        backend = "numpy" if options.assembly_backend == "auto" else str(options.assembly_backend)
+        if backend not in {"numpy", "numba", "cupy", "raw-cuda"}:
+            raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', 'raw-cuda', or 'auto'")
+        trace_basis = str(options.trace_basis).replace("_", "-").lower()
+        if trace_basis not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
+            raise ValueError("trace_basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
+        trace_space = self.space.trace_space(trace_basis)
+        if backend == "numba" and trace_basis != "legacy-lagrange":
+            raise NotImplementedError("diffusion assembly_backend='numba' currently supports only trace_basis='legacy-lagrange'")
+        if options.boundary_mode != "eliminate":
+            raise NotImplementedError("assemble_global_matrix currently returns reduced systems; set boundary_mode='eliminate'")
+
+        start_total = time.perf_counter()
+        local_solver = None
+        element_boundary_mats = None
+        trace_system = None
+        reduction = None
+        indptr = None
+        indices = None
+        matrix_format = "coo"
+        timings: dict[str, float] = {}
+
+        if backend == "numba":
+            source_input = _project_callable_for_numba(self.source, self.space, name="source_h")
+            reaction_input = _project_callable_for_numba(self.reaction, self.space, name="reaction_h")
+            if _diffusion_is_identity(options.diffusion):
+                from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
+
+                assembled = assemble_projected_diffusion_trace_system_eliminated_numba(
+                    source_input,
+                    reaction_input,
+                    self.boundary_condition,
+                    options.stabilization,
+                    self.space,
+                )
+            else:
+                from ..backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
+
+                assembled = assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
+                    source_input,
+                    reaction_input,
+                    _project_inverse_diffusion_for_numba(options.diffusion, self.space),
+                    self.boundary_condition,
+                    options.stabilization,
+                    self.space,
+                )
+            trace_system = assembled.trace_system
+            reduction = assembled.reduction
+            timings.update(assembled.timings)
+
+        elif backend == "numpy":
+            tau = _normalize_tau(options.stabilization, self.space)
+            source_rhs = hdg_assembly.block_source_moments(self.source, self.space, num_blocks=3, source_block=0)
+            local_solver = local_solvers(
+                self.reaction,
+                tau,
+                self.space,
+                backend=options.local_solver_backend,
+                diffusion=options.diffusion,
+            )
+            element_boundary_mats = diffusion_element_boundary_mats(tau, self.space, trace_space=trace_space)
+            full_trace_system = assemble_diffusion_trace_system(
+                local_solver,
+                element_boundary_mats,
+                source_rhs,
+                self.boundary_condition,
+                tau,
+                self.space,
+                boundary_penalty=options.boundary_penalty,
+                verbosity=options.verbose,
+                trace_space=trace_space,
+            )
+            trace_system, reduction = _reduced_result_from_full_trace_system(full_trace_system, self.space)
+
+        elif backend in {"cupy", "raw-cuda"}:
+            if not _diffusion_is_identity(options.diffusion):
+                raise NotImplementedError(f"{backend} diffusion assembly currently supports identity diffusion only")
+            if not np.isscalar(options.stabilization):
+                raise NotImplementedError(f"{backend} diffusion assembly currently supports scalar stabilization only")
+            if backend == "cupy":
+                from ..backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_cupy
+
+                gpu = assemble_projected_diffusion_trace_system_eliminated_cupy(
+                    self.source,
+                    self.reaction,
+                    self.boundary_condition,
+                    float(options.stabilization),
+                    self.space,
+                    trace_basis=trace_basis,
+                )
+            else:
+                from ..backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
+
+                gpu = assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
+                    self.source,
+                    self.reaction,
+                    self.boundary_condition,
+                    float(options.stabilization),
+                    self.space,
+                    trace_basis=trace_basis,
+                    matrix_format=options.raw_matrix_format,
+                    block_size=options.raw_block_size,
+                )
+            rows = _host_array(gpu.rows, dtype=np.int64)
+            cols = _host_array(gpu.cols, dtype=np.int64)
+            data = _host_array(gpu.data, dtype=np.float64)
+            rhs = _host_array(gpu.rhs, dtype=np.float64)
+            boundary_trace = _full_boundary_trace_from_compact(gpu.boundary_trace, self.space)
+            indptr = _host_array(gpu.indptr, dtype=np.int32)
+            indices = _host_array(gpu.indices, dtype=np.int32)
+            matrix_format = str(gpu.matrix_format)
+            trace_system = hdg_assembly.TraceSystem(
+                rows=rows,
+                cols=cols,
+                data=data,
+                rhs=rhs,
+                boundary_trace=boundary_trace,
+            )
+            reduction = _reduction_from_reduced_trace_system(rows, cols, data, rhs, boundary_trace, self.space)
+            timings.update(gpu.timings)
+
+        assert trace_system is not None
+        assert reduction is not None
+        timings.setdefault("total", time.perf_counter() - start_total)
+        result = DiffusionReactionAssemblyResult(
+            rows=None if trace_system.rows is None else np.ascontiguousarray(trace_system.rows, dtype=np.int64),
+            cols=None if trace_system.cols is None else np.ascontiguousarray(trace_system.cols, dtype=np.int64),
+            data=np.ascontiguousarray(trace_system.data, dtype=np.float64),
+            rhs=np.ascontiguousarray(trace_system.rhs, dtype=np.float64),
+            boundary_trace=np.ascontiguousarray(trace_system.boundary_trace, dtype=np.float64),
+            reduction=reduction,
+            assembly_backend=backend,
+            matrix_format=matrix_format,
+            indptr=indptr,
+            indices=indices,
+            timings=timings,
+        )
+
+        self.clear_solution()
+        self.rows = result.rows
+        self.cols = result.cols
+        self.data = result.data
+        self.rhs = result.rhs
+        self.solve_rows = result.rows
+        self.solve_cols = result.cols
+        self.solve_data = result.data
+        self.solve_rhs = result.rhs
+        self.boundary_trace = result.boundary_trace
+        self.reduction = result.reduction
+        self.local_solver = local_solver
+        self.element_boundary_mats = element_boundary_mats
+        return result
 
     def solve(
             self,
@@ -1846,7 +2150,10 @@ def solve_diffusion_reaction_hdg(
         ilu_failure: Literal["raise", "none"] = "raise",
         initial_guess: np.ndarray | None = None,
         local_solver_backend: LocalSolverBackend = "numpy",
-        assembly_backend: AssemblyBackend = "numpy",
+        assembly_backend: TraceAssemblyBackend = "numpy",
+        trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
+        raw_matrix_format: Literal["coo", "csr"] = "coo",
+        raw_block_size: int = 128,
         boundary_penalty: float = 1e20,
         boundary_mode: Literal["penalty", "eliminate"] = "penalty",
         hdg_postprocess: HDGPostprocessMode = "none",
@@ -1872,9 +2179,20 @@ def solve_diffusion_reaction_hdg(
     if boundary_mode not in {"penalty", "eliminate"}:
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if assembly_backend not in {"numpy", "numba", "auto"}:
-        raise ValueError("assembly_backend must be 'numpy', 'numba', or 'auto'")
+        raise ValueError(
+            "solve_diffusion_reaction_hdg supports assembly_backend='numpy', 'numba', or 'auto'; "
+            "use DiffusionReactionHDGSolver.assemble_global_matrix for 'cupy' or 'raw-cuda' assembly-only checks"
+        )
     postprocess_mode = _normalize_hdg_postprocess_mode(hdg_postprocess)
     effective_backend = "numpy" if assembly_backend == "auto" else assembly_backend
+    trace_basis = str(trace_basis).replace("_", "-").lower()
+    if trace_basis not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
+        raise ValueError("trace_basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
+    trace_space = space.trace_space(trace_basis)
+    if effective_backend == "numba" and trace_basis != "legacy-lagrange":
+        raise NotImplementedError("diffusion assembly_backend='numba' currently supports only trace_basis='legacy-lagrange'")
+    if trace_basis != "legacy-lagrange" and postprocess_mode != "none":
+        raise NotImplementedError("diffusion HDG postprocessing currently supports only trace_basis='legacy-lagrange'")
     effective_boundary_mode = "eliminate" if effective_backend == "numba" else boundary_mode
     effective_scale_system = False if solver is not None and str(solver).lower() == "petsc" else scale_system
     projected_numba_identity_diffusion = effective_backend == "numba" and _diffusion_is_identity(diffusion)
@@ -1973,7 +2291,7 @@ def solve_diffusion_reaction_hdg(
         element_boundary_mats, boundary_time = _timed_call(
             "assembling element boundary coupling",
             verbosity,
-            lambda: diffusion_element_boundary_mats(tau, space),
+            lambda: diffusion_element_boundary_mats(tau, space, trace_space=trace_space),
         )
 
     def assemble_trace():
@@ -2018,6 +2336,7 @@ def solve_diffusion_reaction_hdg(
             space,
             boundary_penalty=boundary_penalty,
             verbosity=verbosity,
+            trace_space=trace_space,
         )
 
     trace_assembly_label = (
@@ -2177,6 +2496,7 @@ def solve_diffusion_reaction_hdg(
                 local_solver,
                 element_boundary_mats,
                 space,
+                trace_space=trace_space,
             )
         field, flux = split_diffusion_unknowns(unknowns, space)
         return unknowns, field, flux
@@ -2298,6 +2618,7 @@ diff_rea_hdg_solve = solve_diffusion_reaction_hdg
 
 
 __all__ = [
+    "DiffusionReactionAssemblyResult",
     "DiffusionReactionHDGOptions",
     "DiffusionReactionHDGSolver",
     "DiffusionReactionResult",

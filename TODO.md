@@ -2,17 +2,27 @@
 
 ## Diffusion-Reaction GPU Roadmap
 
-- [ ] Treat diffusion-reaction AMGX global solve performance as acceptable for now and use the existing working configs as baselines: `configs/amgx/diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json` for nodal `legacy-lagrange + PCGF`, `configs/amgx/diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json` as the second nodal and experimental modal PCGF candidate, and `configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json` as the conservative classical AMG baseline and modal `BICGSTAB` path.
-- [ ] Keep additional diffusion AMGX preconditioner sweeps and Cupyx solver comparisons lower priority until raw-CUDA assembly is competitive; revisit CG/CGS/PCGF, Chebyshev/L1 variants, and Cupyx Krylov/preconditioner choices after the assembly path is no longer the obvious bottleneck.
-- [ ] Audit the current `hdgfem/backends/cupy_diff_rea_raw.py` path against the NumPy/Numba diffusion assembly pipeline and record which NumPy-side setup arrays are still being built on the host.
-- [ ] Replace the current one-thread-per-element raw CUDA diffusion local solve with a cooperative element kernel modeled on the advection-reaction raw-CUDA cooperative LU path.
-- [ ] Build the fused diffusion raw-CUDA assembly so each element constructs local mixed diffusion-reaction blocks on the fly, performs local LU/solves cooperatively, applies boundary elimination, and emits the reduced trace operator without materializing large local dense tensors.
-- [ ] Support both reduced COO emission and direct reduced CSR emission for diffusion raw-CUDA assembly, selected by an explicit option, with COO retained as the simpler correctness/debug path.
-- [ ] Add a direct device CSR-to-AMGX diffusion solve path so the raw-CUDA CSR output can be handed to PyAMGX without an expensive CuPy COO-to-CSR reconstruction.
-- [ ] Keep the diffusion raw-CUDA implementation table-driven for coefficients and stabilization: pass pre-evaluated source, reaction, diffusion, boundary trace, and per-face `tau` data to kernels instead of Python callables.
-- [ ] Validate the raw-CUDA diffusion COO and CSR paths against the existing NumPy/Numba diffusion assembly for matrix/RHS equivalence, solution error, and reconstruction error across p, mesh size, and trace basis cases.
-- [ ] Start with identity diffusion and scalar reaction parity with `scripts/gpu/run_diff_rea_gpu4_hdg.py`, then extend the device assembly plan to tensor diffusion once the scalar path is correct and faster.
-- [ ] Benchmark raw-CUDA diffusion assembly phase timings separately from AMGX setup/solve/reconstruction so improvements are not hidden by already acceptable global solve performance.
+- [x] Treat diffusion-reaction AMGX global solve performance as acceptable for now and use the existing working configs as baselines: `configs/amgx/diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json` for nodal `legacy-lagrange + PCGF`, `configs/amgx/diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json` as the second nodal and experimental modal PCGF candidate, and `configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json` as the conservative classical AMG baseline and modal `BICGSTAB` path.
+- [x] Keep additional diffusion AMGX preconditioner sweeps and Cupyx solver comparisons lower priority until raw-CUDA assembly is competitive; revisit CG/CGS/PCGF, Chebyshev/L1 variants, and Cupyx Krylov/preconditioner choices after the assembly path is no longer the obvious bottleneck.
+- [x] Audit the current `hdgfem/backends/cupy_diff_rea_raw.py` path against the NumPy/Numba diffusion assembly pipeline and record which setup arrays are still built outside the hot kernel. See `docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md`.
+- [x] Replace the current one-thread-per-element raw CUDA diffusion local solve with a cooperative element kernel modeled on the advection-reaction raw-CUDA cooperative LU path.
+- [x] Build the fused diffusion raw-CUDA assembly so each element constructs local mixed diffusion-reaction blocks on the fly, performs local LU/solves cooperatively, applies boundary elimination, and emits the reduced trace operator without materializing large local dense tensors. Current supported scope is identity diffusion, scalar zero reaction, nodal `legacy-lagrange` trace coordinates, and `p <= 6`.
+- [x] Support both reduced COO emission and direct reduced CSR emission for diffusion raw-CUDA assembly, selected by an explicit option, with COO retained as the simpler correctness/debug path.
+- [x] Add a direct device CSR-to-AMGX diffusion solve path so the raw-CUDA CSR output can be handed to PyAMGX without an expensive CuPy COO-to-CSR reconstruction.
+- [ ] Generalize the diffusion raw-CUDA implementation table-driven coefficient path: source and boundary trace are already passed as device tables, but reaction, tensor diffusion, and per-face `tau` tables still need production support.
+- [x] Add automated diffusion assembly parity tests for reduced matrix/RHS equivalence: NumPy, Numba, CuPy, raw-CUDA COO, and raw-CUDA CSR for nodal `legacy-lagrange` through `p <= 6`, plus NumPy/Numba/CuPy through `p <= 10` on smaller meshes.
+- [ ] Extend raw-CUDA diffusion validation beyond matrix/RHS parity to solution error, reconstruction error, larger mesh sweeps, and non-legacy trace bases once the raw kernel supports them.
+- [x] Establish identity diffusion and scalar zero-reaction parity with `scripts/gpu/run_diff_rea_gpu4_hdg.py` for the supported raw-CUDA scope.
+- [ ] Extend the device assembly plan to tensor diffusion once the scalar path remains correct under the automated validation suite.
+- [x] Benchmark raw-CUDA diffusion assembly phase timings separately from AMGX setup/solve/reconstruction so improvements are not hidden by already acceptable global solve performance.
+
+## Trace Basis Follow-Ups
+
+- [x] Separate nodal and modal boundary trace coefficient semantics: nodal `legacy-lagrange` uses interpolation-node values, while non-nodal trace bases use edge projection.
+- [x] Thread non-legacy trace-space tables through the diffusion NumPy assembly/reconstruction path and verify `legendre-modal`/`bernstein` smoke solves with postprocessing disabled.
+- [ ] Make diffusion Numba assembly and HDG postprocessing trace-space-aware; both currently reject non-legacy trace bases rather than silently using legacy orientation rules.
+- [ ] Extend diffusion raw-CUDA assembly beyond nodal `legacy-lagrange` once modal/Bernstein orientation and boundary trace tables are wired into the raw kernels.
+- [ ] Extend non-raw advection-reaction assembly backends to consume `DGTraceSpace`; non-legacy advection currently requires the raw-CUDA trace-space path.
 
 ## Lower-Priority Advection-Reaction Benchmark Follow-Ups
 
@@ -63,6 +73,6 @@
 
 ## High Level API Solver Design
 
-- [ ] Reusable GPU solvers acorss all host/device combinations.
-- [ ] All solver classes and solve functions must cleanly handle  parameters for backend choice whether on host/device or 
-a mix of both, and clearly signal unsupported paths.  
+- [ ] Reusable GPU solvers across all host/device combinations.
+- [ ] All solver classes and solve functions must cleanly handle parameters for backend choice whether on host/device or
+a mix of both, and clearly signal unsupported paths.

@@ -16,7 +16,7 @@ from typing import Literal
 import numpy as np
 
 from . import matrices_numpy as hdg_mats
-from ..core.space import DGField, DGSpace, VectorDGField
+from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 @dataclass(frozen=True)
@@ -151,36 +151,16 @@ def block_source_moments(
     return result
 
 
-def boundary_trace_coefficients(boundary_condition: Callable, space: DGSpace) -> np.ndarray:
-    """Project Dirichlet data onto the trace basis on boundary edges."""
-    mesh = space.mesh
-    q = space.quad_data
-    trace_coeffs = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
-    if mesh.bnd_edges_inds.size == 0:
-        return trace_coeffs
-
-    edge_vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
-    t = q.quads_JGL
-    points = 0.5 * (
-        (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
-        + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
-    )
-    values = boundary_condition(points[:, :, 0], points[:, :, 1])
-    values = np.asarray(values, dtype=np.float64)
-    num_face_quads = q.weights_JGL.size
-    if values.ndim == 0:
-        values = np.full((mesh.bnd_edges_inds.size, num_face_quads), float(values))
-    elif values.shape == (num_face_quads,):
-        values = np.broadcast_to(values[None, :], (mesh.bnd_edges_inds.size, num_face_quads))
-    if values.shape != (mesh.bnd_edges_inds.size, num_face_quads):
-        raise ValueError(
-            "boundary_condition must return a scalar, face-quadrature vector, or "
-            f"({mesh.bnd_edges_inds.size}, {num_face_quads}) array; got {values.shape}"
-        )
-
-    rhs = (values * q.weights_JGL[None, :]) @ q.bas1d_of_ref_edg_qds.T
-    trace_coeffs[mesh.bnd_edges_inds] = rhs @ np.linalg.inv(q.M_rf_fc)
-    return np.ascontiguousarray(trace_coeffs)
+def boundary_trace_coefficients(
+        boundary_condition: Callable,
+        space: DGSpace,
+        *,
+        trace_basis: str = "legacy-lagrange",
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
+    """Return Dirichlet coefficients for the requested trace basis."""
+    trace_ref = space.trace_space(trace_basis) if trace_space is None else trace_space
+    return trace_ref.boundary_coefficients(boundary_condition)
 
 
 def free_trace_dofs(space: DGSpace) -> np.ndarray:
@@ -265,32 +245,55 @@ def element_to_trace_matrix_from_lift(
         local_solver: np.ndarray,
         element_boundary_mats: np.ndarray,
         space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Assemble oriented element-to-trace Schur complement blocks from lifts."""
     mesh = space.mesh
     q = space.quad_data
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    edg_dof = trace_ref.edg_dof
     trace_lift = np.asarray(trace_lift, dtype=np.float64)
-    expected_shape = (mesh.num_tri, 3, q.edg_dof, local_solver.shape[-1])
+    expected_shape = (mesh.num_tri, 3, edg_dof, local_solver.shape[-1])
     if trace_lift.shape != expected_shape:
         raise ValueError(f"trace_lift must have shape {expected_shape}; got {trace_lift.shape}")
     schur = trace_lift @ (local_solver @ element_boundary_mats)[:, None, :, :]
-    edg_dof = q.edg_dof
     schur = schur.reshape(mesh.num_tri, 3, edg_dof, 3, edg_dof)
     negative_elements, negative_faces = np.nonzero(~mesh.orientations)
-    schur[negative_elements, :, :, negative_faces, :] = schur[negative_elements, :, :, negative_faces, ::-1]
+    if negative_elements.size:
+        columns = schur[negative_elements, :, :, negative_faces, :]
+        if trace_ref.kind == "legendre-modal":
+            signs = np.where(np.arange(edg_dof) % 2 == 0, 1.0, -1.0)
+            columns = columns * signs[None, None, None, :]
+        else:
+            columns = columns[..., ::-1]
+        schur[negative_elements, :, :, negative_faces, :] = columns
     return np.ascontiguousarray(schur.swapaxes(2, 3))
 
 
-def element_to_trace_matrix(local_solver: np.ndarray, element_boundary_mats: np.ndarray, space: DGSpace) -> np.ndarray:
+def element_to_trace_matrix(
+        local_solver: np.ndarray,
+        element_boundary_mats: np.ndarray,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Assemble oriented element-to-trace Schur complement blocks."""
     mesh = space.mesh
     q = space.quad_data
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     trace_lift = (
         mesh.jacs_el_fc[..., None, None]
         / 2.0
-        * q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
+        * trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     )
-    return element_to_trace_matrix_from_lift(trace_lift, local_solver, element_boundary_mats, space)
+    return element_to_trace_matrix_from_lift(
+        trace_lift,
+        local_solver,
+        element_boundary_mats,
+        space,
+        trace_space=trace_ref,
+    )
 
 
 def trace_matrix_data(
@@ -346,23 +349,26 @@ def trace_rhs_from_lift(
         boundary_condition: Callable,
         space: DGSpace,
         boundary_penalty: float,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Assemble trace RHS from an element-to-trace lift tensor."""
     mesh = space.mesh
     q = space.quad_data
+    edg_dof = q.edg_dof if trace_space is None else trace_space.edg_dof
     trace_lift = np.asarray(trace_lift, dtype=np.float64)
-    expected_shape = (mesh.num_tri, 3, q.edg_dof, local_solver.shape[-1])
+    expected_shape = (mesh.num_tri, 3, edg_dof, local_solver.shape[-1])
     if trace_lift.shape != expected_shape:
         raise ValueError(f"trace_lift must have shape {expected_shape}; got {trace_lift.shape}")
     face_rhs = (trace_lift @ (local_solver @ source_rhs[..., None])[:, None, :, :]).squeeze(-1)
 
-    rhs = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    rhs = np.zeros((mesh.num_edg, edg_dof), dtype=np.float64)
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
     if valid_elements.size:
         np.add.at(rhs, mesh.loc2glob_edge[valid_elements, valid_faces], face_rhs[valid_elements, valid_faces])
 
-    boundary_trace = boundary_trace_coefficients(boundary_condition, space)
+    boundary_trace = boundary_trace_coefficients(boundary_condition, space, trace_space=trace_space)
     rhs[mesh.bnd_edges_inds] = boundary_penalty * boundary_trace[mesh.bnd_edges_inds]
     return rhs.ravel(), boundary_trace
 
@@ -373,16 +379,26 @@ def global_rhs(
         boundary_condition: Callable,
         space: DGSpace,
         boundary_penalty: float,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Assemble the full trace RHS and known boundary trace coefficients."""
     mesh = space.mesh
-    q = space.quad_data
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     trace_lift = (
         mesh.jacs_el_fc[..., None, None]
         / 2.0
-        * q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
+        * trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     )
-    return trace_rhs_from_lift(trace_lift, source_rhs, local_solver, boundary_condition, space, boundary_penalty)
+    return trace_rhs_from_lift(
+        trace_lift,
+        source_rhs,
+        local_solver,
+        boundary_condition,
+        space,
+        boundary_penalty,
+        trace_space=trace_ref,
+    )
 
 
 def assemble_trace_system(
@@ -402,8 +418,15 @@ def assemble_trace_system(
     return TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
 
 
-def element_traces(trace: np.ndarray, space: DGSpace) -> np.ndarray:
+def element_traces(
+        trace: np.ndarray,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Return oriented element-local trace coefficients."""
+    if trace_space is not None:
+        return trace_space.element_coefficients(trace)
     mesh = space.mesh
     edg_dof = space.quad_data.edg_dof
     trace = np.asarray(trace, dtype=np.float64)
@@ -500,9 +523,11 @@ def reconstruct_local_unknowns(
         local_solver: np.ndarray,
         element_boundary_mats: np.ndarray,
         space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ):
     """Recover raw element-local unknown coefficients from a solved trace."""
-    traces = element_traces(trace, space)
+    traces = element_traces(trace, space, trace_space=trace_space)
     unknowns = local_solver @ (source_rhs[..., None] + element_boundary_mats @ traces[..., None])
     return np.ascontiguousarray(unknowns.squeeze(-1))
 
@@ -515,9 +540,17 @@ def reconstruct_field(
         space: DGSpace,
         *,
         name: str = "u_h",
+        trace_space: DGTraceSpace | None = None,
 ) -> DGField:
     """Recover element coefficients from the solved trace vector."""
-    coeffs = reconstruct_local_unknowns(trace, source_rhs, local_solver, element_boundary_mats, space)
+    coeffs = reconstruct_local_unknowns(
+        trace,
+        source_rhs,
+        local_solver,
+        element_boundary_mats,
+        space,
+        trace_space=trace_space,
+    )
     return space.field(coeffs, name=name)
 
 

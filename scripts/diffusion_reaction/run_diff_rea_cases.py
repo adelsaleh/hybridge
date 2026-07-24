@@ -39,6 +39,7 @@ class DiffusionReactionRunPreset:
     ny: int | None = None
     gmsh_verbosity: int = 0
     basis: str = "dub_orth"
+    trace_basis: str = "legacy-lagrange"
     order: int = 4
     volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
@@ -256,6 +257,10 @@ def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReacti
     updates = {}
     if args.volume_quadrature is not None:
         updates["volume_quadrature"] = args.volume_quadrature
+    if args.trace_basis is not None:
+        updates["trace_basis"] = args.trace_basis
+    if args.hdg_postprocess is not None:
+        updates["hdg_postprocess"] = args.hdg_postprocess
     if args.verbosity is not None:
         updates["verbosity"] = args.verbosity
     if args.quiet:
@@ -374,6 +379,7 @@ def _summarize_solve(
         ("local backend",
          "fused" if result.assembly_backend == "numba" and result.local_solver is None else config.local_backend, "s"),
         ("boundary mode", result.boundary_mode, "s"),
+        ("trace basis", config.trace_basis, "s"),
         ("postprocess", config.hdg_postprocess, "s"),
         ("diffusion", "identity" if _diffusion_is_identity(diffusion) else "tensor", "s"),
         ("tau", config.tau, ".3e"),
@@ -773,7 +779,7 @@ def _main() -> None:
             "Preset configuration lives in this file, scripts/diffusion_reaction/run_diff_rea_cases.py.\n"
             "Edit PRESETS to change numerical parameters or add a new run.\n"
             "Add new manufactured PDE cases in scripts/diffusion_reaction/diff_rea_cases.py.\n"
-            "CLI flags are limited to plotting, verbosity, and preset inspection."
+            "CLI flags cover plotting, verbosity, quadrature, trace basis, and postprocessing."
         ),
     )
     parser.add_argument("preset", nargs="?", default=DEFAULT_PRESET, choices=tuple(sorted(PRESETS)))
@@ -785,6 +791,18 @@ def _main() -> None:
         choices=("auto", "symmetric", "duffy"),
         default=None,
         help="override the triangle volume quadrature family for this run only",
+    )
+    parser.add_argument(
+        "--trace-basis",
+        choices=("legacy-lagrange", "legendre-modal", "bernstein"),
+        default=None,
+        help="override trace basis for this run only; non-legacy currently requires hdg_postprocess=none",
+    )
+    parser.add_argument(
+        "--hdg-postprocess",
+        choices=("none", "primal", "flux", "both"),
+        default=None,
+        help="override HDG postprocessing for this run only",
     )
     parser.add_argument("--verbosity", "-v", type=int, default=None,
                         help="override logging verbosity for this run only")
@@ -855,6 +873,7 @@ def _main() -> None:
         ilu_failure=config.ilu_failure,
         local_solver_backend=config.local_backend,
         assembly_backend=config.assembly_backend,
+        trace_basis=config.trace_basis,
         boundary_mode=config.boundary_mode,
         hdg_postprocess=config.hdg_postprocess,
         verbose=config.verbosity,

@@ -25,10 +25,8 @@ if __package__ in {None, ""}:
 import numpy as np
 
 from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
-from hdgfem.backends.cupy_diff_rea_raw import (
-    assemble_projected_diffusion_trace_system_eliminated_raw_cuda,
-    reconstruct_projected_diffusion_field_raw_cuda,
-)
+from hdgfem.backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
+from hdgfem.backends.cupy_diff_rea_raw import reconstruct_projected_diffusion_field_raw_cuda
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGSpace
@@ -543,6 +541,17 @@ def boundary_trace_values_cupy(exact: Callable, cspace, trace_ref):
     t = trace_ref.interpolation_nodes if trace_ref.nodal else trace_ref.quads
     points = 0.5 * ((1.0 - t)[None, :, None] * edge_coords[:, 0:1, :] + (1.0 + t)[None, :, None] * edge_coords[:, 1:2, :])
     values = cp.asarray(exact(points[..., 0], points[..., 1]), dtype=cp.float64)
+    num_points = int(t.size)
+    expected_shape = (int(mesh.bnd_edges_inds.size), num_points)
+    if values.ndim == 0:
+        values = cp.full(expected_shape, float(values), dtype=cp.float64)
+    elif values.shape == (num_points,):
+        values = cp.broadcast_to(values[None, :], expected_shape)
+    if values.shape != expected_shape:
+        raise ValueError(
+            "boundary_condition must return a scalar, edge-point vector, or "
+            f"{expected_shape} array; got {values.shape}"
+        )
     if trace_ref.nodal:
         return cp.ascontiguousarray(values)
     rhs = (values * trace_ref.weights[None, :]) @ trace_ref.bas1d_of_ref_edg_qds.T
@@ -626,6 +635,7 @@ def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, ta
             RUN_METADATA.pop("assembly_fallback_detail", None)
             return assemble_reduced_system_raw_cuda(
                 source,
+                reaction,
                 exact,
                 cspace,
                 trace_ref,
@@ -673,26 +683,24 @@ def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, ta
     return rows, cols, data, rhs, local_lhs, element_boundary, source_rhs, boundary_trace, None
 
 
-def assemble_reduced_system_raw_cuda(source, exact, cspace, trace_ref, tau: float, *, matrix_format: str = "coo", block_size: int = 1):
+def assemble_reduced_system_raw_cuda(source, reaction, exact, cspace, trace_ref, tau: float, *, matrix_format: str = "coo", block_size: int = 1):
     cp = require_cupy()
     log("assembling reduced trace system (raw CUDA fused diffusion gpu4-style) ...")
     start_total = time.perf_counter()
-    source_rhs = source_moments_cupy(source, cspace)
-    boundary_trace = boundary_trace_values_cupy(exact, cspace, trace_ref)
-    D0T, D1T = reference_derivative_mats(cspace)
-    face_mass = face_element_mass(trace_ref)
-    raw = assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
-        source_rhs=source_rhs,
-        boundary_trace=boundary_trace,
-        cspace=cspace,
-        trace_ref=trace_ref,
-        d0_reference=D0T,
-        d1_reference=D1T,
-        face_element_mass=face_mass,
-        tau=tau,
+    assembly = assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
+        source,
+        reaction,
+        exact,
+        tau,
+        cspace,
+        trace_basis=getattr(trace_ref, "kind", "legacy-lagrange"),
         matrix_format=matrix_format,
         block_size=block_size,
+        trace_ref=trace_ref,
     )
+    raw = assembly.raw_assembly
+    if raw is None:
+        raise RuntimeError("raw CUDA diffusion helper did not return raw assembly metadata")
     for key, value in raw.timings.items():
         record_timing(f"assembly.{key}", value)
     total = sync_time(cp, start_total, "assembly.total")
