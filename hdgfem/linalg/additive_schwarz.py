@@ -30,6 +30,42 @@ from ..assembly.face_dense import FaceDenseSystem
 
 
 @dataclass(frozen=True)
+class FaceAdditiveSchwarzLocalMatrices:
+    """Uniform one-element Schwarz matrices before inversion.
+
+    This object separates the algebraic subdomain construction from the
+    factorization backend.  CPU validation can invert the matrices with NumPy,
+    while CUDA/ROCm backends can transfer the same matrices and factor or invert
+    them on the accelerator.
+    """
+
+    local_matrices: np.ndarray
+    element_system_faces: np.ndarray
+    block_size: int
+
+    @property
+    def num_elements(self) -> int:
+        return int(self.local_matrices.shape[0])
+
+    @property
+    def num_local_faces(self) -> int:
+        return int(self.element_system_faces.shape[1])
+
+    @property
+    def local_size(self) -> int:
+        return int(self.local_matrices.shape[1])
+
+    @property
+    def num_system_faces(self) -> int:
+        valid = self.element_system_faces[self.element_system_faces >= 0]
+        return int(np.max(valid) + 1) if valid.size else 0
+
+    @property
+    def num_dofs(self) -> int:
+        return self.num_system_faces * self.block_size
+
+
+@dataclass(frozen=True)
 class FaceAdditiveSchwarzPreconditioner:
     """One-element overlapping additive-Schwarz preconditioner.
 
@@ -222,54 +258,23 @@ def _validate_inputs(
         block_size,
     )
 
-
-def build_face_additive_schwarz_preconditioner(
+def build_face_additive_schwarz_local_matrices(
     system: FaceDenseSystem,
     element_blocks: np.ndarray,
     loc2glob_face: np.ndarray,
-    *,
-    inverse_residual_tolerance: float | None = None,
-) -> FaceAdditiveSchwarzPreconditioner:
-    r"""Build the one-element overlapping ASM preconditioner.
+) -> FaceAdditiveSchwarzLocalMatrices:
+    r"""Construct the uniform one-element Schwarz matrices without inversion.
 
-    Parameters
-    ----------
-    system
-        Penalty or directly eliminated face-dense system.
-    element_blocks
-        Complete condensed elemental blocks with shape
-        ``(NE, Nlfe, Nlfe, b, b)``.  Stabilization mass contributions must
-        already be included.
-    loc2glob_face
-        Element-to-global-face connectivity with shape ``(NE, Nlfe)``.
-    inverse_residual_tolerance
-        Optional upper bound on ``||P_e P_e^{-1} - I||_inf``.
+    The construction is identical to the one used by
+    :func:`build_face_additive_schwarz_preconditioner`: active diagonal blocks
+    are enriched with the assembled global diagonal, eliminated Dirichlet faces
+    are decoupled with identity blocks, and penalty boundary rows reproduce the
+    global row replacement.
 
-    Notes
-    -----
-    For every active local face, the elemental diagonal block is replaced by
-    the corresponding global diagonal block.  On an interior face this adds
-    the neighboring element's diagonal contribution, exactly as in the paper.
-
-    For direct Dirichlet elimination, inactive boundary rows and columns are
-    decoupled and replaced by identity blocks.  They receive zero restricted
-    residuals and are ignored during prolongation, preserving a uniform local
-    matrix size suitable for later batched GPU operations.
-
-    For the penalty formulation, a boundary row is replaced by the same
-    diagonal equation used in the global system, while its column remains in
-    interior rows.  Thus every local matrix equals the corresponding principal
-    submatrix of the global penalty operator.
+    Keeping this operation independent of factorization is essential for GPU
+    setup: the returned matrices can be transferred once and inverted or solved
+    with batched accelerator routines.
     """
-
-    if inverse_residual_tolerance is not None:
-        if (
-            inverse_residual_tolerance < 0.0
-            or not np.isfinite(inverse_residual_tolerance)
-        ):
-            raise ValueError(
-                "inverse_residual_tolerance must be finite and non-negative"
-            )
 
     (
         element_blocks,
@@ -279,17 +284,9 @@ def build_face_additive_schwarz_preconditioner(
         block_size,
     ) = _validate_inputs(system, element_blocks, loc2glob_face)
 
-    # Map each element-local global face into the row numbering of this system.
-    # Directly eliminated boundary faces map to -1.
     element_system_faces = system.global_to_local[loc2glob_face]
-    active = element_system_faces >= 0
-
-    # Begin with the complete element matrices.  Their off-diagonal blocks are
-    # already the exact global couplings between distinct faces of this element.
     local_blocks = element_blocks.copy()
 
-    # Replace every active diagonal block by the assembled global diagonal.
-    # For an interior face this incorporates both adjacent element contributions.
     for element in range(num_elements):
         for local_face in range(num_local_faces):
             system_face = int(element_system_faces[element, local_face])
@@ -298,7 +295,6 @@ def build_face_additive_schwarz_preconditioner(
                     system_face, 0
                 ]
 
-    # Count element incidences so penalty boundary rows can be recognized.
     num_global_faces = int(system.global_to_local.shape[0])
     incidence_count = np.bincount(
         loc2glob_face.reshape(-1),
@@ -312,16 +308,10 @@ def build_face_additive_schwarz_preconditioner(
             system_face = int(element_system_faces[element, local_face])
 
             if system_face < 0:
-                # An eliminated boundary unknown must not couple into the local
-                # active principal matrix.  Identity keeps the fixed local
-                # matrix nonsingular while yielding zero output for zero input.
                 local_blocks[element, local_face, :, :, :] = 0.0
                 local_blocks[element, :, local_face, :, :] = 0.0
                 local_blocks[element, local_face, local_face] = identity
             elif system.mode == "penalty" and incidence_count[global_face] == 1:
-                # Strong penalty-row replacement zeros only this row.  The
-                # boundary column remains because interior global rows still
-                # couple to the prescribed boundary trace unknown.
                 local_blocks[element, local_face, :, :, :] = 0.0
                 local_blocks[element, local_face, local_face] = system.blocks[
                     system_face, 0
@@ -333,14 +323,51 @@ def build_face_additive_schwarz_preconditioner(
         .reshape(num_elements, local_size, local_size)
         .copy()
     )
-    local_matrices = np.ascontiguousarray(local_matrices)
+
+    return FaceAdditiveSchwarzLocalMatrices(
+        local_matrices=np.ascontiguousarray(local_matrices),
+        element_system_faces=np.ascontiguousarray(element_system_faces),
+        block_size=block_size,
+    )
+
+def build_face_additive_schwarz_preconditioner(
+    system: FaceDenseSystem,
+    element_blocks: np.ndarray,
+    loc2glob_face: np.ndarray,
+    *,
+    inverse_residual_tolerance: float | None = None,
+) -> FaceAdditiveSchwarzPreconditioner:
+    r"""Build the one-element overlapping ASM preconditioner.
+
+    Matrix construction is delegated to
+    :func:`build_face_additive_schwarz_local_matrices`; this routine then
+    computes and validates the NumPy reference inverses.
+    """
+
+    if inverse_residual_tolerance is not None:
+        if (
+            inverse_residual_tolerance < 0.0
+            or not np.isfinite(inverse_residual_tolerance)
+        ):
+            raise ValueError(
+                "inverse_residual_tolerance must be finite and non-negative"
+            )
+
+    local = build_face_additive_schwarz_local_matrices(
+        system,
+        element_blocks,
+        loc2glob_face,
+    )
+    local_matrices = local.local_matrices
+    num_elements = local.num_elements
+    local_size = local.local_size
 
     inverse_matrices = np.empty_like(local_matrices)
     for element in range(num_elements):
         try:
             inverse_matrices[element] = np.linalg.inv(local_matrices[element])
         except np.linalg.LinAlgError as exc:
-            active_faces = element_system_faces[element].tolist()
+            active_faces = local.element_system_faces[element].tolist()
             raise np.linalg.LinAlgError(
                 "additive-Schwarz local matrix is singular: "
                 f"element={element}, system_faces={active_faces}"
@@ -370,13 +397,14 @@ def build_face_additive_schwarz_preconditioner(
     return FaceAdditiveSchwarzPreconditioner(
         local_matrices=local_matrices,
         inverse_matrices=np.ascontiguousarray(inverse_matrices),
-        element_system_faces=np.ascontiguousarray(element_system_faces),
+        element_system_faces=local.element_system_faces,
         inverse_residuals=np.ascontiguousarray(inverse_residuals),
-        block_size=block_size,
+        block_size=local.block_size,
     )
 
-
 __all__ = [
+    "FaceAdditiveSchwarzLocalMatrices",
     "FaceAdditiveSchwarzPreconditioner",
+    "build_face_additive_schwarz_local_matrices",
     "build_face_additive_schwarz_preconditioner",
 ]

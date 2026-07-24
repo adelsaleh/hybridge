@@ -26,10 +26,10 @@ def relative_difference(left: np.ndarray, right: np.ndarray) -> float:
 
 def run_case(boundary_mode: str) -> None:
     cp = require_cupy_device()
-    mesh_size = 6 if boundary_mode == "eliminate" else 4
+    mesh_size = 8 if boundary_mode == "eliminate" else 6
     space = DGSpace(
         rectangle_mesh(mesh_size, mesh_size),
-        2,
+        5,
         basis_type="dub_orth",
     )
     diffusion, reaction, source, exact = quadratic_poisson_case()
