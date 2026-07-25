@@ -74,10 +74,15 @@ HIGH_ORDER_MESHES = [
 
 
 def _assemble(space: DGSpace, backend: str, *, raw_matrix_format: str = "coo"):
+    source = _source
+    reaction = 0.0
+    if backend in {"numba", "raw-cuda"}:
+        source = space.project_callable(_source, name="source_h")
+        reaction = space.zeros(name="reaction_h")
     solver = DiffusionReactionHDGSolver(
         space,
-        source=_source,
-        reaction=0.0,
+        source=source,
+        reaction=reaction,
         boundary_condition=_boundary,
         diffusion=1.0,
         stabilization=1.3,

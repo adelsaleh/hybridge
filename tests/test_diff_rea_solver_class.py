@@ -29,8 +29,8 @@ def _callable_problem():
 def _projected_problem(space: DGSpace):
     _, reaction, source, exact = quadratic_poisson_case()
     return (
-        DGField(source, space, name="source_h"),
-        DGField(reaction, space, name="reaction_h"),
+        space.project_callable(source, name="source_h"),
+        space.zeros(name="reaction_h"),
         exact,
     )
 
@@ -277,6 +277,66 @@ def test_diff_rea_solver_rejects_incomplete_problem_update() -> None:
     assert result.trace is not None
 
 
+def test_diff_rea_numba_backend_requires_projected_fields() -> None:
+    pytest.importorskip("numba")
+    space = _space(order=1)
+    source, reaction, exact = _callable_problem()
+
+    with pytest.raises(TypeError, match="requires source to be a DGField"):
+        solve_diffusion_reaction_hdg(
+            source,
+            reaction,
+            exact,
+            space,
+            stabilization=1.0,
+            solver="direct",
+            preconditioner=None,
+            boundary_mode="eliminate",
+            assembly_backend="numba",
+            verbose=False,
+        )
+
+    source_h = space.project_callable(source, name="source_h")
+    with pytest.raises(TypeError, match="requires reaction to be a DGField"):
+        solve_diffusion_reaction_hdg(
+            source_h,
+            reaction,
+            exact,
+            space,
+            stabilization=1.0,
+            solver="direct",
+            preconditioner=None,
+            boundary_mode="eliminate",
+            assembly_backend="numba",
+            verbose=False,
+        )
+
+
+def test_diff_rea_numba_constant_fields_stay_lazy() -> None:
+    pytest.importorskip("numba")
+    space = _space(order=1)
+    source_h = space.constant(1.0, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
+    boundary = lambda x, y: np.zeros_like(x)
+
+    result = solve_diffusion_reaction_hdg(
+        source_h,
+        reaction_h,
+        boundary,
+        space,
+        stabilization=1.0,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        verbose=False,
+    )
+
+    assert result.field.coeffs.shape == space.shape
+    assert not source_h.coefficients_materialized
+    assert not reaction_h.coefficients_materialized
+
+
 def test_hdg_postprocess_primal_and_flux_outputs_and_flux_moments() -> None:
     pytest.importorskip("numba")
     space = _space(order=1)
@@ -318,9 +378,12 @@ def test_hdg_postprocess_flux_uses_primal_reference_for_identity_diffusion() -> 
     problem = trigonometric_poisson_case()
     diffusion, reaction, source, exact = problem
 
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
+
     result = solve_diffusion_reaction_hdg(
-        source,
-        reaction,
+        source_h,
+        reaction_h,
         exact,
         space,
         diffusion=diffusion,
@@ -438,7 +501,9 @@ def test_tensor_diffusion_manufactured_solution_numpy_and_projected_numba_are_ac
     }
 
     numpy_result = solve_diffusion_reaction_hdg(source, reaction, exact, space, assembly_backend="numpy", **kwargs)
-    numba_result = solve_diffusion_reaction_hdg(source, reaction, exact, space, assembly_backend="numba", **kwargs)
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.project_callable(reaction, name="reaction_h")
+    numba_result = solve_diffusion_reaction_hdg(source_h, reaction_h, exact, space, assembly_backend="numba", **kwargs)
 
     assert numpy_result.field.l2_error(exact) < 2.0e-2
     assert numba_result.field.l2_error(exact) < 2.0e-2

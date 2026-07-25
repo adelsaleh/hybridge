@@ -70,6 +70,12 @@ def reaction_mass(reaction, space: DGSpace) -> np.ndarray:
     if np.isscalar(reaction):
         return float(reaction) * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
     if isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(space)
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                return np.zeros((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=np.float64)
+            return constant_value * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
         return hdg_mats.mass_from_field(space, reaction)
     if callable(reaction):
         return space.weighted_mass(reaction)
@@ -87,6 +93,10 @@ def source_moments(source, space: DGSpace) -> np.ndarray:
     r"""Compute element moments :math:`\int_K f\phi_i\,dx`."""
     if isinstance(source, DGField):
         source.space.assert_same_mesh(space)
+        constant_value = source.constant_value
+        if constant_value is not None:
+            rhs = space._constant_reference_moments(constant_value)
+            return np.ascontiguousarray(space.mesh.aff_jacs[:, None] * rhs[None, :], dtype=np.float64)
         if source.space is space:
             rhs = source.coeffs @ space.quad_data.MKrf
             rhs *= space.mesh.aff_jacs[:, None]

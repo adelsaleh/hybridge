@@ -247,6 +247,10 @@ def set_mass_from_field(out: np.ndarray, test_space: DGSpace, field: DGField) ->
     r"""Write :math:`\int_K u_h\phi_i\phi_j\,dx` from DG coefficients."""
     out = _require_local_matrix_out(out, test_space)
     test_space.assert_same_mesh(field.space)
+    constant_value = field.constant_value
+    if constant_value is not None:
+        out[:] = constant_value * test_space.mesh.aff_jacs[:, None, None] * test_space.quad_data.MKrf[None, :, :]
+        return out
     if field.space is test_space:
         np.matmul(
             field.coeffs,
@@ -287,6 +291,14 @@ def set_reaction_mass(out: np.ndarray, reaction, space: DGSpace) -> np.ndarray:
         out[:] = float(reaction) * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
         return out
     if isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(space)
+        if reaction.is_zero:
+            out.fill(0.0)
+            return out
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            out[:] = constant_value * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
+            return out
         return set_mass_from_field(out, space, reaction)
     if callable(reaction):
         points = space.mapped_quads()

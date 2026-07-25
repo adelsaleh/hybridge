@@ -229,16 +229,17 @@ def _same_space_field_coefficients(field, space: DGSpace, label: str) -> np.ndar
         return np.ascontiguousarray(field.coeffs, dtype=np.float64)
     if callable(field):
         raise TypeError(
-            f"{label} is callable; assembly_backend='numba' currently requires explicit projection "
-            f"with DGField({label}, space) before calling the solver"
+            f"{label} is callable; assembly_backend='numba' requires a DGField. "
+            "Project callables first with space.project_callable(...)."
         )
-
-    values = np.asarray(field, dtype=np.float64)
-    if values.shape == space.shape:
-        return np.ascontiguousarray(values, dtype=np.float64)
+    if np.isscalar(field):
+        raise TypeError(
+            f"{label} is a scalar; assembly_backend='numba' requires a DGField. "
+            "Use space.zeros(...) or space.constant(...) for constants."
+        )
     raise TypeError(
-        f"{label} must be a DGField or coefficient array with shape {space.shape} "
-        "for assembly_backend='numba'. Project callables before calling the solver."
+        f"{label} must be a DGField for assembly_backend='numba'. "
+        "Wrap coefficient arrays with space.field(...)."
     )
 
 
@@ -246,8 +247,8 @@ def _same_space_vector_coefficients(beta_field, space: DGSpace) -> np.ndarray:
     """Return contiguous ``(2, nK, nel)`` coefficients for a projected beta."""
     if not isinstance(beta_field, VectorDGField):
         raise TypeError(
-            "assembly_backend='numba' currently requires projected beta as a "
-            "two-component VectorDGField. Use VectorDGField((beta_x, beta_y), space)."
+            "assembly_backend='numba' requires projected beta as a "
+            "two-component VectorDGField. Project callables first with VectorDGField((beta_x, beta_y), space)."
         )
     if beta_field.dim != 2:
         raise ValueError("projected beta must have exactly two components")
@@ -258,10 +259,30 @@ def _same_space_vector_coefficients(beta_field, space: DGSpace) -> np.ndarray:
     return np.ascontiguousarray(beta_field.as_component_first(), dtype=np.float64)
 
 
+def _source_coefficients(source, space: DGSpace) -> tuple[np.ndarray, int]:
+    """Normalize source data for projected Numba kernels.
+
+    ``kind=0`` means exact zero source, ``kind=1`` stores reference source
+    moments in row 0, and ``kind=2`` stores the usual element coefficient table.
+    """
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(space)
+        if source.space is not space:
+            raise ValueError("source must live in the same DGSpace object for assembly_backend='numba'")
+        constant_value = source.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                return np.zeros((1, 1), dtype=np.float64), 0
+            return np.ascontiguousarray(space._constant_reference_moments(constant_value)[None, :]), 1
+    return _same_space_field_coefficients(source, space, "source"), 2
+
+
 def _reaction_coefficients(reaction, space: DGSpace) -> tuple[np.ndarray, float, bool]:
     """Normalize reaction data for projected Numba kernels."""
-    if np.isscalar(reaction):
-        return np.zeros((1, 1), dtype=np.float64), float(reaction), True
+    if isinstance(reaction, DGField):
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            return np.zeros((1, 1), dtype=np.float64), float(constant_value), True
     return _same_space_field_coefficients(reaction, space, "reaction"), 0.0, False
 
 
@@ -286,8 +307,8 @@ def _advection_stabilization_coefficients(stabilization, space: DGSpace) -> tupl
     if callable(stabilization):
         raise TypeError(
             "assembly_backend='numba' requires advection_stabilization to be "
-            "None, a scalar, a DGField, or same-space DG coefficients. Project "
-            "callable stabilizations before calling the solver."
+            "None, a scalar, or a DGField. Project callable stabilizations "
+            "before calling the solver."
         )
     return 2, 0.0, _same_space_field_coefficients(
         stabilization,
@@ -321,15 +342,25 @@ def _advection_trace_weight_tables(
     return tau_face_values, gamma_face_values
 
 
+def _projected_tensor_component_coefficients(component, space: DGSpace, label: str) -> np.ndarray:
+    """Return DG coefficients for internally projected tensor components."""
+    if isinstance(component, DGField):
+        return _same_space_field_coefficients(component, space, label)
+    values = np.asarray(component, dtype=np.float64)
+    if values.shape == space.shape:
+        return np.ascontiguousarray(values, dtype=np.float64)
+    raise TypeError(f"{label} must be a DGField or coefficient array with shape {space.shape}")
+
+
 def _projected_tensor_coefficients(tensor, space: DGSpace, label: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return four same-space coefficient arrays for a projected tensor."""
     if not isinstance(tensor, (tuple, list)) or len(tensor) != 4:
         raise TypeError(f"{label} must be a 4-tuple of projected coefficient arrays")
     return (
-        _same_space_field_coefficients(tensor[0], space, f"{label}[0,0]"),
-        _same_space_field_coefficients(tensor[1], space, f"{label}[0,1]"),
-        _same_space_field_coefficients(tensor[2], space, f"{label}[1,0]"),
-        _same_space_field_coefficients(tensor[3], space, f"{label}[1,1]"),
+        _projected_tensor_component_coefficients(tensor[0], space, f"{label}[0,0]"),
+        _projected_tensor_component_coefficients(tensor[1], space, f"{label}[0,1]"),
+        _projected_tensor_component_coefficients(tensor[2], space, f"{label}[1,0]"),
+        _projected_tensor_component_coefficients(tensor[3], space, f"{label}[1,1]"),
     )
 
 
@@ -482,21 +513,23 @@ def assemble_projected_trace_system_numba(
     must already be represented in the solution space:
 
     ``source``
-        :class:`DGField` or coefficient array in ``space``.
+        :class:`DGField` in ``space``.
     ``beta_field``
         two-component :class:`VectorDGField` with both components in ``space``.
     ``reaction``
-        scalar constant, :class:`DGField`, or coefficient array in ``space``.
+        :class:`DGField` in ``space``; use ``space.zeros`` or ``space.constant``
+        for exact zero/constant coefficients.
 
-    Python callables are intentionally rejected here.  Project them explicitly
-    with :class:`DGField` or :class:`VectorDGField` before calling the solver.
+    Python callables, scalars, and loose coefficient arrays are intentionally
+    rejected here.  Convert them through the owning :class:`DGSpace` before
+    calling the solver.
     """
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
@@ -568,6 +601,7 @@ def assemble_projected_trace_system_numba(
         np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
         np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
         source_coeffs,
+        int(source_kind),
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -615,7 +649,7 @@ def assemble_projected_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
@@ -707,6 +741,7 @@ def assemble_projected_trace_system_eliminated_numba(
         np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
         np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
         source_coeffs,
+        int(source_kind),
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -771,7 +806,7 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     interior_side_index = _interior_side_index(space)
@@ -831,6 +866,7 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
         d0_reference,
         d1_reference,
         source_coeffs,
+        int(source_kind),
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -874,7 +910,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
         diffusion_inverse,
@@ -938,6 +974,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
         d0_reference,
         d1_reference,
         source_coeffs,
+        int(source_kind),
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -984,7 +1021,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     interior_side_index = _interior_side_index(space)
@@ -1021,6 +1058,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
         d0_reference,
         d1_reference,
         source_coeffs,
+        int(source_kind),
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -1259,7 +1297,7 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
@@ -1289,6 +1327,7 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
         d0_reference,
         d1_reference,
         source_coeffs,
+        int(source_kind),
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -1308,7 +1347,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
         diffusion_inverse,
@@ -1342,6 +1381,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
         d0_reference,
         d1_reference,
         source_coeffs,
+        int(source_kind),
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
@@ -1367,7 +1407,7 @@ def reconstruct_projected_field_numba(
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
-    source_coeffs = _same_space_field_coefficients(source, space, "source")
+    source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
@@ -1405,6 +1445,7 @@ def reconstruct_projected_field_numba(
         np.ascontiguousarray(q.weights_JGL, dtype=np.float64),
         np.ascontiguousarray(q.bas1d_of_ref_edg_qds, dtype=np.float64),
         source_coeffs,
+        int(source_kind),
         beta_coeffs,
         tau_face_values,
         gamma_face_values,

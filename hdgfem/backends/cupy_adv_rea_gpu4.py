@@ -19,7 +19,7 @@ import numpy as np
 
 from ..core.space import DGField, DGSpace, DGTraceSpace
 from ..linalg.system import KnownDofReduction, SolveResult
-from .cupy import CupyDGSpace, as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
+from .cupy import CupyDGSpace, as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
 from .cupy_adv_rea_raw import (
     RawAdvectionAssemblyResult,
     assemble_projected_advection_trace_system_eliminated_raw_cuda,
@@ -182,7 +182,7 @@ def source_coefficients_cupy(source, cspace: CupyDGSpace, timings: dict[str, flo
     cp = require_cupy()
     if isinstance(source, DGField):
         source.space.assert_same_mesh(cspace.host)
-        return cp.asarray(np.ascontiguousarray(source.coeffs, dtype=np.float64))
+        return as_cupy_coefficients(source, cspace)
     return project_callable_cupy(source, cspace, timings, "projection.source")
 
 
@@ -192,9 +192,31 @@ def reaction_coefficients_cupy(reaction, cspace: CupyDGSpace, timings: dict[str,
         return cp.empty(1, dtype=cp.float64), float(reaction), True
     if isinstance(reaction, DGField):
         reaction.space.assert_same_mesh(cspace.host)
-        return cp.asarray(np.ascontiguousarray(reaction.coeffs, dtype=np.float64)), 0.0, False
+        return as_cupy_coefficients(reaction, cspace), 0.0, False
     coeffs = project_callable_cupy(reaction, cspace, timings, "projection.reaction")
     return coeffs, 0.0, False
+
+
+def _require_raw_dg_field(value, cspace: CupyDGSpace, label: str) -> DGField:
+    if isinstance(value, DGField):
+        value.space.assert_same_mesh(cspace.host)
+        if value.space is not cspace.host:
+            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='raw-cuda'")
+        return value
+    if callable(value):
+        raise TypeError(
+            f"assembly_backend='raw-cuda' requires {label} to be a DGField; "
+            "project callables first with space.project_callable(...)."
+        )
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        raise TypeError(
+            f"assembly_backend='raw-cuda' requires {label} to be a DGField; "
+            "use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"assembly_backend='raw-cuda' requires {label} to be a DGField; "
+        "wrap coefficient arrays with space.field(...)."
+    )
 
 
 def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, float] | None = None):
@@ -215,8 +237,13 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
     q = cspace.quad_data
     if isinstance(source, DGField):
         source.space.assert_same_mesh(cspace.host)
-        coeffs = cp.asarray(np.ascontiguousarray(source.coeffs, dtype=np.float64))
-        rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
+        constant_value = source.constant_value
+        if constant_value is not None:
+            ref_moments = cp.asarray(cspace.host._constant_reference_moments(constant_value))
+            rhs = mesh.aff_jacs[:, None] * ref_moments[None, :]
+        else:
+            coeffs = as_cupy_coefficients(source, cspace)
+            rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
     else:
         points = mapped_quads_cupy(cspace)
         values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
@@ -240,9 +267,16 @@ def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] 
         result = float(reaction) * mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
     elif isinstance(reaction, DGField):
         reaction.space.assert_same_mesh(cspace.host)
-        coeffs = cp.asarray(np.ascontiguousarray(reaction.coeffs, dtype=np.float64))
-        flat = coeffs @ q.weighted_triple_phi_flat
-        result = mesh.aff_jacs[:, None, None] * flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                result = cp.zeros((mesh.num_tri, cspace.el_dof, cspace.el_dof), dtype=cp.float64)
+            else:
+                result = constant_value * mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
+        else:
+            coeffs = as_cupy_coefficients(reaction, cspace)
+            flat = coeffs @ q.weighted_triple_phi_flat
+            result = mesh.aff_jacs[:, None, None] * flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
     else:
         points = mapped_quads_cupy(cspace)
         values = cp.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
@@ -472,6 +506,8 @@ def assemble_reduced_system_gpu4(
     timings: dict[str, float] = {}
     start_total = time.perf_counter()
     if backend == "raw-cuda":
+        source = _require_raw_dg_field(source, cspace, "source")
+        reaction = _require_raw_dg_field(reaction, cspace, "reaction")
         if raw_local_assembly not in {"precomputed", "fused"}:
             raise ValueError("raw_local_assembly must be 'precomputed' or 'fused'")
         if raw_lu_mode not in {"safe", "coop"}:

@@ -411,11 +411,27 @@ def _project_inverse_diffusion_for_numba(diffusion, space: DGSpace) -> tuple[np.
     )
 
 
-def _project_callable_for_numba(value, space: DGSpace, *, name: str):
-    """Project callable scalar data for coefficient-only Numba kernels."""
-    if callable(value) and not isinstance(value, DGField):
-        return DGField(value, space, name=name)
-    return value
+def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
+    """Return a same-space DGField or raise a backend-specific projection error."""
+    if isinstance(value, DGField):
+        value.space.assert_same_mesh(space)
+        if value.space is not space:
+            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
+        return value
+    if callable(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "project callables first with space.project_callable(...)."
+        )
+    if np.isscalar(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"assembly_backend='{backend}' requires {label} to be a DGField; "
+        "wrap coefficient arrays with space.field(...)."
+    )
 
 
 def _reference_derivative_matrices(space: DGSpace) -> tuple[np.ndarray, np.ndarray]:
@@ -1429,8 +1445,12 @@ class DiffusionReactionHDGSolver:
     backend's eliminated-boundary convention.
 
     GPU global solves are selected through ``solver``, independently of the
-    assembly backend.  For example, ``assembly_backend="numba", solver="amgx"``
-    or ``solver="cupyx"`` assembles the reduced trace operator on the host and
+    assembly backend.  NumPy/CuPy assembly may sample analytic source/reaction
+    callables directly; Numba and raw-CUDA assembly require same-space
+    :class:`DGField` source/reaction inputs, using ``space.zeros`` or
+    ``space.constant`` for exact zero/constant coefficients.  For example,
+    ``assembly_backend="numba", solver="amgx"`` or ``solver="cupyx"``
+    assembles the reduced trace operator on the host and
     then copies the global sparse matrix to the GPU for inversion.  When
     ``cache_device_matrix=True`` and only the RHS/boundary data changes, the
     cached Numba operator path also reuses the Cupyx device CSR matrix across
@@ -1668,8 +1688,8 @@ class DiffusionReactionHDGSolver:
         timings: dict[str, float] = {}
 
         if backend == "numba":
-            source_input = _project_callable_for_numba(self.source, self.space, name="source_h")
-            reaction_input = _project_callable_for_numba(self.reaction, self.space, name="reaction_h")
+            source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="numba")
+            reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="numba")
             if _diffusion_is_identity(options.diffusion):
                 from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
 
@@ -1738,9 +1758,11 @@ class DiffusionReactionHDGSolver:
             else:
                 from ..backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
 
+                source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
+                reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
                 gpu = assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
-                    self.source,
-                    self.reaction,
+                    source_input,
+                    reaction_input,
                     self.boundary_condition,
                     float(options.stabilization),
                     self.space,
@@ -1918,8 +1940,8 @@ class DiffusionReactionHDGSolver:
         )
 
         def prepare_source():
-            source_input = _project_callable_for_numba(self.source, self.space, name="source_h")
-            reaction_input = _project_callable_for_numba(self.reaction, self.space, name="reaction_h")
+            source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="numba")
+            reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="numba")
             return source_input, reaction_input
 
         (source_input, reaction_input), preparation = _timed_call(
@@ -2163,6 +2185,9 @@ def solve_diffusion_reaction_hdg(
     r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with HDG static condensation.
 
     ``assembly_backend`` controls how the HDG trace operator is assembled.
+    NumPy assembly accepts analytic source/reaction callables; Numba assembly
+    requires same-space :class:`DGField` source/reaction inputs, using
+    ``space.zeros`` or ``space.constant`` for exact zero/constant coefficients.
     ``solver`` controls where the global trace system is inverted.  In
     particular, ``assembly_backend="numba"`` with ``solver="amgx"`` or
     ``solver="cupyx"`` means host Numba assembly followed by a GPU sparse
@@ -2210,8 +2235,8 @@ def solve_diffusion_reaction_hdg(
         reaction_input = reaction
         diffusion_inverse_input = None
         if projected_numba_diffusion:
-            source_input = _project_callable_for_numba(source, space, name="source_h")
-            reaction_input = _project_callable_for_numba(reaction, space, name="reaction_h")
+            source_input = _require_same_space_dg_field_for_backend(source, space, label="source", backend="numba")
+            reaction_input = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="numba")
             if projected_numba_tensor_diffusion:
                 diffusion_inverse_input = _project_inverse_diffusion_for_numba(diffusion, space)
             return tau, None, source_input, reaction_input, diffusion_inverse_input

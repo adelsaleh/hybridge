@@ -212,6 +212,38 @@ class CupyDGSpace:
             object.__setattr__(self, "_mapped_quads_cache", cached)
         return cached
 
+    def field(
+            self,
+            coeffs,
+            *,
+            copy: bool = False,
+            name: str = "u",
+            _coefficient_kind: str = "table",
+            _constant_value: float | None = None,
+    ) -> DGField:
+        """Create a same-space DGField backed by a CuPy coefficient table."""
+        return field_from_cupy_coefficients(
+            self,
+            coeffs,
+            copy=copy,
+            name=name,
+            _coefficient_kind=_coefficient_kind,
+            _constant_value=_constant_value,
+        )
+
+    def project_callable(self, func: Callable, *, parameters=None, name: str = "Pi_h f") -> DGField:
+        """Project an analytic callable on the CUDA device into this DG space."""
+        cupy = require_cupy()
+        q = self.quad_data
+        points = self.mapped_quads
+        if parameters is None:
+            raw = func(points[:, 0, :], points[:, 1, :])
+        else:
+            raw = func(points[:, 0, :], points[:, 1, :], parameters)
+        values = _normalize_cupy_values(raw, self.mesh.num_tri, q.Krf_w.shape[0], "callable")
+        coeffs = cupy.ascontiguousarray(values @ q.projection_operator.T)
+        return self.field(coeffs, name=name, _coefficient_kind="projected")
+
     @classmethod
     def from_host(cls, space: DGSpace, *, device_id: int) -> "CupyDGSpace":
         return cls(
@@ -282,6 +314,35 @@ def _cp_array(value, *, dtype=None):
     return cupy.asarray(np.ascontiguousarray(value), dtype=dtype)
 
 
+def _normalize_cupy_values(values, num_elements: int, num_points: int, label: str):
+    """Normalize scalar/quadrature values to a contiguous device array."""
+    cupy = require_cupy()
+    values = cupy.asarray(values, dtype=cupy.float64)
+    if values.shape == (num_elements, num_points):
+        return cupy.ascontiguousarray(values)
+    if values.shape == (num_points,):
+        return cupy.ascontiguousarray(cupy.broadcast_to(values[None, :], (num_elements, num_points)))
+    if values.ndim == 0:
+        return cupy.full((num_elements, num_points), float(values), dtype=cupy.float64)
+    raise ValueError(
+        f"{label} must return a scalar, shape ({num_points},), or shape "
+        f"({num_elements}, {num_points}); got {values.shape}"
+    )
+
+
+def _normalize_cupy_coefficients(coeffs, cspace: CupyDGSpace, *, copy: bool = False, label: str = "coeffs"):
+    """Normalize a coefficient table to contiguous float64 storage on ``cspace``."""
+    cupy = require_cupy()
+    array = cupy.asarray(coeffs, dtype=cupy.float64)
+    if array.shape != cspace.host.shape:
+        raise ValueError(f"{label} must have shape {cspace.host.shape}; got {array.shape}")
+    if copy:
+        array = array.copy()
+    if not array.flags.c_contiguous:
+        array = cupy.ascontiguousarray(array)
+    return array
+
+
 def _current_device_id() -> int:
     """Return the active CUDA device id."""
     cupy = require_cupy()
@@ -310,6 +371,67 @@ def as_cupy_space(space: DGSpace | CupyDGSpace, *, device: int | None = None) ->
         with cupy.cuda.Device(device_id):
             cache[device_id] = CupyDGSpace.from_host(space, device_id=device_id)
     return cache[device_id]
+
+
+def field_from_cupy_coefficients(
+        space: DGSpace | CupyDGSpace,
+        coeffs,
+        *,
+        device: int | None = None,
+        copy: bool = False,
+        name: str = "u",
+        _coefficient_kind: str = "table",
+        _constant_value: float | None = None,
+) -> DGField:
+    """Create a DGField whose coefficient table is cached on a CUDA device."""
+    cupy = require_cupy()
+    cspace = as_cupy_space(space, device=device)
+    with cupy.cuda.Device(cspace.device_id):
+        coeffs_cp = _normalize_cupy_coefficients(coeffs, cspace, copy=copy)
+        return DGField.from_device_coefficients(
+            cspace.host,
+            coeffs_cp,
+            device_id=cspace.device_id,
+            name=name,
+            _coefficient_kind=_coefficient_kind,
+            _constant_value=_constant_value,
+        )
+
+
+def as_cupy_coefficients(field: DGField, cspace: CupyDGSpace, *, copy: bool = False):
+    """Return ``field`` coefficients on ``cspace`` without unnecessary host copies."""
+    if not isinstance(field, DGField):
+        raise TypeError("as_cupy_coefficients expects a DGField")
+    field.space.assert_same_mesh(cspace.host)
+    cupy = require_cupy()
+    with cupy.cuda.Device(cspace.device_id):
+        cached = field._device_coefficients_for(cspace.device_id)
+        if cached is not None:
+            result = _normalize_cupy_coefficients(cached, cspace, copy=copy)
+            if result is not cached:
+                field._store_device_coefficients(result, device_id=cspace.device_id)
+            return result
+
+        constant_value = field.constant_value
+        if constant_value is not None:
+            reference = cupy.asarray(cspace.host._constant_reference_coeffs(constant_value), dtype=cupy.float64)
+            result = cupy.broadcast_to(reference[None, :], cspace.host.shape).copy()
+        else:
+            result = cupy.asarray(np.ascontiguousarray(field.coeffs, dtype=np.float64), dtype=cupy.float64)
+            if not result.flags.c_contiguous:
+                result = cupy.ascontiguousarray(result)
+        field._store_device_coefficients(result, device_id=cspace.device_id)
+        return result.copy() if copy else result
+
+
+def as_cupy_vector_coefficients(field: VectorDGField, cspace: CupyDGSpace, *, copy: bool = False):
+    """Return component-first vector DG coefficients on ``cspace``."""
+    if not isinstance(field, VectorDGField):
+        raise TypeError("as_cupy_vector_coefficients expects a VectorDGField")
+    cupy = require_cupy()
+    components = [as_cupy_coefficients(component, cspace) for component in field.components]
+    result = cupy.ascontiguousarray(cupy.stack(components, axis=0))
+    return result.copy() if copy else result
 
 
 def clear_cupy_space_cache(space: DGSpace) -> None:
@@ -350,7 +472,7 @@ def _beta_values_on_volume(
             raise ValueError("beta_field must have two components")
         beta_field.components[0].space.assert_same_mesh(space)
         beta_field.components[1].space.assert_same_mesh(space)
-        coeffs = cupy.asarray(np.ascontiguousarray(beta_field.as_component_first(), dtype=np.float64))
+        coeffs = as_cupy_vector_coefficients(beta_field, cspace)
         return cupy.ascontiguousarray(cupy.einsum("dKi,iq->Kqd", coeffs, cspace.quad_data.bas_of_quads))
 
     if beta_callables is None:
@@ -409,7 +531,12 @@ def _reaction_mass_cupy(reaction, cspace: CupyDGSpace):
         return float(reaction) * mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
     if isinstance(reaction, DGField):
         reaction.space.assert_same_mesh(cspace.host)
-        coeffs = cupy.asarray(np.ascontiguousarray(reaction.coeffs, dtype=np.float64))
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                return 0.0
+            return constant_value * mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
+        coeffs = as_cupy_coefficients(reaction, cspace)
         values = coeffs @ q.bas_of_quads
     elif callable(reaction):
         mapped_quads = cupy.einsum(
@@ -1094,8 +1221,11 @@ __all__ = [
     "assemble_advection_reaction_trace_system_cupy",
     "assemble_advection_reaction_trace_system_eliminated_cupy",
     "as_cupy_space",
+    "as_cupy_coefficients",
+    "as_cupy_vector_coefficients",
     "asnumpy",
     "clear_cupy_space_cache",
+    "field_from_cupy_coefficients",
     "default_pyamgx_config",
     "require_cupy",
     "require_cupyx_sparse",

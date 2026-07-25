@@ -305,6 +305,50 @@ def _as_beta_field(beta, space: DGSpace) -> VectorDGField:
         ) from exc
 
 
+def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
+    """Return a same-space DGField or raise a backend-specific projection error."""
+    if isinstance(value, DGField):
+        value.space.assert_same_mesh(space)
+        if value.space is not space:
+            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
+        return value
+    if callable(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "project callables first with space.project_callable(...)."
+        )
+    if np.isscalar(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"assembly_backend='{backend}' requires {label} to be a DGField; "
+        "wrap coefficient arrays with space.field(...)."
+    )
+
+
+def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> VectorDGField:
+    """Return a two-component VectorDGField or raise a backend-specific error."""
+    if isinstance(beta, VectorDGField):
+        if beta.dim != 2:
+            raise ValueError("advection field must have two components")
+        beta.components[0].space.assert_same_mesh(space)
+        beta.components[1].space.assert_same_mesh(space)
+        if beta.components[0].space is not space or beta.components[1].space is not space:
+            raise ValueError(f"beta must live in the same DGSpace object for assembly_backend='{backend}'")
+        return beta
+    if _is_callable_beta(beta):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires beta to be a VectorDGField; "
+            "project callables first with VectorDGField((beta_x, beta_y), space)."
+        )
+    raise TypeError(
+        f"assembly_backend='{backend}' requires beta to be a VectorDGField; "
+        "wrap coefficient data with (space * space).field(...)."
+    )
+
+
 def _prepare_beta_data(beta, space: DGSpace) -> tuple[VectorDGField | None, np.ndarray, tuple[Callable, Callable] | None]:
     """Return DG beta data, normal fluxes, and callable beta data for assembly."""
     if _is_callable_beta(beta):
@@ -500,10 +544,13 @@ class AdvectionReactionHDGSolver:
         """Set PDE data and invalidate assembled/solved artifacts.
 
         The inputs are the same objects accepted by
-        :func:`solve_advection_reaction_hdg`: callables, DG fields, coefficient
-        arrays, or scalars depending on the coefficient.  The class stores the
-        objects by reference; if a callable or array is mutated externally, call
-        one of the ``set_*`` methods or :meth:`clear_cache` before solving.
+        :func:`solve_advection_reaction_hdg`.  NumPy/CuPy assembly accepts
+        analytic callables and supported array-like coefficient data; Numba and
+        raw-CUDA assembly require already-discretized :class:`DGField` source and
+        reaction inputs plus a two-component :class:`VectorDGField` beta.  The
+        class stores the objects by reference; if mutable input is changed
+        externally, call one of the ``set_*`` methods or :meth:`clear_cache`
+        before solving.
         """
         self.source = source
         self.beta = beta
@@ -522,10 +569,11 @@ class AdvectionReactionHDGSolver:
     ) -> "AdvectionReactionHDGSolver":
         """Set already-discretized coefficient data.
 
-        ``source_h`` and ``reaction_h`` may be :class:`DGField` objects or
-        coefficient arrays accepted by the solver.  ``beta_h`` should be a
-        projected two-component :class:`VectorDGField`.  This method is an
-        explicit alias for :meth:`set_problem`; it documents the intended use in
+        ``source_h`` and ``reaction_h`` should be :class:`DGField` objects in
+        this solver's space; use ``space.zeros`` or ``space.constant`` for exact
+        zero/constant coefficients.  ``beta_h`` should be a projected
+        two-component :class:`VectorDGField`.  This method is an explicit alias
+        for :meth:`set_problem`; it documents the intended use in
         high-performance loops where projection is managed outside the solver.
         """
         return self.set_problem(source_h, beta_h, reaction_h, boundary_condition)
@@ -758,20 +806,22 @@ def solve_advection_reaction_hdg(
     Parameters
     ----------
     source
-        Callable, :class:`DGField`, source moment array, or source values on
-        ``space`` volume quadrature points.  Callables are evaluated on the
-        quadrature rule; they are not projected by this solver.
+        Source coefficient.  NumPy/CuPy assembly accepts analytic callables,
+        :class:`DGField`, source moment arrays, or source values on ``space``
+        volume quadrature points.  Numba/raw-CUDA assembly requires a same-space
+        :class:`DGField`; use ``space.project_callable``, ``space.zeros``, or
+        ``space.constant`` before calling those backends.
     beta
-        Tuple of two callables, two-component :class:`VectorDGField`, tuple of
-        two :class:`DGField` objects, or compatible DG coefficient array.  A
-        callable beta is evaluated directly on volume and face quadrature
-        points.  A DG beta uses DG basis contractions, with the fastest path
-        when both components live in ``space``.
+        Advection coefficient.  NumPy/CuPy assembly accepts a tuple of two
+        callables, a two-component :class:`VectorDGField`, a tuple of two
+        :class:`DGField` objects, or compatible DG coefficient data.
+        Numba/raw-CUDA assembly requires a two-component :class:`VectorDGField`.
     reaction
-        Scalar constant, callable, :class:`DGField`, DG coefficient array, or
-        reaction values on volume quadrature points.  A callable reaction is
-        evaluated on quadrature points; a same-space :class:`DGField` uses the
-        cached triple-product mass path.
+        Reaction coefficient.  NumPy/CuPy assembly accepts scalar constants,
+        analytic callables, :class:`DGField`, DG coefficient arrays, or reaction
+        values on volume quadrature points.  Numba/raw-CUDA assembly requires a
+        same-space :class:`DGField`; use ``space.zeros`` or ``space.constant``
+        for exact zero/constant coefficients.
     boundary_condition
         Dirichlet trace callable ``g(x, y)``.
     space
@@ -822,10 +872,10 @@ def solve_advection_reaction_hdg(
         expensive.
     assembly_backend
         Assembly backend.  ``"numpy"`` is the established vectorized reference
-        path.  ``"numba"`` uses the experimental fused projected-coefficient
-        trace assembly backend and requires projected source/beta coefficients.
-        ``"auto"`` currently keeps the stable NumPy path.
-        ``"cupy"`` assembles the dense local inverses and trace system on the
+        path.  ``"numba"`` uses the fused projected-coefficient trace assembly
+        backend and requires same-space ``DGField`` source/reaction inputs plus
+        ``VectorDGField`` beta.  ``"auto"`` currently keeps the stable NumPy
+        path.  ``"cupy"`` assembles the dense local inverses and trace system on the
         GPU, then currently materializes the host solve system for the legacy
         solve/reconstruction pipeline. ``"raw-cuda"`` uses the GPU4
         boundary-eliminated trace formalism and raw CUDA kernels; with AMGX it
@@ -851,8 +901,8 @@ def solve_advection_reaction_hdg(
         ``None`` selects the upwind value ``abs(beta_h . n)``.  The NumPy
         backend accepts scalars, callables, :class:`DGField` objects, same-space
         coefficient arrays, per-face constants, or face-quadrature values.  The
-        Numba fused backend accepts ``None``, scalars, :class:`DGField` objects,
-        or same-space coefficient arrays; project callable stabilizations before
+        Numba fused backend accepts ``None``, scalars, or
+        :class:`DGField` objects; project callable stabilizations before
         requesting ``assembly_backend="numba"``.
     cache_local_solvers
         If ``True``, retain the dense local inverse blocks i0.n the returned
@@ -922,24 +972,21 @@ def solve_advection_reaction_hdg(
 
     def prepare_data():
         if effective_backend == "raw-cuda":
-            if _is_callable_beta(beta):
-                return None, None, (beta[0], beta[1]), None, reaction
-            beta_field = _as_beta_field(beta, space)
-            return beta_field, None, None, None, reaction
+            source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
+            reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="raw-cuda")
+            beta_field = _require_beta_field_for_backend(beta, space, backend="raw-cuda")
+            return beta_field, None, None, source_field, reaction_field
         if effective_backend == "numba":
-            if _is_callable_beta(beta):
-                raise TypeError(
-                    "assembly_backend='numba' requires projected beta. "
-                    "Use VectorDGField((beta_x, beta_y), space) or --project-beta."
-                )
-            beta_field = _as_beta_field(beta, space)
-            return beta_field, None, None, None, reaction
+            source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="numba")
+            reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="numba")
+            beta_field = _require_beta_field_for_backend(beta, space, backend="numba")
+            return beta_field, None, None, source_field, reaction_field
 
         beta_field, beta_normal_flux, beta_callables = _prepare_beta_data(beta, space)
         source_rhs = hdg_assembly.source_moments(source, space)
         return beta_field, beta_normal_flux, beta_callables, source_rhs, reaction
 
-    (beta_h, beta_dot_normal, beta_callables, source_moments, reaction_h), preparation = _timed_call(
+    (beta_h, beta_dot_normal, beta_callables, source_data, reaction_h), preparation = _timed_call(
         "preparing coefficient data",
         verbosity,
         prepare_data,
@@ -1094,7 +1141,7 @@ def solve_advection_reaction_hdg(
             trace_assembly_label,
             verbosity,
             lambda: trace_assembler(
-                source,
+                source_data,
                 beta_h,
                 reaction_h,
                 boundary_condition,
@@ -1155,12 +1202,11 @@ def solve_advection_reaction_hdg(
             )
             element_boundary_mats = numba_local.element_boundary_mats
     elif effective_backend == "raw-cuda":
-        from ..backends.cupy import as_cupy_space, require_cupy
+        from ..backends.cupy import as_cupy_space, as_cupy_vector_coefficients, require_cupy
         from ..backends.cupy_adv_rea_gpu4 import (
             assemble_reduced_system_gpu4,
             as_cupy_trace_space,
             beta_dot_normal_from_coeffs,
-            project_callable_cupy,
         )
 
         setup_start = time.perf_counter()
@@ -1175,24 +1221,12 @@ def solve_advection_reaction_hdg(
         setup_start = time.perf_counter()
         trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
         detail_timings["raw.trace_space.device"] = time.perf_counter() - setup_start
-        if beta_h is not None:
-            setup_start = time.perf_counter()
-            gpu4_beta_coeffs = cp.asarray(np.ascontiguousarray(beta_h.as_component_first(), dtype=np.float64))
-            cp.cuda.get_current_stream().synchronize()
-            detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
-        elif beta_callables is not None:
-            setup_start = time.perf_counter()
-            beta_0 = project_callable_cupy(beta_callables[0], cspace)
-            detail_timings["raw.beta_projection.x"] = time.perf_counter() - setup_start
-            setup_start = time.perf_counter()
-            beta_1 = project_callable_cupy(beta_callables[1], cspace)
-            detail_timings["raw.beta_projection.y"] = time.perf_counter() - setup_start
-            setup_start = time.perf_counter()
-            gpu4_beta_coeffs = cp.ascontiguousarray(cp.stack((beta_0, beta_1), axis=0))
-            cp.cuda.get_current_stream().synchronize()
-            detail_timings["raw.beta_projection.stack"] = time.perf_counter() - setup_start
-        else:
-            raise TypeError("raw-cuda assembly requires a VectorDGField beta or two beta callables")
+        if beta_h is None:
+            raise TypeError("assembly_backend='raw-cuda' requires beta to be a VectorDGField")
+        setup_start = time.perf_counter()
+        gpu4_beta_coeffs = as_cupy_vector_coefficients(beta_h, cspace)
+        cp.cuda.get_current_stream().synchronize()
+        detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
         raw_fused = raw_local_assembly == "fused"
         normalized_solver = "" if solver is None else str(solver).lower()
         raw_cuda_device_amgx = (
@@ -1228,7 +1262,7 @@ def solve_advection_reaction_hdg(
             "assembling reduced trace system (raw-cuda gpu4)",
             verbosity,
             lambda: assemble_reduced_system_gpu4(
-                source,
+                source_data,
                 reaction_h,
                 boundary_condition,
                 gpu4_beta_coeffs,
@@ -1296,7 +1330,7 @@ def solve_advection_reaction_hdg(
             cupy_label,
             verbosity,
             lambda: cupy_assembler(
-                source_moments,
+                source_data,
                 beta_h,
                 beta_callables,
                 beta_dot_normal,
@@ -1439,7 +1473,7 @@ def solve_advection_reaction_hdg(
                 verbosity,
                 lambda: hdg_assembly.trace_rhs_from_lift(
                     trace_lift,
-                    source_moments,
+                    source_data,
                     local_solver,
                     boundary_condition,
                     space,
@@ -1726,7 +1760,7 @@ def solve_advection_reaction_hdg(
         trace_reconstruction = time.perf_counter() - trace_reconstruct_start
         detail_timings["raw.reconstruct.trace_device"] = trace_reconstruction
         reconstruction_start = time.perf_counter()
-        uh_cp, _local_reconstruction = reconstruct_field_gpu4(trace_cp, source, reaction_h, gpu4_beta_coeffs, gpu4_assembly)
+        uh_cp, _local_reconstruction = reconstruct_field_gpu4(trace_cp, source_data, reaction_h, gpu4_beta_coeffs, gpu4_assembly)
         cp.cuda.get_current_stream().synchronize()
         trace_device = trace_cp
         field_device = uh_cp
@@ -1753,7 +1787,7 @@ def solve_advection_reaction_hdg(
                 effective_backend == "numba"
                 or (
                     effective_backend == "cupy"
-                    and isinstance(source, DGField)
+                    and isinstance(source_data, DGField)
                     and isinstance(beta_h, VectorDGField)
                     and (np.isscalar(reaction_h) or isinstance(reaction_h, DGField))
                 )
@@ -1769,7 +1803,7 @@ def solve_advection_reaction_hdg(
                     verbosity,
                     lambda: reconstruct_projected_field_numba(
                         trace,
-                        source,
+                        source_data,
                         beta_h,
                         reaction_h,
                         space,
@@ -1788,7 +1822,7 @@ def solve_advection_reaction_hdg(
 
                         local_solver = np.ascontiguousarray(asnumpy(local_solver))
                         element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))
-                    return hdg_assembly.reconstruct_field(trace, source_moments, local_solver, element_boundary_mats, space)
+                    return hdg_assembly.reconstruct_field(trace, source_data, local_solver, element_boundary_mats, space)
 
                 field, reconstruction = _timed_call(
                     "reconstructing element field",

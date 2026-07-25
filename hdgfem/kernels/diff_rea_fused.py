@@ -115,6 +115,18 @@ def _build_projected_diffusion_operator(
 
 
 @njit(cache=True, inline="always", fastmath=True)
+def _projected_source_moment(source_data, source_kind, mass_matrix, element, i, nel):
+    if source_kind == 0:
+        return 0.0
+    if source_kind == 1:
+        return source_data[0, i]
+    value = 0.0
+    for k in range(nel):
+        value += source_data[element, k] * mass_matrix[k, i]
+    return value
+
+
+@njit(cache=True, inline="always", fastmath=True)
 def _build_projected_diffusion_rhs_columns(
         rhs0,
         rhs1,
@@ -127,6 +139,7 @@ def _build_projected_diffusion_rhs_columns(
         mass_matrix,
         face_element_trace,
         source_coeffs,
+        source_kind,
 ):
     """Build local RHS columns for trace dofs plus one source column."""
     nel = mass_matrix.shape[0]
@@ -140,9 +153,7 @@ def _build_projected_diffusion_rhs_columns(
 
     jac = aff_jacs[element]
     for i in range(nel):
-        source_value = 0.0
-        for k in range(nel):
-            source_value += source_coeffs[element, k] * mass_matrix[k, i]
+        source_value = _projected_source_moment(source_coeffs, source_kind, mass_matrix, element, i, nel)
         rhs0[i, trace_cols] = jac * source_value
 
     for face in range(3):
@@ -247,6 +258,7 @@ def _assemble_projected_diffusion_local_columns(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -305,6 +317,7 @@ def _assemble_projected_diffusion_local_columns(
         mass_matrix,
         face_element_trace,
         source_coeffs,
+        source_kind,
     )
     _solve_projected_diffusion_columns(
         local_columns,
@@ -496,6 +509,7 @@ def _assemble_projected_tensor_diffusion_local_columns(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -563,6 +577,7 @@ def _assemble_projected_tensor_diffusion_local_columns(
         mass_matrix,
         face_element_trace,
         source_coeffs,
+        source_kind,
     )
     _solve_projected_tensor_diffusion_columns(
         local_columns,
@@ -856,6 +871,7 @@ def assemble_projected_diffusion_trace_system_eliminated_kernel(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -885,6 +901,7 @@ def assemble_projected_diffusion_trace_system_eliminated_kernel(
             d0_reference,
             d1_reference,
             source_coeffs,
+            source_kind,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -1012,6 +1029,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -1044,6 +1062,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
             d0_reference,
             d1_reference,
             source_coeffs,
+            source_kind,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -1169,6 +1188,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_kernel(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -1198,6 +1218,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_kernel(
             d0_reference,
             d1_reference,
             source_coeffs,
+            source_kind,
             reaction_coeffs,
             reaction_scalar,
             reaction_is_scalar,
@@ -1273,6 +1294,7 @@ def _build_projected_diffusion_reconstruction_rhs(
         mass_matrix,
         face_element_trace,
         source_coeffs,
+        source_kind,
 ):
     """Build one local RHS from source coefficients and the solved trace."""
     nel = mass_matrix.shape[0]
@@ -1284,9 +1306,7 @@ def _build_projected_diffusion_reconstruction_rhs(
 
     jac = aff_jacs[element]
     for i in range(nel):
-        source_value = 0.0
-        for k in range(nel):
-            source_value += source_coeffs[element, k] * mass_matrix[k, i]
+        source_value = _projected_source_moment(source_coeffs, source_kind, mass_matrix, element, i, nel)
         rhs0[i, 0] = jac * source_value
 
     for face in range(3):
@@ -1324,6 +1344,7 @@ def reconstruct_projected_diffusion_local_unknowns_kernel(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -1388,6 +1409,7 @@ def reconstruct_projected_diffusion_local_unknowns_kernel(
             mass_matrix,
             face_element_trace,
             source_coeffs,
+            source_kind,
         )
         _solve_projected_diffusion_columns(
             local_columns,
@@ -1428,6 +1450,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
         d0_reference,
         d1_reference,
         source_coeffs,
+        source_kind,
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
@@ -1501,6 +1524,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
             mass_matrix,
             face_element_trace,
             source_coeffs,
+            source_kind,
         )
         _solve_projected_tensor_diffusion_columns(
             local_columns,

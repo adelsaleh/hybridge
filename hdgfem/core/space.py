@@ -14,7 +14,7 @@ module.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, Sequence
+from typing import Any, Callable, Literal, Sequence
 import numpy as np
 from .mesh import DGMesh, as_dg_mesh
 from .quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
@@ -53,6 +53,9 @@ def _normalize_callable_values(values, num_elements: int, num_points: int) -> np
 
 
 TraceBasisKind = Literal["legacy-lagrange", "legendre-modal", "bernstein"]
+CoefficientKind = Literal["zero", "constant", "table", "projected"]
+_LAZY_COEFFICIENTS = object()
+_DEVICE_COEFFICIENTS = object()
 
 
 @dataclass(frozen=True)
@@ -505,11 +508,52 @@ class DGSpace:
         self.assert_same_mesh(other)
         return VectorDGSpace((self, other), name=f"{self.name} x {other.name}")
 
-    def zeros(self, *, name: str = "u") -> "DGField":
-        """Create a zero scalar field in this space."""
-        return self.field(np.zeros(self.shape, dtype=np.float64), name=name)
+    def _constant_reference_moments(self, value: float) -> np.ndarray:
+        """Return reference moments ``int_Kref value * phi_i`` for a constant."""
+        scalar = float(value)
+        if scalar == 0.0:
+            return np.zeros(self.el_dof, dtype=np.float64)
+        return np.ascontiguousarray(scalar * np.sum(self.quad_data.weighted_phi, axis=0), dtype=np.float64)
 
-    def field(self, coeffs, *, copy: bool = False, name: str = "u") -> "DGField":
+    def _constant_reference_coeffs(self, value: float) -> np.ndarray:
+        """Return element-reference coefficients for a scalar constant."""
+        scalar = float(value)
+        if scalar == 0.0:
+            return np.zeros(self.el_dof, dtype=np.float64)
+        rhs = self._constant_reference_moments(scalar)
+        return np.ascontiguousarray(rhs @ self.quad_data.MKrf_inv, dtype=np.float64)
+
+    def zeros(self, *, name: str = "u") -> "DGField":
+        """Create a lazy zero scalar field in this space."""
+        return DGField(
+            self,
+            _LAZY_COEFFICIENTS,
+            name=name,
+            _coefficient_kind="zero",
+            _constant_value=0.0,
+        )
+
+    def constant(self, value: float, *, name: str = "u") -> "DGField":
+        """Create a lazy scalar DG field representing one constant value."""
+        scalar = float(value)
+        kind: CoefficientKind = "zero" if scalar == 0.0 else "constant"
+        return DGField(
+            self,
+            _LAZY_COEFFICIENTS,
+            name=name,
+            _coefficient_kind=kind,
+            _constant_value=scalar,
+        )
+
+    def field(
+            self,
+            coeffs,
+            *,
+            copy: bool = False,
+            name: str = "u",
+            _coefficient_kind: CoefficientKind = "table",
+            _constant_value: float | None = None,
+    ) -> "DGField":
         """Create a scalar field from element-local coefficients.
 
         ``coeffs`` must have shape :attr:`shape`.  Non-contiguous input is
@@ -523,7 +567,13 @@ class DGSpace:
             raise ValueError(f"coeffs must have shape {self.shape}; got {array.shape}")
         if not array.flags.c_contiguous:
             array = np.ascontiguousarray(array)
-        return DGField(self, array, name=name)
+        return DGField(
+            self,
+            array,
+            name=name,
+            _coefficient_kind=_coefficient_kind,
+            _constant_value=_constant_value,
+        )
 
     def mapped_quads(self) -> np.ndarray:
         """Physical coordinates of this space's volume quadrature points.
@@ -624,7 +674,7 @@ class DGSpace:
         )
         rhs = values @ self.quad_data.weighted_phi
         coeffs = rhs @ self.quad_data.MKrf_inv
-        return self.field(coeffs, name=name)
+        return self.field(coeffs, name=name, _coefficient_kind="projected")
 
     def vector_field(self, components, *, name: str = "u") -> "VectorDGField":
         """Create a vector DG field whose components all use this scalar space."""
@@ -659,9 +709,11 @@ class DGField:
 
         u_h|_K(\hat x) = \sum_i u^K_i \phi_i(\hat x)
 
-    on each element ``K``.  The coefficient array is stored as
-    ``coeffs[K, i]``.  Addition and subtraction act on coefficients, which is
-    the exact representation of DG field addition.  Multiplication by a scalar
+    on each element ``K``.  The coefficient array is exposed as
+    ``coeffs[K, i]``; exact zero/constant fields created by :class:`DGSpace`
+    materialize this table lazily only when coefficient access is requested.
+    Addition and subtraction act on coefficients, which is the exact
+    representation of DG field addition.  Multiplication by a scalar
     scales coefficients, while multiplication by another same-space
     :class:`DGField` returns the :math:`L^2` projection of the pointwise
     product.
@@ -670,8 +722,11 @@ class DGField:
     __array_priority__ = 1000.0
 
     space: DGSpace
-    coeffs: np.ndarray
     name: str = "u"
+    _coeffs: np.ndarray | None = None
+    _device_coeffs: dict[int, Any] | None = None
+    _coefficient_kind: CoefficientKind = "table"
+    _constant_value: float | None = None
 
     def __init__(
             self,
@@ -681,6 +736,9 @@ class DGField:
             name: str = "u",
             copy: bool = False,
             parameters=None,
+            _coefficient_kind: CoefficientKind | None = None,
+            _constant_value: float | None = None,
+            _device_coeffs: dict[int, Any] | None = None,
     ) -> None:
         if isinstance(first, DGSpace):
             space = first
@@ -693,22 +751,95 @@ class DGField:
         if data is None:
             raise TypeError("DGField data cannot be None")
 
+        input_field = data if isinstance(data, DGField) else None
+        callable_input = callable(data) and input_field is None
         self.space = space
         self.name = str(name)
-        self.coeffs = self._coerce_coefficients(data, copy=copy, parameters=parameters)
+        self._coeffs = None
+        self._device_coeffs = dict(_device_coeffs) if _device_coeffs is not None else {}
+        if _coefficient_kind is None:
+            if input_field is not None:
+                _coefficient_kind = input_field.coefficient_kind
+                _constant_value = input_field._constant_value
+            elif callable_input:
+                _coefficient_kind = "projected"
+            else:
+                _coefficient_kind = "table"
+        self._set_coefficient_metadata(_coefficient_kind, _constant_value)
+        self._coeffs = self._coerce_coefficients(data, copy=copy, parameters=parameters)
         self.__post_init__()
 
-    def _coerce_coefficients(self, data, *, copy: bool, parameters) -> np.ndarray:
-        """Return element-local coefficients for constructor input data.
+    @classmethod
+    def from_device_coefficients(
+            cls,
+            space: DGSpace,
+            coeffs,
+            *,
+            device_id: int,
+            name: str = "u",
+            _coefficient_kind: CoefficientKind = "table",
+            _constant_value: float | None = None,
+    ) -> "DGField":
+        """Create a DG field whose coefficient table initially lives on a device.
+
+        The core package treats device arrays opaquely. Host coefficients are
+        materialized only if :attr:`coeffs` is accessed.
+        """
+        return cls(
+            space,
+            _DEVICE_COEFFICIENTS,
+            name=name,
+            _coefficient_kind=_coefficient_kind,
+            _constant_value=_constant_value,
+            _device_coeffs={int(device_id): coeffs},
+        )
+
+    def _set_coefficient_metadata(
+            self,
+            coefficient_kind: CoefficientKind,
+            constant_value: float | None,
+    ) -> None:
+        """Install constructor-owned coefficient provenance metadata."""
+        if coefficient_kind not in {"zero", "constant", "table", "projected"}:
+            raise ValueError("coefficient_kind must be 'zero', 'constant', 'table', or 'projected'")
+        if coefficient_kind == "zero":
+            constant_value = 0.0
+        elif coefficient_kind == "constant":
+            if constant_value is None:
+                raise ValueError("constant DGField metadata requires constant_value")
+            constant_value = float(constant_value)
+            if constant_value == 0.0:
+                coefficient_kind = "zero"
+        else:
+            constant_value = None
+        self._coefficient_kind = coefficient_kind
+        self._constant_value = constant_value
+
+    def _coerce_coefficients(self, data, *, copy: bool, parameters) -> np.ndarray | None:
+        """Return element-local coefficients or ``None`` for lazy constants.
 
         Accepted data are another same-space ``DGField``, an analytic callable,
         or an array-like object.  Callables are projected; arrays are only
         normalized to ``float64`` here and shape-checked in ``__post_init__``.
         """
+        if data is _LAZY_COEFFICIENTS:
+            if self._coefficient_kind not in {"zero", "constant"} or self._constant_value is None:
+                raise ValueError("lazy DGField coefficients are only valid for zero/constant fields")
+            return None
+        if data is _DEVICE_COEFFICIENTS:
+            if not self._device_coeffs:
+                raise ValueError("device DGField coefficients require at least one device array")
+            return None
         if isinstance(data, DGField):
             data.space.assert_same_mesh(self.space)
             if data.space is not self.space:
                 raise ValueError("DGField-to-DGField construction currently requires the same DGSpace object")
+            if data._device_coeffs and not copy:
+                self._device_coeffs.update(data._device_coeffs)
+            if data._coeffs is None and data.constant_value is not None and self._constant_value == data.constant_value:
+                return None
+            if data._coeffs is None and data._device_coeffs and not copy:
+                return None
             return data.coeffs.copy(order="C") if copy else data.coeffs
         if callable(data):
             projected = self.space.project_callable(data, parameters=parameters, name=self.name)
@@ -719,26 +850,172 @@ class DGField:
             array = array.copy(order="C")
         return array
 
-    def __post_init__(self) -> None:
-        """Validate coefficient shape and ensure contiguous ``float64`` storage."""
-        array = np.asarray(self.coeffs, dtype=np.float64)
+    def _validate_device_coefficients(self, coeffs) -> None:
+        shape = getattr(coeffs, "shape", None)
+        if shape is None or tuple(shape) != self.space.shape:
+            raise ValueError(f"device coeffs must have shape {self.space.shape}; got {shape}")
+
+    def _store_device_coefficients(self, coeffs, *, device_id: int):
+        """Cache a backend-owned device coefficient table without host download."""
+        self._validate_device_coefficients(coeffs)
+        if self._device_coeffs is None:
+            self._device_coeffs = {}
+        self._device_coeffs[int(device_id)] = coeffs
+        return coeffs
+
+    def _device_coefficients_for(self, device_id: int):
+        if not self._device_coeffs:
+            return None
+        return self._device_coeffs.get(int(device_id))
+
+    def _first_device_coefficients(self):
+        if not self._device_coeffs:
+            return None
+        return next(iter(self._device_coeffs.values()))
+
+    def _download_device_coefficients(self, coeffs) -> np.ndarray:
+        if hasattr(coeffs, "get"):
+            array = coeffs.get()
+        else:
+            array = np.asarray(coeffs)
+        return self._normalize_coefficients_array(array)
+
+    def _normalize_coefficients_array(self, coeffs) -> np.ndarray:
+        array = np.asarray(coeffs, dtype=np.float64)
         if array.shape != self.space.shape:
             raise ValueError(f"coeffs must have shape {self.space.shape}; got {array.shape}")
         if not array.flags.c_contiguous:
             array = np.ascontiguousarray(array)
-        self.coeffs = array
+        return array
+
+    def _materialize_constant_coefficients(self) -> np.ndarray:
+        constant_value = self._constant_value
+        if self._coefficient_kind == "zero" or constant_value == 0.0:
+            return np.zeros(self.space.shape, dtype=np.float64)
+        if self._coefficient_kind == "constant" and constant_value is not None:
+            reference_coeffs = self.space._constant_reference_coeffs(constant_value)
+            return np.broadcast_to(reference_coeffs[None, :], self.space.shape).copy(order="C")
+        raise RuntimeError("only zero/constant DGFields can materialize coefficients lazily")
+
+    def __post_init__(self) -> None:
+        """Validate coefficient shape and ensure contiguous ``float64`` storage."""
+        if self._device_coeffs:
+            for coeffs in self._device_coeffs.values():
+                self._validate_device_coefficients(coeffs)
+        if self._coeffs is None:
+            if self._constant_value is None and not self._device_coeffs:
+                raise ValueError("non-constant DGField coefficients cannot be lazy")
+            return
+        self._coeffs = self._normalize_coefficients_array(self._coeffs)
+
+    @property
+    def coeffs(self) -> np.ndarray:
+        """Element-local host coefficients.
+
+        Lazy constants are materialized on host when requested. Device-backed
+        fields download their cached device table on first host access.
+        """
+        if self._coeffs is None:
+            if self.constant_value is not None:
+                self._coeffs = self._materialize_constant_coefficients()
+            else:
+                device_coeffs = self._first_device_coefficients()
+                if device_coeffs is None:
+                    raise RuntimeError("DGField has neither host nor device coefficients")
+                self._coeffs = self._download_device_coefficients(device_coeffs)
+        return self._coeffs
+
+    @coeffs.setter
+    def coeffs(self, value) -> None:
+        self._coeffs = self._normalize_coefficients_array(value)
+        if getattr(self, "_device_coeffs", None):
+            self._device_coeffs.clear()
+        if hasattr(self, "_coefficient_kind"):
+            self._coefficient_kind = "table"
+            self._constant_value = None
+
+    @property
+    def coefficients_materialized(self) -> bool:
+        """Return whether the host coefficient table has been materialized."""
+        return self._coeffs is not None
+
+    def device_coefficients_materialized(self, device_id: int | None = None) -> bool:
+        """Return whether a device coefficient table is cached."""
+        if not self._device_coeffs:
+            return False
+        if device_id is None:
+            return True
+        return int(device_id) in self._device_coeffs
 
     def __array__(self, dtype=None):
         """Expose the coefficient array to NumPy array conversion."""
         return np.asarray(self.coeffs, dtype=dtype)
 
     def asarray(self) -> np.ndarray:
-        """Return the underlying coefficient array without copying."""
+        """Return the coefficient array, materializing lazy constants if needed."""
         return self.coeffs
 
+    @property
+    def coefficient_kind(self) -> CoefficientKind:
+        """Constructor-owned provenance for this coefficient field."""
+        return self._coefficient_kind
+
+    def _coefficients_match_constant(self, value: float) -> bool:
+        scalar = float(value)
+        if self._coeffs is None and self._coefficient_kind in {"zero", "constant"}:
+            return self._constant_value == scalar
+        reference_coeffs = self.space._constant_reference_coeffs(scalar)
+        return bool(np.all(self._coeffs == reference_coeffs[None, :]))
+
+    @property
+    def is_zero(self) -> bool:
+        """Return whether the represented DG coefficients are exactly zero."""
+        if self._coeffs is None and self._coefficient_kind == "zero":
+            return True
+        if self._coeffs is None and self._coefficient_kind == "constant":
+            return self._constant_value == 0.0
+        return bool(np.all(self.coeffs == 0.0))
+
+    @property
+    def is_constant(self) -> bool:
+        """Return whether this field still matches its constructor constant."""
+        return self.constant_value is not None
+
+    @property
+    def constant_value(self) -> float | None:
+        """Return the constructor constant when the coefficients still match it."""
+        if self._coeffs is None and self._coefficient_kind in {"zero", "constant"}:
+            return float(self._constant_value) if self._constant_value is not None else None
+        if self._coefficient_kind == "zero":
+            return 0.0 if self.is_zero else None
+        if self._coefficient_kind == "constant" and self._constant_value is not None:
+            if self._coefficients_match_constant(self._constant_value):
+                return float(self._constant_value)
+        return None
+
+    @property
+    def is_zero_coefficient(self) -> bool:
+        """Compatibility alias for :attr:`is_zero`."""
+        return self.is_zero
+
+    @property
+    def is_constant_coefficient(self) -> bool:
+        """Compatibility alias for :attr:`is_constant`."""
+        return self.is_constant
+
     def copy(self, *, name: str | None = None) -> "DGField":
-        """Deep-copy the coefficient array while sharing the same space."""
-        return DGField(self.space, self.coeffs.copy(), name=self.name if name is None else name)
+        """Copy the field while preserving lazy constant storage when possible."""
+        copy_name = self.name if name is None else name
+        constant_value = self.constant_value
+        if constant_value is not None:
+            return self.space.constant(constant_value, name=copy_name)
+        return DGField(
+            self.space,
+            self.coeffs.copy(),
+            name=copy_name,
+            _coefficient_kind=self._coefficient_kind,
+            _constant_value=self._constant_value,
+        )
 
     def values(self) -> np.ndarray:
         """Evaluate on this field's volume quadrature points.
@@ -747,6 +1024,13 @@ class DGField:
         fast path for local assembly because it is a dense matrix multiplication
         against pretabulated basis values.
         """
+        constant_value = self.constant_value
+        if constant_value is not None:
+            return np.full(
+                (self.space.mesh.num_tri, self.space.quad_data.Krf_w.shape[0]),
+                constant_value,
+                dtype=np.float64,
+            )
         return self.coeffs @ self.space.quad_data.bas_of_quads
 
     def values_at_ref(self, reference_points: np.ndarray) -> np.ndarray:
@@ -759,6 +1043,10 @@ class DGField:
         """
         if reference_points is self.space.quad_data.Krf_quads:
             return self.values()
+        constant_value = self.constant_value
+        if constant_value is not None:
+            points = np.asarray(reference_points, dtype=np.float64)
+            return np.full((self.space.mesh.num_tri, points.shape[0]), constant_value, dtype=np.float64)
         return self.coeffs @ self.space.basis_at(reference_points).T
 
     def grad_values(self) -> tuple[np.ndarray, np.ndarray]:
@@ -776,6 +1064,11 @@ class DGField:
         mapped with each element's inverse-transpose affine map.  The returned
         arrays are physical ``x`` and ``y`` derivatives.
         """
+        constant_value = self.constant_value
+        if constant_value is not None:
+            points = np.asarray(reference_points, dtype=np.float64)
+            shape = (self.space.mesh.num_tri, points.shape[0])
+            return np.zeros(shape, dtype=np.float64), np.zeros(shape, dtype=np.float64)
         grad_basis = self.space.gradient_basis_at(reference_points)
         ref_grad = np.einsum("Ki,qid->Kqd", self.coeffs, grad_basis, optimize=True)
         phys_grad = np.einsum(
@@ -943,6 +1236,11 @@ class DGField:
         else:
             target.assert_same_mesh(self.space)
 
+        self_constant = self.constant_value
+        other_constant = other.constant_value
+        if self_constant is not None and other_constant is not None:
+            return target.constant(self_constant * other_constant, name=result_name)
+
         if target is self.space and other.space is self.space:
             q = self.space.quad_data
             weighted_mass = self.coeffs @ q.weighted_triple_phi_flat
@@ -953,12 +1251,12 @@ class DGField:
             )
             rhs = np.einsum("Kj,Kji->Ki", other.coeffs, weighted_mass, optimize=True)
             coeffs = rhs @ q.MKrf_inv
-            return self.space.field(coeffs, name=result_name)
+            return self.space.field(coeffs, name=result_name, _coefficient_kind="projected")
 
         values = evaluate_product(self, other, target.quad_data.Krf_quads, reference=True)
         rhs = values @ target.quad_data.weighted_phi
         coeffs = rhs @ target.quad_data.MKrf_inv
-        return target.field(coeffs, name=result_name)
+        return target.field(coeffs, name=result_name, _coefficient_kind="projected")
 
     def multiply(
             self,
@@ -987,8 +1285,14 @@ class DGField:
                 "DGField multiplication by arrays is ambiguous; use field.coeffs explicitly "
                 "for coefficientwise operations"
             )
+        value = float(scalar)
         label = f"{other}*{self.name}" if reverse else f"{self.name}*{other}"
-        return DGField(self.space, self.coeffs * float(scalar), name=f"({label})")
+        constant_value = self.constant_value
+        if constant_value is not None:
+            return self.space.constant(constant_value * value, name=f"({label})")
+        if value == 0.0:
+            return self.space.zeros(name=f"({label})")
+        return DGField(self.space, self.coeffs * value, name=f"({label})")
 
     def __add__(self, other):
         return self._binary_field_op(other, np.add, "+")
@@ -1056,6 +1360,22 @@ class VectorDGSpace:
     def zeros(self, *, name: str = "u") -> "VectorDGField":
         """Create a zero vector field with one zero component per space."""
         return VectorDGField(tuple(space.zeros(name=f"{name}_{i}") for i, space in enumerate(self.components)), name=name)
+
+    def constant(self, values, *, name: str = "u") -> "VectorDGField":
+        """Create a vector DG field whose components are constants."""
+        if np.isscalar(values):
+            component_values = (float(values),) * self.dim
+        else:
+            component_values = tuple(values)
+            if len(component_values) != self.dim:
+                raise ValueError(f"expected {self.dim} constant component values")
+        return VectorDGField(
+            tuple(
+                space.constant(value, name=f"{name}_{i}")
+                for i, (space, value) in enumerate(zip(self.components, component_values))
+            ),
+            name=name,
+        )
 
     def field(self, coeffs, *, copy: bool = False, name: str = "u") -> "VectorDGField":
         """Create a vector field from component coefficients.
@@ -1231,6 +1551,34 @@ class VectorDGField:
     def space(self) -> VectorDGSpace:
         """Cartesian-product space containing this vector field."""
         return VectorDGSpace(tuple(component.space for component in self.components))
+
+    @property
+    def is_zero(self) -> bool:
+        """Return whether every component has exactly zero coefficients."""
+        return all(component.is_zero for component in self.components)
+
+    @property
+    def is_constant(self) -> bool:
+        """Return whether every component still matches constructor-constant data."""
+        return self.constant_values is not None
+
+    @property
+    def constant_values(self) -> tuple[float, ...] | None:
+        """Return component constants when all components are constructor constants."""
+        values = tuple(component.constant_value for component in self.components)
+        if any(value is None for value in values):
+            return None
+        return tuple(float(value) for value in values)
+
+    @property
+    def is_zero_coefficient(self) -> bool:
+        """Compatibility alias for :attr:`is_zero`."""
+        return self.is_zero
+
+    @property
+    def is_constant_coefficient(self) -> bool:
+        """Compatibility alias for :attr:`is_constant`."""
+        return self.is_constant
 
     def as_component_first(self) -> np.ndarray:
         """Return packed coefficients with shape ``(dim, num_elements, el_dof)``."""

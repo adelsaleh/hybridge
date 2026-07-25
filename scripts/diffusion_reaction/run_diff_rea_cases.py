@@ -825,7 +825,9 @@ def _main() -> None:
     preset_key = args.preset
     config = _runtime_config(preset_by_key(preset_key), args)
 
-    from scripts.diffusion_reaction.diff_rea_cases import CASE_BY_KEY, case_definition_by_key
+    import numpy as np
+
+    from scripts.diffusion_reaction.diff_rea_cases import CASE_BY_KEY, case_definition_by_key, zero_coefficient
 
     if config.case not in CASE_BY_KEY:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
@@ -834,7 +836,7 @@ def _main() -> None:
         _print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.space import DGSpace
+    from hdgfem.core.space import DGField, DGSpace
     from hdgfem.solvers.diff_rea import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver, _timed_call
 
     case = case_definition_by_key(config.case)
@@ -854,6 +856,28 @@ def _main() -> None:
         volume_quad_1d=config.volume_quad_1d,
         edge_quad_1d=config.edge_quad_1d,
     )
+
+    def scalar_field_input(value, *, name: str) -> DGField:
+        if isinstance(value, DGField):
+            value.space.assert_same_mesh(space)
+            if value.space is not space:
+                raise ValueError(f"{name} must live in this run's DGSpace object")
+            return value
+        if value is zero_coefficient:
+            return space.zeros(name=name)
+        if callable(value):
+            return space.project_callable(value, name=name)
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            return space.constant(float(value), name=name)
+        return space.field(value, name=name)
+
+    effective_backend = "numpy" if config.assembly_backend == "auto" else str(config.assembly_backend)
+    source_input = source
+    reaction_input = reaction
+    if effective_backend in {"numba", "raw-cuda"}:
+        source_input = scalar_field_input(source, name="source_h")
+        reaction_input = scalar_field_input(reaction, name="reaction_h")
+
     options = DiffusionReactionHDGOptions(
         diffusion=diffusion,
         stabilization=config.tau,
@@ -880,8 +904,8 @@ def _main() -> None:
     )
     solver = DiffusionReactionHDGSolver(
         space,
-        source=source,
-        reaction=reaction,
+        source=source_input,
+        reaction=reaction_input,
         boundary_condition=exact,
         options=options,
     )

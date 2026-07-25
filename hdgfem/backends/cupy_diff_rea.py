@@ -10,7 +10,8 @@ from typing import Any
 import numpy as np
 
 from ..assembly import hdg as hdg_assembly
-from .cupy import as_cupy_space, require_cupy
+from ..core.space import DGField
+from .cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 from .cupy_diff_rea_raw import (
     RawDiffusionAssemblyResult,
     assemble_projected_diffusion_trace_system_eliminated_raw_cuda,
@@ -213,26 +214,53 @@ def mapped_quads_cupy(cspace):
     return cupy.einsum("Krc,qc->Krq", mesh.aff_mats, q.Krf_quads) + mesh.aff_vecs[:, :, None]
 
 
-def _callable_is_zero(func: Callable, cupy) -> bool:
-    try:
-        x = cupy.asarray([0.0, 0.37], dtype=cupy.float64)
-        y = cupy.asarray([0.0, -0.21], dtype=cupy.float64)
-        vals = cupy.asarray(func(x, y), dtype=cupy.float64)
-        return bool(cupy.all(vals == 0.0).get())
-    except Exception:
-        return False
+def _require_same_space_dg_field(value, cspace, label: str, backend: str) -> DGField:
+    host_space = cspace.host
+    if isinstance(value, DGField):
+        value.space.assert_same_mesh(host_space)
+        if value.space is not host_space:
+            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
+        return value
+    if callable(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            f"project callables first with space.project_callable(...)."
+        )
+    if np.isscalar(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            f"use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"assembly_backend='{backend}' requires {label} to be a DGField; "
+        f"wrap coefficient arrays with space.field(...)."
+    )
 
 
-def _reaction_is_zero(reaction) -> bool:
-    if np.isscalar(reaction):
-        return float(reaction) == 0.0
-    if hasattr(reaction, "coeffs"):
-        return bool(np.all(np.asarray(reaction.coeffs, dtype=np.float64) == 0.0))
-    try:
-        values = np.asarray(reaction, dtype=np.float64)
-    except Exception:
+def _raw_cuda_reaction_is_zero(reaction, cspace) -> bool:
+    if not isinstance(reaction, DGField):
         return False
-    return bool(np.all(values == 0.0))
+    constant_value = reaction.constant_value
+    if constant_value is not None:
+        return constant_value == 0.0
+    cached = reaction._device_coefficients_for(cspace.device_id)
+    if cached is not None:
+        cupy = require_cupy()
+        return bool(cupy.all(cached == 0.0).get())
+    return reaction.is_zero
+
+
+def _validate_raw_cuda_source(source, cspace):
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(cspace.host)
+        if source.space is not cspace.host:
+            raise ValueError("source must live in the same DGSpace object for assembly_backend='raw-cuda'")
+        return source
+    if np.isscalar(source) or callable(source):
+        return source
+    raise TypeError(
+        "assembly_backend='raw-cuda' requires source to be a DGField, scalar, or CuPy-compatible callable"
+    )
 
 
 def reaction_mass_cupy(reaction, cspace):
@@ -245,10 +273,14 @@ def reaction_mass_cupy(reaction, cspace):
         if scalar == 0.0:
             return 0.0
         return scalar * mesh.aff_jacs[:, None, None] * q.MKrf[None, ...]
-    if _callable_is_zero(reaction, cupy):
-        return 0.0
-    if hasattr(reaction, "coeffs"):
-        coeffs = cupy.asarray(np.ascontiguousarray(reaction.coeffs, dtype=np.float64))
+    if isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(cspace.host)
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                return 0.0
+            return constant_value * mesh.aff_jacs[:, None, None] * q.MKrf[None, ...]
+        coeffs = as_cupy_coefficients(reaction, cspace)
         values = coeffs @ q.bas_of_quads
     else:
         points = mapped_quads_cupy(cspace)
@@ -329,15 +361,23 @@ def source_moments_cupy(source: Callable, cspace):
     cupy = require_cupy()
     mesh = cspace.mesh
     q = cspace.quad_data
-    points = mapped_quads_cupy(cspace)
+    rhs = cupy.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=cupy.float64)
     if np.isscalar(source):
-        values = cupy.full((mesh.num_tri, q.Krf_w.size), float(source), dtype=cupy.float64)
-    elif hasattr(source, "coeffs"):
-        coeffs = cupy.asarray(np.ascontiguousarray(source.coeffs, dtype=np.float64))
+        ref_moments = cupy.asarray(cspace.host._constant_reference_moments(float(source)))
+        rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
+        return cupy.ascontiguousarray(rhs)
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(cspace.host)
+        constant_value = source.constant_value
+        if constant_value is not None:
+            ref_moments = cupy.asarray(cspace.host._constant_reference_moments(constant_value))
+            rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
+            return cupy.ascontiguousarray(rhs)
+        coeffs = as_cupy_coefficients(source, cspace)
         values = coeffs @ q.bas_of_quads
     else:
+        points = mapped_quads_cupy(cspace)
         values = cupy.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cupy.float64)
-    rhs = cupy.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=cupy.float64)
     rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * cupy.einsum(
         "Kq,iq,q->Ki",
         values,
@@ -598,11 +638,13 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         trace_ref=None,
 ) -> CupyDiffusionTraceAssembly:
     """Assemble a reduced diffusion trace system with the raw CUDA backend."""
-    if not _reaction_is_zero(reaction):
-        raise NotImplementedError("raw CUDA diffusion assembly currently supports only zero reaction")
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)
+    source = _validate_raw_cuda_source(source, cspace)
+    reaction = _require_same_space_dg_field(reaction, cspace, "reaction", "raw-cuda")
+    if not _raw_cuda_reaction_is_zero(reaction, cspace):
+        raise NotImplementedError("raw CUDA diffusion assembly currently supports only zero reaction")
     if trace_ref is None:
         trace_ref = build_trace_reference(cspace, trace_basis)
     fallback = raw_cuda_diffusion_fallback_reason(cspace, trace_ref)

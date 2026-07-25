@@ -50,6 +50,18 @@ def _advection_tau(tau_kind, tau_scalar, tau_coeffs, face_basis, element, face, 
     return _eval_scalar_face_coeff(tau_coeffs, face_basis, element, face, point, nel)
 
 
+@njit(cache=True, inline="always", fastmath=True)
+def _projected_source_moment(source_data, source_kind, mass_matrix, element, i, nel):
+    if source_kind == 0:
+        return 0.0
+    if source_kind == 1:
+        return source_data[0, i]
+    value = 0.0
+    for k in range(nel):
+        value += source_data[element, k] * mass_matrix[k, i]
+    return value
+
+
 @njit(cache=True, fastmath=True)
 def _assemble_face_trace_weights(
         tau_face_values,
@@ -189,6 +201,7 @@ def _assemble_projected_local_system(
         face_weights,
         trace_basis,
         source_coeffs,
+        source_kind,
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -214,9 +227,7 @@ def _assemble_projected_local_system(
     source_column = 3 * ntr
 
     for i in range(nel):
-        source_value = 0.0
-        for k in range(nel):
-            source_value += source_coeffs[element, k] * mass_matrix[k, i]
+        source_value = _projected_source_moment(source_coeffs, source_kind, mass_matrix, element, i, nel)
         local_rhs[i, source_column] = jac * source_value
 
         for j in range(nel):
@@ -293,6 +304,7 @@ def assemble_projected_trace_system_kernel(
         edge_mass,
         oriented_lifts,
         source_coeffs,
+        source_kind,
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -337,6 +349,7 @@ def assemble_projected_trace_system_kernel(
             face_weights,
             trace_basis,
             source_coeffs,
+            source_kind,
             beta_coeffs,
             tau_face_values,
             gamma_face_values,
@@ -465,6 +478,7 @@ def assemble_projected_trace_system_eliminated_kernel(
         edge_mass,
         oriented_lifts,
         source_coeffs,
+        source_kind,
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -504,6 +518,7 @@ def assemble_projected_trace_system_eliminated_kernel(
             face_weights,
             trace_basis,
             source_coeffs,
+            source_kind,
             beta_coeffs,
             tau_face_values,
             gamma_face_values,
@@ -632,6 +647,7 @@ def reconstruct_projected_field_kernel(
         face_weights,
         trace_basis,
         source_coeffs,
+        source_kind,
         beta_coeffs,
         tau_face_values,
         gamma_face_values,
@@ -663,6 +679,7 @@ def reconstruct_projected_field_kernel(
             face_weights,
             trace_basis,
             source_coeffs,
+            source_kind,
             beta_coeffs,
             tau_face_values,
             gamma_face_values,

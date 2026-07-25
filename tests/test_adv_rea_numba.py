@@ -434,15 +434,31 @@ def test_stateful_solver_source_update_invalidates_previous_solution() -> None:
     assert not np.allclose(second.trace, first.trace)
 
 
-def test_numba_backend_requires_projected_source_and_beta() -> None:
+def test_numba_backend_requires_projected_source_reaction_and_beta() -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 1, basis_type="dub_orth")
     beta_x, beta_y, reaction, source, exact = adv_rea_test2()
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.project_callable(reaction, name="reaction_h")
+    beta_h = VectorDGField((beta_x, beta_y), space, name="beta_h")
 
-    with pytest.raises(TypeError, match="projected beta"):
+    with pytest.raises(TypeError, match="requires source to be a DGField"):
         solve_advection_reaction_hdg(
             source,
-            (beta_x, beta_y),
+            beta_h,
+            reaction_h,
+            exact,
+            space,
+            solver="direct",
+            preconditioner=None,
+            assembly_backend="numba",
+            verbose=False,
+        )
+
+    with pytest.raises(TypeError, match="requires reaction to be a DGField"):
+        solve_advection_reaction_hdg(
+            source_h,
+            beta_h,
             reaction,
             exact,
             space,
@@ -451,6 +467,45 @@ def test_numba_backend_requires_projected_source_and_beta() -> None:
             assembly_backend="numba",
             verbose=False,
         )
+
+    with pytest.raises(TypeError, match="requires beta to be a VectorDGField"):
+        solve_advection_reaction_hdg(
+            source_h,
+            (beta_x, beta_y),
+            reaction_h,
+            exact,
+            space,
+            solver="direct",
+            preconditioner=None,
+            assembly_backend="numba",
+            verbose=False,
+        )
+
+
+def test_adv_rea_numba_constant_source_reaction_fields_stay_lazy() -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 1, basis_type="dub_orth")
+    source_h = space.constant(1.0, name="source_h")
+    reaction_h = space.constant(0.5, name="reaction_h")
+    beta_h = (space * space).constant((0.75, -0.25), name="beta_h")
+    boundary = lambda x, y: np.zeros_like(x)
+
+    result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        verbose=False,
+    )
+
+    assert result.field.coeffs.shape == space.shape
+    assert not source_h.coefficients_materialized
+    assert not reaction_h.coefficients_materialized
 
 
 def test_numba_local_solver_cache_is_explicit() -> None:

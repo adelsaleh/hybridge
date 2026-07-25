@@ -1206,9 +1206,22 @@ def _main() -> None:
         volume_quad_1d=config.volume_quad_1d,
         edge_quad_1d=config.edge_quad_1d,
     )
-    source_input = DGField(source, space, name="source_h") if config.project_source else source
-    reaction_input = DGField(reaction, space, name="reaction_h") if config.project_reaction else reaction
-    beta_input = VectorDGField((beta_x, beta_y), space, name="beta_h") if config.project_beta else (beta_x, beta_y)
+    projected_backend = config.assembly_backend in {"numba", "raw-cuda"}
+    source_input = (
+        space.project_callable(source, name="source_h")
+        if config.project_source or projected_backend
+        else source
+    )
+    reaction_input = (
+        space.project_callable(reaction, name="reaction_h")
+        if config.project_reaction or projected_backend
+        else reaction
+    )
+    beta_input = (
+        VectorDGField((beta_x, beta_y), space, name="beta_h")
+        if config.project_beta or projected_backend
+        else (beta_x, beta_y)
+    )
 
     options = AdvectionReactionHDGOptions(
         solver=config.solver,

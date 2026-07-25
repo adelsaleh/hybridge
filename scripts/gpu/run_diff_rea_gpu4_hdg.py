@@ -24,14 +24,14 @@ if __package__ in {None, ""}:
 
 import numpy as np
 
-from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
+from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
 from hdgfem.backends.cupy_diff_rea_raw import reconstruct_projected_diffusion_field_raw_cuda
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
-from hdgfem.core.space import DGSpace
+from hdgfem.core.space import DGField, DGSpace
 from hdgfem.io.output import pretty_print_sections
-from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key
+from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key, zero_coefficient
 
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "amgx"
@@ -318,31 +318,40 @@ def mapped_quads_cupy(cspace):
     return cp.einsum("Krc,qc->Krq", mesh.aff_mats, q.Krf_quads) + mesh.aff_vecs[:, :, None]
 
 
-def _callable_is_zero(func: Callable, cp) -> bool:
-    try:
-        x = cp.asarray([0.0, 0.37], dtype=cp.float64)
-        y = cp.asarray([0.0, -0.21], dtype=cp.float64)
-        vals = cp.asarray(func(x, y), dtype=cp.float64)
-        return bool(cp.all(vals == 0.0).get())
-    except Exception:
-        return False
-
-
 def reaction_mass_cupy(reaction: Callable, cspace):
     cp = require_cupy()
     log("  reaction mass ... ", end="")
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
-    if _callable_is_zero(reaction, cp):
-        elapsed = sync_time(cp, start, "local.reaction_mass")
-        print_done(elapsed)
-        return 0.0
-    points = mapped_quads_cupy(cspace)
-    values = cp.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
-    scaled = values * mesh.aff_jacs[:, None]
-    flat = scaled @ q.weighted_phi_phi_flat
-    result = flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
+    if np.isscalar(reaction):
+        scalar = float(reaction)
+        if scalar == 0.0:
+            elapsed = sync_time(cp, start, "local.reaction_mass")
+            print_done(elapsed)
+            return 0.0
+        result = scalar * mesh.aff_jacs[:, None, None] * q.MKrf[None, ...]
+    elif isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(cspace.host)
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                elapsed = sync_time(cp, start, "local.reaction_mass")
+                print_done(elapsed)
+                return 0.0
+            result = constant_value * mesh.aff_jacs[:, None, None] * q.MKrf[None, ...]
+        else:
+            coeffs = as_cupy_coefficients(reaction, cspace)
+            values = coeffs @ q.bas_of_quads
+            scaled = values * mesh.aff_jacs[:, None]
+            flat = scaled @ q.weighted_phi_phi_flat
+            result = flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
+    else:
+        points = mapped_quads_cupy(cspace)
+        values = cp.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
+        scaled = values * mesh.aff_jacs[:, None]
+        flat = scaled @ q.weighted_phi_phi_flat
+        result = flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
     elapsed = sync_time(cp, start, "local.reaction_mass")
     print_done(elapsed)
     return result
@@ -424,8 +433,15 @@ def source_moments_cupy(source: Callable, cspace):
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
-    points = mapped_quads_cupy(cspace)
-    values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
+    if np.isscalar(source):
+        values = cp.full((mesh.num_tri, q.Krf_w.size), float(source), dtype=cp.float64)
+    elif isinstance(source, DGField):
+        source.space.assert_same_mesh(cspace.host)
+        coeffs = as_cupy_coefficients(source, cspace)
+        values = coeffs @ q.bas_of_quads
+    else:
+        points = mapped_quads_cupy(cspace)
+        values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
     rhs = cp.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=cp.float64)
     rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w, optimize=True)
     elapsed = sync_time(cp, start, "source_moments")
@@ -623,6 +639,54 @@ def raw_cuda_diffusion_fallback_reason(cspace, trace_ref) -> tuple[str, str] | N
     return label, detail
 
 
+def _raw_cuda_diffusion_source_input(source, space: DGSpace):
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(space)
+        if source.space is not space:
+            raise ValueError("source_h must live in the runner DGSpace object for raw-cuda assembly")
+        return source
+    if callable(source) or np.isscalar(source):
+        return source
+    return space.field(source, name="source_h")
+
+
+def _raw_cuda_diffusion_reaction_field(reaction, space: DGSpace) -> DGField:
+    if isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(space)
+        if reaction.space is not space:
+            raise ValueError("reaction_h must live in the runner DGSpace object for raw-cuda assembly")
+        return reaction
+    if reaction is zero_coefficient:
+        return space.zeros(name="reaction_h")
+    if np.isscalar(reaction):
+        return space.constant(float(reaction), name="reaction_h")
+    if callable(reaction):
+        raise TypeError(
+            "raw-cuda diffusion assembly requires reaction_h as a DGField and currently supports only zero reaction; "
+            "use space.zeros(name='reaction_h') for pure Poisson cases."
+        )
+    return space.field(reaction, name="reaction_h")
+
+
+def _prepare_raw_cuda_diffusion_inputs(source, reaction, space: DGSpace):
+    log("preparing raw CUDA coefficient inputs ... ", end="")
+    total_start = time.perf_counter()
+
+    start = time.perf_counter()
+    source_input = _raw_cuda_diffusion_source_input(source, space)
+    source_elapsed = record_timing("assembly.coefficient_prep.source", time.perf_counter() - start)
+
+    start = time.perf_counter()
+    reaction_h = _raw_cuda_diffusion_reaction_field(reaction, space)
+    reaction_elapsed = record_timing("assembly.coefficient_prep.reaction", time.perf_counter() - start)
+
+    total_elapsed = record_timing("assembly.coefficient_prep", time.perf_counter() - total_start)
+    print_done(total_elapsed)
+    log(f"  source input prep: {source_elapsed:.5f}s", level=2)
+    log(f"  reaction field prep: {reaction_elapsed:.5f}s", level=2)
+    return source_input, reaction_h
+
+
 def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, tau: float, backend: str = "cupy", raw_matrix_format: str = "coo", raw_block_size: int = 1):
     cp = require_cupy()
     requested_backend = str(backend)
@@ -633,9 +697,10 @@ def assemble_reduced_system(source, reaction, exact, maps, cspace, trace_ref, ta
             RUN_METADATA["assembly_backend"] = "raw-cuda"
             RUN_METADATA.pop("assembly_fallback", None)
             RUN_METADATA.pop("assembly_fallback_detail", None)
+            source_input, reaction_h = _prepare_raw_cuda_diffusion_inputs(source, reaction, cspace.host)
             return assemble_reduced_system_raw_cuda(
-                source,
-                reaction,
+                source_input,
+                reaction_h,
                 exact,
                 cspace,
                 trace_ref,
@@ -986,7 +1051,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--nx", type=int, default=128)
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--basis", default="dub_orth", choices=("hier_C0", "hierarchical_c0", "bernstein", "dub_orth"))
-    parser.add_argument("--volume-quad-1d", type=int, default=None)
+    parser.add_argument("--volume-quadrature", choices=("auto", "symmetric", "duffy"), default="auto", help="triangle volume quadrature family; --volume-quad-1d forces the legacy Duffy rule")
+    parser.add_argument("--volume-quad-1d", type=int, default=None, help="legacy Duffy 1D point count; when set, overrides --volume-quadrature")
     parser.add_argument("--edge-quad-1d", type=int, default=None)
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
@@ -1123,6 +1189,7 @@ def print_final_summary(
         [
             ("basis", args.basis, "s"),
             ("trace basis", args.trace_basis, "s"),
+            ("volume quad", str(space.quad_data.volume_quadrature), "s"),
             ("raw matrix", args.raw_matrix_format if effective_backend == "raw-cuda" else "n/a", "s"),
             ("raw block", str(args.raw_block_size) if effective_backend == "raw-cuda" else "n/a", "s"),
             ("verbosity", args.verbosity, ",d"),
@@ -1140,6 +1207,7 @@ def print_final_summary(
         ("element dof", int(cspace.el_dof), ",d"),
         ("edge dof", int(cspace.edg_dof), ",d"),
         ("volume quad pts", int(space.quad_data.Krf_w.size), ",d"),
+        ("volume quad 1d", _display_optional_int(args.volume_quad_1d), "s"),
         ("error quad 1d", _display_optional_int(args.error_volume_quad_1d), "s"),
     ]
     solver_details = [
@@ -1167,6 +1235,9 @@ def print_final_summary(
     if effective_backend == "raw-cuda":
         timings.extend(
             [
+                ("raw input prep", _format_timing_cell(timing_value("assembly.coefficient_prep"), total_seconds), "s"),
+                ("source input prep", _format_timing_cell(timing_value("assembly.coefficient_prep.source"), total_seconds), "s"),
+                ("reaction prep", _format_timing_cell(timing_value("assembly.coefficient_prep.reaction"), total_seconds), "s"),
                 ("raw map/setup", _format_timing_cell(timing_value("assembly.raw.map_setup"), total_seconds), "s"),
                 ("raw zero", _format_timing_cell(timing_value("assembly.raw.csr_zero"), total_seconds), "s"),
                 ("raw kernel", _format_timing_cell(raw_kernel_total, total_seconds), "s"),
@@ -1241,7 +1312,8 @@ def main(argv: list[str] | None = None) -> int:
     log(
         f"case={args.case}, mesh={args.mesh_type}, mesh_size={args.mesh_size:g}, "
         f"order={args.order}, basis={args.basis}, trace_basis={args.trace_basis}, "
-        f"volume_quad_1d={args.volume_quad_1d}, assembly_backend={args.assembly_backend}, "
+        f"volume_quadrature={args.volume_quadrature}, volume_quad_1d={args.volume_quad_1d}, "
+        f"assembly_backend={args.assembly_backend}, "
         f"raw_matrix_format={args.raw_matrix_format}, raw_block_size={args.raw_block_size}"
     )
     print_recommended_profiles(args)
@@ -1266,6 +1338,7 @@ def main(argv: list[str] | None = None) -> int:
         mesh,
         args.order,
         basis_type=args.basis,
+        volume_quadrature=args.volume_quadrature,
         volume_quad_1d=args.volume_quad_1d,
         edge_quad_1d=args.edge_quad_1d,
     )

@@ -143,6 +143,92 @@ def test_project_callable_constant() -> None:
     np.testing.assert_allclose(u.values(), 1.0, atol=1e-12)
 
 
+@pytest.mark.parametrize("basis_type", ("bernstein", "hier_C0", "dub_orth"))
+def test_zero_and_constant_fields_carry_constructor_metadata(basis_type: str) -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 3, basis_type=basis_type)
+
+    zero = V.zeros(name="zero_h")
+    constant = V.constant(2.5, name="constant_h")
+    projected = V.project_callable(lambda x, y: 2.5 + 0.0 * x * y, name="projected_h")
+
+    assert not zero.coefficients_materialized
+    assert not constant.coefficients_materialized
+
+    assert zero.coefficient_kind == "zero"
+    assert zero.is_zero
+    assert zero.is_constant
+    assert zero.constant_value == 0.0
+    assert not zero.coefficients_materialized
+    np.testing.assert_array_equal(zero.coeffs, np.zeros(V.shape))
+    assert zero.coefficients_materialized
+
+    assert constant.coefficient_kind == "constant"
+    assert constant.is_constant
+    assert constant.constant_value == 2.5
+    assert not constant.is_zero
+    np.testing.assert_allclose(constant.values(), 2.5, atol=1.0e-12)
+    assert not constant.coefficients_materialized
+
+    table = V.field(constant.coeffs.copy(), name="table_h")
+    assert constant.coefficients_materialized
+    assert table.coefficient_kind == "table"
+    assert not table.is_constant
+    assert table.constant_value is None
+    np.testing.assert_allclose(table.values(), 2.5, atol=1.0e-12)
+
+    assert projected.coefficient_kind == "projected"
+    assert not projected.is_constant
+    np.testing.assert_allclose(projected.values(), 2.5, atol=1.0e-12)
+
+    mutated = constant.copy(name="mutated")
+    mutated.coeffs[0, 0] += 1.0e-3
+    assert mutated.constant_value is None
+    assert not mutated.is_constant
+
+
+def test_vector_constant_metadata() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 2, basis_type="dub_orth")
+    beta = (V * V).constant((1.25, -0.5), name="beta_h")
+
+    assert beta.is_constant
+    assert beta.constant_values == (1.25, -0.5)
+    assert not beta.is_zero
+    np.testing.assert_allclose(beta.components[0].values(), 1.25, atol=1.0e-12)
+    np.testing.assert_allclose(beta.components[1].values(), -0.5, atol=1.0e-12)
+
+
+def test_direct_analytic_reaction_mass_is_not_projected_dg_assembly() -> None:
+    mesh = split_reference_triangle_mesh()
+    V = DGSpace(mesh, 1, basis_type="dub_orth", volume_quad_1d=4)
+    reaction = lambda x, y: 1.0 + x * x + 0.25 * x * y
+
+    direct = add_reaction_mass(np.zeros((mesh.num_tri, V.el_dof, V.el_dof)), reaction, V)
+    projected = add_reaction_mass(
+        np.zeros((mesh.num_tri, V.el_dof, V.el_dof)),
+        V.project_callable(reaction, name="reaction_h"),
+        V,
+    )
+
+    assert not np.allclose(direct, projected, rtol=1.0e-10, atol=1.0e-12)
+
+
+def test_numpy_source_and_reaction_fast_paths_do_not_materialize_constant_fields() -> None:
+    mesh = split_reference_triangle_mesh()
+    V = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=5)
+    source = V.constant(1.75, name="source_h")
+    reaction = V.constant(2.25, name="reaction_h")
+
+    rhs = source_moments(source, V)
+    mass = add_reaction_mass(np.zeros((mesh.num_tri, V.el_dof, V.el_dof)), reaction, V)
+
+    assert rhs.shape == V.shape
+    assert mass.shape == (mesh.num_tri, V.el_dof, V.el_dof)
+    assert not source.coefficients_materialized
+    assert not reaction.coefficients_materialized
+
+
 def test_dgfield_constructor_projects_callable() -> None:
     mesh = reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")
