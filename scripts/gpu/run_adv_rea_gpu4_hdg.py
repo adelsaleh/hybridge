@@ -22,7 +22,7 @@ if __package__ in {None, ""}:
 from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
-from hdgfem.core.space import DGSpace
+from hdgfem.core.space import DGSpace, VectorDGField
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.solvers.adv_rea import AdvectionReactionHDGSolver
 from scripts.advection_reaction.adv_rea_cases import case_definition_by_key
@@ -89,6 +89,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gmsh-num-threads", type=int, default=None)
     parser.add_argument("--trace-ordering", choices=("none", "upwind-scc"), default="none")
     parser.add_argument("--trace-ordering-flux-tolerance", type=float, default=0.0)
+    parser.add_argument("--solver", choices=("amgx", "cupyx", "direct"), default="amgx")
+    parser.add_argument("--cupyx-solver", default="bicgstab")
     parser.add_argument("--amgx-config", default=None)
     parser.add_argument("--amgx-solver", default=None, help="override the solver named in the AMGX config")
     parser.add_argument("--amgx-tolerance", type=float, default=1.0e-14)
@@ -283,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     cp = require_cupy()
     require_cupyx_sparse()
-    require_pyamgx()
+    if args.solver in {"amgx", "pyamgx"}:
+        require_pyamgx()
     cp.cuda.set_allocator(None)
     cp.cuda.set_pinned_memory_allocator(None)
     if args.show_cupy_config:
@@ -304,8 +307,23 @@ def main(argv: list[str] | None = None) -> int:
             raise
         case = case_definition_by_key("test2")
     beta_x, beta_y, reaction, source, exact = case.build()
-    amgx_config, amgx_config_path = load_amgx_config(args)
-    effective_amgx_solver = str(amgx_config.get("solver", {}).get("solver", "unknown"))
+    solver_source = source
+    solver_reaction = reaction
+    solver_beta = (beta_x, beta_y)
+    if args.assembly_backend == "raw-cuda":
+        projection_start = time.perf_counter()
+        solver_source = space.project_callable(source, name="source_h")
+        solver_reaction = space.project_callable(reaction, name="reaction_h")
+        solver_beta = VectorDGField((beta_x, beta_y), space, name="beta_h")
+        raw_input_projection_time = time.perf_counter() - projection_start
+    else:
+        raw_input_projection_time = 0.0
+    if args.solver in {"amgx", "pyamgx"}:
+        amgx_config, amgx_config_path = load_amgx_config(args)
+        effective_amgx_solver = str(amgx_config.get("solver", {}).get("solver", "unknown"))
+    else:
+        amgx_config, amgx_config_path = None, None
+        effective_amgx_solver = args.cupyx_solver if args.solver == "cupyx" else args.solver
     problem_time = time.perf_counter() - problem_start
     device_error_candidate = args.assembly_backend == "raw-cuda"
     materialize_host_solution = args.materialize_host_solution
@@ -314,14 +332,15 @@ def main(argv: list[str] | None = None) -> int:
 
     solver = AdvectionReactionHDGSolver(
         space,
-        source=source,
-        beta=(beta_x, beta_y),
-        reaction=reaction,
+        source=solver_source,
+        beta=solver_beta,
+        reaction=solver_reaction,
         boundary_condition=exact,
-        solver="amgx",
+        solver=args.solver,
         preconditioner=None,
         solver_rtol=args.check_rtol,
         maxiter=args.amgx_maxiter,
+        cupyx_solver=args.cupyx_solver,
         amgx_config=amgx_config,
         scale_system=True,
         boundary_mode="eliminate",
@@ -382,7 +401,15 @@ def main(argv: list[str] | None = None) -> int:
     device_solution_state = "yes" if getattr(result, "field_device", None) is not None and getattr(result, "trace_device", None) is not None else "no"
     effective_matrix_format = args.raw_matrix_format
     if effective_matrix_format == "auto":
-        effective_matrix_format = "csr" if args.assembly_backend == "raw-cuda" and args.raw_local_assembly == "fused" and not args.materialize_host_system else "coo"
+        direct_device_amgx = args.solver in {"amgx", "pyamgx"}
+        effective_matrix_format = (
+            "csr"
+            if args.assembly_backend == "raw-cuda"
+            and args.raw_local_assembly == "fused"
+            and direct_device_amgx
+            and not args.materialize_host_system
+            else "coo"
+        )
 
     detail = result.timings.details
     detail_order = [
@@ -390,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         ("raw.cupy_space", "GPU space mirror (s)"),
         ("raw.trace_space.host", "trace host setup (s)"),
         ("raw.trace_space.device", "trace device copy (s)"),
+        ("runner.raw_input_projection", "runner raw input projection (s)"),
         ("raw.beta_projection.x", "beta_x projection (s)"),
         ("raw.beta_projection.y", "beta_y projection (s)"),
         ("raw.beta_projection.stack", "beta stack (s)"),
@@ -424,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
         ("raw.host_solution_materialization", "host solution copy (s)"),
     ]
     detail_items = [(label, float(detail[key])) for key, label in detail_order if key in detail]
+    if raw_input_projection_time:
+        detail_items.insert(0, ("runner raw input projection (s)", raw_input_projection_time))
 
     run_options = [
         ("case", args.case, "s"),
@@ -431,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
         ("basis", args.basis, "s"),
         ("trace basis", args.trace_basis, "s"),
         ("backend", args.assembly_backend, "s"),
+        ("global solver", args.solver, "s"),
         ("raw local", args.raw_local_assembly, "s"),
         ("raw LU", args.raw_lu_mode, "s"),
         ("raw block", args.raw_block_size, ",d"),

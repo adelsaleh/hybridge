@@ -24,7 +24,12 @@ such as `.pytest_cache/README.md`, are intentionally not listed.
 - [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX configuration presets and recommendations.
 - [run_configs/README.md](run_configs/README.md): version-controlled benchmark and solver preset notes.
 - [docs/gpu_hdg_modules.md](docs/gpu_hdg_modules.md): standalone GPU runner status, raw-CUDA notes, and benchmark summaries.
+- [docs/algorithms/advection_reaction_discontinuous_device_audit.md](docs/algorithms/advection_reaction_discontinuous_device_audit.md): audit of discontinuous advection-field handling in device assembly paths.
 - [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
+- [docs/algorithms/coefficient_input_api.md](docs/algorithms/coefficient_input_api.md): coefficient input semantics, lazy zero/constant fields, and backend materialization rules.
+- [docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md](docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md): diffusion raw-CUDA setup-array audit and remaining host-built inputs.
+- [docs/algorithms/gpu_assembly_solve_paths.md](docs/algorithms/gpu_assembly_solve_paths.md): GPU assembly/solve path map, direct CSR-to-AMGX notes, and tensor-diffusion direction.
+- [docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md](docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md): symmetric triangle quadrature exactness and solver smoke-test results.
 - [docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md](docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md): recommended torsion-initialized Newton parameters from the Strategy A study.
 - [docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md](docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md): Strategy A band parameter study and result interpretation.
 - [run_logs/adv_rea_amgx_config_findings_20260720.md](run_logs/adv_rea_amgx_config_findings_20260720.md): AMGX configuration sweep findings for advection-reaction.
@@ -523,9 +528,13 @@ constructor is also supported for callables and coefficient arrays.
 
 ### Coefficient Ownership
 
-Solvers accept callables for convenience, but performance-oriented workflows
-should project coefficients explicitly when they will be reused.  This makes
-quadrature, basis, and coefficient ownership clear:
+Coefficient inputs have two distinct meanings.  A Python callable is an
+analytic PDE coefficient; NumPy and CuPy assembly paths may sample it directly
+on their quadrature rules.  A `DGField` or `VectorDGField` is a discrete
+coefficient in the chosen DG space; when it comes from `project_callable`, it is
+the L2 projection of the callable, not the exact callable itself.  Use explicit
+projection when repeat solves should reuse the same discrete coefficient or
+when a backend requires table data:
 
 ```python
 from scripts.advection_reaction.adv_rea_cases import test2
@@ -539,9 +548,24 @@ beta_h = (space * space).field((beta_x_h, beta_y_h), name="beta_h")
 reaction_h = space.project_callable(reaction, name="reaction_h")
 ```
 
-Callable coefficients are evaluated directly on the quadrature rules used by
-assembly.  Projected `DGField` coefficients use cached basis products, which can
-be much cheaper when a coefficient is reused across solves.
+Lazy exact constants should be created with `space.zeros(...)` or
+`space.constant(value, ...)`.  These fields carry zero/constant metadata and do
+not build a full host coefficient table until `.coeffs` or `.asarray()` is
+requested.
+
+Backend coefficient support is deliberately explicit:
+
+```text
+NumPy assembly              callables, DGField/VectorDGField, arrays, lazy constants
+CuPy assembly               CuPy-compatible callables, DGField/VectorDGField, lazy constants
+Numba assembly              DGField/VectorDGField or compact zero/constant descriptors only
+raw-CUDA advection-reaction projected source, beta, and reaction fields only
+raw-CUDA diffusion          current scalar path uses device source/boundary data and zero reaction
+```
+
+For device workflows, `DGField.coeffs` always means host NumPy coefficients.
+CuPy-backed fields can keep a cached device table; CuPy backends access that
+through backend helpers instead of downloading through `.coeffs`.
 
 ### One-Shot Advection-Reaction Solve
 
@@ -566,7 +590,9 @@ print(result.timings)
 ```
 
 Use projected coefficients and the projected Numba backend when projection is
-managed outside the solver:
+managed outside the solver.  The Numba and raw-CUDA advection-reaction paths
+reject Python callables for source, reaction, and advection because their hot
+kernels are table driven:
 
 ```python
 result = solve_advection_reaction_hdg(
@@ -609,6 +635,13 @@ assembled = solve_advection_reaction_hdg(
     matrix_pattern_only=True,
 )
 ```
+
+The advection solver supports `trace_basis="legacy-lagrange"` and
+`trace_basis="legendre-modal"` across the NumPy, CuPy, Numba, and raw-CUDA
+assembly/reconstruction paths.  `trace_basis="bernstein"` remains unwired for
+advection.  Raw-CUDA advection currently accepts only
+`advection_stabilization=None`, which uses the upwind value
+`abs(beta_h . n)` inside the kernels.
 
 ### Stateful Advection-Reaction Solver
 

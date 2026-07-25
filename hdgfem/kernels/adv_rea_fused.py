@@ -122,6 +122,22 @@ def assemble_face_trace_weights_kernel(
         )
 
 
+@njit(cache=True, inline="always")
+def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_mode):
+    """Map a global trace dof into local orientation for nodal/modal traces."""
+    if trace_orientation_mode == 1:
+        return dof
+    return map_edge_dof_bool(is_positive_orientation, dof, edge_dof)
+
+
+@njit(cache=True, inline="always")
+def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode):
+    """Return the coefficient sign for the selected trace orientation rule."""
+    if trace_orientation_mode == 1 and (not is_positive_orientation) and dof % 2 == 1:
+        return -1.0
+    return 1.0
+
+
 @njit(cache=True, fastmath=True)
 def _assemble_weighted_trace_lift_side(
         lift,
@@ -133,6 +149,7 @@ def _assemble_weighted_trace_lift_side(
         face_weights,
         trace_basis,
         tau_face_values,
+        trace_orientation_mode,
 ):
     """Assemble ``int_F tau mu phi`` for one element side."""
     ntr = trace_basis.shape[0]
@@ -140,7 +157,8 @@ def _assemble_weighted_trace_lift_side(
     nqf = face_weights.shape[0]
     face_jac = jacs_el_fc[element, face]
     for row_dof in range(ntr):
-        local_row_dof = map_edge_dof_bool(is_positive_orientation, row_dof, ntr)
+        local_row_dof = _trace_local_dof(is_positive_orientation, row_dof, ntr, trace_orientation_mode)
+        row_sign = _trace_orientation_sign(is_positive_orientation, row_dof, trace_orientation_mode)
         for i in range(nel):
             value = 0.0
             for qf in range(nqf):
@@ -148,6 +166,7 @@ def _assemble_weighted_trace_lift_side(
                     face_jac
                     * tau_face_values[element, face, qf]
                     * face_weights[qf]
+                    * row_sign
                     * trace_basis[local_row_dof, qf]
                     * face_basis[face, i, qf]
                 )
@@ -166,12 +185,15 @@ def _weighted_trace_mass_value(
         face_weights,
         trace_basis,
         gamma_face_values,
+        trace_orientation_mode,
 ):
     """Return ``int_F (tau-beta.n) mu_row mu_col`` for one side block entry."""
     ntr = trace_basis.shape[0]
     nqf = face_weights.shape[0]
-    local_row_dof = map_edge_dof_bool(is_positive_orientation, row_dof, ntr)
-    local_col_dof = map_edge_dof_bool(is_positive_orientation, col_dof, ntr)
+    local_row_dof = _trace_local_dof(is_positive_orientation, row_dof, ntr, trace_orientation_mode)
+    local_col_dof = _trace_local_dof(is_positive_orientation, col_dof, ntr, trace_orientation_mode)
+    row_sign = _trace_orientation_sign(is_positive_orientation, row_dof, trace_orientation_mode)
+    col_sign = _trace_orientation_sign(is_positive_orientation, col_dof, trace_orientation_mode)
     face_jac = jacs_el_fc[element, face]
     value = 0.0
     for qf in range(nqf):
@@ -179,6 +201,8 @@ def _weighted_trace_mass_value(
             face_jac
             * gamma_face_values[element, face, qf]
             * face_weights[qf]
+            * row_sign
+            * col_sign
             * trace_basis[local_row_dof, qf]
             * trace_basis[local_col_dof, qf]
         )
@@ -303,6 +327,7 @@ def assemble_projected_trace_system_kernel(
         trace_basis,
         edge_mass,
         oriented_lifts,
+        trace_orientation_mode,
         source_coeffs,
         source_kind,
         beta_coeffs,
@@ -384,6 +409,7 @@ def assemble_projected_trace_system_kernel(
                 face_weights,
                 trace_basis,
                 tau_face_values,
+                trace_orientation_mode,
             )
             for row_dof in range(ntr):
                 rhs_value = 0.0
@@ -398,7 +424,8 @@ def assemble_projected_trace_system_kernel(
                     col_solve_edge = edge_to_solve_edge[col_edge]
                     col_is_positive = orientations[element, col_face]
                     for col_dof in range(ntr):
-                        local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                        local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                        col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                         column = col_face * ntr + local_col_dof
                         schur_value = 0.0
                         for i in range(nel):
@@ -408,7 +435,7 @@ def assemble_projected_trace_system_kernel(
                         out = (((side_id * 3 + col_face) * ntr + row_dof) * ntr + col_dof)
                         rows[out] = row_solve_edge * ntr + row_dof
                         cols[out] = col_solve_edge * ntr + col_dof
-                        data[out] = -schur_value
+                        data[out] = -col_sign * schur_value
 
                 mass_base = n_flux + side_id * ntr * ntr
                 for col_dof in range(ntr):
@@ -426,6 +453,7 @@ def assemble_projected_trace_system_kernel(
                         face_weights,
                         trace_basis,
                         gamma_face_values,
+                        trace_orientation_mode,
                     )
 
     boundary_matrix_offset = n_flux + n_mass
@@ -477,6 +505,7 @@ def assemble_projected_trace_system_eliminated_kernel(
         trace_basis,
         edge_mass,
         oriented_lifts,
+        trace_orientation_mode,
         source_coeffs,
         source_kind,
         beta_coeffs,
@@ -557,6 +586,7 @@ def assemble_projected_trace_system_eliminated_kernel(
                 face_weights,
                 trace_basis,
                 tau_face_values,
+                trace_orientation_mode,
             )
             for row_dof in range(ntr):
                 rhs_value = 0.0
@@ -576,7 +606,8 @@ def assemble_projected_trace_system_eliminated_kernel(
                             block_rows[block_out] = row_solve_edge
                             block_cols[block_out] = col_solve_edge
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
                             schur_value = 0.0
                             for i in range(nel):
@@ -586,19 +617,20 @@ def assemble_projected_trace_system_eliminated_kernel(
                             out = side_base + (col_block_pos * ntr + row_dof) * ntr + col_dof
                             rows[out] = row_solve_edge * ntr + row_dof
                             cols[out] = col_solve_edge * ntr + col_dof
-                            data[out] = -schur_value
+                            data[out] = -col_sign * schur_value
                             if emit_block_coo:
-                                block_data[block_out, row_dof, col_dof] = -schur_value
+                                block_data[block_out, row_dof, col_dof] = -col_sign * schur_value
                         col_block_pos += 1
                     else:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
                             schur_value = 0.0
                             for i in range(nel):
                                 lift_value = weighted_lift[row_dof, i]
                                 schur_value += lift_value * local_rhs_columns[i, column]
-                            rhs_value += schur_value * boundary_trace[col_edge, col_dof]
+                            rhs_value += col_sign * schur_value * boundary_trace[col_edge, col_dof]
 
                 rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
                 rhs_values[rhs_base + row_dof] = rhs_value
@@ -622,6 +654,7 @@ def assemble_projected_trace_system_eliminated_kernel(
                         face_weights,
                         trace_basis,
                         gamma_face_values,
+                        trace_orientation_mode,
                     )
                     rows[out] = row_solve_edge * ntr + row_dof
                     cols[out] = row_solve_edge * ntr + col_dof
@@ -646,6 +679,7 @@ def reconstruct_projected_field_kernel(
         face_basis,
         face_weights,
         trace_basis,
+        trace_orientation_mode,
         source_coeffs,
         source_kind,
         beta_coeffs,
@@ -695,8 +729,10 @@ def reconstruct_projected_field_kernel(
                 edge = loc2glob_edge[element, face]
                 is_positive = orientations[element, face]
                 for j in range(ntr):
-                    global_dof = edge * ntr + map_edge_dof_bool(is_positive, j, ntr)
-                    value += local_rhs_columns[i, face * ntr + j] * trace[global_dof]
+                    global_trace_dof = _trace_local_dof(is_positive, j, ntr, trace_orientation_mode)
+                    trace_sign = _trace_orientation_sign(is_positive, j, trace_orientation_mode)
+                    global_dof = edge * ntr + global_trace_dof
+                    value += local_rhs_columns[i, face * ntr + j] * trace_sign * trace[global_dof]
             solve_rhs[i, 0] = value
 
         pivots = np.empty(nel, dtype=np.int64)

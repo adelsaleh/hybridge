@@ -33,7 +33,7 @@ from ..linalg.ordering import (
     save_upwind_reordered_matrix_patterns,
     upwind_scc_trace_ordering,
 )
-from ..core.space import DGField, DGSpace, VectorDGField
+from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 ReturnKey = Literal[
@@ -238,11 +238,32 @@ def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSp
     return values
 
 
-def _callable_beta_normal_flux(beta: tuple[Callable, Callable], space: DGSpace) -> np.ndarray:
+def _reference_edge_points_from_trace(trace_space: DGTraceSpace) -> np.ndarray:
+    """Map trace-space 1D edge quadrature nodes to reference-triangle faces."""
+    t = np.asarray(trace_space.quads, dtype=np.float64)
+    return np.ascontiguousarray(
+        np.stack(
+            (
+                np.stack((t, -np.ones_like(t)), axis=1),
+                np.stack((-t, t), axis=1),
+                np.stack((-np.ones_like(t), -t), axis=1),
+            ),
+            axis=1,
+        )
+    )
+
+
+def _callable_beta_normal_flux(
+        beta: tuple[Callable, Callable],
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Evaluate :math:`\beta\cdot n` on element-face quadrature."""
-    face_points = space.quad_data.pts_fc.reshape(-1, 2)
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    face_points = _reference_edge_points_from_trace(trace_ref).reshape(-1, 2)
     mapped_points = space.mesh.map_reference_points(face_points)
-    num_face_quads = space.quad_data.weights_JGL.size
+    num_face_quads = trace_ref.weights.size
     num_flat_points = face_points.shape[0]
     beta_values = np.empty((space.mesh.num_tri, num_flat_points, 2), dtype=np.float64)
     beta_values[..., 0] = _normalize_coefficient_values(
@@ -349,14 +370,20 @@ def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> Ve
     )
 
 
-def _prepare_beta_data(beta, space: DGSpace) -> tuple[VectorDGField | None, np.ndarray, tuple[Callable, Callable] | None]:
+def _prepare_beta_data(
+        beta,
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> tuple[VectorDGField | None, np.ndarray, tuple[Callable, Callable] | None]:
     """Return DG beta data, normal fluxes, and callable beta data for assembly."""
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     if _is_callable_beta(beta):
         beta_callables = (beta[0], beta[1])
-        return None, _callable_beta_normal_flux(beta_callables, space), beta_callables
+        return None, _callable_beta_normal_flux(beta_callables, space, trace_space=trace_ref), beta_callables
 
     beta_field = _as_beta_field(beta, space)
-    beta_normal_flux = hdg_mats.advective_boundary_normal(beta_field, space)
+    beta_normal_flux = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     return beta_field, beta_normal_flux, None
 
 
@@ -903,7 +930,9 @@ def solve_advection_reaction_hdg(
         coefficient arrays, per-face constants, or face-quadrature values.  The
         Numba fused backend accepts ``None``, scalars, or
         :class:`DGField` objects; project callable stabilizations before
-        requesting ``assembly_backend="numba"``.
+        requesting ``assembly_backend="numba"``.  The raw-CUDA backend
+        currently supports only ``None`` and rejects explicit stabilization
+        inputs before device setup.
     cache_local_solvers
         If ``True``, retain the dense local inverse blocks i0.n the returned
         result.  The Numba backend computes these blocks for reconstruction but
@@ -941,12 +970,16 @@ def solve_advection_reaction_hdg(
             raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
         if raw_lu_mode != "safe" and raw_local_assembly != "fused":
             raise ValueError("raw_lu_mode='coop' is only supported with raw_local_assembly='fused'")
-        if raw_lu_mode == "coop" and str(trace_basis).replace("_", "-").lower() == "legendre-modal":
-            raise ValueError("raw_lu_mode='coop' is not validated for trace_basis='legendre-modal'; use raw_lu_mode='safe' or trace_basis='legacy-lagrange'")
         if int(raw_block_size) not in {1, 32, 64, 128}:
             raise ValueError("raw_block_size must be one of 1, 32, 64, or 128")
         if raw_matrix_format not in {"auto", "coo", "csr"}:
             raise ValueError("raw_matrix_format must be 'auto', 'coo', or 'csr'")
+        if advection_stabilization is not None:
+            raise NotImplementedError(
+                "assembly_backend='raw-cuda' currently supports only "
+                "advection_stabilization=None, using the upwind value abs(beta_h . n); "
+                "explicit stabilization tables and callables are not wired into the raw CUDA kernels yet"
+            )
     if ilu_permc_spec is None:
         ilu_permc_spec = "NATURAL" if trace_ordering == "upwind-scc" else "COLAMD"
     want = tuple(return_)
@@ -954,8 +987,9 @@ def solve_advection_reaction_hdg(
     effective_backend = assembly_backend
     if effective_backend == "auto":
         effective_backend = "numpy"
-    if trace_basis != "legacy-lagrange" and effective_backend != "raw-cuda":
-        raise NotImplementedError("advection non-legacy trace bases currently require assembly_backend='raw-cuda'")
+    if trace_basis == "bernstein":
+        raise NotImplementedError("advection trace_basis='bernstein' is not wired into the assembly backends yet")
+    trace_space_host = space.trace_space(trace_basis)
     if materialize_host_solution is None:
         wants_host_solution = effective_backend not in {"cupy", "raw-cuda"}
     else:
@@ -982,7 +1016,11 @@ def solve_advection_reaction_hdg(
             beta_field = _require_beta_field_for_backend(beta, space, backend="numba")
             return beta_field, None, None, source_field, reaction_field
 
-        beta_field, beta_normal_flux, beta_callables = _prepare_beta_data(beta, space)
+        beta_field, beta_normal_flux, beta_callables = _prepare_beta_data(
+            beta,
+            space,
+            trace_space=trace_space_host,
+        )
         source_rhs = hdg_assembly.source_moments(source, space)
         return beta_field, beta_normal_flux, beta_callables, source_rhs, reaction
 
@@ -1011,7 +1049,7 @@ def solve_advection_reaction_hdg(
         return upwind_scc_trace_ordering(
             space.mesh,
             beta_dot_normal,
-            space.quad_data.edg_dof,
+            trace_space_host.edg_dof,
             active_edges=trace_ordering_active_edges(),
             flux_tolerance=trace_ordering_flux_tolerance,
         )
@@ -1091,7 +1129,7 @@ def solve_advection_reaction_hdg(
             beta_dot_normal, beta_flux_time = _timed_call(
                 "assembling normal flux for trace ordering",
                 verbosity,
-                lambda: hdg_mats.advective_boundary_normal(beta_h, space),
+                lambda: hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space_host),
                 level=2,
             )
             preparation += beta_flux_time
@@ -1134,6 +1172,7 @@ def solve_advection_reaction_hdg(
                 "edge_order": numba_edge_order,
                 "beta_dot_normal": beta_dot_normal,
                 "advection_stabilization": advection_stabilization,
+                "trace_space": trace_space_host,
             }
         )
 
@@ -1192,6 +1231,7 @@ def solve_advection_reaction_hdg(
                     beta_dot_normal=beta_dot_normal,
                     reaction=reaction_h,
                     advection_stabilization=advection_stabilization,
+                    trace_space=trace_space_host,
                 ),
                 multiline=verbosity >= 2,
             )
@@ -1216,7 +1256,7 @@ def solve_advection_reaction_hdg(
         cspace = as_cupy_space(space)
         detail_timings["raw.cupy_space"] = time.perf_counter() - setup_start
         setup_start = time.perf_counter()
-        trace_host = space.trace_space(trace_basis)
+        trace_host = trace_space_host
         detail_timings["raw.trace_space.host"] = time.perf_counter() - setup_start
         setup_start = time.perf_counter()
         trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
@@ -1337,6 +1377,7 @@ def solve_advection_reaction_hdg(
                 reaction_h,
                 boundary_condition,
                 space,
+                trace_space=trace_space_host,
                 **cupy_kwargs,
             ),
             multiline=verbosity >= 2,
@@ -1375,13 +1416,16 @@ def solve_advection_reaction_hdg(
             space,
             beta_dot_normal,
             advection_stabilization,
+            trace_space=trace_space_host,
         )
 
         def assemble_local_mats():
             local_blocks, _ = _timed_call(
                 "assembling boundary mass matrices",
                 verbosity,
-                lambda: np.ascontiguousarray(hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face)),
+                lambda: np.ascontiguousarray(
+                    hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face, trace_space=trace_space_host)
+                ),
                 level=2,
             )
             scratch_blocks = np.empty_like(local_blocks)
@@ -1417,7 +1461,7 @@ def solve_advection_reaction_hdg(
         element_boundary_mats, boundary_assembly = _timed_call(
             "assembling element boundary coupling",
             verbosity,
-            lambda: hdg_mats.element_boundary_mats_from_trace_weight(space, gamma_face),
+            lambda: hdg_mats.element_boundary_mats_from_trace_weight(space, gamma_face, trace_space=trace_space_host),
         )
 
         local_solver, local_inverse = _timed_call(
@@ -1430,7 +1474,7 @@ def solve_advection_reaction_hdg(
             trace_lift, _ = _timed_call(
                 "building weighted advection trace lift",
                 verbosity,
-                lambda: hdg_mats.advection_trace_lift_from_stabilization(space, tau_face),
+                lambda: hdg_mats.advection_trace_lift_from_stabilization(space, tau_face, trace_space=trace_space_host),
                 level=2,
             )
             trace_blocks, _ = _timed_call(
@@ -1441,19 +1485,28 @@ def solve_advection_reaction_hdg(
                     local_solver,
                     element_boundary_mats,
                     space,
+                    trace_space=trace_space_host,
                 ),
                 level=2,
             )
             (matrix_rows, matrix_cols), _ = _timed_call(
                 "building global COO index arrays",
                 verbosity,
-                lambda: hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face"),
+                lambda: hdg_assembly.trace_matrix_indices(
+                    space,
+                    interior_mass_mode="face",
+                    trace_space=trace_space_host,
+                ),
                 level=2,
             )
             interior_mass_blocks, _ = _timed_call(
                 "assembling weighted interior trace masses",
                 verbosity,
-                lambda: hdg_mats.advection_interior_trace_mass_blocks_from_weight(space, gamma_face),
+                lambda: hdg_mats.advection_interior_trace_mass_blocks_from_weight(
+                    space,
+                    gamma_face,
+                    trace_space=trace_space_host,
+                ),
                 level=2,
             )
             matrix_data, _ = _timed_call(
@@ -1465,6 +1518,7 @@ def solve_advection_reaction_hdg(
                     boundary_penalty,
                     interior_mass_mode="face",
                     interior_mass_blocks=interior_mass_blocks,
+                    trace_space=trace_space_host,
                 ),
                 level=2,
             )
@@ -1478,6 +1532,7 @@ def solve_advection_reaction_hdg(
                     boundary_condition,
                     space,
                     boundary_penalty,
+                    trace_space=trace_space_host,
                 ),
                 level=2,
             )
@@ -1495,10 +1550,10 @@ def solve_advection_reaction_hdg(
         diagnostic_rows = None
     else:
         solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
-        diagnostic_rows = hdg_assembly.free_trace_dofs(space)
+        diagnostic_rows = hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
         if boundary_mode == "eliminate" and reduction is None:
             def eliminate_boundary_trace():
-                known_mask = ~hdg_assembly.free_trace_dofs(space)
+                known_mask = ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
                 known_values = boundary_trace.ravel()
                 return eliminate_known_dofs(rows, cols, data, rhs, known_mask, known_values)
 
@@ -1642,7 +1697,7 @@ def solve_advection_reaction_hdg(
             ilu_fill_factor=effective_ilu_fill_factor,
             ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
-            upwind_block_size=space.quad_data.edg_dof,
+            upwind_block_size=trace_space_host.edg_dof,
             upwind_level_widths=upwind_level_widths,
             scale_system=effective_scale_system,
             scale_matrix_in_place=effective_scale_system,
@@ -1675,7 +1730,7 @@ def solve_advection_reaction_hdg(
             ilu_fill_factor=effective_ilu_fill_factor,
             ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
-            upwind_block_size=space.quad_data.edg_dof,
+            upwind_block_size=trace_space_host.edg_dof,
             upwind_level_widths=upwind_level_widths,
             scale_system=effective_scale_system,
             scale_matrix_in_place=effective_scale_system,
@@ -1808,6 +1863,7 @@ def solve_advection_reaction_hdg(
                         reaction_h,
                         space,
                         advection_stabilization=advection_stabilization,
+                        trace_space=trace_space_host,
                     ),
                 )
             else:
@@ -1822,7 +1878,14 @@ def solve_advection_reaction_hdg(
 
                         local_solver = np.ascontiguousarray(asnumpy(local_solver))
                         element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))
-                    return hdg_assembly.reconstruct_field(trace, source_data, local_solver, element_boundary_mats, space)
+                    return hdg_assembly.reconstruct_field(
+                        trace,
+                        source_data,
+                        local_solver,
+                        element_boundary_mats,
+                        space,
+                        trace_space=trace_space_host,
+                    )
 
                 field, reconstruction = _timed_call(
                     "reconstructing element field",

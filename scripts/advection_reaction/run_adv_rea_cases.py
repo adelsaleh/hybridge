@@ -1092,7 +1092,7 @@ def _main() -> None:
         "--trace-basis",
         choices=("legacy-lagrange", "legendre-modal", "bernstein"),
         default=None,
-        help="override trace basis for this run only; non-legacy currently requires raw-cuda assembly",
+        help="override trace basis for this run only; legendre-modal is supported by numpy, numba, cupy, and raw-cuda safe assembly",
     )
     parser.add_argument(
         "--trace-ordering",

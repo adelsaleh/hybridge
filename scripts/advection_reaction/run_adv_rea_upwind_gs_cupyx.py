@@ -105,7 +105,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--nx", type=int, default=128)
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--basis", default="dub_orth", choices=("hier_C0", "hierarchical_c0", "bernstein", "dub_orth"))
-    parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
+    parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal"), default="legacy-lagrange")
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)
     parser.add_argument("--rtol", type=float, default=1.0e-13)
@@ -429,7 +429,13 @@ def main(argv: list[str] | None = None) -> int:
         volume_quad_1d=args.volume_quad_1d,
         edge_quad_1d=args.edge_quad_1d,
     )
-    logger.done("space", space_start, "building DG space", extra=f"el_dof={space.el_dof:,}, edge_dof={space.quad_data.edg_dof:,}")
+    trace_space = space.trace_space(args.trace_basis)
+    logger.done(
+        "space",
+        space_start,
+        "building DG space",
+        extra=f"el_dof={space.el_dof:,}, edge_dof={trace_space.edg_dof:,}",
+    )
 
     case_start = logger.start("case", "building manufactured case", level=2)
     case, (beta_x, beta_y, reaction, source, exact) = build_case(args)
@@ -441,14 +447,14 @@ def main(argv: list[str] | None = None) -> int:
 
     ordering_start = logger.start("ordering_total", "building upwind-SCC ordering")
     flux_start = time.perf_counter()
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space)
     logger.timings["beta_dot_normal"] = time.perf_counter() - flux_start
     logger.order.append("beta_dot_normal")
     scc_start = time.perf_counter()
     ordering = upwind_scc_trace_ordering(
         mesh,
         beta_dot_normal,
-        space.quad_data.edg_dof,
+        trace_space.edg_dof,
         active_edges=active_free_edges(space),
         flux_tolerance=args.trace_ordering_flux_tolerance,
     )
@@ -470,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
         space,
         edge_order=ordering.edge_order,
         return_block_coo=True,
+        trace_space=trace_space,
     )
     trace_system = assembly.trace_system
     if assembly.block_rows is None or assembly.block_cols is None or assembly.block_data is None:
@@ -486,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
                 logger.timings[f"assembly_{key}"] = float(value)
                 logger.order.append(f"assembly_{key}")
 
-    edge_dof = int(space.quad_data.edg_dof)
+    edge_dof = int(trace_space.edg_dof)
     num_blocks = int(trace_system.rhs.size // edge_dof)
 
     precond_start = logger.start("preconditioner", "building forward upwind-GS preconditioner")
@@ -528,6 +535,14 @@ def main(argv: list[str] | None = None) -> int:
         logger,
     )
 
+    if cupyx_run.info != 0:
+        raise RuntimeError(f"Cupyx {args.cupyx_solver} failed with info={cupyx_run.info}")
+    if not np.isfinite(cupyx_run.relative_residual) or cupyx_run.relative_residual > float(args.check_rtol):
+        raise RuntimeError(
+            f"Cupyx scaled relative residual {cupyx_run.relative_residual:.3e} "
+            f"exceeds --check-rtol={float(args.check_rtol):.3e}"
+        )
+
     from hdgfem.backends.cupy import require_cupy
 
     cupy = require_cupy()
@@ -542,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.done("trace_expand", trace_start, "expanding ordered reduced trace", level=2)
 
     recon_start = logger.start("reconstruct", "reconstructing element field")
-    field = reconstruct_projected_field_numba(full_trace, source_h, beta_h, reaction_h, space)
+    field = reconstruct_projected_field_numba(full_trace, source_h, beta_h, reaction_h, space, trace_space=trace_space)
     logger.done("reconstruct", recon_start, "reconstructing element field")
 
     error_start = logger.start("error_eval", "evaluating errors")
@@ -613,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
                 ("atol", args.atol, ".1e"),
                 ("maxiter", args.maxiter, ",d"),
                 ("gmres restart", -1 if args.gmres_restart is None else args.gmres_restart, ",d"),
+                ("check rtol", args.check_rtol, ".1e"),
                 ("info", cupyx_run.info, "d"),
                 ("iterations", cupyx_run.iterations, ",d"),
                 ("scaled rel residual", cupyx_run.relative_residual, ".3e"),

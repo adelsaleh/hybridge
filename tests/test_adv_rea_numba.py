@@ -39,31 +39,56 @@ def _elementwise_constant_field(space: DGSpace, values, *, name: str) -> DGField
     return space.field(np.ascontiguousarray(coeffs), name=name)
 
 
-def _numpy_weighted_advection_trace_system(source_h, beta_h, reaction_h, boundary_condition, space: DGSpace):
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
-    tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(space, beta_dot_normal)
-    local_mats = np.ascontiguousarray(hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face))
+def _numpy_weighted_advection_trace_system(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary_condition,
+        space: DGSpace,
+        *,
+        trace_basis: str = "legacy-lagrange",
+):
+    trace_space = space.trace_space(trace_basis)
+    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space)
+    tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
+        space,
+        beta_dot_normal,
+        trace_space=trace_space,
+    )
+    local_mats = np.ascontiguousarray(
+        hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face, trace_space=trace_space)
+    )
     scratch = np.empty_like(local_mats)
     hdg_mats.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
     hdg_mats.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
     local_solver = np.linalg.inv(local_mats)
-    element_boundary_mats = hdg_mats.element_boundary_mats_from_trace_weight(space, gamma_face)
+    element_boundary_mats = hdg_mats.element_boundary_mats_from_trace_weight(
+        space,
+        gamma_face,
+        trace_space=trace_space,
+    )
     source_moments = hdg_assembly.source_moments(source_h, space)
-    trace_lift = hdg_mats.advection_trace_lift_from_stabilization(space, tau_face)
+    trace_lift = hdg_mats.advection_trace_lift_from_stabilization(space, tau_face, trace_space=trace_space)
     trace_blocks = hdg_assembly.element_to_trace_matrix_from_lift(
         trace_lift,
         local_solver,
         element_boundary_mats,
         space,
+        trace_space=trace_space,
     )
-    rows, cols = hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face")
-    interior_mass_blocks = hdg_mats.advection_interior_trace_mass_blocks_from_weight(space, gamma_face)
+    rows, cols = hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face", trace_space=trace_space)
+    interior_mass_blocks = hdg_mats.advection_interior_trace_mass_blocks_from_weight(
+        space,
+        gamma_face,
+        trace_space=trace_space,
+    )
     data = hdg_assembly.trace_matrix_data(
         trace_blocks,
         space,
         1e20,
         interior_mass_mode="face",
         interior_mass_blocks=interior_mass_blocks,
+        trace_space=trace_space,
     )
     rhs, boundary_trace = hdg_assembly.trace_rhs_from_lift(
         trace_lift,
@@ -72,6 +97,7 @@ def _numpy_weighted_advection_trace_system(source_h, beta_h, reaction_h, boundar
         boundary_condition,
         space,
         1e20,
+        trace_space=trace_space,
     )
     return hdg_assembly.TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
 
@@ -173,11 +199,20 @@ def test_numba_local_assembly_matches_numpy_projected_coefficients() -> None:
     np.testing.assert_allclose(numba_data.element_boundary_mats, numpy_boundary, rtol=1e-12, atol=1e-12)
 
 
-def test_numba_fused_trace_system_matches_numpy_projected_coefficients() -> None:
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+def test_numba_fused_trace_system_matches_numpy_projected_coefficients(trace_basis: str) -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, exact = _projected_test2_fields(space)
-    numpy_trace_system = _numpy_weighted_advection_trace_system(source_h, beta_h, reaction_h, exact, space)
+    trace_space = space.trace_space(trace_basis)
+    numpy_trace_system = _numpy_weighted_advection_trace_system(
+        source_h,
+        beta_h,
+        reaction_h,
+        exact,
+        space,
+        trace_basis=trace_basis,
+    )
 
     numba_trace_system = assemble_projected_trace_system_numba(
         source_h,
@@ -185,6 +220,7 @@ def test_numba_fused_trace_system_matches_numpy_projected_coefficients() -> None
         reaction_h,
         exact,
         space,
+        trace_space=trace_space,
     ).trace_system
 
     np.testing.assert_array_equal(numba_trace_system.rows, numpy_trace_system.rows)
@@ -193,10 +229,12 @@ def test_numba_fused_trace_system_matches_numpy_projected_coefficients() -> None
     np.testing.assert_allclose(numba_trace_system.rhs, numpy_trace_system.rhs, rtol=1e-11, atol=1e-11)
 
 
-def test_numba_eliminated_trace_system_matches_generic_elimination() -> None:
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+def test_numba_eliminated_trace_system_matches_generic_elimination(trace_basis: str) -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, exact = _projected_test2_fields(space)
+    trace_space = space.trace_space(trace_basis)
 
     full_trace_system = assemble_projected_trace_system_numba(
         source_h,
@@ -204,13 +242,14 @@ def test_numba_eliminated_trace_system_matches_generic_elimination() -> None:
         reaction_h,
         exact,
         space,
+        trace_space=trace_space,
     ).trace_system
     generic_reduction = eliminate_known_dofs(
         full_trace_system.rows,
         full_trace_system.cols,
         full_trace_system.data,
         full_trace_system.rhs,
-        ~hdg_assembly.free_trace_dofs(space),
+        ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space),
         full_trace_system.boundary_trace.ravel(),
     )
 
@@ -220,6 +259,7 @@ def test_numba_eliminated_trace_system_matches_generic_elimination() -> None:
         reaction_h,
         exact,
         space,
+        trace_space=trace_space,
     )
     direct_reduction = eliminated.reduction
 
@@ -280,8 +320,9 @@ def test_numba_eliminated_block_coo_reconstructs_trace_matrix() -> None:
     assert diff.nnz == 0 or np.max(np.abs(diff.data)) <= 1.0e-12
 
 
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
 @pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
-def test_numba_solve_matches_numpy_projected_coefficients(boundary_mode: str) -> None:
+def test_numba_solve_matches_numpy_projected_coefficients(boundary_mode: str, trace_basis: str) -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, exact = _projected_test2_fields(space)
@@ -296,6 +337,7 @@ def test_numba_solve_matches_numpy_projected_coefficients(boundary_mode: str) ->
         preconditioner=None,
         boundary_mode=boundary_mode,
         assembly_backend="numpy",
+        trace_basis=trace_basis,
         verbose=False,
     )
     numba_result = solve_advection_reaction_hdg(
@@ -308,6 +350,7 @@ def test_numba_solve_matches_numpy_projected_coefficients(boundary_mode: str) ->
         preconditioner=None,
         boundary_mode=boundary_mode,
         assembly_backend="numba",
+        trace_basis=trace_basis,
         verbose=False,
     )
 
@@ -478,6 +521,30 @@ def test_numba_backend_requires_projected_source_reaction_and_beta() -> None:
             solver="direct",
             preconditioner=None,
             assembly_backend="numba",
+            verbose=False,
+        )
+
+
+def test_raw_cuda_rejects_explicit_advection_stabilization_before_device_setup() -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 1, basis_type="dub_orth")
+    source_h = space.constant(1.0, name="source_h")
+    reaction_h = space.constant(0.5, name="reaction_h")
+    beta_h = (space * space).constant((0.75, -0.25), name="beta_h")
+    boundary = lambda x, y: np.zeros_like(x)
+
+    with pytest.raises(NotImplementedError, match="advection_stabilization=None"):
+        solve_advection_reaction_hdg(
+            source_h,
+            beta_h,
+            reaction_h,
+            boundary,
+            space,
+            solver="direct",
+            preconditioner=None,
+            boundary_mode="eliminate",
+            assembly_backend="raw-cuda",
+            advection_stabilization=2.0,
             verbose=False,
         )
 

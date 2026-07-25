@@ -545,9 +545,8 @@ extern "C" __global__ void assemble_advection_raw(
         const long long* __restrict__ int_edges,
         const long long* __restrict__ side_flux_offsets,
         const double* __restrict__ jacs_el_fc,
-        const double* __restrict__ edge_jacs,
-        const double* __restrict__ edge_mass,
-        const double* __restrict__ oriented_lifts,
+        const double* __restrict__ side_mass_blocks,
+        const double* __restrict__ trace_lift,
         const long long num_elements,
         const long long num_int_edges,
         const long long n_flux)
@@ -646,7 +645,7 @@ extern "C" __global__ void assemble_advection_raw(
         }
 
         // Emit Schur flux blocks.  Row-side orientation is encoded by
-        // loc2oriented_face_coupling and oriented_lifts.  Column-side orientation
+        // The row side uses the precomputed tau-weighted global-orientation lift.  Column-side orientation
         // uses the trace-basis transform selected at kernel compile time:
         // nodal bases reverse dof order, modal Legendre bases apply parity signs.
         for (int row_face = 0; row_face < 3; ++row_face) {
@@ -657,12 +656,10 @@ extern "C" __global__ void assemble_advection_raw(
                 continue;
             }
             const long long side_base = side_flux_offsets[side_id];
-            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
-            const double lift_scale = 0.5 * jacs_el_fc[element * 3 + row_face];
             for (int row_dof = 0; row_dof < NTR; ++row_dof) {
                 double rhs_value = 0.0;
                 for (int i = 0; i < NEL; ++i) {
-                    const double lift = lift_scale * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                    const double lift = trace_lift[((element * 3 + row_face) * NTR + row_dof) * NEL + i];
                     rhs_value += lift * local_rhs[i * NCOLS + (NCOLS - 1)];
                 }
 
@@ -672,12 +669,11 @@ extern "C" __global__ void assemble_advection_raw(
                     const long long col_solve_edge = edge_to_solve_edge[col_edge];
                     const bool positive = orientations[element * 3 + col_face];
                     for (int col_dof = 0; col_dof < NTR; ++col_dof) {
-                        const int local_col_dof = raw_local_trace_dof(positive, col_dof);
+                        const int column = raw_trace_column_index(col_face, positive, col_dof);
                         const double trace_sign = raw_trace_orientation_sign(positive, col_dof);
-                        const int column = col_face * NTR + local_col_dof;
                         double schur_value = 0.0;
                         for (int i = 0; i < NEL; ++i) {
-                            const double lift = lift_scale * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                            const double lift = trace_lift[((element * 3 + row_face) * NTR + row_dof) * NEL + i];
                             schur_value += lift * local_rhs[i * NCOLS + column];
                         }
                         schur_value *= trace_sign;
@@ -694,27 +690,18 @@ extern "C" __global__ void assemble_advection_raw(
                         col_block_pos += 1;
                     }
                 }
+                const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;
+                for (int col_dof = 0; col_dof < NTR; ++col_dof) {
+                    const long long out = mass_base + col_dof;
+                    rows[out] = row_solve_edge * NTR + row_dof;
+                    cols[out] = row_solve_edge * NTR + col_dof;
+                    data[out] = side_mass_blocks[side_id * NTR * NTR + row_dof * NTR + col_dof];
+                }
                 atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
             }
         }
     }
 
-    // Append one interior trace-mass block per free edge.  This uses the same
-    // convention as trace_data_cupy: edge_jac * M_ref_edge.
-    if (element < num_int_edges && threadIdx.x == 0) {
-        const long long edge = int_edges[element];
-        const long long solve_edge = edge_to_solve_edge[edge];
-        const double scale = edge_jacs[edge];
-        const long long base = n_flux + element * NTR * NTR;
-        for (int i = 0; i < NTR; ++i) {
-            for (int j = 0; j < NTR; ++j) {
-                const long long out = base + i * NTR + j;
-                rows[out] = solve_edge * NTR + i;
-                cols[out] = solve_edge * NTR + j;
-                data[out] = scale * edge_mass[i * NTR + j];
-            }
-        }
-    }
 }
 """
 
@@ -737,9 +724,8 @@ extern "C" __global__ void assemble_advection_raw_coop(
         const long long* __restrict__ int_edges,
         const long long* __restrict__ side_flux_offsets,
         const double* __restrict__ jacs_el_fc,
-        const double* __restrict__ edge_jacs,
-        const double* __restrict__ edge_mass,
-        const double* __restrict__ oriented_lifts,
+        const double* __restrict__ side_mass_blocks,
+        const double* __restrict__ trace_lift,
         const long long num_elements,
         const long long num_int_edges,
         const long long n_flux)
@@ -881,18 +867,14 @@ extern "C" __global__ void assemble_advection_raw_coop(
             }
 
             const long long side_base = side_flux_offsets[side_id];
-            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
-            const double lift_scale = 0.5 * jacs_el_fc[element * 3 + row_face];
 
             // This thread owns one Schur row for this element side.  The same
-            // oriented lift vector is dotted with the solved source column and
-            // then with every solved trace column.  Keeping the scaled lift in
-            // registers/local memory avoids reloading oriented_lifts and redoing
-            // the face-Jacobian multiply inside every trace-column dot product.
+            // tau-weighted lift vector is dotted with the solved source column
+            // and then with every solved trace column.
             double lift_values[NEL];
             double rhs_value = 0.0;
             for (int i = 0; i < NEL; ++i) {
-                const double lift = lift_scale * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                const double lift = trace_lift[((element * 3 + row_face) * NTR + row_dof) * NEL + i];
                 lift_values[i] = lift;
                 rhs_value += lift * local_rhs[i * NCOLS + (NCOLS - 1)];
             }
@@ -903,9 +885,8 @@ extern "C" __global__ void assemble_advection_raw_coop(
                 const long long col_solve_edge = edge_to_solve_edge[col_edge];
                 const bool positive = orientations[element * 3 + col_face];
                 for (int col_dof = 0; col_dof < NTR; ++col_dof) {
-                    const int local_col_dof = raw_local_trace_dof(positive, col_dof);
+                    const int column = raw_trace_column_index(col_face, positive, col_dof);
                     const double trace_sign = raw_trace_orientation_sign(positive, col_dof);
-                    const int column = col_face * NTR + local_col_dof;
                     double schur_value = 0.0;
                     for (int i = 0; i < NEL; ++i) {
                         schur_value += lift_values[i] * local_rhs[i * NCOLS + column];
@@ -924,27 +905,17 @@ extern "C" __global__ void assemble_advection_raw_coop(
                     col_block_pos += 1;
                 }
             }
+            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;
+            for (int col_dof = 0; col_dof < NTR; ++col_dof) {
+                const long long out = mass_base + col_dof;
+                rows[out] = row_solve_edge * NTR + row_dof;
+                cols[out] = row_solve_edge * NTR + col_dof;
+                data[out] = side_mass_blocks[side_id * NTR * NTR + row_dof * NTR + col_dof];
+            }
             atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
         }
     }
 
-    // The same grid is also used for interior mass blocks.  These writes are
-    // independent of the element-local shared data, so they can run for block
-    // indices beyond num_elements when num_int_edges is larger.
-    if (element < num_int_edges) {
-        const long long edge = int_edges[element];
-        const long long solve_edge = edge_to_solve_edge[edge];
-        const double scale = edge_jacs[edge];
-        const long long base = n_flux + element * NTR * NTR;
-        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {
-            const int i = idx / NTR;
-            const int j = idx - i * NTR;
-            const long long out = base + idx;
-            rows[out] = solve_edge * NTR + i;
-            cols[out] = solve_edge * NTR + j;
-            data[out] = scale * edge_mass[i * NTR + j];
-        }
-    }
 }
 """
 
@@ -1614,18 +1585,23 @@ extern "C" __global__ void assemble_advection_raw_fused(
             }
 
             const long long side_base = side_flux_offsets[side_id];
-            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
-            const double lift_scale = 0.5 * jacs_el_fc[element * 3 + row_face];
+            const bool row_positive_lift = orientations[element * 3 + row_face];
+            const int row_local_lift_dof = raw_local_trace_dof(row_positive_lift, row_dof);
+            const double row_lift_sign = raw_trace_orientation_sign(row_positive_lift, row_dof);
+            const double lift_scale = jacs_el_fc[element * 3 + row_face];
 
-            // This thread owns one Schur row for this element side.  The same
-            // oriented lift vector is dotted with the solved source column and
-            // then with every solved trace column.  Keeping the scaled lift in
-            // registers/local memory avoids reloading oriented_lifts and redoing
-            // the face-Jacobian multiply inside every trace-column dot product.
+            // This thread owns one Schur row for this element side.  Build the
+            // tau-weighted global-orientation lift on the fly from face
+            // quadrature values, matching the NumPy/GPU4 precomputed lift.
             double lift_values[NEL];
             double rhs_value = 0.0;
             for (int i = 0; i < NEL; ++i) {
-                const double lift = lift_scale * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                double lift = 0.0;
+                for (int qf = 0; qf < NQF; ++qf) {
+                    const double mu = row_lift_sign * trace_basis[row_local_lift_dof * NQF + qf];
+                    const double phi_i = face_basis[(row_face * NEL + i) * NQF + qf];
+                    lift += lift_scale * tau_face[row_face * NQF + qf] * face_weights[qf] * mu * phi_i;
+                }
                 lift_values[i] = lift;
                 rhs_value += lift * local_rhs[i * NCOLS + (NCOLS - 1)];
             }
@@ -1636,9 +1612,8 @@ extern "C" __global__ void assemble_advection_raw_fused(
                 const long long col_solve_edge = edge_to_solve_edge[col_edge];
                 const bool positive = orientations[element * 3 + col_face];
                 for (int col_dof = 0; col_dof < NTR; ++col_dof) {
-                    const int local_col_dof = raw_local_trace_dof(positive, col_dof);
+                    const int column = raw_trace_column_index(col_face, positive, col_dof);
                     const double trace_sign = raw_trace_orientation_sign(positive, col_dof);
-                    const int column = col_face * NTR + local_col_dof;
                     double schur_value = 0.0;
                     for (int i = 0; i < NEL; ++i) {
                         schur_value += lift_values[i] * local_rhs[i * NCOLS + column];
@@ -1657,26 +1632,29 @@ extern "C" __global__ void assemble_advection_raw_fused(
                     col_block_pos += 1;
                 }
             }
+            const bool row_positive_mass = orientations[element * 3 + row_face];
+            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);
+            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);
+            const double mass_scale = jacs_el_fc[element * 3 + row_face];
+            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;
+            for (int col_dof = 0; col_dof < NTR; ++col_dof) {
+                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);
+                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);
+                double mass_value = 0.0;
+                for (int qf = 0; qf < NQF; ++qf) {
+                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];
+                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];
+                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;
+                }
+                const long long out = mass_base + col_dof;
+                rows[out] = row_solve_edge * NTR + row_dof;
+                cols[out] = row_solve_edge * NTR + col_dof;
+                data[out] = mass_value;
+            }
             atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
         }
     }
 
-    // Append the edge trace mass blocks after all flux blocks.  This is independent
-    // of local element algebra and uses the same reduced solve-edge numbering.
-    if (element < num_int_edges) {
-        const long long edge = int_edges[element];
-        const long long solve_edge = edge_to_solve_edge[edge];
-        const double scale = edge_jacs[edge];
-        const long long base = n_flux + element * NTR * NTR;
-        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {
-            const int i = idx / NTR;
-            const int j = idx - i * NTR;
-            const long long out = base + idx;
-            rows[out] = solve_edge * NTR + i;
-            cols[out] = solve_edge * NTR + j;
-            data[out] = scale * edge_mass[i * NTR + j];
-        }
-    }
 }
 
 extern "C" __global__ void reconstruct_advection_raw_fused(
@@ -1747,10 +1725,9 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
             const long long edge = loc2glob_edge[element * 3 + face];
             const bool positive = orientations[element * 3 + face];
             for (int dof = 0; dof < NTR; ++dof) {
-                const int local_dof = raw_local_trace_dof(positive, dof);
-                const double trace_sign = raw_trace_orientation_sign(positive, dof);
-                const int column = face * NTR + local_dof;
-                value += local_rhs[i * NCOLS + column] * (trace_sign * trace[edge * NTR + dof]);
+                const int column = raw_trace_column_index(face, positive, dof);
+                const double trace_value = raw_oriented_trace_value(positive, dof, trace[edge * NTR + dof]);
+                value += local_rhs[i * NCOLS + column] * trace_value;
             }
         }
         local_rhs[i * NCOLS] = value;
@@ -1805,10 +1782,9 @@ extern "C" __global__ void reconstruct_advection_raw(
             const long long edge = loc2glob_edge[element * 3 + face];
             const bool positive = orientations[element * 3 + face];
             for (int dof = 0; dof < NTR; ++dof) {
-                const int local_dof = raw_local_trace_dof(positive, dof);
-                const double trace_sign = raw_trace_orientation_sign(positive, dof);
-                const int column = face * NTR + local_dof;
-                rhs[i] += element_boundary[(element * NEL + i) * (3 * NTR) + column] * (trace_sign * trace[edge * NTR + dof]);
+                const int column = raw_trace_column_index(face, positive, dof);
+                const double trace_value = raw_oriented_trace_value(positive, dof, trace[edge * NTR + dof]);
+                rhs[i] += element_boundary[(element * NEL + i) * (3 * NTR) + column] * trace_value;
             }
         }
     }
@@ -1941,6 +1917,12 @@ def _kernel_source(
         "    return 1.0;\n"
         "#endif\n"
         "}\n"
+        "__device__ __forceinline__ int raw_trace_column_index(const int face, const bool positive, const int global_dof) {\n"
+        "    return face * RAW_NTR + raw_local_trace_dof(positive, global_dof);\n"
+        "}\n"
+        "__device__ __forceinline__ double raw_oriented_trace_value(const bool positive, const int global_dof, const double value) {\n"
+        "    return raw_trace_orientation_sign(positive, global_dof) * value;\n"
+        "}\n"
     )
     return prefix + source
 
@@ -2006,8 +1988,8 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     kernel = kernel.replace(
-        '            const long long side_base = side_flux_offsets[side_id];\n            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];',
-        '            const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];',
+        '            const long long side_base = side_flux_offsets[side_id];\n',
+        '',
         1,
     )
     kernel = kernel.replace(
@@ -2016,8 +1998,8 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     kernel = kernel.replace(
-        '        const long long base = n_flux + element * NTR * NTR;\n        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {\n            const int i = idx / NTR;\n            const int j = idx - i * NTR;\n            const long long out = base + idx;\n            rows[out] = solve_edge * NTR + i;\n            cols[out] = solve_edge * NTR + j;\n            data[out] = scale * edge_mass[i * NTR + j];\n        }',
-        '        const int block_pos = mass_csr_block_pos[solve_edge];\n        for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {\n            const int i = idx / NTR;\n            const int j = idx - i * NTR;\n            const long long row = solve_edge * NTR + i;\n            const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + j);\n            atomicAdd(&data[out], scale * edge_mass[i * NTR + j]);\n        }',
+        '            const bool row_positive_mass = orientations[element * 3 + row_face];\n            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n            const double mass_scale = jacs_el_fc[element * 3 + row_face];\n            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;\n            for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                double mass_value = 0.0;\n                for (int qf = 0; qf < NQF; ++qf) {\n                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                }\n                const long long out = mass_base + col_dof;\n                rows[out] = row_solve_edge * NTR + row_dof;\n                cols[out] = row_solve_edge * NTR + col_dof;\n                data[out] = mass_value;\n            }',
+        '            const int mass_block_pos = mass_csr_block_pos[row_solve_edge];\n            if (mass_block_pos >= 0) {\n                const bool row_positive_mass = orientations[element * 3 + row_face];\n                const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n                const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n                const double mass_scale = jacs_el_fc[element * 3 + row_face];\n                const long long row = row_solve_edge * NTR + row_dof;\n                for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                    const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                    const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                    double mass_value = 0.0;\n                    for (int qf = 0; qf < NQF; ++qf) {\n                        const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                        const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                        mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                    }\n                    const long long out = (long long)csr_indptr[row] + ((long long)mass_block_pos * NTR + col_dof);\n                    atomicAdd(&data[out], mass_value);\n                }\n            }',
         1,
     )
     return source[:start] + kernel + source[end:]
@@ -2069,6 +2051,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
         element_boundary,
         source_rhs,
         boundary_trace,
+        side_mass_blocks,
+        trace_lift,
         cspace,
         trace_ref,
         block_size: int = 1,
@@ -2091,7 +2075,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
     side_index_h = _interior_side_index(mesh_h)
     side_offsets_h = _side_flux_offsets(mesh_h, edge_to_solve_h, ntr)
     n_flux = int(side_offsets_h[-1])
-    n_mass = int(mesh_h.int_edges_inds.size * ntr * ntr)
+    n_mass = int(mesh_h.interior_elements.size * ntr * ntr)
     nnz = n_flux + n_mass
     edge_to_solve = cupy.asarray(edge_to_solve_h, dtype=cupy.int64)
     side_index = cupy.asarray(side_index_h, dtype=cupy.int64)
@@ -2136,9 +2120,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
             cspace.mesh.int_edges_inds,
             side_offsets,
             cspace.mesh.jacs_el_fc,
-            cspace.mesh.edge_jacs,
-            trace_ref.M_rf_fc,
-            trace_ref.face_trace_test_element_trial_oriented,
+            side_mass_blocks,
+            trace_lift,
             np.int64(cspace.mesh.num_tri),
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(n_flux),
@@ -2242,7 +2225,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         side_index_h = _interior_side_index(mesh_h)
         side_offsets_h = _side_flux_offsets(mesh_h, edge_to_solve_h, ntr)
         n_flux = int(side_offsets_h[-1])
-        n_mass = int(mesh_h.int_edges_inds.size * ntr * ntr)
+        n_mass = int(mesh_h.interior_elements.size * ntr * ntr)
         nnz = n_flux + n_mass
         edge_to_solve = cupy.asarray(edge_to_solve_h, dtype=cupy.int64)
         side_index = cupy.asarray(side_index_h, dtype=cupy.int64)

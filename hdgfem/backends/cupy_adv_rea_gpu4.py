@@ -366,7 +366,7 @@ def setup_reduced_indices(cspace: CupyDGSpace, timings: dict[str, float] | None 
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
     n_flux = valid_elements.size * 3 * edg_dof * edg_dof
-    n_mass = mesh.int_edges_inds.size * edg_dof * edg_dof
+    n_mass = valid_elements.size * edg_dof * edg_dof
     rows = cp.empty(n_flux + n_mass, dtype=cp.int64)
     cols = cp.empty_like(rows)
     i_grid, j_grid = cp.meshgrid(cp.arange(edg_dof, dtype=cp.int64), cp.arange(edg_dof, dtype=cp.int64), indexing="ij")
@@ -380,19 +380,40 @@ def setup_reduced_indices(cspace: CupyDGSpace, timings: dict[str, float] | None 
     local = cp.arange(edg_dof, dtype=cp.int64)
     l0 = cp.broadcast_to(local[:, None], (edg_dof, edg_dof)).ravel()
     l1 = cp.broadcast_to(local[None, :], (edg_dof, edg_dof)).ravel()
-    rows[n_flux:] = (mesh.int_edges_inds[:, None] * edg_dof + l0).ravel()
-    cols[n_flux:] = (mesh.int_edges_inds[:, None] * edg_dof + l1).ravel()
+    mass_edges = mesh.loc2glob_edge[valid_elements, valid_faces]
+    rows[n_flux:] = (mass_edges[:, None] * edg_dof + l0[None, :]).ravel()
+    cols[n_flux:] = (mass_edges[:, None] * edg_dof + l1[None, :]).ravel()
     if timings is not None:
         timings["indices"] = timings.get("indices", 0.0) + sync_elapsed(start)
     return rows, cols
 
 
-def trace_blocks_cupy(solved_el_bd_mats, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    cp = require_cupy()
+    start = time.perf_counter()
+    mesh = cspace.mesh
+    oriented_trace = oriented_trace_basis_cupy(cspace, trace_ref)
+    result = cp.ascontiguousarray(
+        cp.einsum(
+            "Kf,Kfq,Kfaq,fiq,q->Kfai",
+            mesh.jacs_el_fc,
+            cp.abs(beta_dot_normal),
+            oriented_trace,
+            trace_ref.bas_of_bd_quads,
+            trace_ref.weights,
+            optimize=True,
+        )
+    )
+    if timings is not None:
+        timings["trace_lift"] = timings.get("trace_lift", 0.0) + sync_elapsed(start)
+    return result
+
+
+def trace_blocks_cupy(solved_el_bd_mats, trace_lift, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
-    trace_lift = mesh.jacs_el_fc[..., None, None] / 2.0 * trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     blocks = trace_lift @ solved_el_bd_mats[:, None, :, :]
     blocks = blocks.reshape(mesh.num_tri, 3, edg_dof, 3, edg_dof)
     if mesh.num_negative_orientations:
@@ -408,7 +429,45 @@ def trace_blocks_cupy(solved_el_bd_mats, cspace: CupyDGSpace, trace_ref: CupyDGT
     return result
 
 
-def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
+    cp = require_cupy()
+    mesh = cspace.mesh
+    basis = cp.broadcast_to(
+        trace_ref.bas1d_of_ref_edg_qds[None, None, :, :],
+        (mesh.num_tri, 3, cspace.edg_dof, trace_ref.weights.size),
+    ).copy()
+    if mesh.num_negative_orientations:
+        neg = basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces]
+        if trace_ref.kind == "legendre-modal":
+            signs = cp.where(cp.arange(cspace.edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
+            basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces] = neg * signs[:, None]
+        else:
+            basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces] = neg[:, ::-1, :]
+    return cp.ascontiguousarray(basis)
+
+
+def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    cp = require_cupy()
+    start = time.perf_counter()
+    mesh = cspace.mesh
+    gamma_face = cp.abs(beta_dot_normal) - beta_dot_normal
+    oriented_trace = oriented_trace_basis_cupy(cspace, trace_ref)
+    side_blocks = cp.einsum(
+        "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
+        mesh.jacs_el_fc,
+        gamma_face,
+        oriented_trace,
+        oriented_trace,
+        trace_ref.weights,
+        optimize=True,
+    )
+    result = cp.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
+    if timings is not None:
+        timings["interior_mass"] = timings.get("interior_mass", 0.0) + sync_elapsed(start)
+    return result
+
+
+def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, beta_dot_normal, timings: dict[str, float] | None = None):
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -416,19 +475,18 @@ def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpa
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
     n_flux = valid_elements.size * 3 * edg_dof * edg_dof
-    n_mass = mesh.int_edges_inds.size * edg_dof * edg_dof
+    n_mass = valid_elements.size * edg_dof * edg_dof
     data = cp.empty(n_flux + n_mass, dtype=cp.float64)
     data[:n_flux] = -trace_blocks[valid_elements, valid_faces].ravel()
-    data[n_flux:] = (mesh.edge_jacs[mesh.int_edges_inds, None, None] * trace_ref.M_rf_fc[None]).ravel()
+    data[n_flux:] = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings).ravel()
     if timings is not None:
         timings["data"] = timings.get("data", 0.0) + sync_elapsed(start)
     return data
 
 
-def face_rhs_cupy(solved_src, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
     cp = require_cupy()
     start = time.perf_counter()
-    trace_lift = cspace.mesh.jacs_el_fc[..., None, None] / 2.0 * trace_ref.face_trace_test_element_trial_oriented[cspace.mesh.loc2oriented_face_coupling]
     result = (trace_lift @ solved_src[:, None, :, :]).squeeze(-1)
     if timings is not None:
         timings["rhs_faces"] = timings.get("rhs_faces", 0.0) + sync_elapsed(start)
@@ -540,11 +598,15 @@ def assemble_reduced_system_gpu4(
             element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings)
             source_rhs = source_moments_cupy(source, cspace, timings)
             boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+            side_mass_blocks = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings)
+            trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings)
             raw = assemble_projected_advection_trace_system_eliminated_raw_cuda(
                 local_mats=local_mats,
                 element_boundary=element_boundary,
                 source_rhs=source_rhs,
                 boundary_trace=boundary_trace,
+                side_mass_blocks=side_mass_blocks,
+                trace_lift=trace_lift,
                 cspace=cspace,
                 trace_ref=trace_ref,
                 block_size=raw_block_size,
@@ -582,11 +644,12 @@ def assemble_reduced_system_gpu4(
     solved = solve_local_mats(local_mats, local_rhs, timings, "local.solve.assembly")
     solved_el_bd = solved[:, :, : 3 * cspace.edg_dof]
     solved_src = solved[:, :, 3 * cspace.edg_dof :]
-    blocks = trace_blocks_cupy(solved_el_bd, cspace, trace_ref, timings)
-    data = trace_data_cupy(blocks, cspace, trace_ref, timings)
+    trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings)
+    blocks = trace_blocks_cupy(solved_el_bd, trace_lift, cspace, trace_ref, timings)
+    data = trace_data_cupy(blocks, cspace, trace_ref, beta_dot_normal, timings)
     rhs_full = cp.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=cp.float64)
     rhs_full_r = rhs_full.reshape((cspace.mesh.num_edg, cspace.edg_dof))
-    faces = face_rhs_cupy(solved_src, cspace, trace_ref, timings)
+    faces = face_rhs_cupy(solved_src, trace_lift, cspace, timings)
     cp.add.at(
         rhs_full_r,
         cspace.mesh.loc2glob_edge[cspace.mesh.interior_elements, cspace.mesh.interior_faces],

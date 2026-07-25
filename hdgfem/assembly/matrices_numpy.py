@@ -12,7 +12,7 @@ from typing import Callable
 
 import numpy as np
 
-from ..core.space import DGField, DGSpace, VectorDGField, _normalize_callable_values
+from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField, _normalize_callable_values
 from .projection import scalar_moments_from_values
 
 
@@ -52,20 +52,52 @@ def _accumulate_local_matrix(out: np.ndarray, term: np.ndarray, scale: float) ->
     return out
 
 
-def _require_normal_flux(beta_dot_normal: np.ndarray, test_space: DGSpace) -> np.ndarray:
+def _trace_ref(space: DGSpace, trace_space: DGTraceSpace | None = None) -> DGTraceSpace:
+    """Return the requested trace reference, defaulting to the legacy trace basis."""
+    return space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+
+
+def _reference_edge_points_from_1d(edge_points_1d: np.ndarray) -> np.ndarray:
+    """Map 1D edge points to the three reference-triangle faces."""
+    t = np.asarray(edge_points_1d, dtype=np.float64)
+    return np.ascontiguousarray(
+        np.stack(
+            (
+                np.stack((t, -np.ones_like(t)), axis=1),
+                np.stack((-t, t), axis=1),
+                np.stack((-np.ones_like(t), -t), axis=1),
+            ),
+            axis=1,
+        )
+    )
+
+
+def _require_normal_flux(
+        beta_dot_normal: np.ndarray,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Validate cached face-normal flux values."""
+    trace_ref = _trace_ref(test_space, trace_space)
     flux = np.asarray(beta_dot_normal, dtype=np.float64)
     expected_shape = (
         test_space.mesh.num_tri,
         3,
-        test_space.quad_data.weights_JGL.size,
+        trace_ref.weights.size,
     )
     if flux.shape != expected_shape:
         raise ValueError(f"beta_dot_normal must have shape {expected_shape}; got {flux.shape}")
     return flux
 
 
-def _face_quadrature_values_from_scalar_input(values, space: DGSpace, label: str) -> np.ndarray:
+def _face_quadrature_values_from_scalar_input(
+        values,
+        space: DGSpace,
+        label: str,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Normalize scalar face data to ``(num_elements, 3, num_face_quads)``.
 
     The advection trace stabilization is allowed to be a scalar, callable,
@@ -74,14 +106,14 @@ def _face_quadrature_values_from_scalar_input(values, space: DGSpace, label: str
     forms to the single shape used by the vectorized HDG trace contractions.
     """
     mesh = space.mesh
-    q = space.quad_data
-    num_face_quads = q.weights_JGL.size
+    trace_ref = _trace_ref(space, trace_space)
+    num_face_quads = trace_ref.weights.size
     if np.isscalar(values):
         return np.full((mesh.num_tri, 3, num_face_quads), float(values), dtype=np.float64)
 
     if isinstance(values, DGField):
         values.space.assert_same_mesh(space)
-        face_points = q.pts_fc.reshape(-1, 2)
+        face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
         face_values = values.values_at_ref(face_points)
         return np.ascontiguousarray(
             face_values.reshape(mesh.num_tri, num_face_quads, 3).transpose(0, 2, 1),
@@ -89,7 +121,7 @@ def _face_quadrature_values_from_scalar_input(values, space: DGSpace, label: str
         )
 
     if callable(values):
-        face_points = q.pts_fc.reshape(-1, 2)
+        face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
         mapped_points = mesh.map_reference_points(face_points)
         flat_values = _normalize_callable_values(
             values(mapped_points[:, :, 0], mapped_points[:, :, 1]),
@@ -107,7 +139,12 @@ def _face_quadrature_values_from_scalar_input(values, space: DGSpace, label: str
     if array.shape == (mesh.num_tri, 3):
         return np.ascontiguousarray(np.broadcast_to(array[:, :, None], (mesh.num_tri, 3, num_face_quads)))
     if array.shape == space.shape:
-        return _face_quadrature_values_from_scalar_input(space.field(array, name=label), space, label)
+        return _face_quadrature_values_from_scalar_input(
+            space.field(array, name=label),
+            space,
+            label,
+            trace_space=trace_ref,
+        )
     raise TypeError(
         f"{label} must be a scalar, callable, DGField, coefficient array with shape "
         f"{space.shape}, face constants with shape ({mesh.num_tri}, 3), or face "
@@ -119,6 +156,8 @@ def advection_trace_stabilization_values(
         test_space: DGSpace,
         beta_dot_normal: np.ndarray,
         stabilization=None,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     r"""Return side-quadrature advection stabilization values.
 
@@ -128,37 +167,62 @@ def advection_trace_stabilization_values(
     ``(num_elements, 3, num_face_quads)`` without averaging across an interior
     edge, so discontinuities are preserved element-side by element-side.
     """
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
     if stabilization is None:
         return np.ascontiguousarray(np.abs(beta_dot_normal))
-    return _face_quadrature_values_from_scalar_input(stabilization, test_space, "advection_stabilization")
+    return _face_quadrature_values_from_scalar_input(
+        stabilization,
+        test_space,
+        "advection_stabilization",
+        trace_space=trace_ref,
+    )
 
 
 def advection_trace_weights_from_normal_flux(
         test_space: DGSpace,
         beta_dot_normal: np.ndarray,
         stabilization=None,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Return the side weights ``tau`` and ``gamma=tau-beta_h\cdot n``.
 
     ``tau`` multiplies the element-side value ``u_h`` in the trace conservation
     equation, while ``gamma`` multiplies the trace unknown ``\widehat u_h``.
     """
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space)
-    tau = advection_trace_stabilization_values(test_space, beta_dot_normal, stabilization)
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
+    tau = advection_trace_stabilization_values(
+        test_space,
+        beta_dot_normal,
+        stabilization,
+        trace_space=trace_ref,
+    )
     gamma = tau - beta_dot_normal
     return np.ascontiguousarray(tau), np.ascontiguousarray(gamma)
 
 
-def _oriented_trace_basis_on_element_sides(space: DGSpace) -> np.ndarray:
+def _oriented_trace_basis_on_element_sides(
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Return trace basis values in global edge orientation on every side."""
     mesh = space.mesh
-    trace_basis = space.quad_data.bas1d_of_ref_edg_qds
+    trace_ref = _trace_ref(space, trace_space)
+    trace_basis = trace_ref.bas1d_of_ref_edg_qds
     oriented = np.broadcast_to(
         trace_basis[None, None, :, :],
         (mesh.num_tri, 3, trace_basis.shape[0], trace_basis.shape[1]),
     ).copy()
-    oriented[~mesh.orientations] = oriented[~mesh.orientations][:, ::-1, :]
+    negative = ~mesh.orientations
+    if np.any(negative):
+        if trace_ref.kind == "legendre-modal":
+            signs = np.where(np.arange(trace_ref.edg_dof) % 2 == 0, 1.0, -1.0)
+            oriented[negative] *= signs[None, :, None]
+        else:
+            oriented[negative] = oriented[negative][:, ::-1, :]
     return np.ascontiguousarray(oriented)
 
 
@@ -392,12 +456,18 @@ def _vector_values_on_test_quads(beta: VectorDGField, test_space: DGSpace) -> np
     )
 
 
-def _vector_values_on_test_faces(beta: VectorDGField, test_space: DGSpace) -> np.ndarray:
+def _vector_values_on_test_faces(
+        beta: VectorDGField,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Evaluate a 2D vector field on ``test_space`` face quadrature points."""
     if beta.dim != 2:
         raise ValueError("expected a two-component vector field")
-    face_points = test_space.quad_data.pts_fc.reshape(-1, 2)
-    num_face_quads = test_space.quad_data.weights_JGL.shape[0]
+    trace_ref = _trace_ref(test_space, trace_space)
+    face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
+    num_face_quads = trace_ref.weights.size
     values = []
     for component in beta.components:
         component_values = component.values_at_ref(face_points)
@@ -406,24 +476,36 @@ def _vector_values_on_test_faces(beta: VectorDGField, test_space: DGSpace) -> np
     return np.stack(values, axis=-1)
 
 
-def _basis_on_test_faces(space: DGSpace, test_space: DGSpace) -> np.ndarray:
+def _basis_on_test_faces(
+        space: DGSpace,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Evaluate ``space`` basis on ``test_space`` reference-face quadrature."""
+    trace_ref = _trace_ref(test_space, trace_space)
     if space is test_space:
-        return test_space.quad_data.bas_of_bd_quads
-    face_points = test_space.quad_data.pts_fc.reshape(-1, 2)
-    num_face_quads = test_space.quad_data.weights_JGL.shape[0]
+        return trace_ref.bas_of_bd_quads
+    face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
+    num_face_quads = trace_ref.weights.size
     values = space.basis_at(face_points)
     return values.reshape(num_face_quads, 3, space.el_dof).transpose(1, 2, 0)
 
 
-def _advective_normal_flux(beta: VectorDGField, test_space: DGSpace) -> np.ndarray:
+def _advective_normal_flux(
+        beta: VectorDGField,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Evaluate :math:`\beta_h\cdot n` on element-face quadrature."""
     if beta.dim != 2:
         raise ValueError("expected a two-component vector field")
+    trace_ref = _trace_ref(test_space, trace_space)
     beta_space = beta.components[0].space
     test_space.assert_same_mesh(beta_space)
     if beta.components[1].space is beta_space:
-        beta_basis = _basis_on_test_faces(beta_space, test_space)
+        beta_basis = _basis_on_test_faces(beta_space, test_space, trace_space=trace_ref)
         beta_coeffs = np.empty((2,) + beta.components[0].coeffs.shape, dtype=np.float64)
         beta_coeffs[0] = beta.components[0].coeffs
         beta_coeffs[1] = beta.components[1].coeffs
@@ -435,7 +517,7 @@ def _advective_normal_flux(beta: VectorDGField, test_space: DGSpace) -> np.ndarr
             optimize=["einsum_path", (0, 1, 2)],
         )
 
-    beta_values = _vector_values_on_test_faces(beta, test_space)
+    beta_values = _vector_values_on_test_faces(beta, test_space, trace_space=trace_ref)
     return np.einsum("Kfqd,Kfd->Kfq", beta_values, test_space.mesh.normals, optimize=True)
 
 
@@ -523,7 +605,12 @@ def boundary_mass(test_space: DGSpace, beta: VectorDGField) -> np.ndarray:
     return boundary_mass_from_normal_flux(test_space, _advective_normal_flux(beta, test_space))
 
 
-def boundary_mass_from_trace_stabilization(test_space: DGSpace, tau_face: np.ndarray) -> np.ndarray:
+def boundary_mass_from_trace_stabilization(
+        test_space: DGSpace,
+        tau_face: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Assemble :math:`\int_{\partial K}\tau\,\phi_i\phi_j\,ds`.
 
     ``tau_face`` must already be evaluated as element-side face quadrature
@@ -531,42 +618,52 @@ def boundary_mass_from_trace_stabilization(test_space: DGSpace, tau_face: np.nda
     matrix contribution for the HDG advection numerical flux
     ``beta.n*uhat + tau*(u-uhat)``.
     """
-    tau_face = _require_normal_flux(tau_face, test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    tau_face = _require_normal_flux(tau_face, test_space, trace_space=trace_ref)
     return np.einsum(
         "Kf,Kfq,fiq,fjq->Kij",
         test_space.mesh.jacs_el_fc,
         tau_face,
-        test_space.quad_data.bas_of_bd_quads,
-        test_space.quad_data.weighted_bas_of_bd_quads,
+        trace_ref.bas_of_bd_quads,
+        trace_ref.weighted_bas_of_bd_quads,
         optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
     )
 
 
-def boundary_mass_from_normal_flux(test_space: DGSpace, beta_dot_normal: np.ndarray) -> np.ndarray:
+def boundary_mass_from_normal_flux(
+        test_space: DGSpace,
+        beta_dot_normal: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Assemble :math:`\int_{\partial K}|\beta_h\cdot n|\phi_i\phi_j\,ds`.
 
     ``beta_dot_normal`` must have shape ``(num_elements, 3, num_face_quads)``.
     This entry point avoids recomputing the face-normal flux when it is also
     needed by :func:`element_boundary_mats_from_normal_flux`.
     """
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space)
-    return boundary_mass_from_trace_stabilization(test_space, np.abs(beta_dot_normal))
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
+    return boundary_mass_from_trace_stabilization(test_space, np.abs(beta_dot_normal), trace_space=trace_ref)
 
 
 def set_boundary_mass_from_normal_flux(
         out: np.ndarray,
         test_space: DGSpace,
         beta_dot_normal: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     r"""Write :math:`\int_{\partial K}|\beta_h\cdot n|\phi_i\phi_j\,ds` into ``out``."""
     out = _require_local_matrix_out(out, test_space)
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
     np.einsum(
         "Kf,Kfq,fiq,fjq->Kij",
         test_space.mesh.jacs_el_fc,
         np.abs(beta_dot_normal),
-        test_space.quad_data.bas_of_bd_quads,
-        test_space.quad_data.weighted_bas_of_bd_quads,
+        trace_ref.bas_of_bd_quads,
+        trace_ref.weighted_bas_of_bd_quads,
         out=out,
         optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
     )
@@ -580,11 +677,12 @@ def add_boundary_mass_from_normal_flux(
         *,
         scale: float = 1.0,
         scratch: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     r"""Accumulate :math:`scale\int_{\partial K}|\beta_h\cdot n|\phi_i\phi_j\,ds` into ``out``."""
     out = _require_local_matrix_out(out, test_space)
     scratch = _local_matrix_scratch(scratch, out, test_space)
-    set_boundary_mass_from_normal_flux(scratch, test_space, beta_dot_normal)
+    set_boundary_mass_from_normal_flux(scratch, test_space, beta_dot_normal, trace_space=trace_space)
     return _accumulate_local_matrix(out, scratch, scale)
 
 
@@ -593,36 +691,57 @@ def element_boundary_mats(test_space: DGSpace, beta: VectorDGField) -> np.ndarra
     return element_boundary_mats_from_normal_flux(test_space, _advective_normal_flux(beta, test_space))
 
 
-def element_boundary_mats_from_trace_weight(test_space: DGSpace, gamma_face: np.ndarray) -> np.ndarray:
+def element_boundary_mats_from_trace_weight(
+        test_space: DGSpace,
+        gamma_face: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Assemble element-to-trace coupling for ``gamma=tau-beta_h.n``.
 
     The returned columns use each element's local face orientation.  Global
     edge orientation is applied later by the trace Schur assembly and by
     reconstruction.
     """
-    gamma_face = _require_normal_flux(gamma_face, test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    gamma_face = _require_normal_flux(gamma_face, test_space, trace_space=trace_ref)
     result = np.empty(
-        (test_space.mesh.num_tri, test_space.el_dof, 3 * test_space.quad_data.edg_dof),
+        (test_space.mesh.num_tri, test_space.el_dof, 3 * trace_ref.edg_dof),
         dtype=np.float64,
     )
     result[:] = np.einsum(
         "Kf,Kfq,fiq,jq->Kifj",
         test_space.mesh.jacs_el_fc,
         gamma_face,
-        test_space.quad_data.bas_of_bd_quads,
-        test_space.quad_data.weighted_bas1d_of_ref_edg_qds,
+        trace_ref.bas_of_bd_quads,
+        trace_ref.weighted_bas1d_of_ref_edg_qds,
         optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
-    ).reshape(test_space.mesh.num_tri, test_space.el_dof, 3 * test_space.quad_data.edg_dof)
+    ).reshape(test_space.mesh.num_tri, test_space.el_dof, 3 * trace_ref.edg_dof)
     return result
 
 
-def element_boundary_mats_from_normal_flux(test_space: DGSpace, beta_dot_normal: np.ndarray) -> np.ndarray:
+def element_boundary_mats_from_normal_flux(
+        test_space: DGSpace,
+        beta_dot_normal: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Assemble element-to-trace upwind coupling from cached normal flux."""
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space)
-    return element_boundary_mats_from_trace_weight(test_space, np.abs(beta_dot_normal) - beta_dot_normal)
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
+    return element_boundary_mats_from_trace_weight(
+        test_space,
+        np.abs(beta_dot_normal) - beta_dot_normal,
+        trace_space=trace_ref,
+    )
 
 
-def advection_trace_lift_from_stabilization(test_space: DGSpace, tau_face: np.ndarray) -> np.ndarray:
+def advection_trace_lift_from_stabilization(
+        test_space: DGSpace,
+        tau_face: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Build the side-weighted trace lift for advection conservation rows.
 
     The output has shape ``(num_elements, 3, edg_dof, el_dof)`` and stores
@@ -633,15 +752,16 @@ def advection_trace_lift_from_stabilization(test_space: DGSpace, tau_face: np.nd
 
     with ``mu_a`` expressed in the global orientation of the mesh edge.
     """
-    tau_face = _require_normal_flux(tau_face, test_space)
-    oriented_trace = _oriented_trace_basis_on_element_sides(test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    tau_face = _require_normal_flux(tau_face, test_space, trace_space=trace_ref)
+    oriented_trace = _oriented_trace_basis_on_element_sides(test_space, trace_space=trace_ref)
     result = np.einsum(
         "Kf,Kfq,Kfaq,fiq,q->Kfai",
         test_space.mesh.jacs_el_fc,
         tau_face,
         oriented_trace,
-        test_space.quad_data.bas_of_bd_quads,
-        test_space.quad_data.weights_JGL,
+        trace_ref.bas_of_bd_quads,
+        trace_ref.weights,
         optimize=True,
     )
     return np.ascontiguousarray(result)
@@ -650,6 +770,8 @@ def advection_trace_lift_from_stabilization(test_space: DGSpace, tau_face: np.nd
 def advection_interior_trace_mass_blocks_from_weight(
         test_space: DGSpace,
         gamma_face: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     r"""Return side-wise interior trace masses for ``gamma=tau-beta_h.n``.
 
@@ -657,21 +779,27 @@ def advection_interior_trace_mass_blocks_from_weight(
     mesh.interior_faces`` so it can be passed to
     ``trace_matrix_data(..., interior_mass_mode="face")``.
     """
-    gamma_face = _require_normal_flux(gamma_face, test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    gamma_face = _require_normal_flux(gamma_face, test_space, trace_space=trace_ref)
     mesh = test_space.mesh
-    oriented_trace = _oriented_trace_basis_on_element_sides(test_space)
+    oriented_trace = _oriented_trace_basis_on_element_sides(test_space, trace_space=trace_ref)
     side_blocks = np.einsum(
         "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
         mesh.jacs_el_fc,
         gamma_face,
         oriented_trace,
         oriented_trace,
-        test_space.quad_data.weights_JGL,
+        trace_ref.weights,
         optimize=True,
     )
     return np.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
 
 
-def advective_boundary_normal(beta: VectorDGField, test_space: DGSpace) -> np.ndarray:
+def advective_boundary_normal(
+        beta: VectorDGField,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     r"""Evaluate :math:`\beta_h\cdot n` on element-face quadrature points."""
-    return _advective_normal_flux(beta, test_space)
+    return _advective_normal_flux(beta, test_space, trace_space=trace_space)

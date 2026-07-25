@@ -34,7 +34,7 @@ from ..kernels.diff_rea_fused import (
     reconstruct_projected_diffusion_local_unknowns_kernel,
     reconstruct_projected_tensor_diffusion_local_unknowns_kernel,
 )
-from ..core.space import DGField, DGSpace, VectorDGField
+from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 @dataclass(frozen=True)
@@ -158,6 +158,7 @@ def assemble_local_advection_reaction_numba(
         beta_dot_normal: np.ndarray | None,
         reaction,
         advection_stabilization=None,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaAdvectionLocalAssembly:
     """Assemble local HDG advection-reaction data with Numba.
 
@@ -172,23 +173,26 @@ def assemble_local_advection_reaction_numba(
     timings: dict[str, float] = {}
 
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    _trace_orientation_mode(trace_ref)
     beta_volume = beta_values_on_volume(beta_field, beta_callables, space)
     if beta_dot_normal is None:
         if beta_field is None:
             raise ValueError("beta_dot_normal is required when beta is provided as callables")
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space)
+        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     tau_face = hdg_mats.advection_trace_stabilization_values(
         space,
         beta_dot_normal,
         advection_stabilization,
+        trace_space=trace_ref,
     )
     reaction_values = reaction_values_on_volume(reaction, space)
     timings["coefficient_values"] = time.perf_counter() - start
 
     local_mats = np.empty((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=np.float64)
     element_boundary_mats = np.empty(
-        (space.mesh.num_tri, space.el_dof, 3 * space.quad_data.edg_dof),
+        (space.mesh.num_tri, space.el_dof, 3 * trace_ref.edg_dof),
         dtype=np.float64,
     )
 
@@ -202,9 +206,9 @@ def assemble_local_advection_reaction_numba(
         np.ascontiguousarray(space.quad_data.phi, dtype=np.float64),
         np.ascontiguousarray(space.quad_data.gphi, dtype=np.float64),
         np.ascontiguousarray(space.quad_data.Krf_w, dtype=np.float64),
-        np.ascontiguousarray(space.quad_data.bas_of_bd_quads, dtype=np.float64),
-        np.ascontiguousarray(space.quad_data.weighted_bas_of_bd_quads, dtype=np.float64),
-        np.ascontiguousarray(space.quad_data.weighted_bas1d_of_ref_edg_qds, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.weighted_bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.weighted_bas1d_of_ref_edg_qds, dtype=np.float64),
         beta_volume,
         beta_dot_normal,
         tau_face,
@@ -323,17 +327,19 @@ def _advection_trace_weight_tables(
         tau_kind: int,
         tau_scalar: float,
         tau_coeffs: np.ndarray,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Precompute Numba side weights ``tau`` and ``tau-beta.n``."""
     mesh = space.mesh
-    q = space.quad_data
-    tau_face_values = np.empty((mesh.num_tri, 3, q.weights_JGL.size), dtype=np.float64)
+    trace_ref = _trace_ref(space, trace_space)
+    tau_face_values = np.empty((mesh.num_tri, 3, trace_ref.weights.size), dtype=np.float64)
     gamma_face_values = np.empty_like(tau_face_values)
     assemble_face_trace_weights_kernel(
         tau_face_values,
         gamma_face_values,
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
-        np.ascontiguousarray(q.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
         beta_coeffs,
         int(tau_kind),
         float(tau_scalar),
@@ -387,6 +393,23 @@ def _reference_advection_tensor(space: DGSpace) -> np.ndarray:
             optimize=True,
         ),
         dtype=np.float64,
+    )
+
+
+def _trace_ref(space: DGSpace, trace_space: DGTraceSpace | None = None) -> DGTraceSpace:
+    """Return the requested trace reference, defaulting to legacy Lagrange."""
+    return space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+
+
+def _trace_orientation_mode(trace_ref: DGTraceSpace) -> int:
+    """Return the fused-kernel edge orientation mode for a trace basis."""
+    if trace_ref.kind == "legacy-lagrange" and trace_ref.nodal:
+        return 0
+    if trace_ref.kind == "legendre-modal" and not trace_ref.nodal:
+        return 1
+    raise NotImplementedError(
+        "assembly_backend='numba' currently supports trace_basis='legacy-lagrange' "
+        "and trace_basis='legendre-modal' for advection"
     )
 
 
@@ -445,10 +468,13 @@ def _boundary_reduction_maps(
         space: DGSpace,
         boundary_trace: np.ndarray,
         edge_order: np.ndarray | None = None,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray, KnownDofReduction]:
     """Return edge and dof maps for direct boundary elimination."""
     mesh = space.mesh
-    edg_dof = space.quad_data.edg_dof
+    trace_ref = _trace_ref(space, trace_space)
+    edg_dof = trace_ref.edg_dof
 
     edge_is_free = np.ones(mesh.num_edg, dtype=bool)
     edge_is_free[mesh.bnd_edges_inds] = False
@@ -506,6 +532,7 @@ def assemble_projected_trace_system_numba(
         edge_order: np.ndarray | None = None,
         beta_dot_normal: np.ndarray | None = None,
         advection_stabilization=None,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the full HDG trace system with fused Numba kernels.
 
@@ -529,6 +556,8 @@ def assemble_projected_trace_system_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
@@ -540,16 +569,16 @@ def assemble_projected_trace_system_numba(
     timings["coefficient_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     if beta_dot_normal is None:
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space)
+        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     timings["boundary_trace_and_flux"] = time.perf_counter() - start
 
     mesh = space.mesh
     q = space.quad_data
-    edg_dof = q.edg_dof
+    edg_dof = trace_ref.edg_dof
     edge_to_solve_edge = _full_edge_order_map(space, edge_order)
 
     start = time.perf_counter()
@@ -559,6 +588,7 @@ def assemble_projected_trace_system_numba(
         tau_kind,
         tau_scalar,
         tau_coeffs,
+        trace_space=trace_ref,
     )
     timings["trace_weights"] = time.perf_counter() - start
 
@@ -595,11 +625,12 @@ def assemble_projected_trace_system_numba(
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         _reference_advection_tensor(space),
-        np.ascontiguousarray(q.bas_of_bd_quads, dtype=np.float64),
-        np.ascontiguousarray(q.weights_JGL, dtype=np.float64),
-        np.ascontiguousarray(q.bas1d_of_ref_edg_qds, dtype=np.float64),
-        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
+        int(trace_orientation_mode),
         source_coeffs,
         int(source_kind),
         beta_coeffs,
@@ -642,6 +673,7 @@ def assemble_projected_trace_system_eliminated_numba(
         beta_dot_normal: np.ndarray | None = None,
         advection_stabilization=None,
         return_block_coo: bool = False,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
     if not NUMBA_AVAILABLE:
@@ -649,6 +681,8 @@ def assemble_projected_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
@@ -660,16 +694,16 @@ def assemble_projected_trace_system_eliminated_numba(
     timings["coefficient_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     if beta_dot_normal is None:
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space)
+        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     timings["boundary_trace_and_flux"] = time.perf_counter() - start
 
     mesh = space.mesh
     q = space.quad_data
-    edg_dof = q.edg_dof
+    edg_dof = trace_ref.edg_dof
 
     start = time.perf_counter()
     tau_face_values, gamma_face_values = _advection_trace_weight_tables(
@@ -678,11 +712,17 @@ def assemble_projected_trace_system_eliminated_numba(
         tau_kind,
         tau_scalar,
         tau_coeffs,
+        trace_space=trace_ref,
     )
     timings["trace_weights"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[mesh.interior_elements], axis=1).astype(np.int64)
     side_flux_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
@@ -735,11 +775,12 @@ def assemble_projected_trace_system_eliminated_numba(
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         _reference_advection_tensor(space),
-        np.ascontiguousarray(q.bas_of_bd_quads, dtype=np.float64),
-        np.ascontiguousarray(q.weights_JGL, dtype=np.float64),
-        np.ascontiguousarray(q.bas1d_of_ref_edg_qds, dtype=np.float64),
-        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
+        int(trace_orientation_mode),
         source_coeffs,
         int(source_kind),
         beta_coeffs,
@@ -1402,11 +1443,14 @@ def reconstruct_projected_field_numba(
         *,
         advection_stabilization=None,
         name: str = "u_h",
+        trace_space: DGTraceSpace | None = None,
 ) -> DGField:
     """Recover element coefficients with the projected fused Numba backend."""
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     beta_coeffs = _same_space_vector_coefficients(beta_field, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
@@ -1415,7 +1459,7 @@ def reconstruct_projected_field_numba(
         space,
     )
     trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
-    expected_trace_shape = (space.mesh.num_edg * space.quad_data.edg_dof,)
+    expected_trace_shape = (space.mesh.num_edg * trace_ref.edg_dof,)
     if trace.shape != expected_trace_shape:
         raise ValueError(f"trace must have shape {expected_trace_shape}; got {trace.shape}")
 
@@ -1428,6 +1472,7 @@ def reconstruct_projected_field_numba(
         tau_kind,
         tau_scalar,
         tau_coeffs,
+        trace_space=trace_ref,
     )
     reconstruct_projected_field_kernel(
         coeffs,
@@ -1441,9 +1486,10 @@ def reconstruct_projected_field_numba(
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         _reference_advection_tensor(space),
-        np.ascontiguousarray(q.bas_of_bd_quads, dtype=np.float64),
-        np.ascontiguousarray(q.weights_JGL, dtype=np.float64),
-        np.ascontiguousarray(q.bas1d_of_ref_edg_qds, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
+        int(trace_orientation_mode),
         source_coeffs,
         int(source_kind),
         beta_coeffs,

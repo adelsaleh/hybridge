@@ -173,10 +173,14 @@ def boundary_trace_coefficients(
     return trace_ref.boundary_coefficients(boundary_condition)
 
 
-def free_trace_dofs(space: DGSpace) -> np.ndarray:
+def free_trace_dofs(
+        space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
     """Return a boolean mask selecting non-boundary global trace dofs."""
     mesh = space.mesh
-    edg_dof = space.quad_data.edg_dof
+    edg_dof = space.quad_data.edg_dof if trace_space is None else trace_space.edg_dof
     mask = np.ones(mesh.num_edg * edg_dof, dtype=bool)
     boundary_dofs = mesh.bnd_edges_inds[:, None] * edg_dof + np.arange(edg_dof)[None, :]
     mask[boundary_dofs.ravel()] = False
@@ -197,6 +201,7 @@ def trace_matrix_indices(
         space: DGSpace,
         *,
         interior_mass_mode: InteriorMassMode = "edge",
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return COO row/column indices for the full trace system.
 
@@ -207,7 +212,7 @@ def trace_matrix_indices(
     """
     interior_mass_mode = _validate_interior_mass_mode(interior_mass_mode)
     mesh = space.mesh
-    edg_dof = space.quad_data.edg_dof
+    edg_dof = space.quad_data.edg_dof if trace_space is None else trace_space.edg_dof
     n_interior_flux = mesh.int_edges_inds.size * 2 * edg_dof * 3 * edg_dof
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
@@ -313,12 +318,13 @@ def trace_matrix_data(
         *,
         interior_mass_mode: InteriorMassMode = "edge",
         interior_mass_blocks: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Return COO data values matching :func:`trace_matrix_indices`."""
     interior_mass_mode = _validate_interior_mass_mode(interior_mass_mode)
     mesh = space.mesh
-    q = space.quad_data
-    edg_dof = q.edg_dof
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    edg_dof = trace_ref.edg_dof
     n_interior_flux = mesh.int_edges_inds.size * 2 * edg_dof * 3 * edg_dof
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
@@ -336,7 +342,7 @@ def trace_matrix_data(
         if interior_mass_mode == "face":
             raise ValueError("interior_mass_blocks is required for interior_mass_mode='face'")
         edge_jacs = mesh.edge_jacs[mesh.int_edges_inds]
-        data[offset:offset + n_interior_mass] = (edge_jacs[:, None, None] * q.M_rf_fc[None, :, :]).ravel()
+        data[offset:offset + n_interior_mass] = (edge_jacs[:, None, None] * trace_ref.M_rf_fc[None, :, :]).ravel()
     else:
         blocks = np.asarray(interior_mass_blocks, dtype=np.float64)
         if interior_mass_mode == "edge":
@@ -419,12 +425,21 @@ def assemble_trace_system(
         space: DGSpace,
         *,
         boundary_penalty: float = 1e20,
+        trace_space: DGTraceSpace | None = None,
 ) -> TraceSystem:
     """Assemble the global HDG trace system from condensed element data."""
-    trace_blocks = element_to_trace_matrix(local_solver, element_boundary_mats, space)
-    rows, cols = trace_matrix_indices(space)
-    data = trace_matrix_data(trace_blocks, space, boundary_penalty)
-    rhs, boundary_trace = global_rhs(source_rhs, local_solver, boundary_condition, space, boundary_penalty)
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    trace_blocks = element_to_trace_matrix(local_solver, element_boundary_mats, space, trace_space=trace_ref)
+    rows, cols = trace_matrix_indices(space, trace_space=trace_ref)
+    data = trace_matrix_data(trace_blocks, space, boundary_penalty, trace_space=trace_ref)
+    rhs, boundary_trace = global_rhs(
+        source_rhs,
+        local_solver,
+        boundary_condition,
+        space,
+        boundary_penalty,
+        trace_space=trace_ref,
+    )
     return TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
 
 
