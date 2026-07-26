@@ -1,4 +1,4 @@
-"""Compare CPU inverse transfer, GPU inversion, and batched GPU solves."""
+"""Compare CPU, public-CuPy, explicit-cuBLAS, and repeated-solve setup paths."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from hdgfem.linalg.additive_schwarz import (
 from hdgfem.linalg.block_jacobi import build_face_block_jacobi_preconditioner
 from hdgfem.solvers.diff_rea_face_dense import solve_diffusion_face_dense_direct
 from scripts.diff_rea_cases import quadratic_poisson_case
-
 
 def relative_difference(left: np.ndarray, right: np.ndarray) -> float:
     scale = max(float(np.linalg.norm(right)), np.finfo(np.float64).eps)
@@ -86,7 +85,7 @@ def run_case(boundary_mode: str) -> None:
     print("Block-Jacobi")
     print("-------------")
     expected_bj = cpu_bj.apply(vector)
-    for mode in ("cpu_inverse", "gpu_inverse", "gpu_solve"):
+    for mode in ("cpu_inverse", "gpu_inverse", "cublas_inverse", "gpu_solve"):
         preconditioner, setup_ms = timed_setup(
             cp,
             lambda mode=mode: CuPyFaceBlockJacobiPreconditioner.from_system(
@@ -102,10 +101,16 @@ def run_case(boundary_mode: str) -> None:
         error = relative_difference(cp.asnumpy(output), expected_bj)
         residual = preconditioner.maximum_inverse_residual
         residual_text = "n/a" if residual is None else f"{residual:.3e}"
+        status_text = "n/a"
+        if mode == "cublas_inverse":
+            factor_ok = bool(np.all(preconditioner.factorization_info == 0))
+            inverse_ok = bool(np.all(preconditioner.inversion_info == 0))
+            status_text = "ok" if factor_ok and inverse_ok else "failed"
         print(
-            f"{mode:12s} setup={setup_ms:9.3f} ms  "
+            f"{mode:15s} setup={setup_ms:9.3f} ms  "
             f"apply={apply_ms:9.4f} ms  error={error:.3e}  "
             f"inv_res={residual_text:>9s}  "
+            f"status={status_text:>6s}  "
             f"allocates={preconditioner.allocates_during_apply}"
         )
     print()
@@ -113,7 +118,7 @@ def run_case(boundary_mode: str) -> None:
     print("Additive Schwarz")
     print("-----------------")
     expected_asm = cpu_asm.apply(vector)
-    for mode in ("cpu_inverse", "gpu_inverse", "gpu_solve"):
+    for mode in ("cpu_inverse", "gpu_inverse", "cublas_inverse", "gpu_solve"):
         preconditioner, setup_ms = timed_setup(
             cp,
             lambda mode=mode: CuPyFaceAdditiveSchwarzPreconditioner.from_system(
@@ -131,10 +136,16 @@ def run_case(boundary_mode: str) -> None:
         error = relative_difference(cp.asnumpy(output), expected_asm)
         residual = preconditioner.maximum_inverse_residual
         residual_text = "n/a" if residual is None else f"{residual:.3e}"
+        status_text = "n/a"
+        if mode == "cublas_inverse":
+            factor_ok = bool(np.all(preconditioner.factorization_info == 0))
+            inverse_ok = bool(np.all(preconditioner.inversion_info == 0))
+            status_text = "ok" if factor_ok and inverse_ok else "failed"
         print(
-            f"{mode:12s} setup={setup_ms:9.3f} ms  "
+            f"{mode:15s} setup={setup_ms:9.3f} ms  "
             f"apply={apply_ms:9.4f} ms  error={error:.3e}  "
             f"inv_res={residual_text:>9s}  "
+            f"status={status_text:>6s}  "
             f"allocates={preconditioner.allocates_during_apply}"
         )
     print()

@@ -1,10 +1,11 @@
 """CUDA preconditioners for face-dense HDG systems.
 
 Three local-solver paths are available for validation and later profiling:
-validated CPU inverses transferred to the device, batched GPU inversion during
-setup followed by dense matvec application, and direct batched GPU solves at
-every application.  The inverse paths are the production candidates; the direct
-solve path intentionally exposes the cost of repeated public-API factorization.
+validated CPU inverses transferred to the device, public CuPy batched GPU
+inversion, explicit cuBLAS ``getrfBatched``/``getriBatched`` inversion, and
+direct batched GPU solves at every application.  The inverse paths are the
+production candidates; the direct solve path intentionally exposes the cost of
+repeated public-API factorization.
 """
 
 from __future__ import annotations
@@ -20,7 +21,9 @@ from ..linalg.additive_schwarz import (
     build_face_additive_schwarz_preconditioner,
 )
 from ..linalg.block_jacobi import build_face_block_jacobi_preconditioner
+from .cublas_batched import invert_batched_cublas
 from .cupy import require_cupy_device
+
 
 def _gpu_batched_inverse(cp: Any, matrices: Any, *, label: str) -> tuple[Any, Any]:
     """Compute batched inverses and residuals on the active GPU.
@@ -51,6 +54,7 @@ def _gpu_batched_inverse(cp: Any, matrices: Any, *, label: str) -> tuple[Any, An
         raise FloatingPointError(f"{label} GPU inverse residuals are non-finite")
     return inverse, residuals
 
+
 def _check_gpu_inverse_tolerance(
     cp: Any,
     residuals: Any,
@@ -70,6 +74,7 @@ def _check_gpu_inverse_tolerance(
             f"batch={index}, residual={maximum:.3e}, tolerance={tolerance:.3e}"
         )
 
+
 @dataclass
 class CuPyFaceBlockJacobiPreconditioner:
     """CUDA block-Jacobi with selectable local-solver setup.
@@ -82,6 +87,10 @@ class CuPyFaceBlockJacobiPreconditioner:
     ``"gpu_inverse"``
         Transfer diagonal blocks, compute their batched inverse on the GPU
         with :func:`cupy.linalg.solve`, then apply with batched matmul.
+    ``"cublas_inverse"``
+        Factor and invert the diagonal blocks with explicit low-level cuBLAS
+        ``getrfBatched`` and ``getriBatched`` calls, retaining per-batch status
+        arrays and applying the resulting inverse with batched matmul.
     ``"gpu_solve"``
         Keep the diagonal blocks and call the batched GPU dense solver during
         every application.  This is a correctness/profiling baseline; CuPy's
@@ -93,10 +102,18 @@ class CuPyFaceBlockJacobiPreconditioner:
     local_blocks: Any | None = None
     local_solver: str = "external_inverse"
     inverse_residuals: Any | None = None
+    factorization_info: np.ndarray | None = None
+    inversion_info: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         cp = require_cupy_device()
-        valid_modes = {"external_inverse", "cpu_inverse", "gpu_inverse", "gpu_solve"}
+        valid_modes = {
+            "external_inverse",
+            "cpu_inverse",
+            "gpu_inverse",
+            "cublas_inverse",
+            "gpu_solve",
+        }
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported block-Jacobi local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
@@ -136,7 +153,12 @@ class CuPyFaceBlockJacobiPreconditioner:
         cp = require_cupy_device()
         if not isinstance(system, FaceDenseSystem):
             raise TypeError("system must be a FaceDenseSystem")
-        if local_solver not in {"cpu_inverse", "gpu_inverse", "gpu_solve"}:
+        if local_solver not in {
+            "cpu_inverse",
+            "gpu_inverse",
+            "cublas_inverse",
+            "gpu_solve",
+        }:
             raise ValueError(f"unsupported block-Jacobi local_solver: {local_solver}")
         requested_dtype = np.dtype(system.blocks.dtype if dtype is None else dtype)
         if requested_dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
@@ -180,11 +202,23 @@ class CuPyFaceBlockJacobiPreconditioner:
                     device_id=selected_device,
                     local_solver=local_solver,
                 )
-            inverse_blocks, residuals = _gpu_batched_inverse(
-                cp,
-                local_blocks,
-                label="block-Jacobi diagonal blocks",
-            )
+            factorization_info = None
+            inversion_info = None
+            if local_solver == "cublas_inverse":
+                cublas_result = invert_batched_cublas(
+                    local_blocks,
+                    label="block-Jacobi diagonal blocks",
+                )
+                inverse_blocks = cublas_result.inverse_matrices
+                residuals = cublas_result.inverse_residuals
+                factorization_info = cublas_result.factorization_info
+                inversion_info = cublas_result.inversion_info
+            else:
+                inverse_blocks, residuals = _gpu_batched_inverse(
+                    cp,
+                    local_blocks,
+                    label="block-Jacobi diagonal blocks",
+                )
             _check_gpu_inverse_tolerance(
                 cp,
                 residuals,
@@ -197,6 +231,8 @@ class CuPyFaceBlockJacobiPreconditioner:
                 device_id=selected_device,
                 local_solver=local_solver,
                 inverse_residuals=residuals,
+                factorization_info=factorization_info,
+                inversion_info=inversion_info,
             )
 
     @property
@@ -271,6 +307,7 @@ class CuPyFaceBlockJacobiPreconditioner:
         self.apply_into(x, out)
         return out
 
+
 @dataclass(frozen=True)
 class AdditiveSchwarzBatchLayout:
     """Host-side arrays prepared for the CUDA one-element ASM operator.
@@ -316,6 +353,7 @@ class AdditiveSchwarzBatchLayout:
     @property
     def maximum_inverse_residual(self) -> float:
         return float(np.max(self.inverse_residuals, initial=0.0))
+
 
 def prepare_face_additive_schwarz_batch_layout(
     system: FaceDenseSystem,
@@ -381,6 +419,75 @@ def prepare_face_additive_schwarz_batch_layout(
         block_size=int(cpu_preconditioner.block_size),
         num_system_faces=int(system.num_rows),
     )
+
+
+@dataclass(frozen=True)
+class AdditiveSchwarzMatrixLayout:
+    """Host-side one-element ASM matrices before accelerator inversion."""
+
+    local_matrices: np.ndarray
+    element_system_faces: np.ndarray
+    block_size: int
+    num_system_faces: int
+
+    @property
+    def num_elements(self) -> int:
+        return int(self.local_matrices.shape[0])
+
+    @property
+    def num_local_faces(self) -> int:
+        return int(self.element_system_faces.shape[1])
+
+    @property
+    def local_size(self) -> int:
+        return int(self.local_matrices.shape[1])
+
+    @property
+    def num_dofs(self) -> int:
+        return self.num_system_faces * self.block_size
+
+
+def prepare_face_additive_schwarz_matrix_layout(
+    system: FaceDenseSystem,
+    element_blocks: np.ndarray,
+    loc2glob_face: np.ndarray,
+    *,
+    dtype: np.dtype | type | None = None,
+) -> AdditiveSchwarzMatrixLayout:
+    """Prepare enriched local matrices without computing CPU inverses."""
+
+    if not isinstance(system, FaceDenseSystem):
+        raise TypeError("system must be a FaceDenseSystem")
+    requested_dtype = np.dtype(system.blocks.dtype if dtype is None else dtype)
+    if requested_dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise TypeError("dtype must be float32 or float64")
+
+    local = build_face_additive_schwarz_local_matrices(
+        system,
+        element_blocks,
+        loc2glob_face,
+    )
+    faces64 = np.asarray(local.element_system_faces, dtype=np.int64)
+    if faces64.size == 0:
+        raise ValueError("element_system_faces must be non-empty")
+    if np.any(faces64 < -1):
+        raise ValueError("element_system_faces may contain only row ids or -1")
+    active = faces64 >= 0
+    if np.any(faces64[active] >= system.num_rows):
+        raise ValueError("element_system_faces contains an out-of-range row id")
+    if system.num_rows > np.iinfo(np.int32).max:
+        raise OverflowError("the CUDA ASM kernels use int32 face indices")
+
+    return AdditiveSchwarzMatrixLayout(
+        local_matrices=np.ascontiguousarray(
+            local.local_matrices,
+            dtype=requested_dtype,
+        ),
+        element_system_faces=np.ascontiguousarray(faces64, dtype=np.int32),
+        block_size=int(local.block_size),
+        num_system_faces=int(system.num_rows),
+    )
+
 
 _ASM_KERNEL_SOURCE = r"""
 __device__ __forceinline__ float asm_atomic_add(float* address, float value)
@@ -502,86 +609,16 @@ void prolong_element_faces_f64(
 }
 """
 
-@dataclass(frozen=True)
-class AdditiveSchwarzMatrixLayout:
-    """Host-side one-element ASM matrices before accelerator inversion."""
-
-    local_matrices: np.ndarray
-    element_system_faces: np.ndarray
-    block_size: int
-    num_system_faces: int
-
-    @property
-    def num_elements(self) -> int:
-        return int(self.local_matrices.shape[0])
-
-    @property
-    def num_local_faces(self) -> int:
-        return int(self.element_system_faces.shape[1])
-
-    @property
-    def local_size(self) -> int:
-        return int(self.local_matrices.shape[1])
-
-    @property
-    def num_dofs(self) -> int:
-        return self.num_system_faces * self.block_size
-
-def prepare_face_additive_schwarz_matrix_layout(
-    system: FaceDenseSystem,
-    element_blocks: np.ndarray,
-    loc2glob_face: np.ndarray,
-    *,
-    dtype: np.dtype | type | None = None,
-) -> AdditiveSchwarzMatrixLayout:
-    """Prepare enriched local matrices without computing CPU inverses."""
-
-    if not isinstance(system, FaceDenseSystem):
-        raise TypeError("system must be a FaceDenseSystem")
-    requested_dtype = np.dtype(system.blocks.dtype if dtype is None else dtype)
-    if requested_dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
-        raise TypeError("dtype must be float32 or float64")
-
-    local = build_face_additive_schwarz_local_matrices(
-        system,
-        element_blocks,
-        loc2glob_face,
-    )
-    faces64 = np.asarray(local.element_system_faces, dtype=np.int64)
-    if faces64.size == 0:
-        raise ValueError("element_system_faces must be non-empty")
-    if np.any(faces64 < -1):
-        raise ValueError("element_system_faces may contain only row ids or -1")
-    active = faces64 >= 0
-    if np.any(faces64[active] >= system.num_rows):
-        raise ValueError("element_system_faces contains an out-of-range row id")
-    if system.num_rows > np.iinfo(np.int32).max:
-        raise OverflowError("the CUDA ASM kernels use int32 face indices")
-
-    return AdditiveSchwarzMatrixLayout(
-        local_matrices=np.ascontiguousarray(
-            local.local_matrices,
-            dtype=requested_dtype,
-        ),
-        element_system_faces=np.ascontiguousarray(faces64, dtype=np.int32),
-        block_size=int(local.block_size),
-        num_system_faces=int(system.num_rows),
-    )
 
 @dataclass
 class CuPyFaceAdditiveSchwarzPreconditioner:
     r"""Device one-element ASM with selectable local dense solver.
 
-    ``element_rhs = R @ x``
-        CUDA gather kernel;
-    ``element_solution = inverse_matrices @ element_rhs``
-        batched dense matrix--vector products through ``cupy.matmul``;
-    ``out = sum_e R_e.T @ element_solution_e``
-        CUDA scatter-add kernel using atomics on shared faces.
-
     ``cpu_inverse`` transfers validated NumPy inverses. ``gpu_inverse`` builds
-    the inverse batch on the GPU during setup and then uses allocation-free
-    batched matmul during GMRES. ``gpu_solve`` calls the public batched
+    the inverse batch through CuPy's public solver. ``cublas_inverse`` calls
+    explicit cuBLAS ``getrfBatched``/``getriBatched`` and retains the per-batch
+    status arrays. Both inverse modes use allocation-free batched matmul during
+    GMRES. ``gpu_solve`` calls the public batched
     :func:`cupy.linalg.solve` at every application; it is retained as an
     independent correctness and profiling baseline, not the production default.
     """
@@ -594,10 +631,18 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
     local_matrices: Any | None = None
     local_solver: str = "external_inverse"
     inverse_residuals: Any | None = None
+    factorization_info: np.ndarray | None = None
+    inversion_info: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         cp = require_cupy_device()
-        valid_modes = {"external_inverse", "cpu_inverse", "gpu_inverse", "gpu_solve"}
+        valid_modes = {
+            "external_inverse",
+            "cpu_inverse",
+            "gpu_inverse",
+            "cublas_inverse",
+            "gpu_solve",
+        }
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported ASM local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
@@ -663,8 +708,8 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         )
         self._threads_per_block = 256
         self._kernel_blocks = (
-                                      self.num_local_dofs + self._threads_per_block - 1
-                              ) // self._threads_per_block
+            self.num_local_dofs + self._threads_per_block - 1
+        ) // self._threads_per_block
 
     @classmethod
     def from_system(
@@ -679,7 +724,12 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         inverse_residual_tolerance: float | None = None,
     ) -> "CuPyFaceAdditiveSchwarzPreconditioner":
         cp = require_cupy_device()
-        if local_solver not in {"cpu_inverse", "gpu_inverse", "gpu_solve"}:
+        if local_solver not in {
+            "cpu_inverse",
+            "gpu_inverse",
+            "cublas_inverse",
+            "gpu_solve",
+        }:
             raise ValueError(f"unsupported ASM local_solver: {local_solver}")
         selected_device = (
             int(cp.cuda.Device().id) if device_id is None else int(device_id)
@@ -728,11 +778,23 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     local_solver=local_solver,
                 )
 
-            inverse_matrices, residuals = _gpu_batched_inverse(
-                cp,
-                local_matrices,
-                label="additive-Schwarz local matrices",
-            )
+            factorization_info = None
+            inversion_info = None
+            if local_solver == "cublas_inverse":
+                cublas_result = invert_batched_cublas(
+                    local_matrices,
+                    label="additive-Schwarz local matrices",
+                )
+                inverse_matrices = cublas_result.inverse_matrices
+                residuals = cublas_result.inverse_residuals
+                factorization_info = cublas_result.factorization_info
+                inversion_info = cublas_result.inversion_info
+            else:
+                inverse_matrices, residuals = _gpu_batched_inverse(
+                    cp,
+                    local_matrices,
+                    label="additive-Schwarz local matrices",
+                )
             _check_gpu_inverse_tolerance(
                 cp,
                 residuals,
@@ -748,6 +810,8 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 device_id=selected_device,
                 local_solver=local_solver,
                 inverse_residuals=residuals,
+                factorization_info=factorization_info,
+                inversion_info=inversion_info,
             )
 
     @property
