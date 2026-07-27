@@ -86,6 +86,7 @@ class RawAdvectionAssemblyResult:
     reaction_is_scalar: bool = False
     advection_tensor: Any | None = None
     lu_mode: str = "safe"
+    zero_boundary_flux: bool = False
 
 
 _RAW_LU_SCRATCH_THREADS = 128
@@ -961,6 +962,9 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double* __restrict__ reaction_coeffs,
         const double reaction_scalar,
         const int reaction_is_scalar,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
+        const int zero_boundary_flux,
         const long long num_elements,
         const long long element)
 {
@@ -1034,9 +1038,17 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double normal_x = normals[(element * 3 + face) * 2 + 0];
         const double normal_y = normals[(element * 3 + face) * 2 + 1];
         const double normal_flux = beta_x * normal_x + beta_y * normal_y;
-        const double tau = fabs(normal_flux);
+        double tau = fabs(normal_flux);
+        double gamma = tau - normal_flux;
+        if (zero_boundary_flux) {
+            const long long edge = loc2glob_edge[element * 3 + face];
+            if (edge_to_solve_edge[edge] < 0) {
+                tau = 0.0;
+                gamma = 0.0;
+            }
+        }
         tau_face[idx] = tau;
-        gamma_face[idx] = tau - normal_flux;
+        gamma_face[idx] = gamma;
     }
     __syncthreads();
     // Source moments use the projected source coefficient vector: J * M * f_h.
@@ -1527,6 +1539,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const double* __restrict__ boundary_trace,
         const double reaction_scalar,
         const int reaction_is_scalar,
+        const int zero_boundary_flux,
         const long long num_elements,
         const long long num_int_edges,
         const long long n_flux)
@@ -1563,7 +1576,8 @@ extern "C" __global__ void assemble_advection_raw_fused(
             mass_matrix, reaction_triples, advection_tensor,
             face_basis, face_weights, trace_basis,
             source_coeffs, beta_coeffs, reaction_coeffs,
-            reaction_scalar, reaction_is_scalar, num_elements, element);
+            reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
+            zero_boundary_flux, num_elements, element);
 #if RAW_LU_MODE_COOP
         factor_local_lu_coop_pivot_scale_raw(local_lu, pivots, lu_pivot_abs, lu_pivot_rows);
 #else
@@ -1661,6 +1675,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         double* __restrict__ uh,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
         const bool* __restrict__ orientations,
         const double* __restrict__ aff_jacs,
         const double* __restrict__ inv_aff_mats_t,
@@ -1677,6 +1692,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         const double* __restrict__ reaction_coeffs,
         const double reaction_scalar,
         const int reaction_is_scalar,
+        const int zero_boundary_flux,
         const long long num_elements)
 {
     extern __shared__ unsigned char shared_raw[];
@@ -1713,7 +1729,8 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         mass_matrix, reaction_triples, advection_tensor,
         face_basis, face_weights, trace_basis,
         source_coeffs, beta_coeffs, reaction_coeffs,
-        reaction_scalar, reaction_is_scalar, num_elements, element);
+        reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
+            zero_boundary_flux, num_elements, element);
 
     // Collapse the trace/source columns into one physical reconstruction RHS:
     // f + B(lambda).  The global trace vector uses global edge orientation, so
@@ -1983,8 +2000,8 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     kernel = kernel.replace(
-        '        const long long num_elements,\n        const long long num_int_edges,\n        const long long n_flux)',
-        '        const long long num_elements,\n        const long long num_int_edges)',
+        '        const int zero_boundary_flux,\n        const long long num_elements,\n        const long long num_int_edges,\n        const long long n_flux)',
+        '        const int zero_boundary_flux,\n        const long long num_elements,\n        const long long num_int_edges)',
         1,
     )
     kernel = kernel.replace(
@@ -2164,6 +2181,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         block_size: int = 32,
         lu_mode: str = 'safe',
         matrix_format: str = 'coo',
+        zero_boundary_flux: bool = False,
 ) -> RawAdvectionAssemblyResult:
     """Assemble the reduced advection trace system with fused projected local assembly."""
     cupy = require_cupy()
@@ -2197,6 +2215,11 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {'coo', 'csr'}:
         raise ValueError("matrix_format must be 'coo' or 'csr'")
+    zero_boundary_flux = bool(zero_boundary_flux)
+    if zero_boundary_flux:
+        boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=cupy.float64)
+    else:
+        boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=cupy.float64)
 
     csr_pattern = None
     indptr = indices = None
@@ -2282,6 +2305,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 boundary_trace_full.reshape(-1),
                 np.float64(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
+                np.int32(1 if zero_boundary_flux else 0),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
             ),
@@ -2328,6 +2352,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 boundary_trace_full.reshape(-1),
                 np.float64(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
+                np.int32(1 if zero_boundary_flux else 0),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
                 np.int64(n_flux),
@@ -2361,6 +2386,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         reaction_is_scalar=bool(reaction_is_scalar),
         advection_tensor=advection_tensor,
         lu_mode=lu_mode,
+        zero_boundary_flux=zero_boundary_flux,
     )
 
 
@@ -2418,6 +2444,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         advection_tensor,
         block_size: int = 32,
         lu_mode: str = 'safe',
+        zero_boundary_flux: bool = False,
 ):
     """Recover primal coefficients with fused projected local reconstruction."""
     cupy = require_cupy()
@@ -2444,6 +2471,8 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=cupy.float64)
     beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=cupy.float64)
     advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
+    zero_boundary_flux = bool(zero_boundary_flux)
+    edge_to_solve_edge = _edge_to_solve_edge_device(cspace) if zero_boundary_flux else cupy.empty(1, dtype=cupy.int64)
     uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
     source = _kernel_source(
         _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
@@ -2458,6 +2487,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             uh,
             trace.reshape(-1),
             cspace.mesh.loc2glob_edge,
+            edge_to_solve_edge,
             cspace.mesh.orientations,
             cspace.mesh.aff_jacs,
             cspace.mesh.inv_aff_mats_t,
@@ -2474,6 +2504,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             reaction_coeffs,
             np.float64(reaction_scalar),
             np.int32(1 if reaction_is_scalar else 0),
+            np.int32(1 if zero_boundary_flux else 0),
             np.int64(cspace.mesh.num_tri),
         ),
         shared_mem=int(reconstruct_shared),

@@ -43,6 +43,8 @@ from hdgfem.assembly.matrices_numpy import (
     weighted_mass_from_field,
 )
 from hdgfem.solvers.diff_rea import (
+    DiffusionReactionHDGOptions,
+    DiffusionReactionHDGSolver,
     impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg,
 )
@@ -846,6 +848,38 @@ def test_trace_degree_elevation_from_linear_to_cubic() -> None:
 
     expected = np.array([2.0, 3.0, 4.0, 5.0, -1.0, 1.0 / 3.0, 5.0 / 3.0, 3.0])
     np.testing.assert_allclose(elevated, expected)
+
+
+def test_diffusion_reaction_solver_reuses_numpy_matrix_after_source_update() -> None:
+    mesh = rectangle_mesh(3, 3, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+    V = DGSpace(mesh, 2, basis_type="dub_orth")
+    zero = lambda x, y: 0.0 * x + 0.0 * y
+    options = DiffusionReactionHDGOptions(
+        assembly_backend="numpy",
+        boundary_mode="eliminate",
+        solver="direct",
+        cache_device_matrix=True,
+        verbose=False,
+    )
+    solver = DiffusionReactionHDGSolver(
+        V,
+        source=lambda x, y: x + y,
+        reaction=0.0,
+        boundary_condition=zero,
+        options=options,
+    )
+
+    first = solver.solve()
+    rows = solver.solve_rows
+    data = solver.solve_data
+    solver.set_source(lambda x, y: 2.0 * x - y)
+    second = solver.solve()
+
+    assert solver.solve_rows is rows
+    assert solver.solve_data is data
+    assert second.assembly_backend == "numpy"
+    assert second.timings.local_solver == 0.0
+    assert second.field.l2_norm() != pytest.approx(first.field.l2_norm())
 
 
 def test_diffusion_reaction_bootstrap_initial_guess_smoke() -> None:

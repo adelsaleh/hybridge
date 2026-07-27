@@ -5,10 +5,11 @@ research codebase.  The package provides mesh, reference-element, DG field,
 assembly, linear algebra, solver, plotting, and optional GPU backend modules for
 HDG experiments.
 
-The main package workflows are advection-reaction and diffusion-reaction HDG
-solves.  Current performance work focuses on advection-reaction trace systems:
-upwind-SCC trace ordering, forward upwind block Gauss-Seidel preconditioners,
-Cupyx Krylov solves, and raw-CUDA/AMGX GPU baselines.
+The main package workflows are advection-reaction, diffusion-reaction, and
+fixed-mesh guiding-center HDG solves.  Current performance work focuses on
+raw-CUDA trace assembly, direct device CSR handoff to AMGX, reusable solver
+classes for unsteady runs, tangent zero-boundary-flux transport, and
+high-order guiding-center/diocotron benchmarks.
 
 A separate interested-reader part of the repository studies diocotron-like
 equilibria of the guiding-center model through the semilinear elliptic equation
@@ -38,6 +39,7 @@ List packaged manufactured-run presets:
 ```bash
 python -m scripts.advection_reaction.run_adv_rea_cases --list-presets
 python -m scripts.diffusion_reaction.run_diff_rea_cases --list-presets
+python scripts/guiding_center/run_guiding_center_cases.py --list-presets
 ```
 
 ## Main Workflows
@@ -83,10 +85,24 @@ python -m scripts.gpu.check_upwind_scc_host_pyamgx_adv_rea --help
 
 The advection GPU runner supports CuPy assembly, raw-CUDA fused assembly, direct
 raw-CUDA CSR emission, Cupyx solver experiments, and AMGX solves through
-PyAMGX.  See `docs/gpu_hdg_modules.md` and `configs/amgx/README.md` for current
+PyAMGX.  The diffusion GPU runner supports NumPy/Numba/CuPy/raw-CUDA reduced
+assembly, direct raw-CUDA CSR emission, raw-CUDA reconstruction, device primal
+postprocessing, and fixed-operator/RHS-only reuse for unsteady Poisson-like
+steps.  See `docs/gpu_hdg_modules.md` and `configs/amgx/README.md` for current
 benchmark notes and AMGX presets.
 
-Optional guiding-center and diocotron-equilibrium scripts live under
+Fixed-mesh guiding-center cases live under `scripts/guiding_center/`:
+
+```bash
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH   .venv/bin/python scripts/guiding_center/run_guiding_center_cases.py   --preset diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx   --num-steps 10 --plot-every 0
+```
+
+The runner couples diffusion-reaction Poisson solves with advection-reaction
+transport, supports independent Poisson/transport backend and solver choices,
+writes CSV/JSONL diagnostics, updates PyVista scalar arrays in place, and plots
+density only by default.  Add `--plot-both` to show density and potential.
+
+Optional semilinear diocotron-equilibrium scripts live under
 `scripts/diocotron_hdg/` and `scripts/diocotron_dolfinx/`.  They are documented
 in `MANUAL.md` and the Strategy A notes under `docs/strategyA_band_parameter_study/`.
 
@@ -97,7 +113,10 @@ in `MANUAL.md` and the Strategy A notes under `docs/strategyA_band_parameter_stu
 - `hdgfem/assembly/`: NumPy HDG local matrices, trace assembly helpers,
   projection helpers, face-dense diffusion assembly, and Gram operators.
 - `hdgfem/backends/`: optional Numba, CuPy, Cupyx, raw-CUDA, PyAMGX, and fused
-  benchmark adapters.  Optional dependencies are imported lazily.
+  benchmark adapters.  This includes table-driven Numba assembly, CuPy device
+  mirrors, raw-CUDA advection/diffusion kernels, direct CSR-to-AMGX handoff,
+  shared PyAMGX resource management, and device reconstruction/postprocessing
+  helpers.  Optional dependencies are imported lazily.
 - `hdgfem/kernels/`: low-level Numba kernels used by backend wrappers.
 - `hdgfem/linalg/`: sparse trace-system assembly/solves, boundary dof
   reduction, row scaling, upwind-SCC ordering, upwind block-GS preconditioners,
@@ -156,6 +175,7 @@ Useful supporting notes include:
 
 - [docs/gpu_hdg_modules.md](docs/gpu_hdg_modules.md): standalone GPU runner status and benchmark notes.
 - [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX presets and recommendations.
+- [docs/algorithms/gpu_assembly_solve_paths.md](docs/algorithms/gpu_assembly_solve_paths.md): GPU assembly/solve path map and direct CSR-to-AMGX notes.
 - [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
 - [docs/algorithms/upwind_block_gs_preconditioner/](docs/algorithms/upwind_block_gs_preconditioner/): mathematical upwind block-GS preconditioner note.
 - [TODO.md](TODO.md): current GPU, upwind-GS, solver API, and backend cleanup roadmap.

@@ -19,6 +19,20 @@ from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
 
 
 @njit(cache=True, inline="always", fastmath=True)
+def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_mode):
+    if trace_orientation_mode == 1:
+        return dof
+    return map_edge_dof_bool(is_positive_orientation, dof, edge_dof)
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode):
+    if trace_orientation_mode == 1 and (not is_positive_orientation) and dof % 2 == 1:
+        return -1.0
+    return 1.0
+
+
+@njit(cache=True, inline="always", fastmath=True)
 def _apply_local_solver_columns(local_columns, local_solver, boundary_mats, source_rhs, element):
     """Fill local solution columns for trace columns plus one source column."""
     rows = local_solver.shape[1]
@@ -650,6 +664,7 @@ def assemble_diffusion_trace_system_eliminated_kernel(
         element_boundary_mats,
         source_rhs,
         boundary_trace,
+        trace_orientation_mode,
 ):
     r"""Assemble a reduced diffusion-reaction HDG trace system in COO form.
 
@@ -700,9 +715,10 @@ def assemble_diffusion_trace_system_eliminated_kernel(
                     col_is_positive = orientations[element, col_face]
                     if col_solve_edge >= 0:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -722,9 +738,10 @@ def assemble_diffusion_trace_system_eliminated_kernel(
                         col_block_pos += 1
                     else:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -776,6 +793,7 @@ def assemble_diffusion_trace_rhs_eliminated_kernel(
         element_boundary_mats,
         source_rhs,
         boundary_trace,
+        trace_orientation_mode,
 ):
     """Assemble only the reduced RHS for a cached diffusion trace matrix."""
     num_elements = loc2glob_edge.shape[0]
@@ -820,9 +838,10 @@ def assemble_diffusion_trace_rhs_eliminated_kernel(
                         continue
                     col_is_positive = orientations[element, col_face]
                     for col_dof in range(ntr):
-                        local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                        local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                        col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                         column = col_face * ntr + local_col_dof
-                        schur_value = _diffusion_lift_dot(
+                        schur_value = col_sign * _diffusion_lift_dot(
                             local_columns,
                             oriented_lifts,
                             loc2oriented_face_coupling,
@@ -876,6 +895,7 @@ def assemble_projected_diffusion_trace_system_eliminated_kernel(
         reaction_scalar,
         reaction_is_scalar,
         boundary_trace,
+        trace_orientation_mode,
 ):
     """Fully fused projected diffusion trace assembly with strong trace BCs."""
     num_elements = loc2glob_edge.shape[0]
@@ -941,9 +961,10 @@ def assemble_projected_diffusion_trace_system_eliminated_kernel(
                     col_is_positive = orientations[element, col_face]
                     if col_solve_edge >= 0:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -963,9 +984,10 @@ def assemble_projected_diffusion_trace_system_eliminated_kernel(
                         col_block_pos += 1
                     else:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -1038,6 +1060,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
         inv10_coeffs,
         inv11_coeffs,
         boundary_trace,
+        trace_orientation_mode,
 ):
     """Fully fused projected tensor-diffusion trace assembly with strong BCs."""
     num_elements = loc2glob_edge.shape[0]
@@ -1106,9 +1129,10 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
                     col_is_positive = orientations[element, col_face]
                     if col_solve_edge >= 0:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -1128,9 +1152,10 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
                         col_block_pos += 1
                     else:
                         for col_dof in range(ntr):
-                            local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                             column = col_face * ntr + local_col_dof
-                            schur_value = _diffusion_lift_dot(
+                            schur_value = col_sign * _diffusion_lift_dot(
                                 local_columns,
                                 oriented_lifts,
                                 loc2oriented_face_coupling,
@@ -1193,6 +1218,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_kernel(
         reaction_scalar,
         reaction_is_scalar,
         boundary_trace,
+        trace_orientation_mode,
 ):
     """Fully fused reduced RHS assembly for a cached projected trace matrix."""
     num_elements = loc2glob_edge.shape[0]
@@ -1257,9 +1283,10 @@ def assemble_projected_diffusion_trace_rhs_eliminated_kernel(
                         continue
                     col_is_positive = orientations[element, col_face]
                     for col_dof in range(ntr):
-                        local_col_dof = map_edge_dof_bool(col_is_positive, col_dof, ntr)
+                        local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                        col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
                         column = col_face * ntr + local_col_dof
-                        schur_value = _diffusion_lift_dot(
+                        schur_value = col_sign * _diffusion_lift_dot(
                             local_columns,
                             oriented_lifts,
                             loc2oriented_face_coupling,
@@ -1295,6 +1322,7 @@ def _build_projected_diffusion_reconstruction_rhs(
         face_element_trace,
         source_coeffs,
         source_kind,
+        trace_orientation_mode,
 ):
     """Build one local RHS from source coefficients and the solved trace."""
     nel = mass_matrix.shape[0]
@@ -1316,10 +1344,11 @@ def _build_projected_diffusion_reconstruction_rhs(
         normal_x = normals[element, face, 0]
         normal_y = normals[element, face, 1]
         for trace_dof in range(ntr):
-            global_dof = edge * ntr + map_edge_dof_bool(is_positive, trace_dof, ntr)
-            trace_value = trace[global_dof]
+            local_trace_dof = _trace_local_dof(is_positive, trace_dof, ntr, trace_orientation_mode)
+            sign = _trace_orientation_sign(is_positive, trace_dof, trace_orientation_mode)
+            trace_value = sign * trace[edge * ntr + trace_dof]
             for i in range(nel):
-                coupling = face_scale * face_element_trace[face, i, trace_dof] * trace_value
+                coupling = face_scale * face_element_trace[face, i, local_trace_dof] * trace_value
                 rhs0[i, 0] += tau[element, face] * coupling
                 rhs1[i, 0] += normal_x * coupling
                 rhs2[i, 0] += normal_y * coupling
@@ -1348,6 +1377,7 @@ def reconstruct_projected_diffusion_local_unknowns_kernel(
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
+        trace_orientation_mode,
 ):
     """Recover mixed local unknowns by solving projected local systems."""
     num_elements = loc2glob_edge.shape[0]
@@ -1410,6 +1440,7 @@ def reconstruct_projected_diffusion_local_unknowns_kernel(
             face_element_trace,
             source_coeffs,
             source_kind,
+            trace_orientation_mode,
         )
         _solve_projected_diffusion_columns(
             local_columns,
@@ -1458,6 +1489,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
         inv01_coeffs,
         inv10_coeffs,
         inv11_coeffs,
+        trace_orientation_mode,
 ):
     """Recover mixed local unknowns from projected tensor local systems."""
     num_elements = loc2glob_edge.shape[0]
@@ -1525,6 +1557,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
             face_element_trace,
             source_coeffs,
             source_kind,
+            trace_orientation_mode,
         )
         _solve_projected_tensor_diffusion_columns(
             local_columns,
@@ -1555,6 +1588,7 @@ def reconstruct_diffusion_local_unknowns_kernel(
         local_solver,
         element_boundary_mats,
         source_rhs,
+        trace_orientation_mode,
 ):
     """Recover mixed local unknowns from a full trace vector."""
     num_elements = loc2glob_edge.shape[0]
@@ -1567,8 +1601,10 @@ def reconstruct_diffusion_local_unknowns_kernel(
             edge = loc2glob_edge[element, face]
             is_positive = orientations[element, face]
             for local_dof in range(ntr):
-                global_dof = edge * ntr + map_edge_dof_bool(is_positive, local_dof, ntr)
-                local_trace[face * ntr + local_dof] = trace[global_dof]
+                global_dof = edge * ntr + local_dof
+                sign = _trace_orientation_sign(is_positive, local_dof, trace_orientation_mode)
+                local_trace_dof = _trace_local_dof(is_positive, local_dof, ntr, trace_orientation_mode)
+                local_trace[face * ntr + local_trace_dof] = sign * trace[global_dof]
 
         rhs = np.empty(rows, dtype=np.float64)
         for i in range(rows):
@@ -1680,6 +1716,7 @@ def solve_hdiv_flux_min_distance_postprocess_kernel(
         ainv_constraint_t,
         schur_lu,
         schur_pivots,
+        trace_orientation_mode,
 ):
     """Apply constrained minimum-distance H(div)-type flux post-processing.
 
@@ -1746,8 +1783,14 @@ def solve_hdiv_flux_min_distance_postprocess_kernel(
 
                 trace_face = 0.0
                 for j in range(base_edg_dof):
-                    global_dof = edge * base_edg_dof + map_edge_dof_bool(is_positive, j, base_edg_dof)
-                    trace_face += trace[global_dof] * trace_base_to_post[j, trace_dof]
+                    global_dof = edge * base_edg_dof + _trace_local_dof(
+                        is_positive,
+                        j,
+                        base_edg_dof,
+                        trace_orientation_mode,
+                    )
+                    sign = _trace_orientation_sign(is_positive, j, trace_orientation_mode)
+                    trace_face += sign * trace[global_dof] * trace_base_to_post[j, trace_dof]
 
                 q0_face = 0.0
                 for j in range(post_el_dof):
@@ -1810,6 +1853,7 @@ def solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
         ainv_constraint_t,
         schur_lu,
         schur_pivots,
+        trace_orientation_mode,
 ):
     """Apply constrained H(div)-type flux post-processing using ``-grad(u*)``.
 
@@ -1876,8 +1920,14 @@ def solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
 
                 trace_face = 0.0
                 for j in range(base_edg_dof):
-                    global_dof = edge * base_edg_dof + map_edge_dof_bool(is_positive, j, base_edg_dof)
-                    trace_face += trace[global_dof] * trace_base_to_post[j, trace_dof]
+                    global_dof = edge * base_edg_dof + _trace_local_dof(
+                        is_positive,
+                        j,
+                        base_edg_dof,
+                        trace_orientation_mode,
+                    )
+                    sign = _trace_orientation_sign(is_positive, j, trace_orientation_mode)
+                    trace_face += sign * trace[global_dof] * trace_base_to_post[j, trace_dof]
 
                 q0_face = 0.0
                 for j in range(post_el_dof):

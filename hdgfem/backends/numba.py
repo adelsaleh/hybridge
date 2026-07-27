@@ -158,6 +158,7 @@ def assemble_local_advection_reaction_numba(
         beta_dot_normal: np.ndarray | None,
         reaction,
         advection_stabilization=None,
+        zero_boundary_flux: bool = False,
         trace_space: DGTraceSpace | None = None,
 ) -> NumbaAdvectionLocalAssembly:
     """Assemble local HDG advection-reaction data with Numba.
@@ -181,12 +182,18 @@ def assemble_local_advection_reaction_numba(
             raise ValueError("beta_dot_normal is required when beta is provided as callables")
         beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
+    if zero_boundary_flux:
+        beta_dot_normal = beta_dot_normal.copy()
     tau_face = hdg_mats.advection_trace_stabilization_values(
         space,
         beta_dot_normal,
         advection_stabilization,
         trace_space=trace_ref,
     )
+    tau_face = np.ascontiguousarray(tau_face, dtype=np.float64)
+    if zero_boundary_flux:
+        tau_face = tau_face.copy()
+        _zero_boundary_face_values(space, beta_dot_normal, tau_face)
     reaction_values = reaction_values_on_volume(reaction, space)
     timings["coefficient_values"] = time.perf_counter() - start
 
@@ -348,6 +355,16 @@ def _advection_trace_weight_tables(
     return tau_face_values, gamma_face_values
 
 
+def _zero_boundary_face_values(space: DGSpace, *tables: np.ndarray) -> None:
+    """Set exterior local-face quadrature values to zero in-place."""
+    mesh = space.mesh
+    edge_is_boundary = np.zeros(mesh.num_edg, dtype=bool)
+    edge_is_boundary[mesh.bnd_edges_inds] = True
+    boundary_faces = edge_is_boundary[mesh.loc2glob_edge]
+    for table in tables:
+        table[boundary_faces] = 0.0
+
+
 def _projected_tensor_component_coefficients(component, space: DGSpace, label: str) -> np.ndarray:
     """Return DG coefficients for internally projected tensor components."""
     if isinstance(component, DGField):
@@ -409,7 +426,15 @@ def _trace_orientation_mode(trace_ref: DGTraceSpace) -> int:
         return 1
     raise NotImplementedError(
         "assembly_backend='numba' currently supports trace_basis='legacy-lagrange' "
-        "and trace_basis='legendre-modal' for advection"
+        "and trace_basis='legendre-modal'"
+    )
+
+
+def _diffusion_face_element_trace(trace_ref: DGTraceSpace) -> np.ndarray:
+    """Return ``(face, element-test, trace-trial)`` diffusion coupling table."""
+    return np.ascontiguousarray(
+        trace_ref.face_trace_test_element_trial_oriented[:3].transpose(0, 2, 1),
+        dtype=np.float64,
     )
 
 
@@ -666,13 +691,14 @@ def assemble_projected_trace_system_eliminated_numba(
         source,
         beta_field: VectorDGField,
         reaction,
-        boundary_condition: Callable,
+        boundary_condition: Callable | None,
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
         beta_dot_normal: np.ndarray | None = None,
         advection_stabilization=None,
         return_block_coo: bool = False,
+        zero_boundary_flux: bool = False,
         trace_space: DGTraceSpace | None = None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
@@ -694,7 +720,12 @@ def assemble_projected_trace_system_eliminated_numba(
     timings["coefficient_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
+    if zero_boundary_flux:
+        boundary_trace = np.zeros((space.mesh.num_edg, trace_ref.edg_dof), dtype=np.float64)
+    else:
+        if boundary_condition is None:
+            raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
+        boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     if beta_dot_normal is None:
         beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
@@ -715,6 +746,10 @@ def assemble_projected_trace_system_eliminated_numba(
         trace_space=trace_ref,
     )
     timings["trace_weights"] = time.perf_counter() - start
+    if zero_boundary_flux:
+        start = time.perf_counter()
+        _zero_boundary_face_values(space, tau_face_values, gamma_face_values)
+        timings["boundary_flux_zeroing"] = time.perf_counter() - start
 
     start = time.perf_counter()
     edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
@@ -819,6 +854,34 @@ def assemble_projected_trace_system_eliminated_numba(
     )
 
 
+def assemble_projected_trace_system_zero_flux_numba(
+        source,
+        beta_field: VectorDGField,
+        reaction,
+        space: DGSpace,
+        *,
+        edge_order: np.ndarray | None = None,
+        beta_dot_normal: np.ndarray | None = None,
+        advection_stabilization=None,
+        return_block_coo: bool = False,
+        trace_space: DGTraceSpace | None = None,
+) -> NumbaProjectedTraceAssembly:
+    """Assemble a reduced trace system with zero numerical flux on the boundary."""
+    return assemble_projected_trace_system_eliminated_numba(
+        source,
+        beta_field,
+        reaction,
+        None,
+        space,
+        edge_order=edge_order,
+        beta_dot_normal=beta_dot_normal,
+        advection_stabilization=advection_stabilization,
+        return_block_coo=return_block_coo,
+        zero_boundary_flux=True,
+        trace_space=trace_space,
+    )
+
+
 def _normalize_diffusion_stabilization(stabilization, space: DGSpace) -> np.ndarray:
     """Return diffusion stabilization values with shape ``(num_elements, 3)``."""
     mesh = space.mesh
@@ -840,6 +903,7 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaDiffusionTraceAssembly:
     """Assemble the reduced projected diffusion-reaction trace system in Numba."""
     if not NUMBA_AVAILABLE:
@@ -847,34 +911,43 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     interior_side_index = _interior_side_index(space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    face_element_trace = _diffusion_face_element_trace(trace_ref)
     timings["coefficient_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     mesh = space.mesh
     q = space.quad_data
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    edg_dof = trace_ref.edg_dof
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     valid_elements = np.ascontiguousarray(mesh.interior_elements, dtype=np.int64)
     valid_faces = np.ascontiguousarray(mesh.interior_faces, dtype=np.int64)
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[valid_elements], axis=1).astype(np.int64)
     side_flux_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
     side_flux_offsets[0] = 0
-    np.cumsum(side_col_counts * q.edg_dof * q.edg_dof, out=side_flux_offsets[1:])
+    np.cumsum(side_col_counts * edg_dof * edg_dof, out=side_flux_offsets[1:])
     n_flux = int(side_flux_offsets[-1])
-    n_mass = valid_elements.size * q.edg_dof * q.edg_dof
+    n_mass = valid_elements.size * edg_dof * edg_dof
     nnz = n_flux + n_mass
     timings["reduction_map"] = time.perf_counter() - start
 
     rows = np.empty(nnz, dtype=np.int64)
     cols = np.empty_like(rows)
     data = np.empty(nnz, dtype=np.float64)
-    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
 
     start = time.perf_counter()
@@ -901,9 +974,9 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
         np.ascontiguousarray(q.MKrf_inv, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
-        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        face_element_trace,
+        np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
         d0_reference,
         d1_reference,
         source_coeffs,
@@ -912,11 +985,12 @@ def assemble_projected_diffusion_trace_system_eliminated_numba(
         float(reaction_scalar),
         bool(reaction_is_scalar),
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        int(trace_orientation_mode),
     )
     timings["kernel"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    rhs = np.zeros(free_edges.size * edg_dof, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
@@ -944,6 +1018,7 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaDiffusionTraceAssembly:
     """Assemble the reduced projected tensor diffusion-reaction trace system."""
     if not NUMBA_AVAILABLE:
@@ -951,6 +1026,8 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
@@ -961,29 +1038,36 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
     tau = _normalize_diffusion_stabilization(stabilization, space)
     interior_side_index = _interior_side_index(space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    face_element_trace = _diffusion_face_element_trace(trace_ref)
     timings["coefficient_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     mesh = space.mesh
     q = space.quad_data
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    edg_dof = trace_ref.edg_dof
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     valid_elements = np.ascontiguousarray(mesh.interior_elements, dtype=np.int64)
     valid_faces = np.ascontiguousarray(mesh.interior_faces, dtype=np.int64)
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[valid_elements], axis=1).astype(np.int64)
     side_flux_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
     side_flux_offsets[0] = 0
-    np.cumsum(side_col_counts * q.edg_dof * q.edg_dof, out=side_flux_offsets[1:])
+    np.cumsum(side_col_counts * edg_dof * edg_dof, out=side_flux_offsets[1:])
     n_flux = int(side_flux_offsets[-1])
-    n_mass = valid_elements.size * q.edg_dof * q.edg_dof
+    n_mass = valid_elements.size * edg_dof * edg_dof
     nnz = n_flux + n_mass
     timings["reduction_map"] = time.perf_counter() - start
 
     rows = np.empty(nnz, dtype=np.int64)
     cols = np.empty_like(rows)
     data = np.empty(nnz, dtype=np.float64)
-    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
 
     start = time.perf_counter()
@@ -1009,9 +1093,9 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
-        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        face_element_trace,
+        np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
         d0_reference,
         d1_reference,
         source_coeffs,
@@ -1024,11 +1108,12 @@ def assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
         inv10_coeffs,
         inv11_coeffs,
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        int(trace_orientation_mode),
     )
     timings["kernel"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    rhs = np.zeros(free_edges.size * edg_dof, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
@@ -1055,6 +1140,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray, KnownDofReduction, dict[str, float]]:
     """Assemble only the reduced RHS for a cached projected diffusion matrix."""
     if not NUMBA_AVAILABLE:
@@ -1062,18 +1148,27 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
 
     timings: dict[str, float] = {}
     start = time.perf_counter()
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     interior_side_index = _interior_side_index(space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
+    face_element_trace = _diffusion_face_element_trace(trace_ref)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     mesh = space.mesh
     q = space.quad_data
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    edg_dof = trace_ref.edg_dof
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     timings["preparation"] = time.perf_counter() - start
 
-    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
 
     start = time.perf_counter()
@@ -1094,8 +1189,8 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
         np.ascontiguousarray(q.MKrf_inv, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        face_element_trace,
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
         d0_reference,
         d1_reference,
         source_coeffs,
@@ -1104,11 +1199,12 @@ def assemble_projected_diffusion_trace_rhs_eliminated_numba(
         float(reaction_scalar),
         bool(reaction_is_scalar),
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        int(trace_orientation_mode),
     )
     timings["kernel"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    rhs = np.zeros(free_edges.size * edg_dof, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
@@ -1131,6 +1227,7 @@ def assemble_diffusion_trace_system_eliminated_numba(
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> NumbaDiffusionTraceAssembly:
     """Assemble a boundary-eliminated diffusion-reaction trace system.
 
@@ -1146,12 +1243,15 @@ def assemble_diffusion_trace_system_eliminated_numba(
     start = time.perf_counter()
     mesh = space.mesh
     q = space.quad_data
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
+    edg_dof = trace_ref.edg_dof
     local_solver = np.ascontiguousarray(local_solver, dtype=np.float64)
     element_boundary_mats = np.ascontiguousarray(element_boundary_mats, dtype=np.float64)
     source_rhs = np.ascontiguousarray(source_rhs, dtype=np.float64)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     expected_solver = (mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof)
-    expected_boundary = (mesh.num_tri, 3 * q.el_dof, 3 * q.edg_dof)
+    expected_boundary = (mesh.num_tri, 3 * q.el_dof, 3 * edg_dof)
     expected_rhs = (mesh.num_tri, 3 * q.el_dof)
     if local_solver.shape != expected_solver:
         raise ValueError(f"local_solver must have shape {expected_solver}; got {local_solver.shape}")
@@ -1162,24 +1262,29 @@ def assemble_diffusion_trace_system_eliminated_numba(
     timings["input_validation"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     valid_elements = np.ascontiguousarray(mesh.interior_elements, dtype=np.int64)
     valid_faces = np.ascontiguousarray(mesh.interior_faces, dtype=np.int64)
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[valid_elements], axis=1).astype(np.int64)
     side_flux_offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
     side_flux_offsets[0] = 0
-    np.cumsum(side_col_counts * q.edg_dof * q.edg_dof, out=side_flux_offsets[1:])
+    np.cumsum(side_col_counts * edg_dof * edg_dof, out=side_flux_offsets[1:])
     n_flux = int(side_flux_offsets[-1])
-    n_mass = valid_elements.size * q.edg_dof * q.edg_dof
+    n_mass = valid_elements.size * edg_dof * edg_dof
     nnz = n_flux + n_mass
     timings["reduction_map"] = time.perf_counter() - start
 
     rows = np.empty(nnz, dtype=np.int64)
     cols = np.empty_like(rows)
     data = np.empty(nnz, dtype=np.float64)
-    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
 
     start = time.perf_counter()
@@ -1200,17 +1305,18 @@ def assemble_diffusion_trace_system_eliminated_numba(
         np.ascontiguousarray(mesh.jacs_el_fc, dtype=np.float64),
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
         tau,
-        np.ascontiguousarray(q.M_rf_fc, dtype=np.float64),
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
         local_solver,
         element_boundary_mats,
         source_rhs,
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        int(trace_orientation_mode),
     )
     timings["kernel"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    rhs = np.zeros(free_edges.size * edg_dof, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
@@ -1238,6 +1344,7 @@ def assemble_diffusion_trace_rhs_eliminated_numba(
         space: DGSpace,
         *,
         edge_order: np.ndarray | None = None,
+        trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray, KnownDofReduction, dict[str, float]]:
     """Assemble only the reduced RHS for a cached diffusion trace operator."""
     if not NUMBA_AVAILABLE:
@@ -1246,16 +1353,23 @@ def assemble_diffusion_trace_rhs_eliminated_numba(
     timings: dict[str, float] = {}
     start = time.perf_counter()
     mesh = space.mesh
-    q = space.quad_data
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
+    edg_dof = trace_ref.edg_dof
     local_solver = np.ascontiguousarray(local_solver, dtype=np.float64)
     element_boundary_mats = np.ascontiguousarray(element_boundary_mats, dtype=np.float64)
     source_rhs = np.ascontiguousarray(source_rhs, dtype=np.float64)
     tau = _normalize_diffusion_stabilization(stabilization, space)
-    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space)
-    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(space, boundary_trace, edge_order)
+    boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
+    edge_to_solve_edge, free_edges, reduction_template = _boundary_reduction_maps(
+        space,
+        boundary_trace,
+        edge_order,
+        trace_space=trace_ref,
+    )
     timings["preparation"] = time.perf_counter() - start
 
-    rhs_indices = np.empty(mesh.num_tri * 3 * q.edg_dof, dtype=np.int64)
+    rhs_indices = np.empty(mesh.num_tri * 3 * edg_dof, dtype=np.int64)
     rhs_values = np.empty_like(rhs_indices, dtype=np.float64)
 
     start = time.perf_counter()
@@ -1270,16 +1384,17 @@ def assemble_diffusion_trace_rhs_eliminated_numba(
         np.ascontiguousarray(mesh.jacs_el_fc, dtype=np.float64),
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
         tau,
-        np.ascontiguousarray(q.face_trace_test_element_trial_oriented, dtype=np.float64),
+        np.ascontiguousarray(trace_ref.face_trace_test_element_trial_oriented, dtype=np.float64),
         local_solver,
         element_boundary_mats,
         source_rhs,
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        int(trace_orientation_mode),
     )
     timings["kernel"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    rhs = np.zeros(free_edges.size * q.edg_dof, dtype=np.float64)
+    rhs = np.zeros(free_edges.size * edg_dof, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
@@ -1299,6 +1414,8 @@ def reconstruct_diffusion_local_unknowns_numba(
         local_solver: np.ndarray,
         element_boundary_mats: np.ndarray,
         space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Recover mixed diffusion local unknowns with the Numba backend."""
     if not NUMBA_AVAILABLE:
@@ -1306,8 +1423,11 @@ def reconstruct_diffusion_local_unknowns_numba(
 
     mesh = space.mesh
     q = space.quad_data
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
+    edg_dof = trace_ref.edg_dof
     trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
-    expected_trace_shape = (mesh.num_edg * q.edg_dof,)
+    expected_trace_shape = (mesh.num_edg * edg_dof,)
     if trace.shape != expected_trace_shape:
         raise ValueError(f"trace must have shape {expected_trace_shape}; got {trace.shape}")
 
@@ -1323,6 +1443,7 @@ def reconstruct_diffusion_local_unknowns_numba(
         local_solver,
         element_boundary_mats,
         source_rhs,
+        int(trace_orientation_mode),
     )
     return local_unknowns
 
@@ -1333,19 +1454,25 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
         reaction,
         stabilization,
         space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Recover mixed diffusion local unknowns with fully fused projected kernels."""
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     tau = _normalize_diffusion_stabilization(stabilization, space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    face_element_trace = _diffusion_face_element_trace(trace_ref)
     mesh = space.mesh
     q = space.quad_data
+    edg_dof = trace_ref.edg_dof
     trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
-    expected_trace_shape = (mesh.num_edg * q.edg_dof,)
+    expected_trace_shape = (mesh.num_edg * edg_dof,)
     if trace.shape != expected_trace_shape:
         raise ValueError(f"trace must have shape {expected_trace_shape}; got {trace.shape}")
 
@@ -1364,7 +1491,7 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
         np.ascontiguousarray(q.MKrf_inv, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
+        face_element_trace,
         d0_reference,
         d1_reference,
         source_coeffs,
@@ -1372,6 +1499,7 @@ def reconstruct_projected_diffusion_local_unknowns_numba(
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
+        int(trace_orientation_mode),
     )
     return local_unknowns
 
@@ -1383,11 +1511,15 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
         diffusion_inverse,
         stabilization,
         space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Recover mixed local unknowns with projected tensor fused kernels."""
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
+    trace_ref = _trace_ref(space, trace_space)
+    trace_orientation_mode = _trace_orientation_mode(trace_ref)
     source_coeffs, source_kind = _source_coefficients(source, space)
     reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
     inv00_coeffs, inv01_coeffs, inv10_coeffs, inv11_coeffs = _projected_tensor_coefficients(
@@ -1397,10 +1529,12 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
     )
     tau = _normalize_diffusion_stabilization(stabilization, space)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
+    face_element_trace = _diffusion_face_element_trace(trace_ref)
     mesh = space.mesh
     q = space.quad_data
+    edg_dof = trace_ref.edg_dof
     trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
-    expected_trace_shape = (mesh.num_edg * q.edg_dof,)
+    expected_trace_shape = (mesh.num_edg * edg_dof,)
     if trace.shape != expected_trace_shape:
         raise ValueError(f"trace must have shape {expected_trace_shape}; got {trace.shape}")
 
@@ -1418,7 +1552,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
         np.ascontiguousarray(q.face_element_test_element_trial, dtype=np.float64),
-        np.ascontiguousarray(q.face_element_test_trace_trial, dtype=np.float64),
+        face_element_trace,
         d0_reference,
         d1_reference,
         source_coeffs,
@@ -1430,6 +1564,7 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_numba(
         inv01_coeffs,
         inv10_coeffs,
         inv11_coeffs,
+        int(trace_orientation_mode),
     )
     return local_unknowns
 
@@ -1442,6 +1577,7 @@ def reconstruct_projected_field_numba(
         space: DGSpace,
         *,
         advection_stabilization=None,
+        zero_boundary_flux: bool = False,
         name: str = "u_h",
         trace_space: DGTraceSpace | None = None,
 ) -> DGField:
@@ -1474,6 +1610,8 @@ def reconstruct_projected_field_numba(
         tau_coeffs,
         trace_space=trace_ref,
     )
+    if zero_boundary_flux:
+        _zero_boundary_face_values(space, tau_face_values, gamma_face_values)
     reconstruct_projected_field_kernel(
         coeffs,
         trace,
@@ -1514,6 +1652,7 @@ __all__ = [
     "assemble_local_advection_reaction_numba",
     "assemble_projected_trace_system_eliminated_numba",
     "assemble_projected_trace_system_numba",
+    "assemble_projected_trace_system_zero_flux_numba",
     "beta_values_on_volume",
     "reconstruct_diffusion_local_unknowns_numba",
     "reconstruct_projected_diffusion_local_unknowns_numba",

@@ -14,6 +14,7 @@ from ..core.space import DGField
 from .cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 from .cupy_diff_rea_raw import (
     RawDiffusionAssemblyResult,
+    assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda,
     assemble_projected_diffusion_trace_system_eliminated_raw_cuda,
     validate_raw_cuda_supported,
 )
@@ -57,6 +58,65 @@ class CupyDiffusionTraceAssembly:
     element_boundary_mats: Any | None = None
     source_rhs: Any | None = None
     raw_assembly: RawDiffusionAssemblyResult | None = None
+
+
+def _as_scalar_or_none(value) -> float | None:
+    if np.isscalar(value):
+        return float(value)
+    try:
+        array = np.asarray(value, dtype=np.float64)
+    except (TypeError, ValueError):
+        return None
+    if array.shape == ():
+        return float(array)
+    return None
+
+
+def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, float, float] | None:
+    scalar = _as_scalar_or_none(diffusion)
+    if scalar is not None:
+        if scalar <= 0.0:
+            raise ValueError("diffusion scalar must be positive")
+        inv = 1.0 / scalar
+        return inv, 0.0, 0.0, inv
+
+    try:
+        array = np.asarray(diffusion, dtype=np.float64)
+    except (TypeError, ValueError):
+        array = None
+    if array is not None and array.shape == (2, 2):
+        k00, k01 = float(array[0, 0]), float(array[0, 1])
+        k10, k11 = float(array[1, 0]), float(array[1, 1])
+    elif isinstance(diffusion, (tuple, list)):
+        if len(diffusion) == 3:
+            k00 = _as_scalar_or_none(diffusion[0])
+            k01 = _as_scalar_or_none(diffusion[1])
+            k11 = _as_scalar_or_none(diffusion[2])
+            k10 = k01
+        elif len(diffusion) == 4:
+            k00 = _as_scalar_or_none(diffusion[0])
+            k01 = _as_scalar_or_none(diffusion[1])
+            k10 = _as_scalar_or_none(diffusion[2])
+            k11 = _as_scalar_or_none(diffusion[3])
+        elif (
+            len(diffusion) == 2
+            and all(isinstance(row, (tuple, list)) and len(row) == 2 for row in diffusion)
+        ):
+            k00 = _as_scalar_or_none(diffusion[0][0])
+            k01 = _as_scalar_or_none(diffusion[0][1])
+            k10 = _as_scalar_or_none(diffusion[1][0])
+            k11 = _as_scalar_or_none(diffusion[1][1])
+        else:
+            return None
+        if None in {k00, k01, k10, k11}:
+            return None
+    else:
+        return None
+
+    det = k00 * k11 - k01 * k10
+    if det <= 0.0:
+        raise ValueError(f"diffusion tensor must be positive definite; determinant is {det}")
+    return k11 / det, -k01 / det, -k10 / det, k00 / det
 
 
 def legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
@@ -551,10 +611,15 @@ def compact_boundary_trace_to_full(boundary_trace, cspace):
 def raw_cuda_diffusion_fallback_reason(cspace, trace_ref) -> tuple[str, str] | None:
     """Return a human-readable reason when raw CUDA diffusion is unsupported."""
     trace_kind = str(getattr(trace_ref, "kind", "unknown"))
-    if not getattr(trace_ref, "nodal", False) or trace_kind != "legacy-lagrange":
+    supported_trace = (
+        trace_kind == "legacy-lagrange" and getattr(trace_ref, "nodal", False)
+    ) or (
+        trace_kind == "legendre-modal" and not getattr(trace_ref, "nodal", True)
+    )
+    if not supported_trace:
         label = f"raw-cuda trace={trace_kind} unsupported"
         detail = (
-            "raw CUDA diffusion assembly supports only legacy-lagrange nodal trace basis; "
+            "raw CUDA diffusion assembly supports legacy-lagrange nodal and legendre-modal trace bases; "
             f"got trace={trace_kind}"
         )
         return label, detail
@@ -625,6 +690,84 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
     )
 
 
+def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
+        source,
+        reaction,
+        boundary_condition: Callable,
+        stabilization: float,
+        space,
+        *,
+        cached_raw: RawDiffusionAssemblyResult,
+        trace_basis: str = "legacy-lagrange",
+        block_size: int = 1,
+        trace_ref=None,
+) -> CupyDiffusionTraceAssembly:
+    """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
+    cupy = require_cupy()
+    timings: dict[str, float] = {}
+    cspace = as_cupy_space(space)
+    source = _validate_raw_cuda_source(source, cspace)
+    reaction = _require_same_space_dg_field(reaction, cspace, "reaction", "raw-cuda")
+    if not _raw_cuda_reaction_is_zero(reaction, cspace):
+        raise NotImplementedError("raw CUDA diffusion assembly currently supports only zero reaction")
+    if trace_ref is None:
+        trace_ref = build_trace_reference(cspace, trace_basis)
+    fallback = raw_cuda_diffusion_fallback_reason(cspace, trace_ref)
+    if fallback is not None:
+        _, detail = fallback
+        raise NotImplementedError(detail)
+    validate_raw_cuda_supported(cspace, trace_ref)
+    if str(cached_raw.matrix_format).lower() != "csr" or cached_raw.csr_pattern is None:
+        raise ValueError("raw-CUDA cached RHS assembly requires a cached CSR raw assembly")
+
+    start = time.perf_counter()
+    source_rhs = source_moments_cupy(source, cspace)
+    boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+    raw = assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
+        source_rhs=source_rhs,
+        boundary_trace=boundary_trace,
+        cspace=cspace,
+        trace_ref=trace_ref,
+        d0_reference=cached_raw.d0_reference,
+        d1_reference=cached_raw.d1_reference,
+        face_element_mass=cached_raw.face_element_mass,
+        tau=float(stabilization),
+        csr_pattern=cached_raw.csr_pattern,
+        block_size=block_size,
+    )
+    cupy.cuda.get_current_stream().synchronize()
+    timings.update(raw.timings)
+    timings["total"] = time.perf_counter() - start
+    return CupyDiffusionTraceAssembly(
+        rows=None,
+        cols=None,
+        data=cached_raw.data,
+        rhs=raw.rhs,
+        boundary_trace=raw.boundary_trace,
+        timings=timings,
+        matrix_format="csr",
+        indptr=cached_raw.indptr,
+        indices=cached_raw.indices,
+        source_rhs=source_rhs,
+        raw_assembly=RawDiffusionAssemblyResult(
+            rows=None,
+            cols=None,
+            data=cached_raw.data,
+            rhs=raw.rhs,
+            source_rhs=source_rhs,
+            boundary_trace=raw.boundary_trace,
+            d0_reference=cached_raw.d0_reference,
+            d1_reference=cached_raw.d1_reference,
+            face_element_mass=cached_raw.face_element_mass,
+            timings=timings,
+            indptr=cached_raw.indptr,
+            indices=cached_raw.indices,
+            matrix_format="csr",
+            csr_pattern=cached_raw.csr_pattern,
+        ),
+    )
+
+
 def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         source,
         reaction,
@@ -688,10 +831,131 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
     )
 
 
+
+def _postprocess_reference_cache(space, trace_space, cache):
+    """Return host reference tables for primal postprocessing without host solves."""
+    from ..solvers.diff_rea import _new_hdg_postprocess_cache
+
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
+        cache = _new_hdg_postprocess_cache(space, trace_ref)
+    return cache
+
+
+def postprocess_projected_diffusion_primal_cupy(
+        local_unknowns,
+        space,
+        diffusion=1.0,
+        *,
+        trace_space=None,
+        cache=None,
+        name: str = "u_h_star",
+        timings: dict[str, float] | None = None,
+):
+    """Recover the HDG primal postprocessed field on the CUDA device with CuPy.
+
+    The host is used only to build reference tables and sample the optional
+    inverse-diffusion coefficient table.  The per-element matrix assembly, RHS
+    construction, and local solves run on device, and the returned ``DGField``
+    stores its coefficient table on the active CUDA device until host access is
+    requested.
+    """
+    cupy = require_cupy()
+    timings = {} if timings is None else timings
+    cspace = as_cupy_space(space)
+    stream = cupy.cuda.get_current_stream()
+    stream.synchronize()
+    total_start = time.perf_counter()
+
+    setup_start = time.perf_counter()
+    cache = _postprocess_reference_cache(space, trace_space, cache)
+    cpost_space = as_cupy_space(cache.post_space, device=cspace.device_id)
+    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=cupy.float64))
+    expected_unknowns = (cspace.mesh.num_tri, 3 * cspace.el_dof)
+    if tuple(local_unknowns.shape) != expected_unknowns:
+        raise ValueError(f"local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}")
+
+    base_el_dof = int(cspace.el_dof)
+    post_el_dof = int(cache.post_space.el_dof)
+    rows = post_el_dof + 1
+    num_elements = int(cspace.mesh.num_tri)
+    q_post = cpost_space.quad_data
+
+    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=cupy.float64)
+    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=cupy.float64)
+    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=cupy.float64)
+    mean_post = cupy.asarray(cache.mean_post, dtype=cupy.float64)
+    mean_base = cupy.asarray(cache.mean_base, dtype=cupy.float64)
+    base_basis_t = cupy.asarray(cache.base_basis_on_post_quads.T, dtype=cupy.float64)
+    weights = q_post.Krf_w
+    post_grad = q_post.gphi
+
+    inverse_constants = _constant_inverse_diffusion_components(diffusion)
+    if inverse_constants is None:
+        from ..solvers.diff_rea import _inverse_diffusion_values
+
+        inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
+        inv00 = cupy.asarray(inv00_h, dtype=cupy.float64)
+        inv01 = cupy.asarray(inv01_h, dtype=cupy.float64)
+        inv10 = cupy.asarray(inv10_h, dtype=cupy.float64)
+        inv11 = cupy.asarray(inv11_h, dtype=cupy.float64)
+    else:
+        inv00, inv01, inv10, inv11 = map(float, inverse_constants)
+    stream.synchronize()
+    timings["postprocess.primal.cupy.setup"] = time.perf_counter() - setup_start
+
+    solve_start = time.perf_counter()
+    inv_t = cspace.mesh.inv_aff_mats_t
+    aff_jacs = cspace.mesh.aff_jacs
+    inv00_geom = inv_t[:, 0, 0]
+    inv01_geom = inv_t[:, 0, 1]
+    inv10_geom = inv_t[:, 1, 0]
+    inv11_geom = inv_t[:, 1, 1]
+    metric_rr = inv00_geom * inv00_geom + inv10_geom * inv10_geom
+    metric_rs = inv00_geom * inv01_geom + inv10_geom * inv11_geom
+    metric_ss = inv01_geom * inv01_geom + inv11_geom * inv11_geom
+
+    matrix = cupy.zeros((num_elements, rows, rows), dtype=cupy.float64)
+    matrix[:, :post_el_dof, :post_el_dof] = aff_jacs[:, None, None] * (
+        metric_rr[:, None, None] * stiffness_rr[None, :, :]
+        + metric_rs[:, None, None] * stiffness_rs[None, :, :]
+        + metric_ss[:, None, None] * stiffness_ss[None, :, :]
+    )
+    mean_rows = aff_jacs[:, None] * mean_post[None, :]
+    matrix[:, :post_el_dof, post_el_dof] = mean_rows
+    matrix[:, post_el_dof, :post_el_dof] = mean_rows
+
+    qx_values = local_unknowns[:, base_el_dof:2 * base_el_dof] @ base_basis_t
+    qy_values = local_unknowns[:, 2 * base_el_dof:3 * base_el_dof] @ base_basis_t
+    cqx_values = inv00 * qx_values + inv01 * qy_values
+    cqy_values = inv10 * qx_values + inv11 * qy_values
+
+    rhs = cupy.zeros((num_elements, rows), dtype=cupy.float64)
+    for quad in range(int(weights.shape[0])):
+        grad_r = post_grad[quad, :, 0]
+        grad_s = post_grad[quad, :, 1]
+        grad_x = inv00_geom[:, None] * grad_r[None, :] + inv01_geom[:, None] * grad_s[None, :]
+        grad_y = inv10_geom[:, None] * grad_r[None, :] + inv11_geom[:, None] * grad_s[None, :]
+        rhs[:, :post_el_dof] += weights[quad] * (
+            cqx_values[:, quad, None] * grad_x
+            + cqy_values[:, quad, None] * grad_y
+        )
+    rhs[:, :post_el_dof] *= -aff_jacs[:, None]
+    rhs[:, post_el_dof] = aff_jacs * (local_unknowns[:, :base_el_dof] @ mean_base)
+
+    solution = cupy.linalg.solve(matrix, rhs[:, :, None]).squeeze(-1)
+    coeffs = cupy.ascontiguousarray(solution[:, :post_el_dof])
+    stream.synchronize()
+    timings["postprocess.primal.cupy.solve"] = time.perf_counter() - solve_start
+    timings["postprocess.primal.cupy.total"] = time.perf_counter() - total_start
+    return cpost_space.field(coeffs, name=name), cache
+
+
 __all__ = [
     "CupyDiffusionTraceAssembly",
     "TraceReferenceData",
     "assemble_projected_diffusion_trace_system_eliminated_cupy",
+    "assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy",
     "assemble_projected_diffusion_trace_system_eliminated_raw_cupy",
     "boundary_trace_values_cupy",
     "build_dof_maps",
@@ -700,6 +964,7 @@ __all__ = [
     "element_boundary_mats_cupy",
     "face_element_mass",
     "reference_derivative_mats",
+    "postprocess_projected_diffusion_primal_cupy",
     "raw_cuda_diffusion_fallback_reason",
     "source_moments_cupy",
 ]

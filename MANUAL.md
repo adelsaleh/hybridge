@@ -28,6 +28,10 @@ such as `.pytest_cache/README.md`, are intentionally not listed.
 - [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
 - [docs/algorithms/coefficient_input_api.md](docs/algorithms/coefficient_input_api.md): coefficient input semantics, lazy zero/constant fields, and backend materialization rules.
 - [docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md](docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md): diffusion raw-CUDA setup-array audit and remaining host-built inputs.
+- [docs/algorithms/diff_rea_amgx_hierarchy_audit.md](docs/algorithms/diff_rea_amgx_hierarchy_audit.md): AMGX hierarchy statistics for nodal and modal diffusion traces.
+- [docs/algorithms/diff_rea_matrix_scaling_diagnostics.md](docs/algorithms/diff_rea_matrix_scaling_diagnostics.md): diffusion matrix scaling diagnostics and modal trace conditioning notes.
+- [docs/algorithms/diff_rea_modal_amgx_preconditioners.md](docs/algorithms/diff_rea_modal_amgx_preconditioners.md): modal diffusion AMGX preconditioner sweeps and recommendations.
+- [docs/algorithms/unsteady_reusable_solver_validation.md](docs/algorithms/unsteady_reusable_solver_validation.md): unsteady reusable solver validation plan.
 - [docs/algorithms/gpu_assembly_solve_paths.md](docs/algorithms/gpu_assembly_solve_paths.md): GPU assembly/solve path map, direct CSR-to-AMGX notes, and tensor-diffusion direction.
 - [docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md](docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md): symmetric triangle quadrature exactness and solver smoke-test results.
 - [docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md](docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md): recommended torsion-initialized Newton parameters from the Strategy A study.
@@ -199,6 +203,61 @@ Do not use Cupyx CG with the default left row scaling: left scaling does not
 preserve symmetry.  The code rejects `cupyx_solver="cg"` when
 `scale_system=True`; use BiCGSTAB/GMRES or disable scaling for a genuinely SPD
 operator.
+
+### Current Backend Support Matrix
+
+The solver APIs expose multiple assembly and solve paths.  The important rule is
+that fast Numba and raw-CUDA kernels are table driven: coefficients must already
+be represented as `DGField` or `VectorDGField` objects, usually via
+`space.project_callable(...)`, `space.constant(...)`, or `space.zeros(...)`.
+NumPy and CuPy paths can still sample analytic callables directly.
+
+Advection-reaction backends:
+
+```text
+NumPy          reference assembly/reconstruction; accepts callables and DG fields
+Numba          projected/table assembly and reconstruction; supports boundary elimination,
+               tangent zero-boundary-flux, upwind-SCC ordering, and compact zero/constant descriptors
+CuPy           device assembly baseline; accepts CuPy-compatible callables and DG fields
+raw-CUDA       fused projected assembly; supports COO and direct CSR emission, safe or cooperative LU,
+               legendre-modal and legacy-lagrange traces, device AMGX solves, and zero-flux boundaries
+```
+
+Diffusion-reaction backends:
+
+```text
+NumPy          reference reduced assembly, reconstruction, and host postprocessing
+Numba          trace-space-aware projected assembly/reconstruction for legacy and modal traces
+CuPy           device assembly/reconstruction and device primal postprocessing
+raw-CUDA       identity-diffusion/zero-reaction fast path through p <= 6; supports legacy-lagrange
+               and legendre-modal traces, COO or direct CSR emission, raw-CUDA reconstruction,
+               full mixed local unknown output, and RHS-only rebuilds for cached fixed operators
+```
+
+AMGX/PyAMGX integration:
+
+```text
+PyAMGX CSR handoff       uploads CuPy CSR pointers without materializing a host CSR matrix
+shared AMGX resources    all live PyAMGX solvers share one process-wide Resources handle, which
+                         allows persistent Poisson setup and transient transport solves to coexist
+initial guesses          device initial guesses are passed through Vector.upload_raw; no host guess copy is required
+fixed Poisson operators  raw-CUDA diffusion can cache CSR data and AMGX setup, then rebuild only RHS per step
+transport operators      transport matrices change with beta, so AMGX setup is rebuilt each step for now
+```
+
+The raw-CUDA diffusion cache is intentionally conservative.  It preserves the
+operator only when mesh, order, trace basis, boundary mode, diffusion, reaction,
+stabilization, matrix format, and raw block size are unchanged.  Source and
+Dirichlet trace changes invalidate only the RHS.  For zero potential boundary
+conditions, the cached RHS kernel uses a source-only column layout rather than a
+matrix-sized dummy data buffer.
+
+For AMGX convergence diagnostics, distinguish the values printed by AMGX from
+post-solve checks.  AMGX `RELATIVE_INI` reports reduction relative to the
+initial residual of the supplied initial guess, while runner diagnostics also
+record `solver_residual`, `solver_residual_target`, and residuals relative to
+`||b||`.  The guiding-center Poisson presets use an absolute-convergence PCGF
+config so `poisson_solver_atol` controls the AMGX stop target directly.
 
 ### DOLFINx
 
@@ -406,9 +465,12 @@ Diffusion-reaction presets control optional HDG post-processing with
 postprocessor recovers a degree `p+1` scalar field.  The flux postprocessor
 recovers a degree `p+1` vector field whose normal moments match the HDG
 numerical flux and whose interior moments match the raw HDG flux against
-`[P_{p-1}]^d`.  Manufactured cases return the exact conservative flux
-`q=-kappa grad u`; the runner reports raw and postprocessed flux errors when
-available.
+`[P_{p-1}]^d`.  The host postprocessor supports
+`trace_basis="legacy-lagrange"`, `"legendre-modal"`, and `"bernstein"`;
+modal traces use signed odd modes on reversed edges.  Numba diffusion assembly is
+currently enabled for legacy and modal traces.  Manufactured cases return
+the exact conservative flux `q=-kappa grad u`; the runner reports raw and
+postprocessed flux errors when available.
 
 Create a new manufactured PDE by adding a factory and `CASE_DEFINITIONS` entry
 in `scripts/diffusion_reaction/diff_rea_cases.py`.  Create a new run
@@ -1218,6 +1280,67 @@ factorization; this matters for large trace systems.
 
 This section is for interested readers.  It is not required for the main
 advection-reaction or diffusion-reaction HDG workflows.
+
+### Fixed-Mesh Guiding-Center Cases Runner
+
+The fixed-mesh guiding-center runner lives in `scripts/guiding_center/` and is
+separate from the older semilinear-equilibrium scripts.  It advances a first
+order semi-implicit guiding-center model:
+
+```text
+1. solve -Delta phi^n = rho^n with diffusion-reaction HDG
+2. build beta = dt * q^perp from the Poisson flux q = grad(phi) convention used by the solver
+3. solve implicit advection-reaction transport with reaction 1 and source rho^n
+4. repeat on the same mesh, reusing solver objects and eligible cached operators
+```
+
+Registered cases are defined in `scripts/guiding_center/guiding_center_cases.py`:
+
+```text
+diocotron_k    disc equilibrium density with (1 + eps cos(k theta)) perturbation;
+               zero potential boundary; zero-flux transport boundary
+rho_helm_wave  legacy manufactured rho/phi pair with nonzero exact boundary data;
+               rectangle default with optional domain override
+```
+
+Presets are defined in `scripts/guiding_center/guiding_center_presets.py` and
+can be listed or inspected from the CLI:
+
+```bash
+python scripts/guiding_center/run_guiding_center_cases.py --list-presets
+python scripts/guiding_center/run_guiding_center_cases.py   --preset diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx --print-preset
+```
+
+Representative raw-CUDA/AMGX run, shortened for testing:
+
+```bash
+LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH   .venv/bin/python scripts/guiding_center/run_guiding_center_cases.py   --preset diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx   --num-steps 10 --plot-every 0 --verbosity 1
+```
+
+Important CLI controls:
+
+```text
+--case-param key=value              override case parameters, for example k=20 or eps=0.1
+--mesh-size, --order, --dt          override preset mesh/order/time-step controls
+--poisson-*                         Poisson assembly, solver, AMGX, scaling, raw-CSR options
+--transport-*                       transport assembly, solver, AMGX, zero-flux, raw-CSR options
+--backend-profile host|device|hybrid shorthand defaults, with explicit flags taking precedence
+--plot-every N                      update PyVista every N steps; 0 disables plotting
+--plot-both                         plot density and potential; default plotting shows density only
+--screenshot-dir DIR                write PyVista screenshots with scalar arrays updated in place
+```
+
+Diagnostics are written incrementally to JSONL and then to CSV at shutdown.
+They include mass drift, `||q||_L2` drift, field min/max, solver iterations,
+absolute and relative residuals, AMGX setup/solve timings, raw-kernel timings,
+host/device transfer accounting, plot time, diocotron equilibrium drift, and
+manufactured `rho`/`phi` errors when exact fields are available.
+
+The raw-CUDA full-device diocotron preset uses raw-CUDA direct CSR for Poisson
+and transport assembly, device AMGX solves, raw-CUDA reconstruction, density-only
+PyVista plotting by default, and an absolute Poisson AMGX config.  Poisson setup
+is cached after the first step when scaling is disabled and the operator is
+fixed; transport setup is rebuilt because the matrix changes with `beta`.
 
 The guiding-center scripts compute diocotron-like equilibria through a
 semilinear elliptic equation of the form

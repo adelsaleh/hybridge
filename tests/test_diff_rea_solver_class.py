@@ -94,9 +94,35 @@ def _face_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
     )
 
 
-def _trace_base_to_post(space: DGSpace, post_space: DGSpace) -> np.ndarray:
+def _edge_legendre_basis(order: int, points: np.ndarray) -> np.ndarray:
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
+    return values
+
+
+def _edge_bernstein_basis(order: int, points: np.ndarray) -> np.ndarray:
+    from math import factorial
+
+    r = 0.5 * (points + 1.0)
+    values = np.empty((order + 1, points.size), dtype=np.float64)
+    for j in range(order + 1):
+        coeff = factorial(order) / (factorial(j) * factorial(order - j))
+        values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
+    return values
+
+
+def _trace_base_to_post(space: DGSpace, post_space: DGSpace, trace_basis: str = "legacy-lagrange") -> np.ndarray:
     q_post = post_space.quad_data
-    base_trace = _edge_lagrange_basis(space.order, q_post.quads_JGL)
+    trace_basis = str(trace_basis).replace("_", "-").lower()
+    if trace_basis == "legacy-lagrange":
+        base_trace = _edge_lagrange_basis(space.order, q_post.quads_JGL)
+    elif trace_basis == "legendre-modal":
+        base_trace = _edge_legendre_basis(space.order, q_post.quads_JGL)
+    elif trace_basis == "bernstein":
+        base_trace = _edge_bernstein_basis(space.order, q_post.quads_JGL)
+    else:
+        raise ValueError(f"unknown trace basis {trace_basis!r}")
     return np.einsum(
         "q,iq,aq->ia",
         q_post.weights_JGL,
@@ -119,7 +145,7 @@ def _interior_moment_tables(space: DGSpace, post_space: DGSpace) -> tuple[np.nda
     )
 
 
-def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float) -> None:
+def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float, trace_basis: str = "legacy-lagrange") -> None:
     flux_star = result.postprocessed_flux
     assert flux_star is not None
     post_space = flux_star.components[0].space
@@ -128,7 +154,8 @@ def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float) -> N
     unknowns = result.local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
     qx_star, qy_star = flux_star.as_component_first()
     face_base = _face_base_to_post(space, post_space)
-    trace_base = _trace_base_to_post(space, post_space)
+    trace_base = _trace_base_to_post(space, post_space, trace_basis)
+    trace_space = space.trace_space(trace_basis)
     low_to_base, low_to_post = _interior_moment_tables(space, post_space)
     face_post = post_space.quad_data.face_element_test_trace_trial
 
@@ -136,10 +163,15 @@ def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float) -> N
         for face in range(3):
             edge = space.mesh.loc2glob_edge[element, face]
             orientation = space.mesh.orientations[element, face]
-            trace_ids = np.arange(space.quad_data.edg_dof)
+            edg_dof = trace_space.edg_dof
+            trace_ids = np.arange(edg_dof)
+            trace_coeffs = result.trace[edge * edg_dof + trace_ids].copy()
             if not orientation:
-                trace_ids = trace_ids[::-1]
-            trace_coeffs = result.trace[edge * space.quad_data.edg_dof + trace_ids]
+                if trace_space.kind == "legendre-modal":
+                    signs = np.where(trace_ids % 2 == 0, 1.0, -1.0)
+                    trace_coeffs *= signs
+                else:
+                    trace_coeffs = trace_coeffs[::-1]
 
             nx, ny = space.mesh.normals[element, face]
             scale = space.mesh.jacs_el_fc[element, face]
@@ -427,9 +459,11 @@ def test_diff_rea_numpy_solve_supports_nonlegacy_trace_basis_without_postprocess
     assert result.field.l2_error(exact) < 1.0e-10
 
 
-def test_diff_rea_nonlegacy_trace_basis_rejects_unsupported_paths() -> None:
+def test_diff_rea_modal_numba_solve_matches_numpy_without_postprocess() -> None:
     space = _space(order=2)
     diffusion, reaction, source, exact = quadratic_poisson_case()
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
     kwargs = {
         "diffusion": diffusion,
         "stabilization": 1.0,
@@ -437,30 +471,60 @@ def test_diff_rea_nonlegacy_trace_basis_rejects_unsupported_paths() -> None:
         "preconditioner": None,
         "boundary_mode": "eliminate",
         "trace_basis": "legendre-modal",
+        "hdg_postprocess": "none",
         "verbose": False,
     }
 
-    with pytest.raises(NotImplementedError, match="numba"):
-        solve_diffusion_reaction_hdg(
-            source,
-            reaction,
-            exact,
-            space,
-            assembly_backend="numba",
-            hdg_postprocess="none",
-            **kwargs,
-        )
+    expected = solve_diffusion_reaction_hdg(
+        source_h,
+        reaction_h,
+        exact,
+        space,
+        assembly_backend="numpy",
+        **kwargs,
+    )
+    actual = solve_diffusion_reaction_hdg(
+        source_h,
+        reaction_h,
+        exact,
+        space,
+        assembly_backend="numba",
+        **kwargs,
+    )
 
-    with pytest.raises(NotImplementedError, match="postprocessing"):
-        solve_diffusion_reaction_hdg(
-            source,
-            reaction,
-            exact,
-            space,
-            assembly_backend="numpy",
-            hdg_postprocess="both",
-            **kwargs,
-        )
+    np.testing.assert_allclose(actual.trace, expected.trace, rtol=1.0e-11, atol=1.0e-12)
+    np.testing.assert_allclose(actual.field.coeffs, expected.field.coeffs, rtol=1.0e-11, atol=1.0e-12)
+    np.testing.assert_allclose(actual.flux.as_component_first(), expected.flux.as_component_first(), rtol=1.0e-10, atol=1.0e-11)
+
+
+@pytest.mark.parametrize("assembly_backend", ("numpy", "numba"))
+def test_diff_rea_modal_postprocess_satisfies_flux_constraints(assembly_backend: str) -> None:
+    space = _space(order=2)
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+    if assembly_backend == "numba":
+        source = space.project_callable(source, name="source_h")
+        reaction = space.zeros(name="reaction_h")
+
+    result = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=1.0,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend=assembly_backend,
+        trace_basis="legendre-modal",
+        hdg_postprocess="both",
+        verbose=False,
+    )
+
+    assert result.postprocessed_field is not None
+    assert result.postprocessed_flux is not None
+    assert result.postprocessed_field.l2_error(exact) < 1.0e-10
+    _assert_hdiv_flux_constraints(result, space, 1.0, trace_basis="legendre-modal")
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:

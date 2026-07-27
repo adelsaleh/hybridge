@@ -545,7 +545,7 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace:
 def assemble_reduced_system_gpu4(
     source,
     reaction,
-    boundary_condition: Callable,
+    boundary_condition: Callable | None,
     beta_coeffs,
     cspace: DGSpace | CupyDGSpace,
     trace_space: DGTraceSpace | CupyDGTraceSpace,
@@ -556,6 +556,7 @@ def assemble_reduced_system_gpu4(
     raw_local_assembly: RawLocalAssembly = "precomputed",
     raw_lu_mode: RawLuMode = "safe",
     raw_matrix_format: str = "coo",
+    zero_boundary_flux: bool = False,
 ) -> Gpu4AdvectionAssembly:
     """Assemble the boundary-eliminated GPU4 trace system on device."""
     cp = require_cupy()
@@ -570,13 +571,21 @@ def assemble_reduced_system_gpu4(
             raise ValueError("raw_local_assembly must be 'precomputed' or 'fused'")
         if raw_lu_mode not in {"safe", "coop"}:
             raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
+        zero_boundary_flux = bool(zero_boundary_flux)
+        if zero_boundary_flux and raw_local_assembly != "fused":
+            raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
         if raw_lu_mode != "safe" and raw_local_assembly != "fused":
             raise ValueError("raw_lu_mode='coop' is only supported with raw_local_assembly='fused'")
         if raw_local_assembly == "fused":
             source_coeffs = source_coefficients_cupy(source, cspace, timings)
             reaction_coeffs, reaction_scalar, reaction_is_scalar = reaction_coefficients_cupy(reaction, cspace, timings)
             advection_tensor = reference_advection_tensor_cupy(cspace, timings)
-            boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+            if zero_boundary_flux:
+                boundary_trace = cp.zeros((cspace.mesh.bnd_edges_inds.size, cspace.edg_dof), dtype=cp.float64)
+            else:
+                if boundary_condition is None:
+                    raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
+                boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
             raw = assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 source_coeffs=source_coeffs,
                 beta_coeffs=beta_coeffs,
@@ -590,8 +599,11 @@ def assemble_reduced_system_gpu4(
                 block_size=raw_block_size,
                 lu_mode=raw_lu_mode,
                 matrix_format=raw_matrix_format,
+                zero_boundary_flux=zero_boundary_flux,
             )
         else:
+            if zero_boundary_flux:
+                raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
             if beta_dot_normal is None:
                 beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
             local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings)
@@ -633,6 +645,8 @@ def assemble_reduced_system_gpu4(
             timings=timings,
         )
 
+    if zero_boundary_flux:
+        raise NotImplementedError("CuPy zero-flux advection assembly is not implemented yet; use backend='raw-cuda' with raw_local_assembly='fused' or backend='numba'")
     if beta_dot_normal is None:
         beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
     maps = build_dof_maps(cspace)
@@ -707,6 +721,7 @@ def reconstruct_field_gpu4(trace, source, reaction, beta_coeffs, assembly: Gpu4A
                 advection_tensor=raw.advection_tensor,
                 block_size=block_size,
                 lu_mode=raw.lu_mode,
+                zero_boundary_flux=raw.zero_boundary_flux,
             )
         else:
             uh, kernel_elapsed = reconstruct_projected_advection_field_raw_cuda(
@@ -828,67 +843,201 @@ def _diagonal_scale_csr_rows_in_place(matrix, rhs):
     return diagonal
 
 
-def _pyamgx_solve_csr_device(matrix, rhs, *, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0):
-    """Solve a device CSR system with PyAMGX without staging through host CSR."""
-    cp = require_cupy()
-    pyamgx = require_pyamgx()
+_AMGX_RUNTIME_INITIALIZED = False
+_AMGX_REUSABLE_SOLVERS = []
+
+
+class _PyAMGXSharedResourceManager:
+    """Own one process-wide AMGX Resources handle shared by live solvers."""
+
+    def __init__(self):
+        self.pyamgx = None
+        self.resource_cfg = None
+        self.rsrc = None
+        self.refcount = 0
+
+    def acquire(self, pyamgx, resource_config: dict):
+        global _AMGX_RUNTIME_INITIALIZED
+        if not _AMGX_RUNTIME_INITIALIZED:
+            pyamgx.initialize()
+            _AMGX_RUNTIME_INITIALIZED = True
+        if self.rsrc is None:
+            self.pyamgx = pyamgx
+            self.resource_cfg = pyamgx.Config().create_from_dict(copy.deepcopy(resource_config))
+            self.rsrc = pyamgx.Resources().create_simple(self.resource_cfg)
+        self.refcount += 1
+        return self.rsrc
+
+    def release(self) -> None:
+        if self.refcount > 0:
+            self.refcount -= 1
+        if self.refcount != 0:
+            return
+        for obj in (self.rsrc, self.resource_cfg):
+            if obj is not None:
+                try:
+                    obj.destroy()
+                except AttributeError:
+                    pass
+        self.rsrc = None
+        self.resource_cfg = None
+        self.pyamgx = None
+
+
+_AMGX_SHARED_RESOURCES = _PyAMGXSharedResourceManager()
+
+
+def _close_reusable_amgx_solvers() -> None:
+    live = []
+    for solver in list(_AMGX_REUSABLE_SOLVERS):
+        if solver.closed:
+            continue
+        solver.close()
+        live.append(solver)
+    _AMGX_REUSABLE_SOLVERS[:] = [solver for solver in live if not solver.closed]
+
+def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0):
     from .cupy import default_pyamgx_config
 
     if config is None:
         amgx_config = default_pyamgx_config(tolerance=tolerance, maxiter=maxiter, verbose=verbose)
     else:
         amgx_config = copy.deepcopy(config)
+        solver_config = amgx_config.setdefault("solver", {})
+        if "tolerance" not in solver_config:
+            solver_config["tolerance"] = float(tolerance)
         if maxiter is not None:
-            amgx_config.setdefault("solver", {})["max_iters"] = int(maxiter)
+            solver_config["max_iters"] = int(maxiter)
 
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
     if verbose_level >= 2:
         solver_config = amgx_config.setdefault("solver", {})
         solver_config["print_solve_stats"] = 1
         solver_config["obtain_timings"] = 1
+    return amgx_config
 
-    pyamgx.initialize()
-    cfg = rsrc = mat = vec_b = vec_x = solver = None
-    x = cp.zeros_like(rhs)
-    info = {"amgx_status": "unknown", "amgx_iterations": None}
-    try:
-        cfg = pyamgx.Config().create_from_dict(amgx_config)
-        rsrc = pyamgx.Resources().create_simple(cfg)
-        mat = pyamgx.Matrix().create(rsrc, mode="dDDI")
-        vec_b = pyamgx.Vector().create(rsrc, mode="dDDI")
-        vec_x = pyamgx.Vector().create(rsrc, mode="dDDI")
+
+class PyAMGXCsrDeviceSolver:
+    """Reusable PyAMGX CSR solver for a fixed device-resident matrix."""
+
+    def __init__(
+            self,
+            *,
+            config=None,
+            tolerance: float = 1e-13,
+            maxiter: int | None = None,
+            verbose: bool | int = 0,
+            reusable: bool = False,
+    ):
+        self.cp = require_cupy()
+        self.pyamgx = require_pyamgx()
+        self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
+        self.cfg = self.rsrc = self.mat = self.vec_b = self.vec_x = self.solver = None
+        self.shape = None
+        self.size = None
+        self.is_setup = False
+        self.closed = False
+        self.reusable = bool(reusable)
+        self._shared_resources_acquired = False
+        try:
+            self.rsrc = _AMGX_SHARED_RESOURCES.acquire(self.pyamgx, self.config_dict)
+            self._shared_resources_acquired = True
+            self.cfg = self.pyamgx.Config().create_from_dict(self.config_dict)
+            self.mat = self.pyamgx.Matrix().create(self.rsrc, mode="dDDI")
+            self.vec_b = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
+            self.vec_x = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
+            self.solver = self.pyamgx.Solver().create(self.rsrc, self.cfg)
+            if self.reusable:
+                _AMGX_REUSABLE_SOLVERS.append(self)
+        except Exception:
+            self.close()
+            raise
+
+    def setup(self, matrix) -> float:
+        if self.closed:
+            raise RuntimeError("cannot set up a closed PyAMGXCsrDeviceSolver")
         setup_start = time.perf_counter()
-        mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
-        vec_b.upload_raw(rhs.data.ptr, rhs.size)
-        vec_x.upload_raw(x.data.ptr, x.size)
-        solver = pyamgx.Solver().create(rsrc, cfg)
-        solver.setup(mat)
-        cp.cuda.get_current_stream().synchronize()
-        setup_elapsed = time.perf_counter() - setup_start
+        self.mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
+        self.solver.setup(self.mat)
+        self.cp.cuda.get_current_stream().synchronize()
+        self.shape = tuple(matrix.shape)
+        self.size = int(matrix.shape[0])
+        self.is_setup = True
+        return time.perf_counter() - setup_start
+
+    def solve(self, rhs, *, initial_guess=None):
+        if self.closed or not self.is_setup:
+            raise RuntimeError("PyAMGXCsrDeviceSolver must be set up before solve()")
+        if tuple(rhs.shape) != (self.size,):
+            raise ValueError(f"rhs must have shape ({self.size},); got {rhs.shape}")
+        if initial_guess is None:
+            x = self.cp.zeros_like(rhs)
+            zero_initial_guess = True
+        else:
+            x = self.cp.asarray(initial_guess, dtype=self.cp.float64).copy()
+            if tuple(x.shape) != tuple(rhs.shape):
+                raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
+            zero_initial_guess = False
+        info = {"amgx_status": "unknown", "amgx_iterations": None}
         solve_start = time.perf_counter()
-        solver.solve(vec_b, vec_x)
-        vec_x.download_raw(x.data.ptr)
-        cp.cuda.get_current_stream().synchronize()
+        self.vec_b.upload_raw(rhs.data.ptr, rhs.size)
+        self.vec_x.upload_raw(x.data.ptr, x.size)
+        self.solver.solve(self.vec_b, self.vec_x, zero_initial_guess=zero_initial_guess)
+        self.vec_x.download_raw(x.data.ptr)
+        self.cp.cuda.get_current_stream().synchronize()
         solve_elapsed = time.perf_counter() - solve_start
         try:
-            info["amgx_status"] = str(solver.status)
+            info["amgx_status"] = str(self.solver.status)
         except Exception:
             pass
         try:
-            info["amgx_iterations"] = int(solver.iterations_number)
+            info["amgx_iterations"] = int(self.solver.iterations_number)
         except Exception:
             pass
-    finally:
-        for obj in (solver, mat, vec_x, vec_b, rsrc, cfg):
+        info["amgx_setup_elapsed_seconds"] = 0.0
+        info["amgx_solve_elapsed_seconds"] = solve_elapsed
+        return x, info
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        for obj in (self.solver, self.vec_x, self.vec_b, self.mat, self.cfg):
             if obj is not None:
                 try:
                     obj.destroy()
                 except AttributeError:
                     pass
-        pyamgx.finalize()
-        _flush_c_stdio()
+        if self._shared_resources_acquired:
+            _AMGX_SHARED_RESOURCES.release()
+            self._shared_resources_acquired = False
+        self.solver = self.mat = self.vec_x = self.vec_b = self.rsrc = self.cfg = None
+        self.closed = True
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+def _pyamgx_solve_csr_device(
+        matrix,
+        rhs,
+        *,
+        initial_guess=None,
+        config=None,
+        tolerance: float = 1e-13,
+        maxiter: int | None = None,
+        verbose: bool | int = 0,
+):
+    """Solve a device CSR system with PyAMGX without staging through host CSR."""
+    solver = PyAMGXCsrDeviceSolver(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
+    try:
+        setup_elapsed = solver.setup(matrix)
+        x, info = solver.solve(rhs, initial_guess=initial_guess)
+    finally:
+        solver.close()
     info["amgx_setup_elapsed_seconds"] = setup_elapsed
-    info["amgx_solve_elapsed_seconds"] = solve_elapsed
     return x, info
 
 
@@ -900,6 +1049,8 @@ def solve_reduced_system_amgx_device(
     check_rtol: float | None = None,
     atol: float = 0.0,
     maxiter: int | None = None,
+    initial_guess=None,
+    reusable_solver: PyAMGXCsrDeviceSolver | None = None,
     scale_system: bool = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
@@ -953,14 +1104,22 @@ def solve_reduced_system_amgx_device(
     solve_tolerance = float(tolerance)
     result_check_rtol = solve_tolerance if check_rtol is None else float(check_rtol)
     amgx_call_start = time.perf_counter()
-    x_cp, amgx_info = _pyamgx_solve_csr_device(
-        solve_matrix,
-        solve_rhs,
-        config=config,
-        tolerance=solve_tolerance,
-        maxiter=maxiter,
-        verbose=verbose,
-    )
+    if reusable_solver is None:
+        x_cp, amgx_info = _pyamgx_solve_csr_device(
+            solve_matrix,
+            solve_rhs,
+            initial_guess=initial_guess,
+            config=config,
+            tolerance=solve_tolerance,
+            maxiter=maxiter,
+            verbose=verbose,
+        )
+    else:
+        setup_elapsed = 0.0
+        if not reusable_solver.is_setup:
+            setup_elapsed = reusable_solver.setup(solve_matrix)
+        x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=initial_guess)
+        amgx_info["amgx_setup_elapsed_seconds"] = setup_elapsed
     amgx_call_elapsed = time.perf_counter() - amgx_call_start
 
     finite_start = time.perf_counter()
@@ -1086,6 +1245,7 @@ def assemble_reduced_system(
     raw_local_assembly: str = "precomputed",
     raw_lu_mode: str = "safe",
     raw_matrix_format: str = "coo",
+    zero_boundary_flux: bool = False,
 ):
     """Compatibility wrapper matching the former GPU runner helper signature."""
     assembly = assemble_reduced_system_gpu4(
@@ -1101,6 +1261,7 @@ def assemble_reduced_system(
         raw_local_assembly=raw_local_assembly,
         raw_lu_mode=raw_lu_mode,
         raw_matrix_format=raw_matrix_format,
+        zero_boundary_flux=zero_boundary_flux,
     )
     TIMINGS.update(assembly.timings)
     return (
@@ -1129,5 +1290,6 @@ __all__ = [
     "project_callable_cupy",
     "reconstruct_field_gpu4",
     "reconstruct_trace_cupy",
+    "PyAMGXCsrDeviceSolver",
     "solve_reduced_system_amgx_device",
 ]

@@ -24,6 +24,14 @@ from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGSpace, VectorDGField
 from hdgfem.io.output import pretty_print_sections
+from hdgfem.io.plot import (
+    _require_pyvista,
+    _robust_clim,
+    add_samples_to_plotter,
+    plot_solution_comparison,
+    resolve_exact_plot_resolution,
+    sample_callable_on_elements,
+)
 from hdgfem.solvers.adv_rea import AdvectionReactionHDGSolver
 from scripts.advection_reaction.adv_rea_cases import case_definition_by_key
 
@@ -83,7 +91,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
     parser.add_argument("--raw-block-size", type=int, choices=(1, 32, 64, 128), default=32)
     parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr"), default="auto")
-    parser.add_argument("--plot-resolution", "-pr", type=int, default=20)
+    parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots after the summary")
+    parser.add_argument("--plot-resolution", "-pr", type=int, default=20, help="plot sampling resolution; coarse meshes use a polynomial-degree minimum")
+    parser.add_argument(
+        "--exact-plot-resolution",
+        default="auto",
+        help="exact-solution panel resolution: integer, 'auto', or 'same'",
+    )
+    parser.add_argument("--hide-mesh", action="store_true", help="hide mesh overlay in plots")
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
     parser.add_argument("--gmsh-algorithm", type=int, default=None)
     parser.add_argument("--gmsh-num-threads", type=int, default=None)
@@ -206,7 +221,28 @@ def _print_timing_rows(title: str, rows: list[tuple[str, float]], denominator: f
         print(sep.join((_pad_right(label, widths[0]), _pad_left(seconds_text, widths[1]), _pad_left(percent_text, widths[2]))))
 
 
-def evaluate_errors_device(coeffs, cspace, exact, plot_resolution: int, error_volume_quad_1d: int | None):
+def effective_plot_resolution(requested_resolution: int, order: int, num_elements: int) -> int:
+    """Use a polynomial-degree minimum for coarse per-element plots."""
+    resolution = int(requested_resolution)
+    if int(num_elements) <= 130:
+        return max(resolution, 2 * int(order) + 3, 3)
+    return resolution
+
+
+def matplotlib_contour_levels(order: int) -> int:
+    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
+    return min(256, max(128, 24 * (int(order) + 1)))
+
+
+def evaluate_errors_device(
+        coeffs,
+        cspace,
+        exact,
+        plot_resolution: int,
+        error_volume_quad_1d: int | None,
+        *,
+        return_plot_samples: bool = False,
+):
     cp = require_cupy()
     error_volume_quad_1d = None if error_volume_quad_1d is None else int(error_volume_quad_1d)
     if error_volume_quad_1d is None:
@@ -243,12 +279,20 @@ def evaluate_errors_device(coeffs, cspace, exact, plot_resolution: int, error_vo
     abs_err = cp.abs(uh_plot - exact_plot)
     element_max = cp.max(abs_err, axis=-1)
     cp.cuda.get_current_stream().synchronize()
-    return (
+    metrics = (
         float(l2.get()),
         float(cp.max(element_max).get()),
         float(cp.mean(element_max).get()),
         int(cp.argmax(element_max).get()),
     )
+    if not return_plot_samples:
+        return metrics
+    plot_samples = {
+        "reference_points": cp.asnumpy(ref_points),
+        "numerical_values": cp.asnumpy(uh_plot),
+        "exact_values_for_error": cp.asnumpy(exact_plot),
+    }
+    return (*metrics, plot_samples)
 
 
 def evaluate_errors(field, exact, plot_resolution: int, error_volume_quad_1d: int | None):
@@ -281,6 +325,94 @@ def evaluate_errors(field, exact, plot_resolution: int, error_volume_quad_1d: in
     return l2, linf, avg_max, max_element
 
 
+def plot_sampled_solution_comparison(
+        mesh,
+        exact_solution,
+        plot_samples: dict[str, np.ndarray],
+        *,
+        numerical_resolution: int,
+        exact_resolution: int | str | None,
+        polynomial_order: int | None = None,
+        title: str = "",
+        show_mesh: bool = True,
+        show: bool = True,
+        off_screen: bool = False,
+):
+    """Plot device-sampled numerical/exact/error data using host plot helpers."""
+    reference_points = np.ascontiguousarray(plot_samples["reference_points"], dtype=np.float64)
+    numerical_values = np.asarray(plot_samples["numerical_values"], dtype=np.float64)
+    exact_values_for_error = np.asarray(plot_samples["exact_values_for_error"], dtype=np.float64)
+    absolute_error = np.abs(numerical_values - exact_values_for_error)
+    error_clim = _robust_clim(absolute_error, zero_min=True)
+
+    exact_panel_resolution = resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=numerical_resolution,
+        num_elements=mesh.num_tri,
+    )
+    exact_reference_points, _, exact_display_values = sample_callable_on_elements(
+        mesh,
+        exact_solution,
+        resolution=exact_panel_resolution,
+    )
+
+    if mesh.num_tri <= 130:
+        from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib
+
+        return plot_scalar_sample_panels_matplotlib(
+            mesh,
+            (
+                ("Numerical solution", reference_points, numerical_values),
+                ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
+                ("Absolute error", reference_points, absolute_error, {"cmap": "magma", "zero_min": True}),
+            ),
+            suptitle=title or None,
+            show_mesh=show_mesh,
+            cmap="jet",
+            levels=matplotlib_contour_levels(
+                polynomial_order if polynomial_order is not None else max((int(numerical_resolution) - 3) // 2, 0)
+            ),
+            share_clim=False,
+            show=show,
+        )
+
+    pv = _require_pyvista()
+    field_clim = _robust_clim(np.concatenate((numerical_values.reshape(-1), exact_display_values.reshape(-1))))
+
+    plotter = pv.Plotter(shape=(1, 3), window_size=[1800, 650], off_screen=off_screen)
+    scalar_bar_args = {
+        "vertical": False,
+        "width": 0.55,
+        "height": 0.08,
+        "position_x": 0.225,
+        "position_y": 0.02,
+    }
+    panels = (
+        ("Numerical solution", reference_points, numerical_values, field_clim, "viridis"),
+        ("Exact solution", exact_reference_points, exact_display_values, field_clim, "viridis"),
+        ("Absolute error", reference_points, absolute_error, error_clim, "magma"),
+    )
+    for column, (panel_title, panel_reference_points, values, clim, cmap) in enumerate(panels):
+        display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
+        add_samples_to_plotter(
+            plotter,
+            mesh,
+            panel_reference_points,
+            values,
+            scalar_name=f"field_{column}",
+            title=display_title,
+            subplot=(0, column),
+            show_mesh=show_mesh and column != 1,
+            cmap=cmap,
+            clim=clim,
+            scalar_bar_args=scalar_bar_args,
+        )
+    plotter.link_views()
+    if show:
+        plotter.show()
+    return plotter
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     cp = require_cupy()
@@ -299,6 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     space_start = time.perf_counter()
     space = DGSpace(mesh, args.order, basis_type=args.basis, volume_quad_1d=args.volume_quad_1d, edge_quad_1d=args.edge_quad_1d)
     space_time = time.perf_counter() - space_start
+    plot_resolution = effective_plot_resolution(args.plot_resolution, space.order, mesh.num_tri)
     problem_start = time.perf_counter()
     try:
         case = case_definition_by_key(args.case)
@@ -361,22 +494,28 @@ def main(argv: list[str] | None = None) -> int:
     solve_call_time = time.perf_counter() - solve_call_start
     error_time = 0.0
     error_eval_mode = "no"
+    plot_samples = None
     if args.evaluate_errors:
         error_start = time.perf_counter()
         if result.field_device is not None:
             cspace = as_cupy_space(space)
-            l2, linf, avg_max, max_element = evaluate_errors_device(
+            error_result = evaluate_errors_device(
                 result.field_device,
                 cspace,
                 exact,
-                args.plot_resolution,
+                plot_resolution,
                 args.error_volume_quad_1d,
+                return_plot_samples=args.plot,
             )
+            if args.plot:
+                l2, linf, avg_max, max_element, plot_samples = error_result
+            else:
+                l2, linf, avg_max, max_element = error_result
             error_eval_mode = "device"
         else:
             if result.field is None:
                 raise RuntimeError("error evaluation requires a device field or a host-materialized DGField")
-            l2, linf, avg_max, max_element = evaluate_errors(result.field, exact, args.plot_resolution, args.error_volume_quad_1d)
+            l2, linf, avg_max, max_element = evaluate_errors(result.field, exact, plot_resolution, args.error_volume_quad_1d)
             error_eval_mode = "host"
         error_time = time.perf_counter() - error_start
         error_items = [
@@ -522,6 +661,34 @@ def main(argv: list[str] | None = None) -> int:
         ("Timings", timings),
     ]
     pretty_print_sections(sections, title="HDGFEM GPU4 Advection-Reaction Solve Summary")
+
+    if args.plot:
+        plot_title = f"{args.case}, p={space.order}, elements={mesh.num_tri:,}, L2={l2:.2e}"
+        if plot_samples is not None:
+            print("plotting solution comparison ... ", end="", flush=True)
+            plot_start = time.perf_counter()
+            plot_sampled_solution_comparison(
+                mesh,
+                exact,
+                plot_samples,
+                numerical_resolution=plot_resolution,
+                exact_resolution=args.exact_plot_resolution,
+                polynomial_order=space.order,
+                title=plot_title,
+                show_mesh=not args.hide_mesh,
+            )
+            print(f"done in {time.perf_counter() - plot_start:.5f}s", flush=True)
+        else:
+            if result.field is None:
+                raise RuntimeError("plotting requires a device field sample or a host-materialized DGField")
+            plot_solution_comparison(
+                result.field,
+                exact,
+                resolution=plot_resolution,
+                exact_resolution=args.exact_plot_resolution,
+                title=plot_title,
+                show_mesh=not args.hide_mesh,
+            )
     return 0
 
 

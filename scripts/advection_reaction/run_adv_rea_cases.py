@@ -5,832 +5,21 @@ from __future__ import annotations
 
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
-@dataclass(frozen=True)
-class AdvectionReactionRunPreset:
-    """Complete default configuration for one manufactured advection run."""
-
-    case: str
-    description: str
-    case_params: dict[str, Any] = field(default_factory=dict)
-    domain: str = "auto"
-    mesh_size: float = 0.03
-    nx: int = 8
-    ny: int | None = None
-    gmsh_verbosity: int = 0
-    gmsh_algorithm: int | None = None
-    basis: str = "dub_orth"
-    trace_basis: str = "legacy-lagrange"
-    order: int = 4
-    volume_quadrature: str = "auto"
-    volume_quad_1d: int | None = None
-    edge_quad_1d: int | None = None
-    solver: str | None = "BICGSTAB"
-    preconditioner: str | None = "ilu"
-    solver_rtol: float = 1.0e-13
-    solver_atol: float = 0.0
-    maxiter: int | None = None
-    petsc_preset: str = "gmres_ilu"
-    petsc_levels: int | None = None
-    petsc_options: dict[str, str] = field(default_factory=dict)
-    petsc_divtol: float = 1.0e4
-    petsc_monitor: bool = False
-    ilu_drop_tol: float | None = None
-    ilu_fill_factor: float | None = None
-    ilu_failure: str = "raise"
-    scale_system: bool | None = None
-    boundary_mode: str = "eliminate"
-    trace_ordering: str = "none"
-    trace_ordering_flux_tolerance: float = 0.0
-    ilu_permc_spec: str | None = None
-    matrix_pattern_dir: str | None = None
-    matrix_pattern_prefix: str = "adv_rea_trace_matrix"
-    matrix_pattern_max_points: int = 2_000_000
-    matrix_pattern_dpi: int = 250
-    matrix_pattern_only: bool = False
-    assembly_backend: str = "numba"
-    materialize_host_solution: bool | None = True
-    project_source: bool = True
-    project_beta: bool = True
-    project_reaction: bool = True
-    cache_local_solvers: bool = False
-    verbosity: int = 1
-    plot: bool = False
-    plot_resolution: int = 20
-    exact_plot_resolution: int | str | None = None
-    hide_mesh: bool = False
-
-
-def _test2_solver_preset(
-        *,
-        description: str,
-        solver: str | None,
-        mesh_size: float = 0.01,
-        order: int = 6,
-        assembly_backend="numba",
-        preconditioner: str | None,
-        trace_ordering: str = "none",
-        scale_system: bool | None = None,
-        petsc_preset: str = "gmres_ilu",
-        ilu_drop_tol: float | None = None,
-        ilu_fill_factor: float | None = None,
-        maxiter: int | None = None,
-        petsc_levels : int | None = None
-) -> AdvectionReactionRunPreset:
-    return AdvectionReactionRunPreset(
-        case="test2",
-        description=description,
-        solver=solver,
-        preconditioner=preconditioner,
-        petsc_preset=petsc_preset,
-        ilu_drop_tol=ilu_drop_tol,
-        ilu_fill_factor=ilu_fill_factor,
-        maxiter=maxiter,
-        mesh_size=mesh_size,
-        order=order,
-        petsc_levels=petsc_levels,
-        assembly_backend=assembly_backend,
-        boundary_mode="eliminate",
-        trace_ordering=trace_ordering,
-        scale_system=scale_system,
-        project_source=True,
-        project_beta=True,
-        project_reaction=True,
-        verbosity=2,
-    )
-
-
-PRESETS: dict[str, AdvectionReactionRunPreset] = {
-    "test2_scipy_ilu_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and high-fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        ilu_drop_tol=1.0e-10,
-        ilu_fill_factor=35.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu_upwind_np_ass": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and high-fill ILU, numpy assembly",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        assembly_backend="numpy",
-        trace_ordering="upwind-scc",
-        ilu_drop_tol=1.0e-10,
-        ilu_fill_factor=35.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu25_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and medium-fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=25.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu25_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and medium-fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=25.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu25_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and medium-fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=25.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu25_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and medium-fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=25.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu20_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=20.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu20_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=20.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu20_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=20.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu20_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=20.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=15.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=15.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=15.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=15.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu12_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=12.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu12_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=12.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu12_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=12.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu12_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=12.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu10_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=10.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu10_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=10.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu10_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=10.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu10_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=10.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu8_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=8.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu8_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=8.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu8_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=8.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu8_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=8.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu6_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=6.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu6_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=6.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu6_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=6.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu6_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=6.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu5_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=5.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu5_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=5.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu5_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=5.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu5_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=5.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu4_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=4.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu4_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=4.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu4_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=4.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu4_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=4.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu3_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=3.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu3_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=3.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu3_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=3.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu3_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=3.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu2_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=2.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu2_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=2.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu2_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and much weaker ILU (high droptol).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=2.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_droptol3_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker fill+high droptol.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.5,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu19_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.9).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.9,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu18_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.8).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.8,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu17_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.7).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.7,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu175_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.75).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.75,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu165_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.65).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.65,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu17_droptol07_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with lower drop tolerance at fill 1.7.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-7,
-        ilu_fill_factor=1.7,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu175_droptol07_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with lower drop tolerance at fill 1.75.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-7,
-        ilu_fill_factor=1.75,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu172_droptol07_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with lower drop tolerance at fill 1.72.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-7,
-        ilu_fill_factor=1.72,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu174_droptol07_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with lower drop tolerance at fill 1.74.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-7,
-        ilu_fill_factor=1.74,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu173_droptol07_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with lower drop tolerance at fill 1.73.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-7,
-        ilu_fill_factor=1.73,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu173_droptol6_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with tight drop tolerance at fill 1.73.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.73,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu175_droptol6_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and ILU with mid drop tolerance at fill 1.75.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.75,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu16_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weak ILU (high droptol, fill 1.6).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.6,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_droptol4_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and weaker ILU (intermediate fill, high droptol).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=1.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu35_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and mid weak ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=3.5,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu35_droptol_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and mid weak ILU with high droptol.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=3.5,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu15_droptol5_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, upwind ordering, and very weak ILU (low fill, high droptol).",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=False,
-        ilu_drop_tol=1.0e-6,
-        ilu_fill_factor=0.5,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu2_scaled_natural": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled natural ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="none",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=2.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_ilu2_scaled_upwind": _test2_solver_preset(
-        description="test2 with SciPy BICGSTAB, scaled upwind ordering, and weaker fill ILU.",
-        solver="BICGSTAB",
-        preconditioner="ilu",
-        trace_ordering="upwind-scc",
-        scale_system=True,
-        ilu_drop_tol=1.0e-8,
-        ilu_fill_factor=2.0,
-        maxiter=2000,
-    ),
-    "test2_scipy_direct": _test2_solver_preset(
-        description="test2 with SciPy sparse direct solve.",
-        solver="direct",
-        preconditioner=None,
-    ),
-    "test2_petsc_bicgstab_ilu_upw": _test2_solver_preset(
-        description="test2 with PETSc BiCGStab and ILU.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="bicgstab_ilu",
-        trace_ordering="upwind-scc",
-        petsc_levels=1,
-        maxiter=2000,
-    ),
-    "test2_petsc_gmres_ilu": _test2_solver_preset(
-        description="test2 with PETSc GMRES and ILU.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="gmres_ilu",
-        trace_ordering="upwind-scc",
-        maxiter=2000,
-    ),
-    "test2_petsc_lu": _test2_solver_preset(
-        description="test2 with PETSc direct LU.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="lu",
-    ),
-    "test2_petsc_mumps_lu": _test2_solver_preset(
-        description="test2 with PETSc direct LU using MUMPS.",
-        solver="petsc",
-        preconditioner=None,
-        petsc_preset="mumps_lu",
-    ),
-}
-
-DEFAULT_PRESET = "test2_scipy_ilu_upwind"
-
-
-def preset_by_key(key: str) -> AdvectionReactionRunPreset:
-    """Return a run preset by name."""
-    try:
-        return PRESETS[key]
-    except KeyError as exc:
-        valid = ", ".join(sorted(PRESETS))
-        raise ValueError(f"unknown advection-reaction preset {key!r}; valid presets are {valid}") from exc
-
-
-def _print_presets() -> None:
-    script_path = Path(__file__).resolve()
-    print(f"Preset definitions: {script_path}")
-    print("Edit the PRESETS dictionary in this file to change or add runs.")
-    print("Manufactured advection cases are registered in scripts/advection_reaction/adv_rea_cases.py.\n")
-
-    width = max(len(key) for key in PRESETS)
-    for key in sorted(PRESETS):
-        preset = PRESETS[key]
-        solver = "petsc" if str(preset.solver).lower() == "petsc" else str(preset.solver)
-        print(
-            f"{key:<{width}}  "
-            f"case={preset.case:<8} "
-            f"p={preset.order:<2d} "
-            f"lc={preset.mesh_size:<6.3f} "
-            f"backend={preset.assembly_backend:<5} "
-            f"solver={solver:<8} "
-            f"{preset.description}"
-        )
-
-
-def _print_preset_details(preset_key: str, config: AdvectionReactionRunPreset) -> None:
-    print(f"Preset: {preset_key}")
-    print(f"Defined in: {Path(__file__).resolve()}")
-    for key, value in asdict(config).items():
-        print(f"{key}: {value!r}")
+from scripts.advection_reaction.adv_rea_presets import (
+    AdvectionReactionRunPreset,
+    DEFAULT_PRESET,
+    PRESETS,
+    preset_by_key,
+    print_preset_details,
+    print_presets,
+)
 
 
 def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReactionRunPreset:
@@ -849,6 +38,14 @@ def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReacti
         updates["trace_ordering"] = args.trace_ordering
     if args.ilu_permc_spec is not None:
         updates["ilu_permc_spec"] = args.ilu_permc_spec
+    if args.ilu_drop_tol is not None:
+        updates["ilu_drop_tol"] = args.ilu_drop_tol
+    if args.ilu_fill_factor is not None:
+        updates["ilu_fill_factor"] = args.ilu_fill_factor
+    if args.maxiter is not None:
+        updates["maxiter"] = args.maxiter
+    if args.solver_rtol is not None:
+        updates["solver_rtol"] = args.solver_rtol
     if args.scale_system is not None:
         updates["scale_system"] = {
             "auto": None,
@@ -1003,7 +200,7 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
         )
     if global_solve is not None:
         free_trace_relative_residual = global_solve.diagnostic_relative_residual_norm
-        if free_trace_relative_residual is None and result.boundary_mode == "eliminate":
+        if free_trace_relative_residual is None and result.boundary_mode in {"eliminate", "zero-flux"}:
             free_trace_relative_residual = global_solve.solver_relative_residual_norm
         solver_items.extend(
             [
@@ -1060,13 +257,117 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
     return l2_error
 
 
+def _polynomial_plot_resolution(requested_resolution: int | None, order: int) -> int:
+    """Choose a per-element plotting grid dense enough for degree-``order`` fields."""
+    minimum = max(3, 2 * int(order) + 3)
+    if requested_resolution is None:
+        return max(20, minimum)
+    return max(int(requested_resolution), minimum)
+
+
+def _matplotlib_contour_levels(order: int) -> int:
+    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
+    return min(256, max(128, 24 * (int(order) + 1)))
+
+
+def _plot_solution_comparison_matplotlib(
+        field,
+        exact,
+        *,
+        resolution: int,
+        exact_resolution: int | str | None,
+        title: str,
+        show_mesh: bool,
+        show: bool = True,
+):
+    import numpy as np
+
+    from hdgfem.io.plot import (
+        plot_scalar_sample_panels_matplotlib,
+        resolve_exact_plot_resolution,
+        sample_callable_on_elements,
+        sample_field_on_elements,
+    )
+
+    mesh = field.space.mesh
+    reference_points, _, numerical_values = sample_field_on_elements(
+        field,
+        resolution=resolution,
+    )
+    _, _, exact_values_for_error = sample_callable_on_elements(
+        mesh,
+        exact,
+        reference_points=reference_points,
+    )
+    absolute_error = np.abs(numerical_values - exact_values_for_error)
+
+    exact_panel_resolution = resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=resolution,
+        num_elements=mesh.num_tri,
+    )
+    exact_reference_points, _, exact_values = sample_callable_on_elements(
+        mesh,
+        exact,
+        resolution=exact_panel_resolution,
+    )
+    return plot_scalar_sample_panels_matplotlib(
+        mesh,
+        (
+            ("Numerical solution", reference_points, numerical_values),
+            ("Exact solution", exact_reference_points, exact_values, {"show_mesh": False}),
+            ("Absolute error", reference_points, absolute_error, {"cmap": "magma", "zero_min": True}),
+        ),
+        suptitle=title,
+        show_mesh=show_mesh,
+        cmap="jet",
+        levels=_matplotlib_contour_levels(field.space.order),
+        share_clim=False,
+        show=show,
+    )
+
+
+def _plot_solution_comparison(
+        field,
+        exact,
+        *,
+        resolution: int,
+        exact_resolution: int | str | None,
+        title: str,
+        show_mesh: bool,
+        show: bool = True,
+):
+    if field.space.mesh.num_tri <= 130:
+        return _plot_solution_comparison_matplotlib(
+            field,
+            exact,
+            resolution=_polynomial_plot_resolution(resolution, field.space.order),
+            exact_resolution=exact_resolution,
+            title=title,
+            show_mesh=show_mesh,
+            show=show,
+        )
+
+    from hdgfem.io.plot import plot_solution_comparison
+
+    return plot_solution_comparison(
+        field,
+        exact,
+        resolution=resolution,
+        exact_resolution=exact_resolution,
+        title=title,
+        show_mesh=show_mesh,
+        show=show,
+    )
+
+
 def _main() -> None:
     parser = ArgumentParser(
         description="Run one manufactured advection-reaction preset.",
         formatter_class=RawDescriptionHelpFormatter,
         epilog=(
-            "Preset configuration lives in this file, scripts/advection_reaction/run_adv_rea_cases.py.\n"
-            "Edit PRESETS to change numerical parameters or add a new run.\n"
+            "Curated preset configuration lives in scripts/advection_reaction/adv_rea_presets.py.\n"
+            "Use scripts/advection_reaction/sweep_adv_rea_ilu.py for ILU parameter grids.\n"
             "Add new manufactured cases in scripts/advection_reaction/adv_rea_cases.py."
         ),
     )
@@ -1084,7 +385,7 @@ def _main() -> None:
     parser.add_argument("--mesh-size", "--lc", type=float, default=None, help="override Gmsh target mesh size")
     parser.add_argument(
         "--boundary-mode",
-        choices=("penalty", "eliminate"),
+        choices=("penalty", "eliminate", "zero-flux"),
         default=None,
         help="override Dirichlet trace treatment for this run only",
     )
@@ -1106,6 +407,10 @@ def _main() -> None:
         default=None,
         help="override SuperLU spilu column permutation for this run only",
     )
+    parser.add_argument("--ilu-drop-tol", type=float, default=None, help="override SuperLU spilu drop tolerance")
+    parser.add_argument("--ilu-fill-factor", type=float, default=None, help="override SuperLU spilu fill factor")
+    parser.add_argument("--maxiter", type=int, default=None, help="override Krylov maximum iterations")
+    parser.add_argument("--solver-rtol", type=float, default=None, help="override Krylov relative tolerance")
     parser.add_argument(
         "--scale-system",
         choices=("auto", "on", "off"),
@@ -1161,7 +466,7 @@ def _main() -> None:
                         help="override logging verbosity for this run only")
     parser.add_argument("--quiet", action="store_true", help="run with verbosity 0 for this run only")
     parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots for this run only")
-    parser.add_argument("--plot-resolution", type=int, default=None, help="plot sampling resolution for this run only")
+    parser.add_argument("--plot-resolution", type=int, default=None, help="plot sampling resolution for this run only; coarse meshes use a polynomial-degree minimum")
     parser.add_argument(
         "--exact-plot-resolution",
         type=int,
@@ -1172,7 +477,7 @@ def _main() -> None:
     args = parser.parse_args()
 
     if args.list_presets:
-        _print_presets()
+        print_presets()
         return
 
     preset_key = args.preset
@@ -1184,11 +489,10 @@ def _main() -> None:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
 
     if args.print_preset or args.dry_run:
-        _print_preset_details(preset_key, config)
+        print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.space import DGField, DGSpace, VectorDGField
-    from hdgfem.io.plot import plot_solution_comparison
+    from hdgfem.core.space import DGSpace, VectorDGField
     from hdgfem.solvers.adv_rea import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver, _timed_call
 
     case = case_definition_by_key(config.case)
@@ -1283,7 +587,7 @@ def _main() -> None:
 
     if config.plot:
         title = f"{preset_key}, {case.key}, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
-        plot_solution_comparison(
+        _plot_solution_comparison(
             result.field,
             exact,
             resolution=config.plot_resolution,

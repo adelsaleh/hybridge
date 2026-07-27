@@ -2,7 +2,7 @@
 """Experimental Raw CUDA kernels for diffusion-reaction HDG assembly.
 
 The first implementation targets the standalone ``scripts/gpu/run_diff_rea_gpu4_hdg.py``
-benchmark path: identity diffusion, scalar zero reaction, nodal legacy-lagrange
+benchmark path: identity diffusion, scalar zero reaction, legacy-lagrange or legendre-modal
 trace coordinates, and p <= 6.  It keeps the existing CuPy source and boundary
 trace evaluation, then fuses the expensive element-local HDG condensation,
 boundary-column elimination, and COO/RHS emission into Raw CUDA kernels.
@@ -23,7 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import require_cupy
+from .cupy import as_cupy_space, require_cupy
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,31 @@ class RawDiffusionAssemblyResult:
     matrix_format: str = 'coo'
     csr_pattern: Any | None = None
 
+
+_RAW_TRACE_ORIENTATION_HELPERS = r"""
+__device__ __forceinline__ int raw_trace_local_dof(
+        const bool positive,
+        const int dof,
+        const int edge_dof)
+{
+#if TRACE_ORIENTATION_MODE == 1
+    return dof;
+#else
+    return positive ? dof : (edge_dof - 1 - dof);
+#endif
+}
+
+__device__ __forceinline__ double raw_trace_orientation_sign(
+        const bool positive,
+        const int dof)
+{
+#if TRACE_ORIENTATION_MODE == 1
+    return ((!positive) && ((dof & 1) == 1)) ? -1.0 : 1.0;
+#else
+    return 1.0;
+#endif
+}
+"""
 
 _RAW_ASSEMBLY_TEMPLATE = r"""
 // Solve one condensed element column against an already-factorized scalar Schur
@@ -390,7 +415,8 @@ extern "C" __global__ void assemble_diffusion_raw(
                 }
             }
             for (int col_dof = 0; col_dof < NTR; ++col_dof) {
-                const int local_col_dof = positive ? col_dof : (NTR - 1 - col_dof);
+                const int local_col_dof = raw_trace_local_dof(positive, col_dof, NTR);
+                const double col_sign = raw_trace_orientation_sign(positive, col_dof);
                 solve_condensed_column_raw(
                     schur_matrix, pivots, d0, d1, mn0, mn1, rhs0, qx, qy, u, tmp1, tmp2,
                     mass_inverse, face_element_trace, source_rhs, jacs_el_fc, normals,
@@ -405,7 +431,7 @@ extern "C" __global__ void assemble_diffusion_raw(
                     }
                     const long long side_base = side_flux_offsets[side_id];
                     for (int row_dof = 0; row_dof < NTR; ++row_dof) {
-                        const double schur_value = trace_flux_value_raw(
+                        const double schur_value = col_sign * trace_flux_value_raw(
                             u, qx, qy, oriented_lifts, jacs_el_fc, normals,
                             loc2oriented_face_coupling, tau, element, row_face, row_dof);
                         if (col_solve_edge >= 0) {
@@ -447,6 +473,12 @@ extern "C" __global__ void assemble_diffusion_raw(
 _RAW_ASSEMBLY_COOP_TEMPLATE = r"""
 #ifndef RAW_MATRIX_CSR
 #define RAW_MATRIX_CSR 0
+#endif
+#ifndef RAW_RHS_ONLY
+#define RAW_RHS_ONLY 0
+#endif
+#ifndef RAW_SOURCE_ONLY
+#define RAW_SOURCE_ONLY 0
 #endif
 
 __device__ __forceinline__ void factor_diffusion_schur_lu_coop_raw(
@@ -782,13 +814,15 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
                 rhs_value += ny * lift * qy_cols[i * NCOLS + source_col];
             }
 
+#if !RAW_SOURCE_ONLY
             int col_block_pos = 0;
             for (int col_face = 0; col_face < 3; ++col_face) {
                 const long long col_edge = loc2glob_edge[element * 3 + col_face];
                 const long long col_solve_edge = edge_to_solve_edge[col_edge];
                 const bool positive = orientations[element * 3 + col_face];
                 for (int col_dof = 0; col_dof < NTR; ++col_dof) {
-                    const int local_col_dof = positive ? col_dof : (NTR - 1 - col_dof);
+                    const int local_col_dof = raw_trace_local_dof(positive, col_dof, NTR);
+                    const double col_sign = raw_trace_orientation_sign(positive, col_dof);
                     const int column = col_face * NTR + local_col_dof;
                     double schur_value = 0.0;
                     for (int i = 0; i < NEL; ++i) {
@@ -797,7 +831,9 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
                         schur_value += nx * lift * qx_cols[i * NCOLS + column];
                         schur_value += ny * lift * qy_cols[i * NCOLS + column];
                     }
+                    schur_value *= col_sign;
                     if (col_solve_edge >= 0) {
+#if !RAW_RHS_ONLY
 #if RAW_MATRIX_CSR
                         const int block_pos = side_csr_block_pos[side_id * 3 + col_face];
                         const long long row = row_solve_edge * NTR + row_dof;
@@ -809,6 +845,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
                         cols[out] = col_solve_edge * NTR + col_dof;
                         data[out] = -schur_value;
 #endif
+#endif
                     } else {
                         rhs_value += schur_value * boundary_trace[col_edge * NTR + col_dof];
                     }
@@ -817,6 +854,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
                     col_block_pos += 1;
                 }
             }
+#endif
             atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
         }
     }
@@ -831,6 +869,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
         for (int idx = tid; idx < NTR * NTR; idx += blockDim.x) {
             const int i = idx / NTR;
             const int j = idx - i * NTR;
+#if !RAW_RHS_ONLY
 #if RAW_MATRIX_CSR
             const long long row = solve_edge * NTR + i;
             const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + j);
@@ -841,6 +880,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             rows[out] = solve_edge * NTR + i;
             cols[out] = solve_edge * NTR + j;
             data[out] = scale * edge_mass[i * NTR + j];
+#endif
 #endif
         }
     }
@@ -876,6 +916,8 @@ def _raw_assembly_csr_template() -> str:
 _RAW_RECONSTRUCT_TEMPLATE = r"""
 extern "C" __global__ void reconstruct_diffusion_raw(
         double* __restrict__ uh,
+        double* __restrict__ local_unknowns,
+        const int write_local_unknowns,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -1060,8 +1102,33 @@ extern "C" __global__ void reconstruct_diffusion_raw(
         for (int j = i + 1; j < NEL; ++j) { value -= schur_matrix[i * NEL + j] * red_rhs[j]; }
         red_rhs[i] = value / schur_matrix[i * NEL + i];
     }
-    for (int i = 0; i < NEL; ++i) {
-        uh[element * NEL + i] = red_rhs[i];
+    if (write_local_unknowns) {
+        for (int i = 0; i < NEL; ++i) {
+            double value0 = 0.0;
+            double value1 = 0.0;
+            for (int j = 0; j < NEL; ++j) {
+                value0 += d0[i * NEL + j] * red_rhs[j];
+                value1 += d1[i * NEL + j] * red_rhs[j];
+            }
+            tmp1[i] = value0 - rhs1[i];
+            tmp2[i] = value1 - rhs2[i];
+        }
+        for (int i = 0; i < NEL; ++i) {
+            double qx_value = 0.0;
+            double qy_value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                qx_value += mass_inverse[i * NEL + k] * tmp1[k];
+                qy_value += mass_inverse[i * NEL + k] * tmp2[k];
+            }
+            local_unknowns[element * 3 * NEL + i] = red_rhs[i];
+            local_unknowns[element * 3 * NEL + NEL + i] = jac_inv * qx_value;
+            local_unknowns[element * 3 * NEL + 2 * NEL + i] = jac_inv * qy_value;
+            uh[element * NEL + i] = red_rhs[i];
+        }
+    } else {
+        for (int i = 0; i < NEL; ++i) {
+            uh[element * NEL + i] = red_rhs[i];
+        }
     }
 }
 """
@@ -1115,6 +1182,8 @@ __device__ __forceinline__ void factor_diffusion_reconstruct_lu_coop_raw(
 
 extern "C" __global__ void reconstruct_diffusion_raw_coop(
         double* __restrict__ uh,
+        double* __restrict__ local_unknowns,
+        const int write_local_unknowns,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -1283,8 +1352,35 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
     }
     __syncthreads();
 
-    for (int i = tid; i < NEL; i += blockDim.x) {
-        uh[element * NEL + i] = red_rhs[i];
+    if (write_local_unknowns) {
+        for (int i = tid; i < NEL; i += blockDim.x) {
+            double value0 = 0.0;
+            double value1 = 0.0;
+            for (int j = 0; j < NEL; ++j) {
+                value0 += d0[i * NEL + j] * red_rhs[j];
+                value1 += d1[i * NEL + j] * red_rhs[j];
+            }
+            tmp1[i] = value0 - rhs1[i];
+            tmp2[i] = value1 - rhs2[i];
+        }
+        __syncthreads();
+
+        for (int i = tid; i < NEL; i += blockDim.x) {
+            double qx_value = 0.0;
+            double qy_value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                qx_value += mass_inverse[i * NEL + k] * tmp1[k];
+                qy_value += mass_inverse[i * NEL + k] * tmp2[k];
+            }
+            local_unknowns[element * 3 * NEL + i] = red_rhs[i];
+            local_unknowns[element * 3 * NEL + NEL + i] = jac_inv * qx_value;
+            local_unknowns[element * 3 * NEL + 2 * NEL + i] = jac_inv * qy_value;
+            uh[element * NEL + i] = red_rhs[i];
+        }
+    } else {
+        for (int i = tid; i < NEL; i += blockDim.x) {
+            uh[element * NEL + i] = red_rhs[i];
+        }
     }
 }
 """
@@ -1297,13 +1393,24 @@ def _kernel_source(
         ntr: int,
         ncols: int,
         matrix_format: str = 'coo',
+        trace_orientation_mode: int = 0,
+        rhs_only: bool = False,
+        source_only: bool = False,
 ) -> str:
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {'coo', 'csr'}:
         raise ValueError("matrix_format must be 'coo' or 'csr'")
-    prefix = f"#define RAW_MATRIX_CSR {1 if matrix_format == 'csr' else 0}\n"
+    trace_orientation_mode = int(trace_orientation_mode)
+    if trace_orientation_mode not in {0, 1}:
+        raise ValueError("trace_orientation_mode must be 0 or 1")
+    prefix = (
+        f"#define RAW_MATRIX_CSR {1 if matrix_format == 'csr' else 0}\n"
+        f"#define RAW_RHS_ONLY {1 if rhs_only else 0}\n"
+        f"#define RAW_SOURCE_ONLY {1 if source_only else 0}\n"
+        f"#define TRACE_ORIENTATION_MODE {trace_orientation_mode}\n"
+    )
     source = template.replace('NEL', str(int(nel))).replace('NTR', str(int(ntr))).replace('NCOLS', str(int(ncols)))
-    return prefix + source
+    return prefix + _RAW_TRACE_ORIENTATION_HELPERS + source
 
 
 def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
@@ -1315,11 +1422,11 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     return assembly_bytes, reconstruct_bytes
 
 
-def _coop_shared_sizes(nel: int, ntr: int) -> int:
+def _coop_shared_sizes(nel: int, ntr: int, *, ncols: int | None = None) -> int:
     # Cooperative assembly stores all condensed trace/source columns plus one
     # temporary column slab for flux recovery.  For p=6 this is just under the
     # 64 KiB opt-in shared-memory limit on the original benchmark GPU.
-    ncols = 3 * ntr + 1
+    ncols = 3 * ntr + 1 if ncols is None else int(ncols)
     assembly_doubles = 7 * nel * nel + 4 * nel * ncols
     return assembly_doubles * 8 + nel * 4 + 256
 
@@ -1357,11 +1464,182 @@ def _side_flux_offsets(mesh, edge_to_solve_edge: np.ndarray, edg_dof: int) -> np
     return np.ascontiguousarray(offsets)
 
 
+def _raw_trace_orientation_mode(trace_ref) -> int:
+    kind = getattr(trace_ref, 'kind', '')
+    if kind == 'legacy-lagrange' and getattr(trace_ref, 'nodal', False):
+        return 0
+    if kind == 'legendre-modal' and not getattr(trace_ref, 'nodal', True):
+        return 1
+    raise ValueError('raw CUDA diffusion assembly currently supports legacy-lagrange nodal and legendre-modal trace bases')
+
+
 def validate_raw_cuda_supported(cspace, trace_ref) -> None:
-    if not getattr(trace_ref, 'nodal', False) or getattr(trace_ref, 'kind', '') != 'legacy-lagrange':
-        raise ValueError('raw CUDA diffusion assembly currently supports only legacy-lagrange nodal trace basis')
+    _raw_trace_orientation_mode(trace_ref)
     if cspace.el_dof > 28:
         raise ValueError('raw CUDA diffusion assembly currently supports p <= 6 (el_dof <= 28)')
+
+
+
+def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
+        *,
+        source_rhs,
+        boundary_trace,
+        cspace,
+        trace_ref,
+        d0_reference,
+        d1_reference,
+        face_element_mass,
+        tau: float,
+        csr_pattern,
+        block_size: int = 1,
+) -> RawDiffusionAssemblyResult:
+    """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
+    cupy = require_cupy()
+    validate_raw_cuda_supported(cspace, trace_ref)
+    if csr_pattern is None:
+        raise ValueError('csr_pattern is required for raw-CUDA cached RHS assembly')
+    block_size = int(block_size)
+    if block_size not in {1, 32, 64, 128}:
+        raise ValueError('raw CUDA diffusion block_size must be one of 1, 32, 64, 128')
+    timings: dict[str, float] = {}
+    mesh_h = cspace.host.mesh
+    nel = int(cspace.el_dof)
+    ntr = int(cspace.edg_dof)
+    boundary_is_zero = bool(cupy.all(boundary_trace == 0.0).get())
+    ncols = 1 if boundary_is_zero else 3 * ntr + 1
+    assembly_shared = _shared_sizes(nel, ntr)[0] if block_size == 1 else _coop_shared_sizes(nel, ntr, ncols=ncols)
+    trace_orientation_mode = _raw_trace_orientation_mode(trace_ref)
+
+    edge_to_solve = csr_pattern.edge_to_solve_edge
+    side_index = csr_pattern.interior_side_index
+    indptr = csr_pattern.indptr
+    indices = csr_pattern.indices
+    side_map_arg = csr_pattern.side_csr_block_pos
+    mass_map_arg = csr_pattern.mass_csr_block_pos
+
+    zero_start = time.perf_counter()
+    dummy_data = cupy.zeros(1 if block_size != 1 else indices.size, dtype=cupy.float64)
+    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
+    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+    if mesh_h.bnd_edges_inds.size:
+        boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
+    cupy.cuda.get_current_stream().synchronize()
+    timings['raw.cached_rhs_zero'] = time.perf_counter() - zero_start
+
+    start = time.perf_counter()
+    if block_size == 1:
+        source = _kernel_source(
+            _raw_assembly_csr_template(),
+            nel=nel,
+            ntr=ntr,
+            ncols=ncols,
+            matrix_format='csr',
+            trace_orientation_mode=trace_orientation_mode,
+        )
+        kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
+        kernel_args = (
+            indptr,
+            dummy_data,
+            rhs,
+            cspace.mesh.loc2glob_edge,
+            cspace.mesh.orientations,
+            cspace.mesh.loc2oriented_face_coupling,
+            side_index,
+            edge_to_solve,
+            cspace.mesh.int_edges_inds,
+            side_map_arg,
+            mass_map_arg,
+            cspace.mesh.aff_mats,
+            cspace.mesh.aff_jacs,
+            cspace.mesh.jacs_el_fc,
+            cspace.mesh.edge_jacs,
+            cspace.mesh.normals,
+            cspace.quad_data.MKrf,
+            cspace.quad_data.MKrf_inv,
+            face_element_mass,
+            trace_ref.face_element_test_trace_trial,
+            trace_ref.M_rf_fc,
+            trace_ref.face_trace_test_element_trial_oriented,
+            d0_reference,
+            d1_reference,
+            source_rhs,
+            boundary_trace_full.reshape(-1),
+            np.float64(tau),
+            np.int64(cspace.mesh.num_tri),
+            np.int64(cspace.mesh.int_edges_inds.size),
+            np.int64(0),
+        )
+    else:
+        dummy_i64 = cupy.empty(1, dtype=cupy.int64)
+        dummy_i32 = cupy.empty(1, dtype=cupy.int32)
+        source = _kernel_source(
+            _RAW_ASSEMBLY_COOP_TEMPLATE,
+            nel=nel,
+            ntr=ntr,
+            ncols=ncols,
+            matrix_format='csr',
+            trace_orientation_mode=trace_orientation_mode,
+            rhs_only=True,
+            source_only=boundary_is_zero,
+        )
+        kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
+        kernel_args = (
+            dummy_i64,
+            dummy_i64,
+            indptr,
+            dummy_data,
+            rhs,
+            cspace.mesh.loc2glob_edge,
+            cspace.mesh.orientations,
+            cspace.mesh.loc2oriented_face_coupling,
+            side_index,
+            edge_to_solve,
+            cspace.mesh.int_edges_inds,
+            dummy_i64,
+            side_map_arg,
+            mass_map_arg,
+            cspace.mesh.aff_mats,
+            cspace.mesh.aff_jacs,
+            cspace.mesh.jacs_el_fc,
+            cspace.mesh.edge_jacs,
+            cspace.mesh.normals,
+            cspace.quad_data.MKrf,
+            cspace.quad_data.MKrf_inv,
+            face_element_mass,
+            trace_ref.face_element_test_trace_trial,
+            trace_ref.M_rf_fc,
+            trace_ref.face_trace_test_element_trial_oriented,
+            d0_reference,
+            d1_reference,
+            source_rhs,
+            boundary_trace_full.reshape(-1),
+            np.float64(tau),
+            np.int64(cspace.mesh.num_tri),
+            np.int64(cspace.mesh.int_edges_inds.size),
+            np.int64(0),
+        )
+    grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+    kernel(grid, (block_size,), kernel_args, shared_mem=int(assembly_shared))
+    cupy.cuda.get_current_stream().synchronize()
+    timings['raw.cached_rhs_kernel'] = time.perf_counter() - start
+    timings['raw.block_size'] = float(block_size)
+    timings['raw.total'] = timings.get('raw.cached_rhs_zero', 0.0) + timings.get('raw.cached_rhs_kernel', 0.0)
+    return RawDiffusionAssemblyResult(
+        rows=None,
+        cols=None,
+        data=None,
+        rhs=rhs,
+        source_rhs=source_rhs,
+        boundary_trace=boundary_trace,
+        d0_reference=d0_reference,
+        d1_reference=d1_reference,
+        face_element_mass=face_element_mass,
+        timings=timings,
+        indptr=indptr,
+        indices=indices,
+        matrix_format='csr',
+        csr_pattern=csr_pattern,
+    )
 
 
 def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
@@ -1392,6 +1670,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     ntr = int(cspace.edg_dof)
     ncols = 3 * ntr + 1
     assembly_shared = _shared_sizes(nel, ntr)[0] if block_size == 1 else _coop_shared_sizes(nel, ntr)
+    trace_orientation_mode = _raw_trace_orientation_mode(trace_ref)
 
     csr_pattern = None
     indptr = indices = None
@@ -1446,7 +1725,14 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     start = time.perf_counter()
     if block_size == 1:
         if matrix_format == 'csr':
-            source = _kernel_source(_raw_assembly_csr_template(), nel=nel, ntr=ntr, ncols=ncols, matrix_format=matrix_format)
+            source = _kernel_source(
+                _raw_assembly_csr_template(),
+                nel=nel,
+                ntr=ntr,
+                ncols=ncols,
+                matrix_format=matrix_format,
+                trace_orientation_mode=trace_orientation_mode,
+            )
             kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
             kernel_args = (
                 indptr,
@@ -1481,7 +1767,14 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
                 np.int64(n_flux),
             )
         else:
-            source = _kernel_source(_RAW_ASSEMBLY_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, matrix_format=matrix_format)
+            source = _kernel_source(
+                _RAW_ASSEMBLY_TEMPLATE,
+                nel=nel,
+                ntr=ntr,
+                ncols=ncols,
+                matrix_format=matrix_format,
+                trace_orientation_mode=trace_orientation_mode,
+            )
             kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw', assembly_shared)
             kernel_args = (
                 rows,
@@ -1538,6 +1831,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             ntr=ntr,
             ncols=ncols,
             matrix_format=matrix_format,
+            trace_orientation_mode=trace_orientation_mode,
         )
         kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
         kernel_args = (
@@ -1615,8 +1909,9 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         face_element_mass,
         tau: float,
         block_size: int = 1,
+        return_local_unknowns: bool = False,
 ):
-    """Recover primal element coefficients with the Raw CUDA local solve."""
+    """Recover primal coefficients, optionally with full mixed local unknowns."""
     cupy = require_cupy()
     validate_raw_cuda_supported(cspace, trace_ref)
     block_size = int(block_size)
@@ -1626,9 +1921,20 @@ def reconstruct_projected_diffusion_field_raw_cuda(
     ntr = int(cspace.edg_dof)
     _, reconstruct_shared = _shared_sizes(nel, ntr)
     uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    local_unknowns = (
+        cupy.empty((cspace.mesh.num_tri, 3 * nel), dtype=cupy.float64)
+        if return_local_unknowns
+        else cupy.empty(1, dtype=cupy.float64)
+    )
     template = _RAW_RECONSTRUCT_TEMPLATE if block_size == 1 else _RAW_RECONSTRUCT_COOP_TEMPLATE
     kernel_name = 'reconstruct_diffusion_raw' if block_size == 1 else 'reconstruct_diffusion_raw_coop'
-    source = _kernel_source(template, nel=nel, ntr=ntr, ncols=1)
+    source = _kernel_source(
+        template,
+        nel=nel,
+        ntr=ntr,
+        ncols=1,
+        trace_orientation_mode=_raw_trace_orientation_mode(trace_ref),
+    )
     kernel = _compile_kernel(cupy, source, kernel_name, reconstruct_shared)
     start = time.perf_counter()
     kernel(
@@ -1636,6 +1942,8 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         (block_size,),
         (
             uh,
+            local_unknowns,
+            np.int32(1 if return_local_unknowns else 0),
             trace.reshape(-1),
             cspace.mesh.loc2glob_edge,
             cspace.mesh.loc2oriented_face_coupling,
@@ -1655,12 +1963,476 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         shared_mem=int(reconstruct_shared),
     )
     cupy.cuda.get_current_stream().synchronize()
-    return cupy.ascontiguousarray(uh), time.perf_counter() - start
+    elapsed = time.perf_counter() - start
+    uh = cupy.ascontiguousarray(uh)
+    if return_local_unknowns:
+        return uh, cupy.ascontiguousarray(local_unknowns), elapsed
+    return uh, elapsed
+
+
+_RAW_PRIMAL_POSTPROCESS_TEMPLATE = r"""
+__device__ __forceinline__ void reduce_post_rows_sum_raw(double* __restrict__ scratch)
+{
+    const int tid = threadIdx.x;
+    int active = POST_ROWS;
+    while (active > 1) {
+        const int stride = (active + 1) >> 1;
+        if (tid < active - stride) {
+            scratch[tid] += scratch[tid + stride];
+        }
+        __syncthreads();
+        active = stride;
+    }
+}
+
+__device__ __forceinline__ void factor_primal_postprocess_lu_coop_raw(
+        double* __restrict__ matrix,
+        int* __restrict__ pivots)
+{
+    const int tid = threadIdx.x;
+    for (int k = 0; k < POST_ROWS; ++k) {
+        if (tid == 0) {
+            int pivot = k;
+            double max_value = fabs(matrix[k * POST_ROWS + k]);
+            for (int i = k + 1; i < POST_ROWS; ++i) {
+                const double value = fabs(matrix[i * POST_ROWS + k]);
+                if (value > max_value) {
+                    max_value = value;
+                    pivot = i;
+                }
+            }
+            pivots[k] = pivot;
+            if (pivot != k) {
+                for (int j = 0; j < POST_ROWS; ++j) {
+                    const double tmp = matrix[k * POST_ROWS + j];
+                    matrix[k * POST_ROWS + j] = matrix[pivot * POST_ROWS + j];
+                    matrix[pivot * POST_ROWS + j] = tmp;
+                }
+            }
+            double diagonal = matrix[k * POST_ROWS + k];
+            if (fabs(diagonal) < 1.0e-30) {
+                diagonal = diagonal >= 0.0 ? 1.0e-30 : -1.0e-30;
+                matrix[k * POST_ROWS + k] = diagonal;
+            }
+            for (int i = k + 1; i < POST_ROWS; ++i) {
+                matrix[i * POST_ROWS + k] /= diagonal;
+            }
+        }
+        __syncthreads();
+
+        const int width = POST_ROWS - k - 1;
+        for (int idx = tid; idx < width * width; idx += blockDim.x) {
+            const int i = k + 1 + idx / width;
+            const int j = k + 1 + idx - (idx / width) * width;
+            matrix[i * POST_ROWS + j] -= matrix[i * POST_ROWS + k] * matrix[k * POST_ROWS + j];
+        }
+        __syncthreads();
+    }
+}
+
+__device__ __forceinline__ void solve_primal_postprocess_rhs_coop_raw(
+        const double* __restrict__ matrix,
+        const int* __restrict__ pivots,
+        double* __restrict__ rhs,
+        double* __restrict__ scratch)
+{
+    const int tid = threadIdx.x;
+    for (int k = 0; k < POST_ROWS; ++k) {
+        const int pivot = pivots[k];
+        if (tid == 0 && pivot != k) {
+            const double tmp = rhs[k];
+            rhs[k] = rhs[pivot];
+            rhs[pivot] = tmp;
+        }
+        __syncthreads();
+    }
+
+    for (int i = 0; i < POST_ROWS; ++i) {
+        double partial = 0.0;
+        for (int j = tid; j < i; j += blockDim.x) {
+            partial += matrix[i * POST_ROWS + j] * rhs[j];
+        }
+        if (tid < POST_ROWS) {
+            scratch[tid] = partial;
+        }
+        __syncthreads();
+        reduce_post_rows_sum_raw(scratch);
+        if (tid == 0) {
+            rhs[i] -= scratch[0];
+        }
+        __syncthreads();
+    }
+
+    for (int i = POST_ROWS - 1; i >= 0; --i) {
+        double partial = 0.0;
+        for (int j = i + 1 + tid; j < POST_ROWS; j += blockDim.x) {
+            partial += matrix[i * POST_ROWS + j] * rhs[j];
+        }
+        if (tid < POST_ROWS) {
+            scratch[tid] = partial;
+        }
+        __syncthreads();
+        reduce_post_rows_sum_raw(scratch);
+        if (tid == 0) {
+            rhs[i] = (rhs[i] - scratch[0]) / matrix[i * POST_ROWS + i];
+        }
+        __syncthreads();
+    }
+}
+
+extern "C" __global__ void primal_postprocess_diffusion_raw(
+        double* __restrict__ coeffs,
+        const double* __restrict__ local_unknowns,
+        const double* __restrict__ aff_jacs,
+        const double* __restrict__ inv_aff_mats_t,
+        const double* __restrict__ weights,
+        const double* __restrict__ base_basis_on_post_quads,
+        const double* __restrict__ post_grad,
+        const double* __restrict__ mean_base,
+        const double* __restrict__ mean_post,
+        const double* __restrict__ stiffness_rr,
+        const double* __restrict__ stiffness_rs,
+        const double* __restrict__ stiffness_ss,
+        const int inverse_mode,
+        const double inv00_scalar,
+        const double inv01_scalar,
+        const double inv10_scalar,
+        const double inv11_scalar,
+        const double* __restrict__ inv00_values,
+        const double* __restrict__ inv01_values,
+        const double* __restrict__ inv10_values,
+        const double* __restrict__ inv11_values,
+        const long long num_elements)
+{
+    extern __shared__ unsigned char shared_raw[];
+    double* shared = reinterpret_cast<double*>(shared_raw);
+    double* matrix = shared;
+    double* rhs = matrix + (POST_ROWS * POST_ROWS);
+    double* cqx = rhs + POST_ROWS;
+    double* cqy = cqx + POST_NQ;
+    double* scratch = cqy + POST_NQ;
+    int* pivots = reinterpret_cast<int*>(scratch + POST_ROWS);
+
+    const int tid = threadIdx.x;
+    const long long element = blockIdx.x;
+    if (element >= num_elements) {
+        return;
+    }
+
+    const double jac = aff_jacs[element];
+    const double inv00g = inv_aff_mats_t[(element * 2 + 0) * 2 + 0];
+    const double inv01g = inv_aff_mats_t[(element * 2 + 0) * 2 + 1];
+    const double inv10g = inv_aff_mats_t[(element * 2 + 1) * 2 + 0];
+    const double inv11g = inv_aff_mats_t[(element * 2 + 1) * 2 + 1];
+    const double metric_rr = inv00g * inv00g + inv10g * inv10g;
+    const double metric_rs = inv00g * inv01g + inv10g * inv11g;
+    const double metric_ss = inv01g * inv01g + inv11g * inv11g;
+
+    for (int idx = tid; idx < POST_ROWS * POST_ROWS; idx += blockDim.x) {
+        matrix[idx] = 0.0;
+    }
+    for (int i = tid; i < POST_ROWS; i += blockDim.x) {
+        rhs[i] = 0.0;
+    }
+    __syncthreads();
+
+    for (int idx = tid; idx < POST_NEL * POST_NEL; idx += blockDim.x) {
+        const int i = idx / POST_NEL;
+        const int j = idx - i * POST_NEL;
+        matrix[i * POST_ROWS + j] = jac * (
+            metric_rr * stiffness_rr[idx]
+            + metric_rs * stiffness_rs[idx]
+            + metric_ss * stiffness_ss[idx]
+        );
+    }
+    for (int i = tid; i < POST_NEL; i += blockDim.x) {
+        const double mean = jac * mean_post[i];
+        matrix[i * POST_ROWS + POST_NEL] = mean;
+        matrix[POST_NEL * POST_ROWS + i] = mean;
+    }
+    __syncthreads();
+
+    for (int q = tid; q < POST_NQ; q += blockDim.x) {
+        double qx = 0.0;
+        double qy = 0.0;
+        for (int j = 0; j < BASE_NEL; ++j) {
+            const double basis = base_basis_on_post_quads[q * BASE_NEL + j];
+            qx += local_unknowns[element * 3 * BASE_NEL + BASE_NEL + j] * basis;
+            qy += local_unknowns[element * 3 * BASE_NEL + 2 * BASE_NEL + j] * basis;
+        }
+        if (inverse_mode == 0) {
+            cqx[q] = inv00_scalar * qx + inv01_scalar * qy;
+            cqy[q] = inv10_scalar * qx + inv11_scalar * qy;
+        } else {
+            cqx[q] = inv00_values[element * POST_NQ + q] * qx + inv01_values[element * POST_NQ + q] * qy;
+            cqy[q] = inv10_values[element * POST_NQ + q] * qx + inv11_values[element * POST_NQ + q] * qy;
+        }
+    }
+    __syncthreads();
+
+    for (int i = tid; i < POST_NEL; i += blockDim.x) {
+        double value = 0.0;
+        for (int q = 0; q < POST_NQ; ++q) {
+            const double grad_r = post_grad[(q * POST_NEL + i) * 2 + 0];
+            const double grad_s = post_grad[(q * POST_NEL + i) * 2 + 1];
+            const double grad_x = inv00g * grad_r + inv01g * grad_s;
+            const double grad_y = inv10g * grad_r + inv11g * grad_s;
+            value += weights[q] * (cqx[q] * grad_x + cqy[q] * grad_y);
+        }
+        rhs[i] = -jac * value;
+    }
+    if (tid == 0) {
+        double mean_value = 0.0;
+        for (int j = 0; j < BASE_NEL; ++j) {
+            mean_value += local_unknowns[element * 3 * BASE_NEL + j] * mean_base[j];
+        }
+        rhs[POST_NEL] = jac * mean_value;
+    }
+    __syncthreads();
+
+    factor_primal_postprocess_lu_coop_raw(matrix, pivots);
+    solve_primal_postprocess_rhs_coop_raw(matrix, pivots, rhs, scratch);
+
+    for (int i = tid; i < POST_NEL; i += blockDim.x) {
+        coeffs[element * POST_NEL + i] = rhs[i];
+    }
+}
+"""
+
+
+def _raw_primal_postprocess_source(base_nel: int, post_nel: int, post_nq: int) -> str:
+    return (
+        _RAW_PRIMAL_POSTPROCESS_TEMPLATE
+        .replace('BASE_NEL', str(int(base_nel)))
+        .replace('POST_NEL', str(int(post_nel)))
+        .replace('POST_ROWS', str(int(post_nel) + 1))
+        .replace('POST_NQ', str(int(post_nq)))
+    )
+
+
+def raw_cuda_primal_postprocess_row_fit_order(block_size: int) -> int:
+    """Return largest base degree whose degree ``p+1`` local rows fit in one block."""
+    block_size = int(block_size)
+    if block_size <= 0:
+        raise ValueError('block_size must be positive')
+    max_order = -1
+    for order in range(64):
+        post_el_dof = (order + 2) * (order + 3) // 2
+        if post_el_dof + 1 > block_size:
+            break
+        max_order = order
+    return max_order
+
+
+def raw_cuda_primal_postprocess_supported_order(block_size: int) -> int:
+    """Return the current raw-CUDA diffusion primal-postprocess degree limit."""
+    return min(6, raw_cuda_primal_postprocess_row_fit_order(block_size))
+
+
+def _select_raw_primal_postprocess_block_size(order: int, requested_block_size: int) -> int:
+    post_el_dof = (int(order) + 2) * (int(order) + 3) // 2
+    post_rows = post_el_dof + 1
+    allowed = (32, 64, 128)
+    requested = max(32, int(requested_block_size))
+    for block_size in allowed:
+        if block_size >= requested and block_size >= post_rows:
+            return block_size
+    raise ValueError(
+        f'raw CUDA primal postprocess needs at least {post_rows} threads per element for p={order}; '
+        'maximum supported block size is 128'
+    )
+
+
+def _raw_primal_postprocess_shared_size(post_el_dof: int, post_nq: int) -> int:
+    rows = int(post_el_dof) + 1
+    doubles = rows * rows + rows + 2 * int(post_nq) + rows
+    return doubles * 8 + rows * 4 + 256
+
+
+def _as_scalar_or_none(value) -> float | None:
+    if np.isscalar(value):
+        return float(value)
+    try:
+        array = np.asarray(value, dtype=np.float64)
+    except (TypeError, ValueError):
+        return None
+    if array.shape == ():
+        return float(array)
+    return None
+
+
+def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, float, float] | None:
+    scalar = _as_scalar_or_none(diffusion)
+    if scalar is not None:
+        if scalar <= 0.0:
+            raise ValueError('diffusion scalar must be positive')
+        inv = 1.0 / scalar
+        return inv, 0.0, 0.0, inv
+
+    try:
+        array = np.asarray(diffusion, dtype=np.float64)
+    except (TypeError, ValueError):
+        array = None
+    if array is not None and array.shape == (2, 2):
+        k00, k01 = float(array[0, 0]), float(array[0, 1])
+        k10, k11 = float(array[1, 0]), float(array[1, 1])
+    elif isinstance(diffusion, (tuple, list)):
+        if len(diffusion) == 3:
+            k00 = _as_scalar_or_none(diffusion[0])
+            k01 = _as_scalar_or_none(diffusion[1])
+            k11 = _as_scalar_or_none(diffusion[2])
+            k10 = k01
+        elif len(diffusion) == 4:
+            k00 = _as_scalar_or_none(diffusion[0])
+            k01 = _as_scalar_or_none(diffusion[1])
+            k10 = _as_scalar_or_none(diffusion[2])
+            k11 = _as_scalar_or_none(diffusion[3])
+        elif (
+            len(diffusion) == 2
+            and all(isinstance(row, (tuple, list)) and len(row) == 2 for row in diffusion)
+        ):
+            k00 = _as_scalar_or_none(diffusion[0][0])
+            k01 = _as_scalar_or_none(diffusion[0][1])
+            k10 = _as_scalar_or_none(diffusion[1][0])
+            k11 = _as_scalar_or_none(diffusion[1][1])
+        else:
+            return None
+        if None in {k00, k01, k10, k11}:
+            return None
+    else:
+        return None
+
+    det = k00 * k11 - k01 * k10
+    if det <= 0.0:
+        raise ValueError(f'diffusion tensor must be positive definite; determinant is {det}')
+    return k11 / det, -k01 / det, -k10 / det, k00 / det
+
+
+def postprocess_projected_diffusion_primal_raw_cuda(
+        local_unknowns,
+        cspace,
+        diffusion=1.0,
+        *,
+        trace_space=None,
+        block_size: int = 128,
+        name: str = 'u_h_star',
+        timings: dict[str, float] | None = None,
+        cache=None,
+):
+    """Recover the HDG primal postprocessed field with a per-element Raw CUDA kernel.
+
+    The current raw diffusion path is validated for base degree ``p <= 6``.  At
+    ``p=6`` the degree-7 postprocess solve has 36 scalar coefficients plus one
+    mean row, so block sizes 64 and 128 provide at least one thread per local
+    row.  A 128-thread block would fit that row-wise local work through
+    ``p=13``, but the assembled raw diffusion solve remains capped at ``p<=6``.
+    """
+    cupy = require_cupy()
+    if int(cspace.el_dof) > 28:
+        raise ValueError('raw CUDA primal postprocess currently supports p <= 6 (el_dof <= 28)')
+    timings = {} if timings is None else timings
+    stream = cupy.cuda.get_current_stream()
+    stream.synchronize()
+    total_start = time.perf_counter()
+
+    setup_start = time.perf_counter()
+    from ..solvers.diff_rea import _new_hdg_postprocess_cache
+
+    trace_ref = cspace.host.trace_space('legacy-lagrange') if trace_space is None else trace_space
+    if cache is None or cache.base_space is not cspace.host or cache.trace_space is not trace_ref:
+        cache = _new_hdg_postprocess_cache(cspace.host, trace_ref)
+    cpost_space = as_cupy_space(cache.post_space, device=cspace.device_id)
+    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=cupy.float64))
+    expected_unknowns = (cspace.mesh.num_tri, 3 * cspace.el_dof)
+    if tuple(local_unknowns.shape) != expected_unknowns:
+        raise ValueError(f'local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}')
+
+    base_el_dof = int(cspace.el_dof)
+    post_el_dof = int(cache.post_space.el_dof)
+    post_nq = int(cache.post_space.quad_data.Krf_w.shape[0])
+    effective_block_size = _select_raw_primal_postprocess_block_size(cspace.order, block_size)
+    shared_bytes = _raw_primal_postprocess_shared_size(post_el_dof, post_nq)
+
+    weights = cupy.asarray(cache.post_space.quad_data.Krf_w, dtype=cupy.float64)
+    base_basis = cupy.asarray(cache.base_basis_on_post_quads, dtype=cupy.float64)
+    post_grad = cupy.asarray(cache.post_space.quad_data.gphi, dtype=cupy.float64)
+    mean_base = cupy.asarray(cache.mean_base, dtype=cupy.float64)
+    mean_post = cupy.asarray(cache.mean_post, dtype=cupy.float64)
+    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=cupy.float64)
+    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=cupy.float64)
+    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=cupy.float64)
+    inverse_constants = _constant_inverse_diffusion_components(diffusion)
+    if inverse_constants is None:
+        from ..solvers.diff_rea import _inverse_diffusion_values
+
+        inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
+        inverse_mode = np.int32(1)
+        inv00_scalar = inv01_scalar = inv10_scalar = inv11_scalar = np.float64(0.0)
+        inv00 = cupy.asarray(inv00_h, dtype=cupy.float64)
+        inv01 = cupy.asarray(inv01_h, dtype=cupy.float64)
+        inv10 = cupy.asarray(inv10_h, dtype=cupy.float64)
+        inv11 = cupy.asarray(inv11_h, dtype=cupy.float64)
+    else:
+        inverse_mode = np.int32(0)
+        inv00_scalar, inv01_scalar, inv10_scalar, inv11_scalar = map(np.float64, inverse_constants)
+        inv00 = inv01 = inv10 = inv11 = weights
+    coeffs = cupy.empty((cspace.mesh.num_tri, post_el_dof), dtype=cupy.float64)
+    stream.synchronize()
+    timings['postprocess.primal.raw_cuda.setup'] = time.perf_counter() - setup_start
+
+    kernel_source = _raw_primal_postprocess_source(base_el_dof, post_el_dof, post_nq)
+    kernel = _compile_kernel(cupy, kernel_source, 'primal_postprocess_diffusion_raw', shared_bytes)
+    solve_start = time.perf_counter()
+    kernel(
+        (int(cspace.mesh.num_tri),),
+        (int(effective_block_size),),
+        (
+            coeffs,
+            local_unknowns,
+            cspace.mesh.aff_jacs,
+            cspace.mesh.inv_aff_mats_t,
+            weights,
+            base_basis,
+            post_grad,
+            mean_base,
+            mean_post,
+            stiffness_rr,
+            stiffness_rs,
+            stiffness_ss,
+            inverse_mode,
+            inv00_scalar,
+            inv01_scalar,
+            inv10_scalar,
+            inv11_scalar,
+            inv00,
+            inv01,
+            inv10,
+            inv11,
+            np.int64(cspace.mesh.num_tri),
+        ),
+        shared_mem=int(shared_bytes),
+    )
+    stream.synchronize()
+    timings['postprocess.primal.raw_cuda.kernel'] = time.perf_counter() - solve_start
+    timings['postprocess.primal.raw_cuda.total'] = time.perf_counter() - total_start
+    timings['postprocess.primal.raw_cuda.block_size'] = float(effective_block_size)
+    timings['postprocess.primal.raw_cuda.shared_bytes'] = float(shared_bytes)
+    timings['postprocess.primal.raw_cuda.row_fit_order'] = float(
+        raw_cuda_primal_postprocess_row_fit_order(effective_block_size)
+    )
+    timings['postprocess.primal.raw_cuda.supported_order'] = float(
+        raw_cuda_primal_postprocess_supported_order(effective_block_size)
+    )
+    return cpost_space.field(cupy.ascontiguousarray(coeffs), name=name), cache
 
 
 __all__ = [
     'RawDiffusionAssemblyResult',
+    'assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda',
     'assemble_projected_diffusion_trace_system_eliminated_raw_cuda',
+    'postprocess_projected_diffusion_primal_raw_cuda',
+    'raw_cuda_primal_postprocess_row_fit_order',
+    'raw_cuda_primal_postprocess_supported_order',
     'reconstruct_projected_diffusion_field_raw_cuda',
     'validate_raw_cuda_supported',
 ]

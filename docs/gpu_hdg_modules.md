@@ -197,14 +197,14 @@ The `dub_orth + legacy-lagrange` p6/ms0.05 run matches the legacy v4 numerical e
 
 ## Modal Trace Status for Diffusion
 
-The diffusion runner now orients trace-column couplings directly through `face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]`. This centralizes the modal orientation convention and keeps the local trace RHS, Schur row lift, boundary elimination, and reconstruction in the same global trace coordinate system.
+The diffusion runner now orients trace-column couplings directly through the active `DGTraceSpace` tables.  NumPy, CuPy, Numba, and raw-CUDA COO/CSR assembly are validated against the same modal trace operator, and raw-CUDA reconstruction supports `legendre-modal` for the current p <= 6 identity-diffusion/zero-reaction path.  The raw-CUDA path still falls back for p > 6 and does not enable Bernstein traces yet.
 
-Low-order checks show the modal trace algebra is consistent:
+Low-order runner checks show the modal trace algebra is consistent with AMGX handoff:
 
-- p2, ms=0.3, `dub_orth + legendre-modal`: correct error, 1 AMGX iteration.
-- p4, ms=0.2, `dub_orth + legendre-modal`: correct error, but about 800 AMGX iterations.
+- p2, structured rectangle, `dub_orth + legendre-modal`, CuPy COO-to-CSR: correct error.
+- p2, structured rectangle, `dub_orth + legendre-modal`, raw-CUDA direct CSR with cooperative local solve: correct error.
 
-At p6, `legendre-modal` is not currently robust with the AMGX PCGF/classical-AMG configuration: coarse and fine p6 cases hit the iteration cap and reconstruction errors are dominated by linear-solve failure. The remaining issue appears to be AMG robustness in modal trace coordinates rather than the simple orientation mismatch encountered during the advection port.
+Large p6 modal AMGX robustness should still be benchmarked separately before treating modal traces as the preferred production setting.
 
 ## Defaults
 

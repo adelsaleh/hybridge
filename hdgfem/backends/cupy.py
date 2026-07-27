@@ -1390,6 +1390,158 @@ def solve_pyamgx_csr(
     return x_cp
 
 
+_CSR_ROW_SCALE_SOURCE = r"""
+extern "C" __global__ void diagonal_scale_csr_rows(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        double* __restrict__ data,
+        double* __restrict__ rhs,
+        double* __restrict__ row_diagonal,
+        const long long nrows)
+{
+    const long long row = blockIdx.x;
+    if (row >= nrows) {
+        return;
+    }
+    const int start = indptr[row];
+    const int end = indptr[row + 1];
+    __shared__ double diagonal;
+    if (threadIdx.x == 0) {
+        double value = 0.0;
+        for (int p = start; p < end; ++p) {
+            if (indices[p] == (int)row) {
+                value += data[p];
+            }
+        }
+        if (value == 0.0) {
+            value = 1.0;
+        }
+        diagonal = value;
+        row_diagonal[row] = value;
+        rhs[row] /= value;
+    }
+    __syncthreads();
+    const double inverse = 1.0 / diagonal;
+    for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
+        data[p] *= inverse;
+    }
+}
+"""
+_CSR_ROW_SCALE_KERNELS: dict[int, Any] = {}
+
+
+def diagonal_scale_cupy_csr_rows_in_place(matrix, rhs):
+    """Apply left Jacobi row scaling to a CuPy CSR matrix and RHS in place."""
+    cupy = require_cupy()
+    device_id = int(cupy.cuda.runtime.getDevice())
+    kernel = _CSR_ROW_SCALE_KERNELS.get(device_id)
+    if kernel is None:
+        kernel = cupy.RawKernel(_CSR_ROW_SCALE_SOURCE, "diagonal_scale_csr_rows")
+        _CSR_ROW_SCALE_KERNELS[device_id] = kernel
+    nrows = int(rhs.size)
+    diagonal = cupy.empty(nrows, dtype=cupy.float64)
+    if nrows:
+        kernel(
+            (nrows,),
+            (128,),
+            (
+                matrix.indptr,
+                matrix.indices,
+                matrix.data,
+                rhs,
+                diagonal,
+                np.int64(nrows),
+            ),
+        )
+    return diagonal
+
+
+_CSR_SYMMETRIC_DIAGONAL_SOURCE = r"""
+extern "C" __global__ void csr_inverse_sqrt_diagonal(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        const double* __restrict__ data,
+        double* __restrict__ inverse_sqrt_diagonal,
+        const long long nrows)
+{
+    const long long row = blockIdx.x;
+    if (row >= nrows || threadIdx.x != 0) {
+        return;
+    }
+    const int start = indptr[row];
+    const int end = indptr[row + 1];
+    double value = 0.0;
+    for (int p = start; p < end; ++p) {
+        if (indices[p] == (int)row) {
+            value += data[p];
+        }
+    }
+    if (value < 0.0) {
+        value = -value;
+    }
+    if (value == 0.0) {
+        value = 1.0;
+    }
+    inverse_sqrt_diagonal[row] = 1.0 / sqrt(value);
+}
+
+extern "C" __global__ void symmetric_scale_csr_rows(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        double* __restrict__ data,
+        double* __restrict__ rhs,
+        const double* __restrict__ inverse_sqrt_diagonal,
+        const long long nrows)
+{
+    const long long row = blockIdx.x;
+    if (row >= nrows) {
+        return;
+    }
+    const int start = indptr[row];
+    const int end = indptr[row + 1];
+    const double row_scale = inverse_sqrt_diagonal[row];
+    if (threadIdx.x == 0) {
+        rhs[row] *= row_scale;
+    }
+    for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
+        data[p] *= row_scale * inverse_sqrt_diagonal[indices[p]];
+    }
+}
+"""
+_CSR_SYMMETRIC_SCALE_KERNELS: dict[int, tuple[Any, Any]] = {}
+
+
+def symmetric_scale_cupy_csr_in_place(matrix, rhs):
+    """Apply symmetric Jacobi scaling ``D^-1/2 A D^-1/2`` to CSR/RHS in place.
+
+    The returned vector is ``D^-1/2``. After solving the scaled system for
+    ``y``, recover the physical unknown by multiplying ``x = D^-1/2 y``.
+    """
+    cupy = require_cupy()
+    device_id = int(cupy.cuda.runtime.getDevice())
+    kernels = _CSR_SYMMETRIC_SCALE_KERNELS.get(device_id)
+    if kernels is None:
+        diag_kernel = cupy.RawKernel(_CSR_SYMMETRIC_DIAGONAL_SOURCE, "csr_inverse_sqrt_diagonal")
+        scale_kernel = cupy.RawKernel(_CSR_SYMMETRIC_DIAGONAL_SOURCE, "symmetric_scale_csr_rows")
+        kernels = (diag_kernel, scale_kernel)
+        _CSR_SYMMETRIC_SCALE_KERNELS[device_id] = kernels
+    diag_kernel, scale_kernel = kernels
+    nrows = int(rhs.size)
+    inverse_sqrt_diagonal = cupy.empty(nrows, dtype=cupy.float64)
+    if nrows:
+        diag_kernel(
+            (nrows,),
+            (128,),
+            (matrix.indptr, matrix.indices, matrix.data, inverse_sqrt_diagonal, np.int64(nrows)),
+        )
+        scale_kernel(
+            (nrows,),
+            (128,),
+            (matrix.indptr, matrix.indices, matrix.data, rhs, inverse_sqrt_diagonal, np.int64(nrows)),
+        )
+    return inverse_sqrt_diagonal
+
+
 __all__ = [
     "CupyAdvectionTraceAssembly",
     "CupyDGMesh",
@@ -1404,6 +1556,7 @@ __all__ = [
     "clear_cupy_space_cache",
     "field_from_cupy_coefficients",
     "default_pyamgx_config",
+    "diagonal_scale_cupy_csr_rows_in_place",
     "require_cupy",
     "require_cupyx_sparse",
     "require_cupyx_sparse_linalg",
@@ -1414,4 +1567,5 @@ __all__ = [
     "scipy_csr_to_cupy",
     "solve_cupyx_csr",
     "solve_pyamgx_csr",
+    "symmetric_scale_cupy_csr_in_place",
 ]

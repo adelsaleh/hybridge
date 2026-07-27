@@ -125,6 +125,86 @@ def test3(
     return betax, betay, reaction, source, exact
 
 
+def disk_tangent_conservative():
+    r"""Manufactured conservative advection-reaction case on the unit disk.
+
+    The velocity is tangent to the exact circular boundary, so the intended HDG
+    boundary treatment is ``boundary_mode="zero-flux"`` rather than prescribed
+    Dirichlet trace data.  The velocity is not divergence-free; the source uses
+    ``div(beta*u) + reaction*u``.
+    """
+
+    def _flow_data(x, y):
+        radius_squared = x**2 + y**2
+        one_minus_radius_squared = 1.0 - radius_squared
+        geometry_factor = 1.0 + 0.25 * x - 0.2 * y
+        speed_factor = 1.0 + 0.2 * x + y / 6.0
+
+        psi_x = -2.0 * x * geometry_factor + 0.25 * one_minus_radius_squared
+        psi_y = -2.0 * y * geometry_factor - 0.2 * one_minus_radius_squared
+
+        velocity_x = speed_factor * psi_y
+        velocity_y = -speed_factor * psi_x
+        velocity_divergence = (
+            geometry_factor * (x / 3.0 - 0.4 * y)
+            - (49.0 / 600.0) * one_minus_radius_squared
+        )
+        return velocity_x, velocity_y, velocity_divergence
+
+    def beta_x(x, y):
+        velocity_x, _, _ = _flow_data(x, y)
+        return velocity_x
+
+    def beta_y(x, y):
+        _, velocity_y, _ = _flow_data(x, y)
+        return velocity_y
+
+    def reaction(x, y):
+        return 2.0 + 0.25 * x**2 + 0.2 * y**2 + 0.1 * x * y
+
+    def _exact_data(x, y):
+        exponential = np.exp(0.5 * x - 0.25 * y)
+        sin_pi_x = np.sin(pi * x)
+        cos_pi_x = np.cos(pi * x)
+        sin_2pi_y = np.sin(2.0 * pi * y)
+        cos_2pi_y = np.cos(2.0 * pi * y)
+        radius_squared = x**2 + y**2
+
+        solution = (
+            2.0
+            + exponential
+            + 0.3 * sin_pi_x * cos_2pi_y
+            + 0.2 * x * y * (1.0 - radius_squared)
+        )
+        solution_x = (
+            0.5 * exponential
+            + 0.3 * pi * cos_pi_x * cos_2pi_y
+            + 0.2 * y * (1.0 - 3.0 * x**2 - y**2)
+        )
+        solution_y = (
+            -0.25 * exponential
+            - 0.6 * pi * sin_pi_x * sin_2pi_y
+            + 0.2 * x * (1.0 - x**2 - 3.0 * y**2)
+        )
+        return solution, solution_x, solution_y
+
+    def exact(x, y):
+        solution, _, _ = _exact_data(x, y)
+        return solution
+
+    def source(x, y):
+        velocity_x, velocity_y, velocity_divergence = _flow_data(x, y)
+        solution, solution_x, solution_y = _exact_data(x, y)
+        conservative_advection = (
+            velocity_x * solution_x
+            + velocity_y * solution_y
+            + velocity_divergence * solution
+        )
+        return conservative_advection + reaction(x, y) * solution
+
+    return beta_x, beta_y, reaction, source, exact
+
+
 CASE_DEFINITIONS = {
     "test2": AdvectionReactionCaseDefinition(
         key="test2",
@@ -158,6 +238,12 @@ CASE_DEFINITIONS = {
         description="Divergence-free vortex transport-reaction case.",
         factory=test3,
         default_domain="structured-rectangle",
+    ),
+    "disk_tangent": AdvectionReactionCaseDefinition(
+        key="disk_tangent",
+        description="Conservative disk case with velocity tangent to the circular boundary.",
+        factory=disk_tangent_conservative,
+        default_domain="disc",
     ),
 }
 

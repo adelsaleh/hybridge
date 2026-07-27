@@ -495,7 +495,7 @@ def _dense_exact_plot_resolution(
     """
     if exact_resolution is not None:
         return exact_resolution
-    if int(num_elements) <= 100:
+    if int(num_elements) <= 130:
         target = max(4 * int(numerical_resolution), 80)
     else:
         target = max(2 * int(numerical_resolution), int(numerical_resolution) + 20)
@@ -513,26 +513,29 @@ def _polynomial_plot_resolution(requested_resolution: int | None, order: int) ->
     return max(int(requested_resolution), minimum)
 
 
+def _matplotlib_contour_levels(order: int) -> int:
+    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
+    return min(256, max(128, 24 * (int(order) + 1)))
+
+
 def _exact_centered_clim(
         exact_values,
         *comparison_values,
         relative_padding: float = 0.04,
         max_relative_expansion: float = 0.15,
 ) -> tuple[float, float]:
-    """Return exact-dominated color limits with capped numerical expansion.
+    """Return exact-dominated robust color limits with capped numerical expansion.
 
-    The exact solution determines the dominant color scale.  Numerical and
-    postprocessed values may expand the limits to avoid clipping moderate
-    overshoot, but only up to ``max_relative_expansion`` of the exact range.
+    The central 95 percent of the exact solution determines the dominant color
+    scale.  Numerical and postprocessed values may expand the limits to avoid
+    clipping moderate overshoot, but only up to ``max_relative_expansion`` of
+    the exact robust range.
     """
     import numpy as np
 
-    exact_min = float(np.nanmin(exact_values))
-    exact_max = float(np.nanmax(exact_values))
-    if not np.isfinite(exact_min) or not np.isfinite(exact_max):
-        return 0.0, 1.0
-    if exact_min == exact_max:
-        exact_max = exact_min + 1.0
+    from hdgfem.io.plot import _robust_clim
+
+    exact_min, exact_max = _robust_clim(exact_values, percentile=95.0)
 
     span = exact_max - exact_min
     padding = relative_padding * span
@@ -541,8 +544,7 @@ def _exact_centered_clim(
     lower_cap = exact_min - max_relative_expansion * span
     upper_cap = exact_max + max_relative_expansion * span
     for values in comparison_values:
-        values_min = float(np.nanmin(values))
-        values_max = float(np.nanmax(values))
+        values_min, values_max = _robust_clim(values, percentile=95.0)
         if np.isfinite(values_min):
             lower = max(lower_cap, min(lower, values_min - padding))
         if np.isfinite(values_max):
@@ -625,7 +627,7 @@ def _plot_primal_postprocess_comparison(
 ):
     """Plot HDG, postprocessed primal, and exact scalar panels.
 
-    Meshes with at most 100 triangles use the Matplotlib discontinuous contour
+    Meshes with at most 130 triangles use the Matplotlib discontinuous contour
     helper for high-detail per-element inspection.  Larger meshes use the
     PyVista refined-mesh path, which is more responsive for larger point sets.
     """
@@ -638,7 +640,7 @@ def _plot_primal_postprocess_comparison(
         sample_field_on_elements,
     )
 
-    if result.field.space.mesh.num_tri <= 100:
+    if result.field.space.mesh.num_tri <= 130:
         return _plot_primal_postprocess_comparison_matplotlib(
             result,
             exact,
@@ -694,7 +696,7 @@ def _plot_primal_postprocess_comparison(
                 scalar_name=scalar_name,
                 title=None,
                 subplot=(0, column),
-                show_mesh=show_mesh,
+                show_mesh=False,
                 cmap="viridis",
                 clim=shared_clim,
                 scalar_bar_args=scalar_bar_args,
@@ -760,12 +762,12 @@ def _plot_primal_postprocess_comparison_matplotlib(
         (
             (hdg_title, reference_points, primal_values),
             (post_title, reference_points, postprocessed_values),
-            ("Exact solution", exact_reference_points, exact_values),
+            ("Exact solution", exact_reference_points, exact_values, {"show_mesh": False}),
         ),
         suptitle=suptitle,
         show_mesh=show_mesh,
         cmap="jet",
-        levels=128,
+        levels=_matplotlib_contour_levels(postprocessed_field.space.order),
         clim=shared_clim,
         share_clim=True,
     )
@@ -796,7 +798,7 @@ def _main() -> None:
         "--trace-basis",
         choices=("legacy-lagrange", "legendre-modal", "bernstein"),
         default=None,
-        help="override trace basis for this run only; non-legacy currently requires hdg_postprocess=none",
+        help="override trace basis for this run only",
     )
     parser.add_argument(
         "--hdg-postprocess",

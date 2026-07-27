@@ -78,6 +78,7 @@ class AdvectionReactionResult:
     timings: AdvectionReactionTimings
     field_device: Any = None
     trace_device: Any = None
+    trace_reduced_device: Any = None
     matrix_rows: np.ndarray | None = None
     matrix_cols: np.ndarray | None = None
     matrix_data: np.ndarray | None = None
@@ -90,7 +91,7 @@ class AdvectionReactionResult:
     reduction: KnownDofReduction | None = None
     local_solver: np.ndarray | None = None
     element_boundary_mats: np.ndarray | None = None
-    boundary_mode: Literal["penalty", "eliminate"] = "penalty"
+    boundary_mode: Literal["penalty", "eliminate", "zero-flux"] = "penalty"
     trace_ordering: Literal["none", "upwind-scc"] = "none"
     assembly_backend: AssemblyBackend = "numpy"
     ordering_result: GraphOrderingResult | None = None
@@ -126,7 +127,7 @@ class AdvectionReactionHDGOptions:
     ilu_failure: Literal["raise", "none"] = "raise"
     scale_system: bool | None = None
     boundary_penalty: float = 1e20
-    boundary_mode: Literal["penalty", "eliminate"] = "penalty"
+    boundary_mode: Literal["penalty", "eliminate", "zero-flux"] = "penalty"
     trace_ordering: Literal["none", "upwind-scc"] = "none"
     trace_ordering_flux_tolerance: float = 0.0
     ilu_permc_spec: str | None = None
@@ -145,6 +146,7 @@ class AdvectionReactionHDGOptions:
     materialize_host_solution: bool | None = None
     advection_stabilization: Any = None
     cache_local_solvers: bool = False
+    initial_guess: Any = None
     verbose: bool | int = True
 
     def with_overrides(self, **overrides) -> "AdvectionReactionHDGOptions":
@@ -478,11 +480,18 @@ class AdvectionReactionHDGSolver:
             boundary_condition is not _UNSET,
         )
         if any(provided):
-            if not all(provided):
+            boundary_optional = self.options.boundary_mode == "zero-flux"
+            if not all(provided[:3]) or (not provided[3] and not boundary_optional):
                 raise ValueError(
-                    "source, beta, reaction, and boundary_condition must be provided together"
+                    "source, beta, reaction, and boundary_condition must be provided together "
+                    "unless boundary_mode='zero-flux'"
                 )
-            self.set_problem(source, beta, reaction, boundary_condition)
+            self.set_problem(
+                source,
+                beta,
+                reaction,
+                None if boundary_condition is _UNSET else boundary_condition,
+            )
 
     @property
     def mesh(self):
@@ -509,6 +518,7 @@ class AdvectionReactionHDGSolver:
         treatment.
         """
         self.options = self.options.with_overrides(**overrides)
+        self._raw_cuda_last_trace_reduced = None
         self.clear_cache()
         return self
 
@@ -527,6 +537,7 @@ class AdvectionReactionHDGSolver:
             If ``False``, problem inputs are also cleared.
         """
         self.space = space
+        self._raw_cuda_last_trace_reduced = None
         if not keep_problem:
             self.clear_problem()
         self.clear_cache()
@@ -564,10 +575,11 @@ class AdvectionReactionHDGSolver:
         self.reaction = None
         self.boundary_condition = None
         self._problem_is_set = False
+        self._raw_cuda_last_trace_reduced = None
         self.clear_cache()
         return self
 
-    def set_problem(self, source, beta, reaction, boundary_condition: Callable) -> "AdvectionReactionHDGSolver":
+    def set_problem(self, source, beta, reaction, boundary_condition: Callable | None = None) -> "AdvectionReactionHDGSolver":
         """Set PDE data and invalidate assembled/solved artifacts.
 
         The inputs are the same objects accepted by
@@ -583,7 +595,7 @@ class AdvectionReactionHDGSolver:
         self.beta = beta
         self.reaction = reaction
         self.boundary_condition = boundary_condition
-        self._problem_is_set = True
+        self._problem_is_set = self._has_complete_problem()
         self.clear_cache()
         return self
 
@@ -592,7 +604,7 @@ class AdvectionReactionHDGSolver:
             source_h,
             beta_h: VectorDGField,
             reaction_h,
-            boundary_condition: Callable,
+            boundary_condition: Callable | None = None,
     ) -> "AdvectionReactionHDGSolver":
         """Set already-discretized coefficient data.
 
@@ -609,7 +621,7 @@ class AdvectionReactionHDGSolver:
         """Replace only the source input and invalidate cached artifacts."""
         self._require_problem_or_partial_update()
         self.source = source
-        self._problem_is_set = self.beta is not None and self.reaction is not None and self.boundary_condition is not None
+        self._problem_is_set = self._has_complete_problem()
         self.clear_cache()
         return self
 
@@ -617,7 +629,7 @@ class AdvectionReactionHDGSolver:
         """Replace the advection coefficient and invalidate cached artifacts."""
         self._require_problem_or_partial_update()
         self.beta = beta
-        self._problem_is_set = self.source is not None and self.reaction is not None and self.boundary_condition is not None
+        self._problem_is_set = self._has_complete_problem()
         self.clear_cache()
         return self
 
@@ -625,15 +637,15 @@ class AdvectionReactionHDGSolver:
         """Replace the reaction coefficient and invalidate cached artifacts."""
         self._require_problem_or_partial_update()
         self.reaction = reaction
-        self._problem_is_set = self.source is not None and self.beta is not None and self.boundary_condition is not None
+        self._problem_is_set = self._has_complete_problem()
         self.clear_cache()
         return self
 
-    def set_boundary_condition(self, boundary_condition: Callable) -> "AdvectionReactionHDGSolver":
+    def set_boundary_condition(self, boundary_condition: Callable | None) -> "AdvectionReactionHDGSolver":
         """Replace the Dirichlet trace data and invalidate cached artifacts."""
         self._require_problem_or_partial_update()
         self.boundary_condition = boundary_condition
-        self._problem_is_set = self.source is not None and self.beta is not None and self.reaction is not None
+        self._problem_is_set = self._has_complete_problem()
         self.clear_cache()
         return self
 
@@ -644,6 +656,8 @@ class AdvectionReactionHDGSolver:
         when external mutable arrays/callables have changed but the Python object
         identities stored on the solver are the same.
         """
+        if not hasattr(self, "_raw_cuda_last_trace_reduced"):
+            self._raw_cuda_last_trace_reduced = None
         self.result: AdvectionReactionResult | None = None
         self.field: DGField | None = None
         self.trace: np.ndarray | None = None
@@ -707,6 +721,7 @@ class AdvectionReactionHDGSolver:
             beta: Any = _UNSET,
             reaction: Any = _UNSET,
             boundary_condition: Callable | object = _UNSET,
+            initial_guess: Any = _UNSET,
             **option_overrides,
     ) -> AdvectionReactionResult:
         """Assemble, solve, reconstruct, cache, and return the HDG result.
@@ -715,6 +730,11 @@ class AdvectionReactionHDGSolver:
         Optional keyword arguments matching :class:`AdvectionReactionHDGOptions`
         override options for this call and become the solver's stored options.
         """
+        if initial_guess is not _UNSET:
+            option_overrides["initial_guess"] = initial_guess
+        if option_overrides:
+            self.with_options(**option_overrides)
+
         provided = (
             source is not _UNSET,
             beta is not _UNSET,
@@ -722,16 +742,23 @@ class AdvectionReactionHDGSolver:
             boundary_condition is not _UNSET,
         )
         if any(provided):
-            if not all(provided):
+            boundary_optional = self.options.boundary_mode == "zero-flux"
+            if not all(provided[:3]) or (not provided[3] and not boundary_optional):
                 raise ValueError(
-                    "source, beta, reaction, and boundary_condition must be provided together"
+                    "source, beta, reaction, and boundary_condition must be provided together "
+                    "unless boundary_mode='zero-flux'"
                 )
-            self.set_problem(source, beta, reaction, boundary_condition)
-
-        if option_overrides:
-            self.with_options(**option_overrides)
+            self.set_problem(
+                source,
+                beta,
+                reaction,
+                None if boundary_condition is _UNSET else boundary_condition,
+            )
 
         self._require_problem()
+        solve_kwargs = self.options.as_solve_kwargs()
+        if solve_kwargs.get("initial_guess") is None:
+            solve_kwargs["initial_guess"] = self._raw_cuda_last_trace_reduced
         result = solve_advection_reaction_hdg(
             self.source,
             self.beta,
@@ -739,7 +766,7 @@ class AdvectionReactionHDGSolver:
             self.boundary_condition,
             self.space,
             return_=("result",),
-            **self.options.as_solve_kwargs(),
+            **solve_kwargs,
         )
         self._store_result(result)
         return result
@@ -749,11 +776,18 @@ class AdvectionReactionHDGSolver:
         if self.source is None and self.beta is None and self.reaction is None and self.boundary_condition is None:
             return
 
+    def _has_complete_problem(self) -> bool:
+        if self.source is None or self.beta is None or self.reaction is None:
+            return False
+        return self.boundary_condition is not None or self.options.boundary_mode == "zero-flux"
+
     def _require_problem(self) -> None:
+        self._problem_is_set = self._has_complete_problem()
         if not self._problem_is_set:
             raise RuntimeError(
                 "no complete advection-reaction problem is set; call set_problem(...) "
-                "or pass source, beta, reaction, and boundary_condition to solve(...)"
+                "or pass source, beta, reaction, and boundary_condition to solve(...); "
+                "boundary_condition may be omitted only for boundary_mode='zero-flux'"
             )
 
     def _store_result(self, result: AdvectionReactionResult) -> None:
@@ -780,13 +814,16 @@ class AdvectionReactionHDGSolver:
         self.matrix_pattern_plots = result.matrix_pattern_plots
         self.global_solve_result = result.global_solve_result
         self.preconditioner = None if result.global_solve_result is None else result.global_solve_result.preconditioner
+        trace_reduced_device = getattr(result, "trace_reduced_device", None)
+        if trace_reduced_device is not None:
+            self._raw_cuda_last_trace_reduced = trace_reduced_device
 
 
 def solve_advection_reaction_hdg(
         source,
         beta,
         reaction,
-        boundary_condition: Callable,
+        boundary_condition: Callable | None,
         space: DGSpace,
         *,
         solver: str | None = "BICGSTAB",
@@ -806,7 +843,7 @@ def solve_advection_reaction_hdg(
         ilu_failure: Literal["raise", "none"] = "raise",
         scale_system: bool | None = None,
         boundary_penalty: float = 1e20,
-        boundary_mode: Literal["penalty", "eliminate"] = "penalty",
+        boundary_mode: Literal["penalty", "eliminate", "zero-flux"] = "penalty",
         trace_ordering: Literal["none", "upwind-scc"] = "none",
         trace_ordering_flux_tolerance: float = 0.0,
         ilu_permc_spec: str | None = None,
@@ -825,6 +862,7 @@ def solve_advection_reaction_hdg(
         materialize_host_solution: bool | None = None,
         advection_stabilization=None,
         cache_local_solvers: bool = False,
+        initial_guess=None,
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
@@ -850,7 +888,9 @@ def solve_advection_reaction_hdg(
         same-space :class:`DGField`; use ``space.zeros`` or ``space.constant``
         for exact zero/constant coefficients.
     boundary_condition
-        Dirichlet trace callable ``g(x, y)``.
+        Dirichlet trace callable ``g(x, y)``.  Pass ``None`` only with
+        ``boundary_mode="zero-flux"``, where exterior numerical fluxes are
+        forced to zero and boundary trace data is not sampled.
     space
         Scalar solution DG space.
     solver
@@ -876,6 +916,11 @@ def solve_advection_reaction_hdg(
         ``"penalty"`` keeps the legacy full trace system with large boundary
         diagonal entries.  ``"eliminate"`` removes prescribed boundary trace
         dofs, solves only for free trace dofs, then reconstructs the full trace.
+        ``"zero-flux"`` solves the same interior-edge reduced system but sets
+        all exterior numerical-flux weights to zero and does not sample boundary
+        trace data.  This mode is implemented for the Numba projected backend
+        and the raw-CUDA fused backend; raw-CUDA currently keeps
+        ``trace_ordering="none"``.
     trace_ordering
         ``"upwind-scc"`` builds an experimental edge-block ordering from the
         directed upwind graph and applies it as a symmetric matrix permutation
@@ -950,8 +995,10 @@ def solve_advection_reaction_hdg(
     verbosity = _verbosity_level(verbose)
     if verbosity:
         print("\n----- DG FEM Advection-Reaction HDG Solve -----")
-    if boundary_mode not in {"penalty", "eliminate"}:
-        raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
+    if boundary_mode not in {"penalty", "eliminate", "zero-flux"}:
+        raise ValueError("boundary_mode must be 'penalty', 'eliminate', or 'zero-flux'")
+    if boundary_condition is None and boundary_mode != "zero-flux":
+        raise ValueError("boundary_condition may be None only when boundary_mode='zero-flux'")
     if trace_ordering not in {"none", "upwind-scc"}:
         raise ValueError("trace_ordering must be 'none' or 'upwind-scc'")
     trace_basis = str(trace_basis).replace("_", "-").lower()
@@ -959,9 +1006,19 @@ def solve_advection_reaction_hdg(
         raise ValueError("trace_basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
     if assembly_backend not in {"numpy", "numba", "cupy", "raw-cuda", "auto"}:
         raise ValueError("assembly_backend must be 'numpy', 'numba', 'cupy', 'raw-cuda', or 'auto'")
+    effective_backend = assembly_backend
+    if effective_backend == "auto":
+        effective_backend = "numpy"
+    if boundary_mode == "zero-flux" and effective_backend not in {"numba", "raw-cuda"}:
+        raise NotImplementedError(
+            "boundary_mode='zero-flux' currently requires assembly_backend='numba' "
+            "or raw-CUDA fused assembly; NumPy and CuPy zero-flux paths are not implemented yet"
+        )
     if assembly_backend == "raw-cuda":
-        if boundary_mode != "eliminate":
-            raise ValueError("assembly_backend='raw-cuda' requires boundary_mode='eliminate'")
+        if boundary_mode not in {"eliminate", "zero-flux"}:
+            raise ValueError("assembly_backend='raw-cuda' requires boundary_mode='eliminate' or 'zero-flux'")
+        if boundary_mode == "zero-flux" and raw_local_assembly != "fused":
+            raise NotImplementedError("assembly_backend='raw-cuda' with boundary_mode='zero-flux' requires raw_local_assembly='fused'")
         if trace_ordering != "none":
             raise ValueError("assembly_backend='raw-cuda' currently requires trace_ordering='none'")
         if raw_local_assembly not in {"precomputed", "fused"}:
@@ -983,10 +1040,6 @@ def solve_advection_reaction_hdg(
     if ilu_permc_spec is None:
         ilu_permc_spec = "NATURAL" if trace_ordering == "upwind-scc" else "COLAMD"
     want = tuple(return_)
-
-    effective_backend = assembly_backend
-    if effective_backend == "auto":
-        effective_backend = "numpy"
     if trace_basis == "bernstein":
         raise NotImplementedError("advection trace_basis='bernstein' is not wired into the assembly backends yet")
     trace_space_host = space.trace_space(trace_basis)
@@ -999,10 +1052,10 @@ def solve_advection_reaction_hdg(
     effective_scale_system = not solver_is_petsc if scale_system is None else bool(scale_system)
     effective_ilu_drop_tol = ilu_drop_tol
     if effective_ilu_drop_tol is None:
-        effective_ilu_drop_tol = 1e-8 if boundary_mode == "eliminate" else 1e-10
+        effective_ilu_drop_tol = 1e-8 if boundary_mode in {"eliminate", "zero-flux"} else 1e-10
     effective_ilu_fill_factor = ilu_fill_factor
     if effective_ilu_fill_factor is None:
-        effective_ilu_fill_factor = 20 if boundary_mode == "eliminate" else 35
+        effective_ilu_fill_factor = 20 if boundary_mode in {"eliminate", "zero-flux"} else 35
 
     def prepare_data():
         if effective_backend == "raw-cuda":
@@ -1039,7 +1092,7 @@ def solve_advection_reaction_hdg(
     numba_edge_order = None
 
     def trace_ordering_active_edges():
-        if boundary_mode != "eliminate":
+        if boundary_mode not in {"eliminate", "zero-flux"}:
             return None
         active_edge_mask = np.ones(space.mesh.num_edg, dtype=bool)
         active_edge_mask[space.mesh.bnd_edges_inds] = False
@@ -1157,15 +1210,23 @@ def solve_advection_reaction_hdg(
             assemble_local_advection_reaction_numba,
             assemble_projected_trace_system_eliminated_numba,
             assemble_projected_trace_system_numba,
+            assemble_projected_trace_system_zero_flux_numba,
         )
 
-        if boundary_mode == "eliminate":
+        if boundary_mode == "zero-flux":
+            trace_assembler = assemble_projected_trace_system_zero_flux_numba
+            trace_assembly_label = "assembling zero-flux reduced projected trace system (numba)"
+            trace_assembly_args = (source_data, beta_h, reaction_h, space)
+            trace_assembly_kwargs = {}
+        elif boundary_mode == "eliminate":
             trace_assembler = assemble_projected_trace_system_eliminated_numba
             trace_assembly_label = "assembling reduced projected trace system (numba)"
+            trace_assembly_args = (source_data, beta_h, reaction_h, boundary_condition, space)
             trace_assembly_kwargs = {}
         else:
             trace_assembler = assemble_projected_trace_system_numba
             trace_assembly_label = "assembling projected trace system (numba)"
+            trace_assembly_args = (source_data, beta_h, reaction_h, boundary_condition, space)
             trace_assembly_kwargs = {"boundary_penalty": boundary_penalty}
         trace_assembly_kwargs.update(
             {
@@ -1180,11 +1241,7 @@ def solve_advection_reaction_hdg(
             trace_assembly_label,
             verbosity,
             lambda: trace_assembler(
-                source_data,
-                beta_h,
-                reaction_h,
-                boundary_condition,
-                space,
+                *trace_assembly_args,
                 **trace_assembly_kwargs,
             ),
             multiline=verbosity >= 2,
@@ -1212,6 +1269,8 @@ def solve_advection_reaction_hdg(
                 timing_parts.append(f"reduction={timings['reduction_map']:.5f}s")
             if "trace_weights" in timings:
                 timing_parts.append(f"weights={timings['trace_weights']:.5f}s")
+            if "boundary_flux_zeroing" in timings:
+                timing_parts.append(f"zero_flux={timings['boundary_flux_zeroing']:.5f}s")
             timing_parts.extend(
                 [
                     f"kernel={timings.get('kernel', 0.0):.5f}s",
@@ -1231,6 +1290,7 @@ def solve_advection_reaction_hdg(
                     beta_dot_normal=beta_dot_normal,
                     reaction=reaction_h,
                     advection_stabilization=advection_stabilization,
+                    zero_boundary_flux=boundary_mode == "zero-flux",
                     trace_space=trace_space_host,
                 ),
                 multiline=verbosity >= 2,
@@ -1314,6 +1374,7 @@ def solve_advection_reaction_hdg(
                 raw_local_assembly=raw_local_assembly,
                 raw_lu_mode=raw_lu_mode,
                 raw_matrix_format=effective_raw_matrix_format,
+                zero_boundary_flux=boundary_mode == "zero-flux",
             ),
             multiline=verbosity >= 2,
         )
@@ -1551,7 +1612,7 @@ def solve_advection_reaction_hdg(
     else:
         solve_rows, solve_cols, solve_data, solve_rhs = rows, cols, data, rhs
         diagnostic_rows = hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
-        if boundary_mode == "eliminate" and reduction is None:
+        if boundary_mode in {"eliminate", "zero-flux"} and reduction is None:
             def eliminate_boundary_trace():
                 known_mask = ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
                 known_values = boundary_trace.ravel()
@@ -1569,7 +1630,7 @@ def solve_advection_reaction_hdg(
                 reduction.rhs,
             )
             diagnostic_rows = None
-        elif boundary_mode == "eliminate":
+        elif boundary_mode in {"eliminate", "zero-flux"}:
             solve_rows, solve_cols, solve_data, solve_rhs = (
                 reduction.rows,
                 reduction.cols,
@@ -1674,6 +1735,21 @@ def solve_advection_reaction_hdg(
     if ordering_result is not None and ordering_result.diagnostics.largest_component_size == 1:
         upwind_level_widths = ordering_result.diagnostics.level_widths
 
+    solve_initial_guess = initial_guess
+    if initial_guess is not None and not raw_cuda_device_amgx:
+        guess = np.asarray(initial_guess, dtype=np.float64)
+        if guess.size == solve_rhs.size:
+            solve_initial_guess = np.ascontiguousarray(guess.reshape((solve_rhs.size,)))
+        else:
+            full_size = int(space.mesh.num_edg * trace_space_host.edg_dof)
+            if boundary_mode != "penalty" and guess.size == full_size:
+                full = guess.reshape((space.mesh.num_edg, trace_space_host.edg_dof))
+                solve_initial_guess = np.ascontiguousarray(full[space.mesh.int_edges_inds].ravel())
+            else:
+                raise ValueError(
+                    f"initial_guess must have solve size {solve_rhs.size} or full trace size {full_size}; got {guess.size}"
+                )
+
     if boundary_mode == "penalty":
         solve_lambda = lambda: solve_global_system(
             solve_rows,
@@ -1683,6 +1759,7 @@ def solve_advection_reaction_hdg(
             solve_rhs.size,
             solver=solver,
             preconditioner=preconditioner,
+            initial_guess=solve_initial_guess,
             rtol=solver_rtol,
             atol=solver_atol,
             maxiter=maxiter,
@@ -1716,6 +1793,7 @@ def solve_advection_reaction_hdg(
             solve_rhs.size,
             solver=solver,
             preconditioner=preconditioner,
+            initial_guess=solve_initial_guess,
             rtol=solver_rtol,
             atol=solver_atol,
             maxiter=maxiter,
@@ -1740,7 +1818,26 @@ def solve_advection_reaction_hdg(
         )
 
     if raw_cuda_device_amgx:
+        from ..backends.cupy import require_cupy
         from ..backends.cupy_adv_rea_gpu4 import solve_reduced_system_amgx_device
+
+        cp = require_cupy()
+
+        def raw_reduced_initial_guess():
+            guess = initial_guess
+            if guess is None:
+                return None
+            guess_cp = cp.asarray(guess, dtype=cp.float64)
+            reduced_size = int(gpu4_assembly.rhs.size)
+            if guess_cp.size == reduced_size:
+                return cp.ascontiguousarray(guess_cp.reshape((reduced_size,)))
+            full_size = int(space.mesh.num_edg * gpu4_assembly.cspace.edg_dof)
+            if guess_cp.size == full_size:
+                full = guess_cp.reshape((space.mesh.num_edg, gpu4_assembly.cspace.edg_dof))
+                return cp.ascontiguousarray(full[gpu4_assembly.cspace.mesh.int_edges_inds].ravel())
+            raise ValueError(
+                f"initial_guess must have reduced trace size {reduced_size} or full trace size {full_size}; got {guess_cp.size}"
+            )
 
         (global_solve_result, trace_reduced_cp), solve_time = _timed_call(
             "solving global system (raw-cuda device AMGX)",
@@ -1752,6 +1849,7 @@ def solve_advection_reaction_hdg(
                 check_rtol=solver_rtol,
                 atol=solver_atol,
                 maxiter=maxiter,
+                initial_guess=raw_reduced_initial_guess(),
                 scale_system=effective_scale_system,
                 raise_on_nonconvergence=True,
                 materialize_host_solution=wants_host_solution,
@@ -1863,6 +1961,7 @@ def solve_advection_reaction_hdg(
                         reaction_h,
                         space,
                         advection_stabilization=advection_stabilization,
+                        zero_boundary_flux=boundary_mode == "zero-flux",
                         trace_space=trace_space_host,
                     ),
                 )
@@ -1930,6 +2029,7 @@ def solve_advection_reaction_hdg(
         timings=timings,
         field_device=field_device,
         trace_device=trace_device,
+        trace_reduced_device=trace_reduced_cp,
         matrix_rows=rows,
         matrix_cols=cols,
         matrix_data=data,

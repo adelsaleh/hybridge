@@ -388,8 +388,8 @@ def plot_solution(field, exact, *, resolution: int, exact_resolution: int | str 
         mesh,
         (
             ("Numerical solution", reference_points, numerical_values),
-            ("Exact solution", exact_reference_points, exact_display_values),
-            ("Absolute error", reference_points, absolute_error),
+            ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
+            ("Absolute error", reference_points, absolute_error, {"cmap": "magma", "zero_min": True}),
         ),
         suptitle=title,
         show_mesh=show_mesh,

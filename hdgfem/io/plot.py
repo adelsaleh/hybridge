@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from math import sqrt
+import os
 
 import numpy as np
 from scipy.spatial import Delaunay
@@ -45,15 +46,66 @@ def _normalize_sample_values(values, num_elements: int, num_points: int) -> np.n
     )
 
 
-def _safe_clim(values: np.ndarray) -> tuple[float, float]:
-    """Return a finite color range, expanding constants for PyVista."""
-    minimum = float(np.nanmin(values))
-    maximum = float(np.nanmax(values))
+def _expand_clim(minimum: float, maximum: float) -> tuple[float, float]:
+    """Return finite color limits, expanding constants for plotting backends."""
     if not np.isfinite(minimum) or not np.isfinite(maximum):
         return 0.0, 1.0
     if minimum == maximum:
         return minimum, minimum + 1.0
     return minimum, maximum
+
+
+def _robust_clim(
+        values: np.ndarray,
+        *,
+        percentile: float = 95.0,
+        zero_min: bool = False,
+) -> tuple[float, float]:
+    """Return robust finite color limits from scalar samples.
+
+    Ordinary scalar fields use the central ``percentile`` percent of finite
+    values.  Error-like fields can request ``zero_min=True`` to keep zero fixed
+    and use the selected percentile as the upper limit.
+    """
+    percentile = float(percentile)
+    if percentile <= 0.0 or percentile > 100.0:
+        raise ValueError("percentile must satisfy 0 < percentile <= 100")
+    finite = np.asarray(values, dtype=np.float64).reshape(-1)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 0.0, 1.0
+
+    if zero_min:
+        minimum = 0.0
+        maximum = float(np.percentile(finite, percentile))
+        return _expand_clim(minimum, maximum)
+
+    if percentile == 100.0:
+        minimum = float(np.min(finite))
+        maximum = float(np.max(finite))
+    else:
+        tail = 0.5 * (100.0 - percentile)
+        minimum, maximum = (
+            float(v) for v in np.percentile(finite, (tail, 100.0 - tail))
+        )
+    return _expand_clim(minimum, maximum)
+
+
+def _safe_clim(values: np.ndarray) -> tuple[float, float]:
+    """Return a robust finite color range, expanding constants for PyVista."""
+    return _robust_clim(values, percentile=95.0)
+
+
+def _mesh_overlay_line_width(mesh: DGMesh) -> float:
+    """Choose a PyVista wireframe width that does not saturate dense meshes."""
+    elements = int(mesh.num_tri)
+    if elements >= 50_000:
+        return 0.25
+    if elements >= 10_000:
+        return 0.4
+    if elements >= 2_000:
+        return 0.65
+    return 1.0
 
 
 def reference_plot_points(resolution: int) -> np.ndarray:
@@ -90,28 +142,56 @@ def _auto_exact_plot_resolution(
     return max(2, min(int(max_resolution), candidate))
 
 
+def resolve_exact_plot_resolution(
+        exact_resolution: int | str | None,
+        *,
+        numerical_resolution: int,
+        num_elements: int,
+        max_total_points: int = 5_000_000,
+        max_resolution: int = 100,
+) -> int:
+    """Resolve an exact-panel plotting resolution policy.
+
+    ``None`` and ``"same"`` use the numerical plotting resolution. ``"auto"``
+    chooses a mesh-size-capped dense resolution that is independent of the
+    solution polynomial order. Integer values, including numeric strings from
+    command-line arguments, are interpreted directly.
+    """
+    if exact_resolution is None:
+        return int(numerical_resolution)
+    if isinstance(exact_resolution, str):
+        policy = exact_resolution.strip().lower()
+        if policy == "same":
+            return int(numerical_resolution)
+        if policy == "auto":
+            return _auto_exact_plot_resolution(
+                num_elements=num_elements,
+                max_total_points=max_total_points,
+                max_resolution=max_resolution,
+            )
+        try:
+            exact_resolution = int(policy)
+        except ValueError as exc:
+            raise ValueError("exact_resolution must be an integer, 'same', 'auto', or None") from exc
+    else:
+        exact_resolution = int(exact_resolution)
+    if exact_resolution < 2:
+        raise ValueError("exact_resolution must be at least 2")
+    return exact_resolution
+
+
 def _resolve_exact_plot_resolution(
         exact_resolution: int | str | None,
         *,
         numerical_resolution: int,
         num_elements: int,
 ) -> int:
-    """Resolve the exact-panel resolution policy."""
-    if exact_resolution is None:
-        return int(numerical_resolution)
-    if isinstance(exact_resolution, str):
-        policy = exact_resolution.lower()
-        if policy == "same":
-            return int(numerical_resolution)
-        if policy == "auto":
-            return _auto_exact_plot_resolution(
-                num_elements=num_elements,
-            )
-        raise ValueError("exact_resolution must be an integer, 'same', 'auto', or None")
-    exact_resolution = int(exact_resolution)
-    if exact_resolution < 2:
-        raise ValueError("exact_resolution must be at least 2")
-    return exact_resolution
+    """Backward-compatible private wrapper for exact-panel resolution."""
+    return resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=numerical_resolution,
+        num_elements=num_elements,
+    )
 
 
 def reference_plot_connectivity(reference_points: np.ndarray) -> np.ndarray:
@@ -303,6 +383,7 @@ def add_field_to_plotter(
         show_edges: bool = False,
         mesh_color: str = "black",
         mesh_opacity: float = 0.45,
+        mesh_line_width: float | None = None,
 ):
     """Add a sampled DG field to an existing PyVista plotter.
 
@@ -338,7 +419,7 @@ def add_field_to_plotter(
             coarse_mesh_polydata(field.space.mesh),
             style="wireframe",
             color=mesh_color,
-            line_width=1.0,
+            line_width=_mesh_overlay_line_width(field.space.mesh) if mesh_line_width is None else float(mesh_line_width),
             opacity=mesh_opacity,
         )
     if title:
@@ -365,6 +446,7 @@ def add_samples_to_plotter(
         show_edges: bool = False,
         mesh_color: str = "black",
         mesh_opacity: float = 0.45,
+        mesh_line_width: float | None = None,
 ):
     """Add mesh-only scalar samples to an existing PyVista plotter.
 
@@ -398,7 +480,7 @@ def add_samples_to_plotter(
             coarse_mesh_polydata(mesh),
             style="wireframe",
             color=mesh_color,
-            line_width=1.0,
+            line_width=_mesh_overlay_line_width(mesh) if mesh_line_width is None else float(mesh_line_width),
             opacity=mesh_opacity,
         )
     if title:
@@ -485,8 +567,8 @@ def plot_fields(
     reference_points = reference_plot_points(resolution)
     shared_clim = None
     if share_clim:
-        limits = [_safe_clim(field.values_at_ref(reference_points)) for field in field_tuple]
-        shared_clim = min(lo for lo, _ in limits), max(hi for _, hi in limits)
+        shared_values = np.concatenate([field.values_at_ref(reference_points).reshape(-1) for field in field_tuple])
+        shared_clim = _robust_clim(shared_values)
 
     pv = _require_pyvista()
     plotter = pv.Plotter(shape=shape, window_size=list(window_size), off_screen=off_screen)
@@ -562,7 +644,11 @@ def _matplotlib_pyplot(*, show: bool):
     """Import pyplot, switching away from non-interactive backends when showing."""
     import matplotlib
 
-    if show and _matplotlib_backend_is_noninteractive(matplotlib.get_backend()):
+    if (
+        show
+        and _matplotlib_backend_is_noninteractive(matplotlib.get_backend())
+        and "MPLBACKEND" not in os.environ
+    ):
         errors = []
         for backend in ("QtAgg", "TkAgg", "GTK3Agg", "WXAgg", "MacOSX"):
             try:
@@ -587,7 +673,7 @@ def _matplotlib_pyplot(*, show: bool):
 
 def plot_scalar_sample_panels_matplotlib(
         mesh: DGMesh,
-        panels: Sequence[tuple[str, np.ndarray, np.ndarray]],
+        panels: Sequence[tuple],
         *,
         suptitle: str | None = None,
         show_mesh: bool = True,
@@ -600,22 +686,28 @@ def plot_scalar_sample_panels_matplotlib(
 ):
     """Plot scalar per-element samples using Matplotlib discontinuous contours.
 
-    Each panel is ``(title, reference_points, values)``.  ``values`` may be a
-    scalar, one value per reference point, or an array with shape
-    ``(num_elements, num_points)``.  Vertices are duplicated per element so
-    discontinuous DG fields are not averaged across element boundaries.
+    Each panel is ``(title, reference_points, values)`` or
+    ``(title, reference_points, values, options)``.  ``values`` may be a scalar,
+    one value per reference point, or an array with shape
+    ``(num_elements, num_points)``.  Per-panel ``options`` may set ``cmap``,
+    ``levels``, ``clim``, ``extend``, ``show_mesh``, ``robust_percentile``,
+    and ``zero_min``.  Vertices are duplicated per element so discontinuous
+    DG fields are not averaged across element boundaries.
 
     Parameters
     ----------
     mesh
         Mesh used to map all supplied reference-point grids.
     panels
-        Sequence of panel triples.  Panels may use different reference grids,
+        Sequence of panel tuples.  Panels may use different reference grids,
         which is useful when exact/reference data should be sampled more densely
         than polynomial DG fields.
     clim
         Optional shared color limits.  When provided with integer ``levels`` and
         ``share_clim=True``, the contour levels span exactly this interval.
+        Automatic limits use the central 95 percent of finite values by
+        default.  Error panels can set ``zero_min=True`` to use a zero lower
+        limit and a percentile-based upper limit.
     show
         If true, call :func:`matplotlib.pyplot.show`.  The active Matplotlib
         backend must be interactive for a window to appear.
@@ -626,45 +718,102 @@ def plot_scalar_sample_panels_matplotlib(
     if not panel_tuple:
         raise ValueError("at least one panel is required")
     if figsize is None:
-        figsize = (6.0 * len(panel_tuple), 6.0)
+        figsize = (5.0 * len(panel_tuple), 4.8)
 
     normalized_panels = []
-    for title, reference_points, values in panel_tuple:
+    for panel in panel_tuple:
+        if len(panel) == 3:
+            title, reference_points, values = panel
+            panel_options = {}
+        elif len(panel) == 4:
+            title, reference_points, values, panel_options = panel
+            panel_options = {} if panel_options is None else dict(panel_options)
+        else:
+            raise ValueError(
+                "each panel must be (title, reference_points, values) "
+                "or include an options dict"
+            )
         reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
         normalized_values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
-        normalized_panels.append((title, reference_points, normalized_values))
+        normalized_panels.append((title, reference_points, normalized_values, panel_options))
 
-    contour_levels = levels
-    if share_clim and isinstance(levels, int):
+    colorbar_option_keys = {
+        "cmap",
+        "levels",
+        "clim",
+        "extend",
+        "robust_percentile",
+        "zero_min",
+    }
+    use_shared_colorbar = bool(share_clim) and not any(
+        colorbar_option_keys.intersection(options) for _, _, _, options in normalized_panels
+    )
+
+    def _resolve_clim(
+            values: np.ndarray,
+            requested_clim=None,
+            *,
+            percentile: float = 95.0,
+            zero_min: bool = False,
+    ) -> tuple[float, float]:
+        if requested_clim is None:
+            return _robust_clim(values, percentile=percentile, zero_min=zero_min)
+        minimum, maximum = float(requested_clim[0]), float(requested_clim[1])
+        return _expand_clim(minimum, maximum)
+
+    shared_range = None
+    if share_clim:
         if clim is None:
-            minimum = float(min(np.nanmin(values) for _, _, values in normalized_panels))
-            maximum = float(max(np.nanmax(values) for _, _, values in normalized_panels))
+            shared_values = np.concatenate(
+                [values.reshape(-1) for _, _, values, _ in normalized_panels]
+            )
+            shared_range = _resolve_clim(shared_values)
         else:
-            minimum, maximum = float(clim[0]), float(clim[1])
-        if not np.isfinite(minimum) or not np.isfinite(maximum):
-            minimum, maximum = 0.0, 1.0
-        elif minimum == maximum:
-            maximum = minimum + 1.0
-        contour_levels = np.linspace(minimum, maximum, int(levels))
+            shared_range = _resolve_clim(np.array([0.0]), clim)
 
     fig, axes = plt.subplots(1, len(normalized_panels), figsize=figsize, constrained_layout=True)
     axes = np.atleast_1d(axes)
     contour = None
+    panel_contours = []
     triangulations: dict[tuple[tuple[int, ...], bytes], object] = {}
-    for ax, (title, reference_points, values) in zip(axes, normalized_panels):
+    for ax, (title, reference_points, values, panel_options) in zip(axes, normalized_panels):
         key = (reference_points.shape, reference_points.tobytes())
         triangulation = triangulations.get(key)
         if triangulation is None:
             triangulation = matplotlib_discontinuous_triangulation(mesh, reference_points)
             triangulations[key] = triangulation
+        panel_levels = panel_options.get("levels", levels)
+        panel_percentile = float(panel_options.get("robust_percentile", 95.0))
+        panel_zero_min = bool(panel_options.get("zero_min", False))
+        if "clim" in panel_options:
+            panel_minimum, panel_maximum = _resolve_clim(
+                values,
+                panel_options.get("clim"),
+                percentile=panel_percentile,
+                zero_min=panel_zero_min,
+            )
+        elif shared_range is not None:
+            panel_minimum, panel_maximum = shared_range
+        else:
+            panel_minimum, panel_maximum = _resolve_clim(
+                values,
+                percentile=panel_percentile,
+                zero_min=panel_zero_min,
+            )
+        if isinstance(panel_levels, int):
+            panel_levels = np.linspace(panel_minimum, panel_maximum, int(panel_levels))
         contour = ax.tricontourf(
             triangulation,
             values.reshape(-1),
-            levels=contour_levels,
-            cmap=cmap,
-            extend="both",
+            levels=panel_levels,
+            cmap=panel_options.get("cmap", cmap),
+            extend=panel_options.get("extend", "both"),
+            vmin=panel_minimum,
+            vmax=panel_maximum,
         )
-        if show_mesh:
+        contour.set_clim(panel_minimum, panel_maximum)
+        panel_contours.append((ax, contour))
+        if panel_options.get("show_mesh", show_mesh):
             add_matplotlib_mesh(ax, mesh)
         ax.set_aspect("equal", adjustable="box")
         ax.set_title(title, fontsize=10)
@@ -673,9 +822,26 @@ def plot_scalar_sample_panels_matplotlib(
 
     if suptitle:
         fig.suptitle(suptitle, fontsize=14)
-    if contour is not None:
-        fig.colorbar(contour, ax=axes.ravel().tolist(), shrink=0.82, location="right")
-    if show:
+    if use_shared_colorbar and contour is not None:
+        fig.colorbar(
+            contour,
+            ax=axes.ravel().tolist(),
+            shrink=0.76,
+            fraction=0.045,
+            pad=0.035,
+            location="right",
+        )
+    elif not use_shared_colorbar:
+        for ax, panel_contour in panel_contours:
+            fig.colorbar(
+                panel_contour,
+                ax=ax,
+                shrink=0.72,
+                fraction=0.045,
+                pad=0.035,
+                location="right",
+            )
+    if show and not _matplotlib_backend_is_noninteractive(plt.get_backend()):
         plt.show()
     return fig
 
@@ -699,8 +865,7 @@ def plot_solution_comparison(
 
     ``resolution`` controls the numerical and error panels.  ``exact_resolution``
     controls only the exact reference panel; use ``"auto"`` for a denser exact
-    sampling that is independent of the DG polynomial order while still drawing
-    the physical mesh as a wireframe overlay.  ``None`` preserves the historical
+    sampling that is independent of the DG polynomial order.  ``None`` preserves the historical
     behavior and samples the exact panel on the same grid as the numerical panel.
     """
     pv = _require_pyvista()
@@ -727,10 +892,8 @@ def plot_solution_comparison(
         resolution=exact_panel_resolution,
     )
 
-    field_min = float(min(np.min(numerical_values), np.min(exact_display_values)))
-    field_max = float(max(np.max(numerical_values), np.max(exact_display_values)))
-    if field_min == field_max:
-        field_max = field_min + 1.0
+    field_clim = _robust_clim(np.concatenate((numerical_values.reshape(-1), exact_display_values.reshape(-1))))
+    error_clim = _robust_clim(absolute_error, zero_min=True)
 
     plotter = pv.Plotter(shape=(1, 3), window_size=list(window_size), off_screen=off_screen)
     scalar_bar_args = {
@@ -741,9 +904,9 @@ def plot_solution_comparison(
         "position_y": 0.02,
     }
     panels = (
-        ("Numerical solution", reference_points, numerical_values, (field_min, field_max), "viridis"),
-        ("Exact solution", exact_reference_points, exact_display_values, (field_min, field_max), "viridis"),
-        ("Absolute error", reference_points, absolute_error, None, "magma"),
+        ("Numerical solution", reference_points, numerical_values, field_clim, "viridis"),
+        ("Exact solution", exact_reference_points, exact_display_values, field_clim, "viridis"),
+        ("Absolute error", reference_points, absolute_error, error_clim, "magma"),
     )
     for column, (panel_title, panel_reference_points, values, clim, cmap) in enumerate(panels):
         display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
@@ -756,7 +919,7 @@ def plot_solution_comparison(
                 scalar_name=f"field_{column}",
                 title=display_title,
                 subplot=(0, column),
-                show_mesh=show_mesh,
+                show_mesh=False,
                 cmap=cmap,
                 clim=clim,
                 scalar_bar_args=scalar_bar_args,
@@ -793,6 +956,7 @@ __all__ = [
     "plot_solution_comparison",
     "reference_plot_connectivity",
     "reference_plot_points",
+    "resolve_exact_plot_resolution",
     "refined_field_polydata",
     "refined_sample_polydata",
     "sample_callable_on_elements",

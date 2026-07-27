@@ -74,18 +74,21 @@ def _boundary_numerical_flux(result, beta_h: VectorDGField) -> float:
     assert trace is not None
     space = field.space
     mesh = space.mesh
-    q = space.quad_data
-    trace_coeffs = np.asarray(trace, dtype=np.float64).reshape(mesh.num_edg, q.edg_dof)
-    oriented_trace_basis = hdg_mats._oriented_trace_basis_on_element_sides(space)
+    trace_space = space.trace_space(result.trace_basis if hasattr(result, "trace_basis") else "legacy-lagrange")
+    trace_coeffs = np.asarray(trace, dtype=np.float64).reshape(mesh.num_edg, trace_space.edg_dof)
+    oriented_trace_basis = hdg_mats._oriented_trace_basis_on_element_sides(
+        space,
+        trace_space=trace_space,
+    )
 
-    uh_face = np.einsum("Ki,fiq->Kfq", field.coeffs, q.bas_of_bd_quads, optimize=True)
+    uh_face = np.einsum("Ki,fiq->Kfq", field.coeffs, trace_space.bas_of_bd_quads, optimize=True)
     uhat_face = np.einsum(
         "Kfa,Kfaq->Kfq",
         trace_coeffs[mesh.loc2glob_edge],
         oriented_trace_basis,
         optimize=True,
     )
-    beta_dot_n = hdg_mats.advective_boundary_normal(beta_h, space)
+    beta_dot_n = hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space)
     upwind_tau = np.abs(beta_dot_n)
     numerical_flux = beta_dot_n * uhat_face + upwind_tau * (uh_face - uhat_face)
     boundary_side = np.isin(mesh.loc2glob_edge, mesh.bnd_edges_inds)
@@ -95,7 +98,7 @@ def _boundary_numerical_flux(result, beta_h: VectorDGField) -> float:
             mesh.jacs_el_fc,
             boundary_side.astype(np.float64),
             numerical_flux,
-            q.weights_JGL,
+            trace_space.weights,
             optimize=True,
         )
     )
@@ -174,6 +177,37 @@ HIGH_ORDER_BACKENDS = [
         id="raw-fused-coop-p8",
     ),
 ]
+
+
+def test_zero_flux_numba_tangent_boundary_conserves_mass_without_boundary_data() -> None:
+    mesh = rectangle_mesh(1, 1, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+    space = DGSpace(mesh, 4, basis_type="dub_orth", volume_quadrature="symmetric")
+    beta_x = lambda x, y: x * (1.0 - x) * (1.0 - 2.0 * y)
+    beta_y = lambda x, y: -(1.0 - 2.0 * x) * y * (1.0 - y)
+    beta_h = _project_beta(space, beta_x, beta_y)
+    source_h = space.constant(1.0, name="source_h")
+    reaction_h = space.constant(2.0, name="reaction_h")
+
+    result = _solve(
+        space=space,
+        source_h=source_h,
+        reaction_h=reaction_h,
+        beta_h=beta_h,
+        boundary_condition=None,
+        backend="numba",
+        boundary_mode="zero-flux",
+    )
+
+    assert result.boundary_mode == "zero-flux"
+    np.testing.assert_allclose(result.boundary_trace, 0.0)
+    _assert_global_conservation(
+        result,
+        source_h,
+        reaction_h,
+        beta_h,
+        atol=1.0e-10,
+        boundary_atol=1.0e-11,
+    )
 
 
 @pytest.mark.parametrize("backend,options,atol", HIGH_ORDER_BACKENDS)

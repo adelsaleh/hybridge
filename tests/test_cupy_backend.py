@@ -904,6 +904,119 @@ def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+def test_advection_reaction_raw_cuda_zero_flux_matches_numba(trace_basis):
+    mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    beta = (
+        lambda x, y: (1.0 - x * x) * (1.0 - y * y),
+        lambda x, y: -0.35 * (1.0 - x * x) * (1.0 - y * y),
+    )
+    source = lambda x, y: 1.0 + 0.2 * x - 0.1 * y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.project_callable(reaction, name="reaction_h")
+    beta_h = VectorDGField(beta, space, name="beta_h")
+    common_options = dict(
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="zero-flux",
+        trace_basis=trace_basis,
+        trace_ordering="none",
+        materialize_host_system=True,
+        materialize_host_solution=True,
+        verbose=False,
+    )
+
+    numba_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        None,
+        space,
+        assembly_backend="numba",
+        **common_options,
+    )
+    raw_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        None,
+        space,
+        assembly_backend="raw-cuda",
+        raw_local_assembly="fused",
+        raw_lu_mode="coop",
+        raw_block_size=64,
+        raw_matrix_format="coo",
+        **common_options,
+    )
+
+    _assert_solver_systems_match(raw_result, numba_result, rtol=1.0e-10, atol=1.0e-11)
+    np.testing.assert_allclose(raw_result.boundary_trace, 0.0)
+    np.testing.assert_allclose(raw_result.trace, numba_result.trace, rtol=1.0e-10, atol=1.0e-10)
+    np.testing.assert_allclose(raw_result.field.coeffs, numba_result.field.coeffs, rtol=1.0e-10, atol=1.0e-10)
+
+
+@pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
+def test_raw_fused_zero_flux_csr_assembly_matches_coo():
+    from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse
+    from hdgfem.backends.cupy_adv_rea_gpu4 import (
+        assemble_reduced_system_gpu4,
+        as_cupy_trace_space,
+        project_callable_cupy,
+    )
+
+    cp = require_cupy()
+    sparse = require_cupyx_sparse()
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    cspace = as_cupy_space(space)
+    trace_ref = as_cupy_trace_space(space.trace_space("legacy-lagrange"), device=cspace.device_id)
+    beta = (
+        lambda x, y: 1.0 + 0.1 * x,
+        lambda x, y: -0.25 + 0.1 * y,
+    )
+    source = lambda x, y: 1.0 + x - y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.project_callable(reaction, name="reaction_h")
+    beta_coeffs = cp.ascontiguousarray(
+        cp.stack((project_callable_cupy(beta[0], cspace), project_callable_cupy(beta[1], cspace)), axis=0)
+    )
+
+    common = dict(
+        source=source_h,
+        reaction=reaction_h,
+        boundary_condition=None,
+        beta_coeffs=beta_coeffs,
+        cspace=cspace,
+        trace_space=trace_ref,
+        backend="raw-cuda",
+        raw_local_assembly="fused",
+        raw_lu_mode="coop",
+        raw_block_size=64,
+        zero_boundary_flux=True,
+    )
+    coo = assemble_reduced_system_gpu4(raw_matrix_format="coo", **common)
+    csr = assemble_reduced_system_gpu4(raw_matrix_format="csr", **common)
+
+    shape = (coo.rhs.size, coo.rhs.size)
+    coo_matrix = sparse.coo_matrix(
+        (coo.data, (coo.rows.astype(cp.int32), coo.cols.astype(cp.int32))),
+        shape=shape,
+    ).tocsr()
+    coo_matrix.sum_duplicates()
+    csr_matrix = sparse.csr_matrix((csr.data, csr.indices, csr.indptr), shape=shape)
+
+    assert csr.matrix_format == "csr"
+    assert bool(cp.all(coo_matrix.indptr == csr_matrix.indptr).get())
+    assert bool(cp.all(coo_matrix.indices == csr_matrix.indices).get())
+    assert float(cp.max(cp.abs(coo_matrix.data - csr_matrix.data)).get()) < 1.0e-11
+    assert float(cp.max(cp.abs(coo.rhs - csr.rhs)).get()) < 1.0e-11
+    assert float(cp.max(cp.abs(csr.boundary_trace)).get()) == 0.0
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_space_field_keeps_coefficients_device_backed_until_host_access():
     from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 

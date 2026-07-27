@@ -37,8 +37,13 @@ Additional raw-CSR preconditioner checks on 2026-07-21 used `p=6`, `ms=0.01`, `d
 
 Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation (`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
 
+Guiding-center transport presets currently use `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`.  Its AMGX residual history may show flat BiCGSTAB phases followed by a sharp drop, but it remains cheaper than the FGMRES aggregation/DILU variant on the long p=6 diocotron run.  Do not promote `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json` for that case without a longer multi-step benchmark; one-step smoke timings are misleading.
+
 Experimental advection-reaction configs retained for comparison:
 
+Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_adv_rea_disk_tangent_raw_cuda.py` with `p=4`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, fused raw-CUDA CSR, cooperative LU, and `--amgx-tolerance 1e-10`. The default BICGSTAB/classical-ILU0 AMG route needed about 2200 iterations. `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json` reduced this to 73 iterations using `PBICGSTAB + aggregation AMG + MULTICOLOR_DILU` with `presweeps=0`, `postsweeps=2`. This is a stronger diagnostic config, not yet the global default: each preconditioner application is much heavier, so the wall-clock solve was slightly slower on that screen. Use it with `--no-scale-system`; external row scaling made the PBICGSTAB aggregation-DILU variants fail, and AMGX internal `BINORMALIZATION` terminated before the runner summary with device-pool leak diagnostics.
+
+- `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json`: strong zero-flux disk-tangent diagnostic; requires `--no-scale-system`.
 - `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: L1 smoother baseline candidate.
 - `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: Chebyshev/L1 smoother candidate.
 - `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json`: heavier ILU0 W-cycle candidate.
@@ -106,7 +111,8 @@ For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR convers
 
 Working configs:
 
-- `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`: current default for nodal trace runs.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`: current relative-convergence default for nodal trace standalone diffusion runs.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive_abs.json`: same PCGF + Chebyshev/L1 hierarchy with `convergence=ABSOLUTE`; used by guiding-center Poisson presets so `poisson_solver_atol` is the AMGX stopping tolerance.
 - `diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json`: second nodal candidate and experimental modal PCGF candidate.
 - `diff_rea_gpu4_hdg_pcgf_classical_amg.json`: conservative classical AMG baseline and modal BICGSTAB preconditioner.
 
@@ -132,12 +138,18 @@ LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
   --amgx-config configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json
 ```
 
+Additional device scaling diagnostics on 2026-07-26 used `scripts/gpu/diagnose_diff_rea_matrix_scaling.py` with the existing PCGF Chebyshev/L1 config unchanged.  Symmetric Jacobi scaling is cheap and preserves symmetry, but it is not recommended for this config: on the p6/ms0.04 raw-CUDA CSR case it increased nodal PCGF iterations from 32 to 242, and modal PCGF still reached the 2000 iteration limit.  The modal matrix remained symmetric to roundoff, so the current evidence points to AMG/coarsening sensitivity rather than a raw-CUDA orientation bug.  Details are in `docs/algorithms/diff_rea_matrix_scaling_diagnostics.md`.
+
+Focused modal preconditioner sweeps on 2026-07-26 used `scripts/gpu/sweep_diff_rea_amgx_preconditioners.py`.  Disabling aggressive coarsening avoids several modal setup failures and higher Chebyshev orders reduce modal PCGF iterations, but the heavier preconditioner applications did not beat the existing modal choices on the p6/ms0.04 raw-CUDA CSR case.  Representative heavy unscaled solve times were 0.452 s for nodal PCGF/Cheb-L1 aggressive, 23.978 s for modal PCGF/Cheb-L1 aggressive, 28.869 s for modal non-aggressive Cheb order 6, 31.012 s for modal non-aggressive Cheb order 10, and 5.034 s for modal BICGSTAB/classical at physical residual 1.448e-09.  Non-Chebyshev candidates from the local AMGX sources were also generated and screened at p6/ms0.18 and p6/ms0.04 with symmetric scaling controls.  The best fine non-Cheb candidate was direct `BICGSTAB + MULTICOLOR_DILU` at about 5.37 s solve and physical residual 6.70e-11, close to but not better than the existing modal BICGSTAB/classical fallback.  Symmetric diagonal scaling stayed cheap but did not improve the practical modal runs.  AMGX internal `solver.scaling` defaults to `NONE` and is not enabled in these configs; `error_scaling=3` is coarse-grid correction scaling, not hidden matrix scaling.  Details are in `docs/algorithms/diff_rea_modal_amgx_preconditioners.md`.
+
+AMGX hierarchy stats for p6 nodal/modal aggressive Chebyshev/L1 runs are recorded in `docs/algorithms/diff_rea_amgx_hierarchy_audit.md`.  The modal hierarchy is smaller than the nodal hierarchy on the fine p6/ms0.04 case, with operator complexity about 1.008 versus 1.038, but PCGF convergence is much worse.  Lowering `dense_lu_num_rows` from 2048 to 128 fixes the modal p6/ms0.18 setup failure and reduces nodal fine setup in one sample, but it does not fix modal PCGF iteration count; repeat this before changing the default config.
+
 Recommendation summary from the latest coarse p=4..8 sweep at `-ms 0.18`:
 
 - Nodal best: `legacy-lagrange + PCGF + Chebyshev/L1 aggressive AMG`. Fastest average solve path; default for `scripts/gpu/run_diff_rea_gpu4_hdg.py` when `--amgx-config` is omitted.
 - Nodal second best: `legacy-lagrange + PCGF + ChebPoly4/L1 aggressive AMG`. Similar accuracy and solve time, with heavier setup.
 - Nodal most robust: `legacy-lagrange + PCGF + classical V-cycle GS AMG`. Conservative SPD baseline; sometimes wins total time when Chebyshev setup dominates small/coarse runs.
-- Modal best/most robust: `legendre-modal + BICGSTAB + classical AMG`. Modal PCGF is still preconditioner-sensitive even though the assembled matrix is symmetric.
+- Modal best/most robust: `legendre-modal + BICGSTAB + classical AMG`. Modal PCGF is still preconditioner-sensitive even though the assembled matrix is symmetric. Direct `BICGSTAB + MULTICOLOR_DILU` is a close diagnostic baseline, but it is not promoted because it did not beat the classical AMG fallback on the fine p6 screen.
 - Modal PCGF experimental: `legendre-modal + PCGF + ChebPoly4/L1 aggressive AMG`. It can improve modal PCGF accuracy, but one p=4 coarse setup took about 95 s, so it is not a default.
 
 Representative coarse timings, all on 5,699 triangles with `dub_orth`, `volume_quad_1d=2p`, and `error_volume_quad_1d=24`:
@@ -177,4 +189,4 @@ Set `HDGFEM_GPU4_AMGX_MONITOR=1` to enable AMGX residual/grid/timing prints for 
 
 ## Modal Trace Warning
 
-The modal trace algebra is symmetric and gives the same direct-solve errors as the nodal trace in the checked cases, but modal PCGF remains sensitive to the AMG preconditioner. Use `legendre-modal + BICGSTAB + classical AMG` as the practical modal path. Use nodal `legacy-lagrange + PCGF` for the fastest robust production runs until modal AMG preconditioning is improved.
+The modal trace algebra is symmetric and gives the same direct-solve errors as the nodal trace in the checked cases, but modal PCGF remains sensitive to the AMG preconditioner. Device symmetric scaling normalizes the modal matrix but does not fix the p6/ms0.04 PCGF convergence issue with the Chebyshev/L1 config, and it worsens nodal PCGF for that heavy case. Use `legendre-modal + BICGSTAB + classical AMG` as the practical modal path. Use nodal `legacy-lagrange + PCGF` for the fastest robust production runs until modal AMG preconditioning is improved.

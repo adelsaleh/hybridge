@@ -17,20 +17,42 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 
-from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
-from hdgfem.backends.cupy_diff_rea import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
-from hdgfem.backends.cupy_diff_rea_raw import reconstruct_projected_diffusion_field_raw_cuda
+from hdgfem.backends.cupy import (
+    as_cupy_coefficients,
+    as_cupy_space,
+    diagonal_scale_cupy_csr_rows_in_place,
+    require_cupy,
+    require_cupyx_sparse,
+    require_pyamgx,
+    symmetric_scale_cupy_csr_in_place,
+)
+from hdgfem.backends.cupy_diff_rea import (
+    assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
+    postprocess_projected_diffusion_primal_cupy,
+)
+from hdgfem.backends.cupy_diff_rea_raw import (
+    postprocess_projected_diffusion_primal_raw_cuda,
+    reconstruct_projected_diffusion_field_raw_cuda,
+)
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGField, DGSpace
 from hdgfem.io.output import pretty_print_sections
+from hdgfem.io.plot import (
+    _require_pyvista,
+    add_samples_to_plotter,
+    resolve_exact_plot_resolution,
+    sample_callable_on_elements,
+    sample_field_on_elements,
+)
+from hdgfem.solvers.diff_rea import _new_hdg_postprocess_cache, _postprocess_diffusion_solution
 from scripts.diffusion_reaction.diff_rea_cases import case_definition_by_key, zero_coefficient
 
 
@@ -139,6 +161,16 @@ class TraceReferenceData:
     M_rf_fc: object
 
 
+@dataclass(frozen=True)
+class DeviceCsrScaleResult:
+    matrix: Any
+    rhs: Any
+    mode: str
+    elapsed_seconds: float
+    row_diagonal: Any | None = None
+    inverse_sqrt_diagonal: Any | None = None
+
+
 TIMINGS: dict[str, float] = {}
 RUN_METADATA: dict[str, object] = {}
 VERBOSITY = 1
@@ -163,6 +195,10 @@ def record_timing(key: str, seconds: float) -> float:
 
 def timing_value(key: str) -> float:
     return TIMINGS.get(key, 0.0)
+
+
+def timing_prefix_total(prefix: str) -> float:
+    return sum(value for key, value in TIMINGS.items() if key.startswith(prefix))
 
 
 def sync_time(cp, start: float, key: str) -> float:
@@ -621,10 +657,15 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace)
 
 def raw_cuda_diffusion_fallback_reason(cspace, trace_ref) -> tuple[str, str] | None:
     trace_kind = str(getattr(trace_ref, "kind", "unknown"))
-    if not getattr(trace_ref, "nodal", False) or trace_kind != "legacy-lagrange":
+    supported_trace = (
+        trace_kind == "legacy-lagrange" and getattr(trace_ref, "nodal", False)
+    ) or (
+        trace_kind == "legendre-modal" and not getattr(trace_ref, "nodal", True)
+    )
+    if not supported_trace:
         label = f"raw-cuda trace={trace_kind} unsupported"
         detail = (
-            "raw CUDA diffusion assembly supports only legacy-lagrange nodal trace basis; "
+            "raw CUDA diffusion assembly supports legacy-lagrange nodal and legendre-modal trace bases; "
             f"got trace={trace_kind}"
         )
         return label, detail
@@ -814,6 +855,22 @@ def load_amgx_config(args):
         raise FileNotFoundError(f"AMGX config file not found: {config_path}")
     return copy.deepcopy(AMGX_CONFIG), None
 
+
+def normalize_scale_system(value: str) -> str:
+    value = str(value).lower()
+    if value == "on":
+        return "left"
+    if value == "off":
+        return "none"
+    if value not in {"none", "left", "symmetric"}:
+        raise ValueError(f"unknown scale-system value: {value}")
+    return value
+
+
+def resolve_scale_system(args) -> str:
+    return normalize_scale_system(args.scale_system)
+
+
 def _cupyx_csr_from_coo(rows, cols, data, rhs):
     cp = require_cupy()
     cpsp = require_cupyx_sparse()
@@ -836,6 +893,54 @@ def _upload_device_csr_to_amgx(mat, matrix) -> None:
     mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
 
 
+def prepare_scaled_device_csr_for_solve(
+        matrix,
+        rhs,
+        scale_system: str,
+        *,
+        timing_key: str | None = "solve.scale",
+) -> DeviceCsrScaleResult:
+    """Return the device CSR/RHS that should be uploaded to AMGX.
+
+    Scaling stays fully on device.  For symmetric scaling this prepares
+    ``D^-1/2 A D^-1/2`` and ``D^-1/2 b``; callers recover the physical trace by
+    multiplying the scaled unknown by the returned ``inverse_sqrt_diagonal``.
+    """
+    cp = require_cupy()
+    mode = normalize_scale_system(scale_system)
+    row_diagonal = None
+    inverse_sqrt_diagonal = None
+    if mode == "none":
+        return DeviceCsrScaleResult(matrix=matrix, rhs=rhs, mode=mode, elapsed_seconds=0.0)
+
+    start = time.perf_counter()
+    solve_matrix = _cupyx_csr_from_arrays(
+        matrix.data.copy(),
+        matrix.indptr,
+        matrix.indices,
+        shape=matrix.shape,
+    )
+    solve_rhs = rhs.copy()
+    if mode == "left":
+        row_diagonal = diagonal_scale_cupy_csr_rows_in_place(solve_matrix, solve_rhs)
+    elif mode == "symmetric":
+        inverse_sqrt_diagonal = symmetric_scale_cupy_csr_in_place(solve_matrix, solve_rhs)
+    else:
+        raise ValueError(f"unknown scale-system value: {scale_system}")
+    cp.cuda.get_current_stream().synchronize()
+    elapsed = time.perf_counter() - start
+    if timing_key is not None:
+        record_timing(timing_key, elapsed)
+    return DeviceCsrScaleResult(
+        matrix=solve_matrix,
+        rhs=solve_rhs,
+        mode=mode,
+        elapsed_seconds=elapsed,
+        row_diagonal=row_diagonal,
+        inverse_sqrt_diagonal=inverse_sqrt_diagonal,
+    )
+
+
 def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
     cp = require_cupy()
     pyamgx = require_pyamgx()
@@ -846,7 +951,7 @@ def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
         matrix = _cupyx_csr_from_coo(rows, cols, data, rhs)
         csr_elapsed = sync_time(cp, csr_start, "solve.csr_scale")
         matrix_format = "coo->csr"
-        log(f"  CSR assembly without diagonal scaling: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}")
+        log(f"  CSR assembly: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}")
     else:
         matrix = _cupyx_csr_from_arrays(data, indptr, indices, shape=(int(rhs.size), int(rhs.size)))
         csr_elapsed = sync_time(cp, csr_start, "solve.csr_scale")
@@ -854,6 +959,25 @@ def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
         log(f"  direct CSR view setup: {csr_elapsed:.5f}s, nnz={matrix.nnz:,}")
     RUN_METADATA["matrix_nnz"] = int(matrix.nnz)
     RUN_METADATA["solve_matrix_format"] = matrix_format
+
+    scale_system = resolve_scale_system(args)
+    RUN_METADATA["solve_scale_system"] = scale_system
+    scaled_system = prepare_scaled_device_csr_for_solve(matrix, rhs, scale_system, timing_key="solve.scale")
+    solve_matrix = scaled_system.matrix
+    solve_rhs = scaled_system.rhs
+    row_diagonal = scaled_system.row_diagonal
+    inverse_sqrt_diagonal = scaled_system.inverse_sqrt_diagonal
+    scale_elapsed = scaled_system.elapsed_seconds
+    RUN_METADATA["solve_scale_seconds"] = scale_elapsed
+    RUN_METADATA["solve_scale_vector"] = (
+        "row diagonal" if row_diagonal is not None
+        else "inverse sqrt diagonal" if inverse_sqrt_diagonal is not None
+        else "none"
+    )
+    if scale_system != "none":
+        log(f"  {scale_system} diagonal scaling: {scale_elapsed:.5f}s")
+    else:
+        log("  diagonal scaling: off", level=2)
 
     config, config_path = load_amgx_config(args)
     log(f"  AMGX config: {config_path if config_path is not None else 'embedded default'}")
@@ -888,12 +1012,12 @@ def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
         setup_objects_elapsed = record_timing("solve.amgx_setup.objects", time.perf_counter() - phase_start)
 
         phase_start = time.perf_counter()
-        _upload_device_csr_to_amgx(mat, matrix)
+        _upload_device_csr_to_amgx(mat, solve_matrix)
         cp.cuda.get_current_stream().synchronize()
         matrix_upload_elapsed = record_timing("solve.amgx_setup.matrix_upload", time.perf_counter() - phase_start)
 
         phase_start = time.perf_counter()
-        vec_b.upload_raw(rhs.data.ptr, rhs.size)
+        vec_b.upload_raw(solve_rhs.data.ptr, solve_rhs.size)
         trace = cp.zeros(rhs.size, dtype=cp.float64)
         vec_x.upload_raw(trace.data.ptr, trace.size)
         cp.cuda.get_current_stream().synchronize()
@@ -919,17 +1043,56 @@ def solve_amgx(rows, cols, data, rhs, args, *, indptr=None, indices=None):
         amgx_start = time.perf_counter()
         solver.solve(vec_b, vec_x)
         solve_elapsed = sync_time(cp, amgx_start, "solve.amgx_solve")
+        try:
+            RUN_METADATA["amgx_status"] = str(solver.status)
+        except Exception:
+            RUN_METADATA["amgx_status"] = "unknown"
+        try:
+            RUN_METADATA["amgx_iterations"] = int(solver.iterations_number)
+        except Exception:
+            RUN_METADATA["amgx_iterations"] = None
         vec_x.download_raw(trace.data.ptr)
         cp.cuda.get_current_stream().synchronize()
-        residual = cp.linalg.norm(matrix @ trace - rhs)
-        rhs_norm = cp.linalg.norm(rhs)
-        residual_value = float(residual.get())
-        rhs_norm_value = float(rhs_norm.get())
-        rel_residual = residual_value / rhs_norm_value if rhs_norm_value else float("nan")
-        RUN_METADATA["amgx_scaled_rel_residual"] = rel_residual
-        RUN_METADATA["amgx_residual_norm"] = residual_value
-        RUN_METADATA["amgx_rhs_norm"] = rhs_norm_value
-        log(f"  PyAMGX solve: {solve_elapsed:.5f}s, scaled_rel_res={rel_residual:.3e}")
+        solver_residual_vec = solve_matrix @ trace - solve_rhs
+        solver_residual = cp.linalg.norm(solver_residual_vec)
+        solver_rhs_norm = cp.linalg.norm(solve_rhs)
+        solver_residual_value = float(solver_residual.get())
+        solver_rhs_norm_value = float(solver_rhs_norm.get())
+        solver_rel_residual = solver_residual_value / solver_rhs_norm_value if solver_rhs_norm_value else float("nan")
+        if inverse_sqrt_diagonal is not None:
+            trace *= inverse_sqrt_diagonal
+            physical_residual = cp.linalg.norm(solver_residual_vec / inverse_sqrt_diagonal)
+            physical_rhs_norm = cp.linalg.norm(solve_rhs / inverse_sqrt_diagonal)
+            physical_residual_value = float(physical_residual.get())
+            physical_rhs_norm_value = float(physical_rhs_norm.get())
+            physical_rel_residual = (
+                physical_residual_value / physical_rhs_norm_value if physical_rhs_norm_value else float("nan")
+            )
+        elif row_diagonal is not None:
+            physical_residual = cp.linalg.norm(row_diagonal * solver_residual_vec)
+            physical_rhs_norm = cp.linalg.norm(row_diagonal * solve_rhs)
+            physical_residual_value = float(physical_residual.get())
+            physical_rhs_norm_value = float(physical_rhs_norm.get())
+            physical_rel_residual = (
+                physical_residual_value / physical_rhs_norm_value if physical_rhs_norm_value else float("nan")
+            )
+        else:
+            physical_residual_value = solver_residual_value
+            physical_rhs_norm_value = solver_rhs_norm_value
+            physical_rel_residual = solver_rel_residual
+        RUN_METADATA["amgx_scaled_rel_residual"] = solver_rel_residual
+        RUN_METADATA["amgx_solver_rel_residual"] = solver_rel_residual
+        RUN_METADATA["amgx_physical_rel_residual"] = physical_rel_residual
+        RUN_METADATA["amgx_residual_norm"] = solver_residual_value
+        RUN_METADATA["amgx_rhs_norm"] = solver_rhs_norm_value
+        RUN_METADATA["amgx_physical_residual_norm"] = physical_residual_value
+        RUN_METADATA["amgx_physical_rhs_norm"] = physical_rhs_norm_value
+        iteration_text = RUN_METADATA.get("amgx_iterations")
+        iteration_text = "unknown" if iteration_text is None else f"{int(iteration_text):,d}"
+        log(
+            f"  PyAMGX solve: {solve_elapsed:.5f}s, iterations={iteration_text}, "
+            f"solver_rel_res={solver_rel_residual:.3e}, physical_rel_res={physical_rel_residual:.3e}"
+        )
     finally:
         for obj in (solver, mat, vec_x, vec_b, rsrc, cfg):
             if obj is not None:
@@ -957,7 +1120,7 @@ def reconstruct_trace(trace_reduced, boundary_trace, cspace):
     return trace
 
 
-def reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref):
+def reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref, *, return_local_unknowns: bool = False):
     cp = require_cupy()
     log("reconstructing element field ...")
     start = time.perf_counter()
@@ -968,17 +1131,29 @@ def reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, tr
     element_traces = element_traces.reshape((mesh.num_tri, 3 * edg_dof))
     rhs = source_rhs[..., None] + element_boundary @ element_traces[..., None]
     solution = solve_local_mats(local_lhs, rhs, "  local solve reconstruction ... ", "local.solve.reconstruction").squeeze(-1)
-    uh = solution.reshape((mesh.num_tri, 3, cspace.el_dof))[:, 0]
+    local_unknowns = cp.ascontiguousarray(solution.reshape((mesh.num_tri, 3 * cspace.el_dof)))
+    uh = cp.ascontiguousarray(local_unknowns.reshape((mesh.num_tri, 3, cspace.el_dof))[:, 0])
     elapsed = sync_time(cp, start, "reconstruct.field")
     print_done(elapsed)
-    return cp.ascontiguousarray(uh)
+    if return_local_unknowns:
+        return uh, local_unknowns
+    return uh
 
 
-def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: float, raw_block_size: int = 1):
+def reconstruct_field_raw_cuda(
+        trace,
+        raw_assembly,
+        cspace,
+        trace_ref,
+        tau: float,
+        raw_block_size: int = 1,
+        *,
+        return_local_unknowns: bool = False,
+):
     cp = require_cupy()
     log("reconstructing element field (raw CUDA) ... ", end="")
     start = time.perf_counter()
-    uh, kernel_elapsed = reconstruct_projected_diffusion_field_raw_cuda(
+    result = reconstruct_projected_diffusion_field_raw_cuda(
         trace=trace,
         source_rhs=raw_assembly.source_rhs,
         cspace=cspace,
@@ -988,14 +1163,235 @@ def reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, tau: floa
         face_element_mass=raw_assembly.face_element_mass,
         tau=tau,
         block_size=raw_block_size,
+        return_local_unknowns=return_local_unknowns,
     )
+    if return_local_unknowns:
+        uh, local_unknowns, kernel_elapsed = result
+    else:
+        uh, kernel_elapsed = result
+        local_unknowns = None
     record_timing("local.solve.reconstruction", kernel_elapsed)
     elapsed = sync_time(cp, start, "reconstruct.field")
     print_done(elapsed)
+    if return_local_unknowns:
+        return uh, local_unknowns
     return uh
 
 
-def evaluate_errors(uh, exact: Callable, cspace, plot_resolution: int, error_volume_quad_1d: int | None = None):
+def _host_source_field_for_projected_reconstruction(source, space: DGSpace) -> DGField:
+    """Return a same-space source field for host-side projected reconstruction."""
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(space)
+        if source.space is not space:
+            raise ValueError("source_h must live in the runner DGSpace object for raw-cuda postprocessing")
+        return source
+    if np.isscalar(source):
+        return space.constant(float(source), name="source_h")
+    if callable(source):
+        return space.project_callable(source, name="source_h")
+    return space.field(source, name="source_h")
+
+
+def _host_reaction_field_for_projected_reconstruction(reaction, space: DGSpace) -> DGField:
+    """Return a same-space reaction field for host-side projected reconstruction."""
+    if isinstance(reaction, DGField):
+        reaction.space.assert_same_mesh(space)
+        if reaction.space is not space:
+            raise ValueError("reaction_h must live in the runner DGSpace object for raw-cuda postprocessing")
+        return reaction
+    if reaction is zero_coefficient:
+        return space.zeros(name="reaction_h")
+    if np.isscalar(reaction):
+        return space.constant(float(reaction), name="reaction_h")
+    if callable(reaction):
+        raise TypeError(
+            "raw-cuda primal postprocess plotting requires reaction_h as a DGField or exact zero/constant; "
+            "project callable reactions before using raw-cuda postprocess plotting."
+        )
+    return space.field(reaction, name="reaction_h")
+
+
+def postprocess_primal_field_for_plot(
+        *,
+        trace,
+        local_unknowns_device,
+        source,
+        reaction,
+        exact: Callable,
+        space: DGSpace,
+        trace_basis: str,
+        diffusion,
+        tau: float,
+        backend: str,
+        cspace,
+        raw_block_size: int,
+        postprocess_cache=None,
+) -> DGField:
+    """Build ``u_h^*`` for plotting from GPU solve data."""
+    cp = require_cupy()
+    backend = str(backend).lower()
+    if backend not in {"host", "cupy", "raw-cuda"}:
+        raise ValueError("postprocess backend must be 'host', 'cupy', or 'raw-cuda'")
+    RUN_METADATA["postprocess_backend"] = backend
+    trace_space = space.trace_space(trace_basis)
+    log(f"post-processing primal field ({backend}) ... ", end="")
+    start = time.perf_counter()
+
+    if backend == "cupy":
+        if local_unknowns_device is None:
+            raise RuntimeError("CuPy primal postprocess requires device local unknowns")
+        device_timings: dict[str, float] = {}
+        postprocessed_field, _ = postprocess_projected_diffusion_primal_cupy(
+            local_unknowns_device,
+            space,
+            diffusion,
+            trace_space=trace_space,
+            timings=device_timings,
+            cache=postprocess_cache,
+        )
+        for key, value in device_timings.items():
+            record_timing(key, value)
+
+    elif backend == "raw-cuda":
+        if local_unknowns_device is None:
+            raise RuntimeError("raw CUDA primal postprocess requires device local unknowns")
+        device_timings = {}
+        postprocessed_field, _ = postprocess_projected_diffusion_primal_raw_cuda(
+            local_unknowns_device,
+            cspace,
+            diffusion,
+            trace_space=trace_space,
+            block_size=raw_block_size,
+            timings=device_timings,
+            cache=postprocess_cache,
+        )
+        for key, value in device_timings.items():
+            record_timing(key, value)
+        block = int(device_timings.get("postprocess.primal.raw_cuda.block_size", raw_block_size))
+        row_fit = int(device_timings.get("postprocess.primal.raw_cuda.row_fit_order", -1))
+        supported = int(device_timings.get("postprocess.primal.raw_cuda.supported_order", -1))
+        RUN_METADATA["postprocess_raw_cuda_block_size"] = block
+        RUN_METADATA["postprocess_raw_cuda_row_fit_order"] = row_fit
+        RUN_METADATA["postprocess_raw_cuda_supported_order"] = supported
+
+    else:
+        trace_host = cp.asnumpy(trace)
+        if local_unknowns_device is None:
+            from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
+
+            source_h = _host_source_field_for_projected_reconstruction(source, space)
+            reaction_h = _host_reaction_field_for_projected_reconstruction(reaction, space)
+            reconstruct_start = time.perf_counter()
+            local_unknowns_host = reconstruct_projected_diffusion_local_unknowns_numba(
+                trace_host,
+                source_h,
+                reaction_h,
+                tau,
+                space,
+                trace_space=trace_space,
+            )
+            record_timing("postprocess.primal.host_reconstruct", time.perf_counter() - reconstruct_start)
+        else:
+            local_unknowns_host = cp.asnumpy(local_unknowns_device)
+
+        postprocessed_field, _, _ = _postprocess_diffusion_solution(
+            local_unknowns_host,
+            trace_host,
+            space,
+            tau,
+            diffusion,
+            "primal",
+            trace_space=trace_space,
+            cache=postprocess_cache,
+        )
+        if postprocessed_field is None:
+            raise RuntimeError("primal HDG postprocessing did not produce a field")
+
+    elapsed = record_timing("postprocess.primal", time.perf_counter() - start)
+    print_done(elapsed)
+    if backend == "raw-cuda":
+        log(
+            f"  raw CUDA primal postprocess block size: "
+            f"{RUN_METADATA.get('postprocess_raw_cuda_block_size')}; "
+            f"row-fit p<={RUN_METADATA.get('postprocess_raw_cuda_row_fit_order')}, "
+            f"current raw path p<={RUN_METADATA.get('postprocess_raw_cuda_supported_order')}",
+            level=1,
+        )
+
+    if postprocessed_field.device_coefficients_materialized() and not postprocessed_field.coefficients_materialized:
+        traffic_start = time.perf_counter()
+        _ = postprocessed_field.coeffs
+        record_timing("traffic.device_to_host.postprocess_primal_coeffs", time.perf_counter() - traffic_start)
+
+    log("computing postprocessed primal error diagnostics ... ", end="", level=2)
+    error_start = time.perf_counter()
+    points = postprocessed_field.space.mapped_quads()
+    exact_values = exact(points[:, :, 0], points[:, :, 1])
+    post_diff = postprocessed_field.values() - exact_values
+    RUN_METADATA["postprocess_primal_l2"] = float(
+        np.sqrt(
+            np.einsum(
+                "K,Kq,q->",
+                postprocessed_field.space.mesh.aff_jacs,
+                post_diff * post_diff,
+                postprocessed_field.space.quad_data.Krf_w,
+                optimize=True,
+            )
+        )
+    )
+    RUN_METADATA["postprocess_primal_linf"] = float(np.max(np.abs(post_diff)))
+    diagnostic_elapsed = record_timing("diagnostics.postprocess_primal_error_host", time.perf_counter() - error_start)
+    print_done(diagnostic_elapsed, level=2)
+    return postprocessed_field
+
+
+def sample_postprocessed_primal_for_plot(
+        postprocessed_field: DGField,
+        exact: Callable,
+        *,
+        resolution: int,
+) -> dict[str, np.ndarray]:
+    """Sample ``u_h^*`` and exact values on the postprocessed-space plot grid."""
+    reference_points, _, values = sample_field_on_elements(postprocessed_field, resolution=resolution)
+    _, _, exact_values = sample_callable_on_elements(
+        postprocessed_field.space.mesh,
+        exact,
+        reference_points=reference_points,
+    )
+    return {
+        "reference_points": reference_points,
+        "postprocessed_values": values,
+        "exact_values_for_error": exact_values,
+    }
+
+
+def effective_plot_resolution(requested_resolution: int, order: int, num_elements: int) -> int:
+    """Use a polynomial-degree minimum for coarse per-element plots."""
+    resolution = int(requested_resolution)
+    if int(num_elements) <= 130:
+        return max(resolution, 2 * int(order) + 3, 3)
+    return resolution
+
+
+def matplotlib_contour_levels(order: int) -> int:
+    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
+    return min(256, max(128, 24 * (int(order) + 1)))
+
+
+def postprocess_plot_resolution(numerical_resolution: int, order: int, num_elements: int) -> int:
+    """Choose a plotting resolution that can show degree ``p+1`` postprocess data."""
+    return effective_plot_resolution(max(int(numerical_resolution), 2 * (int(order) + 1) + 3), int(order) + 1, num_elements)
+
+
+def evaluate_errors(
+        uh,
+        exact: Callable,
+        cspace,
+        plot_resolution: int,
+        error_volume_quad_1d: int | None = None,
+        *,
+        return_plot_samples: bool = False,
+):
     cp = require_cupy()
     log("computing plot/error data ... ", end="")
     start = time.perf_counter()
@@ -1024,7 +1420,14 @@ def evaluate_errors(uh, exact: Callable, cspace, plot_resolution: int, error_vol
     xx, yy = cp.meshgrid(grid, grid)
     cond = yy <= -xx
     ref_points = cp.column_stack((xx[cond], yy[cond]))
-    basis_plot = cp.asarray(cspace.host.basis_at(cp.asnumpy(ref_points)), dtype=cp.float64)
+    traffic_start = time.perf_counter()
+    ref_points_host = cp.asnumpy(ref_points)
+    record_timing("traffic.device_to_host.plot_reference_points", time.perf_counter() - traffic_start)
+    basis_plot_host = cspace.host.basis_at(ref_points_host)
+    traffic_start = time.perf_counter()
+    basis_plot = cp.asarray(basis_plot_host, dtype=cp.float64)
+    cp.cuda.get_current_stream().synchronize()
+    record_timing("traffic.host_to_device.plot_basis", time.perf_counter() - traffic_start)
     mapped_plot = cp.einsum("Krc,pc->Krp", mesh.aff_mats, ref_points) + mesh.aff_vecs[:, :, None]
     exact_plot = cp.asarray(exact(mapped_plot[:, 0, :], mapped_plot[:, 1, :]), dtype=cp.float64)
     uh_plot = uh @ basis_plot.T
@@ -1034,7 +1437,152 @@ def evaluate_errors(uh, exact: Callable, cspace, plot_resolution: int, error_vol
     max_element = cp.argmax(cp.max(abs_err, axis=-1))
     elapsed = sync_time(cp, start, "plot_error")
     print_done(elapsed)
-    return float(l2.get()), float(linf.get()), float(avg_max.get()), int(max_element.get())
+    traffic_start = time.perf_counter()
+    metrics = float(l2.get()), float(linf.get()), float(avg_max.get()), int(max_element.get())
+    record_timing("traffic.device_to_host.error_metrics", time.perf_counter() - traffic_start)
+    if not return_plot_samples:
+        return metrics
+    traffic_start = time.perf_counter()
+    plot_samples = {
+        "reference_points": cp.asnumpy(ref_points),
+        "numerical_values": cp.asnumpy(uh_plot),
+        "exact_values_for_error": cp.asnumpy(exact_plot),
+    }
+    record_timing("traffic.device_to_host.plot_samples", time.perf_counter() - traffic_start)
+    return (*metrics, plot_samples)
+
+
+def plot_sampled_solution_comparison(
+        mesh,
+        exact_solution: Callable,
+        plot_samples: dict[str, np.ndarray],
+        *,
+        numerical_resolution: int,
+        exact_resolution: int | str | None,
+        polynomial_order: int | None = None,
+        postprocessed_plot_samples: dict[str, np.ndarray] | None = None,
+        title: str = "",
+        show_mesh: bool = True,
+        show: bool = True,
+        off_screen: bool = False,
+):
+    """Plot device-sampled numerical/exact/error data using host plot helpers."""
+    reference_points = np.ascontiguousarray(plot_samples["reference_points"], dtype=np.float64)
+    numerical_values = np.asarray(plot_samples["numerical_values"], dtype=np.float64)
+    exact_values_for_error = np.asarray(plot_samples["exact_values_for_error"], dtype=np.float64)
+    absolute_error = np.abs(numerical_values - exact_values_for_error)
+
+    post_reference_points = None
+    postprocessed_values = None
+    postprocess_error = None
+    if postprocessed_plot_samples is not None:
+        post_reference_points = np.ascontiguousarray(postprocessed_plot_samples["reference_points"], dtype=np.float64)
+        postprocessed_values = np.asarray(postprocessed_plot_samples["postprocessed_values"], dtype=np.float64)
+        post_exact_values = np.asarray(postprocessed_plot_samples["exact_values_for_error"], dtype=np.float64)
+        postprocess_error = np.abs(postprocessed_values - post_exact_values)
+
+    displayed_error = absolute_error if postprocess_error is None else postprocess_error
+
+    def _error_clim_from_percentile(values: np.ndarray, percentile: float = 95.0) -> tuple[float, float]:
+        finite = np.asarray(values, dtype=np.float64).reshape(-1)
+        finite = finite[np.isfinite(finite)]
+        if finite.size == 0:
+            return 0.0, 1.0
+        error_upper = float(np.percentile(finite, percentile))
+        if not np.isfinite(error_upper) or error_upper <= 0.0:
+            error_upper = 1.0
+        return 0.0, error_upper
+
+    error_clim = _error_clim_from_percentile(displayed_error)
+
+    exact_panel_resolution = resolve_exact_plot_resolution(
+        exact_resolution,
+        numerical_resolution=numerical_resolution,
+        num_elements=mesh.num_tri,
+    )
+    exact_reference_points, _, exact_display_values = sample_callable_on_elements(
+        mesh,
+        exact_solution,
+        resolution=exact_panel_resolution,
+    )
+    if mesh.num_tri <= 130:
+        from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib
+
+        panels = [("Numerical solution", reference_points, numerical_values)]
+        if postprocessed_values is not None:
+            panels.append(("Postprocessed primal", post_reference_points, postprocessed_values))
+        panels.extend(
+            [
+                ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
+                (
+                    "Absolute error" if postprocess_error is None else "Postprocessed absolute error",
+                    reference_points if postprocess_error is None else post_reference_points,
+                    displayed_error,
+                    {"cmap": "magma", "zero_min": True},
+                ),
+            ]
+        )
+        return plot_scalar_sample_panels_matplotlib(
+            mesh,
+            panels,
+            suptitle=title or None,
+            show_mesh=show_mesh,
+            cmap="jet",
+            levels=matplotlib_contour_levels(
+                (int(polynomial_order) + (1 if postprocessed_values is not None else 0))
+                if polynomial_order is not None
+                else max((int(numerical_resolution) - 3) // 2, 0)
+            ),
+            share_clim=False,
+            show=show,
+        )
+
+    pv = _require_pyvista()
+
+    panel_count = 4 if postprocessed_values is not None else 3
+    plotter = pv.Plotter(shape=(1, panel_count), window_size=[600 * panel_count, 650], off_screen=off_screen)
+    scalar_bar_args = {
+        "vertical": False,
+        "width": 0.55,
+        "height": 0.08,
+        "position_x": 0.225,
+        "position_y": 0.02,
+    }
+    panels = [("Numerical solution", reference_points, numerical_values, None, "viridis", True)]
+    if postprocessed_values is not None:
+        panels.append(("Postprocessed primal", post_reference_points, postprocessed_values, None, "viridis", True))
+    panels.extend(
+        [
+            ("Exact solution", exact_reference_points, exact_display_values, None, "viridis", False),
+            (
+                "Absolute error" if postprocess_error is None else "Postprocessed absolute error",
+                reference_points if postprocess_error is None else post_reference_points,
+                displayed_error,
+                error_clim,
+                "magma",
+                True,
+            ),
+        ]
+    )
+    for column, (panel_title, panel_reference_points, values, clim, cmap, panel_show_mesh) in enumerate(panels):
+        display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
+        add_samples_to_plotter(
+            plotter,
+            mesh,
+            panel_reference_points,
+            values,
+            scalar_name=f"field_{column}",
+            title=display_title,
+            subplot=(0, column),
+            show_mesh=show_mesh and panel_show_mesh,
+            cmap=cmap,
+            clim=clim,
+            scalar_bar_args=scalar_bar_args,
+        )
+    plotter.link_views()
+    if show:
+        plotter.show()
+    return plotter
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -1060,7 +1608,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--raw-matrix-format", choices=("coo", "csr"), default="coo")
     parser.add_argument("--raw-block-size", type=int, choices=(1, 32, 64, 128), default=1)
     parser.add_argument("--tau", type=float, default=1.0)
-    parser.add_argument("--plot-resolution", "-pr", type=int, default=12)
+    parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots after the summary")
+    parser.add_argument(
+        "--plot-postprocess-primal",
+        action="store_true",
+        help="include HDG primal postprocessed u_h^* in the solution plot; implies --plot",
+    )
+    parser.add_argument(
+        "--postprocess-backend",
+        choices=("auto", "host", "cupy", "raw-cuda"),
+        default="auto",
+        help="primal postprocess backend for --plot-postprocess-primal; auto follows the assembly backend",
+    )
+    parser.add_argument("--plot-resolution", "-pr", type=int, default=12, help="plot/error sampling resolution; coarse meshes use a polynomial-degree minimum")
+    parser.add_argument(
+        "--exact-plot-resolution",
+        default="auto",
+        help="exact-solution panel resolution: integer, 'auto', or 'same'",
+    )
+    parser.add_argument("--hide-mesh", action="store_true", help="hide mesh overlay in plots")
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
     parser.add_argument("--gmsh-algorithm", type=int, default=None)
     parser.add_argument(
@@ -1068,12 +1634,48 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to a PyAMGX JSON config; omitted means the nodal best Chebyshev/L1 profile",
     )
-    parser.add_argument("--amgx-solver", default="PCGF")
+    parser.add_argument("--amgx-solver", default="PCGF", help="AMGX Krylov solver; overrides the solver entry loaded from --amgx-config")
     parser.add_argument("--amgx-tolerance", type=float, default=1.0e-13)
+    parser.add_argument(
+        "--scale-system",
+        choices=("symmetric", "left", "on", "off"),
+        default="off",
+        help="diagonal scaling before AMGX upload; 'on' is an alias for legacy left row scaling",
+    )
     parser.add_argument("--amgx-maxiter", type=int, default=2000)
     parser.add_argument("--show-cupy-config", action="store_true")
     parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2), default=1)
     return parser
+
+
+def resolve_primal_postprocess_backend(args) -> str:
+    """Resolve the requested primal postprocess backend."""
+    backend = str(args.postprocess_backend).lower()
+    if backend == "auto":
+        return "raw-cuda" if args.assembly_backend == "raw-cuda" else "cupy"
+    return backend
+
+
+def prepare_primal_postprocess_setup(space: DGSpace, cspace, trace_basis: str, backend: str):
+    """Prebuild degree p+1 postprocess reference data during setup."""
+    backend = str(backend).lower()
+    if backend == "none":
+        return None
+    log("building primal postprocess p+1 reference data ... ", end="")
+    cp = require_cupy()
+    start = time.perf_counter()
+    host_start = time.perf_counter()
+    trace_space = space.trace_space(trace_basis)
+    cache = _new_hdg_postprocess_cache(space, trace_space)
+    record_timing("postprocess.reference_host_setup", time.perf_counter() - host_start)
+    if backend in {"cupy", "raw-cuda"}:
+        traffic_start = time.perf_counter()
+        as_cupy_space(cache.post_space, device=cspace.device_id)
+        cp.cuda.get_current_stream().synchronize()
+        record_timing("traffic.host_to_device.postprocess_reference", time.perf_counter() - traffic_start)
+    elapsed = record_timing("postprocess.reference_setup", time.perf_counter() - start)
+    print_done(elapsed)
+    return cache
 
 
 def build_mesh(args, case):
@@ -1145,6 +1747,130 @@ def _format_timing_cell(seconds: float, total_seconds: float) -> str:
     return f"{seconds:.3f}s"
 
 
+def _timing_row(label: str, seconds: float, total_seconds: float) -> tuple[str, str, str]:
+    return label, _format_timing_cell(seconds, total_seconds), "s"
+
+
+def _nonzero_timing_rows(items: list[tuple[str, float]], total_seconds: float) -> list[tuple[str, str, str]]:
+    return [
+        _timing_row(label, seconds, total_seconds)
+        for label, seconds in items
+        if abs(float(seconds)) > 0.0
+    ]
+
+
+def print_detailed_timing_table(args, total_seconds: float) -> None:
+    """Print backend-specific timing details before the compact solve summary."""
+    if int(getattr(args, "verbosity", 1)) < 2:
+        return
+    effective_backend = str(RUN_METADATA.get("assembly_backend", args.assembly_backend))
+    raw_kernel_total = timing_value("assembly.raw.csr_kernel") or timing_value("assembly.raw.kernel")
+    csr_total = timing_value("solve.csr_scale")
+    sections: list[tuple[str, list[tuple[str, str, str]]]] = []
+
+    setup_rows = _nonzero_timing_rows(
+        [
+            ("mesh generate", timing_value("mesh.generate")),
+            ("space/reference", timing_value("space.setup")),
+            ("post p+1 ref", timing_value("postprocess.reference_setup")),
+            ("post p+1 host", timing_value("postprocess.reference_host_setup")),
+        ],
+        total_seconds,
+    )
+    if setup_rows:
+        sections.append(("Setup", setup_rows))
+
+    if effective_backend == "raw-cuda":
+        assembly_items = [
+            ("coefficient prep", timing_value("assembly.coefficient_prep")),
+            ("source prep", timing_value("assembly.coefficient_prep.source")),
+            ("reaction prep", timing_value("assembly.coefficient_prep.reaction")),
+            ("raw map/setup", timing_value("assembly.raw.map_setup")),
+            ("raw csr zero", timing_value("assembly.raw.csr_zero")),
+            ("raw kernel", raw_kernel_total),
+            ("raw total", timing_value("assembly.raw.total")),
+            ("assembly total", timing_value("assembly.total")),
+        ]
+    else:
+        assembly_items = [
+            ("index arrays", timing_value("assembly.indices")),
+            ("local LHS", timing_value("local.lhs")),
+            ("local solve", timing_value("local.solve.assembly")),
+            ("trace lift", timing_value("assembly.b_trace")),
+            ("trace blocks", timing_value("assembly.trace_blocks")),
+            ("global data", timing_value("assembly.data")),
+            ("source moments", timing_value("source_moments")),
+            ("RHS faces", timing_value("assembly.rhs_faces")),
+            ("boundary elim", timing_value("assembly.boundary_elimination")),
+            ("assembly total", timing_value("assembly.total")),
+        ]
+    assembly_rows = _nonzero_timing_rows(assembly_items, total_seconds)
+    if assembly_rows:
+        sections.append(("Assembly", assembly_rows))
+
+    solve_rows = _nonzero_timing_rows(
+        [
+            ("CSR/view", csr_total),
+            ("diagonal scaling", timing_value("solve.scale")),
+            ("AMGX setup/upload", timing_value("solve.amgx_setup")),
+            ("AMGX solve", timing_value("solve.amgx_solve")),
+            ("solve total", timing_value("solve.total")),
+            ("trace augment", timing_value("reconstruct.trace")),
+            ("field reconstruct", timing_value("reconstruct.field")),
+            ("local recon solve", timing_value("local.solve.reconstruction")),
+        ],
+        total_seconds,
+    )
+    if solve_rows:
+        sections.append(("Solve / Recon", solve_rows))
+
+    post_rows = _nonzero_timing_rows(
+        [
+            ("post cupy setup", timing_value("postprocess.primal.cupy.setup")),
+            ("post cupy solve", timing_value("postprocess.primal.cupy.solve")),
+            ("post cupy total", timing_value("postprocess.primal.cupy.total")),
+            ("post cuda setup", timing_value("postprocess.primal.raw_cuda.setup")),
+            ("post cuda kernel", timing_value("postprocess.primal.raw_cuda.kernel")),
+            ("post cuda total", timing_value("postprocess.primal.raw_cuda.total")),
+            ("post host recon", timing_value("postprocess.primal.host_reconstruct")),
+            ("post total", timing_value("postprocess.primal")),
+        ],
+        total_seconds,
+    )
+    if post_rows:
+        sections.append(("HDG Postprocess", post_rows))
+
+    diagnostic_rows = _nonzero_timing_rows(
+        [
+            ("post errors host", timing_value("diagnostics.postprocess_primal_error_host")),
+            ("solution error/sample", timing_value("plot_error")),
+        ],
+        total_seconds,
+    )
+    if diagnostic_rows:
+        sections.append(("Diagnostics", diagnostic_rows))
+
+    traffic_rows = _nonzero_timing_rows(
+        [
+            ("H2D space static", timing_value("traffic.host_to_device.space_static")),
+            ("H2D maps/trace", timing_value("traffic.host_to_device.maps_trace_reference")),
+            ("H2D post p+1 ref", timing_value("traffic.host_to_device.postprocess_reference")),
+            ("H2D plot basis", timing_value("traffic.host_to_device.plot_basis")),
+            ("D2H post coeffs", timing_value("traffic.device_to_host.postprocess_primal_coeffs")),
+            ("D2H plot ref pts", timing_value("traffic.device_to_host.plot_reference_points")),
+            ("D2H error metrics", timing_value("traffic.device_to_host.error_metrics")),
+            ("D2H plot samples", timing_value("traffic.device_to_host.plot_samples")),
+            ("traffic total", timing_prefix_total("traffic.")),
+        ],
+        total_seconds,
+    )
+    if traffic_rows:
+        sections.append(("Host/Device Traffic", traffic_rows))
+
+    if sections:
+        pretty_print_sections(sections, title="HDGFEM GPU4 Detailed Timings")
+
+
 def print_final_summary(
         *,
         args,
@@ -1161,16 +1887,19 @@ def print_final_summary(
     mesh_total = timing_value("mesh.generate")
     space_total = timing_value("space.setup")
     gpu_setup_total = timing_value("gpu.setup")
-    setup_total = mesh_total + space_total + gpu_setup_total
+    post_ref_total = timing_value("postprocess.reference_setup")
+    setup_total = space_total + gpu_setup_total + post_ref_total
     assembly_total = timing_value("assembly.total")
     csr_total = timing_value("solve.csr_scale")
     amgx_setup_total = timing_value("solve.amgx_setup")
     amgx_solve_total = timing_value("solve.amgx_solve")
     solve_total = timing_value("solve.total")
     reconstruct_total = timing_value("reconstruct.trace") + timing_value("reconstruct.field")
+    post_host_l2_total = timing_value("diagnostics.postprocess_primal_error_host")
+    postprocess_hdg_total = timing_value("postprocess.primal")
     plot_total = timing_value("plot_error")
+    traffic_total = timing_prefix_total("traffic.")
     global_dof = int(cspace.mesh.int_edges_inds.size * cspace.edg_dof)
-    raw_kernel_total = timing_value("assembly.raw.csr_kernel") or timing_value("assembly.raw.kernel")
     amgx_subtotal = csr_total + amgx_setup_total + amgx_solve_total
     effective_backend = str(RUN_METADATA.get("assembly_backend", args.assembly_backend))
     requested_backend = str(RUN_METADATA.get("requested_assembly_backend", args.assembly_backend))
@@ -1192,6 +1921,14 @@ def print_final_summary(
             ("volume quad", str(space.quad_data.volume_quadrature), "s"),
             ("raw matrix", args.raw_matrix_format if effective_backend == "raw-cuda" else "n/a", "s"),
             ("raw block", str(args.raw_block_size) if effective_backend == "raw-cuda" else "n/a", "s"),
+            ("postprocess", str(RUN_METADATA.get("postprocess_backend", "none")), "s"),
+            (
+                "post raw block",
+                str(RUN_METADATA.get("postprocess_raw_cuda_block_size", "n/a"))
+                if RUN_METADATA.get("postprocess_backend") == "raw-cuda"
+                else "n/a",
+                "s",
+            ),
             ("verbosity", args.verbosity, ",d"),
         ]
     )
@@ -1199,7 +1936,6 @@ def print_final_summary(
         ("order", args.order, ",d"),
         ("mesh size", args.mesh_size, ".4f"),
         ("h", mesh.h, ".3e"),
-        ("h^(p+1)", mesh.h ** (args.order + 1), ".3e"),
         ("triangles", mesh.num_tri, ",d"),
         ("edges", mesh.num_edg, ",d"),
         ("interior edges", int(mesh.int_edges_inds.size), ",d"),
@@ -1215,72 +1951,37 @@ def print_final_summary(
         ("solver", str(RUN_METADATA.get("amgx_solver", args.amgx_solver)), "s"),
         ("tol", args.amgx_tolerance, ".1e"),
         ("maxiter", args.amgx_maxiter, ",d"),
+        ("iterations", _display_optional_int(RUN_METADATA.get("amgx_iterations")), "s"),
         ("matrix input", str(RUN_METADATA.get("solve_matrix_format", "unknown")), "s"),
+        ("scaling", str(RUN_METADATA.get("solve_scale_system", "unknown")), "s"),
         ("matrix nnz", int(RUN_METADATA.get("matrix_nnz", 0)), ",d"),
-        ("scaled residual", float(RUN_METADATA.get("amgx_scaled_rel_residual", float("nan"))), ".3e"),
+        ("solver residual", float(RUN_METADATA.get("amgx_solver_rel_residual", float("nan"))), ".3e"),
+        ("physical residual", float(RUN_METADATA.get("amgx_physical_rel_residual", float("nan"))), ".3e"),
     ]
     errors = [
+        ("theory h^(p+1)", mesh.h ** (args.order + 1), ".3e"),
         ("L2", l2, ".3e"),
         ("Linf", linf, ".3e"),
-        ("avg max", avg_max, ".3e"),
-        ("max element", max_element, ",d"),
     ]
-    timings = [
-        ("setup subtotal", _format_timing_cell(setup_total, total_seconds), "s"),
-        ("mesh setup", _format_timing_cell(mesh_total, total_seconds), "s"),
-        ("space setup", _format_timing_cell(space_total, total_seconds), "s"),
-        ("GPU setup", _format_timing_cell(gpu_setup_total, total_seconds), "s"),
-        ("assembly", _format_timing_cell(assembly_total, total_seconds), "s"),
-    ]
-    if effective_backend == "raw-cuda":
-        timings.extend(
-            [
-                ("raw input prep", _format_timing_cell(timing_value("assembly.coefficient_prep"), total_seconds), "s"),
-                ("source input prep", _format_timing_cell(timing_value("assembly.coefficient_prep.source"), total_seconds), "s"),
-                ("reaction prep", _format_timing_cell(timing_value("assembly.coefficient_prep.reaction"), total_seconds), "s"),
-                ("raw map/setup", _format_timing_cell(timing_value("assembly.raw.map_setup"), total_seconds), "s"),
-                ("raw zero", _format_timing_cell(timing_value("assembly.raw.csr_zero"), total_seconds), "s"),
-                ("raw kernel", _format_timing_cell(raw_kernel_total, total_seconds), "s"),
-                ("raw total", _format_timing_cell(timing_value("assembly.raw.total"), total_seconds), "s"),
-            ]
-        )
-    else:
-        timings.extend(
-            [
-                ("index arrays", _format_timing_cell(timing_value("assembly.indices"), total_seconds), "s"),
-                ("local LHS", _format_timing_cell(timing_value("local.lhs"), total_seconds), "s"),
-                ("local solve", _format_timing_cell(timing_value("local.solve.assembly"), total_seconds), "s"),
-                (
-                    "trace blocks/data",
-                    _format_timing_cell(
-                        timing_value("assembly.b_trace")
-                        + timing_value("assembly.trace_blocks")
-                        + timing_value("assembly.data"),
-                        total_seconds,
-                    ),
-                    "s",
-                ),
-                (
-                    "RHS/source",
-                    _format_timing_cell(timing_value("source_moments") + timing_value("assembly.rhs_faces"), total_seconds),
-                    "s",
-                ),
-                ("boundary elim", _format_timing_cell(timing_value("assembly.boundary_elimination"), total_seconds), "s"),
-            ]
-        )
-    timings.extend(
+    if "postprocess_primal_l2" in RUN_METADATA:
+        errors.append(("post primal L2", float(RUN_METADATA["postprocess_primal_l2"]), ".3e"))
+    if "postprocess_primal_linf" in RUN_METADATA:
+        errors.append(("post primal Linf", float(RUN_METADATA["postprocess_primal_linf"]), ".3e"))
+    errors.extend(
         [
-            ("global solve", _format_timing_cell(solve_total, total_seconds), "s"),
-            ("CSR/view", _format_timing_cell(csr_total, total_seconds), "s"),
-            ("AMGX setup", _format_timing_cell(amgx_setup_total, total_seconds), "s"),
-            ("AMGX solve", _format_timing_cell(amgx_solve_total, total_seconds), "s"),
-            ("AMGX subtotal", _format_timing_cell(amgx_subtotal, total_seconds), "s"),
-            ("reconstruct", _format_timing_cell(reconstruct_total, total_seconds), "s"),
-            ("local recon solve", _format_timing_cell(timing_value("local.solve.reconstruction"), total_seconds), "s"),
-            ("plot/error", _format_timing_cell(plot_total, total_seconds), "s"),
-            ("total measured", f"{total_seconds:.3f}s", "s"),
+            ("avg max", avg_max, ".3e"),
+            ("max element", max_element, ",d"),
         ]
     )
+    timings = [
+        ("mesh", _format_timing_cell(mesh_total, total_seconds), "s"),
+        ("setup", _format_timing_cell(setup_total, total_seconds), "s"),
+        ("assembly", _format_timing_cell(assembly_total, total_seconds), "s"),
+        ("global solve", _format_timing_cell(solve_total, total_seconds), "s"),
+        ("reconstruction", _format_timing_cell(reconstruct_total, total_seconds), "s"),
+        ("HDG postprocess", _format_timing_cell(postprocess_hdg_total, total_seconds), "s"),
+        ("total measured", f"{total_seconds:.3f}s", "s"),
+    ]
 
     sections = [
         ("Run / Options", run_options),
@@ -1294,12 +1995,16 @@ def print_final_summary(
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    postprocess_backend = resolve_primal_postprocess_backend(args) if args.plot_postprocess_primal else "none"
+    if args.plot_postprocess_primal:
+        args.plot = True
     set_verbosity(args.verbosity)
     TIMINGS.clear()
     RUN_METADATA.clear()
     cp = require_cupy()
     require_cupyx_sparse()
     require_pyamgx()
+    RUN_METADATA["postprocess_backend"] = postprocess_backend
     # Match the legacy gpu_v4 runner: do not let CuPy keep freed blocks in its
     # memory pool while PyAMGX reports device memory usage.
     cp.cuda.set_allocator(None)
@@ -1344,15 +2049,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     space_time = record_timing("space.setup", time.perf_counter() - start)
     print_done(space_time)
+    plot_resolution = effective_plot_resolution(args.plot_resolution, space.order, mesh.num_tri)
     log(f"h={mesh.h:.2e}, h^(p+1)={mesh.h ** (args.order + 1):.2e}, triangles={mesh.num_tri:,}")
 
     log("copying static data to GPU ... ", end="")
     start = time.perf_counter()
+    traffic_start = time.perf_counter()
     cspace = as_cupy_space(space)
+    cp.cuda.get_current_stream().synchronize()
+    record_timing("traffic.host_to_device.space_static", time.perf_counter() - traffic_start)
+    traffic_start = time.perf_counter()
     maps = build_dof_maps(cspace)
     trace_ref = build_trace_reference(cspace, args.trace_basis)
-    gpu_time = sync_time(cp, start, "gpu.setup")
+    cp.cuda.get_current_stream().synchronize()
+    record_timing("traffic.host_to_device.maps_trace_reference", time.perf_counter() - traffic_start)
+    gpu_time = record_timing("gpu.setup", time.perf_counter() - start)
     print_done(gpu_time)
+
+    postprocess_cache = None
+    if args.plot_postprocess_primal:
+        postprocess_cache = prepare_primal_postprocess_setup(space, cspace, args.trace_basis, postprocess_backend)
 
     rows, cols, data, rhs, local_lhs, element_boundary, source_rhs, boundary_trace, raw_assembly = assemble_reduced_system(
         source,
@@ -1376,19 +2092,74 @@ def main(argv: list[str] | None = None) -> int:
         indices=getattr(raw_assembly, "indices", None),
     )
     trace = reconstruct_trace(trace_reduced, boundary_trace, cspace)
+    local_unknowns_device = None
+    needs_device_local_unknowns = args.plot_postprocess_primal and postprocess_backend in {"cupy", "raw-cuda"}
     if raw_assembly is not None:
-        uh = reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, args.tau, args.raw_block_size)
+        if needs_device_local_unknowns:
+            uh, local_unknowns_device = reconstruct_field_raw_cuda(
+                trace,
+                raw_assembly,
+                cspace,
+                trace_ref,
+                args.tau,
+                args.raw_block_size,
+                return_local_unknowns=True,
+            )
+        else:
+            uh = reconstruct_field_raw_cuda(trace, raw_assembly, cspace, trace_ref, args.tau, args.raw_block_size)
     else:
-        uh = reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref)
-    l2, linf, avg_max, max_element = evaluate_errors(
+        if args.plot_postprocess_primal:
+            uh, local_unknowns_device = reconstruct_field(
+                trace,
+                local_lhs,
+                element_boundary,
+                source_rhs,
+                cspace,
+                trace_ref,
+                return_local_unknowns=True,
+            )
+        else:
+            uh = reconstruct_field(trace, local_lhs, element_boundary, source_rhs, cspace, trace_ref)
+
+    postprocessed_plot_samples = None
+    if args.plot_postprocess_primal:
+        postprocessed_field = postprocess_primal_field_for_plot(
+            trace=trace,
+            local_unknowns_device=local_unknowns_device,
+            source=source,
+            reaction=reaction,
+            exact=exact,
+            space=space,
+            trace_basis=args.trace_basis,
+            diffusion=diffusion,
+            tau=args.tau,
+            backend=postprocess_backend,
+            cspace=cspace,
+            raw_block_size=args.raw_block_size,
+            postprocess_cache=postprocess_cache,
+        )
+        postprocessed_plot_samples = sample_postprocessed_primal_for_plot(
+            postprocessed_field,
+            exact,
+            resolution=postprocess_plot_resolution(plot_resolution, space.order, mesh.num_tri),
+        )
+
+    error_result = evaluate_errors(
         uh,
         exact,
         cspace,
-        args.plot_resolution,
+        plot_resolution,
         error_volume_quad_1d=args.error_volume_quad_1d,
+        return_plot_samples=args.plot,
     )
+    if args.plot:
+        l2, linf, avg_max, max_element, plot_samples = error_result
+    else:
+        l2, linf, avg_max, max_element = error_result
+        plot_samples = None
 
     total = time.perf_counter() - run_start
+    print_detailed_timing_table(args, total)
     print_final_summary(
         args=args,
         domain=domain,
@@ -1401,6 +2172,23 @@ def main(argv: list[str] | None = None) -> int:
         max_element=max_element,
         total_seconds=total,
     )
+
+    if args.plot:
+        log("plotting solution comparison ... ", end="")
+        plot_start = time.perf_counter()
+        plot_title = f"{args.case}, p={space.order}, elements={mesh.num_tri:,}, L2={l2:.2e}"
+        plot_sampled_solution_comparison(
+            mesh,
+            exact,
+            plot_samples,
+            numerical_resolution=plot_resolution,
+            exact_resolution=args.exact_plot_resolution,
+            polynomial_order=space.order,
+            postprocessed_plot_samples=postprocessed_plot_samples,
+            title=plot_title,
+            show_mesh=not args.hide_mesh,
+        )
+        print_done(time.perf_counter() - plot_start)
     return 0
 
 
