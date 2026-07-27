@@ -81,7 +81,13 @@ class CuPyVectorBLAS:
     GMRES immediately needs those values on the CPU for the Hessenberg update.
     """
 
-    def __init__(self, *, dtype: Any, device_id: int) -> None:
+    def __init__(
+        self,
+        *,
+        dtype: Any,
+        device_id: int,
+        profiler: Any | None = None,
+    ) -> None:
         cp = require_cupy_device()
         if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise TypeError("GPU GMRES supports float32 and float64 only")
@@ -89,6 +95,7 @@ class CuPyVectorBLAS:
         self.dtype = cp.dtype(dtype)
         self.device_id = int(device_id)
         self._host_scalar = np.empty((), dtype=np.dtype(self.dtype.name))
+        self.profiler = profiler
         # cupy.cublas is a high-level wrapper around cuBLAS BLAS-1/2 routines.
         from cupy import cublas as cupy_cublas
 
@@ -116,19 +123,45 @@ class CuPyVectorBLAS:
         destination = self._validate_vector(destination, name="destination")
         if source.shape != destination.shape:
             raise ValueError("source and destination must have equal shape")
-        self.cp.copyto(destination, source)
+        def operation() -> None:
+            self.cp.copyto(destination, source)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("copy", operation)
 
     def dot(self, x: Any, y: Any) -> float:
         x = self._validate_vector(x, name="x")
         y = self._validate_vector(y, name="y")
         if x.shape != y.shape:
             raise ValueError("dot vectors must have equal shape")
-        self._cublas.dot(x, y, out=self._host_scalar)
+        def operation() -> None:
+            self._cublas.dot(x, y, out=self._host_scalar)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call(
+                "dot",
+                operation,
+                host_synchronizing=True,
+            )
         return float(self._host_scalar)
 
     def norm(self, x: Any) -> float:
         x = self._validate_vector(x, name="x")
-        self._cublas.nrm2(x, out=self._host_scalar)
+        def operation() -> None:
+            self._cublas.nrm2(x, out=self._host_scalar)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call(
+                "norm",
+                operation,
+                host_synchronizing=True,
+            )
         return float(self._host_scalar)
 
     def axpy(self, alpha: float, x: Any, y: Any) -> None:
@@ -136,11 +169,23 @@ class CuPyVectorBLAS:
         y = self._validate_vector(y, name="y")
         if x.shape != y.shape:
             raise ValueError("AXPY vectors must have equal shape")
-        self._cublas.axpy(alpha, x, y)
+        def operation() -> None:
+            self._cublas.axpy(alpha, x, y)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("axpy", operation)
 
     def scal(self, alpha: float, x: Any) -> None:
         x = self._validate_vector(x, name="x")
-        self._cublas.scal(alpha, x)
+        def operation() -> None:
+            self._cublas.scal(alpha, x)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("scal", operation)
 
     def basis_update(
         self,
@@ -165,14 +210,20 @@ class CuPyVectorBLAS:
                 f"basis={basis_rows.shape}, coefficients={coefficients.shape}, "
                 f"solution={solution.shape}"
             )
-        self._cublas.gemv(
-            "T",
-            1.0,
-            basis_rows,
-            coefficients,
-            1.0,
-            solution,
-        )
+        def operation() -> None:
+            self._cublas.gemv(
+                "T",
+                1.0,
+                basis_rows,
+                coefficients,
+                1.0,
+                solution,
+            )
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("basis_update", operation)
 
 
 def _compute_givens(a: float, b: float) -> tuple[float, float, float]:
@@ -271,6 +322,7 @@ def restarted_gmres_cupy(
     preconditioner: DevicePreconditioner | None = None,
     reorthogonalize: bool = False,
     breakdown_tolerance: float | None = None,
+    profiler: Any | None = None,
 ) -> CuPyGMRESResult:
     r"""Solve ``A x = rhs`` with restarted left-preconditioned GPU GMRES.
 
@@ -282,6 +334,11 @@ def restarted_gmres_cupy(
     The Givens residual is used as an inexpensive convergence trigger.  A true
     residual is always recomputed after each completed or early-terminated
     restart cycle before convergence is accepted.
+
+    When ``profiler`` is supplied, CUDA events are inserted around each large
+    operation and CPU timers are used for the Hessenberg/Givens work.  This is
+    diagnostic instrumentation; benchmark an uninstrumented solve separately
+    for the primary time-to-solution measurement.
     """
 
     cp = require_cupy_device()
@@ -297,6 +354,8 @@ def restarted_gmres_cupy(
         raise ValueError("operator.num_dofs must be positive")
     dtype = cp.dtype(operator.dtype)
     device_id = int(operator.device_id)
+    if profiler is not None and int(profiler.device_id) != device_id:
+        raise ValueError("profiler and operator use different CUDA devices")
     restart, max_iterations, breakdown_tolerance = _validate_restart_parameters(
         restart=restart,
         max_iterations=max_iterations,
@@ -340,7 +399,11 @@ def restarted_gmres_cupy(
             x0 = validate_vector(x0, name="x0")
             x = x0.reshape(-1).copy()
 
-        blas = CuPyVectorBLAS(dtype=dtype, device_id=device_id)
+        blas = CuPyVectorBLAS(
+            dtype=dtype,
+            device_id=device_id,
+            profiler=profiler,
+        )
         basis = cp.empty((restart + 1, num_dofs), dtype=dtype)
         matvec_buffer = cp.empty(num_dofs, dtype=dtype)
         residual = cp.empty(num_dofs, dtype=dtype)
@@ -357,7 +420,14 @@ def restarted_gmres_cupy(
 
         def apply_matvec(source: Any, destination: Any) -> None:
             nonlocal matvec_count
-            operator.matvec_into(source, destination)
+
+            def operation() -> None:
+                operator.matvec_into(source, destination)
+
+            if profiler is None:
+                operation()
+            else:
+                profiler.record_gpu_call("matvec", operation)
             matvec_count += 1
 
         def apply_preconditioner(source: Any, destination: Any) -> None:
@@ -365,7 +435,13 @@ def restarted_gmres_cupy(
             if preconditioner is None:
                 blas.copy(source, destination)
             else:
-                preconditioner.apply_into(source, destination)
+                def operation() -> None:
+                    preconditioner.apply_into(source, destination)
+
+                if profiler is None:
+                    operation()
+                else:
+                    profiler.record_gpu_call("preconditioner", operation)
                 preconditioner_count += 1
 
         def compute_true_residual() -> float:
@@ -473,25 +549,34 @@ def restarted_gmres_cupy(
                     blas.copy(work, basis[column + 1])
                     blas.scal(1.0 / next_norm, basis[column + 1])
 
-                _apply_previous_givens(
-                    hessenberg,
-                    cosines,
-                    sines,
-                    column,
-                )
-                cosine, sine, diagonal = _compute_givens(
-                    hessenberg[column, column],
-                    hessenberg[column + 1, column],
-                )
-                cosines[column] = cosine
-                sines[column] = sine
-                hessenberg[column, column] = diagonal
-                hessenberg[column + 1, column] = 0.0
+                def update_hessenberg_column() -> float:
+                    _apply_previous_givens(
+                        hessenberg,
+                        cosines,
+                        sines,
+                        column,
+                    )
+                    cosine, sine, diagonal = _compute_givens(
+                        hessenberg[column, column],
+                        hessenberg[column + 1, column],
+                    )
+                    cosines[column] = cosine
+                    sines[column] = sine
+                    hessenberg[column, column] = diagonal
+                    hessenberg[column + 1, column] = 0.0
 
-                old_rhs = least_squares_rhs[column]
-                least_squares_rhs[column] = cosine * old_rhs
-                least_squares_rhs[column + 1] = -sine * old_rhs
-                estimate = abs(least_squares_rhs[column + 1])
+                    old_rhs = least_squares_rhs[column]
+                    least_squares_rhs[column] = cosine * old_rhs
+                    least_squares_rhs[column + 1] = -sine * old_rhs
+                    return abs(least_squares_rhs[column + 1])
+
+                if profiler is None:
+                    estimate = update_hessenberg_column()
+                else:
+                    estimate = profiler.record_cpu_call(
+                        "hessenberg_givens",
+                        update_hessenberg_column,
+                    )
                 estimated_history.append(estimate)
 
                 iterations += 1
@@ -511,21 +596,39 @@ def restarted_gmres_cupy(
             if used_dimension == 0:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
-            try:
-                coefficients = _back_substitute_upper(
+            def solve_small_system() -> np.ndarray:
+                return _back_substitute_upper(
                     hessenberg[:used_dimension, :used_dimension],
                     least_squares_rhs[:used_dimension],
                     singular_tolerance=breakdown_tolerance,
                 )
+
+            try:
+                if profiler is None:
+                    coefficients = solve_small_system()
+                else:
+                    coefficients = profiler.record_cpu_call(
+                        "back_substitution",
+                        solve_small_system,
+                    )
             except np.linalg.LinAlgError:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
-            coefficient_device[:used_dimension].set(
-                coefficients.astype(
-                    np.dtype(dtype.name),
-                    copy=False,
-                )
+            coefficient_host = coefficients.astype(
+                np.dtype(dtype.name),
+                copy=False,
             )
+
+            def transfer_coefficients() -> None:
+                coefficient_device[:used_dimension].set(coefficient_host)
+
+            if profiler is None:
+                transfer_coefficients()
+            else:
+                profiler.record_gpu_call(
+                    "coefficient_h2d",
+                    transfer_coefficients,
+                )
             blas.basis_update(
                 basis[:used_dimension],
                 coefficient_device[:used_dimension],
@@ -541,7 +644,6 @@ def restarted_gmres_cupy(
                 return make_result("breakdown", iterations, cycles, true_norm)
 
         return make_result("max_iterations", iterations, cycles, true_norm)
-
 
 __all__ = [
     "CuPyGMRESResult",
