@@ -13,6 +13,27 @@ except ImportError as error:  # pragma: no cover
 else:  # pragma: no cover
     _IMPORT_ERROR = None
 
+def device_arrays_overlap(first: Any, second: Any) -> bool:
+    """Return whether two C-contiguous device arrays overlap in memory.
+
+    The check uses only host-side array metadata (device id, data pointer, and
+    byte size).  Unlike :func:`cupy.shares_memory`, it launches no CUDA kernels
+    and performs no device synchronization.  The face-dense hot paths validate
+    C-contiguity before calling this helper, so a simple byte-range test is
+    sufficient.
+    """
+
+    if int(first.device.id) != int(second.device.id):
+        return False
+    first_bytes = int(first.nbytes)
+    second_bytes = int(second.nbytes)
+    if first_bytes == 0 or second_bytes == 0:
+        return False
+    first_begin = int(first.data.ptr)
+    second_begin = int(second.data.ptr)
+    first_end = first_begin + first_bytes
+    second_end = second_begin + second_bytes
+    return first_begin < second_end and second_begin < first_end
 
 def require_cupy():
     """Return the CuPy module or raise a clear dependency error."""

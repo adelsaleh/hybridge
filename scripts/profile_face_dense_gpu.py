@@ -85,6 +85,18 @@ def _parse_args() -> argparse.Namespace:
         default=["matmul", "raw"],
     )
     parser.add_argument(
+        "--gmres-matvec-implementation",
+        choices=("matmul", "raw"),
+        default="raw",
+        help="Operator used inside GMRES; independent of reporting order.",
+    )
+    parser.add_argument(
+        "--preconditioner-application",
+        choices=("matmul", "raw"),
+        default="raw",
+        help="Dense inverse application used by block-Jacobi and ASM.",
+    )
+    parser.add_argument(
         "--preconditioners",
         nargs="+",
         choices=("none", "block_jacobi", "asm"),
@@ -124,6 +136,13 @@ def _parse_args() -> argparse.Namespace:
         parser.error("gmres-warmup must be non-negative")
     if args.detailed_max_iterations <= 0:
         parser.error("detailed-max-iterations must be positive")
+    if args.gmres_matvec_implementation not in args.matvec_implementations:
+        parser.error(
+            "--gmres-matvec-implementation must also appear in "
+            "--matvec-implementations"
+        )
+    if args.local_solver == "gpu_solve" and args.preconditioner_application == "raw":
+        parser.error("raw preconditioner application requires a precomputed inverse")
     return args
 
 
@@ -272,6 +291,8 @@ def main() -> None:
     print(f"Device          : {device_name} (id={device_id})")
     print(f"Boundary mode   : {args.boundary_mode}")
     print(f"Local solver    : {args.local_solver}")
+    print(f"GMRES matvec    : {args.gmres_matvec_implementation}")
+    print(f"Prec. apply     : {args.preconditioner_application}")
     print(f"Warmup/repeats  : {args.warmup}/{args.repeats}")
     print()
 
@@ -352,7 +373,7 @@ def main() -> None:
                         f"dense={profile.dense_product.median_ms:8.4f}"
                     )
 
-                primary_operator = operators[args.matvec_implementations[0]]
+                primary_operator = operators[args.gmres_matvec_implementation]
                 rhs_gpu = primary_operator.to_device(system.rhs.astype(dtype, copy=False))
                 random_gpu = primary_operator.to_device(
                     np.random.default_rng(991 + mesh_size + order)
@@ -368,6 +389,7 @@ def main() -> None:
                             device_id=device_id,
                             dtype=dtype,
                             local_solver=args.local_solver,
+                            application=args.preconditioner_application,
                         ),
                         device_id=device_id,
                     )
@@ -386,6 +408,7 @@ def main() -> None:
                             "record_type": "preconditioner",
                             "preconditioner": "block_jacobi",
                             "local_solver": args.local_solver,
+                            "application": args.preconditioner_application,
                             "setup_ms": setup.elapsed_ms,
                             "allocates_during_apply": bj.allocates_during_apply,
                             "maximum_inverse_residual": bj.maximum_inverse_residual,
@@ -406,6 +429,7 @@ def main() -> None:
                             device_id=device_id,
                             dtype=dtype,
                             local_solver=args.local_solver,
+                            application=args.preconditioner_application,
                         ),
                         device_id=device_id,
                     )
@@ -424,6 +448,7 @@ def main() -> None:
                             "record_type": "preconditioner",
                             "preconditioner": "asm",
                             "local_solver": args.local_solver,
+                            "application": args.preconditioner_application,
                             "setup_ms": setup.elapsed_ms,
                             "allocates_during_apply": asm.allocates_during_apply,
                             "maximum_inverse_residual": asm.maximum_inverse_residual,
@@ -489,6 +514,10 @@ def main() -> None:
                                 "preconditioner": name,
                                 "local_solver": (
                                     "none" if preconditioner is None else args.local_solver
+                                ),
+                                "preconditioner_application": (
+                                    "none" if preconditioner is None
+                                    else args.preconditioner_application
                                 ),
                                 "solve_wall_ms": solve_ms,
                                 "converged": result.converged,
@@ -563,6 +592,8 @@ def main() -> None:
         "stabilization": args.stabilization,
         "dtype": dtype.name,
         "matvec_implementations": args.matvec_implementations,
+        "gmres_matvec_implementation": args.gmres_matvec_implementation,
+        "preconditioner_application": args.preconditioner_application,
         "preconditioners": args.preconditioners,
         "local_solver": args.local_solver,
         "warmup": args.warmup,

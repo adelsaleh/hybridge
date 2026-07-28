@@ -27,7 +27,7 @@ from typing import Literal
 import numpy as np
 
 from hdgfem.assembly.face_dense import FaceDenseSystem
-from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
 
 
 GPUFaceMatvecImplementation = Literal["matmul", "raw"]
@@ -429,7 +429,7 @@ class CuPyFaceDenseOperator:
         cp = self._cp
         self._validate_device_vector(x, name="x")
         out_faces = self._validate_device_vector(out, name="out")
-        if cp.shares_memory(x, out):
+        if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
         self.gather_neighbors_into(x, self._x_extended)

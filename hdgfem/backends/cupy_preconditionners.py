@@ -22,7 +22,96 @@ from ..linalg.additive_schwarz import (
 )
 from ..linalg.block_jacobi import build_face_block_jacobi_preconditioner
 from .cublas_batched import invert_batched_cublas
-from .cupy import require_cupy_device, solve_batched_vectors
+from .cupy import device_arrays_overlap, require_cupy_device, solve_batched_vectors
+
+
+_BATCHED_DENSE_MV_KERNEL_SOURCE = r"""
+extern "C" __global__
+void batched_dense_mv_f32(
+    const unsigned long long total_rows,
+    const int matrix_size,
+    const float* __restrict__ matrices,
+    const float* __restrict__ vectors,
+    float* __restrict__ output)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total_rows) return;
+
+    const unsigned long long batch = index / matrix_size;
+    const int row = (int) (index - batch * matrix_size);
+    const unsigned long long matrix_offset =
+        batch * (unsigned long long) matrix_size * matrix_size
+        + (unsigned long long) row * matrix_size;
+    const unsigned long long vector_offset = batch * matrix_size;
+
+    float value = 0.0f;
+    for (int column = 0; column < matrix_size; ++column) {
+        value += matrices[matrix_offset + column]
+            * vectors[vector_offset + column];
+    }
+    output[index] = value;
+}
+
+extern "C" __global__
+void batched_dense_mv_f64(
+    const unsigned long long total_rows,
+    const int matrix_size,
+    const double* __restrict__ matrices,
+    const double* __restrict__ vectors,
+    double* __restrict__ output)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total_rows) return;
+
+    const unsigned long long batch = index / matrix_size;
+    const int row = (int) (index - batch * matrix_size);
+    const unsigned long long matrix_offset =
+        batch * (unsigned long long) matrix_size * matrix_size
+        + (unsigned long long) row * matrix_size;
+    const unsigned long long vector_offset = batch * matrix_size;
+
+    double value = 0.0;
+    for (int column = 0; column < matrix_size; ++column) {
+        value += matrices[matrix_offset + column]
+            * vectors[vector_offset + column];
+    }
+    output[index] = value;
+}
+"""
+
+
+def _build_raw_batched_mv_kernel(cp: Any, dtype: Any) -> Any:
+    suffix = "f32" if dtype == cp.float32 else "f64"
+    return cp.RawKernel(
+        _BATCHED_DENSE_MV_KERNEL_SOURCE,
+        f"batched_dense_mv_{suffix}",
+    )
+
+
+def _launch_raw_batched_mv(
+    kernel: Any,
+    matrices: Any,
+    vectors: Any,
+    output: Any,
+    *,
+    matrix_size: int,
+) -> None:
+    total_rows = int(matrices.shape[0]) * int(matrix_size)
+    threads = 256
+    blocks = (total_rows + threads - 1) // threads
+    kernel(
+        (blocks,),
+        (threads,),
+        (
+            np.uint64(total_rows),
+            np.int32(matrix_size),
+            matrices,
+            vectors,
+            output,
+        ),
+    )
 
 
 def _gpu_batched_inverse(cp: Any, matrices: Any, *, label: str) -> tuple[Any, Any]:
@@ -104,6 +193,7 @@ class CuPyFaceBlockJacobiPreconditioner:
     inverse_residuals: Any | None = None
     factorization_info: np.ndarray | None = None
     inversion_info: np.ndarray | None = None
+    application: str = "matmul"
 
     def __post_init__(self) -> None:
         cp = require_cupy_device()
@@ -117,6 +207,10 @@ class CuPyFaceBlockJacobiPreconditioner:
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported block-Jacobi local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
+        if self.application not in {"matmul", "raw"}:
+            raise ValueError(f"unsupported block-Jacobi application: {self.application}")
+        if not use_inverse and self.application != "matmul":
+            raise ValueError("raw application requires precomputed inverse blocks")
         matrices = self.inverse_blocks if use_inverse else self.local_blocks
         if not isinstance(matrices, cp.ndarray):
             name = "inverse_blocks" if use_inverse else "local_blocks"
@@ -136,7 +230,12 @@ class CuPyFaceBlockJacobiPreconditioner:
         self._output = cp.empty((self.num_faces, self.block_size), dtype=self.dtype)
         self._matmul_output = (
             cp.empty((self.num_faces, self.block_size, 1), dtype=self.dtype)
-            if use_inverse
+            if use_inverse and self.application == "matmul"
+            else None
+        )
+        self._raw_apply_kernel = (
+            _build_raw_batched_mv_kernel(cp, self.dtype)
+            if use_inverse and self.application == "raw"
             else None
         )
 
@@ -148,6 +247,7 @@ class CuPyFaceBlockJacobiPreconditioner:
         device_id: int | None = None,
         dtype: np.dtype | type | None = None,
         local_solver: str = "cpu_inverse",
+        application: str = "matmul",
         inverse_residual_tolerance: float | None = None,
     ) -> "CuPyFaceBlockJacobiPreconditioner":
         cp = require_cupy_device()
@@ -183,6 +283,7 @@ class CuPyFaceBlockJacobiPreconditioner:
                 device_id=selected_device,
                 local_solver=local_solver,
                 inverse_residuals=cp.asarray(cpu.inverse_residuals),
+                application=application,
             )
 
         diagonal_host = np.ascontiguousarray(
@@ -201,6 +302,7 @@ class CuPyFaceBlockJacobiPreconditioner:
                     local_blocks=local_blocks,
                     device_id=selected_device,
                     local_solver=local_solver,
+                    application=application,
                 )
             factorization_info = None
             inversion_info = None
@@ -233,6 +335,7 @@ class CuPyFaceBlockJacobiPreconditioner:
                 inverse_residuals=residuals,
                 factorization_info=factorization_info,
                 inversion_info=inversion_info,
+                application=application,
             )
 
     @property
@@ -283,7 +386,7 @@ class CuPyFaceBlockJacobiPreconditioner:
         cp = self._cp
         x_faces = self._validate_vector(x, name="x")
         out_faces = self._validate_vector(out, name="out")
-        if cp.shares_memory(x, out):
+        if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
         if self.local_solver == "gpu_solve":
@@ -293,6 +396,17 @@ class CuPyFaceBlockJacobiPreconditioner:
             solved = solve_batched_vectors(cp, self.local_blocks, x_faces)
             self._output[...] = solved
             out_faces[...] = self._output
+            return
+
+        if self.application == "raw":
+            assert self._raw_apply_kernel is not None
+            _launch_raw_batched_mv(
+                self._raw_apply_kernel,
+                self.inverse_blocks,
+                x_faces,
+                out_faces,
+                matrix_size=self.block_size,
+            )
             return
 
         cp.matmul(
@@ -633,6 +747,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
     inverse_residuals: Any | None = None
     factorization_info: np.ndarray | None = None
     inversion_info: np.ndarray | None = None
+    application: str = "matmul"
 
     def __post_init__(self) -> None:
         cp = require_cupy_device()
@@ -646,6 +761,10 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported ASM local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
+        if self.application not in {"matmul", "raw"}:
+            raise ValueError(f"unsupported ASM application: {self.application}")
+        if not use_inverse and self.application != "matmul":
+            raise ValueError("raw application requires precomputed inverse matrices")
         matrices = self.inverse_matrices if use_inverse else self.local_matrices
         matrix_name = "inverse_matrices" if use_inverse else "local_matrices"
         if not isinstance(matrices, cp.ndarray):
@@ -706,6 +825,11 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             _ASM_KERNEL_SOURCE,
             f"prolong_element_faces_{suffix}",
         )
+        self._raw_apply_kernel = (
+            _build_raw_batched_mv_kernel(cp, self.dtype)
+            if use_inverse and self.application == "raw"
+            else None
+        )
         self._threads_per_block = 256
         self._kernel_blocks = (
             self.num_local_dofs + self._threads_per_block - 1
@@ -721,6 +845,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         dtype: np.dtype | type | None = None,
         device_id: int | None = None,
         local_solver: str = "cpu_inverse",
+        application: str = "matmul",
         inverse_residual_tolerance: float | None = None,
     ) -> "CuPyFaceAdditiveSchwarzPreconditioner":
         cp = require_cupy_device()
@@ -752,6 +877,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     device_id=selected_device,
                     local_solver=local_solver,
                     inverse_residuals=cp.asarray(layout.inverse_residuals),
+                    application=application,
                 )
 
         layout = prepare_face_additive_schwarz_matrix_layout(
@@ -776,6 +902,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     num_system_faces=layout.num_system_faces,
                     device_id=selected_device,
                     local_solver=local_solver,
+                    application=application,
                 )
 
             factorization_info = None
@@ -812,6 +939,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 inverse_residuals=residuals,
                 factorization_info=factorization_info,
                 inversion_info=inversion_info,
+                application=application,
             )
 
     @property
@@ -937,7 +1065,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         cp = self._cp
         x_flat = self._validate_global_vector(x, name="x")
         out_flat = self._validate_element_vector(out, name="out")
-        if cp.shares_memory(x, out):
+        if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
         self._launch_restrict(x_flat, out_flat)
 
@@ -953,7 +1081,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         cp = self._cp
         element_flat = self._validate_element_vector(element_vector, name="element_vector")
         out_flat = self._validate_global_vector(out, name="out")
-        if cp.shares_memory(element_vector, out):
+        if device_arrays_overlap(element_vector, out):
             raise ValueError("element_vector and out must not alias")
         out_flat.fill(0)
         self._launch_prolong(element_flat, out_flat)
@@ -971,7 +1099,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         cp = self._cp
         x_flat = self._validate_global_vector(x, name="x")
         out_flat = self._validate_global_vector(out, name="out")
-        if cp.shares_memory(x, out):
+        if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
         self._launch_restrict(x_flat, self._element_rhs.reshape(-1))
@@ -982,6 +1110,15 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 self._element_rhs,
             )
             self._local_output[...] = solved
+        elif self.application == "raw":
+            assert self._raw_apply_kernel is not None
+            _launch_raw_batched_mv(
+                self._raw_apply_kernel,
+                self.inverse_matrices,
+                self._element_rhs,
+                self._local_output,
+                matrix_size=self.local_size,
+            )
         else:
             cp.matmul(
                 self.inverse_matrices,
