@@ -3,6 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from hdgfem.assembly.face_dense import (
+    face_dense_relative_residual,
+    normalize_penalty_rows,
+)
 from hdgfem.backends.cupy import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import (
@@ -18,6 +22,9 @@ from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers.diff_rea_face_dense import solve_diffusion_face_dense_direct
 from scripts.diff_rea_cases import quadratic_poisson_case
+
+
+_BOUNDARY_PENALTY = 1.0e6
 
 
 def _cupy_or_skip():
@@ -42,7 +49,7 @@ def _small_face_system(boundary_mode: str, *, nx: int = 3, ny: int = 3):
         diffusion=diffusion,
         stabilization=1.3,
         boundary_mode=boundary_mode,
-        boundary_penalty=1.0e6,
+        boundary_penalty=_BOUNDARY_PENALTY,
     )
     return direct
 
@@ -139,11 +146,26 @@ def test_cupy_gmres_matches_direct_face_solution(
     - There is one basis update per restart cycle.
     - The preconditioner counter is positive only when preconditioning is enabled.
     Finally, the solution is copied back to the CPU and compared with the direct face-system solution.
+
+    The unpreconditioned penalty case first divides the artificial boundary
+    equations by their penalty factor.  This preserves their solution exactly
+    and prevents the stopping norm from being dominated by an arbitrary row
+    scale.  Its residual is also checked against the original physical system.
     """
 
     cp = _cupy_or_skip()
     direct = _small_face_system(boundary_mode)
-    system = direct.system
+    physical_system = direct.system
+    system = physical_system
+    if boundary_mode == "penalty" and not preconditioned:
+        boundary_faces = np.flatnonzero(
+            direct.assembly.topology.incidence_count == 1
+        )
+        system = normalize_penalty_rows(
+            physical_system,
+            boundary_faces,
+            boundary_penalty=_BOUNDARY_PENALTY,
+        )
     operator = CuPyFaceDenseOperator.from_system(system, implementation="matmul")
     rhs = operator.to_device(system.rhs)
     preconditioner = None
@@ -179,6 +201,10 @@ def test_cupy_gmres_matches_direct_face_solution(
         assert result.preconditioner_count == 0
 
     computed = operator.to_host(result.solution).reshape(-1)
+    assert (
+        face_dense_relative_residual(physical_system, computed)
+        <= 1.2e-10
+    )
     np.testing.assert_allclose(
         computed,
         direct.system_solution,

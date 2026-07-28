@@ -338,6 +338,153 @@ def make_penalty_system(
     )
 
 
+def normalize_penalty_rows(
+    system: FaceDenseSystem,
+    boundary_faces: np.ndarray,
+    *,
+    boundary_penalty: float,
+) -> FaceDenseSystem:
+    r"""Return an equivalent penalty system with unit Dirichlet rows.
+
+    Penalty assembly represents a prescribed boundary trace by
+
+    ``gamma * uhat_f = gamma * g_f``.
+
+    The factor ``gamma`` is algebraically redundant, but a large value makes
+    an unpreconditioned Krylov stopping test depend on the artificial boundary
+    scale.  This helper applies the exact left row scaling ``1 / gamma`` only
+    to the supplied boundary faces.  Interior equations are unchanged, so the
+    returned system has exactly the same solution as ``system`` while its
+    residual norm is no longer dominated by the penalty magnitude.
+
+    ``boundary_faces`` contains global face ids.  They are mapped through
+    :attr:`FaceDenseSystem.global_to_local`, and every selected row is
+    validated to have the expected ``gamma * I`` penalty form before any
+    scaling is applied.
+    """
+
+    if not isinstance(system, FaceDenseSystem):
+        raise TypeError("system must be a FaceDenseSystem")
+    if system.mode != "penalty":
+        raise ValueError("normalize_penalty_rows requires a penalty system")
+    if not np.isfinite(boundary_penalty) or boundary_penalty <= 0.0:
+        raise ValueError("boundary_penalty must be a positive finite number")
+
+    boundary_faces = np.asarray(boundary_faces)
+    if boundary_faces.ndim != 1:
+        raise ValueError("boundary_faces must be one-dimensional")
+    if not np.issubdtype(boundary_faces.dtype, np.integer):
+        raise TypeError("boundary_faces must contain integer global face ids")
+    boundary_faces = np.ascontiguousarray(boundary_faces, dtype=np.int64)
+    if np.unique(boundary_faces).size != boundary_faces.size:
+        raise ValueError("boundary_faces must not contain duplicates")
+
+    global_to_local = np.asarray(system.global_to_local, dtype=np.int64)
+    if global_to_local.ndim != 1:
+        raise ValueError("system.global_to_local must be one-dimensional")
+    if boundary_faces.size:
+        if (
+            boundary_faces.min() < 0
+            or boundary_faces.max() >= global_to_local.size
+        ):
+            raise ValueError(
+                "boundary_faces contains a global face id outside the system"
+            )
+        local_faces = global_to_local[boundary_faces]
+        if np.any(local_faces < 0):
+            raise ValueError(
+                "every boundary face must be present in the penalty system"
+            )
+        if np.unique(local_faces).size != local_faces.size:
+            raise ValueError(
+                "system.global_to_local maps multiple boundary faces to one row"
+            )
+    else:
+        local_faces = np.empty(0, dtype=np.int64)
+
+    blocks = np.asarray(system.blocks)
+    rhs = np.asarray(system.rhs)
+    if blocks.ndim != 4:
+        raise ValueError("system.blocks must have shape (Nrow, S, b, b)")
+    num_rows, num_slots, block_size, column_size = blocks.shape
+    if block_size != column_size:
+        raise ValueError("face blocks must be square")
+    if not np.issubdtype(blocks.dtype, np.floating):
+        raise TypeError("system.blocks must use a floating-point dtype")
+    if rhs.shape != (num_rows, block_size):
+        raise ValueError(
+            f"system.rhs must have shape ({num_rows}, {block_size}); got {rhs.shape}"
+        )
+    neighbors = np.asarray(system.neighbors)
+    if neighbors.shape != (num_rows, num_slots):
+        raise ValueError(
+            "system.neighbors must match the first two system.blocks axes"
+        )
+    boundary_trace = np.asarray(system.boundary_trace)
+    if boundary_trace.ndim != 2 or boundary_trace.shape[1] != block_size:
+        raise ValueError(
+            "system.boundary_trace must have shape (Nglobal, block_size)"
+        )
+    if boundary_trace.shape[0] < global_to_local.size:
+        raise ValueError(
+            "system.boundary_trace does not cover system.global_to_local"
+        )
+
+    if local_faces.size:
+        if np.any(local_faces >= num_rows):
+            raise ValueError(
+                "system.global_to_local contains an invalid local face id"
+            )
+        if np.any(neighbors[local_faces, 0] != local_faces):
+            raise ValueError(
+                "penalty rows must have their diagonal block in slot zero"
+            )
+
+        expected_diagonal = (
+            float(boundary_penalty)
+            * np.eye(block_size, dtype=blocks.dtype)[None, :, :]
+        )
+        tolerance = 32.0 * np.finfo(blocks.dtype).eps
+        if not np.allclose(
+            blocks[local_faces, 0],
+            expected_diagonal,
+            rtol=tolerance,
+            atol=0.0,
+        ):
+            raise ValueError(
+                "selected boundary rows do not have the expected "
+                "boundary_penalty * identity diagonal"
+            )
+        if num_slots > 1 and np.any(blocks[local_faces, 1:] != 0.0):
+            raise ValueError("selected boundary rows contain off-diagonal blocks")
+        expected_rhs = boundary_penalty * boundary_trace[boundary_faces]
+        if not np.allclose(
+            rhs[local_faces],
+            expected_rhs,
+            rtol=tolerance,
+            atol=tolerance,
+        ):
+            raise ValueError(
+                "selected boundary right-hand sides do not match "
+                "boundary_penalty * boundary_trace"
+            )
+
+    normalized_blocks = blocks.copy()
+    normalized_rhs = rhs.copy()
+    normalized_blocks[local_faces] /= boundary_penalty
+    normalized_rhs[local_faces] /= boundary_penalty
+
+    return FaceDenseSystem(
+        blocks=np.ascontiguousarray(normalized_blocks),
+        neighbors=np.ascontiguousarray(system.neighbors),
+        rhs=np.ascontiguousarray(normalized_rhs),
+        global_faces=np.ascontiguousarray(system.global_faces),
+        global_to_local=np.ascontiguousarray(system.global_to_local),
+        boundary_trace=np.ascontiguousarray(system.boundary_trace),
+        mode=system.mode,
+    )
+
+
 def eliminate_dirichlet_faces(
     interior_row_blocks: np.ndarray,
     topology: FaceTopology,
@@ -612,4 +759,5 @@ __all__ = [
     "face_dense_relative_residual",
     "materialize_face_dense_matrix",
     "make_penalty_system",
+    "normalize_penalty_rows",
 ]
