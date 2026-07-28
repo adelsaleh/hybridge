@@ -4,6 +4,20 @@ from __future__ import annotations
 
 from time import perf_counter
 
+if __package__:
+    from .validate_gpu_environment import check_gpu_validation_environment
+else:  # Support PyCharm's direct "Run file" action.
+    from validate_gpu_environment import check_gpu_validation_environment
+
+
+if __name__ == "__main__":
+    _environment = check_gpu_validation_environment(
+        "scripts.validate_face_dense_gpu_local_factorization",
+    )
+    if not _environment.ready:
+        raise SystemExit(_environment.exit_code)
+
+
 import numpy as np
 
 from hdgfem.backends.cupy import require_cupy_device
@@ -19,6 +33,7 @@ from hdgfem.linalg.additive_schwarz import (
 from hdgfem.linalg.block_jacobi import build_face_block_jacobi_preconditioner
 from hdgfem.solvers.diff_rea_face_dense import solve_diffusion_face_dense_direct
 from scripts.diff_rea_cases import quadratic_poisson_case
+
 
 def relative_difference(left: np.ndarray, right: np.ndarray) -> float:
     scale = max(float(np.linalg.norm(right)), np.finfo(np.float64).eps)

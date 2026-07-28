@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.backends.cupy import require_cupy_device, solve_batched_vectors
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
 from hdgfem.backends.cupy_preconditionners import (
@@ -47,6 +47,23 @@ def _problem(boundary_mode: str, *, size: int = 2, order: int = 2):
         boundary_penalty=1.0e6,
     )
     return space, direct
+
+
+def test_batched_vector_solve_uses_cross_version_rhs_shape() -> None:
+    matrices = np.array(
+        [
+            [[3.0, 1.0], [1.0, 2.0]],
+            [[2.0, -1.0], [4.0, 3.0]],
+            [[5.0, 2.0], [-1.0, 4.0]],
+        ]
+    )
+    expected = np.array([[2.0, -1.0], [1.5, 2.0], [-2.0, 0.5]])
+    vectors = np.einsum("bij,bj->bi", matrices, expected)
+
+    result = solve_batched_vectors(np, matrices, vectors)
+
+    assert result.shape == vectors.shape
+    np.testing.assert_allclose(result, expected, rtol=1.0e-14, atol=1.0e-14)
 
 
 @pytest.mark.parametrize("boundary_mode", ["eliminate", "penalty"])

@@ -2,8 +2,26 @@
 
 from __future__ import annotations
 
+if __package__:
+    from .validate_gpu_environment import check_gpu_validation_environment
+else:  # Support PyCharm's direct "Run file" action.
+    from validate_gpu_environment import check_gpu_validation_environment
+
+
+if __name__ == "__main__":
+    _environment = check_gpu_validation_environment(
+        "scripts.validate_face_dense_gpu_gmres",
+    )
+    if not _environment.ready:
+        raise SystemExit(_environment.exit_code)
+
+
 import numpy as np
 
+from hdgfem.assembly.face_dense import (
+    face_dense_relative_residual,
+    normalize_penalty_rows,
+)
 from hdgfem.backends.cupy import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
@@ -20,6 +38,9 @@ else:  # Support PyCharm's direct "Run file" action.
     from diff_rea_cases import quadratic_poisson_case
 
 
+_BOUNDARY_PENALTY = 1.0e6
+
+
 def run_case(boundary_mode: str, preconditioned: bool) -> None:
     cp = require_cupy_device()
     space = DGSpace(rectangle_mesh(4, 4), 2, basis_type="dub_orth")
@@ -32,9 +53,21 @@ def run_case(boundary_mode: str, preconditioned: bool) -> None:
         diffusion=diffusion,
         stabilization=1.3,
         boundary_mode=boundary_mode,
-        boundary_penalty=1.0e6,
+        boundary_penalty=_BOUNDARY_PENALTY,
     )
-    system = direct.system
+    physical_system = direct.system
+    system = physical_system
+    normalized_penalty_rows = boundary_mode == "penalty" and not preconditioned
+    if normalized_penalty_rows:
+        boundary_faces = np.flatnonzero(
+            direct.assembly.topology.incidence_count == 1
+        )
+        system = normalize_penalty_rows(
+            physical_system,
+            boundary_faces,
+            boundary_penalty=_BOUNDARY_PENALTY,
+        )
+
     operator = CuPyFaceDenseOperator.from_system(system)
     preconditioner = None
     label = "GMRES"
@@ -62,12 +95,21 @@ def run_case(boundary_mode: str, preconditioned: bool) -> None:
         np.linalg.norm(direct.system_solution),
         np.finfo(np.float64).eps,
     )
+    physical_residual = face_dense_relative_residual(
+        physical_system,
+        solution,
+    )
     print(f"{boundary_mode:9s} {label:8s}")
     print(f"  status               : {result.status}")
     print(f"  dofs                 : {system.num_dofs}")
+    print(
+        "  normalized penalty   : "
+        f"{'yes' if normalized_penalty_rows else 'no'}"
+    )
     print(f"  Arnoldi iterations   : {result.iterations}")
     print(f"  restart cycles       : {result.restart_cycles}")
-    print(f"  true relative resid. : {result.relative_residual:.3e}")
+    print(f"  solve relative resid.: {result.relative_residual:.3e}")
+    print(f"  physical rel. resid. : {physical_residual:.3e}")
     print(f"  direct difference    : {difference:.3e}")
     print(f"  matvec / dot / axpy  : {result.matvec_count} / "
           f"{result.dot_count} / {result.axpy_count}")

@@ -12,6 +12,20 @@ face-dense operator.
 
 from __future__ import annotations
 
+if __package__:
+    from .validate_gpu_environment import check_gpu_validation_environment
+else:  # Support PyCharm's direct "Run file" action.
+    from validate_gpu_environment import check_gpu_validation_environment
+
+
+if __name__ == "__main__":
+    _environment = check_gpu_validation_environment(
+        "scripts.validate_face_dense_gpu_operator",
+    )
+    if not _environment.ready:
+        raise SystemExit(_environment.exit_code)
+
+
 import numpy as np
 
 from hdgfem.assembly.face_dense import face_dense_matvec

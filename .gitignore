@@ -5,6 +5,8 @@
 .cupy-cache/
 .tmp/
 venv/
+/.conda/
+/.conda-hpc/
 __pycache__/
 *.py[cod]
 *.pyo

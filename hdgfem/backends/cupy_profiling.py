@@ -28,7 +28,7 @@ from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from .cupy import require_cupy_device
+from .cupy import require_cupy_device, solve_batched_vectors
 
 
 @dataclass(frozen=True)
@@ -490,7 +490,8 @@ def profile_block_jacobi(
 def _asm_local_solve_into(preconditioner: Any) -> None:
     cp = preconditioner._cp
     if preconditioner.local_solver == "gpu_solve":
-        solved = cp.linalg.solve(
+        solved = solve_batched_vectors(
+            cp,
             preconditioner.local_matrices,
             preconditioner._element_rhs,
         )

@@ -334,8 +334,8 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
   degree `p+1` primal and H(div)-style flux post-processing.
 - `hdgfem/backends/numba.py`: package adapter for the projected Numba backend.
 - `hdgfem/backends/numpy.py`: NumPy backend exports.
-- `hdgfem/backends/cupy.py`: optional CuPy loader, CUDA component-wheel
-  bootstrap, and device validation helpers.
+- `hdgfem/backends/cupy.py`: optional CuPy loader and device validation
+  helpers.
 - `hdgfem/assembly/hdg.py`: reusable HDG static-condensation and trace assembly helpers.
 - `hdgfem/assembly/hdg_gram.py`: sparse and statically condensed HDG Gram
   inverse applications for dual residual norms.
@@ -362,38 +362,127 @@ The default basis is `dub_orth`, matching the legacy HDG comparisons.
 
 ## Local Development
 
-Run local commands from the repository root, or install the project in editable
-mode so `hdgfem` is importable from any working directory:
+Run commands from the repository root and use the project interpreter
+explicitly. A bare `python`, `pip`, or `pytest` may resolve to a Conda or system
+environment even when `.venv` exists.
 
 ```bash
-python scripts/run_adv_rea_cases.py test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
-python -m pip install -e .
+uv python install 3.13.13
+uv sync --locked --python 3.13.13 --group dev --extra all
+.venv/bin/python -m pip check
+.venv/bin/python -m pytest
+.venv/bin/python -m scripts.run_adv_rea_cases \
+  test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
 ```
 
-### Windows CUDA 11 dense-GMRES development
+On Windows, replace `.venv/bin/python` with
+`.\.venv\Scripts\python.exe`. For a smaller core-test environment that does
+not run the Gmsh smoke command, `--extra test` is sufficient.
 
-The face-dense GMRES CUDA backend uses Python 3.13 and the `gpu-cu11` optional
-dependency set. The locked environment includes the cuBLAS and NVRTC
-components used by this backend; unrelated CuPy features can require a full
-CUDA 11.8 Toolkit. The following PowerShell commands create the environment in
-`.venv`, install the project in editable mode, and include the development
-packaging tools PyCharm uses for package inspection:
+After switching branches, clear pytest's cross-branch failure cache before
+using `--lf`; otherwise removed or renamed tests can still appear in the cached
+failure list:
+
+```bash
+.venv/bin/python -m pytest --cache-clear
+```
+
+If Numba reports that an older system TBB interface was disabled, either
+upgrade that system TBB installation to interface version 12060 or newer, or
+select the already-supported OpenMP threading layer explicitly:
+
+```bash
+NUMBA_THREADING_LAYER=omp .venv/bin/python -m pytest
+```
+
+### CUDA dense-GMRES development
+
+The GPU environment follows the current workstation rather than the older
+laptop-specific stack. The reference configuration is Python 3.13.13, an NVIDIA
+T600 with driver 595.84, CuPy 14.1.1, and the CUDA 13 component wheels. The
+optional dependency is consequently named `gpu`, without a legacy CUDA version
+in its public name.
+
+The `gpu` extra selects `cupy-cuda13x[ctk]>=14.1.1,<15`. CuPy's official `ctk`
+extra installs its compatible cuBLAS, CUDA runtime, NVRTC, and other CUDA 13
+component wheels, so these validations do not require a separately installed
+CUDA Toolkit. Component-wheel patch releases are left to the resolver so a
+newer compatible CUDA 13 release can be used. The scientific Python ranges are
+NumPy `>=2.0,<2.5` and Numba `>=0.66,<0.67`; the current Python 3.13 lock
+resolves NumPy 2.4 and SciPy 1.18. SciPy remains a core CPU dependency rather
+than a CUDA-specific constraint.
+
+CuPy 14 uses NVIDIA's `cuda-pathfinder` dependency to locate those component
+wheels on Linux and Windows. The project therefore does not set `CUDA_PATH` or
+modify the DLL search path itself.
+
+Install exactly one CuPy distribution. In particular, do not install the
+unqualified `cupy` package or a second wheel variant such as `cupy-cuda12x`
+alongside `cupy-cuda13x`; the distributions share the same import package and
+produce an invalid environment. The NVIDIA driver must support the CUDA runtime
+selected by the component wheels.
+
+CUDA 13 requires a Turing-or-newer GPU (compute capability 7.5 or newer) and a
+driver exposing a CUDA 13 driver API. The T600 reference device has compute
+capability 7.5 and satisfies that hardware requirement.
+
+On Linux:
+
+```bash
+uv python install 3.13.13
+uv sync --locked --python 3.13.13 \
+  --group dev --extra test --extra gpu
+.venv/bin/python -m pip check
+.venv/bin/python -m scripts.validate_gpu_environment
+```
+
+Then run the complete test suite and every face-dense GPU validation:
+
+```bash
+CUPY_CACHE_DIR="$PWD/.cupy-cache" \
+  .venv/bin/python -m pytest
+CUPY_CACHE_DIR="$PWD/.cupy-cache" \
+  .venv/bin/python -m scripts.validate_face_dense_gpu_operator
+CUPY_CACHE_DIR="$PWD/.cupy-cache" \
+  .venv/bin/python -m scripts.validate_face_dense_gpu_gmres
+CUPY_CACHE_DIR="$PWD/.cupy-cache" \
+  .venv/bin/python -m scripts.validate_face_dense_gpu_additive_schwarz
+CUPY_CACHE_DIR="$PWD/.cupy-cache" \
+  .venv/bin/python -m scripts.validate_face_dense_gpu_local_factorization
+```
+
+The equivalent PowerShell commands are:
 
 ```powershell
 $env:UV_CACHE_DIR = "$PWD\.uv-cache"
 $env:UV_PYTHON_INSTALL_DIR = "$PWD\.uv-python"
-uv python install 3.13.12
-uv sync --python 3.13.12 --group dev --extra all --extra gpu-cu11
+uv python install 3.13.13
+uv sync --locked --python 3.13.13 `
+  --group dev --extra test --extra gpu
 .\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m scripts.validate_gpu_environment
 ```
 
 Select `.venv\Scripts\python.exe` as the PyCharm project interpreter. Run the
-GPU validation module from the repository root with:
+complete tests and validation modules from the repository root with:
 
 ```powershell
 $env:CUPY_CACHE_DIR = "$PWD\.cupy-cache"
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m scripts.validate_face_dense_gpu_operator
 .\.venv\Scripts\python.exe -m scripts.validate_face_dense_gpu_gmres
+.\.venv\Scripts\python.exe -m scripts.validate_face_dense_gpu_additive_schwarz
+.\.venv\Scripts\python.exe -m scripts.validate_face_dense_gpu_local_factorization
 ```
+
+The environment preflight and the GPU validation modules print the active
+Python executable, installed CuPy wheel variant, CUDA Toolkit wheel version,
+constrained scientific Python versions, CUDA runtime, driver API, and device. A
+machine with no optional CuPy installation or no visible CUDA device reports
+`SKIPPED` and exits successfully. A wrong project interpreter or multiple CuPy
+wheel variants installed together reports `ERROR` and exits with status 2.
+`pip check` remains useful, but cannot by itself prove that the `gpu` optional
+dependency set was selected.
 
 ## Generic Field Plotting
 

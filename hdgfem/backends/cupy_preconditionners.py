@@ -22,7 +22,7 @@ from ..linalg.additive_schwarz import (
 )
 from ..linalg.block_jacobi import build_face_block_jacobi_preconditioner
 from .cublas_batched import invert_batched_cublas
-from .cupy import require_cupy_device
+from .cupy import require_cupy_device, solve_batched_vectors
 
 
 def _gpu_batched_inverse(cp: Any, matrices: Any, *, label: str) -> tuple[Any, Any]:
@@ -290,7 +290,7 @@ class CuPyFaceBlockJacobiPreconditioner:
             # Public CuPy batched solve currently has no ``out`` parameter and
             # does not expose reusable LU factors.  Keep this path as a
             # correctness/performance comparison, not the production default.
-            solved = cp.linalg.solve(self.local_blocks, x_faces)
+            solved = solve_batched_vectors(cp, self.local_blocks, x_faces)
             self._output[...] = solved
             out_faces[...] = self._output
             return
@@ -976,7 +976,11 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
 
         self._launch_restrict(x_flat, self._element_rhs.reshape(-1))
         if self.local_solver == "gpu_solve":
-            solved = cp.linalg.solve(self.local_matrices, self._element_rhs)
+            solved = solve_batched_vectors(
+                cp,
+                self.local_matrices,
+                self._element_rhs,
+            )
             self._local_output[...] = solved
         else:
             cp.matmul(
