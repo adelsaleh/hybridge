@@ -21,6 +21,7 @@ import numpy as np
 from .cupy import require_cupy_device
 
 CuPyGMRESStatus = Literal["converged", "max_iterations", "breakdown"]
+CuPyOrthogonalization = Literal["mgs", "mgs2", "cgs", "cgs2"]
 
 
 @runtime_checkable
@@ -71,6 +72,10 @@ class CuPyGMRESResult:
     axpy_count: int
     norm_count: int
     basis_update_count: int
+    orthogonalization: CuPyOrthogonalization
+    basis_projection_count: int
+    basis_correction_count: int
+    coefficient_d2h_count: int
 
 
 class CuPyVectorBLAS:
@@ -187,6 +192,136 @@ class CuPyVectorBLAS:
         else:
             self.profiler.record_gpu_call("scal", operation)
 
+    def _validate_basis_matrix(self, matrix: Any, *, name: str) -> Any:
+        cp = self.cp
+        if not isinstance(matrix, cp.ndarray):
+            raise TypeError(f"{name} must be a CuPy array")
+        if int(matrix.device.id) != self.device_id:
+            raise ValueError(f"{name} is on the wrong CUDA device")
+        if matrix.dtype != self.dtype:
+            raise TypeError(f"{name} must have dtype {self.dtype}")
+        if matrix.ndim != 2:
+            raise ValueError(f"{name} must be two-dimensional")
+        if not matrix.flags.c_contiguous:
+            raise ValueError(f"{name} must be C-contiguous")
+        return matrix
+
+    def basis_projection(
+        self,
+        basis_rows: Any,
+        vector: Any,
+        coefficients: Any,
+    ) -> None:
+        """Compute ``coefficients = basis_rows @ vector`` with one GEMV."""
+
+        basis_rows = self._validate_basis_matrix(
+            basis_rows,
+            name="basis_rows",
+        )
+        vector = self._validate_vector(vector, name="vector")
+        coefficients = self._validate_vector(
+            coefficients,
+            name="coefficients",
+        )
+        if basis_rows.shape != (coefficients.size, vector.size):
+            raise ValueError(
+                "basis projection shapes are incompatible: "
+                f"basis={basis_rows.shape}, vector={vector.shape}, "
+                f"coefficients={coefficients.shape}"
+            )
+
+        def operation() -> None:
+            self._cublas.gemv(
+                "N",
+                1.0,
+                basis_rows,
+                vector,
+                0.0,
+                coefficients,
+            )
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("basis_projection", operation)
+
+    def basis_correction(
+        self,
+        basis_rows: Any,
+        coefficients: Any,
+        vector: Any,
+    ) -> None:
+        """Compute ``vector -= basis_rows.T @ coefficients`` with one GEMV."""
+
+        basis_rows = self._validate_basis_matrix(
+            basis_rows,
+            name="basis_rows",
+        )
+        coefficients = self._validate_vector(
+            coefficients,
+            name="coefficients",
+        )
+        vector = self._validate_vector(vector, name="vector")
+        if basis_rows.shape != (coefficients.size, vector.size):
+            raise ValueError(
+                "basis correction shapes are incompatible: "
+                f"basis={basis_rows.shape}, coefficients={coefficients.shape}, "
+                f"vector={vector.shape}"
+            )
+
+        def operation() -> None:
+            self._cublas.gemv(
+                "T",
+                -1.0,
+                basis_rows,
+                coefficients,
+                1.0,
+                vector,
+            )
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call("basis_correction", operation)
+
+    def copy_device_vector_to_host(
+        self,
+        source: Any,
+        destination: np.ndarray,
+    ) -> None:
+        """Copy one short device vector into a reusable NumPy buffer.
+
+        The transfer is intentionally blocking because the CPU immediately
+        accumulates the coefficients into the Hessenberg column.  CGS/CGS2
+        performs one such transfer per orthogonalization pass rather than one
+        scalar transfer per basis vector.
+        """
+
+        source = self._validate_vector(source, name="source")
+        destination = np.asarray(destination)
+        expected_dtype = np.dtype(self.dtype.name)
+        if destination.dtype != expected_dtype:
+            raise TypeError(
+                f"destination must have dtype {expected_dtype}, got "
+                f"{destination.dtype}"
+            )
+        if destination.shape != source.shape:
+            raise ValueError("source and destination must have equal shape")
+        if not destination.flags.c_contiguous:
+            raise ValueError("destination must be C-contiguous")
+
+        def operation() -> None:
+            source.get(out=destination, blocking=True)
+
+        if self.profiler is None:
+            operation()
+        else:
+            self.profiler.record_gpu_call(
+                "orthogonalization_d2h",
+                operation,
+                host_synchronizing=True,
+            )
+
     def basis_update(
         self,
         basis_rows: Any,
@@ -195,13 +330,10 @@ class CuPyVectorBLAS:
     ) -> None:
         """Perform ``solution += basis_rows.T @ coefficients`` with GEMV."""
 
-        cp = self.cp
-        if not isinstance(basis_rows, cp.ndarray) or basis_rows.ndim != 2:
-            raise TypeError("basis_rows must be a two-dimensional CuPy array")
-        if int(basis_rows.device.id) != self.device_id:
-            raise ValueError("basis_rows is on the wrong CUDA device")
-        if basis_rows.dtype != self.dtype or not basis_rows.flags.c_contiguous:
-            raise ValueError("basis_rows must be C-contiguous with matching dtype")
+        basis_rows = self._validate_basis_matrix(
+            basis_rows,
+            name="basis_rows",
+        )
         coefficients = self._validate_vector(coefficients, name="coefficients")
         solution = self._validate_vector(solution, name="solution")
         if basis_rows.shape != (coefficients.size, solution.size):
@@ -279,6 +411,29 @@ def _back_substitute_upper(
     return result
 
 
+def _resolve_orthogonalization(
+    *,
+    orthogonalization: CuPyOrthogonalization | None,
+    reorthogonalize: bool,
+) -> CuPyOrthogonalization:
+    """Resolve the new orthogonalization selector and legacy boolean flag."""
+
+    valid = {"mgs", "mgs2", "cgs", "cgs2"}
+    if orthogonalization is None:
+        return "mgs2" if reorthogonalize else "mgs"
+    value = str(orthogonalization).lower()
+    if value not in valid:
+        raise ValueError(
+            "orthogonalization must be one of mgs, mgs2, cgs, or cgs2"
+        )
+    if reorthogonalize:
+        raise ValueError(
+            "reorthogonalize cannot be combined with an explicit "
+            "orthogonalization mode"
+        )
+    return value  # type: ignore[return-value]
+
+
 def _validate_restart_parameters(
     *,
     restart: int,
@@ -320,16 +475,19 @@ def restarted_gmres_cupy(
     rtol: float = 1.0e-8,
     atol: float = 0.0,
     preconditioner: DevicePreconditioner | None = None,
+    orthogonalization: CuPyOrthogonalization | None = None,
     reorthogonalize: bool = False,
     breakdown_tolerance: float | None = None,
     profiler: Any | None = None,
 ) -> CuPyGMRESResult:
     r"""Solve ``A x = rhs`` with restarted left-preconditioned GPU GMRES.
 
-    Large vectors and the Arnoldi basis stay on the GPU.  Modified
-    Gram--Schmidt uses cuBLAS DOT and AXPY calls; norms use cuBLAS NRM2; the
-    restart update uses one cuBLAS GEMV.  Only scalar Hessenberg coefficients
-    and the final restart coefficient vector cross the PCIe boundary.
+    Large vectors and the Arnoldi basis stay on the GPU.  ``mgs`` and
+    ``mgs2`` use cuBLAS DOT/AXPY operations.  ``cgs`` and ``cgs2`` form all
+    projection coefficients with one cuBLAS GEMV and apply the correction with
+    a second GEMV per pass.  CGS modes transfer one short coefficient vector to
+    the CPU per pass, rather than one scalar per basis vector.  Norms use
+    cuBLAS NRM2 and the restart update uses one cuBLAS GEMV.
 
     The Givens residual is used as an inexpensive convergence trigger.  A true
     residual is always recomputed after each completed or early-terminated
@@ -363,6 +521,11 @@ def restarted_gmres_cupy(
         rtol=rtol,
         atol=atol,
         breakdown_tolerance=breakdown_tolerance,
+    )
+
+    orthogonalization = _resolve_orthogonalization(
+        orthogonalization=orthogonalization,
+        reorthogonalize=reorthogonalize,
     )
 
     if preconditioner is not None:
@@ -410,6 +573,11 @@ def restarted_gmres_cupy(
         work = cp.empty(num_dofs, dtype=dtype)
         preconditioned = cp.empty(num_dofs, dtype=dtype)
         coefficient_device = cp.empty(restart, dtype=dtype)
+        orthogonalization_coefficients_device = cp.empty(restart, dtype=dtype)
+        orthogonalization_coefficients_host = np.empty(
+            restart,
+            dtype=np.dtype(dtype.name),
+        )
 
         matvec_count = 0
         preconditioner_count = 0
@@ -417,6 +585,9 @@ def restarted_gmres_cupy(
         axpy_count = 0
         norm_count = 0
         basis_update_count = 0
+        basis_projection_count = 0
+        basis_correction_count = 0
+        coefficient_d2h_count = 0
 
         def apply_matvec(source: Any, destination: Any) -> None:
             nonlocal matvec_count
@@ -488,6 +659,10 @@ def restarted_gmres_cupy(
                 axpy_count=axpy_count,
                 norm_count=norm_count,
                 basis_update_count=basis_update_count,
+                orthogonalization=orthogonalization,
+                basis_projection_count=basis_projection_count,
+                basis_correction_count=basis_correction_count,
+                coefficient_d2h_count=coefficient_d2h_count,
             )
 
         if true_norm <= target:
@@ -526,14 +701,46 @@ def restarted_gmres_cupy(
                 apply_matvec(basis[column], matvec_buffer)
                 apply_preconditioner(matvec_buffer, work)
 
-                passes = 2 if reorthogonalize else 1
-                for _ in range(passes):
-                    for row in range(column + 1):
-                        coefficient = blas.dot(basis[row], work)
-                        dot_count += 1
-                        hessenberg[row, column] += coefficient
-                        blas.axpy(-coefficient, basis[row], work)
-                        axpy_count += 1
+                if orthogonalization in ("mgs", "mgs2"):
+                    passes = 2 if orthogonalization == "mgs2" else 1
+                    for _ in range(passes):
+                        for row in range(column + 1):
+                            coefficient = blas.dot(basis[row], work)
+                            dot_count += 1
+                            hessenberg[row, column] += coefficient
+                            blas.axpy(-coefficient, basis[row], work)
+                            axpy_count += 1
+                else:
+                    passes = 2 if orthogonalization == "cgs2" else 1
+                    active_dimension = column + 1
+                    active_basis = basis[:active_dimension]
+                    device_coefficients = (
+                        orthogonalization_coefficients_device[:active_dimension]
+                    )
+                    host_coefficients = (
+                        orthogonalization_coefficients_host[:active_dimension]
+                    )
+                    for _ in range(passes):
+                        blas.basis_projection(
+                            active_basis,
+                            work,
+                            device_coefficients,
+                        )
+                        basis_projection_count += 1
+                        blas.basis_correction(
+                            active_basis,
+                            device_coefficients,
+                            work,
+                        )
+                        basis_correction_count += 1
+                        blas.copy_device_vector_to_host(
+                            device_coefficients,
+                            host_coefficients,
+                        )
+                        coefficient_d2h_count += 1
+                        hessenberg[:active_dimension, column] += (
+                            host_coefficients
+                        )
 
                 next_norm = blas.norm(work)
                 norm_count += 1
@@ -645,10 +852,13 @@ def restarted_gmres_cupy(
 
         return make_result("max_iterations", iterations, cycles, true_norm)
 
+
 __all__ = [
     "CuPyGMRESResult",
+    "CuPyOrthogonalization",
     "CuPyVectorBLAS",
     "DeviceMatvecOperator",
     "DevicePreconditioner",
+    "_resolve_orthogonalization",
     "restarted_gmres_cupy",
 ]

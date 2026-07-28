@@ -113,7 +113,20 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-iterations", type=int, default=1000)
     parser.add_argument("--rtol", type=float, default=1.0e-8)
     parser.add_argument("--atol", type=float, default=0.0)
-    parser.add_argument("--reorthogonalize", action="store_true")
+    parser.add_argument(
+        "--orthogonalization",
+        choices=("mgs", "mgs2", "cgs", "cgs2"),
+        default=None,
+        help=(
+            "Arnoldi orthogonalization. When omitted, the legacy "
+            "--reorthogonalize flag selects mgs2; otherwise mgs is used."
+        ),
+    )
+    parser.add_argument(
+        "--reorthogonalize",
+        action="store_true",
+        help="Legacy alias for --orthogonalization mgs2.",
+    )
     parser.add_argument("--gmres-warmup", type=int, default=1)
     parser.add_argument("--skip-gmres", action="store_true")
     parser.add_argument("--skip-detailed-gmres", action="store_true")
@@ -136,6 +149,10 @@ def _parse_args() -> argparse.Namespace:
         parser.error("gmres-warmup must be non-negative")
     if args.detailed_max_iterations <= 0:
         parser.error("detailed-max-iterations must be positive")
+    if args.orthogonalization is not None and args.reorthogonalize:
+        parser.error(
+            "--orthogonalization and --reorthogonalize cannot be combined"
+        )
     if args.gmres_matvec_implementation not in args.matvec_implementations:
         parser.error(
             "--gmres-matvec-implementation must also appear in "
@@ -292,7 +309,13 @@ def main() -> None:
     print(f"Boundary mode   : {args.boundary_mode}")
     print(f"Local solver    : {args.local_solver}")
     print(f"GMRES matvec    : {args.gmres_matvec_implementation}")
+    resolved_orthogonalization = (
+        args.orthogonalization
+        if args.orthogonalization is not None
+        else ("mgs2" if args.reorthogonalize else "mgs")
+    )
     print(f"Prec. apply     : {args.preconditioner_application}")
+    print(f"Orthogonalize   : {resolved_orthogonalization}")
     print(f"Warmup/repeats  : {args.warmup}/{args.repeats}")
     print()
 
@@ -484,6 +507,7 @@ def main() -> None:
                                 rtol=args.rtol,
                                 atol=args.atol,
                                 preconditioner=preconditioner,
+                                orthogonalization=args.orthogonalization,
                                 reorthogonalize=args.reorthogonalize,
                                 profiler=profiler,
                             )
@@ -531,6 +555,16 @@ def main() -> None:
                                 "axpy_count": result.axpy_count,
                                 "norm_count": result.norm_count,
                                 "basis_update_count": result.basis_update_count,
+                                "orthogonalization": result.orthogonalization,
+                                "basis_projection_count": (
+                                    result.basis_projection_count
+                                ),
+                                "basis_correction_count": (
+                                    result.basis_correction_count
+                                ),
+                                "coefficient_d2h_count": (
+                                    result.coefficient_d2h_count
+                                ),
                                 "profiled_iterations": (
                                     None if profiled_result is None else profiled_result.iterations
                                 ),
@@ -562,6 +596,16 @@ def main() -> None:
                                         "iterations": result.iterations,
                                         "restart_cycles": result.restart_cycles,
                                         "relative_residual": result.relative_residual,
+                                        "orthogonalization": result.orthogonalization,
+                                        "basis_projection_count": (
+                                            result.basis_projection_count
+                                        ),
+                                        "basis_correction_count": (
+                                            result.basis_correction_count
+                                        ),
+                                        "coefficient_d2h_count": (
+                                            result.coefficient_d2h_count
+                                        ),
                                     },
                                     "profiled_result": {
                                         "converged": profiled_result.converged,
@@ -569,6 +613,18 @@ def main() -> None:
                                         "iterations": profiled_result.iterations,
                                         "restart_cycles": profiled_result.restart_cycles,
                                         "relative_residual": profiled_result.relative_residual,
+                                        "orthogonalization": (
+                                            profiled_result.orthogonalization
+                                        ),
+                                        "basis_projection_count": (
+                                            profiled_result.basis_projection_count
+                                        ),
+                                        "basis_correction_count": (
+                                            profiled_result.basis_correction_count
+                                        ),
+                                        "coefficient_d2h_count": (
+                                            profiled_result.coefficient_d2h_count
+                                        ),
                                     },
                                     "operation_profile": profile_summary.to_dict(),
                                 }
@@ -602,6 +658,7 @@ def main() -> None:
         "max_iterations": args.max_iterations,
         "rtol": args.rtol,
         "atol": args.atol,
+        "orthogonalization": resolved_orthogonalization,
         "reorthogonalize": args.reorthogonalize,
         "skip_detailed_gmres": args.skip_detailed_gmres,
         "detailed_max_iterations": args.detailed_max_iterations,
