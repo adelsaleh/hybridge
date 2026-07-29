@@ -1,8 +1,9 @@
 """Validate and benchmark harmonic-Ritz polynomial preconditioning on CUDA.
 
-The recommended first T600 comparison is ASM versus the hybrid
-``p(M^{-1}A)M^{-1}`` form.  Spectral setup uses CGS2 by default, while the
-outer GMRES may use the faster one-pass CGS observed in the restart study.
+A degree sweep can use one shared Arnoldi probe at the largest requested
+polynomial degree.  Every smaller candidate is then extracted from a leading
+Hessenberg submatrix, avoiding repeated global matvec/preconditioner setup
+work.  CUDA JIT initialization is reported separately from numerical setup.
 """
 
 from __future__ import annotations
@@ -20,7 +21,11 @@ from hdgfem.assembly import hdg as hdg_assembly
 from hdgfem.backends.cupy import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
-from hdgfem.backends.cupy_polynomial import CuPyPolynomialPreconditioner
+from hdgfem.backends.cupy_polynomial import (
+    CuPyPolynomialPreconditioner,
+    initialize_polynomial_kernels_cupy,
+    setup_polynomial_arnoldi_probe_cupy,
+)
 from hdgfem.backends.cupy_preconditionners import (
     CuPyFaceAdditiveSchwarzPreconditioner,
     CuPyFaceBlockJacobiPreconditioner,
@@ -45,6 +50,19 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         choices=METHODS,
         default=["asm", "asm_poly"],
+    )
+    parser.add_argument(
+        "--setup-mode",
+        choices=("shared", "independent"),
+        default="shared",
+        help="reuse one maximum-degree Arnoldi probe or rebuild each degree",
+    )
+    parser.add_argument(
+        "--rhs-counts",
+        nargs="+",
+        type=int,
+        default=[1, 5, 20],
+        help="numbers of right-hand sides used for setup amortization summaries",
     )
     parser.add_argument("--restart", type=int, default=100)
     parser.add_argument("--max-iterations", type=int, default=2000)
@@ -80,10 +98,14 @@ def parse_args() -> argparse.Namespace:
         parser.error("mesh must be positive and order non-negative")
     if any(degree <= 0 for degree in args.degrees):
         parser.error("all polynomial degrees must be positive")
+    if any(count <= 0 for count in args.rhs_counts):
+        parser.error("all rhs-counts must be positive")
     if args.restart <= 0 or args.max_iterations <= 0:
         parser.error("restart and max-iterations must be positive")
     if args.apply_warmup < 0 or args.apply_repeats <= 0:
         parser.error("invalid application benchmark counts")
+    args.degrees = sorted(set(args.degrees))
+    args.rhs_counts = sorted(set(args.rhs_counts))
     return args
 
 
@@ -126,7 +148,13 @@ def _device_name(cp: Any, device_id: int) -> str:
     return name.decode(errors="replace") if isinstance(name, bytes) else str(name)
 
 
-def benchmark_apply(cp: Any, preconditioner: Any, vector: Any, warmup: int, repeats: int) -> float:
+def benchmark_apply(
+    cp: Any,
+    preconditioner: Any,
+    vector: Any,
+    warmup: int,
+    repeats: int,
+) -> float:
     output = cp.empty_like(vector)
     for _ in range(warmup):
         preconditioner.apply_into(vector, output)
@@ -143,7 +171,13 @@ def benchmark_apply(cp: Any, preconditioner: Any, vector: Any, warmup: int, repe
     return float(np.median(samples))
 
 
-def timed_solve(cp: Any, operator: Any, rhs: Any, preconditioner: Any, args: argparse.Namespace):
+def timed_solve(
+    cp: Any,
+    operator: Any,
+    rhs: Any,
+    preconditioner: Any,
+    args: argparse.Namespace,
+):
     cp.cuda.get_current_stream().synchronize()
     start = perf_counter()
     result = restarted_gmres_cupy(
@@ -172,6 +206,41 @@ def write_outputs(prefix: Path, rows: list[dict[str, Any]], metadata: dict[str, 
     with json_path.open("w", encoding="utf-8") as file:
         json.dump({"metadata": metadata, "rows": rows}, file, indent=2)
     return csv_path, json_path
+
+
+def _print_amortized_selection(
+    rows: list[dict[str, Any]], rhs_counts: list[int]
+) -> None:
+    polynomial_methods = sorted(
+        {row["method"] for row in rows if int(row.get("degree", 0)) > 0}
+    )
+    if not polynomial_methods:
+        return
+    print("\nBest converged degree by amortized setup + solve time")
+    print("-" * 67)
+    for method in polynomial_methods:
+        candidates = [
+            row
+            for row in rows
+            if row["method"] == method and row["status"] == "converged"
+        ]
+        if not candidates:
+            print(f"{method:10s}: no converged candidate")
+            continue
+        summaries: list[str] = []
+        for rhs_count in rhs_counts:
+            winner = min(
+                candidates,
+                key=lambda row: float(row["solve_ms"])
+                + float(row["total_setup_ms"]) / rhs_count,
+            )
+            amortized = float(winner["solve_ms"]) + float(
+                winner["total_setup_ms"]
+            ) / rhs_count
+            summaries.append(
+                f"N={rhs_count}: P={winner['degree']} ({amortized:.3f} ms/RHS)"
+            )
+        print(f"{method:10s}: " + "; ".join(summaries))
 
 
 def main() -> None:
@@ -210,21 +279,38 @@ def main() -> None:
                 application=args.preconditioner_application,
             )
 
+        cp.cuda.get_current_stream().synchronize()
+        jit_start = perf_counter()
+        initialize_polynomial_kernels_cupy(
+            dtype=operator.dtype,
+            device_id=device_id,
+        )
+        kernel_initialization_ms = 1.0e3 * (perf_counter() - jit_start)
+
         print("GPU harmonic-Ritz polynomial preconditioner study")
-        print("=" * 67)
-        print(f"Device / dofs      : {_device_name(cp, device_id)} / {system.num_dofs}")
-        print(f"Mesh / order       : {args.mesh}x{args.mesh} / p={args.order}")
-        print(f"Restart / tolerance: {args.restart} / {args.rtol:.1e}")
-        print(f"Outer / setup orth.: {args.outer_orthogonalization} / {args.setup_orthogonalization}")
+        print("=" * 79)
+        print(f"Device / dofs       : {_device_name(cp, device_id)} / {system.num_dofs}")
+        print(f"Mesh / order        : {args.mesh}x{args.mesh} / p={args.order}")
+        print(f"Restart / tolerance : {args.restart} / {args.rtol:.1e}")
+        print(
+            f"Outer / setup orth. : {args.outer_orthogonalization} / "
+            f"{args.setup_orthogonalization}"
+        )
+        print(f"Polynomial setup    : {args.setup_mode}")
+        print(f"One-time kernel JIT : {kernel_initialization_ms:.3f} ms")
         print()
         print(
-            "method    degree setup[ms] apply[ms]  iter cycles  solve[ms]   relres      "
-            "status   setup-orthF   |theta|min  |theta|max"
+            "method    degree probe[ms] cand[ms] apply[ms] iter cycles "
+            "solve[ms] cold[ms]   relres      status   setup-orthF"
         )
         print("-" * 126)
 
         rows: list[dict[str, Any]] = []
-        baseline_methods = [method for method in args.methods if not method.endswith("_poly") and method != "poly"]
+        baseline_methods = [
+            method
+            for method in args.methods
+            if not method.endswith("_poly") and method != "poly"
+        ]
         for method in baseline_methods:
             preconditioner = {
                 "none": None,
@@ -246,7 +332,11 @@ def main() -> None:
             row = {
                 "method": method,
                 "degree": 0,
-                "setup_ms": 0.0,
+                "requested_degree": 0,
+                "probe_ms": 0.0,
+                "candidate_setup_ms": 0.0,
+                "total_setup_ms": 0.0,
+                "cold_total_ms": solve_ms,
                 "apply_median_ms": apply_ms,
                 "iterations": result.iterations,
                 "restart_cycles": result.restart_cycles,
@@ -259,26 +349,66 @@ def main() -> None:
             }
             rows.append(row)
             print(
-                f"{method:10s} {0:6d} {0.0:9.3f} {apply_ms:9.4f} "
-                f"{result.iterations:5d} {result.restart_cycles:6d} {solve_ms:10.3f} "
-                f"{result.relative_residual:10.3e} {result.status:>11s}"
+                f"{method:10s} {0:6d} {0.0:9.3f} {0.0:8.3f} {apply_ms:9.4f} "
+                f"{result.iterations:4d} {result.restart_cycles:6d} "
+                f"{solve_ms:9.3f} {solve_ms:8.3f} {result.relative_residual:10.3e} "
+                f"{result.status:>11s}"
             )
 
-        polynomial_methods = [method for method in args.methods if method == "poly" or method.endswith("_poly")]
+        polynomial_methods = [
+            method
+            for method in args.methods
+            if method == "poly" or method.endswith("_poly")
+        ]
         for method in polynomial_methods:
             base = {"poly": None, "bj_poly": block_jacobi, "asm_poly": asm}[method]
-            for degree in args.degrees:
+            probe = None
+            shared_probe_ms = 0.0
+            if args.setup_mode == "shared":
                 cp.cuda.get_current_stream().synchronize()
-                setup_start = perf_counter()
-                polynomial = CuPyPolynomialPreconditioner.from_operator(
+                probe_start = perf_counter()
+                probe = setup_polynomial_arnoldi_probe_cupy(
                     operator,
-                    degree=degree,
+                    maximum_degree=max(args.degrees),
                     base_preconditioner=base,
                     seed=args.seed,
-                    setup_orthogonalization=args.setup_orthogonalization,
+                    orthogonalization=args.setup_orthogonalization,
                 )
                 cp.cuda.get_current_stream().synchronize()
-                setup_ms = 1.0e3 * (perf_counter() - setup_start)
+                shared_probe_ms = 1.0e3 * (perf_counter() - probe_start)
+
+            for degree in args.degrees:
+                cp.cuda.get_current_stream().synchronize()
+                candidate_start = perf_counter()
+                if probe is None:
+                    polynomial = CuPyPolynomialPreconditioner.from_operator(
+                        operator,
+                        degree=degree,
+                        base_preconditioner=base,
+                        seed=args.seed,
+                        setup_orthogonalization=args.setup_orthogonalization,
+                    )
+                    cp.cuda.get_current_stream().synchronize()
+                    independent_setup_ms = 1.0e3 * (
+                        perf_counter() - candidate_start
+                    )
+                    probe_ms = independent_setup_ms
+                    candidate_setup_ms = 0.0
+                    total_setup_ms = independent_setup_ms
+                else:
+                    polynomial = CuPyPolynomialPreconditioner.from_probe(
+                        operator,
+                        probe=probe,
+                        degree=degree,
+                        base_preconditioner=base,
+                    )
+                    cp.cuda.get_current_stream().synchronize()
+                    candidate_setup_ms = 1.0e3 * (
+                        perf_counter() - candidate_start
+                    )
+                    probe_ms = shared_probe_ms
+                    total_setup_ms = probe_ms + candidate_setup_ms
+
                 apply_ms = benchmark_apply(
                     cp,
                     polynomial,
@@ -290,34 +420,57 @@ def main() -> None:
                 setup = polynomial.setup
                 assert setup is not None
                 root_magnitudes = np.abs(polynomial.roots)
+                cold_total_ms = total_setup_ms + solve_ms
                 row = {
                     "method": method,
                     "degree": polynomial.degree,
                     "requested_degree": degree,
-                    "setup_ms": setup_ms,
+                    "probe_ms": probe_ms,
+                    "candidate_setup_ms": candidate_setup_ms,
+                    "total_setup_ms": total_setup_ms,
+                    "cold_total_ms": cold_total_ms,
                     "apply_median_ms": apply_ms,
                     "iterations": result.iterations,
                     "restart_cycles": result.restart_cycles,
                     "solve_ms": solve_ms,
                     "relative_residual": result.relative_residual,
                     "status": result.status,
-                    "setup_orthogonality_frobenius": setup.frobenius_orthogonality_defect,
+                    "setup_orthogonality_frobenius": (
+                        setup.frobenius_orthogonality_defect
+                    ),
                     "setup_maximum_offdiagonal": setup.maximum_offdiagonal,
                     "minimum_root_magnitude": float(np.min(root_magnitudes)),
                     "maximum_root_magnitude": float(np.max(root_magnitudes)),
                     "setup_matvec_count": setup.matvec_count,
-                    "setup_base_preconditioner_count": setup.base_preconditioner_count,
+                    "setup_base_preconditioner_count": (
+                        setup.base_preconditioner_count
+                    ),
+                    "shared_probe_requested_degree": (
+                        0 if probe is None else probe.requested_degree
+                    ),
+                    "shared_probe_matvec_count": (
+                        0 if probe is None else probe.matvec_count
+                    ),
                     "matvecs_per_application": polynomial.matvecs_per_application,
-                    "base_calls_per_application": polynomial.base_preconditioner_calls_per_application,
+                    "base_calls_per_application": (
+                        polynomial.base_preconditioner_calls_per_application
+                    ),
                 }
+                for rhs_count in args.rhs_counts:
+                    row[f"amortized_ms_per_rhs_{rhs_count}"] = (
+                        solve_ms + total_setup_ms / rhs_count
+                    )
                 rows.append(row)
                 print(
-                    f"{method:10s} {polynomial.degree:6d} {setup_ms:9.3f} {apply_ms:9.4f} "
-                    f"{result.iterations:5d} {result.restart_cycles:6d} {solve_ms:10.3f} "
+                    f"{method:10s} {polynomial.degree:6d} {probe_ms:9.3f} "
+                    f"{candidate_setup_ms:8.3f} {apply_ms:9.4f} "
+                    f"{result.iterations:4d} {result.restart_cycles:6d} "
+                    f"{solve_ms:9.3f} {cold_total_ms:8.3f} "
                     f"{result.relative_residual:10.3e} {result.status:>11s} "
-                    f"{setup.frobenius_orthogonality_defect:13.3e} "
-                    f"{np.min(root_magnitudes):11.3e} {np.max(root_magnitudes):11.3e}"
+                    f"{setup.frobenius_orthogonality_defect:13.3e}"
                 )
+
+        _print_amortized_selection(rows, args.rhs_counts)
 
         if args.output_prefix is not None:
             metadata = {
@@ -331,7 +484,10 @@ def main() -> None:
                 "rtol": args.rtol,
                 "outer_orthogonalization": args.outer_orthogonalization,
                 "setup_orthogonalization": args.setup_orthogonalization,
+                "setup_mode": args.setup_mode,
+                "rhs_counts": args.rhs_counts,
                 "seed": args.seed,
+                "kernel_initialization_ms": kernel_initialization_ms,
             }
             csv_path, json_path = write_outputs(args.output_prefix, rows, metadata)
             print(f"\nCSV report : {csv_path}")

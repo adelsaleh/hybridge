@@ -62,6 +62,37 @@ class CuPyPolynomialSetup:
         return int(self.ordered_roots.size)
 
 
+@dataclass(frozen=True)
+class CuPyPolynomialArnoldiProbe:
+    """Reusable Arnoldi data for a family of polynomial degrees.
+
+    A single probe of dimension ``maximum_degree`` contains every leading
+    Arnoldi relation needed to construct degrees ``1, ..., maximum_degree``.
+    Only the small Hessenberg and Gram matrices are retained on the host; the
+    large Krylov basis is released after setup.
+    """
+
+    hessenberg: np.ndarray
+    gram_matrix: np.ndarray
+    requested_degree: int
+    effective_degree: int
+    seed: int
+    breakdown: bool
+    orthogonalization: CuPyOrthogonalization
+    matvec_count: int
+    base_preconditioner_count: int
+    num_dofs: int
+    device_id: int
+    dtype_name: str
+    uses_base_preconditioner: bool
+    operator_identity: int
+    base_preconditioner_identity: int | None
+
+    @property
+    def maximum_degree(self) -> int:
+        return int(self.effective_degree)
+
+
 _POLYNOMIAL_UPDATE_KERNEL_SOURCE = r"""
 extern "C" __global__
 void polynomial_real_update_f32(
@@ -139,6 +170,66 @@ void polynomial_pair_update_f64(
 """
 
 
+_POLYNOMIAL_KERNEL_CACHE: dict[tuple[int, str], tuple[Any, Any, Any]] = {}
+
+
+def _get_polynomial_update_kernels(cp: Any, *, dtype: Any, device_id: int):
+    """Return cached RawModule kernels for one device and floating dtype."""
+
+    key = (int(device_id), np.dtype(dtype.name).str)
+    cached = _POLYNOMIAL_KERNEL_CACHE.get(key)
+    if cached is not None:
+        _, real_update, pair_update = cached
+        return real_update, pair_update
+    with cp.cuda.Device(device_id):
+        module = cp.RawModule(
+            code=_POLYNOMIAL_UPDATE_KERNEL_SOURCE,
+            options=("--std=c++11",),
+        )
+        suffix = "f32" if dtype == cp.float32 else "f64"
+        real_update = module.get_function(f"polynomial_real_update_{suffix}")
+        pair_update = module.get_function(f"polynomial_pair_update_{suffix}")
+    _POLYNOMIAL_KERNEL_CACHE[key] = (module, real_update, pair_update)
+    return real_update, pair_update
+
+
+def initialize_polynomial_kernels_cupy(
+    *, dtype: Any = np.float64, device_id: int | None = None
+) -> None:
+    """Compile and launch the polynomial update kernels once.
+
+    Benchmark scripts use this helper to separate one-time CUDA JIT cost from
+    numerical Arnoldi setup.  Normal users do not need to call it because the
+    preconditioner constructor initializes the same cache lazily.
+    """
+
+    cp = require_cupy_device()
+    resolved_device = int(cp.cuda.Device().id) if device_id is None else int(device_id)
+    resolved_dtype = cp.dtype(dtype)
+    if resolved_dtype not in (cp.float32, cp.float64):
+        raise TypeError("polynomial kernels support float32 or float64")
+    real_update, pair_update = _get_polynomial_update_kernels(
+        cp, dtype=resolved_dtype, device_id=resolved_device
+    )
+    scalar = np.float32 if resolved_dtype == cp.float32 else np.float64
+    with cp.cuda.Device(resolved_device):
+        q = cp.ones(1, dtype=resolved_dtype)
+        bq = cp.zeros(1, dtype=resolved_dtype)
+        b2q = cp.zeros(1, dtype=resolved_dtype)
+        result = cp.zeros(1, dtype=resolved_dtype)
+        real_update(
+            (1,),
+            (1,),
+            (np.uint64(1), scalar(1.0), bq, q, result),
+        )
+        pair_update(
+            (1,),
+            (1,),
+            (np.uint64(1), scalar(1.0), scalar(1.0), bq, b2q, q, result),
+        )
+        cp.cuda.get_current_stream().synchronize()
+
+
 def _orthogonality_metrics(gram: np.ndarray) -> tuple[float, float, float]:
     gram = np.asarray(gram, dtype=np.float64)
     dimension = gram.shape[0]
@@ -178,39 +269,41 @@ def _validate_protocol_compatibility(
     return dtype, device_id, num_dofs
 
 
-def setup_polynomial_preconditioner_cupy(
+def setup_polynomial_arnoldi_probe_cupy(
     operator: DeviceMatvecOperator,
     *,
-    degree: int,
+    maximum_degree: int,
     base_preconditioner: DevicePreconditioner | None = None,
     seed: int = 1729,
     initial_vector: np.ndarray | None = None,
     orthogonalization: CuPyOrthogonalization = "cgs2",
     breakdown_tolerance: float | None = None,
-    pair_tolerance: float = 1.0e-10,
     profiler: Any | None = None,
-) -> CuPyPolynomialSetup:
-    """Run one GPU Arnoldi cycle and construct harmonic-Ritz/Leja roots.
+) -> CuPyPolynomialArnoldiProbe:
+    """Run one reusable GPU Arnoldi probe up to ``maximum_degree``.
 
-    ``cgs2`` is the default for setup even when the outer GMRES uses faster
-    one-pass CGS: harmonic Ritz values are more sensitive to basis defects than
-    the final restarted solve observed in the current Poisson benchmarks.
+    For a fixed initial vector, the first ``d`` columns are identical to an
+    independent degree-``d`` Arnoldi setup.  A degree sweep can therefore run
+    the expensive matrix-free probe once and derive every candidate from a
+    leading Hessenberg submatrix on the CPU.
     """
 
     cp = require_cupy_device()
     dtype, device_id, num_dofs = _validate_protocol_compatibility(
         operator, base_preconditioner
     )
-    if isinstance(degree, bool) or int(degree) != degree or degree <= 0:
-        raise ValueError("degree must be a positive integer")
-    degree = int(degree)
-    if degree > num_dofs:
-        raise ValueError("degree cannot exceed operator.num_dofs")
+    if (
+        isinstance(maximum_degree, bool)
+        or int(maximum_degree) != maximum_degree
+        or maximum_degree <= 0
+    ):
+        raise ValueError("maximum_degree must be a positive integer")
+    maximum_degree = int(maximum_degree)
+    if maximum_degree > num_dofs:
+        raise ValueError("maximum_degree cannot exceed operator.num_dofs")
     orthogonalization = str(orthogonalization).lower()  # type: ignore[assignment]
     if orthogonalization not in _SETUP_ORTHOGONALIZATIONS:
         raise ValueError("unsupported setup orthogonalization")
-    if pair_tolerance <= 0.0 or not np.isfinite(pair_tolerance):
-        raise ValueError("pair_tolerance must be positive and finite")
     if breakdown_tolerance is None:
         breakdown_tolerance = 100.0 * np.finfo(np.dtype(dtype.name)).eps
     if breakdown_tolerance < 0.0 or not np.isfinite(breakdown_tolerance):
@@ -226,11 +319,11 @@ def setup_polynomial_preconditioner_cupy(
     initial_host = np.ascontiguousarray(initial_host.reshape(-1), dtype=host_dtype)
 
     with cp.cuda.Device(device_id):
-        basis = cp.empty((degree + 1, num_dofs), dtype=dtype)
+        basis = cp.empty((maximum_degree + 1, num_dofs), dtype=dtype)
         operator_output = cp.empty(num_dofs, dtype=dtype)
         work = cp.empty(num_dofs, dtype=dtype)
-        coefficients_device = cp.empty(degree, dtype=dtype)
-        coefficients_host = np.empty(degree, dtype=host_dtype)
+        coefficients_device = cp.empty(maximum_degree, dtype=dtype)
+        coefficients_host = np.empty(maximum_degree, dtype=host_dtype)
         blas = CuPyVectorBLAS(dtype=dtype, device_id=device_id, profiler=profiler)
 
         cp.copyto(basis[0], cp.asarray(initial_host))
@@ -239,8 +332,10 @@ def setup_polynomial_preconditioner_cupy(
             raise ValueError("initial_vector must be nonzero")
         blas.scal(1.0 / initial_norm, basis[0])
 
-        hessenberg = np.zeros((degree + 1, degree), dtype=np.float64)
-        effective_degree = degree
+        hessenberg = np.zeros(
+            (maximum_degree + 1, maximum_degree), dtype=np.float64
+        )
+        effective_degree = maximum_degree
         breakdown = False
         matvec_count = 0
         base_count = 0
@@ -255,7 +350,7 @@ def setup_polynomial_preconditioner_cupy(
                 base_preconditioner.apply_into(operator_output, destination)
                 base_count += 1
 
-        for column in range(degree):
+        for column in range(maximum_degree):
             effective_apply(basis[column], work)
             work_before = blas.norm(work)
             active_dimension = column + 1
@@ -289,14 +384,56 @@ def setup_polynomial_preconditioner_cupy(
             blas.scal(1.0 / next_norm, basis[column + 1])
 
         active_basis = basis[:effective_degree]
-        gram_host = cp.asnumpy(active_basis @ active_basis.T)
-        frobenius, maximum_offdiagonal, maximum_diagonal_error = (
-            _orthogonality_metrics(gram_host)
-        )
+        gram_host = np.ascontiguousarray(cp.asnumpy(active_basis @ active_basis.T))
         used_hessenberg = np.ascontiguousarray(
             hessenberg[: effective_degree + 1, :effective_degree]
         )
 
+    return CuPyPolynomialArnoldiProbe(
+        hessenberg=used_hessenberg,
+        gram_matrix=gram_host,
+        requested_degree=maximum_degree,
+        effective_degree=effective_degree,
+        seed=int(seed),
+        breakdown=breakdown,
+        orthogonalization=orthogonalization,  # type: ignore[arg-type]
+        matvec_count=matvec_count,
+        base_preconditioner_count=base_count,
+        num_dofs=num_dofs,
+        device_id=device_id,
+        dtype_name=np.dtype(dtype.name).name,
+        uses_base_preconditioner=base_preconditioner is not None,
+        operator_identity=id(operator),
+        base_preconditioner_identity=(
+            None if base_preconditioner is None else id(base_preconditioner)
+        ),
+    )
+
+
+def polynomial_setup_from_probe(
+    probe: CuPyPolynomialArnoldiProbe,
+    *,
+    degree: int,
+    pair_tolerance: float = 1.0e-10,
+) -> CuPyPolynomialSetup:
+    """Extract one harmonic-Ritz/Leja polynomial from a reusable probe."""
+
+    if not isinstance(probe, CuPyPolynomialArnoldiProbe):
+        raise TypeError("probe must be a CuPyPolynomialArnoldiProbe")
+    if isinstance(degree, bool) or int(degree) != degree or degree <= 0:
+        raise ValueError("degree must be a positive integer")
+    degree = int(degree)
+    if degree > probe.requested_degree:
+        raise ValueError("degree exceeds the probe requested degree")
+    if pair_tolerance <= 0.0 or not np.isfinite(pair_tolerance):
+        raise ValueError("pair_tolerance must be positive and finite")
+
+    effective_degree = min(degree, probe.effective_degree)
+    if effective_degree <= 0:
+        raise np.linalg.LinAlgError("Arnoldi probe has no usable dimension")
+    used_hessenberg = np.ascontiguousarray(
+        probe.hessenberg[: effective_degree + 1, :effective_degree]
+    )
     values = harmonic_ritz_values(used_hessenberg)
     roots = leja_order_conjugate_preserving(values, tolerance=pair_tolerance)
     root_scale = max(float(np.max(np.abs(roots))), 1.0)
@@ -304,20 +441,56 @@ def setup_polynomial_preconditioner_cupy(
     if np.any(np.abs(roots) <= zero_tolerance):
         raise np.linalg.LinAlgError("harmonic Ritz setup produced a zero root")
 
+    gram = probe.gram_matrix[:effective_degree, :effective_degree]
+    frobenius, maximum_offdiagonal, maximum_diagonal_error = (
+        _orthogonality_metrics(gram)
+    )
+    uses_base = probe.uses_base_preconditioner
     return CuPyPolynomialSetup(
         hessenberg=used_hessenberg,
         harmonic_ritz_values=values,
         ordered_roots=roots,
         requested_degree=degree,
         effective_degree=effective_degree,
-        seed=int(seed),
-        breakdown=breakdown,
-        orthogonalization=orthogonalization,  # type: ignore[arg-type]
+        seed=probe.seed,
+        breakdown=effective_degree < degree,
+        orthogonalization=probe.orthogonalization,
         frobenius_orthogonality_defect=frobenius,
         maximum_offdiagonal=maximum_offdiagonal,
         maximum_diagonal_error=maximum_diagonal_error,
-        matvec_count=matvec_count,
-        base_preconditioner_count=base_count,
+        matvec_count=effective_degree,
+        base_preconditioner_count=effective_degree if uses_base else 0,
+    )
+
+
+def setup_polynomial_preconditioner_cupy(
+    operator: DeviceMatvecOperator,
+    *,
+    degree: int,
+    base_preconditioner: DevicePreconditioner | None = None,
+    seed: int = 1729,
+    initial_vector: np.ndarray | None = None,
+    orthogonalization: CuPyOrthogonalization = "cgs2",
+    breakdown_tolerance: float | None = None,
+    pair_tolerance: float = 1.0e-10,
+    profiler: Any | None = None,
+) -> CuPyPolynomialSetup:
+    """Run one GPU Arnoldi cycle and construct harmonic-Ritz/Leja roots."""
+
+    probe = setup_polynomial_arnoldi_probe_cupy(
+        operator,
+        maximum_degree=degree,
+        base_preconditioner=base_preconditioner,
+        seed=seed,
+        initial_vector=initial_vector,
+        orthogonalization=orthogonalization,
+        breakdown_tolerance=breakdown_tolerance,
+        profiler=profiler,
+    )
+    return polynomial_setup_from_probe(
+        probe,
+        degree=degree,
+        pair_tolerance=pair_tolerance,
     )
 
 
@@ -365,16 +538,10 @@ class CuPyPolynomialPreconditioner:
             self._bq = cp.empty(num_dofs, dtype=dtype)
             self._b2q = cp.empty(num_dofs, dtype=dtype)
             self._operator_output = cp.empty(num_dofs, dtype=dtype)
-            module = cp.RawModule(
-                code=_POLYNOMIAL_UPDATE_KERNEL_SOURCE,
-                options=("--std=c++11",),
-            )
-            suffix = "f32" if dtype == cp.float32 else "f64"
-            self._real_update = module.get_function(
-                f"polynomial_real_update_{suffix}"
-            )
-            self._pair_update = module.get_function(
-                f"polynomial_pair_update_{suffix}"
+            self._real_update, self._pair_update = (
+                _get_polynomial_update_kernels(
+                    cp, dtype=dtype, device_id=device_id
+                )
             )
         self._cp = cp
 
@@ -402,6 +569,46 @@ class CuPyPolynomialPreconditioner:
             breakdown_tolerance=breakdown_tolerance,
             pair_tolerance=pair_tolerance,
             profiler=profiler,
+        )
+        return cls(
+            operator,
+            roots=setup.ordered_roots,
+            base_preconditioner=base_preconditioner,
+            setup=setup,
+            pair_tolerance=pair_tolerance,
+        )
+
+    @classmethod
+    def from_probe(
+        cls,
+        operator: DeviceMatvecOperator,
+        *,
+        probe: CuPyPolynomialArnoldiProbe,
+        degree: int,
+        base_preconditioner: DevicePreconditioner | None = None,
+        pair_tolerance: float = 1.0e-10,
+    ) -> "CuPyPolynomialPreconditioner":
+        """Construct a degree candidate from a shared Arnoldi probe."""
+
+        cp = require_cupy_device()
+        dtype, device_id, num_dofs = _validate_protocol_compatibility(
+            operator, base_preconditioner
+        )
+        if probe.num_dofs != num_dofs:
+            raise ValueError("probe size does not match the operator")
+        if probe.device_id != device_id:
+            raise ValueError("probe and operator use different CUDA devices")
+        if np.dtype(probe.dtype_name) != np.dtype(dtype.name):
+            raise TypeError("probe dtype does not match the operator")
+        if probe.operator_identity != id(operator):
+            raise ValueError("probe was built for a different operator object")
+        expected_base_identity = (
+            None if base_preconditioner is None else id(base_preconditioner)
+        )
+        if probe.base_preconditioner_identity != expected_base_identity:
+            raise ValueError("probe was built for a different base preconditioner")
+        setup = polynomial_setup_from_probe(
+            probe, degree=degree, pair_tolerance=pair_tolerance
         )
         return cls(
             operator,
@@ -522,7 +729,11 @@ class CuPyPolynomialPreconditioner:
 
 
 __all__ = [
+    "CuPyPolynomialArnoldiProbe",
     "CuPyPolynomialPreconditioner",
     "CuPyPolynomialSetup",
+    "initialize_polynomial_kernels_cupy",
+    "polynomial_setup_from_probe",
+    "setup_polynomial_arnoldi_probe_cupy",
     "setup_polynomial_preconditioner_cupy",
 ]
