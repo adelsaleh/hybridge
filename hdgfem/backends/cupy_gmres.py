@@ -49,6 +49,18 @@ class DevicePreconditioner(Protocol):
 
 
 @dataclass(frozen=True)
+class CuPyOrthogonalityRecord:
+    """Orthogonality diagnostics for one completed restart cycle."""
+
+    restart_cycle: int
+    total_iterations: int
+    basis_dimension: int
+    frobenius_defect: float
+    maximum_offdiagonal: float
+    maximum_diagonal_error: float
+
+
+@dataclass(frozen=True)
 class CuPyGMRESResult:
     """GPU GMRES result.
 
@@ -76,6 +88,7 @@ class CuPyGMRESResult:
     basis_projection_count: int
     basis_correction_count: int
     coefficient_d2h_count: int
+    orthogonality_records: tuple[CuPyOrthogonalityRecord, ...]
 
 
 class CuPyVectorBLAS:
@@ -358,6 +371,36 @@ class CuPyVectorBLAS:
             self.profiler.record_gpu_call("basis_update", operation)
 
 
+
+def _orthogonality_metrics_from_gram(
+    gram: np.ndarray,
+) -> tuple[float, float, float]:
+    """Return ``||G-I||_F``, max off-diagonal, and max diagonal error.
+
+    This helper is intentionally NumPy-only so that the metric definition can
+    be unit-tested without a CUDA device.  ``gram`` is expected to be the small
+    host copy of ``V @ V.T`` for one Arnoldi basis.
+    """
+
+    gram = np.asarray(gram, dtype=np.float64)
+    if gram.ndim != 2 or gram.shape[0] != gram.shape[1]:
+        raise ValueError("gram must be a square matrix")
+    if not np.all(np.isfinite(gram)):
+        raise ValueError("gram must contain only finite values")
+    dimension = gram.shape[0]
+    defect = gram - np.eye(dimension, dtype=np.float64)
+    frobenius = float(np.linalg.norm(defect, ord="fro"))
+    diagonal_error = float(
+        np.max(np.abs(np.diag(defect)), initial=0.0)
+    )
+    offdiagonal = defect.copy()
+    if dimension:
+        offdiagonal[np.diag_indices(dimension)] = 0.0
+    maximum_offdiagonal = float(
+        np.max(np.abs(offdiagonal), initial=0.0)
+    )
+    return frobenius, maximum_offdiagonal, diagonal_error
+
 def _compute_givens(a: float, b: float) -> tuple[float, float, float]:
     """Return ``c, s, r`` such that ``[[c,s],[-s,c]] [a,b]^T=[r,0]^T``."""
 
@@ -479,6 +522,7 @@ def restarted_gmres_cupy(
     reorthogonalize: bool = False,
     breakdown_tolerance: float | None = None,
     profiler: Any | None = None,
+    monitor_orthogonality: bool = False,
 ) -> CuPyGMRESResult:
     r"""Solve ``A x = rhs`` with restarted left-preconditioned GPU GMRES.
 
@@ -488,6 +532,11 @@ def restarted_gmres_cupy(
     a second GEMV per pass.  CGS modes transfer one short coefficient vector to
     the CPU per pass, rather than one scalar per basis vector.  Norms use
     cuBLAS NRM2 and the restart update uses one cuBLAS GEMV.
+
+    When ``monitor_orthogonality`` is enabled, one small Gram matrix is
+    computed and copied to the CPU after every restart cycle.  This diagnostic
+    path is intentionally disabled by default because it allocates and
+    synchronizes.
 
     The Givens residual is used as an inexpensive convergence trigger.  A true
     residual is always recomputed after each completed or early-terminated
@@ -588,6 +637,7 @@ def restarted_gmres_cupy(
         basis_projection_count = 0
         basis_correction_count = 0
         coefficient_d2h_count = 0
+        orthogonality_records: list[CuPyOrthogonalityRecord] = []
 
         def apply_matvec(source: Any, destination: Any) -> None:
             nonlocal matvec_count
@@ -663,6 +713,7 @@ def restarted_gmres_cupy(
                 basis_projection_count=basis_projection_count,
                 basis_correction_count=basis_correction_count,
                 coefficient_d2h_count=coefficient_d2h_count,
+                orthogonality_records=tuple(orthogonality_records),
             )
 
         if true_norm <= target:
@@ -803,6 +854,36 @@ def restarted_gmres_cupy(
             if used_dimension == 0:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
+            if monitor_orthogonality:
+                # Include the newly generated Arnoldi vector unless a happy
+                # breakdown prevented its normalization.
+                basis_dimension = used_dimension + (0 if happy_breakdown else 1)
+                active_basis = basis[:basis_dimension]
+
+                def compute_orthogonality_record() -> CuPyOrthogonalityRecord:
+                    gram_host = cp.asnumpy(active_basis @ active_basis.T)
+                    frobenius, offdiagonal, diagonal = (
+                        _orthogonality_metrics_from_gram(gram_host)
+                    )
+                    return CuPyOrthogonalityRecord(
+                        restart_cycle=cycles,
+                        total_iterations=iterations,
+                        basis_dimension=basis_dimension,
+                        frobenius_defect=frobenius,
+                        maximum_offdiagonal=offdiagonal,
+                        maximum_diagonal_error=diagonal,
+                    )
+
+                if profiler is None:
+                    record = compute_orthogonality_record()
+                else:
+                    record = profiler.record_gpu_call(
+                        "orthogonality_gram",
+                        compute_orthogonality_record,
+                        host_synchronizing=True,
+                    )
+                orthogonality_records.append(record)
+
             def solve_small_system() -> np.ndarray:
                 return _back_substitute_upper(
                     hessenberg[:used_dimension, :used_dimension],
@@ -855,10 +936,12 @@ def restarted_gmres_cupy(
 
 __all__ = [
     "CuPyGMRESResult",
+    "CuPyOrthogonalityRecord",
     "CuPyOrthogonalization",
     "CuPyVectorBLAS",
     "DeviceMatvecOperator",
     "DevicePreconditioner",
+    "_orthogonality_metrics_from_gram",
     "_resolve_orthogonalization",
     "restarted_gmres_cupy",
 ]
