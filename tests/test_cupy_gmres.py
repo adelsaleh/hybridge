@@ -13,6 +13,10 @@ from hdgfem.backends.cupy_gmres import (
     _apply_previous_givens,
     _back_substitute_upper,
     _compute_givens,
+    _resolve_orthogonalization,
+    CuPyGMRESWorkspace,
+    CuPyRestartedGMRESSolver,
+    CuPyVectorBLAS,
     restarted_gmres_cupy,
 )
 from hdgfem.backends.cupy_preconditionners import (
@@ -52,6 +56,35 @@ def _small_face_system(boundary_mode: str, *, nx: int = 3, ny: int = 3):
         boundary_penalty=_BOUNDARY_PENALTY,
     )
     return direct
+
+
+def test_resolve_orthogonalization_preserves_legacy_behavior() -> None:
+    assert _resolve_orthogonalization(
+        orthogonalization=None,
+        reorthogonalize=False,
+    ) == "mgs"
+    assert _resolve_orthogonalization(
+        orthogonalization=None,
+        reorthogonalize=True,
+    ) == "mgs2"
+    for mode in ("mgs", "mgs2", "cgs", "cgs2"):
+        assert _resolve_orthogonalization(
+            orthogonalization=mode,
+            reorthogonalize=False,
+        ) == mode
+
+
+def test_resolve_orthogonalization_rejects_ambiguous_or_invalid_input() -> None:
+    with pytest.raises(ValueError, match="cannot be combined"):
+        _resolve_orthogonalization(
+            orthogonalization="cgs2",
+            reorthogonalize=True,
+        )
+    with pytest.raises(ValueError, match="must be one of"):
+        _resolve_orthogonalization(
+            orthogonalization="invalid",  # type: ignore[arg-type]
+            reorthogonalize=False,
+        )
 
 
 def test_compute_givens_annihilates_lower_entry() -> None:
@@ -195,6 +228,10 @@ def test_cupy_gmres_matches_direct_face_solution(
     assert result.axpy_count > 0
     assert result.norm_count > 0
     assert result.basis_update_count == result.restart_cycles
+    assert result.orthogonalization == "mgs2"
+    assert result.basis_projection_count == 0
+    assert result.basis_correction_count == 0
+    assert result.coefficient_d2h_count == 0
     if preconditioned:
         assert result.preconditioner_count > 0
     else:
@@ -241,6 +278,93 @@ def test_cupy_gmres_exact_initial_guess_exits_without_arnoldi() -> None:
     assert result.iterations == 0
     assert result.restart_cycles == 0
     assert result.basis_update_count == 0
+    assert result.orthogonalization == "mgs"
+
+
+def test_cupy_batched_basis_projection_and_correction_match_numpy() -> None:
+    cp = _cupy_or_skip()
+    rng = np.random.default_rng(20260728)
+    basis_host = np.ascontiguousarray(rng.standard_normal((5, 37)))
+    vector_host = np.ascontiguousarray(rng.standard_normal(37))
+    basis = cp.asarray(basis_host)
+    vector = cp.asarray(vector_host)
+    coefficients = cp.empty(5, dtype=cp.float64)
+    blas = CuPyVectorBLAS(dtype=cp.float64, device_id=int(cp.cuda.Device().id))
+
+    blas.basis_projection(basis, vector, coefficients)
+    coefficient_host = cp.asnumpy(coefficients)
+    np.testing.assert_allclose(
+        coefficient_host,
+        basis_host @ vector_host,
+        rtol=2.0e-13,
+        atol=2.0e-13,
+    )
+
+    corrected = vector.copy()
+    blas.basis_correction(basis, coefficients, corrected)
+    np.testing.assert_allclose(
+        cp.asnumpy(corrected),
+        vector_host - basis_host.T @ coefficient_host,
+        rtol=2.0e-13,
+        atol=2.0e-13,
+    )
+
+    copied = np.empty_like(coefficient_host)
+    blas.copy_device_vector_to_host(coefficients, copied)
+    np.testing.assert_allclose(copied, coefficient_host, rtol=0.0, atol=0.0)
+
+
+def test_cupy_cgs2_matches_mgs2_with_fewer_host_synchronizations() -> None:
+    _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=4, ny=4)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="matmul")
+    rhs = operator.to_device(system.rhs)
+
+    mgs2 = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=20,
+        max_iterations=500,
+        rtol=1.0e-10,
+        orthogonalization="mgs2",
+    )
+    cgs2 = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=20,
+        max_iterations=500,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+    )
+    operator.synchronize()
+
+    assert mgs2.converged, mgs2.status
+    assert cgs2.converged, cgs2.status
+    assert mgs2.orthogonalization == "mgs2"
+    assert cgs2.orthogonalization == "cgs2"
+    assert mgs2.dot_count > 0
+    assert mgs2.basis_projection_count == 0
+    assert cgs2.dot_count == 0
+    assert cgs2.basis_projection_count == 2 * cgs2.iterations
+    assert cgs2.basis_correction_count == cgs2.basis_projection_count
+    assert cgs2.coefficient_d2h_count == cgs2.basis_projection_count
+    assert cgs2.coefficient_d2h_count < mgs2.dot_count
+
+    computed_mgs2 = operator.to_host(mgs2.solution).reshape(-1)
+    computed_cgs2 = operator.to_host(cgs2.solution).reshape(-1)
+    np.testing.assert_allclose(
+        computed_cgs2,
+        computed_mgs2,
+        rtol=3.0e-9,
+        atol=3.0e-10,
+    )
+    np.testing.assert_allclose(
+        computed_cgs2,
+        direct.system_solution,
+        rtol=3.0e-9,
+        atol=3.0e-10,
+    )
 
 
 def test_cupy_block_jacobi_application_matches_cpu_reference() -> None:
@@ -273,3 +397,222 @@ def test_cupy_block_jacobi_application_matches_cpu_reference() -> None:
         rtol=2.0e-13,
         atol=2.0e-13,
     )
+
+
+def test_orthogonality_metrics_identity_and_perturbation() -> None:
+    from hdgfem.backends.cupy_gmres import (
+        _orthogonality_metrics_from_gram,
+    )
+
+    identity = np.eye(4)
+    assert _orthogonality_metrics_from_gram(identity) == (0.0, 0.0, 0.0)
+
+    gram = identity.copy()
+    gram[0, 1] = gram[1, 0] = 2.0e-3
+    gram[2, 2] += 3.0e-4
+    frobenius, offdiagonal, diagonal = _orthogonality_metrics_from_gram(gram)
+    np.testing.assert_allclose(
+        frobenius,
+        np.sqrt(2.0 * (2.0e-3) ** 2 + (3.0e-4) ** 2),
+        rtol=2.0e-15,
+    )
+    assert offdiagonal == pytest.approx(2.0e-3)
+    assert diagonal == pytest.approx(3.0e-4)
+
+
+@pytest.mark.parametrize("bad", [np.ones(3), np.ones((2, 3))])
+def test_orthogonality_metrics_reject_nonsquare_input(bad: np.ndarray) -> None:
+    from hdgfem.backends.cupy_gmres import (
+        _orthogonality_metrics_from_gram,
+    )
+
+    with pytest.raises(ValueError, match="square"):
+        _orthogonality_metrics_from_gram(bad)
+
+
+def test_cupy_gmres_optional_orthogonality_monitor_records_each_cycle() -> None:
+    _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=4, ny=4)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    rhs = operator.to_device(system.rhs)
+
+    result = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=10,
+        max_iterations=200,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+        monitor_orthogonality=True,
+    )
+    operator.synchronize()
+
+    assert result.converged, result.status
+    assert len(result.orthogonality_records) == result.restart_cycles
+    for cycle, record in enumerate(result.orthogonality_records, start=1):
+        assert record.restart_cycle == cycle
+        assert record.total_iterations > 0
+        assert 1 <= record.basis_dimension <= 11
+        assert record.frobenius_defect >= 0.0
+        assert record.maximum_offdiagonal >= 0.0
+        assert record.maximum_diagonal_error >= 0.0
+        assert np.isfinite(record.frobenius_defect)
+
+
+def test_cupy_gmres_orthogonality_monitor_disabled_by_default() -> None:
+    _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=2, ny=2)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    result = restarted_gmres_cupy(
+        operator,
+        operator.to_device(system.rhs),
+        restart=10,
+        max_iterations=100,
+        rtol=1.0e-10,
+        orthogonalization="cgs",
+    )
+    assert result.orthogonality_records == ()
+
+
+
+def test_cupy_reusable_workspace_matches_legacy_solver_for_two_rhs() -> None:
+    cp = _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=3, ny=3)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    rhs = operator.to_device(system.rhs).reshape(-1)
+    output = cp.empty_like(rhs)
+    workspace = CuPyGMRESWorkspace.allocate(
+        num_dofs=operator.num_dofs,
+        restart_capacity=20,
+        dtype=operator.dtype,
+        device_id=operator.device_id,
+    )
+    pointers_before = tuple(int(array.data.ptr) for array in workspace.device_arrays)
+
+    legacy = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=20,
+        max_iterations=500,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+    )
+    reusable = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=20,
+        max_iterations=500,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+        workspace=workspace,
+        solution_out=output,
+    )
+    operator.synchronize()
+
+    assert legacy.converged and reusable.converged
+    assert reusable.solution.data.ptr == output.data.ptr
+    np.testing.assert_allclose(
+        cp.asnumpy(reusable.solution),
+        cp.asnumpy(legacy.solution),
+        rtol=3.0e-10,
+        atol=3.0e-11,
+    )
+
+    scaled_rhs = 1.7 * rhs
+    second = restarted_gmres_cupy(
+        operator,
+        scaled_rhs,
+        restart=20,
+        max_iterations=500,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+        workspace=workspace,
+        solution_out=output,
+    )
+    operator.synchronize()
+    assert second.converged
+    np.testing.assert_allclose(
+        cp.asnumpy(second.solution),
+        1.7 * direct.system_solution.reshape(-1),
+        rtol=3.0e-9,
+        atol=3.0e-10,
+    )
+    assert tuple(int(array.data.ptr) for array in workspace.device_arrays) == pointers_before
+
+
+def test_cupy_restarted_solver_reuses_workspace_and_preallocated_output() -> None:
+    cp = _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=2, ny=2)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    rhs = operator.to_device(system.rhs)
+    output = cp.empty_like(rhs)
+    solver = CuPyRestartedGMRESSolver(
+        operator,
+        restart=15,
+        max_iterations=300,
+        rtol=1.0e-10,
+        orthogonalization="cgs",
+    )
+
+    first = solver.solve(rhs, solution_out=output)
+    first_host = cp.asnumpy(first.solution).copy().reshape(-1)
+    second = solver.solve(0.5 * rhs, solution_out=output)
+    operator.synchronize()
+
+    assert first.converged and second.converged
+    assert solver.workspace_device_bytes == solver.workspace.device_bytes
+    np.testing.assert_allclose(
+        first_host,
+        direct.system_solution,
+        rtol=3.0e-9,
+        atol=3.0e-10,
+    )
+    np.testing.assert_allclose(
+        cp.asnumpy(second.solution).reshape(-1),
+        0.5 * direct.system_solution,
+        rtol=3.0e-9,
+        atol=3.0e-10,
+    )
+
+
+def test_cupy_workspace_rejects_insufficient_capacity_and_aliasing() -> None:
+    cp = _cupy_or_skip()
+    direct = _small_face_system("eliminate", nx=2, ny=2)
+    system = direct.system
+    operator = CuPyFaceDenseOperator.from_system(system, implementation="raw")
+    rhs = operator.to_device(system.rhs).reshape(-1)
+    workspace = CuPyGMRESWorkspace.allocate(
+        num_dofs=operator.num_dofs,
+        restart_capacity=4,
+        dtype=operator.dtype,
+        device_id=operator.device_id,
+    )
+
+    with pytest.raises(ValueError, match="restart_capacity"):
+        restarted_gmres_cupy(
+            operator,
+            rhs,
+            restart=5,
+            max_iterations=20,
+            workspace=workspace,
+        )
+    with pytest.raises(ValueError, match="must not overlap rhs"):
+        restarted_gmres_cupy(
+            operator,
+            rhs,
+            restart=4,
+            max_iterations=20,
+            solution_out=rhs,
+        )
+    with pytest.raises(ValueError, match="workspace"):
+        restarted_gmres_cupy(
+            operator,
+            workspace.residual,
+            restart=4,
+            max_iterations=20,
+            workspace=workspace,
+        )

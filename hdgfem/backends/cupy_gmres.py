@@ -13,12 +13,12 @@ but constructing the BLAS adapter or calling the solver does.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 
-from .cupy import require_cupy_device
+from .cupy import device_arrays_overlap, require_cupy_device
 
 CuPyGMRESStatus = Literal["converged", "max_iterations", "breakdown"]
 CuPyOrthogonalization = Literal["mgs", "mgs2", "cgs", "cgs2"]
@@ -51,6 +51,137 @@ class DevicePreconditioner(Protocol):
 
     def apply_into(self, x: Any, out: Any) -> None:
         """Compute ``out = M^{-1} @ x`` on the device."""
+
+
+
+
+@dataclass
+class CuPyGMRESWorkspace:
+    """Reusable GPU and CPU storage for restarted GMRES.
+
+    The workspace owns the Arnoldi basis, vector work buffers, short device
+    coefficient arrays, and the small CPU Hessenberg/Givens arrays.  Reusing
+    one instance across sequential solves avoids repeated large GPU
+    allocations and makes multi-right-hand-side timings representative of the
+    actual numerical work.
+
+    A workspace is not thread-safe and must not be used by concurrent solves.
+    ``restart_capacity`` may be larger than the restart selected by a solve.
+    """
+
+    num_dofs: int
+    restart_capacity: int
+    dtype: Any
+    device_id: int
+    basis: Any = field(repr=False)
+    matvec_buffer: Any = field(repr=False)
+    residual: Any = field(repr=False)
+    work: Any = field(repr=False)
+    preconditioned: Any = field(repr=False)
+    coefficient_device: Any = field(repr=False)
+    orthogonalization_coefficients_device: Any = field(repr=False)
+    orthogonalization_coefficients_host: np.ndarray = field(repr=False)
+    update_coefficients_host: np.ndarray = field(repr=False)
+    hessenberg: np.ndarray = field(repr=False)
+    cosines: np.ndarray = field(repr=False)
+    sines: np.ndarray = field(repr=False)
+    least_squares_rhs: np.ndarray = field(repr=False)
+
+    @classmethod
+    def allocate(
+        cls,
+        *,
+        num_dofs: int,
+        restart_capacity: int,
+        dtype: Any,
+        device_id: int = 0,
+    ) -> "CuPyGMRESWorkspace":
+        cp = require_cupy_device()
+        if isinstance(num_dofs, bool) or int(num_dofs) != num_dofs or num_dofs <= 0:
+            raise ValueError("num_dofs must be a positive integer")
+        if (
+            isinstance(restart_capacity, bool)
+            or int(restart_capacity) != restart_capacity
+            or restart_capacity <= 0
+        ):
+            raise ValueError("restart_capacity must be a positive integer")
+        dtype = cp.dtype(dtype)
+        if np.dtype(dtype.name) not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise TypeError("GPU GMRES supports float32 and float64 only")
+        num_dofs = int(num_dofs)
+        restart_capacity = int(restart_capacity)
+        device_id = int(device_id)
+        host_dtype = np.dtype(dtype.name)
+        with cp.cuda.Device(device_id):
+            return cls(
+                num_dofs=num_dofs,
+                restart_capacity=restart_capacity,
+                dtype=dtype,
+                device_id=device_id,
+                basis=cp.empty((restart_capacity + 1, num_dofs), dtype=dtype),
+                matvec_buffer=cp.empty(num_dofs, dtype=dtype),
+                residual=cp.empty(num_dofs, dtype=dtype),
+                work=cp.empty(num_dofs, dtype=dtype),
+                preconditioned=cp.empty(num_dofs, dtype=dtype),
+                coefficient_device=cp.empty(restart_capacity, dtype=dtype),
+                orthogonalization_coefficients_device=cp.empty(
+                    restart_capacity, dtype=dtype
+                ),
+                orthogonalization_coefficients_host=np.empty(
+                    restart_capacity, dtype=host_dtype
+                ),
+                update_coefficients_host=np.empty(
+                    restart_capacity, dtype=host_dtype
+                ),
+                hessenberg=np.empty(
+                    (restart_capacity + 1, restart_capacity), dtype=np.float64
+                ),
+                cosines=np.empty(restart_capacity, dtype=np.float64),
+                sines=np.empty(restart_capacity, dtype=np.float64),
+                least_squares_rhs=np.empty(
+                    restart_capacity + 1, dtype=np.float64
+                ),
+            )
+
+    def validate_for(
+        self,
+        *,
+        num_dofs: int,
+        restart: int,
+        dtype: Any,
+        device_id: int,
+    ) -> None:
+        cp = require_cupy_device()
+        if self.num_dofs != int(num_dofs):
+            raise ValueError("workspace size does not match the operator")
+        if self.restart_capacity < int(restart):
+            raise ValueError(
+                "workspace restart_capacity is smaller than the requested restart"
+            )
+        if cp.dtype(self.dtype) != cp.dtype(dtype):
+            raise TypeError("workspace dtype does not match the operator")
+        if self.device_id != int(device_id):
+            raise ValueError("workspace and operator use different CUDA devices")
+
+    @property
+    def device_arrays(self) -> tuple[Any, ...]:
+        """Device arrays owned by the workspace."""
+
+        return (
+            self.basis,
+            self.matvec_buffer,
+            self.residual,
+            self.work,
+            self.preconditioned,
+            self.coefficient_device,
+            self.orthogonalization_coefficients_device,
+        )
+
+    @property
+    def device_bytes(self) -> int:
+        """Total bytes owned by the reusable device arrays."""
+
+        return sum(int(array.nbytes) for array in self.device_arrays)
 
 
 @dataclass(frozen=True)
@@ -94,6 +225,84 @@ class CuPyGMRESResult:
     basis_correction_count: int
     coefficient_d2h_count: int
     orthogonality_records: tuple[CuPyOrthogonalityRecord, ...]
+
+
+class CuPyRestartedGMRESSolver:
+    """Reusable restarted-GMRES solver for sequential right-hand sides.
+
+    The numerical configuration and :class:`CuPyGMRESWorkspace` are created
+    once.  Call :meth:`solve` repeatedly with different right-hand sides and
+    preallocated ``solution_out`` vectors to avoid large per-solve device
+    allocations.
+    """
+
+    def __init__(
+        self,
+        operator: DeviceMatvecOperator,
+        *,
+        restart: int = 30,
+        max_iterations: int | None = None,
+        rtol: float = 1.0e-8,
+        atol: float = 0.0,
+        preconditioner: DevicePreconditioner | None = None,
+        orthogonalization: CuPyOrthogonalization = "cgs",
+        breakdown_tolerance: float | None = None,
+        workspace: CuPyGMRESWorkspace | None = None,
+    ) -> None:
+        cp = require_cupy_device()
+        self.operator = operator
+        self.restart = int(restart)
+        self.max_iterations = max_iterations
+        self.rtol = float(rtol)
+        self.atol = float(atol)
+        self.preconditioner = preconditioner
+        self.orthogonalization = orthogonalization
+        self.breakdown_tolerance = breakdown_tolerance
+        if workspace is None:
+            workspace = CuPyGMRESWorkspace.allocate(
+                num_dofs=int(operator.num_dofs),
+                restart_capacity=self.restart,
+                dtype=cp.dtype(operator.dtype),
+                device_id=int(operator.device_id),
+            )
+        else:
+            workspace.validate_for(
+                num_dofs=int(operator.num_dofs),
+                restart=self.restart,
+                dtype=cp.dtype(operator.dtype),
+                device_id=int(operator.device_id),
+            )
+        self.workspace = workspace
+
+    @property
+    def workspace_device_bytes(self) -> int:
+        return self.workspace.device_bytes
+
+    def solve(
+        self,
+        rhs: Any,
+        *,
+        x0: Any | None = None,
+        solution_out: Any | None = None,
+        profiler: Any | None = None,
+        monitor_orthogonality: bool = False,
+    ) -> CuPyGMRESResult:
+        return restarted_gmres_cupy(
+            self.operator,
+            rhs,
+            x0=x0,
+            restart=self.restart,
+            max_iterations=self.max_iterations,
+            rtol=self.rtol,
+            atol=self.atol,
+            preconditioner=self.preconditioner,
+            orthogonalization=self.orthogonalization,
+            breakdown_tolerance=self.breakdown_tolerance,
+            profiler=profiler,
+            monitor_orthogonality=monitor_orthogonality,
+            workspace=self.workspace,
+            solution_out=solution_out,
+        )
 
 
 class CuPyVectorBLAS:
@@ -528,6 +737,8 @@ def restarted_gmres_cupy(
     breakdown_tolerance: float | None = None,
     profiler: Any | None = None,
     monitor_orthogonality: bool = False,
+    workspace: CuPyGMRESWorkspace | None = None,
+    solution_out: Any | None = None,
 ) -> CuPyGMRESResult:
     r"""Solve ``A x = rhs`` with restarted left-preconditioned GPU GMRES.
 
@@ -551,6 +762,10 @@ def restarted_gmres_cupy(
     operation and CPU timers are used for the Hessenberg/Givens work.  This is
     diagnostic instrumentation; benchmark an uninstrumented solve separately
     for the primary time-to-solution measurement.
+
+    Pass a :class:`CuPyGMRESWorkspace` to reuse the Arnoldi basis and all work
+    buffers across sequential solves.  Supplying ``solution_out`` additionally
+    avoids allocating the solution vector; it must not overlap ``rhs``.
     """
 
     cp = require_cupy_device()
@@ -610,27 +825,79 @@ def restarted_gmres_cupy(
 
     with cp.cuda.Device(device_id):
         b = rhs.reshape(-1)
-        if x0 is None:
-            x = cp.zeros(num_dofs, dtype=dtype)
+        if solution_out is None:
+            if x0 is None:
+                x = cp.zeros(num_dofs, dtype=dtype)
+            else:
+                x0 = validate_vector(x0, name="x0")
+                x = x0.reshape(-1).copy()
         else:
-            x0 = validate_vector(x0, name="x0")
-            x = x0.reshape(-1).copy()
+            solution_out = validate_vector(solution_out, name="solution_out")
+            if solution_out.shape != original_shape:
+                raise ValueError("solution_out must have the same shape as rhs")
+            if device_arrays_overlap(rhs, solution_out):
+                raise ValueError("solution_out must not overlap rhs")
+            x = solution_out.reshape(-1)
+            if x0 is None:
+                x.fill(0)
+            else:
+                x0 = validate_vector(x0, name="x0")
+                x0_flat = x0.reshape(-1)
+                same_storage = (
+                    int(x0_flat.data.ptr) == int(x.data.ptr)
+                    and int(x0_flat.nbytes) == int(x.nbytes)
+                )
+                if not same_storage and device_arrays_overlap(x0_flat, x):
+                    raise ValueError(
+                        "x0 and solution_out may be identical but must not "
+                        "partially overlap"
+                    )
+                if not same_storage:
+                    cp.copyto(x, x0_flat)
+
+        if workspace is None:
+            workspace = CuPyGMRESWorkspace.allocate(
+                num_dofs=num_dofs,
+                restart_capacity=restart,
+                dtype=dtype,
+                device_id=device_id,
+            )
+        else:
+            if not isinstance(workspace, CuPyGMRESWorkspace):
+                raise TypeError("workspace must be a CuPyGMRESWorkspace")
+            workspace.validate_for(
+                num_dofs=num_dofs,
+                restart=restart,
+                dtype=dtype,
+                device_id=device_id,
+            )
+
+        for workspace_array in workspace.device_arrays:
+            if device_arrays_overlap(rhs, workspace_array):
+                raise ValueError("rhs must not overlap the GMRES workspace")
+            if solution_out is not None and device_arrays_overlap(
+                solution_out, workspace_array
+            ):
+                raise ValueError(
+                    "solution_out must not overlap the GMRES workspace"
+                )
 
         blas = CuPyVectorBLAS(
             dtype=dtype,
             device_id=device_id,
             profiler=profiler,
         )
-        basis = cp.empty((restart + 1, num_dofs), dtype=dtype)
-        matvec_buffer = cp.empty(num_dofs, dtype=dtype)
-        residual = cp.empty(num_dofs, dtype=dtype)
-        work = cp.empty(num_dofs, dtype=dtype)
-        preconditioned = cp.empty(num_dofs, dtype=dtype)
-        coefficient_device = cp.empty(restart, dtype=dtype)
-        orthogonalization_coefficients_device = cp.empty(restart, dtype=dtype)
-        orthogonalization_coefficients_host = np.empty(
-            restart,
-            dtype=np.dtype(dtype.name),
+        basis = workspace.basis[: restart + 1]
+        matvec_buffer = workspace.matvec_buffer
+        residual = workspace.residual
+        work = workspace.work
+        preconditioned = workspace.preconditioned
+        coefficient_device = workspace.coefficient_device[:restart]
+        orthogonalization_coefficients_device = (
+            workspace.orthogonalization_coefficients_device[:restart]
+        )
+        orthogonalization_coefficients_host = (
+            workspace.orthogonalization_coefficients_host[:restart]
         )
 
         matvec_count = 0
@@ -742,13 +1009,18 @@ def restarted_gmres_cupy(
             blas.scal(1.0 / beta, basis[0])
 
             cycle_dimension = min(restart, max_iterations - iterations)
-            hessenberg = np.zeros(
-                (cycle_dimension + 1, cycle_dimension),
-                dtype=np.float64,
-            )
-            cosines = np.zeros(cycle_dimension, dtype=np.float64)
-            sines = np.zeros(cycle_dimension, dtype=np.float64)
-            least_squares_rhs = np.zeros(cycle_dimension + 1, dtype=np.float64)
+            hessenberg = workspace.hessenberg[
+                : cycle_dimension + 1, :cycle_dimension
+            ]
+            cosines = workspace.cosines[:cycle_dimension]
+            sines = workspace.sines[:cycle_dimension]
+            least_squares_rhs = workspace.least_squares_rhs[
+                : cycle_dimension + 1
+            ]
+            hessenberg.fill(0.0)
+            cosines.fill(0.0)
+            sines.fill(0.0)
+            least_squares_rhs.fill(0.0)
             least_squares_rhs[0] = beta
 
             used_dimension = 0
@@ -907,10 +1179,10 @@ def restarted_gmres_cupy(
             except np.linalg.LinAlgError:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
-            coefficient_host = coefficients.astype(
-                np.dtype(dtype.name),
-                copy=False,
-            )
+            coefficient_host = workspace.update_coefficients_host[
+                :used_dimension
+            ]
+            coefficient_host[:] = coefficients
 
             def transfer_coefficients() -> None:
                 coefficient_device[:used_dimension].set(coefficient_host)
@@ -941,12 +1213,18 @@ def restarted_gmres_cupy(
 
 __all__ = [
     "CuPyGMRESResult",
+    "CuPyGMRESWorkspace",
+    "CuPyRestartedGMRESSolver",
     "CuPyOrthogonalityRecord",
     "CuPyOrthogonalization",
     "CuPyVectorBLAS",
     "DeviceMatvecOperator",
     "DevicePreconditioner",
     "_orthogonality_metrics_from_gram",
+    "_resolve_orthogonalization",
+    "_apply_previous_givens",
+    "_back_substitute_upper",
+    "_compute_givens",
     "_resolve_orthogonalization",
     "restarted_gmres_cupy",
 ]
