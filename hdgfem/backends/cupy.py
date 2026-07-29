@@ -70,4 +70,4 @@ def solve_batched_vectors(array_module: Any, matrices: Any, vectors: Any) -> Any
     return array_module.linalg.solve(matrices, vectors[..., None])[..., 0]
 
 
-__all__ = ["require_cupy", "require_cupy_device", "solve_batched_vectors"]
+__all__ = ["require_cupy", "require_cupy_device", "solve_batched_vectors", "device_arrays_overlap"]
