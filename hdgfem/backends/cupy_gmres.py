@@ -40,9 +40,14 @@ class DeviceMatvecOperator(Protocol):
 class DevicePreconditioner(Protocol):
     """Minimal left-preconditioner interface used by GPU GMRES."""
 
-    num_dofs: int
-    dtype: Any
-    device_id: int
+    @property
+    def num_dofs(self) -> int: ...
+
+    @property
+    def dtype(self) -> Any: ...
+
+    @property
+    def device_id(self) -> int: ...
 
     def apply_into(self, x: Any, out: Any) -> None:
         """Compute ``out = M^{-1} @ x`` on the device."""
