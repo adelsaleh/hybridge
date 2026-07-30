@@ -507,6 +507,10 @@ def profile_block_jacobi(
 
 def _asm_local_solve_into(preconditioner: Any) -> None:
     cp = preconditioner._cp
+    if preconditioner.application == "fused":
+        raise RuntimeError("fused ASM local application requires the global input")
+    if preconditioner._element_rhs is None:
+        raise RuntimeError("ASM restricted workspace is unavailable")
     if preconditioner.local_solver == "gpu_solve":
         solved = solve_batched_vectors(
             cp,
@@ -553,20 +557,39 @@ def profile_additive_schwarz(
 ) -> AdditiveSchwarzProfile:
     """Profile restriction, local dense operation, prolongation, and total ASM."""
 
-    restriction = benchmark_cuda_call(
-        lambda: preconditioner.restrict_into(x, preconditioner.restricted_buffer),
-        warmup=warmup,
-        repeats=repeats,
-        device_id=preconditioner.device_id,
-    )
-    preconditioner.restrict_into(x, preconditioner.restricted_buffer)
-    local_solve = benchmark_cuda_call(
-        lambda: _asm_local_solve_into(preconditioner),
-        warmup=warmup,
-        repeats=repeats,
-        device_id=preconditioner.device_id,
-    )
-    _asm_local_solve_into(preconditioner)
+    if preconditioner.application == "fused":
+        restriction = _zero_cuda_timing(warmup=warmup, repeats=repeats)
+        local_solve = benchmark_cuda_call(
+            lambda: preconditioner.fused_local_into(
+                x,
+                preconditioner.local_solution_buffer,
+            ),
+            warmup=warmup,
+            repeats=repeats,
+            device_id=preconditioner.device_id,
+        )
+        preconditioner.fused_local_into(
+            x,
+            preconditioner.local_solution_buffer,
+        )
+    else:
+        restricted = preconditioner.restricted_buffer
+        if restricted is None:
+            raise RuntimeError("ASM restricted workspace is unavailable")
+        restriction = benchmark_cuda_call(
+            lambda: preconditioner.restrict_into(x, restricted),
+            warmup=warmup,
+            repeats=repeats,
+            device_id=preconditioner.device_id,
+        )
+        preconditioner.restrict_into(x, restricted)
+        local_solve = benchmark_cuda_call(
+            lambda: _asm_local_solve_into(preconditioner),
+            warmup=warmup,
+            repeats=repeats,
+            device_id=preconditioner.device_id,
+        )
+        _asm_local_solve_into(preconditioner)
     prolongation = benchmark_cuda_call(
         lambda: preconditioner.prolong_into(
             preconditioner.local_solution_buffer,

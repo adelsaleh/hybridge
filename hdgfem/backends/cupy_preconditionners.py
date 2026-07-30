@@ -603,6 +603,60 @@ def prepare_face_additive_schwarz_matrix_layout(
     )
 
 
+def build_face_additive_schwarz_incidence_slots(
+    element_system_faces: np.ndarray,
+    num_system_faces: int,
+) -> np.ndarray:
+    """Build a race-free face-to-element incidence table for one-element ASM.
+
+    The returned ``int32`` array has shape ``(num_system_faces, 2)``.  Each
+    non-negative entry is the flattened element-local-face slot
+    ``element * Nlfe + local_face`` contributing to that system face.  Boundary
+    faces have one active slot and interior manifold faces have two.
+
+    A face with more than two incident elements is rejected because the fused
+    CUDA prolongation kernel intentionally targets conforming manifold meshes.
+    """
+
+    faces = np.asarray(element_system_faces, dtype=np.int64)
+    if faces.ndim != 2 or faces.size == 0:
+        raise ValueError("element_system_faces must have shape (NE, Nlfe)")
+    num_system_faces = int(num_system_faces)
+    if num_system_faces <= 0:
+        raise ValueError("num_system_faces must be positive")
+    if np.any(faces < -1):
+        raise ValueError("element_system_faces may contain only row ids or -1")
+    active = faces >= 0
+    if np.any(faces[active] >= num_system_faces):
+        raise ValueError("element_system_faces contains an out-of-range row id")
+    if faces.shape[0] * faces.shape[1] > np.iinfo(np.int32).max:
+        raise OverflowError("flattened element-face slots exceed int32 capacity")
+
+    slots = np.full((num_system_faces, 2), -1, dtype=np.int32)
+    counts = np.zeros(num_system_faces, dtype=np.int8)
+    num_local_faces = int(faces.shape[1])
+    for element in range(int(faces.shape[0])):
+        for local_face in range(num_local_faces):
+            system_face = int(faces[element, local_face])
+            if system_face < 0:
+                continue
+            incidence = int(counts[system_face])
+            if incidence >= 2:
+                raise ValueError(
+                    "fused ASM requires at most two incident elements per system face"
+                )
+            slots[system_face, incidence] = element * num_local_faces + local_face
+            counts[system_face] = incidence + 1
+
+    missing = np.flatnonzero(counts == 0)
+    if missing.size:
+        raise ValueError(
+            "every system face must occur in element_system_faces; "
+            f"first missing row is {int(missing[0])}"
+        )
+    return np.ascontiguousarray(slots)
+
+
 _ASM_KERNEL_SOURCE = r"""
 __device__ __forceinline__ float asm_atomic_add(float* address, float value)
 {
@@ -724,6 +778,143 @@ void prolong_element_faces_f64(
 """
 
 
+_FUSED_ASM_KERNEL_SOURCE = r"""
+extern "C" __global__
+void fused_asm_local_f32(
+    const unsigned long long total_rows,
+    const int num_local_faces,
+    const int block_size,
+    const int local_size,
+    const int* __restrict__ element_system_faces,
+    const float* __restrict__ inverse_matrices,
+    const float* __restrict__ global_vector,
+    float* __restrict__ local_output)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total_rows) return;
+
+    const unsigned long long element = index / local_size;
+    const int row = (int) (index - element * local_size);
+    const unsigned long long matrix_offset =
+        element * (unsigned long long) local_size * local_size
+        + (unsigned long long) row * local_size;
+    const unsigned long long face_offset = element * num_local_faces;
+
+    float value = 0.0f;
+    for (int column = 0; column < local_size; ++column) {
+        const int local_face = column / block_size;
+        const int local_dof = column - local_face * block_size;
+        const int system_face = element_system_faces[face_offset + local_face];
+        const float input = (system_face >= 0)
+            ? global_vector[(unsigned long long) system_face * block_size + local_dof]
+            : 0.0f;
+        value += inverse_matrices[matrix_offset + column] * input;
+    }
+    local_output[index] = value;
+}
+
+extern "C" __global__
+void fused_asm_local_f64(
+    const unsigned long long total_rows,
+    const int num_local_faces,
+    const int block_size,
+    const int local_size,
+    const int* __restrict__ element_system_faces,
+    const double* __restrict__ inverse_matrices,
+    const double* __restrict__ global_vector,
+    double* __restrict__ local_output)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total_rows) return;
+
+    const unsigned long long element = index / local_size;
+    const int row = (int) (index - element * local_size);
+    const unsigned long long matrix_offset =
+        element * (unsigned long long) local_size * local_size
+        + (unsigned long long) row * local_size;
+    const unsigned long long face_offset = element * num_local_faces;
+
+    double value = 0.0;
+    for (int column = 0; column < local_size; ++column) {
+        const int local_face = column / block_size;
+        const int local_dof = column - local_face * block_size;
+        const int system_face = element_system_faces[face_offset + local_face];
+        const double input = (system_face >= 0)
+            ? global_vector[(unsigned long long) system_face * block_size + local_dof]
+            : 0.0;
+        value += inverse_matrices[matrix_offset + column] * input;
+    }
+    local_output[index] = value;
+}
+
+extern "C" __global__
+void race_free_asm_prolong_f32(
+    const unsigned long long total,
+    const int num_local_faces,
+    const int block_size,
+    const int local_size,
+    const int* __restrict__ face_element_slots,
+    const float* __restrict__ local_vector,
+    float* __restrict__ global_vector)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total) return;
+
+    const unsigned long long system_face = index / block_size;
+    const int local_dof = (int) (index - system_face * block_size);
+    float value = 0.0f;
+    #pragma unroll
+    for (int side = 0; side < 2; ++side) {
+        const int element_face = face_element_slots[system_face * 2 + side];
+        if (element_face >= 0) {
+            const int element = element_face / num_local_faces;
+            const int local_face = element_face - element * num_local_faces;
+            const unsigned long long local_index =
+                (unsigned long long) element * local_size
+                + (unsigned long long) local_face * block_size + local_dof;
+            value += local_vector[local_index];
+        }
+    }
+    global_vector[index] = value;
+}
+
+extern "C" __global__
+void race_free_asm_prolong_f64(
+    const unsigned long long total,
+    const int num_local_faces,
+    const int block_size,
+    const int local_size,
+    const int* __restrict__ face_element_slots,
+    const double* __restrict__ local_vector,
+    double* __restrict__ global_vector)
+{
+    const unsigned long long index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    if (index >= total) return;
+
+    const unsigned long long system_face = index / block_size;
+    const int local_dof = (int) (index - system_face * block_size);
+    double value = 0.0;
+    #pragma unroll
+    for (int side = 0; side < 2; ++side) {
+        const int element_face = face_element_slots[system_face * 2 + side];
+        if (element_face >= 0) {
+            const int element = element_face / num_local_faces;
+            const int local_face = element_face - element * num_local_faces;
+            const unsigned long long local_index =
+                (unsigned long long) element * local_size
+                + (unsigned long long) local_face * block_size + local_dof;
+            value += local_vector[local_index];
+        }
+    }
+    global_vector[index] = value;
+}
+"""
+
+
 @dataclass
 class CuPyFaceAdditiveSchwarzPreconditioner:
     r"""Device one-element ASM with selectable local dense solver.
@@ -748,6 +939,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
     factorization_info: np.ndarray | None = None
     inversion_info: np.ndarray | None = None
     application: str = "matmul"
+    face_element_slots: Any | None = None
 
     def __post_init__(self) -> None:
         cp = require_cupy_device()
@@ -761,10 +953,12 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if self.local_solver not in valid_modes:
             raise ValueError(f"unsupported ASM local_solver: {self.local_solver}")
         use_inverse = self.local_solver != "gpu_solve"
-        if self.application not in {"matmul", "raw"}:
+        if self.application not in {"matmul", "raw", "fused"}:
             raise ValueError(f"unsupported ASM application: {self.application}")
         if not use_inverse and self.application != "matmul":
-            raise ValueError("raw application requires precomputed inverse matrices")
+            raise ValueError(
+                "raw and fused applications require precomputed inverse matrices"
+            )
         matrices = self.inverse_matrices if use_inverse else self.local_matrices
         matrix_name = "inverse_matrices" if use_inverse else "local_matrices"
         if not isinstance(matrices, cp.ndarray):
@@ -813,7 +1007,31 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if maximum_face >= self.num_system_faces:
             raise ValueError("element_system_faces contains an out-of-range row id")
 
-        self._element_rhs = cp.empty((self.num_elements, self.local_size), dtype=self.dtype)
+        if self.application == "fused":
+            if self.face_element_slots is None:
+                host_slots = build_face_additive_schwarz_incidence_slots(
+                    cp.asnumpy(self.element_system_faces),
+                    self.num_system_faces,
+                )
+                self.face_element_slots = cp.asarray(host_slots)
+            if not isinstance(self.face_element_slots, cp.ndarray):
+                raise TypeError("face_element_slots must be a CuPy array")
+            if self.face_element_slots.shape != (self.num_system_faces, 2):
+                raise ValueError(
+                    "face_element_slots must have shape (num_system_faces, 2)"
+                )
+            if self.face_element_slots.dtype != cp.int32:
+                raise TypeError("face_element_slots must use int32")
+            if not self.face_element_slots.flags.c_contiguous:
+                raise ValueError("face_element_slots must be C-contiguous")
+            if int(self.face_element_slots.device.id) != self.device_id:
+                raise ValueError("face_element_slots is on the wrong CUDA device")
+
+        self._element_rhs = (
+            None
+            if self.application == "fused"
+            else cp.empty((self.num_elements, self.local_size), dtype=self.dtype)
+        )
         self._local_output = cp.empty((self.num_elements, self.local_size), dtype=self.dtype)
 
         suffix = "f32" if self.dtype == cp.float32 else "f64"
@@ -830,9 +1048,25 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             if use_inverse and self.application == "raw"
             else None
         )
+        self._fused_local_kernel = (
+            cp.RawKernel(_FUSED_ASM_KERNEL_SOURCE, f"fused_asm_local_{suffix}")
+            if use_inverse and self.application == "fused"
+            else None
+        )
+        self._race_free_prolong_kernel = (
+            cp.RawKernel(
+                _FUSED_ASM_KERNEL_SOURCE,
+                f"race_free_asm_prolong_{suffix}",
+            )
+            if self.application == "fused"
+            else None
+        )
         self._threads_per_block = 256
         self._kernel_blocks = (
             self.num_local_dofs + self._threads_per_block - 1
+        ) // self._threads_per_block
+        self._global_kernel_blocks = (
+            self.num_dofs + self._threads_per_block - 1
         ) // self._threads_per_block
 
     @classmethod
@@ -868,6 +1102,14 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 dtype=dtype,
                 inverse_residual_tolerance=inverse_residual_tolerance,
             )
+            face_slots = (
+                build_face_additive_schwarz_incidence_slots(
+                    layout.element_system_faces,
+                    layout.num_system_faces,
+                )
+                if application == "fused"
+                else None
+            )
             with cp.cuda.Device(selected_device):
                 return cls(
                     inverse_matrices=cp.asarray(layout.inverse_matrices),
@@ -878,6 +1120,9 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     local_solver=local_solver,
                     inverse_residuals=cp.asarray(layout.inverse_residuals),
                     application=application,
+                    face_element_slots=(
+                        None if face_slots is None else cp.asarray(face_slots)
+                    ),
                 )
 
         layout = prepare_face_additive_schwarz_matrix_layout(
@@ -886,9 +1131,18 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             loc2glob_face,
             dtype=dtype,
         )
+        face_slots = (
+            build_face_additive_schwarz_incidence_slots(
+                layout.element_system_faces,
+                layout.num_system_faces,
+            )
+            if application == "fused"
+            else None
+        )
         with cp.cuda.Device(selected_device):
             local_matrices = cp.asarray(layout.local_matrices)
             faces = cp.asarray(layout.element_system_faces)
+            device_face_slots = None if face_slots is None else cp.asarray(face_slots)
             if local_solver == "gpu_solve":
                 if inverse_residual_tolerance is not None:
                     raise ValueError(
@@ -903,6 +1157,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                     device_id=selected_device,
                     local_solver=local_solver,
                     application=application,
+                    face_element_slots=device_face_slots,
                 )
 
             factorization_info = None
@@ -940,6 +1195,7 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
                 factorization_info=factorization_info,
                 inversion_info=inversion_info,
                 application=application,
+                face_element_slots=device_face_slots,
             )
 
     @property
@@ -971,7 +1227,9 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         return self.local_solver == "gpu_solve"
 
     @property
-    def restricted_buffer(self) -> Any:
+    def restricted_buffer(self) -> Any | None:
+        if self._element_rhs is None:
+            return None
         return self._element_rhs.reshape(
             self.num_elements,
             self.num_local_faces,
@@ -985,6 +1243,22 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             self.num_local_faces,
             self.block_size,
         )
+
+    @property
+    def restricted_workspace_bytes(self) -> int:
+        return 0 if self._element_rhs is None else int(self._element_rhs.nbytes)
+
+    @property
+    def local_workspace_bytes(self) -> int:
+        return int(self._local_output.nbytes)
+
+    @property
+    def workspace_bytes(self) -> int:
+        return self.restricted_workspace_bytes + self.local_workspace_bytes
+
+    @property
+    def uses_race_free_prolongation(self) -> bool:
+        return self.application == "fused"
 
     @property
     def maximum_inverse_residual(self) -> float | None:
@@ -1061,6 +1335,50 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
             ),
         )
 
+    def _launch_fused_local(self, x_flat: Any, local_flat: Any) -> None:
+        if self._fused_local_kernel is None:
+            raise RuntimeError("fused ASM local kernel is unavailable")
+        self._fused_local_kernel(
+            (self._kernel_blocks,),
+            (self._threads_per_block,),
+            (
+                np.uint64(self.num_local_dofs),
+                np.int32(self.num_local_faces),
+                np.int32(self.block_size),
+                np.int32(self.local_size),
+                self.element_system_faces,
+                self.inverse_matrices,
+                x_flat,
+                local_flat,
+            ),
+        )
+
+    def _launch_race_free_prolong(self, element_flat: Any, out_flat: Any) -> None:
+        if self._race_free_prolong_kernel is None or self.face_element_slots is None:
+            raise RuntimeError("race-free ASM prolongation kernel is unavailable")
+        self._race_free_prolong_kernel(
+            (self._global_kernel_blocks,),
+            (self._threads_per_block,),
+            (
+                np.uint64(self.num_dofs),
+                np.int32(self.num_local_faces),
+                np.int32(self.block_size),
+                np.int32(self.local_size),
+                self.face_element_slots,
+                element_flat,
+                out_flat,
+            ),
+        )
+
+    def fused_local_into(self, x: Any, out: Any) -> None:
+        if self.application != "fused":
+            raise RuntimeError("fused_local_into requires application='fused'")
+        x_flat = self._validate_global_vector(x, name="x")
+        out_flat = self._validate_element_vector(out, name="out")
+        if device_arrays_overlap(x, out):
+            raise ValueError("x and out must not alias")
+        self._launch_fused_local(x_flat, out_flat)
+
     def restrict_into(self, x: Any, out: Any) -> None:
         cp = self._cp
         x_flat = self._validate_global_vector(x, name="x")
@@ -1078,13 +1396,15 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         return out
 
     def prolong_into(self, element_vector: Any, out: Any) -> None:
-        cp = self._cp
         element_flat = self._validate_element_vector(element_vector, name="element_vector")
         out_flat = self._validate_global_vector(out, name="out")
         if device_arrays_overlap(element_vector, out):
             raise ValueError("element_vector and out must not alias")
-        out_flat.fill(0)
-        self._launch_prolong(element_flat, out_flat)
+        if self.application == "fused":
+            self._launch_race_free_prolong(element_flat, out_flat)
+        else:
+            out_flat.fill(0)
+            self._launch_prolong(element_flat, out_flat)
 
     def prolong(self, element_vector: Any, *, flat: bool = False) -> Any:
         shape = (self.num_dofs,) if flat else (
@@ -1102,6 +1422,15 @@ class CuPyFaceAdditiveSchwarzPreconditioner:
         if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
+        if self.application == "fused":
+            self._launch_fused_local(x_flat, self._local_output.reshape(-1))
+            self._launch_race_free_prolong(
+                self._local_output.reshape(-1),
+                out_flat,
+            )
+            return
+
+        assert self._element_rhs is not None
         self._launch_restrict(x_flat, self._element_rhs.reshape(-1))
         if self.local_solver == "gpu_solve":
             solved = solve_batched_vectors(
@@ -1139,6 +1468,7 @@ __all__ = [
     "AdditiveSchwarzMatrixLayout",
     "CuPyFaceAdditiveSchwarzPreconditioner",
     "CuPyFaceBlockJacobiPreconditioner",
+    "build_face_additive_schwarz_incidence_slots",
     "prepare_face_additive_schwarz_batch_layout",
     "prepare_face_additive_schwarz_matrix_layout",
 ]

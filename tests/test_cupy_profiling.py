@@ -151,3 +151,51 @@ def test_profiled_cupy_gmres_matches_unprofiled_solution() -> None:
     assert summary.operation("dot") is not None
     assert summary.operation("norm") is not None
     assert "hessenberg_givens" in summary.cpu_times_ms
+
+
+def test_profiled_cgs2_exposes_batched_orthogonalization_categories() -> None:
+    _cupy_or_skip()
+    system = _small_system()
+    operator = CuPyFaceDenseOperator.from_system(system)
+    rhs = operator.to_device(system.rhs)
+    profiler = CuPyGMRESProfiler(device_id=operator.device_id)
+
+    result = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=10,
+        max_iterations=200,
+        rtol=1.0e-10,
+        orthogonalization="cgs2",
+        profiler=profiler,
+    )
+    summary = profiler.finalize()
+
+    assert result.converged
+    assert result.orthogonalization == "cgs2"
+    assert summary.operation("basis_projection") is not None
+    assert summary.operation("basis_correction") is not None
+    assert summary.operation("orthogonalization_d2h") is not None
+    assert summary.operation("dot") is None
+
+
+def test_fused_operator_profile_marks_removed_stages_as_zero() -> None:
+    cp = _cupy_or_skip()
+    system = _small_system()
+    operator = CuPyFaceDenseOperator.from_system(
+        system,
+        implementation="raw_fused",
+    )
+    x = operator.to_device(system.rhs)
+    out = cp.empty_like(x)
+    profile = profile_face_dense_operator(
+        operator,
+        x,
+        out,
+        warmup=1,
+        repeats=3,
+    )
+    assert profile.total.median_ms >= 0.0
+    assert np.all(profile.gather.samples_ms == 0.0)
+    assert np.all(profile.dense_product.samples_ms == 0.0)
+    assert profile.vector_bytes == 2 * operator.num_dofs * operator.dtype.itemsize

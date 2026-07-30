@@ -94,7 +94,16 @@ def _parse_args() -> argparse.Namespace:
         "--preconditioner-application",
         choices=("matmul", "raw"),
         default="raw",
-        help="Dense inverse application used by block-Jacobi and ASM.",
+        help="Dense inverse application used by block-Jacobi and, by default, ASM.",
+    )
+    parser.add_argument(
+        "--asm-application",
+        choices=("matmul", "raw", "fused"),
+        default=None,
+        help=(
+            "ASM-specific application path. 'fused' combines restriction and "
+            "local inverse multiplication, then uses race-free prolongation."
+        ),
     )
     parser.add_argument(
         "--preconditioners",
@@ -314,7 +323,13 @@ def main() -> None:
         if args.orthogonalization is not None
         else ("mgs2" if args.reorthogonalize else "mgs")
     )
-    print(f"Prec. apply     : {args.preconditioner_application}")
+    resolved_asm_application = (
+        args.preconditioner_application
+        if args.asm_application is None
+        else args.asm_application
+    )
+    print(f"BJ apply        : {args.preconditioner_application}")
+    print(f"ASM apply       : {resolved_asm_application}")
     print(f"Orthogonalize   : {resolved_orthogonalization}")
     print(f"Warmup/repeats  : {args.warmup}/{args.repeats}")
     print()
@@ -452,7 +467,7 @@ def main() -> None:
                             device_id=device_id,
                             dtype=dtype,
                             local_solver=args.local_solver,
-                            application=args.preconditioner_application,
+                            application=resolved_asm_application,
                         ),
                         device_id=device_id,
                     )
@@ -471,9 +486,12 @@ def main() -> None:
                             "record_type": "preconditioner",
                             "preconditioner": "asm",
                             "local_solver": args.local_solver,
-                            "application": args.preconditioner_application,
+                            "application": resolved_asm_application,
                             "setup_ms": setup.elapsed_ms,
                             "allocates_during_apply": asm.allocates_during_apply,
+                            "workspace_bytes": asm.workspace_bytes,
+                            "restricted_workspace_bytes": asm.restricted_workspace_bytes,
+                            "race_free_prolongation": asm.uses_race_free_prolongation,
                             "maximum_inverse_residual": asm.maximum_inverse_residual,
                             **_timing_fields("total", timing.total),
                             **_timing_fields("restriction", timing.restriction),
