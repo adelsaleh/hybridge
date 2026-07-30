@@ -91,8 +91,8 @@ class GuidingCenterCaseDefinition:
         return case
 
 
-def rho_eq_diocotron(x, y, *, r0: float = 0.45, sigma: float = 0.03):
-    """Classical annular Gaussian density profile used by the legacy diocotron test."""
+def rho_eq_diocotron_gaussian(x, y, *, r0: float = 0.45, sigma: float = 0.03):
+    """Legacy Gaussian annular density profile retained for comparisons."""
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     r = np.sqrt(x * x + y * y)
@@ -102,35 +102,54 @@ def rho_eq_diocotron(x, y, *, r0: float = 0.45, sigma: float = 0.03):
 def diocotron_k(
         *,
         k: int = 3,
-        eps: float = 0.05,
-        r0: float = 0.45,
-        sigma: float = 0.03,
+        epsilon: float = 0.05,
+        eps: float | None = None,
+        s_minus: float = 0.79,
+        s_plus: float = 0.80,
+        rho_bar: float = 1.0,
+        theta_shift: float = 0.0,
 ) -> GuidingCenterCase:
-    """Return the fixed-disc diocotron perturbation case."""
+    """Return the sharp annular-band single-mode diocotron perturbation case."""
     mode = int(k)
-    amplitude = float(eps)
-    radius0 = float(r0)
-    width = float(sigma)
+    amplitude = float(epsilon if eps is None else eps)
+    inner = float(s_minus)
+    outer = float(s_plus)
+    density_level = float(rho_bar)
+    shift = float(theta_shift)
 
     def equilibrium(x, y):
-        return rho_eq_diocotron(x, y, r0=radius0, sigma=width)
+        return rho_eq_diocotron_annulus(
+            x,
+            y,
+            s_minus=inner,
+            s_plus=outer,
+            rho_bar=density_level,
+        )
 
     def initial_density(x, y):
-        theta = np.arctan2(y, x)
-        return (1.0 + amplitude * np.cos(mode * theta)) * equilibrium(x, y)
+        x_arr = np.asarray(x, dtype=np.float64)
+        y_arr = np.asarray(y, dtype=np.float64)
+        theta = np.arctan2(y_arr, x_arr) - shift
+        return equilibrium(x_arr, y_arr) * (1.0 + amplitude * np.cos(mode * theta))
 
     return GuidingCenterCase(
         key="diocotron_k",
-        description="Classical fixed-disc diocotron perturbation with zero potential boundary and zero density flux.",
+        description="Sharp annular-band diocotron perturbation with one azimuthal mode, zero potential boundary, and zero density flux.",
         initial_density=initial_density,
         potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
         density_boundary=None,
         density_transport_boundary_mode="zero-flux",
         default_domain="disc",
         equilibrium_density=equilibrium,
-        parameters={"k": mode, "eps": amplitude, "r0": radius0, "sigma": width},
+        parameters={
+            "k": mode,
+            "epsilon": amplitude,
+            "s_minus": inner,
+            "s_plus": outer,
+            "rho_bar": density_level,
+            "theta_shift": shift,
+        },
     )
-
 
 def diocotron_azimuthal_perturbation(
         theta,
@@ -401,14 +420,14 @@ def rho_helm_wave(
 CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
     "diocotron_k": GuidingCenterCaseDefinition(
         key="diocotron_k",
-        description="Fixed-disc diocotron perturbation; default azimuthal mode k=3.",
+        description="Sharp annular-band single-mode diocotron perturbation; default azimuthal mode k=3.",
         factory=diocotron_k,
         default_domain="disc",
         default_params={"k": 3},
     ),
     "diocotron_broadband": GuidingCenterCaseDefinition(
         key="diocotron_broadband",
-        description="Sharp-annulus broadband diocotron perturbation; default modes m=3,...,102.",
+        description="Sharp annular-band broadband diocotron perturbation; default modes m=3,...,102.",
         factory=diocotron_broadband,
         default_domain="disc",
         default_params={"m_min": 3, "n_modes": 100},
@@ -446,7 +465,7 @@ __all__ = [
     "diocotron_initial_density_polar",
     "diocotron_k",
     "diocotron_perturbation_polar",
-    "rho_eq_diocotron",
+    "rho_eq_diocotron_gaussian",
     "rho_eq_diocotron_annulus",
     "rho_helm_wave",
 ]

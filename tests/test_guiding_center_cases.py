@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import subprocess
 import sys
 from dataclasses import replace
@@ -9,6 +11,7 @@ import numpy as np
 import pytest
 
 from scripts.guiding_center.guiding_center_cases import (
+    CASE_DEFINITIONS,
     case_definition_by_key,
     diocotron_azimuthal_perturbation,
     diocotron_initial_density_cartesian,
@@ -17,11 +20,25 @@ from scripts.guiding_center.guiding_center_presets import preset_by_key
 from scripts.guiding_center.run_guiding_center_cases import run_guiding_center_case
 
 
+def test_guiding_center_case_registry_has_two_annular_diocotron_cases_and_rho_helm() -> None:
+    assert tuple(CASE_DEFINITIONS) == ("diocotron_k", "diocotron_broadband", "rho_helm_wave")
+
+    single_mode = case_definition_by_key("diocotron_k").build()
+    broadband = case_definition_by_key("diocotron_broadband").build()
+    for case in (single_mode, broadband):
+        assert case.default_domain == "disc"
+        assert case.density_transport_boundary_mode == "zero-flux"
+        assert case.parameters["s_minus"] == pytest.approx(0.79)
+        assert case.parameters["s_plus"] == pytest.approx(0.80)
+        assert case.initial_density(np.array([0.795]), np.array([0.0]))[0] > 0.0
+        assert case.initial_density(np.array([0.2]), np.array([0.0]))[0] == pytest.approx(0.0)
+
+
 def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
     x = np.array([[0.1, 0.2, -0.3], [0.4, -0.5, 0.0]])
     y = np.array([[0.0, 0.3, -0.2], [0.1, 0.2, -0.4]])
 
-    for key in ("diocotron_k", "diocotron_broadband", "rho_helm_wave"):
+    for key in CASE_DEFINITIONS:
         case = case_definition_by_key(key).build()
         rho0 = case.initial_density(x, y)
         phi_boundary = case.potential_boundary_at(0.125)(x, y)
@@ -61,7 +78,7 @@ def test_diocotron_broadband_matches_mean_of_consecutive_modes() -> None:
     assert np.max(np.abs(eta)) == pytest.approx(1.0)
 
 
-def test_diocotron_broadband_case_uses_sharp_annulus_defaults() -> None:
+def test_diocotron_broadband_case_uses_sharp_annular_band_defaults() -> None:
     case = case_definition_by_key("diocotron_broadband").build()
     assert case.default_domain == "disc"
     assert case.density_transport_boundary_mode == "zero-flux"
@@ -140,7 +157,7 @@ def test_guiding_center_diocotron_cli_smoke(tmp_path: Path) -> None:
             "--num-steps",
             "1",
             "--mesh-size",
-            "0.9",
+            "0.3",
             "--diagnostics-dir",
             str(tmp_path),
             "--diagnostics-prefix",
@@ -156,5 +173,14 @@ def test_guiding_center_diocotron_cli_smoke(tmp_path: Path) -> None:
         timeout=180,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert (tmp_path / "diocotron_smoke_test.csv").exists()
-    assert (tmp_path / "diocotron_smoke_test.jsonl").exists()
+    csv_path = tmp_path / "diocotron_smoke_test.csv"
+    jsonl_path = tmp_path / "diocotron_smoke_test.jsonl"
+    assert csv_path.exists()
+    assert jsonl_path.exists()
+
+    final = json.loads(jsonl_path.read_text().strip().splitlines()[-1])
+    for key in ("mass_relative_drift", "q_l2_relative_drift", "rho_min", "rho_max", "transport_solver_residual"):
+        assert final[key] is not None
+        assert math.isfinite(final[key])
+    assert abs(final["mass_relative_drift"]) < 1.0e-3
+    assert final["transport_solver_residual"] < 1.0e-4

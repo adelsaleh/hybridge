@@ -122,7 +122,7 @@
 ## Guiding-Center HDG Roadmap
 
 - [x] Add the fixed-mesh guiding-center cases runner at `scripts/guiding_center/run_guiding_center_cases.py` with `--preset`, `--list-presets`, `--case`, `--case-param`, independent Poisson/transport backend and solver flags, and `--backend-profile host|device|hybrid` shorthands.
-- [x] Add `scripts/guiding_center/guiding_center_cases.py` with the classical `diocotron_k` disc case and the legacy manufactured `rho_helm_wave`/`phi_helm_wave` pair.
+- [x] Add `scripts/guiding_center/guiding_center_cases.py` with two annular-band diocotron cases, `diocotron_k` and `diocotron_broadband`, plus the legacy manufactured `rho_helm_wave`/`phi_helm_wave` pair.
 - [x] Add `scripts/guiding_center/guiding_center_presets.py` with curated host and raw-CUDA/AMGX-oriented presets for `diocotron_k3` and `rho_helm_wave` runs.
 - [x] Add first-pass per-step guiding-center diagnostics: CSV/JSONL output, mass and `||q||_L2` energy drift, min/max histories, solver residual/iteration histories, step timings, diocotron equilibrium-potential drift, and manufactured `rho`/`phi` errors.
 - [x] Add density-only PyVista plotting as the default guiding-center plot mode, with `--plot-both` for density/potential panels and in-place scalar-array updates for active plots.

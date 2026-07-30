@@ -1297,10 +1297,12 @@ order semi-implicit guiding-center model:
 Registered cases are defined in `scripts/guiding_center/guiding_center_cases.py`:
 
 ```text
-diocotron_k    disc equilibrium density with (1 + eps cos(k theta)) perturbation;
-               zero potential boundary; zero-flux transport boundary
-rho_helm_wave  legacy manufactured rho/phi pair with nonzero exact boundary data;
-               rectangle default with optional domain override
+diocotron_k          sharp annular-band density with (1 + eps cos(k theta)) perturbation;
+                     zero potential boundary; zero-flux transport boundary
+diocotron_broadband  sharp annular-band density with 100 consecutive azimuthal modes by default;
+                     zero potential boundary; zero-flux transport boundary
+rho_helm_wave        legacy manufactured rho/phi pair with nonzero exact boundary data;
+                     rectangle default with optional domain override
 ```
 
 Presets are defined in `scripts/guiding_center/guiding_center_presets.py` and
