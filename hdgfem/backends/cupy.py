@@ -53,6 +53,8 @@ except ImportError as error:  # pragma: no cover
 else:  # pragma: no cover
     _PYAMGX_IMPORT_ERROR = None
 
+_PYAMGX_RUNTIME_INITIALIZED = False
+
 
 @dataclass(frozen=True)
 class CupyReferenceElementData:
@@ -359,6 +361,20 @@ def require_pyamgx():
     if pyamgx is None:
         raise RuntimeError("PyAMGX solve requested, but pyamgx is not importable") from _PYAMGX_IMPORT_ERROR
     return pyamgx
+
+
+def initialize_pyamgx_once():
+    """Initialize AMGX once per process.
+
+    PyAMGX/AMGX 2.5 does not tolerate repeated ``initialize()`` calls in one
+    Python process because plugin readers are registered globally.
+    """
+    global _PYAMGX_RUNTIME_INITIALIZED
+    amgx = require_pyamgx()
+    if not _PYAMGX_RUNTIME_INITIALIZED:
+        amgx.initialize()
+        _PYAMGX_RUNTIME_INITIALIZED = True
+    return amgx
 
 
 def asnumpy(array) -> np.ndarray:
@@ -1350,7 +1366,7 @@ def solve_pyamgx_csr(
 ):
     """Solve a CuPy CSR system with PyAMGX and return a CuPy solution."""
     cupy = require_cupy()
-    amgx = require_pyamgx()
+    amgx = initialize_pyamgx_once()
     rhs_cp = cupy.asarray(rhs, dtype=cupy.float64)
     if initial_guess is None:
         x_cp = cupy.zeros_like(rhs_cp)
@@ -1363,7 +1379,6 @@ def solve_pyamgx_csr(
     if config is not None:
         amgx_config = dict(config)
 
-    amgx.initialize()
     cfg = rsrc = mat = vec_b = vec_x = solver = None
     try:
         cfg = amgx.Config().create_from_dict(amgx_config)
@@ -1386,7 +1401,6 @@ def solve_pyamgx_csr(
                     obj.destroy()
                 except AttributeError:
                     pass
-        amgx.finalize()
     return x_cp
 
 
@@ -1555,6 +1569,7 @@ __all__ = [
     "asnumpy",
     "clear_cupy_space_cache",
     "field_from_cupy_coefficients",
+    "initialize_pyamgx_once",
     "default_pyamgx_config",
     "diagonal_scale_cupy_csr_rows_in_place",
     "require_cupy",

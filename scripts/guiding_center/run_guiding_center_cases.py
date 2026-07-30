@@ -19,6 +19,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.guiding_center.guiding_center_cases import CASE_DEFINITIONS
 from scripts.guiding_center.guiding_center_presets import (
     DEFAULT_PRESET,
     PRESETS,
@@ -1150,7 +1151,7 @@ def _main() -> None:
     parser.add_argument("--print-preset", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--backend-profile", choices=("host", "device", "hybrid"), default=None)
-    parser.add_argument("--case", choices=("diocotron_k", "rho_helm_wave"), default=None)
+    parser.add_argument("--case", choices=tuple(sorted(CASE_DEFINITIONS)), default=None)
     parser.add_argument("--case-param", action="append", default=None, help="override case parameter with key=value syntax")
     parser.add_argument("--domain", choices=("auto", "structured-rectangle", "rectangle", "disc", "triangle"), default=None)
     parser.add_argument("--mesh-size", "--lc", type=float, default=None)

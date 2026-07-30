@@ -8,7 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.guiding_center.guiding_center_cases import case_definition_by_key
+from scripts.guiding_center.guiding_center_cases import (
+    case_definition_by_key,
+    diocotron_azimuthal_perturbation,
+    diocotron_initial_density_cartesian,
+)
 from scripts.guiding_center.guiding_center_presets import preset_by_key
 from scripts.guiding_center.run_guiding_center_cases import run_guiding_center_case
 
@@ -17,7 +21,7 @@ def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
     x = np.array([[0.1, 0.2, -0.3], [0.4, -0.5, 0.0]])
     y = np.array([[0.0, 0.3, -0.2], [0.1, 0.2, -0.4]])
 
-    for key in ("diocotron_k", "rho_helm_wave"):
+    for key in ("diocotron_k", "diocotron_broadband", "rho_helm_wave"):
         case = case_definition_by_key(key).build()
         rho0 = case.initial_density(x, y)
         phi_boundary = case.potential_boundary_at(0.125)(x, y)
@@ -45,6 +49,31 @@ def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
     assert config.transport_raw_matrix_format == "csr"
     assert config.transport_materialize_host_system is False
     assert config.transport_materialize_host_solution is False
+
+
+def test_diocotron_broadband_matches_mean_of_consecutive_modes() -> None:
+    theta = np.linspace(-np.pi, np.pi, 257)
+    m_min = 3
+    n_modes = 100
+    eta = diocotron_azimuthal_perturbation(theta, m_min=m_min, n_modes=n_modes)
+    direct = np.mean([np.cos(m * theta) for m in range(m_min, m_min + n_modes)], axis=0)
+    np.testing.assert_allclose(eta, direct, rtol=2.0e-13, atol=2.0e-13)
+    assert np.max(np.abs(eta)) == pytest.approx(1.0)
+
+
+def test_diocotron_broadband_case_uses_sharp_annulus_defaults() -> None:
+    case = case_definition_by_key("diocotron_broadband").build()
+    assert case.default_domain == "disc"
+    assert case.density_transport_boundary_mode == "zero-flux"
+    assert case.parameters["m_min"] == 3
+    assert case.parameters["n_modes"] == 100
+
+    rho_on_annulus = case.initial_density(np.array([0.795]), np.array([0.0]))
+    rho_inside_hole = case.initial_density(np.array([0.2]), np.array([0.0]))
+    wrapper_value = diocotron_initial_density_cartesian(np.array([0.795]), np.array([0.0]))
+    assert rho_on_annulus[0] == pytest.approx(1.0 + case.parameters["epsilon"])
+    assert wrapper_value[0] == pytest.approx(rho_on_annulus[0])
+    assert rho_inside_hole[0] == pytest.approx(0.0)
 
 
 def test_rho_helm_wave_satisfies_negative_laplacian_phi_equals_rho() -> None:

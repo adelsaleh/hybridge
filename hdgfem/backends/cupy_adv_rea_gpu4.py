@@ -19,7 +19,7 @@ import numpy as np
 
 from ..core.space import DGField, DGSpace, DGTraceSpace
 from ..linalg.system import KnownDofReduction, SolveResult
-from .cupy import CupyDGSpace, as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
+from .cupy import CupyDGSpace, as_cupy_coefficients, as_cupy_space, initialize_pyamgx_once, require_cupy, require_cupyx_sparse, require_pyamgx
 from .cupy_adv_rea_raw import (
     RawAdvectionAssemblyResult,
     assemble_projected_advection_trace_system_eliminated_raw_cuda,
@@ -843,7 +843,6 @@ def _diagonal_scale_csr_rows_in_place(matrix, rhs):
     return diagonal
 
 
-_AMGX_RUNTIME_INITIALIZED = False
 _AMGX_REUSABLE_SOLVERS = []
 
 
@@ -857,10 +856,7 @@ class _PyAMGXSharedResourceManager:
         self.refcount = 0
 
     def acquire(self, pyamgx, resource_config: dict):
-        global _AMGX_RUNTIME_INITIALIZED
-        if not _AMGX_RUNTIME_INITIALIZED:
-            pyamgx.initialize()
-            _AMGX_RUNTIME_INITIALIZED = True
+        initialize_pyamgx_once()
         if self.rsrc is None:
             self.pyamgx = pyamgx
             self.resource_cfg = pyamgx.Config().create_from_dict(copy.deepcopy(resource_config))
