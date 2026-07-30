@@ -30,7 +30,7 @@ from hdgfem.assembly.face_dense import FaceDenseSystem
 from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
 
 
-GPUFaceMatvecImplementation = Literal["matmul", "raw"]
+GPUFaceMatvecImplementation = Literal["matmul", "raw", "raw_fused"]
 
 
 @dataclass(frozen=True)
@@ -240,6 +240,87 @@ void face_dense_matvec_f64(
 }
 """
 
+_FUSED_RAW_MATVEC_KERNEL_SOURCE = r"""
+extern "C" __global__
+void face_dense_matvec_fused_f32(
+    const int num_rows,
+    const int num_slots,
+    const int block_size,
+    const float* __restrict__ matrix_batches,
+    const int* __restrict__ neighbors,
+    const float* __restrict__ x,
+    float* __restrict__ y)
+{
+    const unsigned long long output_index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    const unsigned long long total_outputs =
+        (unsigned long long) num_rows * block_size;
+    if (output_index >= total_outputs) return;
+
+    const int row_face = (int) (output_index / block_size);
+    const int row_dof = (int) (output_index % block_size);
+    const int extended_size = num_slots * block_size;
+    const unsigned long long matrix_offset =
+        ((unsigned long long) row_face * block_size + row_dof)
+        * extended_size;
+
+    float value = 0.0f;
+    for (int slot = 0; slot < num_slots; ++slot) {
+        const int column_face = neighbors[row_face * num_slots + slot];
+        if (column_face < 0) continue;
+        const unsigned long long x_offset =
+            (unsigned long long) column_face * block_size;
+        const unsigned long long block_offset =
+            matrix_offset + (unsigned long long) slot * block_size;
+        for (int column_dof = 0; column_dof < block_size; ++column_dof) {
+            value += matrix_batches[block_offset + column_dof]
+                   * x[x_offset + column_dof];
+        }
+    }
+    y[output_index] = value;
+}
+
+extern "C" __global__
+void face_dense_matvec_fused_f64(
+    const int num_rows,
+    const int num_slots,
+    const int block_size,
+    const double* __restrict__ matrix_batches,
+    const int* __restrict__ neighbors,
+    const double* __restrict__ x,
+    double* __restrict__ y)
+{
+    const unsigned long long output_index =
+        (unsigned long long) blockDim.x * blockIdx.x + threadIdx.x;
+    const unsigned long long total_outputs =
+        (unsigned long long) num_rows * block_size;
+    if (output_index >= total_outputs) return;
+
+    const int row_face = (int) (output_index / block_size);
+    const int row_dof = (int) (output_index % block_size);
+    const int extended_size = num_slots * block_size;
+    const unsigned long long matrix_offset =
+        ((unsigned long long) row_face * block_size + row_dof)
+        * extended_size;
+
+    double value = 0.0;
+    for (int slot = 0; slot < num_slots; ++slot) {
+        const int column_face = neighbors[row_face * num_slots + slot];
+        if (column_face < 0) continue;
+        const unsigned long long x_offset =
+            (unsigned long long) column_face * block_size;
+        const unsigned long long block_offset =
+            matrix_offset + (unsigned long long) slot * block_size;
+        for (int column_dof = 0; column_dof < block_size; ++column_dof) {
+            value += matrix_batches[block_offset + column_dof]
+                   * x[x_offset + column_dof];
+        }
+    }
+    y[output_index] = value;
+}
+"""
+
+
 
 class CuPyFaceDenseOperator:
     """GPU-resident face-dense HDG operator.
@@ -259,8 +340,10 @@ class CuPyFaceDenseOperator:
         device_id: int,
     ) -> None:
         cp = require_cupy_device()
-        if implementation not in ("matmul", "raw"):
-            raise ValueError("implementation must be 'matmul' or 'raw'")
+        if implementation not in ("matmul", "raw", "raw_fused"):
+            raise ValueError(
+                "implementation must be 'matmul', 'raw', or 'raw_fused'"
+            )
         if matrix_batches.ndim != 3:
             raise ValueError("matrix_batches must have shape (NF, b, S*b)")
         if neighbors.ndim != 2:
@@ -289,14 +372,22 @@ class CuPyFaceDenseOperator:
         self.num_dofs = self.num_rows * self.block_size
         self.dtype = matrix_batches.dtype
 
-        self._x_extended = cp.empty(
-            (self.num_rows, self.num_slots, self.block_size),
-            dtype=self.dtype,
-        )
-        self._matmul_output = cp.empty(
-            (self.num_rows, self.block_size, 1),
-            dtype=self.dtype,
-        )
+        # The fused raw path reads neighbouring face values directly and
+        # therefore needs neither the gathered-vector buffer nor a temporary
+        # batched-matmul output.  The two-stage paths keep their reusable
+        # workspaces for validation and comparison.
+        self._x_extended = None
+        if implementation != "raw_fused":
+            self._x_extended = cp.empty(
+                (self.num_rows, self.num_slots, self.block_size),
+                dtype=self.dtype,
+            )
+        self._matmul_output = None
+        if implementation == "matmul":
+            self._matmul_output = cp.empty(
+                (self.num_rows, self.block_size, 1),
+                dtype=self.dtype,
+            )
 
         suffix = "f32" if self.dtype == cp.float32 else "f64"
         self._gather_kernel = cp.RawKernel(
@@ -304,10 +395,75 @@ class CuPyFaceDenseOperator:
             f"gather_face_neighbors_{suffix}",
         )
         self._raw_matvec_kernel = None
+        self._fused_raw_matvec_kernel = None
         if implementation == "raw":
             self._raw_matvec_kernel = cp.RawKernel(
                 _RAW_MATVEC_KERNEL_SOURCE,
                 f"face_dense_matvec_{suffix}",
+            )
+        elif implementation == "raw_fused":
+            self._fused_raw_matvec_kernel = cp.RawKernel(
+                _FUSED_RAW_MATVEC_KERNEL_SOURCE,
+                f"face_dense_matvec_fused_{suffix}",
+            )
+
+    @classmethod
+    def from_device_blocks(
+        cls,
+        blocks,
+        neighbors,
+        *,
+        implementation: GPUFaceMatvecImplementation = "raw_fused",
+        device_id: int | None = None,
+    ) -> "CuPyFaceDenseOperator":
+        """Construct directly from GPU-resident ``(NF,S,b,b)`` blocks.
+
+        This setup path is used by the GPU assembly pipeline.  The only
+        numerical transformation is the one-time device-side permutation to
+        ``(NF,b,S*b)``; global blocks are never copied back to the CPU.
+        """
+
+        cp = require_cupy_device()
+        if not isinstance(blocks, cp.ndarray):
+            raise TypeError("blocks must be a CuPy array")
+        if blocks.ndim != 4:
+            raise ValueError("blocks must have shape (NF, S, b, b)")
+        num_rows, num_slots, row_size, column_size = blocks.shape
+        if row_size != column_size or min(blocks.shape) <= 0:
+            raise ValueError("face blocks must be non-empty and square")
+        if blocks.dtype not in (cp.float32, cp.float64):
+            raise TypeError("blocks must use float32 or float64")
+        selected_device = int(blocks.device.id) if device_id is None else int(device_id)
+        if int(blocks.device.id) != selected_device:
+            raise ValueError("blocks are on a different CUDA device")
+        if isinstance(neighbors, cp.ndarray):
+            neighbors_device = neighbors
+            if int(neighbors_device.device.id) != selected_device:
+                raise ValueError("neighbors are on a different CUDA device")
+            if neighbors_device.dtype != cp.int32:
+                neighbors_device = neighbors_device.astype(cp.int32, copy=True)
+            elif not neighbors_device.flags.c_contiguous:
+                neighbors_device = cp.ascontiguousarray(neighbors_device)
+        else:
+            neighbors_host = np.ascontiguousarray(neighbors, dtype=np.int32)
+            with cp.cuda.Device(selected_device):
+                neighbors_device = cp.asarray(neighbors_host)
+        if neighbors_device.shape != (num_rows, num_slots):
+            raise ValueError("neighbors must have shape (NF, S)")
+
+        with cp.cuda.Device(selected_device):
+            matrix_batches = cp.ascontiguousarray(
+                blocks.transpose(0, 2, 1, 3).reshape(
+                    num_rows,
+                    row_size,
+                    num_slots * row_size,
+                )
+            )
+            return cls(
+                matrix_batches=matrix_batches,
+                neighbors=neighbors_device,
+                implementation=implementation,
+                device_id=selected_device,
             )
 
     @classmethod
@@ -347,9 +503,33 @@ class CuPyFaceDenseOperator:
 
     @property
     def x_extended(self):
-        """Reusable gathered-vector buffer with shape ``(NF, S, b)``."""
+        """Reusable gathered-vector buffer with shape ``(NF, S, b)``.
 
+        The fused raw implementation deliberately does not allocate this
+        buffer.  Accessing it in that mode is therefore an error rather than a
+        hidden allocation.
+        """
+
+        if self._x_extended is None:
+            raise RuntimeError("raw_fused does not use a gathered-vector buffer")
         return self._x_extended
+
+    @property
+    def uses_gather_buffer(self) -> bool:
+        """Whether the selected implementation materializes neighbour values."""
+
+        return self._x_extended is not None
+
+    @property
+    def workspace_bytes(self) -> int:
+        """Bytes owned by operator-only temporary device workspaces."""
+
+        total = 0
+        if self._x_extended is not None:
+            total += int(self._x_extended.nbytes)
+        if self._matmul_output is not None:
+            total += int(self._matmul_output.nbytes)
+        return total
 
     def _validate_device_vector(self, vector, *, name: str):
         cp = self._cp
@@ -419,7 +599,10 @@ class CuPyFaceDenseOperator:
     def gather_neighbors(self, x):
         """Return a newly allocated gathered vector (validation convenience)."""
 
-        out = self._cp.empty_like(self._x_extended)
+        out = self._cp.empty(
+            (self.num_rows, self.num_slots, self.block_size),
+            dtype=self.dtype,
+        )
         self.gather_neighbors_into(x, out)
         return out
 
@@ -432,9 +615,31 @@ class CuPyFaceDenseOperator:
         if device_arrays_overlap(x, out):
             raise ValueError("x and out must not alias")
 
+        threads = 256
+        blocks = (self.num_dofs + threads - 1) // threads
+
+        if self.implementation == "raw_fused":
+            assert self._fused_raw_matvec_kernel is not None
+            self._fused_raw_matvec_kernel(
+                (blocks,),
+                (threads,),
+                (
+                    np.int32(self.num_rows),
+                    np.int32(self.num_slots),
+                    np.int32(self.block_size),
+                    self.matrix_batches,
+                    self.neighbors,
+                    x.reshape(-1),
+                    out_faces,
+                ),
+            )
+            return
+
+        assert self._x_extended is not None
         self.gather_neighbors_into(x, self._x_extended)
 
         if self.implementation == "matmul":
+            assert self._matmul_output is not None
             cp.matmul(
                 self.matrix_batches,
                 self._x_extended.reshape(
@@ -447,8 +652,6 @@ class CuPyFaceDenseOperator:
             out_faces[...] = self._matmul_output[:, :, 0]
             return
 
-        threads = 256
-        blocks = (self.num_dofs + threads - 1) // threads
         assert self._raw_matvec_kernel is not None
         self._raw_matvec_kernel(
             (blocks,),

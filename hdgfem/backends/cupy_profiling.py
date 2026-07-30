@@ -419,6 +419,16 @@ def _operator_dense_product_into(operator: Any, out: Any) -> None:
     )
 
 
+def _zero_cuda_timing(*, warmup: int, repeats: int) -> CudaTimingStats:
+    """Return an explicit zero-cost stage for a fused implementation."""
+
+    return CudaTimingStats(
+        samples_ms=np.zeros(int(repeats), dtype=np.float64),
+        warmup=int(warmup),
+        repeats=int(repeats),
+    )
+
+
 def profile_face_dense_operator(
     operator: Any,
     x: Any,
@@ -432,20 +442,24 @@ def profile_face_dense_operator(
     operator._validate_device_vector(x, name="x")
     operator._validate_device_vector(out, name="out")
 
-    gather = benchmark_cuda_call(
-        lambda: operator.gather_neighbors_into(x, operator.x_extended),
-        warmup=warmup,
-        repeats=repeats,
-        device_id=operator.device_id,
-    )
-    # Ensure the dense stage sees a valid gathered vector before its warmup.
-    operator.gather_neighbors_into(x, operator.x_extended)
-    dense = benchmark_cuda_call(
-        lambda: _operator_dense_product_into(operator, out),
-        warmup=warmup,
-        repeats=repeats,
-        device_id=operator.device_id,
-    )
+    if operator.implementation == "raw_fused":
+        gather = _zero_cuda_timing(warmup=warmup, repeats=repeats)
+        dense = _zero_cuda_timing(warmup=warmup, repeats=repeats)
+    else:
+        gather = benchmark_cuda_call(
+            lambda: operator.gather_neighbors_into(x, operator.x_extended),
+            warmup=warmup,
+            repeats=repeats,
+            device_id=operator.device_id,
+        )
+        # Ensure the dense stage sees a valid gathered vector before its warmup.
+        operator.gather_neighbors_into(x, operator.x_extended)
+        dense = benchmark_cuda_call(
+            lambda: _operator_dense_product_into(operator, out),
+            warmup=warmup,
+            repeats=repeats,
+            device_id=operator.device_id,
+        )
     total = benchmark_cuda_call(
         lambda: operator.matvec_into(x, out),
         warmup=warmup,
@@ -456,9 +470,13 @@ def profile_face_dense_operator(
     itemsize = int(np.dtype(operator.dtype.name).itemsize)
     flops = int(2 * operator.num_rows * operator.block_size * operator.extended_size)
     matrix_bytes = int(operator.matrix_batches.size * itemsize)
-    vector_bytes = int(
-        (operator.num_dofs + operator.x_extended.size + operator.num_dofs) * itemsize
-    )
+    if operator.implementation == "raw_fused":
+        vector_bytes = int(2 * operator.num_dofs * itemsize)
+    else:
+        vector_bytes = int(
+            (operator.num_dofs + operator.x_extended.size + operator.num_dofs)
+            * itemsize
+        )
     return FaceDenseOperatorProfile(
         total=total,
         gather=gather,
@@ -496,6 +514,19 @@ def _asm_local_solve_into(preconditioner: Any) -> None:
             preconditioner._element_rhs,
         )
         preconditioner._local_output[...] = solved
+        return
+    if preconditioner.application == "raw":
+        from .cupy_preconditionners import _launch_raw_batched_mv
+
+        if preconditioner._raw_apply_kernel is None:
+            raise RuntimeError("raw ASM application kernel is unavailable")
+        _launch_raw_batched_mv(
+            preconditioner._raw_apply_kernel,
+            preconditioner.inverse_matrices,
+            preconditioner._element_rhs,
+            preconditioner._local_output,
+            matrix_size=preconditioner.local_size,
+        )
         return
     cp.matmul(
         preconditioner.inverse_matrices,

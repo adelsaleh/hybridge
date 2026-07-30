@@ -81,13 +81,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--matvec-implementations",
         nargs="+",
-        choices=("matmul", "raw"),
-        default=["matmul", "raw"],
+        choices=("matmul", "raw", "raw_fused"),
+        default=["raw_fused", "raw", "matmul"],
     )
     parser.add_argument(
         "--gmres-matvec-implementation",
-        choices=("matmul", "raw"),
-        default="raw",
+        choices=("matmul", "raw", "raw_fused"),
+        default="raw_fused",
         help="Operator used inside GMRES; independent of reporting order.",
     )
     parser.add_argument(
