@@ -69,6 +69,22 @@ def main() -> None:
         args.order,
         basis_type="dub_orth",
     )
+    expected_element_dofs = (args.order + 1) * (args.order + 2) // 2
+    expected_trace_dofs = args.order + 1
+    if space.order != args.order:
+        raise RuntimeError(
+            f"requested p={args.order}, but DGSpace constructed p={space.order}"
+        )
+    if space.el_dof != expected_element_dofs:
+        raise RuntimeError(
+            "DGSpace element-dof mismatch: "
+            f"expected {expected_element_dofs}, got {space.el_dof}"
+        )
+    if space.reference.edg_dof != expected_trace_dofs:
+        raise RuntimeError(
+            "DGSpace trace-dof mismatch: "
+            f"expected {expected_trace_dofs}, got {space.reference.edg_dof}"
+        )
     diffusion, reaction, source, exact = quadratic_poisson_case()
     if not _diffusion_is_identity(diffusion):
         raise RuntimeError("this validation currently targets identity diffusion")
@@ -127,7 +143,10 @@ def main() -> None:
     print("GPU element-local HDG assembly validation")
     print("=" * 72)
     print(f"Device / elements : {device_name} / {space.mesh.num_tri}")
-    print(f"Mesh / order      : {args.mesh}x{args.mesh} / p={args.order}")
+    print(f"Mesh / order      : {args.mesh}x{args.mesh} / p={space.order}")
+    print(
+        f"Element / trace dofs: {space.el_dof} / {space.reference.edg_dof}"
+    )
     print(f"dtype / inverse   : {args.dtype} / {args.inverse_backend}")
     print()
     print(f"CPU local+face assembly       : {cpu_ms:10.3f} ms")

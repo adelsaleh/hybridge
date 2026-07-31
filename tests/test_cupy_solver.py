@@ -168,6 +168,30 @@ def test_cgs_fallback_switches_subsequent_restart_cycles_to_cgs2() -> None:
     assert result.cycle_records[0].switched_to_cgs2
 
 
+
+def test_cgs_fallback_is_not_counted_after_final_converged_cycle() -> None:
+    _cupy_or_skip()
+    direct = _small_face_system()
+    operator = CuPyFaceDenseOperator.from_system(
+        direct.system, implementation="raw"
+    )
+    rhs = operator.to_device(direct.system.rhs)
+    result = restarted_gmres_cupy(
+        operator,
+        rhs,
+        restart=direct.system.num_dofs,
+        max_iterations=direct.system.num_dofs,
+        rtol=1.0e-8,
+        orthogonalization="cgs",
+        cgs2_fallback_threshold=0.0,
+    )
+    operator.synchronize()
+
+    assert result.converged
+    assert result.restart_cycles == 1
+    assert result.fallback_count == 0
+    assert not result.cycle_records[-1].switched_to_cgs2
+
 def test_nonfinite_rhs_has_explicit_status_and_optional_exception() -> None:
     cp = _cupy_or_skip()
     direct = _small_face_system()

@@ -1167,6 +1167,7 @@ def restarted_gmres_cupy(
             cycle_orthogonalization = active_orthogonalization
             orthogonalization_history.append(cycle_orthogonalization)
             switched_to_cgs2 = False
+            fallback_requested = False
             cycle_orthogonality_record: CuPyOrthogonalityRecord | None = None
 
             # The true residual from the previous cycle is already in
@@ -1347,15 +1348,12 @@ def restarted_gmres_cupy(
                         host_synchronizing=True,
                     )
                 orthogonality_records.append(cycle_orthogonality_record)
-                if (
+                fallback_requested = bool(
                     cgs2_fallback_threshold is not None
                     and cycle_orthogonalization == "cgs"
                     and cycle_orthogonality_record.maximum_offdiagonal
                     > cgs2_fallback_threshold
-                ):
-                    active_orthogonalization = "cgs2"
-                    fallback_count += 1
-                    switched_to_cgs2 = True
+                )
 
             def solve_small_system() -> np.ndarray:
                 return _back_substitute_upper(
@@ -1420,6 +1418,12 @@ def restarted_gmres_cupy(
                 )
                 return make_result("non_finite", iterations, cycles, true_norm)
 
+            converged_this_cycle = true_norm <= target
+            if fallback_requested and not converged_this_cycle:
+                active_orthogonalization = "cgs2"
+                fallback_count += 1
+                switched_to_cgs2 = True
+
             residual_reduction = (
                 true_norm / cycle_true_start
                 if cycle_true_start > 0.0
@@ -1448,7 +1452,7 @@ def restarted_gmres_cupy(
                 )
             )
 
-            if true_norm <= target:
+            if converged_this_cycle:
                 return make_result("converged", iterations, cycles, true_norm)
             if true_norm > divergence_factor * max(initial_true_norm, target):
                 return make_result("diverged", iterations, cycles, true_norm)

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from hdgfem.assembly import hdg as hdg_assembly
-from hdgfem.backends.cupy_autotune import autotune_face_dense_gpu
+from hdgfem.backends.cupy_autotune import autotune_face_dense_gpu_cached
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers.diff_rea import diffusion_element_boundary_mats, local_solvers
@@ -27,6 +27,9 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=50)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--cache-file", type=Path, default=None)
+    parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--force-retune", action="store_true")
     args = parser.parse_args()
 
     space = DGSpace(rectangle_mesh(args.mesh, args.mesh), args.order, basis_type="dub_orth")
@@ -47,21 +50,30 @@ def main() -> None:
     system = assembly.eliminated_system if args.boundary_mode == "eliminate" else assembly.penalty_system
     dtype = np.float32 if args.dtype == "float32" else np.float64
 
-    result = autotune_face_dense_gpu(
+    cached = autotune_face_dense_gpu_cached(
         system,
         element_blocks=assembly.element_blocks,
         loc2glob_face=space.mesh.loc2glob_edge,
         dtype=dtype,
         device_id=args.device,
+        polynomial_order=args.order,
         warmup=args.warmup,
         repeats=args.repeats,
+        cache_path=args.cache_file,
+        use_cache=not args.no_cache,
+        force_retune=args.force_retune,
     )
+    result = cached.result
 
     print("Face-dense CUDA autotuning")
     print("=" * 68)
     print(f"Device / dofs : {result.device_name} / {result.num_dofs}")
     print(f"Mesh / order  : {args.mesh}x{args.mesh} / p={args.order}")
     print(f"dtype         : {result.dtype}")
+    print(f"cache         : {'hit' if cached.cache_hit else 'miss'}")
+    if cached.cache_path is not None:
+        print(f"cache file    : {cached.cache_path}")
+    print(f"cache key     : {cached.key.cache_id[:16]}")
     print()
     print("operator candidate   median[ms] minimum[ms] workspace[MiB] relerr")
     for row in result.operator_candidates:
@@ -81,7 +93,13 @@ def main() -> None:
 
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result.to_dict(), indent=2) + "\n")
+        payload = {
+            "cache_hit": cached.cache_hit,
+            "cache_path": None if cached.cache_path is None else str(cached.cache_path),
+            "cache_key": cached.key.to_dict(),
+            "result": result.to_dict(),
+        }
+        args.output.write_text(json.dumps(payload, indent=2) + "\n")
         print(f"\nJSON report: {args.output}")
 
 
