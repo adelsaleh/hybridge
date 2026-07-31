@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate and time the GPU element-local diffusion assembly pipeline."""
 
 from __future__ import annotations

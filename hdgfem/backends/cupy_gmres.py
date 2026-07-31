@@ -20,7 +20,14 @@ import numpy as np
 
 from .cupy import device_arrays_overlap, require_cupy_device
 
-CuPyGMRESStatus = Literal["converged", "max_iterations", "breakdown"]
+CuPyGMRESStatus = Literal[
+    "converged",
+    "max_iterations",
+    "breakdown",
+    "stagnated",
+    "diverged",
+    "non_finite",
+]
 CuPyOrthogonalization = Literal["mgs", "mgs2", "cgs", "cgs2"]
 
 
@@ -196,6 +203,31 @@ class CuPyOrthogonalityRecord:
     maximum_diagonal_error: float
 
 
+
+
+@dataclass(frozen=True)
+class CuPyGMRESCycleRecord:
+    """Diagnostics for one completed restart cycle.
+
+    ``true_residual_start`` and ``true_residual_end`` are unpreconditioned
+    residual norms.  The solver recomputes the true residual at every restart
+    boundary and uses it to seed the next cycle, so each completed cycle also
+    acts as a residual-replacement step.
+    """
+
+    restart_cycle: int
+    iteration_start: int
+    iteration_end: int
+    basis_dimension: int
+    orthogonalization: CuPyOrthogonalization
+    true_residual_start: float
+    true_residual_end: float
+    residual_reduction: float
+    estimated_residual_end: float
+    happy_breakdown: bool
+    stagnation_count: int
+    switched_to_cgs2: bool
+
 @dataclass(frozen=True)
 class CuPyGMRESResult:
     """GPU GMRES result.
@@ -225,6 +257,11 @@ class CuPyGMRESResult:
     basis_correction_count: int
     coefficient_d2h_count: int
     orthogonality_records: tuple[CuPyOrthogonalityRecord, ...]
+    cycle_records: tuple[CuPyGMRESCycleRecord, ...]
+    orthogonalization_history: tuple[CuPyOrthogonalization, ...]
+    fallback_count: int
+    true_residual_recomputations: int
+    termination_reason: str
 
 
 class CuPyRestartedGMRESSolver:
@@ -247,6 +284,11 @@ class CuPyRestartedGMRESSolver:
         preconditioner: DevicePreconditioner | None = None,
         orthogonalization: CuPyOrthogonalization = "cgs",
         breakdown_tolerance: float | None = None,
+        check_finite: bool = True,
+        stagnation_cycles: int | None = None,
+        stagnation_tolerance: float = 1.0e-3,
+        divergence_factor: float = 1.0e6,
+        cgs2_fallback_threshold: float | None = None,
         workspace: CuPyGMRESWorkspace | None = None,
     ) -> None:
         cp = require_cupy_device()
@@ -258,6 +300,11 @@ class CuPyRestartedGMRESSolver:
         self.preconditioner = preconditioner
         self.orthogonalization = orthogonalization
         self.breakdown_tolerance = breakdown_tolerance
+        self.check_finite = bool(check_finite)
+        self.stagnation_cycles = stagnation_cycles
+        self.stagnation_tolerance = float(stagnation_tolerance)
+        self.divergence_factor = float(divergence_factor)
+        self.cgs2_fallback_threshold = cgs2_fallback_threshold
         if workspace is None:
             workspace = CuPyGMRESWorkspace.allocate(
                 num_dofs=int(operator.num_dofs),
@@ -298,6 +345,11 @@ class CuPyRestartedGMRESSolver:
             preconditioner=self.preconditioner,
             orthogonalization=self.orthogonalization,
             breakdown_tolerance=self.breakdown_tolerance,
+            check_finite=self.check_finite,
+            stagnation_cycles=self.stagnation_cycles,
+            stagnation_tolerance=self.stagnation_tolerance,
+            divergence_factor=self.divergence_factor,
+            cgs2_fallback_threshold=self.cgs2_fallback_threshold,
             profiler=profiler,
             monitor_orthogonality=monitor_orthogonality,
             workspace=self.workspace,
@@ -722,6 +774,81 @@ def _validate_restart_parameters(
     return restart, int(max_iterations), float(breakdown_tolerance)
 
 
+def _validate_robustness_parameters(
+    *,
+    check_finite: bool,
+    stagnation_cycles: int | None,
+    stagnation_tolerance: float,
+    divergence_factor: float,
+    cgs2_fallback_threshold: float | None,
+) -> tuple[bool, int | None, float, float, float | None]:
+    """Validate production convergence safeguards without requiring CUDA."""
+
+    check_finite = bool(check_finite)
+    if stagnation_cycles is not None:
+        if (
+            isinstance(stagnation_cycles, bool)
+            or int(stagnation_cycles) != stagnation_cycles
+            or stagnation_cycles <= 0
+        ):
+            raise ValueError("stagnation_cycles must be a positive integer or None")
+        stagnation_cycles = int(stagnation_cycles)
+    stagnation_tolerance = float(stagnation_tolerance)
+    if (
+        not np.isfinite(stagnation_tolerance)
+        or stagnation_tolerance < 0.0
+        or stagnation_tolerance >= 1.0
+    ):
+        raise ValueError("stagnation_tolerance must be finite and in [0, 1)")
+    divergence_factor = float(divergence_factor)
+    if not np.isfinite(divergence_factor) or divergence_factor <= 1.0:
+        raise ValueError("divergence_factor must be finite and greater than one")
+    if cgs2_fallback_threshold is not None:
+        cgs2_fallback_threshold = float(cgs2_fallback_threshold)
+        if (
+            not np.isfinite(cgs2_fallback_threshold)
+            or cgs2_fallback_threshold < 0.0
+        ):
+            raise ValueError(
+                "cgs2_fallback_threshold must be finite and non-negative or None"
+            )
+    return (
+        check_finite,
+        stagnation_cycles,
+        stagnation_tolerance,
+        divergence_factor,
+        cgs2_fallback_threshold,
+    )
+
+
+def _updated_stagnation_count(
+    previous_residual: float,
+    current_residual: float,
+    *,
+    tolerance: float,
+    previous_count: int,
+) -> int:
+    """Update the consecutive restart-cycle stagnation counter."""
+
+    previous_residual = float(previous_residual)
+    current_residual = float(current_residual)
+    if not np.isfinite(previous_residual) or not np.isfinite(current_residual):
+        return previous_count + 1
+    required = previous_residual * (1.0 - float(tolerance))
+    return previous_count + 1 if current_residual >= required else 0
+
+
+def _termination_reason(status: CuPyGMRESStatus) -> str:
+    return {
+        "converged": "true residual satisfied the requested tolerance",
+        "max_iterations": "maximum iteration count reached",
+        "breakdown": "Arnoldi or triangular-solve breakdown",
+        "stagnated": "stagnation: true residual failed to improve across restart cycles",
+        "diverged": "true residual exceeded the configured divergence limit",
+        "non_finite": "a residual, norm, or Hessenberg quantity became non-finite",
+    }[status]
+
+
 def restarted_gmres_cupy(
     operator: DeviceMatvecOperator,
     rhs: Any,
@@ -735,6 +862,11 @@ def restarted_gmres_cupy(
     orthogonalization: CuPyOrthogonalization | None = None,
     reorthogonalize: bool = False,
     breakdown_tolerance: float | None = None,
+    check_finite: bool = True,
+    stagnation_cycles: int | None = None,
+    stagnation_tolerance: float = 1.0e-3,
+    divergence_factor: float = 1.0e6,
+    cgs2_fallback_threshold: float | None = None,
     profiler: Any | None = None,
     monitor_orthogonality: bool = False,
     workspace: CuPyGMRESWorkspace | None = None,
@@ -790,6 +922,19 @@ def restarted_gmres_cupy(
         rtol=rtol,
         atol=atol,
         breakdown_tolerance=breakdown_tolerance,
+    )
+    (
+        check_finite,
+        stagnation_cycles,
+        stagnation_tolerance,
+        divergence_factor,
+        cgs2_fallback_threshold,
+    ) = _validate_robustness_parameters(
+        check_finite=check_finite,
+        stagnation_cycles=stagnation_cycles,
+        stagnation_tolerance=stagnation_tolerance,
+        divergence_factor=divergence_factor,
+        cgs2_fallback_threshold=cgs2_fallback_threshold,
     )
 
     orthogonalization = _resolve_orthogonalization(
@@ -909,7 +1054,13 @@ def restarted_gmres_cupy(
         basis_projection_count = 0
         basis_correction_count = 0
         coefficient_d2h_count = 0
+        true_residual_recomputations = 0
+        fallback_count = 0
+        active_orthogonalization = orthogonalization
         orthogonality_records: list[CuPyOrthogonalityRecord] = []
+        cycle_records: list[CuPyGMRESCycleRecord] = []
+        orthogonalization_history: list[CuPyOrthogonalization] = []
+        consecutive_stagnation = 0
 
         def apply_matvec(source: Any, destination: Any) -> None:
             nonlocal matvec_count
@@ -938,21 +1089,30 @@ def restarted_gmres_cupy(
                 preconditioner_count += 1
 
         def compute_true_residual() -> float:
-            nonlocal axpy_count, norm_count
+            nonlocal axpy_count, norm_count, true_residual_recomputations
             apply_matvec(x, matvec_buffer)
             blas.copy(b, residual)
             blas.axpy(-1.0, matvec_buffer, residual)
             axpy_count += 1
             value = blas.norm(residual)
             norm_count += 1
+            true_residual_recomputations += 1
             return value
 
         b_norm = blas.norm(b)
         norm_count += 1
-        denominator = max(b_norm, np.finfo(np.dtype(dtype.name)).eps)
-        target = max(float(atol), float(rtol) * b_norm)
+        machine_epsilon = np.finfo(np.dtype(dtype.name)).eps
+        denominator = (
+            max(b_norm, machine_epsilon) if np.isfinite(b_norm) else 1.0
+        )
+        target = (
+            max(float(atol), float(rtol) * b_norm)
+            if np.isfinite(b_norm)
+            else float(atol)
+        )
 
         true_norm = compute_true_residual()
+        initial_true_norm = true_norm
         true_history: list[float] = [true_norm]
         estimated_history: list[float] = []
 
@@ -986,8 +1146,15 @@ def restarted_gmres_cupy(
                 basis_correction_count=basis_correction_count,
                 coefficient_d2h_count=coefficient_d2h_count,
                 orthogonality_records=tuple(orthogonality_records),
+                cycle_records=tuple(cycle_records),
+                orthogonalization_history=tuple(orthogonalization_history),
+                fallback_count=fallback_count,
+                true_residual_recomputations=true_residual_recomputations,
+                termination_reason=_termination_reason(status),
             )
 
+        if not np.isfinite(b_norm) or not np.isfinite(true_norm):
+            return make_result("non_finite", 0, 0, true_norm)
         if true_norm <= target:
             return make_result("converged", 0, 0, true_norm)
 
@@ -995,6 +1162,12 @@ def restarted_gmres_cupy(
         cycles = 0
         while iterations < max_iterations:
             cycles += 1
+            cycle_iteration_start = iterations
+            cycle_true_start = true_norm
+            cycle_orthogonalization = active_orthogonalization
+            orthogonalization_history.append(cycle_orthogonalization)
+            switched_to_cgs2 = False
+            cycle_orthogonality_record: CuPyOrthogonalityRecord | None = None
 
             # The true residual from the previous cycle is already in
             # ``residual``. Apply the left preconditioner and normalize it.
@@ -1002,6 +1175,8 @@ def restarted_gmres_cupy(
             beta = blas.norm(preconditioned)
             norm_count += 1
             estimated_history.append(beta)
+            if not np.isfinite(beta):
+                return make_result("non_finite", iterations, cycles, true_norm)
             if beta <= breakdown_tolerance * max(1.0, true_norm):
                 return make_result("breakdown", iterations, cycles, true_norm)
 
@@ -1029,8 +1204,8 @@ def restarted_gmres_cupy(
                 apply_matvec(basis[column], matvec_buffer)
                 apply_preconditioner(matvec_buffer, work)
 
-                if orthogonalization in ("mgs", "mgs2"):
-                    passes = 2 if orthogonalization == "mgs2" else 1
+                if cycle_orthogonalization in ("mgs", "mgs2"):
+                    passes = 2 if cycle_orthogonalization == "mgs2" else 1
                     for _ in range(passes):
                         for row in range(column + 1):
                             coefficient = blas.dot(basis[row], work)
@@ -1039,7 +1214,7 @@ def restarted_gmres_cupy(
                             blas.axpy(-coefficient, basis[row], work)
                             axpy_count += 1
                 else:
-                    passes = 2 if orthogonalization == "cgs2" else 1
+                    passes = 2 if cycle_orthogonalization == "cgs2" else 1
                     active_dimension = column + 1
                     active_basis = basis[:active_dimension]
                     device_coefficients = (
@@ -1072,6 +1247,8 @@ def restarted_gmres_cupy(
 
                 next_norm = blas.norm(work)
                 norm_count += 1
+                if not np.isfinite(next_norm):
+                    return make_result("non_finite", iterations, cycles, true_norm)
                 hessenberg[column + 1, column] = next_norm
                 arnoldi_scale = max(
                     1.0,
@@ -1113,6 +1290,12 @@ def restarted_gmres_cupy(
                         update_hessenberg_column,
                     )
                 estimated_history.append(estimate)
+                if not np.isfinite(estimate):
+                    return make_result("non_finite", iterations, cycles, true_norm)
+                if check_finite and not np.all(
+                    np.isfinite(hessenberg[: column + 2, column])
+                ):
+                    return make_result("non_finite", iterations, cycles, true_norm)
 
                 iterations += 1
                 used_dimension = column + 1
@@ -1131,7 +1314,11 @@ def restarted_gmres_cupy(
             if used_dimension == 0:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
-            if monitor_orthogonality:
+            needs_orthogonality = monitor_orthogonality or (
+                cgs2_fallback_threshold is not None
+                and cycle_orthogonalization == "cgs"
+            )
+            if needs_orthogonality:
                 # Include the newly generated Arnoldi vector unless a happy
                 # breakdown prevented its normalization.
                 basis_dimension = used_dimension + (0 if happy_breakdown else 1)
@@ -1152,14 +1339,23 @@ def restarted_gmres_cupy(
                     )
 
                 if profiler is None:
-                    record = compute_orthogonality_record()
+                    cycle_orthogonality_record = compute_orthogonality_record()
                 else:
-                    record = profiler.record_gpu_call(
+                    cycle_orthogonality_record = profiler.record_gpu_call(
                         "orthogonality_gram",
                         compute_orthogonality_record,
                         host_synchronizing=True,
                     )
-                orthogonality_records.append(record)
+                orthogonality_records.append(cycle_orthogonality_record)
+                if (
+                    cgs2_fallback_threshold is not None
+                    and cycle_orthogonalization == "cgs"
+                    and cycle_orthogonality_record.maximum_offdiagonal
+                    > cgs2_fallback_threshold
+                ):
+                    active_orthogonalization = "cgs2"
+                    fallback_count += 1
+                    switched_to_cgs2 = True
 
             def solve_small_system() -> np.ndarray:
                 return _back_substitute_upper(
@@ -1178,6 +1374,8 @@ def restarted_gmres_cupy(
                     )
             except np.linalg.LinAlgError:
                 return make_result("breakdown", iterations, cycles, true_norm)
+            if check_finite and not np.all(np.isfinite(coefficients)):
+                return make_result("non_finite", iterations, cycles, true_norm)
 
             coefficient_host = workspace.update_coefficients_host[
                 :used_dimension
@@ -1203,8 +1401,62 @@ def restarted_gmres_cupy(
 
             true_norm = compute_true_residual()
             true_history.append(true_norm)
+            if not np.isfinite(true_norm):
+                cycle_records.append(
+                    CuPyGMRESCycleRecord(
+                        restart_cycle=cycles,
+                        iteration_start=cycle_iteration_start,
+                        iteration_end=iterations,
+                        basis_dimension=used_dimension,
+                        orthogonalization=cycle_orthogonalization,
+                        true_residual_start=float(cycle_true_start),
+                        true_residual_end=float(true_norm),
+                        residual_reduction=float("nan"),
+                        estimated_residual_end=float(estimated_history[-1]),
+                        happy_breakdown=happy_breakdown,
+                        stagnation_count=consecutive_stagnation,
+                        switched_to_cgs2=switched_to_cgs2,
+                    )
+                )
+                return make_result("non_finite", iterations, cycles, true_norm)
+
+            residual_reduction = (
+                true_norm / cycle_true_start
+                if cycle_true_start > 0.0
+                else (0.0 if true_norm == 0.0 else float("inf"))
+            )
+            consecutive_stagnation = _updated_stagnation_count(
+                cycle_true_start,
+                true_norm,
+                tolerance=stagnation_tolerance,
+                previous_count=consecutive_stagnation,
+            )
+            cycle_records.append(
+                CuPyGMRESCycleRecord(
+                    restart_cycle=cycles,
+                    iteration_start=cycle_iteration_start,
+                    iteration_end=iterations,
+                    basis_dimension=used_dimension,
+                    orthogonalization=cycle_orthogonalization,
+                    true_residual_start=float(cycle_true_start),
+                    true_residual_end=float(true_norm),
+                    residual_reduction=float(residual_reduction),
+                    estimated_residual_end=float(estimated_history[-1]),
+                    happy_breakdown=happy_breakdown,
+                    stagnation_count=consecutive_stagnation,
+                    switched_to_cgs2=switched_to_cgs2,
+                )
+            )
+
             if true_norm <= target:
                 return make_result("converged", iterations, cycles, true_norm)
+            if true_norm > divergence_factor * max(initial_true_norm, target):
+                return make_result("diverged", iterations, cycles, true_norm)
+            if (
+                stagnation_cycles is not None
+                and consecutive_stagnation >= stagnation_cycles
+            ):
+                return make_result("stagnated", iterations, cycles, true_norm)
             if happy_breakdown:
                 return make_result("breakdown", iterations, cycles, true_norm)
 
@@ -1212,6 +1464,7 @@ def restarted_gmres_cupy(
 
 
 __all__ = [
+    "CuPyGMRESCycleRecord",
     "CuPyGMRESResult",
     "CuPyGMRESWorkspace",
     "CuPyRestartedGMRESSolver",
@@ -1222,9 +1475,8 @@ __all__ = [
     "DevicePreconditioner",
     "_orthogonality_metrics_from_gram",
     "_resolve_orthogonalization",
-    "_apply_previous_givens",
-    "_back_substitute_upper",
-    "_compute_givens",
-    "_resolve_orthogonalization",
+    "_termination_reason",
+    "_updated_stagnation_count",
+    "_validate_robustness_parameters",
     "restarted_gmres_cupy",
 ]
