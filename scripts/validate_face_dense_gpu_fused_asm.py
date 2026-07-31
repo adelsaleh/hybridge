@@ -19,7 +19,14 @@ from hdgfem.backends.cupy_profiling import profile_additive_schwarz
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.additive_schwarz import build_face_additive_schwarz_preconditioner
-from hdgfem.solvers.diff_rea_face_dense import solve_diffusion_face_dense_direct
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.solvers.diff_rea import (
+    diffusion_element_boundary_mats,
+    local_solvers,
+)
+from hdgfem.solvers.diff_rea_face_dense import (
+    assemble_diffusion_face_dense_components,
+)
 from scripts.diff_rea_cases import quadratic_poisson_case
 
 
@@ -73,20 +80,34 @@ def main() -> None:
         args.order,
         basis_type="dub_orth",
     )
-    direct = solve_diffusion_face_dense_direct(
-        source,
-        reaction,
+    # Build the scalable face-dense system without materializing or directly
+    # solving the dense scalar matrix.  The old direct-reference helper is
+    # intentionally limited to small validation meshes and becomes prohibitive
+    # for cases such as 64x64, p=4.
+    local_solver = local_solvers(
+        reaction, 1.3, space, diffusion=diffusion
+    )
+    element_boundary_mats = diffusion_element_boundary_mats(1.3, space)
+    source_rhs = hdg_assembly.block_source_moments(
+        source, space, num_blocks=3, source_block=0
+    )
+    assembly = assemble_diffusion_face_dense_components(
+        local_solver,
+        element_boundary_mats,
+        source_rhs,
         boundary,
+        1.3,
         space,
-        diffusion=diffusion,
-        stabilization=1.3,
-        boundary_mode=args.boundary_mode,
         boundary_penalty=1.0e6,
     )
-    system = direct.system
+    system = (
+        assembly.eliminated_system
+        if args.boundary_mode == "eliminate"
+        else assembly.penalty_system
+    )
     cpu = build_face_additive_schwarz_preconditioner(
         system,
-        direct.assembly.element_blocks,
+        assembly.element_blocks,
         space.mesh.loc2glob_edge,
     )
 
@@ -99,7 +120,7 @@ def main() -> None:
         )
         raw = CuPyFaceAdditiveSchwarzPreconditioner.from_system(
             system,
-            direct.assembly.element_blocks,
+            assembly.element_blocks,
             space.mesh.loc2glob_edge,
             dtype=dtype,
             device_id=device_id,
@@ -108,7 +129,7 @@ def main() -> None:
         )
         fused = CuPyFaceAdditiveSchwarzPreconditioner.from_system(
             system,
-            direct.assembly.element_blocks,
+            assembly.element_blocks,
             space.mesh.loc2glob_edge,
             dtype=dtype,
             device_id=device_id,

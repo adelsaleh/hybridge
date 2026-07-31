@@ -4,12 +4,12 @@ The routines in this module are intentionally CPU/NumPy reference
 implementations.  They define the data structures and exact algebra that can
 later be ported to CUDA/HIP without changing the mathematical layout.
 
-For a scalar problem with 'b' trace dofs per face and 'S' face-neighbour
+For a scalar problem with ``b`` trace dofs per face and ``S`` face-neighbour
 slots, the matrix is stored as
 
     blocks[row_face, slot, row_dof, col_dof]
 
-with shape '(num_rows, S, b, b)'.  'neighbors[row_face, slot]' identifies
+with shape ``(num_rows, S, b, b)``.  ``neighbors[row_face, slot]`` identifies
 the column face represented by a block.  Slot zero is always the diagonal
 face block.
 """
@@ -29,20 +29,20 @@ class FaceTopology:
     Attributes
     ----------
     neighbors
-        '(NF, S)' global face ids.  'neighbors[f, 0] == f' and unused
-        slots are '-1'.
+        ``(NF, S)`` global face ids.  ``neighbors[f, 0] == f`` and unused
+        slots are ``-1``.
     adjacent_elements
-        '(NF, 2)' element ids incident to each global face.  Boundary faces
-        use only column zero and pad the second column with '-1'.
+        ``(NF, 2)`` element ids incident to each global face.  Boundary faces
+        use only column zero and pad the second column with ``-1``.
     adjacent_local_faces
-        '(NF, 2)' local-face ids corresponding to 'adjacent_elements'.
+        ``(NF, 2)`` local-face ids corresponding to ``adjacent_elements``.
     incidence_count
         Number of incident elements for each face (one or two on a manifold
         triangular mesh).
     element_face_slots
-        '(NE, Nlfe, Nlfe)' lookup.  Entry '[e, r, c]' is the slot in the
-        global row of face 'loc2glob_face[e, r]' corresponding to column
-        face 'loc2glob_face[e, c]'.
+        ``(NE, Nlfe, Nlfe)`` lookup.  Entry ``[e, r, c]`` is the slot in the
+        global row of face ``loc2glob_face[e, r]`` corresponding to column
+        face ``loc2glob_face[e, c]``.
     """
 
     neighbors: np.ndarray
@@ -64,7 +64,7 @@ class FaceTopology:
 class FaceDenseSystem:
     """A face-dense linear system.
 
-    'neighbors' always contains indices into the rows of this system.  Thus
+    ``neighbors`` always contains indices into the rows of this system.  Thus
     it contains global face ids for a full/penalty system and compact reduced
     face ids for an eliminated system.
     """
@@ -100,7 +100,7 @@ def build_face_topology(loc2glob_face: np.ndarray) -> FaceTopology:
     Parameters
     ----------
     loc2glob_face
-        Element-to-global-face table of shape '(NE, Nlfe)'.
+        Element-to-global-face table of shape ``(NE, Nlfe)``.
     """
 
     loc2glob_face = np.ascontiguousarray(loc2glob_face, dtype=np.int64)
@@ -197,16 +197,16 @@ def assemble_global_face_blocks(
     Parameters
     ----------
     element_blocks
-        Shape '(NE, Nlfe, Nlfe, b, b)'.  These blocks must already include
+        Shape ``(NE, Nlfe, Nlfe, b, b)``.  These blocks must already include
         every local contribution, including the stabilization face mass.
     loc2glob_face
-        Shape '(NE, Nlfe)'.
+        Shape ``(NE, Nlfe)``.
     topology
-        Result of :func:'build_face_topology'.
+        Result of :func:`build_face_topology`.
     active_row_faces
-        Optional boolean mask of shape '(NE, Nlfe)'. Only elemental block
-        rows for which the mask is true are assembled. For strong Dirichlet
-        treatment in the current code, use 'mesh.interior_face_mask' so
+        Optional boolean mask of shape ``(NE, Nlfe)``.  Only elemental block
+        rows for which the mask is true are assembled.  For strong Dirichlet
+        treatment in the current code, use ``mesh.interior_face_mask`` so
         boundary equations are left empty and can then be replaced or removed.
     """
 
@@ -284,12 +284,12 @@ def make_penalty_system(
     *,
     boundary_penalty: float = 1.0e20,
 ) -> FaceDenseSystem:
-    """Replace Dirichlet boundary rows by 'gamma I' equations.
+    """Replace Dirichlet boundary rows by ``gamma I`` equations.
 
     The resulting system exactly represents the penalty-row convention used by
     the current COO assembly: interior rows keep all their couplings (including
     columns on boundary faces), while every boundary row becomes
-    'gamma * uhat_f = gamma * g_f'.
+    ``gamma * uhat_f = gamma * g_f``.
     """
 
     blocks = np.asarray(interior_row_blocks, dtype=np.float64).copy()
@@ -491,12 +491,12 @@ def eliminate_dirichlet_faces(
     interior_rhs: np.ndarray,
     boundary_trace: np.ndarray,
     free_faces: np.ndarray,
-    ) -> FaceDenseSystem:
+) -> FaceDenseSystem:
     r"""Eliminate prescribed boundary faces blockwise.
 
     This forms
 
-    'K_ff * u_free = rhs_free - K_fb * g_boundary'
+    ``K_ff * u_free = rhs_free - K_fb * g_boundary``
 
     où
 
@@ -504,7 +504,7 @@ def eliminate_dirichlet_faces(
           K_bf  K_bb ]
 
     while retaining the same fixed number of stencil slots per row.  Slots
-    formerly associated with boundary columns are set to '-1' and their
+    formerly associated with boundary columns are set to ``-1`` and their
     blocks are zeroed after their action has been transferred to the RHS.
     """
 
@@ -602,11 +602,11 @@ def face_dense_matvec(
     Parameters
     ----------
     blocks
-        Shape '(Nrow, S, b, b)'.
+        Shape ``(Nrow, S, b, b)``.
     neighbors
-        Shape '(Nrow, S)' with indices in '[0, Nrow)' and '-1' padding.
+        Shape ``(Nrow, S)`` with indices in ``[0, Nrow)`` and ``-1`` padding.
     x
-        Either '(Nrow, b)' or flat '(Nrow*b,)'.  The return shape matches
+        Either ``(Nrow, b)`` or flat ``(Nrow*b,)``.  The return shape matches
         the input shape.
     """
 
@@ -669,7 +669,7 @@ def materialize_face_dense_matrix(
 
     This helper is intended only for small validation problems and reference
     direct solves.  Production CPU/GPU paths should call
-    :func:'face_dense_matvec' and must not form this matrix.
+    :func:`face_dense_matvec` and must not form this matrix.
     """
 
     blocks = np.asarray(blocks)
@@ -709,7 +709,7 @@ def face_dense_relative_residual(
     system: FaceDenseSystem,
     solution: np.ndarray,
 ) -> float:
-    """Return '||A x - b||_2 / max(||b||_2, eps)' for a face system."""
+    """Return ``||A x - b||_2 / max(||b||_2, eps)`` for a face system."""
 
     solution = np.asarray(solution, dtype=np.float64)
     if solution.shape not in {
