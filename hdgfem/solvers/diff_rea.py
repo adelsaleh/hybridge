@@ -60,6 +60,7 @@ ReturnKey = Literal[
     "reduction",
     "global_solve_result",
     "timings",
+    "gpu_diagnostics",
 ]
 
 
@@ -122,6 +123,9 @@ class DiffusionReactionResult:
     scale_system: bool = True
     assembly_backend: AssemblyBackend = "numpy"
     global_solve_result: SolveResult | None = None
+    linear_solver_backend: str = "cpu_sparse"
+    gpu_diagnostics: Any = None
+
 
 
 def flux_coefficients(result: DiffusionReactionResult) -> np.ndarray:
@@ -163,6 +167,7 @@ class DiffusionReactionHDGOptions:
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
     hdg_postprocess: HDGPostprocessMode = "none"
+    gpu_options: Any = None
     verbose: bool | int = True
 
     def with_overrides(self, **overrides) -> "DiffusionReactionHDGOptions":
@@ -1432,6 +1437,8 @@ class DiffusionReactionHDGSolver:
         self.local_unknowns: np.ndarray | None = None
         self._hdg_postprocess_cache: _HDGPostprocessCache | None = None
         self.global_solve_result: SolveResult | None = None
+        self.linear_solver_backend: str | None = None
+        self.gpu_diagnostics: Any = None
         self.timings: DiffusionReactionTimings | None = None
         return self
 
@@ -1445,6 +1452,8 @@ class DiffusionReactionHDGSolver:
         self.trace = None
         self.local_unknowns = None
         self.global_solve_result = None
+        self.linear_solver_backend = None
+        self.gpu_diagnostics = None
         self.timings = None
         return self
 
@@ -1720,6 +1729,8 @@ class DiffusionReactionHDGSolver:
         self.local_solver = result.local_solver
         self.element_boundary_mats = result.element_boundary_mats
         self.global_solve_result = result.global_solve_result
+        self.linear_solver_backend = result.linear_solver_backend
+        self.gpu_diagnostics = result.gpu_diagnostics
 
 
 def solve_diffusion_reaction_hdg(
@@ -1750,10 +1761,34 @@ def solve_diffusion_reaction_hdg(
         boundary_penalty: float = 1e20,
         boundary_mode: Literal["penalty", "eliminate"] = "penalty",
         hdg_postprocess: HDGPostprocessMode = "none",
+        gpu_options: Any = None,
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
     r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with HDG static condensation."""
+    if solver is not None and str(solver).lower() in {"gpu_face_dense", "face_dense_gpu"}:
+        from .diff_rea_gpu import solve_diffusion_reaction_face_dense_gpu
+
+        return solve_diffusion_reaction_face_dense_gpu(
+            source,
+            reaction,
+            boundary_condition,
+            space,
+            diffusion=diffusion,
+            stabilization=stabilization,
+            solver_rtol=solver_rtol,
+            solver_atol=solver_atol,
+            maxiter=maxiter,
+            initial_guess=initial_guess,
+            local_solver_backend=local_solver_backend,
+            boundary_penalty=boundary_penalty,
+            boundary_mode=boundary_mode,
+            hdg_postprocess=hdg_postprocess,
+            verbose=verbose,
+            return_=return_,
+            gpu_options=gpu_options,
+        )
+
     total_start = time.perf_counter()
     verbosity = _verbosity_level(verbose)
     if verbosity:
@@ -2177,6 +2212,8 @@ def solve_diffusion_reaction_hdg(
             output.append(global_solve_result)
         elif key == "timings":
             output.append(timings)
+        elif key == "gpu_diagnostics":
+            output.append(result.gpu_diagnostics)
         else:
             raise ValueError(f"unknown return key {key!r}")
     return tuple(output)
