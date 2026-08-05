@@ -601,9 +601,10 @@ The CuPy/PyAMGX advection runner is backed by the reusable package solver in
 assembly, AMGX solve, trace reconstruction, field reconstruction, and error
 evaluation on device unless host materialization is explicitly requested.
 
-`configs/amgx/README.md` contains current AMGX presets.  The current
-advection-reaction solver ranking and caveats are summarized in
-`docs/algorithms/advection_reaction_solver_configurations.md`.
+[The AMGX guide](configs/amgx/README.md) contains current presets. The
+[July 2026 advection solver study](docs/research/solver_studies/advection_reaction_2026_07.md)
+retains dated SCC, ILU, upwind-GS, Krylov, and AMGX measurements; it is
+research evidence rather than the current support contract.
 
 `check_advection_upwind_scc_host_pyamgx.py` is the broader ordering/solver
 comparison harness and also covers Cupyx-only solves. Its
@@ -1623,9 +1624,8 @@ closed-loop refit       Newton-polish a state, measure density mismatch, refit c
 reduced optimization    optimize leakage/missing-area objectives with sensitivity solves
 ```
 
-Detailed algorithm notes for these variants live in the LaTeX docs under
-`docs/algorithms/torsion_initialized_window_reduced_optimization/` and
-`docs/algorithms/torsion_initialized_window_optimization/`.
+Detailed derivations for both variants live under
+[torsion-initialized equilibrium research](docs/research/torsion_initialized_equilibrium/).
 
 ## Performance Notes
 

@@ -3,8 +3,6 @@
 \usepackage[a4paper,margin=1in]{geometry}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs,array}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 \setlength{\emergencystretch}{3em}
@@ -32,9 +30,6 @@
 \newcommand{\etab}{\boldsymbol\eta}
 \newcommand{\inner}[2]{\left\langle #1,#2\right\rangle}
 \newcommand{\code}[1]{\texttt{#1}}
-
-\algrenewcommand\algorithmicrequire{\textbf{Input:}}
-\algrenewcommand\algorithmicensure{\textbf{Output:}}
 
 \title{Diffusion--Reaction HDG: Derivation and Assembly Workflows}
 \author{}
@@ -378,23 +373,25 @@ The RHS contribution is
     \underline b_\Gamma\mathrel{+}=g_e^K.
 \]
 
-\begin{algorithm}[p]
-\caption{Vectorized NumPy HDG assembly}
-\footnotesize
-\begin{algorithmic}[1]
-\Require mesh, basis data, $f$, $r$, $u_D$, stabilization $\tau$
-\Ensure trace solution $\uhat$ and reconstructed local unknowns $\{\UK\}$
-\State Build topology: $\sigma(K,e)$, boundary labels, orientations, normals, Jacobians.
-\State Assemble all local matrices entering $\LK$, $\Mbb_m^{\partial K}$, and $\B_e^K$.
-\State Compute or apply local inverses $\SK=(\LK)^{-1}$.
-\State Materialize $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$ for all $K,e,m$.
-\State Orient column trace bases and flatten $-\C_{e,m}^K$ into COO arrays.
-\State Flatten $\Mhh_\tau^{K,e}$ into the diagonal edge blocks.
-\State Scatter-add $g_e^K=\B_e^K\SK\FK$ into the RHS.
-\State Eliminate or impose Dirichlet trace degrees of freedom.
-\State Solve the sparse trace system and reconstruct $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ elementwise.
-\end{algorithmic}
-\end{algorithm}
+\paragraph{Vectorized NumPy HDG assembly.}
+Input: mesh and basis data, $f$, $r$, $u_D$, and stabilization $\tau$.
+The output is the trace solution $\uhat$ and reconstructed local unknowns
+$\{\UK\}$. The workflow is:
+\begin{enumerate}[leftmargin=*,nosep]
+\item Build topology: $\sigma(K,e)$, boundary labels, orientations, normals,
+      and Jacobians.
+\item Assemble all local matrices entering $\LK$, $\Mbb_m^{\partial K}$,
+      and $\B_e^K$.
+\item Compute or apply local inverse actions $\SK=(\LK)^{-1}$.
+\item Materialize $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$ for all
+      $K,e,m$.
+\item Orient column trace bases and flatten $-\C_{e,m}^K$ into COO arrays.
+\item Insert $\Mhh_\tau^{K,e}$ into diagonal edge blocks and scatter-add
+      $g_e^K=\B_e^K\SK\FK$ into the right-hand side.
+\item Eliminate or impose Dirichlet trace degrees of freedom.
+\item Solve the sparse trace system and reconstruct
+      $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ elementwise.
+\end{enumerate}
 
 \section{Fused Numba workflow}
 
@@ -404,35 +401,26 @@ The fused Numba path uses the same formulae, but computes local inverse actions 
 \]
 is moved to the reduced RHS instead of being inserted into the reduced matrix.
 
-\begin{algorithm}[p]
-\caption{Fused Numba reduced trace assembly}
-\footnotesize
-\begin{algorithmic}[1]
-\Require mesh, reference data, projected arrays $f_h,r_h$, $u_D$, stabilization $\tau$
-\Ensure reduced trace matrix $\mathbf A_{FF}$, RHS $\underline b_F$, and reconstructed local unknowns
-\State Project $u_D$ on Dirichlet edges and build free-trace maps.
-\State Allocate reduced COO arrays and RHS scatter buffers.
-\ForAll{$K\in\T$}
-    \State Map reference quadrature and derivatives to element $K$.
-    \State Assemble $\LK$, $\FK$, $\Mbb_m^{\partial K}$, $\B_e^K$, and $\Mhh_\tau^{K,e}$ locally.
-    \State Factor or invert the small dense matrix $\LK$ locally.
-    \ForAll{$e=1,2,3$ with $\sigma(K,e)$ free}
-        \State Add $g_e^K=\B_e^K\SK\FK$ to the reduced RHS.
-        \State Insert $\Mhh_\tau^{K,e}$ into the reduced diagonal block.
-        \ForAll{$m=1,2,3$}
-            \State Compute $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$.
-            \If{$\sigma(K,m)$ is free}
-                \State Insert $-\C_{e,m}^K$ into reduced COO arrays.
-            \Else
-                \State Add $+\C_{e,m}^K\uhat_D^{\sigma(K,m)}$ to the reduced RHS.
-            \EndIf
-        \EndFor
-    \EndFor
-\EndFor
-\State Accumulate scatter buffers, solve $\mathbf A_{FF}\uhat_F=\underline b_F$, and expand with known Dirichlet traces.
-\State Reconstruct $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ in a second compiled element loop.
-\end{algorithmic}
-\end{algorithm}
+\paragraph{Fused Numba reduced trace assembly.}
+Input: mesh and reference data, projected arrays $f_h,r_h$, $u_D$, and
+stabilization $\tau$. The output is $\mathbf A_{FF}$, $\underline b_F$, and
+the reconstructed local unknowns. The workflow is:
+\begin{enumerate}[leftmargin=*]
+\item Project $u_D$ on Dirichlet edges, build free-trace maps, and allocate
+      reduced COO arrays and right-hand-side scatter buffers.
+\item For every $K\in\T$, map reference data, assemble $\LK$, $\FK$,
+      $\Mbb_m^{\partial K}$, $\B_e^K$, and $\Mhh_\tau^{K,e}$, then factor
+      the small dense matrix $\LK$.
+\item For each free row edge $e$, add $g_e^K=\B_e^K\SK\FK$ and
+      $\Mhh_\tau^{K,e}$. For each column edge $m$, compute
+      $\C_{e,m}^K=\B_e^K\SK\Mbb_m^{\partial K}$.
+\item Insert $-\C_{e,m}^K$ for a free column. For a Dirichlet column, add
+      $+\C_{e,m}^K\uhat_D^{\sigma(K,m)}$ to the reduced right-hand side.
+\item Accumulate scatter buffers, solve
+      $\mathbf A_{FF}\uhat_F=\underline b_F$, and expand the known traces.
+\item Reconstruct $\UK=\SK(\FK+\Mbb^{\partial K}\uhat^K)$ in a second
+      compiled element loop.
+\end{enumerate}
 
 \section{Workflow comparison}
 
@@ -452,80 +440,23 @@ Best use & Prototyping and debugging. & Production runs and projected-coefficien
 \end{tabular}
 \end{center}
 
-\paragraph{Performance note.}
-The Numba path is faster for the reduced diffusion trace assembly because it
-does not first build the global collection of dense local objects.  The NumPy
-path materializes arrays such as $\SK$, $\Mbb^{\partial K}$, the Schur tensor
-$\C_{e,m}^K$, and then flattens those arrays into COO data.  These arrays scale
-with the number of elements and with high powers of the local polynomial
-dimension.  The fused Numba path instead loops over elements and faces in
-compiled code, forms the needed local blocks in cache, inserts the free-trace
-COO entries directly, and moves Dirichlet-column contributions directly to the
-RHS.  This removes many large temporary arrays and much of the memory traffic.
+\paragraph{Execution characteristics.}
+The vectorized NumPy path materializes element batches of local inverse blocks,
+element-boundary blocks, trace-lifted Schur blocks, orientation-adjusted copies,
+COO indices and data, and RHS work arrays. This representation is easy to
+inspect, but its temporary storage grows with the number of elements and local
+polynomial dimension.
 
-The following timings are \emph{not} total solve times: they exclude mesh
-generation, sparse matrix construction for the linear solve, ILU/Krylov solve
-time, error evaluation, and plotting.  The reduced assembly timing includes
-only local-factor construction, local inverse construction or fused local
-inverse action, trace COO/RHS assembly, and Dirichlet trace elimination.
+The fused Numba path instead forms the same small dense element and face
+operations inside compiled loops, applies orientation locally, writes reduced
+COO entries directly, and moves known Dirichlet-column contributions to the
+RHS immediately. The two workflows implement the same condensed operator but
+have different allocation and memory-traffic profiles. Compilation warmup must
+therefore be reported separately in any timing comparison.
 
-On the finer rectangle mesh from
-\code{compare\_assembly\_backends.py --lc 0.01}, with $92552$ triangles, five
-timed repeats, \code{trace\_ordering=none}, and compilation excluded, the
-diffusion-reaction reduced assembly timings were:
-\begin{center}
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{rrrrrr}
-\toprule
-$p$ & NumPy assembly (s) & Numba assembly (s) & speedup & NumPy peak MiB & Numba peak MiB \\
-\midrule
-3 & 3.069 & 0.096 & $31.81\times$ & 2312 & 449 \\
-4 & 6.306 & 0.166 & $38.03\times$ & 4609 & 685 \\
-5 & 11.333 & 0.349 & $32.47\times$ & 9032 & 972 \\
-6 & 19.480 & 0.644 & $30.26\times$ & 16056 & 1310 \\
-7 & 30.606 & 1.064 & $28.77\times$ & 26540 & 1699 \\
-\bottomrule
-\end{tabular}
-\end{center}
-These runs were on an Intel Xeon w5-3535X workstation with $20$ physical cores
-and $40$ logical CPUs.  The benchmark process had affinity to all $40$ logical
-CPUs.  Numba used its TBB threading layer with \code{numba.get\_num\_threads()}
-$=40$, while NumPy was linked against OpenBLAS and was run with
-\code{OPENBLAS\_NUM\_THREADS=40} and \code{OMP\_NUM\_THREADS=40}.  Thus both
-backends had access to the same logical CPU budget; the remaining difference is
-mostly algorithmic memory traffic and materialization, not an intentionally
-different core count.
-
-This is the regime where the NumPy materialization cost dominates.  The
-diffusion trace assembly is not one large dense matrix multiplication; it is a
-large collection of independent small dense element and face operations.  For
-$p=3,\ldots,7$, the scalar element dimension is only
-$n_K=(p+1)(p+2)/2=10,\ldots,36$, so the mixed local blocks have size
-$3n_K=30,\ldots,108$, and the face blocks have size $(p+1)\times(p+1)$.  This
-is the ``many small GEMM'' regime: each local product is too small to amortize
-all dispatch, scheduling, and memory-movement costs as effectively as a single
-large BLAS-3 operation.
-
-The vectorized NumPy path exposes these local operations by allocating full
-element batches: local inverse blocks $\SK$, element-boundary blocks
-$\Mbb^{\partial K}$, trace-lifted Schur blocks $\C_{e,m}^K$, orientation-adjusted
-copies, COO index arrays, COO data arrays, and RHS work arrays.  Even when the
-individual contractions call optimized kernels, the code must read and write
-large temporary tensors before the final sparse matrix data exist.  The
-orientation reversal and boundary-elimination steps also operate on already
-materialized arrays, so they add more memory traffic.
-
-The fused Numba path changes the execution model.  It parallelizes over
-elements/faces, forms the small local matrices inside compiled loops, applies
-orientation locally, immediately writes free-trace COO entries, and moves known
-Dirichlet-column contributions directly into the RHS.  Intermediate quantities
-usually live only for one element or one face, so they stay closer to cache and
-do not become global NumPy arrays.  This reduces memory bandwidth pressure,
-temporary allocation pressure, and Python/NumPy dispatch overhead.  In the
-fine-mesh runs above, the NumPy path allocates about
-$5.2\times$--$15.6\times$ more Python-tracked peak memory over $p=3,\ldots,7$.
-First-call Numba compilation should be excluded from these comparisons or
-treated separately.
+Dated host timing and peak-memory measurements are retained in
+\path{docs/research/solver_studies/diffusion_assembly_2026_07.md}; they are not
+algorithm invariants.
 
 \section{Code correspondence}
 

@@ -2,7 +2,7 @@
 """Reduced-space optimizer for torsion-initialized logistic-window thresholds.
 
 This runner implements the reduced optimization algorithm described in
-``docs/algorithms/torsion_initialized_window_reduced_optimization``.  It keeps the
+``docs/research/torsion_initialized_equilibrium``.  It keeps the
 torsion target fixed, solves the semilinear state equation for each current
 ``(c1Phi, c2Phi)``, computes reduced gradients through two sensitivity solves,
 and updates the two thresholds with a constrained trust-region step.

@@ -6,7 +6,7 @@
 \usepackage{booktabs}
 \usepackage{amsmath,amssymb}
 
-\title{HDG Diffusion-Reaction Flux Postprocessing Summary}
+\title{HDG Diffusion-Reaction Flux Postprocessing}
 \author{}
 \date{}
 
@@ -15,7 +15,7 @@
 
 \section{Context}
 
-The investigation started from the preset run
+The implementation and verification path is exercised by the preset
 \begin{quote}
 \small
 \begin{verbatim}
@@ -164,9 +164,9 @@ The implementation changes were:
     M^{-1}(\phi_i, \partial_r \phi_j), \qquad
     M^{-1}(\phi_i, \partial_s \phi_j)
     \]
-    in \verb|_HDGPostprocessCache| in \verb|diff_rea.py|.
+    in \verb|_HDGPostprocessCache| in \verb|hdgfem.solvers.diff_rea|.
     \item Added the primal-reference H(div) flux kernel in
-    \verb|diff_rea_fused.py|:
+    \verb|hdgfem.backends.diffusion_reaction_numba|:
     \begin{quote}
     \small
     \verb|solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel|
@@ -185,23 +185,14 @@ The implementation changes were:
 
 \section{Verification}
 
-The focused solver tests passed:
+The focused regression command is:
 \begin{quote}
 \verb|.venv/bin/python -m pytest tests/test_diffusion_reaction_solver.py -q|
 \end{quote}
-with result:
-\begin{quote}
-\verb|9 passed|
-\end{quote}
-
-A new regression test was added to verify that, on a smooth trigonometric
-identity-diffusion problem, the postprocessed flux is substantially more
-accurate than raw $q_h$ while still satisfying the H(div)-style moment
-constraints.
-
-The tensor-diffusion fallback was also smoke-tested with
-\verb|hdg_postprocess="both"| and still produced degree $p+1$ postprocessed
-field and flux outputs.
+The tests verify that the postprocessed flux improves on raw $q_h$ for a smooth
+identity-diffusion problem while preserving the H(div)-style moment
+constraints. They also cover the tensor-diffusion fallback and require
+degree-$p+1$ primal and flux outputs.
 
 \section{Observed Results}
 
@@ -257,13 +248,5 @@ Both runs used $p=6$, identity diffusion, $\tau=1$, eliminated boundary
 trace degrees of freedom, the Numba assembly backend, and PETSc CG/GAMG with
 10 levels. Their reported postprocessing costs were $0.6$ seconds and
 $1.6$ seconds, respectively, about $5$--$6\%$ of total runtime.
-
-\section{Environment Notes}
-
-The PETSc preset could not be run inside the normal sandbox because Open MPI
-failed during local socket/listener initialization. The run was repeated with
-escalated execution permissions so PETSc/MPI could initialize. The resulting
-accuracy numbers are meaningful, but the wall-clock timings from that
-escalated environment were not directly comparable to the original user run.
 
 \end{document}

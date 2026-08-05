@@ -122,9 +122,11 @@ assembly, direct raw-CUDA CSR emission, raw-CUDA reconstruction, device primal
 postprocessing, and fixed-operator/RHS-only reuse for unsteady Poisson-like
 steps. Public raw-CUDA solver and runner defaults use the equation- and
 order-aware `raw_block_size="auto"` policy documented in
-`docs/algorithms/raw_cuda_launch_policy.md`; explicit launch sizes remain
-available for benchmark reproduction. See `docs/backends/cuda_runners.md` and
-`configs/amgx/README.md` for current benchmark notes and AMGX presets.
+[the raw-CUDA backend guide](docs/backends/raw_cuda.md); explicit launch sizes
+remain available for benchmark reproduction. See
+[CUDA execution paths](docs/backends/cuda_execution.md) and
+[the AMGX configuration guide](configs/amgx/README.md) for operational details
+and current presets.
 
 Fixed-mesh guiding-center cases live under `scripts/guiding_center/`:
 
@@ -321,10 +323,12 @@ Useful supporting notes include:
 - [docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md): authoritative early-alpha backend and residency matrix.
 - [docs/development/alpha_test_matrix.md](docs/development/alpha_test_matrix.md): executable host, CPU parity, GPU smoke, and scheduled validation matrix.
 - [docs/releases/early_alpha.md](docs/releases/early_alpha.md): current release evidence, reviewed skips, and known gaps.
-- [docs/backends/cuda_runners.md](docs/backends/cuda_runners.md): standalone GPU runner status and benchmark notes.
 - [docs/backends/README.md](docs/backends/README.md): backend role map, module ownership, and naming rules.
+- [docs/backends/cuda_execution.md](docs/backends/cuda_execution.md): CUDA assembly, matrix handoff, runner, and direct-CSR notes.
+- [docs/backends/raw_cuda.md](docs/backends/raw_cuda.md): raw-CUDA kernel ownership, launch policy, and parity audits.
+- [docs/algorithms/advection_reaction/](docs/algorithms/advection_reaction/): upwind flux, SCC ordering, and block-GS derivations.
+- [docs/algorithms/diffusion_reaction/](docs/algorithms/diffusion_reaction/): mixed HDG assembly and postprocessing derivations.
+- [docs/algorithms/quadrature/](docs/algorithms/quadrature/): symmetric triangle quadrature derivation and validation requirements.
+- [docs/research/solver_studies/](docs/research/solver_studies/): dated solver and preconditioner evidence, not current support contracts.
 - [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX presets and recommendations.
-- [docs/algorithms/gpu_assembly_solve_paths.md](docs/algorithms/gpu_assembly_solve_paths.md): GPU assembly/solve path map and direct CSR-to-AMGX notes.
-- [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
-- [docs/algorithms/upwind_block_gs_preconditioner/](docs/algorithms/upwind_block_gs_preconditioner/): mathematical upwind block-GS preconditioner note.
 - [TODO.md](TODO.md): current GPU, upwind-GS, solver API, and backend cleanup roadmap.

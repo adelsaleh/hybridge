@@ -41,6 +41,7 @@ HOST_FAST_TARGETS = (
     "tests/test_backend_capabilities.py",
     "tests/test_diffusion_reaction_run_presets.py",
     "tests/test_documented_examples.py",
+    "tests/test_documentation_structure.py",
     "tests/test_diffusion_reaction_solver.py",
     "tests/test_diffusion_reaction_test7_fused_experiment.py",
     "tests/test_face_dense.py",
@@ -88,7 +89,7 @@ ALPHA_TEST_LANES = (
         cadence="every change",
         release_blocking=True,
         runtime="Python 3.10+; NumPy, SciPy, Numba, pytest",
-        coverage="Host unit/API, convergence-contract, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests",
+        coverage="Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests",
         commands=(_pytest_command(HOST_FAST_TARGETS),),
     ),
     AlphaTestLane(

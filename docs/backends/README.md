@@ -5,6 +5,13 @@ reconstruction. Supported combinations and transfer boundaries are defined in
 [`../reference/backend_capabilities.md`](../reference/backend_capabilities.md).
 Backend modules remain implementation details unless exported from `hdgfem`.
 
+## Guides
+
+- [`cuda_execution.md`](cuda_execution.md): CUDA runner entry points, matrix
+  formats, sparse-solve handoff, and direct-CSR timing anchor.
+- [`raw_cuda.md`](raw_cuda.md): raw-CUDA kernel ownership, launch policy,
+  discontinuous-advection audit, and diffusion setup ownership.
+
 ## Solver Modules
 
 - `hdgfem.solvers.advection_reaction` owns the advection-reaction
@@ -28,9 +35,9 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 | `hdgfem.backends.diffusion_cupy` | CuPy diffusion assembly and postprocessing helpers. |
 | `hdgfem.backends.diffusion_raw_cuda` | Raw-CUDA diffusion assembly, cached operator/RHS, reconstruction, and postprocessing kernels. |
 
-The former `cupy_*_gpu4` and abbreviated equation backend modules were internal
-prototype names and were removed before the first alpha. The hard-coded fused
-tensor Test 7 adapter and kernels now live under
+The former `cupy_*_gpu4` and abbreviated equation backend modules were
+internal prototype names and were removed before the first alpha. The
+hard-coded fused tensor Test 7 adapter and kernels now live under
 `scripts/diffusion_reaction/experiments/` and are not installed.
 
 ## Naming And Ownership Rules
@@ -44,6 +51,5 @@ tensor Test 7 adapter and kernels now live under
   PETSc, PARDISO, Gmsh, or DOLFINx.
 - Do not infer residency from a filename. Use the checked capability record and
   transfer instrumentation.
-- Further splitting of generic CuPy resources, sparse-solver adapters, and
-  reconstruction remains an internal ownership improvement, not a reason to
-  reintroduce historical names.
+- Keep dated performance conclusions in [`../research/`](../research/), not in
+  maintained backend guidance.

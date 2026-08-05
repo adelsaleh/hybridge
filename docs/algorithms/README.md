@@ -1,21 +1,31 @@
-# Algorithms And Diagnostics
+# Numerical Algorithms
 
-This directory contains numerical derivations, implementation audits, and
-measured solver studies. These notes do not expand the supported API or backend
-matrix unless the corresponding reference contract and tests are updated.
+This directory contains maintained numerical formulations and derivations.
+It does not contain backend support contracts, dated benchmark conclusions,
+release checklists, or application-specific research notes.
 
-Maintained entry points include:
+## Topics
 
-- [`advection_reaction_solver_configurations.md`](advection_reaction_solver_configurations.md)
-- [`advection_reaction_discontinuous_device_audit.md`](advection_reaction_discontinuous_device_audit.md)
-- [`gpu_assembly_solve_paths.md`](gpu_assembly_solve_paths.md)
-- [`raw_cuda_launch_policy.md`](raw_cuda_launch_policy.md)
-- [`diffusion_raw_cuda/setup_array_audit.md`](diffusion_raw_cuda/setup_array_audit.md)
-- [`diffusion_amgx_hierarchy_audit.md`](diffusion_amgx_hierarchy_audit.md)
-- [`diffusion_matrix_scaling_diagnostics.md`](diffusion_matrix_scaling_diagnostics.md)
-- [`diffusion_modal_amgx_preconditioners.md`](diffusion_modal_amgx_preconditioners.md)
-- [`symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md`](symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md)
+| Topic | Contents |
+|---|---|
+| [`advection_reaction/`](advection_reaction/) | Upwind HDG fluxes, upwind-SCC ordering, and block Gauss-Seidel preconditioning. |
+| [`diffusion_reaction/`](diffusion_reaction/) | Mixed HDG formulation, static condensation, assembly, and postprocessing. |
+| [`quadrature/`](quadrature/) | Symmetric triangle quadrature and exactness requirements. |
 
-Long-form TeX sources live beside their generated artifacts. The canonical
-diffusion assembly derivation is under `diffusion_reaction_assembly/`; the
-former byte-identical misspelled duplicate has been removed.
+Each topic has a Markdown landing page for navigation and one or more TeX
+sources for the long-form derivation. Generated PDFs are local build artifacts
+and are not tracked.
+
+## Ownership Boundaries
+
+- Supported interfaces and coefficient semantics belong in
+  [`../reference/`](../reference/).
+- CUDA implementation paths and launch policy belong in
+  [`../backends/`](../backends/).
+- Qualification plans belong in [`../development/`](../development/).
+- Dated timings and solver studies belong in [`../research/`](../research/).
+
+Algorithm notes may describe implementation correspondence, but they do not
+expand the supported API or backend matrix. Support claims remain governed by
+[`../reference/backend_capabilities.md`](../reference/backend_capabilities.md)
+and their executable tests.

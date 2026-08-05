@@ -35,7 +35,7 @@
 
 \title{Upwind SCC Graph Ordering for HDG Trace Systems}
 \author{\code{hdgfem.linalg.ordering}}
-\date{\today}
+\date{}
 
 \begin{document}
 \maketitle
@@ -489,13 +489,13 @@ Function & Role \\
 
 \section{Practical Usage}
 
-From the advection-reaction CLI, the current diagnostic path can generate the
-matrix patterns without entering the expensive global solve:
+The maintained advection-reaction case runner can generate matrix patterns
+without entering the global solve:
 
 \begin{lstlisting}
-python -m hdgfem.solvers.adv_rea -p 7 --lc 0.03 \
-  --boundary-mode eliminate \
-  --matrix-pattern-only \
+.venv/bin/python scripts/advection_reaction/run_cases.py \
+  -p 7 --lc 0.03 --boundary-mode eliminate \
+  --trace-ordering upwind-scc --matrix-pattern-only \
   --matrix-pattern-max-points 2000000
 \end{lstlisting}
 
@@ -507,7 +507,7 @@ matrix_patterns/*_after_upwind.png
 
 \section{Summary}
 
-The ordering in \code{graph_ordering.py} is a block-level flow ordering:
+The ordering in \code{hdgfem.linalg.ordering} is a block-level flow ordering:
 construct local inflow-to-outflow dependencies, compress cycles with SCCs,
 topologically order the acyclic component graph, and lift the result to trace
 dofs.  The graph construction is inexpensive and mostly independent of

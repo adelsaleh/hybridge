@@ -22,7 +22,7 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 ### Host Fast
 
 - Command: `python scripts/dev/alpha_test_matrix.py host-fast`
-- Result: 490 passed in 61.87 seconds on 2026-08-05; zero pytest skips or warnings. The lane includes both copy-runnable documented solver examples and full-name solver API and compatibility contract coverage.
+- Result: 494 passed in 29.33 seconds on 2026-08-05; zero pytest skips or warnings. The lane includes both copy-runnable documented solver examples and full-name solver API and compatibility contract coverage.
 - Review: no device test modules were collected. The existing optional AMGX
   library banner and deprecated-plugin notice were emitted during the wider
   host process import/CLI lifecycle; this is not GPU test evidence.

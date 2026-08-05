@@ -28,20 +28,18 @@
   backgroundcolor=\color{black!3}
 }
 
-\title{Host Tests for Symmetric Triangle Quadrature in HDGFEM}
+\title{Symmetric Triangle Quadrature in HDGFEM}
 \author{}
-\date{July 23, 2026}
+\date{}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This note explains the host-side tests for symmetric triangle quadrature.  The
-module checks compact symmetric triangle quadrature rules before any production
-GPU assembly path is changed.  The intended reader is a new intern who needs to
-understand what is being tested, why degree \(2p\) appears in diffusion
-assembly, and why the collapsed-coordinate basis formulas are still polynomial
-bases even though some implementation formulas contain removable singularities.
+This note derives the symmetric triangle quadrature policy and its validation
+requirements. It explains why degree \(2p\) appears in diffusion assembly and
+why collapsed-coordinate implementation formulas still represent polynomial
+bases despite removable singularities.
 \end{abstract}
 
 \tableofcontents
@@ -249,9 +247,9 @@ HDG order \(p\) & Required exact degree \(2p\) & Dunavant points & Duffy points 
 6 & 12 & 33 & 144 \\
 \bottomrule
 \end{tabular}
-\caption{Point counts for exact integration through degree \(2p\).  The Duffy
-column is the current collapsed tensor-product pattern when the one-dimensional
-count is set to \(2p\).}
+\caption{Point counts for exact integration through degree \(2p\). The Duffy
+column is the collapsed tensor-product pattern when the one-dimensional count
+is set to \(2p\).}
 \label{tab:point-counts}
 \end{table}
 
@@ -354,43 +352,27 @@ test rebuilds and compares:
   \item the edge mass \code{M_rf_fc};
   \item face coupling tables and their legacy aliases.
 \end{itemize}
-This confirms internal tensor consistency, but it does not replace the
-Dunavant exactness tests because \code{ReferenceElementData} still uses the
-existing collapsed Duffy quadrature rule.
+This confirms internal tensor consistency for the selected
+\code{ReferenceElementData} rule, but it does not replace independent
+monomial and basis exactness tests.
 
-\section{Results}
+\section{Validation execution}
 
-The focused test command was
-\begin{lstlisting}[language=bash]
-.venv/bin/python -m pytest tests/test_symmetric_triangle_quadrature_host.py -q
-\end{lstlisting}
-and the result was
-\begin{lstlisting}
-71 passed in 9.21s
-\end{lstlisting}
+Automated checks live in
+\code{tests/test_symmetric_triangle_quadrature_host.py}. They cover monomial
+exactness, basis integration, mass and stiffness matrices, and cached reference
+tensors. Pass counts and wall times belong to release evidence rather than this
+derivation.
 
-The broader sanity command was
-\begin{lstlisting}[language=bash]
-.venv/bin/python -m pytest \
-  tests/test_symmetric_triangle_quadrature_host.py \
-  tests/test_space.py \
-  tests/test_diffusion_reaction_solver.py \
-  -q
-\end{lstlisting}
-and the result was
-\begin{lstlisting}
-124 passed in 11.22s
-\end{lstlisting}
+\section{Implementation policy}
 
-\section{Practical conclusion}
-
-For the current raw-CUDA diffusion-reaction target range \(p\le6\), a
-positive interior Dunavant rule exact through degree \(2p\) needs at most
-\(33\) volume points.  This is much smaller than the \(144\) points used by a
-collapsed Duffy rule with \code{volume_quad_1d=12}.  The next production step
-should be to add an optional symmetric triangle rule in
-\code{hdgfem/core/quadrature.py}, keep the existing Duffy rule as a fallback,
-and rerun GPU diffusion assembly/solve timings at \(p=1,\ldots,6\).
+For orders \(p\leq 6\), a positive interior Dunavant rule exact through degree
+\(2p\) needs at most \(33\) volume points, compared with \(144\) points for a
+collapsed Duffy rule with \code{volume_quad_1d=12}. The automatic policy uses
+compact tabulated Dunavant rules through polynomial order 7 and then selects
+the lower-point admissible fallback. The generated positive-weight symmetric
+rule remains explicit, while the collapsed Duffy rule remains available for
+compatibility and higher-order fallback.
 
 \section{References}
 

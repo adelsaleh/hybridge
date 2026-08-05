@@ -1,6 +1,6 @@
-# Coefficient Input API Notes
+# Coefficient Inputs
 
-This note records the coefficient-input semantics used by the HDG solver APIs after the coefficient cleanup. It is intended to prevent accidental host materialization and to keep backend-specific restrictions explicit.
+This reference defines coefficient-input semantics for the HDG solver APIs. It prevents accidental host materialization and distinguishes mathematical coefficient meaning from backend residency. Exact support limits remain governed by [`backend_capabilities.md`](backend_capabilities.md).
 
 ## Coefficient Forms
 

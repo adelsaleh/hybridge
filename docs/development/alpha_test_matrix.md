@@ -11,7 +11,7 @@ against documentation drift by `tests/test_alpha_test_matrix.py`.
 <!-- BEGIN GENERATED ALPHA TEST MATRIX -->
 | Lane | Cadence | Release blocking | Runtime | Trace bases | Coverage |
 |---|---|---|---|---|---|
-| host-fast | every change | yes | Python 3.10+; NumPy, SciPy, Numba, pytest | not basis-specific | Host unit/API, convergence-contract, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests |
+| host-fast | every change | yes | Python 3.10+; NumPy, SciPy, Numba, pytest | not basis-specific | Host unit/API, convergence-contract, documentation-integrity, documented-example, reusable-solver, launch-policy, quadrature, and guiding-center host tests |
 | install-smoke | every release candidate | yes | Python 3.10+; pip, setuptools, wheel; installed NumPy/SciPy/Numba | not basis-specific | Offline wheel build, isolated target install, installed-package import, public sparse solve, and DG mesh/space smoke |
 | cpu-parity | every pull request and release candidate | yes | host NumPy/Numba | legacy-lagrange, legendre-modal | Representative p=2 advection/diffusion solve parity plus diffusion p=1,3,6 reconstruction parity |
 | gpu-smoke | opt-in on GPU changes; required before release tag | yes | CUDA, CuPy/Cupyx, PyAMGX, Numba | legacy-lagrange, legendre-modal | CuPy/raw-CUDA parity, explicit Cupyx transfers, zero-flux advection, direct CSR AMGX solves, and device diffusion postprocessing |

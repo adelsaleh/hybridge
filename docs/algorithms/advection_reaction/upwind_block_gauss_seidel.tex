@@ -34,7 +34,7 @@
 
 \title{Upwind Block Gauss-Seidel Preconditioners for HDG Trace Systems}
 \author{HDGFEM implementation note}
-\date{2026-07-22}
+\date{}
 
 \begin{document}
 \maketitle
@@ -445,7 +445,7 @@ Array & Shape & Meaning \\
 \end{tabular}
 \end{center}
 
-The diagonal inverse is the main dense linear algebra cost in the current host
+The diagonal inverse is the main dense linear algebra cost in the host
 builder.  For p6/ms0.01 it took about 0.38 seconds for 138,428 independent
 \(7\times7\) inversions.
 
@@ -547,8 +547,8 @@ Why it exists:
 
 Why it is not the performance target:
 \begin{itemize}[nosep]
-  \item It still scans every raw scalar triplet.  On the p6/ms0.01 benchmark,
-        that was 54.19M scalar triplets.
+  \item It still scans every raw scalar triplet, so setup work scales with the scalar
+        COO representation rather than only with the edge-block graph.
 \end{itemize}
 
 \subsection{Assembly-Emitted Ordered Block COO Builder}
@@ -587,7 +587,7 @@ first accumulates the block diagonal, reads the scalar diagonal entries inside
 those blocks, and scales local rows of all retained blocks by the same scalar
 row factors used by \code{diagonal_scale_system}.
 
-This is the preferred host performance builder today.
+This is the assembly-emitted host builder used by performance experiments.
 
 \subsection{CuPy Exported Operator}
 
@@ -620,15 +620,13 @@ The device operator owns only the repeated apply:
   \item one CUDA thread processes one edge block.
 \end{itemize}
 
-This keeps the host/device role clear.  The current builder still uses host
-setup, but the Krylov sparse matvecs and preconditioner applications run on the
+This keeps the host/device role clear.  This representation uses host setup, but the Krylov sparse matvecs and preconditioner applications run on the
 GPU.  Host/device transfer timings are reported separately in the experimental
 script because future raw CUDA assembly should avoid most of that traffic.
 
 \subsection{Raw CUDA Direct Builder}
 
-This is the intended future production direction.  The raw GPU assembly path
-should eventually write either:
+A device-resident direct builder would write either:
 \begin{itemize}[nosep]
   \item dense ordered block COO on device, followed by a device-side compacting
         builder; or
@@ -646,9 +644,9 @@ Implementation & Input representation & Primary role & Main limitation \\
 \midrule
 CSR/NumPy reference & Ordered SciPy CSR matrix & Ground truth for structure and residual behavior & Requires CSR build and CSR scan \\
 Scalar COO on-fly & Natural scalar COO plus scalar permutation & Debug bridge for direct accumulation & Still scans all scalar triplets \\
-Ordered block COO on-fly & Dense ordered edge-block COO from Numba assembly & Current best host setup path & Diagonal inversions and compacting still on host \\
+Ordered block COO on-fly & Dense ordered edge-block COO from Numba assembly & Assembly-emitted host setup path & Diagonal inversions and compacting still on host \\
 CuPy exported operator & Compact host arrays copied to CUDA & Moves repeated BiCGSTAB work to device & One kernel launch per level; setup still host-side \\
-Raw CUDA direct builder & Future device block COO or compact arrays & Target production GPU setup path & Not implemented yet \\
+Raw CUDA direct builder & Device block COO or compact arrays & Proposed device setup path & Not implemented \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -694,46 +692,20 @@ Run BiCGSTAB with the same ordered matrix and RHS.  Check:
   \item solution difference relative to the reference path.
 \end{itemize}
 
-The experimental checker performs these checks for the current host and CuPy
+The experimental checker performs these checks for the implemented host and CuPy
 paths:
 \begin{lstlisting}
 scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py
 \end{lstlisting}
 
-\section{Current Benchmark Snapshot}
+\section{Performance Evidence}
 \label{sec:benchmark}
 
-The detailed performance report is
-\code{run_logs/upwind_block_gs_cupyx_findings_20260722.md}.  The raw data are in
-\code{run_logs/upwind_block_gs_cupyx_p6_ms001_20260722.json}.
-
-For the p6/ms0.01 \code{test2_legacy_gpu3} case with \code{dub_orth} volume
-basis and \code{legacy-lagrange} trace basis:
-\begin{itemize}[nosep]
-  \item reduced trace unknowns: 968,996;
-  \item scalar COO triplets: 54,185,376;
-  \item CSR nonzeros: 33,836,460;
-  \item ordered dense block COO entries: 1,105,824;
-  \item retained upstream couplings: 195,023;
-  \item same-level dropped couplings: 162,066;
-  \item downstream dropped couplings: 195,023.
-\end{itemize}
-
-The assembly block-COO builder matched the CSR reference with lower pattern
-mismatches equal to zero and a deterministic matvec relative difference of
-\(7.9\times10^{-16}\).  Host SciPy and Cupyx BiCGSTAB both took 27 iterations.
-Host SciPy solve time with the assembly block preconditioner was 6.657 s;
-Cupyx solve time with the exported preconditioner was 0.844 s.  The cumulative
-preconditioner application time fell from 2.736 s on host to 0.384 s on device.
-
-The builder timing lesson is equally important:
-\begin{itemize}[nosep]
-  \item CSR reference preconditioner setup: 1.111 s;
-  \item scalar COO on-fly setup: 1.942 s;
-  \item assembly block-COO setup: 0.911 s.
-\end{itemize}
-The scalar COO path is slower because it scans all raw triplets.  The assembly
-block-COO path is faster because it avoids that scalar triplet rescan.
+Dated setup, operator-equivalence, Krylov, and timing measurements are retained
+in \code{run_logs/} and summarized in the July 2026 advection-reaction solver
+study under \code{docs/research/solver_studies/}. They are deliberately not
+embedded in this maintained derivation because hardware timings and provisional
+rankings are not algorithm invariants.
 
 \section{Common Pitfalls}
 \label{sec:pitfalls}
@@ -810,25 +782,16 @@ Krylov solve timing.  Benchmark reports should say whether warmup was enabled.
   direction in the backward sweep.
 \end{description}
 
-\section{Recommended Development Path}
+\section{Extension constraints}
 
-For new work, use the following order:
-\begin{enumerate}[nosep]
-  \item keep the CSR reference builder as the correctness oracle;
-  \item use the scalar COO on-fly builder only when debugging direct
-        accumulation logic;
-  \item use the assembly-emitted ordered block COO builder for current host
-        performance experiments;
-  \item use the host-to-CuPy export helper
-        \path{cupy_upwind_block_gs_from_host_preconditioner} when measuring
-        Cupyx BiCGSTAB solve time with host-built preconditioner data;
-  \item move block diagonal inversion and bounded block accumulation to CUDA
-        only after the host/device data contract is stable.
-\end{enumerate}
+New builders must preserve the CSR reference operator, scalar row-scaling
+semantics, ordered block indices, retained-coupling classification, and one
+application to a deterministic vector before Krylov timings are compared.
+Moving diagonal inversion or block accumulation between host and device changes
+setup placement, not the mathematical preconditioner.
 
-The next algorithmic experiment should be the forward-backward variant after
-the forward path is integrated cleanly with the GPU assembly workflow.  The
-next performance experiment should move the independent dense diagonal block
-inversions and compact block accumulation closer to the raw CUDA assembly path.
+A forward-backward sweep is a distinct preconditioner because it retains a
+second dependency direction. It should be compared against the forward
+reference rather than introduced as an implementation optimization.
 
 \end{document}

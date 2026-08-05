@@ -1,8 +1,8 @@
 # Documentation Index
 
 Project documentation is grouped by ownership. The repository root
-`README.md` is the overview, `MANUAL.md` is the user guide, and `TODO.md` is the
-active roadmap. Detailed documents belong to one category below.
+`README.md` is the overview, `MANUAL.md` is the user guide, and `TODO.md` is
+the active roadmap. Detailed documents belong to one category below.
 
 ## Start Here
 
@@ -18,11 +18,11 @@ active roadmap. Detailed documents belong to one category below.
 | Directory | Ownership |
 |---|---|
 | [`getting_started/`](getting_started/) | Installation and onboarding. |
-| [`reference/`](reference/) | Supported API, backend, residency, and convergence contracts. |
-| [`development/`](development/) | Release gates and contributor validation workflows. |
-| [`backends/`](backends/) | Backend module roles and CUDA runner guidance. |
-| [`algorithms/`](algorithms/) | Numerical algorithms, implementation notes, and measured diagnostics. |
-| [`research/`](research/) | Generated study outputs and research-only records. |
+| [`reference/`](reference/) | Supported API, coefficient, backend, residency, and convergence contracts. |
+| [`development/`](development/) | Release gates and contributor validation plans. |
+| [`backends/`](backends/) | Backend architecture, CUDA execution, and launch policy. |
+| [`algorithms/`](algorithms/) | Maintained numerical formulations and derivations. |
+| [`research/`](research/) | Dated solver studies, application research, and generated study outputs. |
 | [`releases/`](releases/) | Candidate evidence and release-specific gaps. |
 
 The current early-alpha path is:
@@ -34,6 +34,7 @@ The current early-alpha path is:
 5. [`development/alpha_test_matrix.md`](development/alpha_test_matrix.md)
 6. [`releases/early_alpha.md`](releases/early_alpha.md)
 
-New user-facing documents must be linked from the relevant category index.
-Backend support claims must update the capability source, generated reference,
-tests, README, MANUAL, TODO, and release evidence in the same change.
+New documents must be linked from the owning category index. Backend support
+claims must update the capability source, generated reference, tests, README,
+MANUAL, TODO, and release evidence in the same change. Dated measurements must
+remain labeled as research and must not be presented as current API guarantees.
