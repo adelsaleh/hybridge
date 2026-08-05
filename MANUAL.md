@@ -14,36 +14,18 @@ compared against the native HDG implementation.
 
 ## Documentation Map
 
-This manual is the navigation hub for the repository's Markdown notes.  Keep
-this list updated whenever a new `.md` file is added.  Generated cache notes,
-such as `.pytest_cache/README.md`, are intentionally not listed.
+The detailed navigation hub is [docs/README.md](docs/README.md). It separates
+user documentation, executable alpha contracts, backend guides, algorithm
+notes, and generated research outputs. The release-critical entry points are:
 
-- [MANUAL.md](MANUAL.md): package manual, CLI notes, backend notes, API examples, and implementation guide.
-- [README.md](README.md): top-level overview, quick start, package map, and documentation pointers.
-- [TODO.md](TODO.md): current GPU, upwind-GS, solver API, and backend cleanup roadmap.
-- [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX configuration presets and recommendations.
-- [run_configs/README.md](run_configs/README.md): version-controlled benchmark and solver preset notes.
-- [docs/gpu_hdg_modules.md](docs/gpu_hdg_modules.md): standalone GPU runner status, raw-CUDA notes, and benchmark summaries.
-- [docs/algorithms/advection_reaction_discontinuous_device_audit.md](docs/algorithms/advection_reaction_discontinuous_device_audit.md): audit of discontinuous advection-field handling in device assembly paths.
-- [docs/algorithms/advection_reaction_solver_configurations.md](docs/algorithms/advection_reaction_solver_configurations.md): current advection-reaction solver/preconditioner ranking and caveats.
-- [docs/algorithms/coefficient_input_api.md](docs/algorithms/coefficient_input_api.md): coefficient input semantics, lazy zero/constant fields, and backend materialization rules.
-- [docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md](docs/algorithms/diff_rea_raw_cuda/setup_array_audit.md): diffusion raw-CUDA setup-array audit and remaining host-built inputs.
-- [docs/algorithms/diff_rea_amgx_hierarchy_audit.md](docs/algorithms/diff_rea_amgx_hierarchy_audit.md): AMGX hierarchy statistics for nodal and modal diffusion traces.
-- [docs/algorithms/diff_rea_matrix_scaling_diagnostics.md](docs/algorithms/diff_rea_matrix_scaling_diagnostics.md): diffusion matrix scaling diagnostics and modal trace conditioning notes.
-- [docs/algorithms/diff_rea_modal_amgx_preconditioners.md](docs/algorithms/diff_rea_modal_amgx_preconditioners.md): modal diffusion AMGX preconditioner sweeps and recommendations.
-- [docs/algorithms/unsteady_reusable_solver_validation.md](docs/algorithms/unsteady_reusable_solver_validation.md): unsteady reusable solver validation plan.
-- [docs/algorithms/gpu_assembly_solve_paths.md](docs/algorithms/gpu_assembly_solve_paths.md): GPU assembly/solve path map, direct CSR-to-AMGX notes, and tensor-diffusion direction.
-- [docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md](docs/algorithms/symmetric_triangle_quadrature/symmetric_triangle_quadrature_tests.md): symmetric triangle quadrature exactness and solver smoke-test results.
-- [docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md](docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md): recommended torsion-initialized Newton parameters from the Strategy A study.
-- [docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md](docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md): Strategy A band parameter study and result interpretation.
-- [run_logs/adv_rea_amgx_config_findings_20260720.md](run_logs/adv_rea_amgx_config_findings_20260720.md): AMGX configuration sweep findings for advection-reaction.
-- [run_logs/adv_rea_amgx_variability_20260722.md](run_logs/adv_rea_amgx_variability_20260722.md): AMGX variability checks for advection-reaction cases.
-- [run_logs/adv_rea_solver_benchmarks_p6_ms001_20260722.md](run_logs/adv_rea_solver_benchmarks_p6_ms001_20260722.md): p=6, mesh-size 0.01 advection solver benchmark report.
-- [run_logs/adv_rea_solver_robustness_ms0008_20260722.md](run_logs/adv_rea_solver_robustness_ms0008_20260722.md): mesh-size 0.008 robustness sweep for advection solvers.
-- [run_logs/adv_rea_upwgs_variability_20260722.md](run_logs/adv_rea_upwgs_variability_20260722.md): upwind block-GS/Cupyx variability follow-up.
-- [run_logs/raw_cuda_fused_coop_lu_findings_20260720.md](run_logs/raw_cuda_fused_coop_lu_findings_20260720.md): raw-CUDA fused cooperative LU findings.
-- [run_logs/run_logs_audit_20260722.md](run_logs/run_logs_audit_20260722.md): audit of run-log coverage and findings.
-- [run_logs/upwind_block_gs_cupyx_findings_20260722.md](run_logs/upwind_block_gs_cupyx_findings_20260722.md): upwind block-GS/Cupyx findings and notes.
+- [README.md](README.md): overview, quick start, release status, and roadmap.
+- [docs/reference/solver_api_alpha.md](docs/reference/solver_api_alpha.md): supported public solver API.
+- [docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md): supported backend and residency combinations.
+- [docs/reference/solver_convergence_contract.md](docs/reference/solver_convergence_contract.md): solve acceptance and failure semantics.
+- [docs/development/alpha_test_matrix.md](docs/development/alpha_test_matrix.md): executable release gates.
+- [docs/releases/early_alpha.md](docs/releases/early_alpha.md): current evidence and open pre-tag gates.
+- [docs/backends/README.md](docs/backends/README.md): backend roles, module ownership, and naming rules.
+- [TODO.md](TODO.md): detailed active roadmap.
 
 ## Package Architecture
 
@@ -59,7 +41,8 @@ such as `.pytest_cache/README.md`, are intentionally not listed.
     kernels/      low-level Numba kernels used by backend wrappers
     io/           output formatting and plotting helpers
   scripts/        command-line runners and research harnesses
-  docs/           algorithm notes, GPU status notes, benchmark summaries
+  examples/       copy-runnable base-install solver examples
+  docs/           index, alpha contracts, backend guides, algorithms, releases
   run_configs/    version-controlled benchmark and solver presets
   configs/        backend configuration files, currently AMGX presets
   tests/          focused regression tests
@@ -85,9 +68,11 @@ Important module groups:
 - `hdgfem.backends.cupy`: CuPy/Cupyx import guards, device mirrors of mesh and
   reference data, host/device sparse conversion, Cupyx Krylov wrappers, device
   ILU(1), host-ILU export to device triangular solves, and PyAMGX CSR handoff.
-- `hdgfem.backends.cupy_adv_rea_gpu4`, `hdgfem.backends.cupy_adv_rea_raw`, and
-  `hdgfem.backends.cupy_diff_rea_raw`: GPU benchmark support.  The `gpu4` name
-  is historical; `TODO.md` records the cleanup plan.
+- `hdgfem.backends.advection_cuda`, `hdgfem.backends.advection_raw_cuda`,
+  `hdgfem.backends.diffusion_cupy`, and
+  `hdgfem.backends.diffusion_raw_cuda`: canonical CuPy and raw-CUDA assembly,
+  solve, reconstruction, and device-data paths for the two production solver
+  families.
 - `hdgfem.linalg.system`: sparse trace matrix assembly, boundary dof
   elimination/expansion, diagonal row scaling, SciPy/PETSc/Cupyx solve routing,
   and residual diagnostics.
@@ -95,21 +80,41 @@ Important module groups:
   sparse-pattern plotting diagnostics.
 - `hdgfem.linalg.upwind_block_gs`: CSR-reference level-scheduled upwind block
   Gauss-Seidel preconditioner builder.
-- `hdgfem.linalg.upwind_block_gs_onfly`: scalar-COO and ordered block-COO
+- `hdgfem.linalg.upwind_block_gs_on_the_fly`: scalar-COO and ordered block-COO
   builders that construct the same forward upwind block-GS preconditioner
   without scanning a finished CSR matrix.
-- `hdgfem.linalg.cupy_upwind_block_gs`: device application of compact host-built
+- `hdgfem.linalg.upwind_block_gs_cupy`: device application of compact host-built
   upwind block-GS data through a Cupyx `LinearOperator`.
+
+Public application code should import solver classes and functions from
+`hdgfem`, `hdgfem.solvers`, or the canonical implementation modules
+`hdgfem.solvers.advection_reaction` and
+`hdgfem.solvers.diffusion_reaction`. The abbreviated `adv_rea` and `diff_rea`
+modules are compatibility shims for the first alpha; production backends and
+kernels use descriptive names. See
+[docs/backends/README.md](docs/backends/README.md) before adding a backend
+module or migrating an existing import.
 
 ## Environment Setup
 
-Install and run from the repository root:
+Install the base host package:
 
 ```bash
+python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install --upgrade pip
+python -m pip install .
+```
+
+For development from a checkout:
+
+```bash
+python -m pip install -e '.[test,mesh,plot]'
 python -m pytest
 ```
+
+The installed wheel contains the `hdgfem` library; runners, configs, and
+benchmarks remain checkout-only. See `docs/getting_started/installation.md` for the complete
 
 The base package uses NumPy, SciPy, and Numba.  Tune Numba CPU parallelism
 before Python starts:
@@ -122,6 +127,13 @@ export OMP_NUM_THREADS=1
 Mesh generation defaults to local caching under `.cache/hdgfem/meshes` and logs
 cache hits, misses, and fallbacks.  GPU advection runners also accept
 `--gmsh-num-threads` for parallel CPU meshing.
+
+Gmsh remains optional, but installing the `mesh` extra is highly recommended:
+most runners, geometry tests, and realistic configurations use Gmsh meshes.
+
+```bash
+python -m pip install -e '.[mesh]'
+```
 
 ### PETSc
 
@@ -149,6 +161,56 @@ python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); k.getPC().setType
 python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('hypre'); pc.setHYPREType('boomeramg'); print('Hypre/BoomerAMG ok')"
 python -c "from petsc4py import PETSc; k=PETSc.KSP().create(); pc=k.getPC(); pc.setType('lu'); pc.setFactorSolverType('mumps'); print('MUMPS ok')"
 ```
+### PyPardiso Host Direct Solver
+
+The optional `pardiso` extra installs `pypardiso`, its oneMKL runtime, and the
+host direct-solver adapter:
+
+```bash
+python -m pip install -e '.[pardiso]'
+export MKL_NUM_THREADS=12
+export OMP_NUM_THREADS=1
+```
+
+```python
+from hdgfem.linalg import clear_pypardiso_cache, solve_global_system
+
+result = solve_global_system(rows, cols, data, rhs, size, solver="pypardiso")
+assert result.converged and result.physical_residual_target_met
+clear_pypardiso_cache()
+```
+
+`solver="pardiso"` is an alias for the general real-matrix path. The
+`pypardiso-spd` and `pardiso-spd` aliases are reserved for mathematically
+symmetric-positive-definite matrices. The SPD path verifies matrix symmetry,
+converts the full CSR input to upper-triangular CSR storage, and selects
+PARDISO `mtype=2`. Symmetry is checked by HDGFEM; positive definiteness remains
+a property the caller and PDE discretization must guarantee.
+
+Both paths canonicalize inputs to sorted `float64` CSR, import `pypardiso` only
+when selected, and return the common `SolveResult`. Native success is never
+enough: the solution is checked against the original full, unscaled matrix and
+right-hand side, which also catches silent bad results from singular systems.
+
+`pypardiso` owns process-global solvers and can reuse the latest factorization
+for each matrix type. HDGFEM serializes calls; call `clear_pypardiso_cache()`
+when the factorizations are no longer needed. Set MKL and OpenMP thread counts
+before Python starts, especially when Numba is also active, to prevent nested
+oversubscription. The backend is available to NumPy/Numba host paths and to
+device assembly paths that explicitly materialize the reduced system on host.
+
+Run `python scripts/dev/check_pypardiso.py --side 100 --repeats 3` for compact
+advection/diffusion parity and timing checks. For the matched p=6 HDG Poisson
+benchmark with 51,200 triangles, run:
+
+```bash
+python scripts/diffusion_reaction/run_cases.py trigonometric_poisson_50k_scipy_direct
+python scripts/diffusion_reaction/run_cases.py trigonometric_poisson_50k_pypardiso_spd
+```
+
+The measured machine-specific comparison is recorded in
+`docs/releases/early_alpha.md`.
+
 
 ### CuPy, Cupyx, and AMGX
 
@@ -196,7 +258,7 @@ Cupyx solves default to double precision.  Set `HDGFEM_CUPYX_DTYPE=float32` or
 dtype in `solve_cupyx_system`:
 
 ```bash
-HDGFEM_CUPYX_DTYPE=float64 python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py -o 6 -ms 0.01
+HDGFEM_CUPYX_DTYPE=float64 python scripts/advection_reaction/run_upwind_gs_cupyx.py -o 6 -ms 0.01
 ```
 
 Do not use Cupyx CG with the default left row scaling: left scaling does not
@@ -204,9 +266,14 @@ preserve symmetry.  The code rejects `cupyx_solver="cg"` when
 `scale_system=True`; use BiCGSTAB/GMRES or disable scaling for a genuinely SPD
 operator.
 
-### Current Backend Support Matrix
+### Backend Implementation Summary
 
-The solver APIs expose multiple assembly and solve paths.  The important rule is
+The authoritative public solver support and host/device residency matrix is
+[docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md). The summary below
+also names lower-level research capabilities and must not be read as a promise
+that every assembly/solve/reconstruction cross-product is supported.
+
+The solver APIs expose multiple assembly and solve paths. The important rule is
 that fast Numba and raw-CUDA kernels are table driven: coefficients must already
 be represented as `DGField` or `VectorDGField` objects, usually via
 `space.project_callable(...)`, `space.constant(...)`, or `space.zeros(...)`.
@@ -245,6 +312,14 @@ fixed Poisson operators  raw-CUDA diffusion can cache CSR data and AMGX setup, t
 transport operators      transport matrices change with beta, so AMGX setup is rebuilt each step for now
 ```
 
+Transfer behavior is tested at the public solve boundary. A host-assembled
+Cupyx solve performs one sparse-matrix upload and one solution download. With
+host materialization disabled, raw-CUDA advection and diffusion direct-CSR
+AMGX solves perform no `cp.asnumpy` full-array downloads; reduced traces and
+reconstructed DG fields remain device backed, and the normalized solve result
+still validates the original unscaled residual. Diagnostics or explicit host
+result requests intentionally opt back into materialization.
+
 The raw-CUDA diffusion cache is intentionally conservative.  It preserves the
 operator only when mesh, order, trace basis, boundary mode, diffusion, reaction,
 stabilization, matrix format, and raw block size are unchanged.  Source and
@@ -278,14 +353,14 @@ python -m pip install -e .
 ### Advection-Reaction Presets
 
 Manufactured advection-reaction presets live in
-`scripts/advection_reaction/run_adv_rea_cases.py` and problem factories live in
-`scripts/advection_reaction/adv_rea_cases.py`.
+`scripts/advection_reaction/run_cases.py` and problem factories live in
+`scripts/advection_reaction/cases.py`.
 
 ```bash
-python -m scripts.advection_reaction.run_adv_rea_cases --list-presets
-python -m scripts.advection_reaction.run_adv_rea_cases --print-preset --dry-run
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
+python -m scripts.advection_reaction.run_cases --list-presets
+python -m scripts.advection_reaction.run_cases --print-preset --dry-run
+python -m scripts.advection_reaction.run_cases test2_scipy_ilu_upwind -p 2 --lc 0.30
+python -m scripts.advection_reaction.run_cases test2_scipy_ilu_upwind -p 6 --lc 0.03 --verbosity 2
 ```
 
 The default manufactured `test2` problem solves
@@ -320,7 +395,7 @@ test2_amp_skew   same frequencies as test2 with mildly skewed amplitudes
 Useful runner options:
 
 ```text
-preset                   preset name from run_adv_rea_cases.py
+preset                   preset name from run_cases.py
 --list-presets           print available advection presets
 --print-preset           print selected preset fields
 --dry-run                validate and print the selected preset without solving
@@ -338,7 +413,7 @@ preset                   preset name from run_adv_rea_cases.py
 A one-assembly solver benchmark is available for preconditioner work:
 
 ```bash
-python -m scripts.advection_reaction.benchmark_adv_rea_solvers -p 6 --lc 0.01
+python -m scripts.advection_reaction.benchmark_solvers -p 6 --lc 0.01
 ```
 
 It assembles the `test2` upwind-ordered trace matrix once, builds a reusable
@@ -354,9 +429,9 @@ expand a benchmark run.
 
 ### Fast Upwind-GS/Cupyx Advection Runner
 
-`scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py` is the current
+`scripts/advection_reaction/run_upwind_gs_cupyx.py` is the current
 narrow performance path for upwind-SCC ordered advection-reaction trace solves.
-It is separate from `run_adv_rea_cases.py` while the reusable API is still being
+It is separate from `run_cases.py` while the reusable API is still being
 shaped.
 
 Pipeline:
@@ -375,7 +450,7 @@ Pipeline:
 Typical GMRES run:
 
 ```bash
-python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+python scripts/advection_reaction/run_upwind_gs_cupyx.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -390,7 +465,7 @@ python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
 Typical BiCGSTAB run:
 
 ```bash
-python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+python scripts/advection_reaction/run_upwind_gs_cupyx.py \
   -o 6 -ms 0.008 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -404,7 +479,7 @@ python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
 Important controls:
 
 ```text
---case                         manufactured case key from adv_rea_cases.py
+--case                         manufactured case key from cases.py
 --mesh-type                    rectangle or structured-rectangle
 --basis                        dub_orth, hierarchical C0, or bernstein element basis
 --trace-basis                  legacy-lagrange, legendre-modal, or bernstein trace basis
@@ -425,7 +500,7 @@ The structural check harness compares the CSR-reference, scalar-COO, and
 ordered block-COO preconditioner builders:
 
 ```bash
-python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py \
+python scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -436,7 +511,7 @@ python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_r
 It can also export the host-built block-GS object to CuPy and run a Cupyx solve:
 
 ```bash
-python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py \
+python scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -449,15 +524,15 @@ python scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_r
 ### Diffusion-Reaction Presets
 
 Manufactured diffusion-reaction presets live in
-`scripts/diffusion_reaction/run_diff_rea_cases.py` and problem factories live in
-`scripts/diffusion_reaction/diff_rea_cases.py`.
+`scripts/diffusion_reaction/run_cases.py` and problem factories live in
+`scripts/diffusion_reaction/cases.py`.
 
 ```bash
-python -m scripts.diffusion_reaction.run_diff_rea_cases --list-presets
-python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson
-python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_quick --plot
-python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --print-preset
-python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg --dry-run
+python -m scripts.diffusion_reaction.run_cases --list-presets
+python -m scripts.diffusion_reaction.run_cases quadratic_poisson
+python -m scripts.diffusion_reaction.run_cases tensor_sine_quick --plot
+python -m scripts.diffusion_reaction.run_cases tensor_sine_gamg --print-preset
+python -m scripts.diffusion_reaction.run_cases tensor_sine_gamg --dry-run
 ```
 
 Diffusion-reaction presets control optional HDG post-processing with
@@ -473,22 +548,22 @@ the exact conservative flux `q=-kappa grad u`; the runner reports raw and
 postprocessed flux errors when available.
 
 Create a new manufactured PDE by adding a factory and `CASE_DEFINITIONS` entry
-in `scripts/diffusion_reaction/diff_rea_cases.py`.  Create a new run
+in `scripts/diffusion_reaction/cases.py`.  Create a new run
 configuration by adding a `DiffusionReactionRunPreset` entry to `PRESETS` in
-`scripts/diffusion_reaction/run_diff_rea_cases.py`.
+`scripts/diffusion_reaction/run_cases.py`.
 
 Use the optional Numba local-solver block builder by setting
 `local_backend="numba"` in a preset.  Tensor diffusion test7 through the main
 projected Numba tensor path is available with:
 
 ```bash
-python -m scripts.diffusion_reaction.run_diff_rea_cases tensor_sine_gamg
+python -m scripts.diffusion_reaction.run_cases tensor_sine_gamg
 ```
 
 Experimental hard-coded tensor test7 fused path:
 
 ```bash
-python -m scripts.diffusion_reaction.experimental.diff_rea_test7_fused \
+python -m scripts.diffusion_reaction.experiments.test7_fused \
   --domain structured-rectangle --nx 200 --ny 200 -p 6 \
   --tau 4 --petsc --petsc-preset cg_gamg \
   --volume-quad-1d 7 --edge-quad-1d 7
@@ -500,10 +575,10 @@ High-performance advection and diffusion runs are driven by standalone scripts
 in `scripts/gpu/`:
 
 ```bash
-python -m scripts.gpu.run_adv_rea_gpu4_hdg --help
-python -m scripts.gpu.run_diff_rea_gpu4_hdg --help
-python -m scripts.gpu.sweep_adv_rea_gpu4_hdg --help
-python -m scripts.gpu.check_upwind_scc_host_pyamgx_adv_rea --help
+python -m scripts.gpu.run_advection_reaction_cuda --help
+python -m scripts.gpu.run_diffusion_reaction_cuda --help
+python -m scripts.gpu.sweep_cuda_hdg --help
+python -m scripts.gpu.check_advection_upwind_scc_host_pyamgx --help
 ```
 
 There are no root-level GPU compatibility wrappers in `scripts/`; run these
@@ -522,17 +597,17 @@ trace bases.  Default behavior is:
 ```
 
 The CuPy/PyAMGX advection runner is backed by the reusable package solver in
-`hdgfem.solvers.adv_rea`.  Its raw-CUDA path keeps reduced trace assembly, AMGX
-solve, trace reconstruction, field reconstruction, and error evaluation on
-device unless host materialization is explicitly requested.
+`hdgfem.solvers.advection_reaction`. Its raw-CUDA path keeps reduced trace
+assembly, AMGX solve, trace reconstruction, field reconstruction, and error
+evaluation on device unless host materialization is explicitly requested.
 
 `configs/amgx/README.md` contains current AMGX presets.  The current
 advection-reaction solver ranking and caveats are summarized in
 `docs/algorithms/advection_reaction_solver_configurations.md`.
 
-`check_upwind_scc_host_pyamgx_adv_rea.py` is the broader ordering/solver
-comparison harness.  Despite the historical filename, it also covers Cupyx-only
-solves.  Its `--cupyx-preconditioner` options are:
+`check_advection_upwind_scc_host_pyamgx.py` is the broader ordering/solver
+comparison harness and also covers Cupyx-only solves. Its
+`--cupyx-preconditioner` options are:
 
 ```text
 none              unpreconditioned Cupyx Krylov
@@ -556,6 +631,96 @@ DGMesh -> DGSpace -> DGField/VectorDGField -> local HDG assembly
        -> local reconstruction into DGField/VectorDGField
        -> diagnostics, plotting, transfer, or adaptivity
 ```
+
+### Minimal End-to-End Examples
+
+The two examples below use only the base NumPy/SciPy installation. They cover
+mesh construction, a DG space, manufactured PDE coefficients, an eliminated
+HDG boundary trace, the global solve, local reconstruction, and independent
+error/residual checks. Identical executable sources live in `examples/` and
+are run by `tests/test_documented_examples.py`.
+
+#### Advection-Reaction
+
+For `u = 1 + x + y`, `beta = (1, 1/2)`, and `r = 2`, the source is
+`f = beta . grad(u) + r u = 3/2 + 2u`.
+
+```python
+from hdgfem import DGSpace, rectangle_mesh, solve_advection_reaction_hdg
+
+mesh = rectangle_mesh(6, 6, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+space = DGSpace(mesh, 2, basis_type="dub_orth")
+
+exact = lambda x, y: 1.0 + x + y
+beta_x = lambda x, y: 1.0 + 0.0 * x
+beta_y = lambda x, y: 0.5 + 0.0 * y
+reaction = lambda x, y: 2.0 + 0.0 * x
+source = lambda x, y: 1.5 + 2.0 * exact(x, y)
+
+result = solve_advection_reaction_hdg(
+    source,
+    (beta_x, beta_y),
+    reaction,
+    exact,
+    space,
+    solver="direct",
+    preconditioner=None,
+    boundary_mode="eliminate",
+    verbose=False,
+)
+
+error = result.field.l2_error(exact)
+linear_solve = result.global_solve_result
+assert linear_solve is not None and linear_solve.converged
+assert error < 1.0e-10
+assert linear_solve.physical_relative_residual_norm < 1.0e-10
+```
+
+`result.field` is the reconstructed scalar `DGField`; `result.trace` contains
+the full trace coefficients after prescribed boundary values are restored.
+`result.timings` separates preparation, assembly, global solve, and
+reconstruction costs.
+
+#### Diffusion-Reaction
+
+For identity diffusion, zero reaction, and `u = 1 + x^2 + y^2`, the source is
+`f = -Delta u = -4`. The result also contains the conservative flux
+`q_h = -grad(u_h)` as a two-component `VectorDGField`.
+
+```python
+from hdgfem import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
+
+mesh = rectangle_mesh(6, 6, xlim=(0.0, 1.0), ylim=(0.0, 1.0))
+space = DGSpace(mesh, 2, basis_type="dub_orth")
+
+exact = lambda x, y: 1.0 + x**2 + y**2
+reaction = lambda x, y: 0.0 * x
+source = lambda x, y: -4.0 + 0.0 * x
+
+result = solve_diffusion_reaction_hdg(
+    source,
+    reaction,
+    exact,
+    space,
+    diffusion=1.0,
+    stabilization=1.0,
+    solver="direct",
+    preconditioner=None,
+    boundary_mode="eliminate",
+    verbose=False,
+)
+
+error = result.field.l2_error(exact)
+linear_solve = result.global_solve_result
+assert linear_solve is not None and linear_solve.converged
+assert error < 1.0e-10
+assert linear_solve.physical_relative_residual_norm < 1.0e-10
+```
+
+Use the reusable `AdvectionReactionHDGSolver` and
+`DiffusionReactionHDGSolver` classes shown later when coefficients or right-hand
+sides change repeatedly. The one-shot functions are the clearest starting
+point and remain part of the alpha API.
 
 ### Core Objects
 
@@ -599,7 +764,7 @@ projection when repeat solves should reuse the same discrete coefficient or
 when a backend requires table data:
 
 ```python
-from scripts.advection_reaction.adv_rea_cases import test2
+from scripts.advection_reaction.cases import test2
 
 beta_x, beta_y, reaction, source, exact = test2()
 
@@ -765,7 +930,7 @@ adapted_result = solver.solve()
 
 ```python
 from hdgfem import DiffusionReactionHDGSolver, solve_diffusion_reaction_hdg
-from scripts.diffusion_reaction.diff_rea_cases import quadratic_poisson_case
+from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 diffusion, reaction, source, exact = quadratic_poisson_case()
 
@@ -895,7 +1060,15 @@ element-side incidence rather than once per global edge.
 `hdgfem.linalg.system.solve_global_system` is the common global trace solver
 entry point.  It can build a SciPy sparse matrix from COO data, apply diagonal
 row scaling, eliminate/expand known dofs through helper functions, and route to
-SciPy, PETSc, AMGX, or Cupyx solve paths.
+SciPy, PyPardiso, PETSc, AMGX, or Cupyx solve paths.
+
+Every completed solve returns the normalized `SolveResult` contract described
+in `docs/reference/solver_convergence_contract.md`. A backend success code is accepted
+only when the solution and both scaled solver-system and original-system
+residual diagnostics are finite and meet their targets. Set
+`raise_on_nonconvergence=True` to raise
+`LinearSolveConvergenceError`; inspect `exception.result` for the same
+normalized status, native `backend_info`, iteration count, and residuals.
 
 Cupyx aliases include `solver="cupyx"`, `solver="cupyx_bicgstab"`,
 `solver="cupyx_gmres"`, `solver="cupyx_cg"`, and `solver="cupyx_cgs"`.
@@ -960,7 +1133,7 @@ triplets or assembly-emitted block data.  Use scalar COO when the matrix stream
 is natural-order scalar triplets:
 
 ```python
-from hdgfem.linalg.upwind_block_gs_onfly import build_forward_upwind_block_gs_from_coo
+from hdgfem.linalg.upwind_block_gs_on_the_fly import build_forward_upwind_block_gs_from_coo
 
 preconditioner = build_forward_upwind_block_gs_from_coo(
     rows,
@@ -977,7 +1150,7 @@ Use ordered block COO when the Numba assembly kernel emits dense trace blocks:
 
 ```python
 from hdgfem.backends.numba import assemble_projected_trace_system_eliminated_numba
-from hdgfem.linalg.upwind_block_gs_onfly import (
+from hdgfem.linalg.upwind_block_gs_on_the_fly import (
     build_forward_upwind_block_gs_from_ordered_block_coo,
     scale_ordered_trace_coo_from_block_gs,
 )
@@ -1016,7 +1189,7 @@ preconditioner and Cupyx matrix see the same scaled operator.
 Export a host-built forward upwind block-GS preconditioner to CuPy with:
 
 ```python
-from hdgfem.linalg.cupy_upwind_block_gs import cupy_upwind_block_gs_from_host_preconditioner
+from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
 
 M_cp = cupy_upwind_block_gs_from_host_preconditioner(preconditioner, warm_start=True)
 ```
@@ -1284,29 +1457,47 @@ advection-reaction or diffusion-reaction HDG workflows.
 ### Fixed-Mesh Guiding-Center Cases Runner
 
 The fixed-mesh guiding-center runner lives in `scripts/guiding_center/` and is
-separate from the older semilinear-equilibrium scripts.  It advances a first
-order semi-implicit guiding-center model:
+separate from the older semilinear-equilibrium scripts. It supports two fixed-
+mesh time schemes. With `A(v) rho = div(v rho)`, `q = -grad(phi)`, and
+`v = (-q_y, q_x)`, semi-implicit Euler is
 
 ```text
-1. solve -Delta phi^n = rho^n with diffusion-reaction HDG
-2. build beta = dt * q^perp from the Poisson flux q = grad(phi) convention used by the solver
-3. solve implicit advection-reaction transport with reaction 1 and source rho^n
-4. repeat on the same mesh, reusing solver objects and eligible cached operators
+-Delta phi^n = rho^n
+(I + dt A(v^n)) rho^(n+1) = rho^n
 ```
+
+The second-order `predictor-corrector` option performs
+
+```text
+(I + dt A(v^n)) rho^P = rho^n
+-Delta phi^P = rho^P
+v^(n+1/2) = (v^n + v^P) / 2
+(I + dt/2 A(v^(n+1/2))) w = rho^n
+rho^(n+1) = 2 w - rho^n
+-Delta phi^(n+1) = rho^(n+1)
+```
+
+The predictor is internal: diagnostics and PyVista receive accepted endpoint
+states only. Solver objects and the fixed Poisson operator/AMGX setup are reused.
 
 Registered cases are defined in `scripts/guiding_center/guiding_center_cases.py`:
 
 ```text
-diocotron_k          sharp annular-band density with (1 + eps cos(k theta)) perturbation;
-                     zero potential boundary; zero-flux transport boundary
-diocotron_broadband  sharp annular-band density with 100 consecutive azimuthal modes by default;
-                     zero potential boundary; zero-flux transport boundary
-rho_helm_wave        legacy manufactured rho/phi pair with nonzero exact boundary data;
-                     rectangle default with optional domain override
+diocotron_gaussian_annulus  legacy Gaussian-annulus density with (1 + eps cos(k theta)) perturbation;
+                            zero potential boundary; zero-flux transport boundary
+diocotron_k                 sharp annular-band density with (1 + eps cos(k theta)) perturbation;
+                            zero potential boundary; zero-flux transport boundary
+rho_helm_wave               legacy manufactured rho/phi pair with nonzero exact boundary data;
+                            rectangle default with optional domain override
 ```
 
 Presets are defined in `scripts/guiding_center/guiding_center_presets.py` and
 can be listed or inspected from the CLI:
+
+Long guiding-center commands can also be stored in argparse response files and
+passed as `@path/to/file.args`; see `run_configs/guiding_center/`.  The helper
+`scripts/guiding_center/run_local_amgx_cases.sh` sets `LD_LIBRARY_PATH` from
+`AMGX_LIB_DIR` or `$HOME/.local/amgx/lib` and then invokes the runner.
 
 ```bash
 python scripts/guiding_center/run_guiding_center_cases.py --list-presets
@@ -1324,10 +1515,14 @@ Important CLI controls:
 ```text
 --case-param key=value              override case parameters, for example k=20 or eps=0.1
 --mesh-size, --order, --dt          override preset mesh/order/time-step controls
+--time-scheme NAME                  si-euler or predictor-corrector
 --poisson-*                         Poisson assembly, solver, AMGX, scaling, raw-CSR options
 --transport-*                       transport assembly, solver, AMGX, zero-flux, raw-CSR options
+--transport-initial-guess MODE      solver-default or initial-density-trace
+--transport-retry-policy POLICY     none or amgx-robust
+--diagnostics-every N               materialize/record every N accepted steps
 --backend-profile host|device|hybrid shorthand defaults, with explicit flags taking precedence
---plot-every N                      update PyVista every N steps; 0 disables plotting
+--plot-every N                      update PyVista every N accepted steps; 0 disables plotting
 --plot-both                         plot density and potential; default plotting shows density only
 --screenshot-dir DIR                write PyVista screenshots with scalar arrays updated in place
 ```
@@ -1343,6 +1538,28 @@ and transport assembly, device AMGX solves, raw-CUDA reconstruction, density-onl
 PyVista plotting by default, and an absolute Poisson AMGX config.  Poisson setup
 is cached after the first step when scaling is disabled and the operator is
 fixed; transport setup is rebuilt because the matrix changes with `beta`.
+
+Every time stage passes an explicit trace guess through the solver-class
+`initial_guess` argument. Raw-CUDA runs keep current, predicted, midpoint, and
+extrapolated traces on CuPy arrays. The `rho_helm_wave` predictor uses exact
+endpoint density data; its corrector uses the average of exact density traces at
+`t_n` and `t_(n+1)`. Because its velocity is not tangent to the rectangle,
+`boundary_mode=eliminate` is mandatory and zero-flux configurations are rejected.
+
+`--transport-retry-policy amgx-robust` keeps the assembled CSR/RHS on device and
+tries primary/stage-guess, primary/zero, PBICGSTAB aggregation-DILU postsmooth2
+with the stage guess and scaling off, then the same fallback from zero. Each
+attempt and residual is stored in CSV/JSONL diagnostics.
+
+Temporal convergence for Euler, predictor-corrector, or both is available with:
+
+```bash
+LD_LIBRARY_PATH=$HOME/.local/amgx/lib:$LD_LIBRARY_PATH .venv/bin/python scripts/guiding_center/run_guiding_center_temporal_convergence.py --scheme both --plot-convergence
+```
+
+The default study uses `rho_helm_wave`, raw-CUDA/AMGX, Gmsh rectangle mesh size
+`0.025`, DG order 6, `T=0.2`, and `dt=0.04,0.02,0.01,0.005`. It writes aggregate
+CSV/JSON data and optional four-panel Matplotlib L2/Linf convergence plots.
 
 The guiding-center scripts compute diocotron-like equilibria through a
 semilinear elliptic equation of the form
@@ -1396,8 +1613,8 @@ parameter-study line.  In this repository it refers to the studies and scripts
 around choosing torsion and nonlinear density-window parameters for the same
 semilinear guiding-center equilibrium solve, not to a separate core HDG solver
 family.  The relevant Markdown docs are
-`docs/strategyA_band_parameter_study/strategyA_band_parameter_study.md` and
-`docs/strategyA_band_parameter_study/recommended_strategyA_parameters.md`.
+`docs/research/strategy_a_band_parameter_study/strategyA_band_parameter_study.md` and
+`docs/research/strategy_a_band_parameter_study/recommended_strategyA_parameters.md`.
 
 Two DOLFINx diagnostic variants are worth knowing about:
 
@@ -1431,7 +1648,48 @@ Detailed algorithm notes for these variants live in the LaTeX docs under
 
 ## Development Checks
 
-Run the full focused test suite:
+Use the executable early-alpha matrix for release work:
+
+```bash
+python scripts/dev/alpha_test_matrix.py host-fast
+python scripts/dev/alpha_test_matrix.py install-smoke
+python scripts/dev/alpha_test_matrix.py cpu-parity
+python scripts/dev/alpha_test_matrix.py gpu-smoke
+```
+
+`host-fast` runs on every change and does not collect device test modules.
+`install-smoke` builds and imports a wheel outside the source tree for every
+release candidate. `cpu-parity` covers both production trace bases.
+`gpu-smoke` is opt-in for ordinary development but is
+required on the production CUDA/PyAMGX environment before an alpha tag; runtime
+skips do not count as GPU evidence.
+
+`scheduled-evidence` preflights the recommended Gmsh runtime and enables its
+opt-in geometry parity cases; those cases may not be counted as scheduled skips.
+
+The current package candidate is `0.1.0a1`. On 2026-08-05 it passed 490 host
+tests, the isolated wheel smoke, 14 CPU parity cases, and 10 GPU smoke cases.
+The current Gmsh-enabled broad suite passed 608 tests with zero skips. The four
+focused Gmsh parameters cover 16 geometry/order combinations. The evidence
+record retains the stronger dependency-isolated install smoke and wheel/sdist
+metadata checks. The first hosted `early-alpha` workflow execution on Python
+3.10 and 3.12 remains a separate pre-tag gate and must be linked from the
+release evidence record.
+
+The normalized solver status and true-residual acceptance rules are documented
+in `docs/reference/solver_convergence_contract.md`.
+
+Inspect the longer release-candidate commands without running them using:
+
+```bash
+python scripts/dev/alpha_test_matrix.py scheduled-evidence --dry-run
+```
+
+See `docs/development/alpha_test_matrix.md` for exact targets and acceptance rules, and
+`docs/releases/early_alpha.md` for current results, warnings, skips, hardware,
+and known gaps.
+
+Run the broad repository test suite when changing shared behavior:
 
 ```bash
 env MPLCONFIGDIR=/tmp python -m pytest tests -q
@@ -1446,14 +1704,14 @@ python -m compileall -q hdgfem tests scripts
 Run CLI smoke tests:
 
 ```bash
-python -m scripts.advection_reaction.run_adv_rea_cases test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
-python -m scripts.diffusion_reaction.run_diff_rea_cases quadratic_poisson --dry-run
+python -m scripts.advection_reaction.run_cases test2_scipy_ilu_upwind -p 2 --lc 0.30 --quiet
+python -m scripts.diffusion_reaction.run_cases quadratic_poisson --dry-run
 ```
 
 Run focused Gram and solver-class checks:
 
 ```bash
-python -m pytest tests/test_hdg_gram.py tests/test_adv_rea_solver_class.py tests/test_diff_rea_solver_class.py
+python -m pytest tests/test_hdg_gram.py tests/test_advection_reaction_solver.py tests/test_diffusion_reaction_solver.py
 ```
 
 Run a cheap guiding-center HDG smoke test only when that optional path is being

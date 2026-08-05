@@ -22,9 +22,9 @@ against the oriented face test function. The matching right-hand-side and local 
 
 ## Validation Anchors
 
-- `tests/test_adv_rea_numba.py::test_discontinuous_beta_uses_side_weighted_trace_mass` checks that the side-weighted formulation differs from the old unweighted/averaged trace mass.
+- `tests/test_advection_reaction_numba.py::test_discontinuous_beta_uses_side_weighted_trace_mass` checks that the side-weighted formulation differs from the old unweighted/averaged trace mass.
 - `tests/test_cupy_backend.py::test_advection_reaction_cupy_discontinuous_beta_matrix_matches_numpy` compares CuPy full/reduced matrix and RHS assembly against NumPy for a discontinuous projected beta field.
 - `tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_discontinuous_beta_matrix_matches_numpy` compares raw-CUDA precomputed, fused safe, and fused cooperative matrix/RHS assembly against NumPy for the same discontinuous-beta class of inputs.
 - `tests/test_cupy_backend.py::test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta` compares fused raw-CUDA cooperative assembly against the CuPy reference for a discontinuous projected beta field.
 - `tests/test_cupy_backend.py::test_raw_fused_csr_assembly_matches_coo_discontinuous_beta` compares fused raw-CUDA direct CSR against fused raw-CUDA COO for the same discontinuous-beta class of inputs.
-- `tests/test_adv_rea_conservation.py` checks the end-to-end HDG global conservation balance, including a high-order no-through-flow case and the legacy non-tangent boundary case.
+- `tests/test_advection_reaction_conservation.py` checks the end-to-end HDG global conservation balance, including a high-order no-through-flow case and the legacy non-tangent boundary case.

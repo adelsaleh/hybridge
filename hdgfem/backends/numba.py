@@ -16,15 +16,15 @@ import numpy as np
 from ..assembly import hdg as hdg_assembly
 from ..assembly import matrices_numpy as hdg_mats
 from ..kernels import NUMBA_AVAILABLE
-from ..kernels.adv_rea import assemble_local_mats_and_boundary_kernel
+from ..kernels.advection_reaction import assemble_local_mats_and_boundary_kernel
 from ..linalg.system import KnownDofReduction
-from ..kernels.adv_rea_fused import (
+from ..kernels.advection_reaction_fused import (
     assemble_face_trace_weights_kernel,
     assemble_projected_trace_system_eliminated_kernel,
     assemble_projected_trace_system_kernel,
     reconstruct_projected_field_kernel,
 )
-from ..kernels.diff_rea_fused import (
+from ..kernels.diffusion_reaction_fused import (
     assemble_diffusion_trace_rhs_eliminated_kernel,
     assemble_diffusion_trace_system_eliminated_kernel,
     assemble_projected_diffusion_trace_rhs_eliminated_kernel,

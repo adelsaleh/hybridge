@@ -20,65 +20,54 @@ from .core.mesh import (
 from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
 
+_SOLVER_EXPORTS = {
+    "AdvectionReactionHDGOptions",
+    "AdvectionReactionHDGSolver",
+    "AdvectionReactionResult",
+    "AdvectionReactionTimings",
+    "DiffusionReactionAssemblyResult",
+    "DiffusionReactionHDGOptions",
+    "DiffusionReactionHDGSolver",
+    "DiffusionReactionResult",
+    "DiffusionReactionTimings",
+    "solve_advection_reaction_hdg",
+    "solve_diffusion_reaction_hdg",
+}
+
+
 def __getattr__(name: str):
     """Lazily expose solver symbols without pre-importing script modules."""
+    if name in _SOLVER_EXPORTS:
+        from . import solvers
+
+        value = getattr(solvers, name)
+        globals()[name] = value
+        return value
     if name in {
-        "AdvectionReactionHDGOptions",
-        "AdvectionReactionHDGSolver",
-        "AdvectionReactionResult",
-        "AdvectionReactionTimings",
-        "solve_advection_reaction_hdg",
+        "LinearSolveConvergenceError",
+        "LinearSolveError",
+        "SolveResult",
+        "SolveStatus",
+        "solve_global_system",
     }:
-        from .solvers.adv_rea import (
-            AdvectionReactionHDGOptions,
-            AdvectionReactionHDGSolver,
-            AdvectionReactionResult,
-            AdvectionReactionTimings,
-            solve_advection_reaction_hdg,
+        from .linalg.system import (
+            LinearSolveConvergenceError,
+            LinearSolveError,
+            SolveResult,
+            SolveStatus,
+            solve_global_system,
         )
 
         symbols = {
-            "AdvectionReactionHDGOptions": AdvectionReactionHDGOptions,
-            "AdvectionReactionHDGSolver": AdvectionReactionHDGSolver,
-            "AdvectionReactionResult": AdvectionReactionResult,
-            "AdvectionReactionTimings": AdvectionReactionTimings,
-            "solve_advection_reaction_hdg": solve_advection_reaction_hdg,
-        }
-        return symbols[name]
-    if name in {
-        "DiffusionReactionAssemblyResult",
-        "DiffusionReactionHDGOptions",
-        "DiffusionReactionHDGSolver",
-        "DiffusionReactionResult",
-        "DiffusionReactionTimings",
-        "solve_diffusion_reaction_hdg",
-    }:
-        from .solvers.diff_rea import (
-            DiffusionReactionAssemblyResult,
-            DiffusionReactionHDGOptions,
-            DiffusionReactionHDGSolver,
-            DiffusionReactionResult,
-            DiffusionReactionTimings,
-            solve_diffusion_reaction_hdg,
-        )
-
-        symbols = {
-            "DiffusionReactionAssemblyResult": DiffusionReactionAssemblyResult,
-            "DiffusionReactionHDGOptions": DiffusionReactionHDGOptions,
-            "DiffusionReactionHDGSolver": DiffusionReactionHDGSolver,
-            "DiffusionReactionResult": DiffusionReactionResult,
-            "DiffusionReactionTimings": DiffusionReactionTimings,
-            "solve_diffusion_reaction_hdg": solve_diffusion_reaction_hdg,
-        }
-        return symbols[name]
-    if name in {"SolveResult", "solve_global_system"}:
-        from .linalg.system import SolveResult, solve_global_system
-
-        symbols = {
+            "LinearSolveConvergenceError": LinearSolveConvergenceError,
+            "LinearSolveError": LinearSolveError,
             "SolveResult": SolveResult,
+            "SolveStatus": SolveStatus,
             "solve_global_system": solve_global_system,
         }
-        return symbols[name]
+        value = symbols[name]
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
@@ -96,6 +85,9 @@ __all__ = [
     "DGField",
     "DGMesh",
     "DGSpace",
+    "LinearSolveConvergenceError",
+    "LinearSolveError",
+    "SolveStatus",
     "SolveResult",
     "VectorDGField",
     "VectorDGSpace",

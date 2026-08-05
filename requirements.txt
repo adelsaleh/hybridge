@@ -1,6 +1,4 @@
+# Base runtime dependencies; pyproject.toml is the package source of truth.
 numpy
 scipy
 numba
-gmsh
-pyvista
-pytest

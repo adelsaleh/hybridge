@@ -13,25 +13,57 @@ import pytest
 from scripts.guiding_center.guiding_center_cases import (
     CASE_DEFINITIONS,
     case_definition_by_key,
-    diocotron_azimuthal_perturbation,
-    diocotron_initial_density_cartesian,
+    rho_eq_annular_band,
+    rho_eq_gaussian_annulus,
+    rho_eq_super_gaussian_annulus,
 )
 from scripts.guiding_center.guiding_center_presets import preset_by_key
-from scripts.guiding_center.run_guiding_center_cases import run_guiding_center_case
+from scripts.guiding_center.run_guiding_center_cases import _initial_trace_guess_from_callable, run_guiding_center_case
 
 
-def test_guiding_center_case_registry_has_two_annular_diocotron_cases_and_rho_helm() -> None:
-    assert tuple(CASE_DEFINITIONS) == ("diocotron_k", "diocotron_broadband", "rho_helm_wave")
+def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
+    pytest.importorskip("gmsh")
+    script = Path("scripts/guiding_center/run_guiding_center_cases.py")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--preset",
+            "diocotron_gaussian_annulus_host_smoke",
+            "--num-steps",
+            "1",
+            "--mesh-size",
+            "0.3",
+            "--diagnostics-dir",
+            str(tmp_path),
+            "--diagnostics-prefix",
+            "diocotron_gaussian_smoke_test",
+            "--quiet",
+            "--plot-every",
+            "0",
+        ],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=180,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    csv_path = tmp_path / "diocotron_gaussian_smoke_test.csv"
+    jsonl_path = tmp_path / "diocotron_gaussian_smoke_test.jsonl"
+    assert csv_path.exists()
+    assert jsonl_path.exists()
 
-    single_mode = case_definition_by_key("diocotron_k").build()
-    broadband = case_definition_by_key("diocotron_broadband").build()
-    for case in (single_mode, broadband):
-        assert case.default_domain == "disc"
-        assert case.density_transport_boundary_mode == "zero-flux"
-        assert case.parameters["s_minus"] == pytest.approx(0.79)
-        assert case.parameters["s_plus"] == pytest.approx(0.80)
-        assert case.initial_density(np.array([0.795]), np.array([0.0]))[0] > 0.0
-        assert case.initial_density(np.array([0.2]), np.array([0.0]))[0] == pytest.approx(0.0)
+    final = json.loads(jsonl_path.read_text().strip().splitlines()[-1])
+    for key in ("mass_relative_drift", "q_l2_relative_drift", "rho_min", "rho_max", "transport_solver_residual"):
+        assert final[key] is not None
+        assert math.isfinite(final[key])
+    assert abs(final["mass_relative_drift"]) < 1.0e-3
+    assert final["transport_solver_residual"] < 1.0e-4
+
+
+def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
+    assert tuple(CASE_DEFINITIONS) == ("diocotron_gaussian_annulus", "diocotron_k", "rho_helm_wave")
 
 
 def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
@@ -47,6 +79,91 @@ def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
         if case.density_boundary is not None:
             rho_boundary = case.density_boundary_at(0.125)(x, y)
             assert rho_boundary.shape == x.shape
+
+
+def test_legacy_gaussian_annulus_diocotron_defaults() -> None:
+    case = case_definition_by_key("diocotron_gaussian_annulus").build()
+    assert case.default_domain == "disc"
+    assert case.density_transport_boundary_mode == "zero-flux"
+    assert case.parameters["r0"] == pytest.approx(0.45)
+    assert case.parameters["sigma"] == pytest.approx(0.03)
+
+    rho_at_peak = case.initial_density(np.array([0.45]), np.array([0.0]))
+    rho_far = case.initial_density(np.array([0.2]), np.array([0.0]))
+    wrapper_value = rho_eq_gaussian_annulus(np.array([0.45]), np.array([0.0]))
+    assert rho_at_peak[0] == pytest.approx(1.0 + case.parameters["eps"])
+    assert wrapper_value[0] == pytest.approx(1.0)
+    assert rho_far[0] < 1.0e-10
+
+
+def test_sharp_annular_band_diocotron_k_defaults() -> None:
+    case = case_definition_by_key("diocotron_k").build()
+    assert case.default_domain == "disc"
+    assert case.density_transport_boundary_mode == "zero-flux"
+    assert case.parameters["s_minus"] == pytest.approx(0.79)
+    assert case.parameters["s_plus"] == pytest.approx(0.80)
+    assert case.parameters["edge_width"] == pytest.approx(0.0)
+
+    rho_on_band = case.initial_density(np.array([0.795]), np.array([0.0]))
+    rho_inside_hole = case.initial_density(np.array([0.2]), np.array([0.0]))
+    wrapper_value = rho_eq_annular_band(np.array([0.795]), np.array([0.0]))
+    assert rho_on_band[0] == pytest.approx(1.0 + case.parameters["epsilon"])
+    assert wrapper_value[0] == pytest.approx(1.0)
+    assert rho_inside_hole[0] == pytest.approx(0.0)
+
+
+def test_annular_band_supports_smooth_edges() -> None:
+    case = case_definition_by_key("diocotron_k").build(
+        s_minus=0.78,
+        s_plus=0.82,
+        edge_width=0.005,
+    )
+    center = case.equilibrium_density(np.array([0.80]), np.array([0.0]))
+    inner_edge = case.equilibrium_density(np.array([0.78]), np.array([0.0]))
+    outside = case.equilibrium_density(np.array([0.74]), np.array([0.0]))
+
+    assert center[0] > 0.99
+    assert inner_edge[0] == pytest.approx(0.5, abs=1.0e-3)
+    assert outside[0] < 1.0e-6
+
+
+def test_diocotron_k_supports_super_gaussian_radial_power() -> None:
+    case = case_definition_by_key("diocotron_k").build(
+        s_bar=0.80,
+        s_d=0.02,
+        p=4,
+    )
+    center = case.equilibrium_density(np.array([0.80]), np.array([0.0]))
+    scale_radius = case.equilibrium_density(np.array([0.82]), np.array([0.0]))
+    outside = case.equilibrium_density(np.array([0.84]), np.array([0.0]))
+    wrapper_value = rho_eq_super_gaussian_annulus(
+        np.array([0.82]),
+        np.array([0.0]),
+        s_bar=0.80,
+        s_d=0.02,
+        p=4,
+    )
+
+    assert case.parameters["p"] == pytest.approx(4.0)
+    assert center[0] == pytest.approx(1.0)
+    assert scale_radius[0] == pytest.approx(np.exp(-1.0))
+    assert wrapper_value[0] == pytest.approx(np.exp(-1.0))
+    assert outside[0] == pytest.approx(np.exp(-16.0))
+
+
+
+def test_gaussian_annulus_full_raw_cuda_t50_preset_uses_legacy_case() -> None:
+    config = preset_by_key("diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx")
+
+    assert config.case == "diocotron_gaussian_annulus"
+    assert config.case_params == {"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03}
+    assert config.order == 6
+    assert config.dt == pytest.approx(0.1)
+    assert config.num_steps == 500
+    assert config.poisson_assembly_backend == "raw-cuda"
+    assert config.transport_assembly_backend == "raw-cuda"
+    assert config.transport_materialize_host_system is False
+    assert config.transport_materialize_host_solution is False
 
 
 def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
@@ -67,30 +184,68 @@ def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
     assert config.transport_materialize_host_system is False
     assert config.transport_materialize_host_solution is False
 
+def test_diocotron_k100_stress_preset_uses_resolved_single_mode_band() -> None:
+    config = preset_by_key("diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx")
 
-def test_diocotron_broadband_matches_mean_of_consecutive_modes() -> None:
-    theta = np.linspace(-np.pi, np.pi, 257)
-    m_min = 3
-    n_modes = 100
-    eta = diocotron_azimuthal_perturbation(theta, m_min=m_min, n_modes=n_modes)
-    direct = np.mean([np.cos(m * theta) for m in range(m_min, m_min + n_modes)], axis=0)
-    np.testing.assert_allclose(eta, direct, rtol=2.0e-13, atol=2.0e-13)
-    assert np.max(np.abs(eta)) == pytest.approx(1.0)
+    assert config.case == "diocotron_k"
+    assert config.case_params["k"] == 100
+    assert config.case_params["eps"] == pytest.approx(1.0)
+    assert config.case_params["s_bar"] == pytest.approx(0.80)
+    assert config.case_params["s_d"] == pytest.approx(0.04)
+    assert config.case_params["p"] == pytest.approx(6)
+    assert config.order == 6
+    assert config.mesh_size == pytest.approx(0.006)
+    assert config.dt == pytest.approx(0.1)
+    assert config.num_steps == 500
+    assert config.poisson_assembly_backend == "raw-cuda"
+    assert config.transport_assembly_backend == "raw-cuda"
+    assert config.transport_solver_rtol == pytest.approx(1.0e-11)
+    assert config.transport_initial_guess == "initial-density-trace"
+    assert config.poisson_raw_matrix_format == "csr"
+    assert config.transport_raw_matrix_format == "csr"
 
 
-def test_diocotron_broadband_case_uses_sharp_annular_band_defaults() -> None:
-    case = case_definition_by_key("diocotron_broadband").build()
-    assert case.default_domain == "disc"
-    assert case.density_transport_boundary_mode == "zero-flux"
-    assert case.parameters["m_min"] == 3
-    assert case.parameters["n_modes"] == 100
 
-    rho_on_annulus = case.initial_density(np.array([0.795]), np.array([0.0]))
-    rho_inside_hole = case.initial_density(np.array([0.2]), np.array([0.0]))
-    wrapper_value = diocotron_initial_density_cartesian(np.array([0.795]), np.array([0.0]))
-    assert rho_on_annulus[0] == pytest.approx(1.0 + case.parameters["epsilon"])
-    assert wrapper_value[0] == pytest.approx(rho_on_annulus[0])
-    assert rho_inside_hole[0] == pytest.approx(0.0)
+
+def test_diocotron_k100_has_one_hundred_angular_maxima_and_only_mode_100() -> None:
+    case = case_definition_by_key("diocotron_k").build(
+        k=100,
+        eps=1.0,
+        s_bar=0.8,
+        s_d=0.04,
+        p=6,
+    )
+    theta = np.linspace(0.0, 2.0 * np.pi, 4096, endpoint=False)
+    x = 0.8 * np.cos(theta)
+    y = 0.8 * np.sin(theta)
+    rho = case.initial_density(x, y)
+    rho_eq = case.equilibrium_density(x, y)
+    angular_factor = rho / rho_eq
+    spectrum = np.fft.rfft(angular_factor) / theta.size
+    maxima = np.count_nonzero((angular_factor > np.roll(angular_factor, 1)) & (angular_factor > np.roll(angular_factor, -1)))
+
+    assert maxima == 100
+    assert abs(spectrum[0]) == pytest.approx(1.0, abs=1.0e-13)
+    assert abs(spectrum[100]) == pytest.approx(0.5, abs=1.0e-13)
+    outside = np.delete(spectrum, (0, 100))
+    assert np.max(np.abs(outside)) < 1.0e-12
+    assert np.min(angular_factor) == pytest.approx(0.0, abs=1.0e-13)
+    assert np.max(angular_factor) == pytest.approx(2.0, abs=1.0e-13)
+
+def test_initial_density_trace_guess_projects_constant_to_reduced_skeleton() -> None:
+    from hdgfem.core.mesh import rectangle_mesh
+    from hdgfem.core.space import DGSpace
+
+    space = DGSpace(rectangle_mesh(2, 2), 2)
+    guess = _initial_trace_guess_from_callable(
+        space,
+        lambda x, y: 2.5 + 0.0 * x + 0.0 * y,
+        trace_basis="legacy-lagrange",
+        prefer_device=False,
+    )
+
+    assert guess.shape == (space.mesh.int_edges_inds.size * space.trace_space("legacy-lagrange").edg_dof,)
+    np.testing.assert_allclose(guess, 2.5, rtol=1.0e-13, atol=1.0e-13)
 
 
 def test_rho_helm_wave_satisfies_negative_laplacian_phi_equals_rho() -> None:
@@ -145,27 +300,20 @@ def test_rho_helm_wave_host_accuracy_preset_runs_few_steps(tmp_path: Path) -> No
     assert final["phi_l2_error"] < 2.0e-2
 
 
-def test_guiding_center_diocotron_cli_smoke(tmp_path: Path) -> None:
-    pytest.importorskip("gmsh")
+def test_guiding_center_cli_accepts_response_file(tmp_path: Path) -> None:
     script = Path("scripts/guiding_center/run_guiding_center_cases.py")
+    args_path = tmp_path / "guiding_center.args"
+    args_path.write_text(
+        "# comments and blank lines are allowed\n"
+        "--preset diocotron_gaussian_annulus_host_smoke\n"
+        "--num-steps 0\n"
+        "--plot-every 0\n"
+        "--diagnostics-prefix response_file_smoke\n"
+        "--dry-run\n"
+    )
+
     completed = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--preset",
-            "diocotron_k3_host_smoke",
-            "--num-steps",
-            "1",
-            "--mesh-size",
-            "0.3",
-            "--diagnostics-dir",
-            str(tmp_path),
-            "--diagnostics-prefix",
-            "diocotron_smoke_test",
-            "--quiet",
-            "--plot-every",
-            "0",
-        ],
+        [sys.executable, str(script), f"@{args_path}"],
         check=False,
         text=True,
         stdout=subprocess.PIPE,
@@ -173,14 +321,5 @@ def test_guiding_center_diocotron_cli_smoke(tmp_path: Path) -> None:
         timeout=180,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    csv_path = tmp_path / "diocotron_smoke_test.csv"
-    jsonl_path = tmp_path / "diocotron_smoke_test.jsonl"
-    assert csv_path.exists()
-    assert jsonl_path.exists()
-
-    final = json.loads(jsonl_path.read_text().strip().splitlines()[-1])
-    for key in ("mass_relative_drift", "q_l2_relative_drift", "rho_min", "rho_max", "transport_solver_residual"):
-        assert final[key] is not None
-        assert math.isfinite(final[key])
-    assert abs(final["mass_relative_drift"]) < 1.0e-3
-    assert final["transport_solver_residual"] < 1.0e-4
+    assert "Preset: diocotron_gaussian_annulus_host_smoke" in completed.stdout
+    assert "num_steps: 0" in completed.stdout

@@ -1,0 +1,269 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+
+\title{HDG Diffusion-Reaction Flux Postprocessing Summary}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Context}
+
+The investigation started from the preset run
+\begin{quote}
+\small
+\begin{verbatim}
+scripts/diffusion_reaction/run_cases.py trigonometric_poisson_cg_gamg \
+    --verbosity 2 --plot
+\end{verbatim}
+\end{quote}
+where the scalar postprocessing was very effective, but the flux postprocessing
+was only modestly better than the raw HDG flux:
+\[
+\|q_h - q\|_{L^2} = 4.1124 \times 10^{-9}, \qquad
+\|q_h^\star - q\|_{L^2} = 2.1696 \times 10^{-9}.
+\]
+
+The relevant files were:
+\begin{itemize}
+    \item \verb|scripts/diffusion_reaction/run_cases.py| for preset execution and error reporting,
+    \item \verb|hdgfem/solvers/diffusion_reaction.py| for the HDG solver and postprocessing wrapper,
+    \item \verb|hdgfem/kernels/diffusion_reaction_fused.py| for the fused Numba local postprocessing kernels,
+    \item \verb|tests/test_diffusion_reaction_solver.py| for solver and postprocessing regression tests.
+\end{itemize}
+
+\section{Diagnosis}
+
+The runner's vector $L^2$ error calculation was not the source of the issue.
+For a postprocessed flux, it evaluates the exact flux on the postprocessed
+degree $p+1$ quadrature space, so the comparison is made at the correct
+quadrature order.
+
+The implemented flux postprocessor was mathematically consistent with its
+documented constraints. It built a degree $p+1$ vector field whose:
+\begin{itemize}
+    \item normal moments match the HDG numerical flux
+    \[
+    q_h \cdot n + \tau (u_h - \widehat{u}_h),
+    \]
+    \item interior component moments match the raw HDG flux against
+    $[P_{p-1}]^2$,
+    \item remaining unconstrained high-order modes are chosen by a minimum
+    mass-norm correction from an $L^2$ projection of raw $q_h$.
+\end{itemize}
+
+That last point explained the limited improvement. The constrained projection
+was preserving conservation constraints, but its free high-order content was
+still tied to raw $q_h$ rather than to the much more accurate postprocessed
+scalar field $u_h^\star$.
+
+\section{Postprocessing Formulas}
+
+The mixed HDG variables use the conservative flux convention
+\[
+q = -\kappa \nabla u.
+\]
+On each element $K$, the computed local fields are
+\[
+u_h \in P_p(K), \qquad q_h \in [P_p(K)]^2,
+\]
+with trace unknown $\widehat{u}_h$ on the element faces. The local
+postprocessing constructs degree $p+1$ fields
+\[
+u_h^\star \in P_{p+1}(K), \qquad
+q_h^\star \in [P_{p+1}(K)]^2.
+\]
+
+\subsection*{Primal Postprocessing}
+
+The scalar postprocessed field is the standard local Neumann recovery: find
+$u_h^\star \in P_{p+1}(K)$ such that
+\begin{align}
+(\nabla u_h^\star, \nabla w)_K
+    &= -(\kappa^{-1} q_h, \nabla w)_K
+    &&\forall w \in P_{p+1}(K), \label{eq:primal-post-gradient}\\
+(u_h^\star, 1)_K
+    &= (u_h, 1)_K. \label{eq:primal-post-mean}
+\end{align}
+Equation \eqref{eq:primal-post-gradient} recovers a scalar field whose
+gradient is consistent with the mixed flux relation, while
+\eqref{eq:primal-post-mean} fixes the constant mode.
+
+\subsection*{Flux Postprocessing}
+
+The flux postprocessor is a constrained local projection. Let $q_0$ be the
+reference flux used for the minimum-distance projection. The postprocessed flux
+is defined as
+\[
+q_h^\star
+    = \arg\min_{v \in [P_{p+1}(K)]^2}
+        \frac{1}{2}\|v - q_0\|_{0,K}^2
+\]
+subject to the HDG conservation constraints
+\begin{align}
+\langle q_h^\star \cdot n, \mu \rangle_F
+    &=
+    \langle q_h \cdot n + \tau (u_h - \widehat{u}_h), \mu \rangle_F
+    &&\forall \mu \in P_{p+1}(F), \quad F \subset \partial K,
+    \label{eq:flux-post-normal}\\
+(q_h^\star, r)_K
+    &= (q_h, r)_K
+    &&\forall r \in [P_{p-1}(K)]^2.
+    \label{eq:flux-post-interior}
+\end{align}
+The first constraint matches the numerical normal flux on every face. The
+second preserves the low-order interior flux moments.
+
+In matrix form, with vector mass matrix $A$, constraint matrix $C$, and
+constraint right-hand side $b$, the constrained minimizer satisfies
+\begin{align}
+q_h^\star &= q_0 + A^{-1} C^T \lambda, \\
+(C A^{-1} C^T)\lambda &= b - C q_0.
+\end{align}
+The existing implementation already factored the element-local Schur
+complement $C A^{-1} C^T$. The improvement made in this chat changes only
+the reference $q_0$ in the identity-diffusion \verb|both| path:
+\[
+q_0 =
+\begin{cases}
+\Pi_{p+1} q_h,
+    & \text{flux-only mode or tensor-diffusion fallback}, \\
+\Pi_{p+1}(-\nabla u_h^\star),
+    & \text{identity diffusion with primal and flux postprocessing}.
+\end{cases}
+\]
+Here $\Pi_{p+1}$ denotes the elementwise $L^2$ projection into
+$[P_{p+1}(K)]^2$. Thus the new path leaves
+\eqref{eq:flux-post-normal}--\eqref{eq:flux-post-interior} unchanged, but it
+selects the unconstrained high-order part of $q_h^\star$ from the more
+accurate scalar recovery.
+
+\section{Implementation}
+
+For identity diffusion and \verb|hdg_postprocess="both"|, the flux
+postprocessor now keeps the same HDG constraints but changes the
+minimum-distance reference from raw $q_h$ to the constitutive flux
+\[
+q_0 = -\nabla u_h^\star.
+\]
+
+This affects only the identity-diffusion \verb|both| path. Flux-only
+postprocessing and tensor-diffusion postprocessing still use the original
+raw-$q_h$ reference path.
+
+The implementation changes were:
+\begin{itemize}
+    \item Added cached reference projection matrices
+    \[
+    M^{-1}(\phi_i, \partial_r \phi_j), \qquad
+    M^{-1}(\phi_i, \partial_s \phi_j)
+    \]
+    in \verb|_HDGPostprocessCache| in \verb|diff_rea.py|.
+    \item Added the primal-reference H(div) flux kernel in
+    \verb|diff_rea_fused.py|:
+    \begin{quote}
+    \small
+    \verb|solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel|
+    \end{quote}
+    \item Factored the shared constraint projection into
+    \begin{quote}
+    \small
+    \verb|_apply_hdiv_flux_min_distance_constraints|
+    \end{quote}
+    so both the old and new
+    flux references use exactly the same normal-flux and interior-moment
+    constraints.
+    \item Routed identity-diffusion \verb|both| postprocessing through the new
+    primal-reference kernel.
+\end{itemize}
+
+\section{Verification}
+
+The focused solver tests passed:
+\begin{quote}
+\verb|.venv/bin/python -m pytest tests/test_diffusion_reaction_solver.py -q|
+\end{quote}
+with result:
+\begin{quote}
+\verb|9 passed|
+\end{quote}
+
+A new regression test was added to verify that, on a smooth trigonometric
+identity-diffusion problem, the postprocessed flux is substantially more
+accurate than raw $q_h$ while still satisfying the H(div)-style moment
+constraints.
+
+The tensor-diffusion fallback was also smoke-tested with
+\verb|hdg_postprocess="both"| and still produced degree $p+1$ postprocessed
+field and flux outputs.
+
+\section{Observed Results}
+
+On a small structured p=3 sequence, the improved flux was consistently lower:
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$n_x$ & elements & raw flux error & post flux error \\
+\midrule
+4  & 32  & $3.052875 \times 10^{-3}$ & $1.026032 \times 10^{-3}$ \\
+8  & 128 & $2.279693 \times 10^{-4}$ & $6.146711 \times 10^{-5}$ \\
+12 & 288 & $4.635780 \times 10^{-5}$ & $1.212750 \times 10^{-5}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+On the reported PETSc/GAMG preset, the postprocessed flux error improved from
+the original
+\[
+2.1696 \times 10^{-9}
+\]
+to
+\[
+1.1386 \times 10^{-9}.
+\]
+The raw flux error remained
+\[
+4.1124 \times 10^{-9},
+\]
+and the postprocessed primal error remained
+\[
+2.9877 \times 10^{-11}.
+\]
+
+Additional PETSc/GAMG runs after the primal-reference flux change showed the
+same pattern on nearby mesh sizes. The 72,969-triangle summary appeared twice
+in the pasted logs and is listed once here.
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rrrrrrr}
+\toprule
+triangles & trace dofs & $h^{p+1}$ & raw flux & post flux & reduction & post primal \\
+\midrule
+28,569 & 301,350 & $1.5872{\times}10^{-7}$ & $3.0769{\times}10^{-8}$ &
+$8.2495{\times}10^{-9}$ & $3.73{\times}$ & $1.0951{\times}10^{-10}$ \\
+72,969 & 768,376 & $6.8735{\times}10^{-9}$ & $1.1368{\times}10^{-9}$ &
+$3.0657{\times}10^{-10}$ & $3.71{\times}$ & $1.4182{\times}10^{-11}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Both runs used $p=6$, identity diffusion, $\tau=1$, eliminated boundary
+trace degrees of freedom, the Numba assembly backend, and PETSc CG/GAMG with
+10 levels. Their reported postprocessing costs were $0.6$ seconds and
+$1.6$ seconds, respectively, about $5$--$6\%$ of total runtime.
+
+\section{Environment Notes}
+
+The PETSc preset could not be run inside the normal sandbox because Open MPI
+failed during local socket/listener initialization. The run was repeated with
+escalated execution permissions so PETSc/MPI could initialize. The resulting
+accuracy numbers are meaningful, but the wall-clock timings from that
+escalated environment were not directly comparable to the original user run.
+
+\end{document}

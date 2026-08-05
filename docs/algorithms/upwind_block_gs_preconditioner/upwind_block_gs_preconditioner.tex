@@ -82,16 +82,16 @@ The important files are:
   preconditioner and SciPy \code{LinearOperator}.
 
   \item[Direct builders]
-  \path{hdgfem/linalg/upwind_block_gs_onfly.py}.  Builds the scalar COO and
+  \path{hdgfem/linalg/upwind_block_gs_on_the_fly.py}.  Builds the scalar COO and
   ordered block COO variants.
 
   \item[CuPy apply]
-  \path{hdgfem/linalg/cupy_upwind_block_gs.py}.  Exports compact host data and
+  \path{hdgfem/linalg/upwind_block_gs_cupy.py}.  Exports compact host data and
   applies the preconditioner on device.
 
   \item[Experiment]
   \begin{lstlisting}
-scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py
+scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py
   \end{lstlisting}
   Runs end-to-end consistency and timing checks.
 \end{description}
@@ -511,7 +511,7 @@ What it costs:
 
 Function:
 \[
-  \code{hdgfem.linalg.upwind_block_gs_onfly.build_forward_upwind_block_gs_from_coo}.
+  \code{hdgfem.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_coo}.
 \]
 It consumes natural-order scalar COO triplets plus the scalar permutation:
 \begin{lstlisting}
@@ -555,7 +555,7 @@ Why it is not the performance target:
 
 Function:
 \begin{lstlisting}
-hdgfem.linalg.upwind_block_gs_onfly.build_forward_upwind_block_gs_from_ordered_block_coo
+hdgfem.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_ordered_block_coo
 \end{lstlisting}
 It consumes dense ordered edge-block COO emitted by Numba assembly:
 \begin{lstlisting}
@@ -593,7 +593,7 @@ This is the preferred host performance builder today.
 
 Function:
 \begin{lstlisting}
-hdgfem.linalg.cupy_upwind_block_gs.cupy_upwind_block_gs_from_host_preconditioner
+hdgfem.linalg.upwind_block_gs_cupy.upwind_block_gs_cupy_from_host_preconditioner
 \end{lstlisting}
 It takes a host-built \code{UpwindBlockGSPreconditioner} and transfers compact
 arrays to the current CUDA device:
@@ -697,7 +697,7 @@ Run BiCGSTAB with the same ordered matrix and RHS.  Check:
 The experimental checker performs these checks for the current host and CuPy
 paths:
 \begin{lstlisting}
-scripts/advection_reaction/experimental/check_upwind_block_gs_onfly_adv_rea.py
+scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py
 \end{lstlisting}
 
 \section{Current Benchmark Snapshot}

@@ -8,6 +8,7 @@ preconditioning, and cheap diagonal Jacobi preconditioning.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Literal
@@ -34,6 +35,35 @@ _ITERATIVE_SOLVERS = {
     "LGMRES": lgmres,
     "MINRES": minres,
 }
+
+_PYPARDISO_LOCK = threading.RLock()
+_PYPARDISO_SOLVERS: dict[tuple[int, int], Any] = {}
+
+SolveStatus = Literal["converged", "not-converged", "stagnated", "non-finite"]
+
+
+class LinearSolveError(RuntimeError):
+    """Base class for configured linear-solve failures."""
+
+    def __init__(self, message: str, *, result: "SolveResult | None" = None):
+        super().__init__(message)
+        self.result = result
+
+
+class LinearSolveConvergenceError(LinearSolveError):
+    """Raised when a backend does not produce a validated solution."""
+
+
+def _import_pypardiso():
+    """Import the optional oneMKL PARDISO adapter only when requested."""
+    try:
+        import pypardiso
+    except ImportError as exc:
+        raise ImportError(
+            "solver='pypardiso' requires the optional pypardiso runtime; "
+            "install hdgfem[pardiso] or pypardiso directly"
+        ) from exc
+    return pypardiso
 
 
 def _verbosity_level(verbose: bool | int) -> int:
@@ -167,6 +197,21 @@ class SolveResult:
     permutation_size: int | None = None
     ilu_permc_spec: str | None = None
 
+    # Backend-neutral convergence contract. ``info`` remains the normalized
+    # integer compatibility field; ``backend_info`` preserves the native code.
+    backend: str | None = None
+    backend_info: int | str | None = None
+    status: SolveStatus = "not-converged"
+    converged: bool = False
+    failure_reason: str | None = None
+    solution_is_finite: bool | None = None
+    solver_residual_is_finite: bool | None = None
+    physical_residual_is_finite: bool | None = None
+    solver_residual_target_met: bool | None = None
+    physical_residual_target_met: bool | None = None
+    stagnated: bool = False
+    residual_history: tuple[float, ...] | None = None
+
 
 @dataclass(frozen=True)
 class KnownDofReduction:
@@ -180,6 +225,36 @@ class KnownDofReduction:
     known_mask: NDArray
     known_values: NDArray
     old_to_new: NDArray
+
+
+def _validate_finite_array(values: NDArray, label: str) -> None:
+    """Reject non-finite solver inputs before backend setup."""
+    try:
+        finite = bool(np.all(np.isfinite(values)))
+    except TypeError as exc:
+        raise TypeError(f"{label} must contain numeric values") from exc
+    if not finite:
+        raise ValueError(f"{label} contains non-finite values")
+
+
+def _validate_solver_controls(
+    *,
+    rtol: float,
+    atol: float,
+    maxiter: int | None = None,
+    restart: int | None = None,
+) -> None:
+    """Validate common tolerance and iteration controls."""
+    if not np.isfinite(rtol) or float(rtol) < 0.0:
+        raise ValueError(f"rtol must be finite and non-negative, got {rtol}")
+    if not np.isfinite(atol) or float(atol) < 0.0:
+        raise ValueError(f"atol must be finite and non-negative, got {atol}")
+    if maxiter is not None and int(maxiter) <= 0:
+        raise ValueError(f"maxiter must be positive when provided, got {maxiter}")
+    if restart is not None and int(restart) <= 0:
+        raise ValueError(f"restart must be positive when provided, got {restart}")
+
+
 
 
 def validate_global_system_inputs(
@@ -238,6 +313,11 @@ def validate_global_system_inputs(
         raise ValueError(
             f"initial_guess must have shape ({system_size},), got {initial_guess.shape}"
         )
+
+    _validate_finite_array(matrix_values, "matrix_values")
+    _validate_finite_array(rhs, "rhs")
+    if initial_guess is not None:
+        _validate_finite_array(initial_guess, "initial_guess")
 
 
 def _normalize_diagnostic_rows(diagnostic_rows: NDArray | None, system_size: int) -> NDArray | None:
@@ -633,9 +713,13 @@ def _configure_petsc_solver(
     return normalized, option_keys
 
 
-def _petsc_matrix_from_scipy(PETSc, matrix: scipy.sparse.spmatrix | scipy.sparse.sparray):
+def _petsc_matrix_from_scipy(
+    PETSc, matrix: scipy.sparse.spmatrix | scipy.sparse.sparray, *, resource_owner=None
+):
     """Build a PETSc AIJ matrix from a SciPy sparse matrix."""
     petsc_matrix = PETSc.Mat().create(comm=PETSc.COMM_WORLD)
+    if resource_owner is not None:
+        resource_owner(petsc_matrix)
     if hasattr(petsc_matrix, "setPreallocationCOO"):
         coo = matrix.tocoo(copy=False)
         rows = np.asarray(coo.row, dtype=PETSc.IntType)
@@ -661,7 +745,7 @@ def _petsc_matrix_from_scipy(PETSc, matrix: scipy.sparse.spmatrix | scipy.sparse
     return petsc_matrix
 
 
-def solve_petsc_system(
+def _solve_petsc_system_impl(
     matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
     rhs: NDArray,
     *,
@@ -678,6 +762,7 @@ def solve_petsc_system(
     verbose: bool | int = 0,
     diagnostic_rows: NDArray | None = None,
     diagnostic_label: str | None = None,
+    _resource_owner: Any,
 ) -> SolveResult:
     """Solve a sparse system with PETSc KSP/PC presets.
 
@@ -685,6 +770,7 @@ def solve_petsc_system(
     boundary-eliminated trace system.  PETSc is imported lazily, so the rest of
     :mod:`hdgfem` remains usable without petsc4py.
     """
+    _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter)
     total_start = time.time()
     import_start = time.time()
     PETSc = _import_petsc()
@@ -692,10 +778,19 @@ def solve_petsc_system(
     _solver_print(verbose, 2, "  PETSc runtime initialized in %.5fs", petsc_import_elapsed_seconds)
     matrix = matrix.tocsr()
     rhs = np.asarray(rhs, dtype=np.float64)
+    if matrix.shape != (rhs.size, rhs.size):
+        raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
+    _validate_finite_array(np.asarray(matrix.data), "matrix data")
+    _validate_finite_array(rhs, "rhs")
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, rhs.size)
+    if initial_guess is not None:
+        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        if initial_guess.shape != rhs.shape:
+            raise ValueError(f"initial_guess must have shape {rhs.shape}; got {initial_guess.shape}")
+        _validate_finite_array(initial_guess, "initial_guess")
 
     matrix_start = time.time()
-    petsc_matrix = _petsc_matrix_from_scipy(PETSc, matrix)
+    petsc_matrix = _petsc_matrix_from_scipy(PETSc, matrix, resource_owner=_resource_owner)
     petsc_matrix_elapsed_seconds = time.time() - matrix_start
     _solver_print(
         verbose,
@@ -705,16 +800,13 @@ def solve_petsc_system(
         matrix.nnz,
     )
 
-    b = PETSc.Vec().createWithArray(rhs, comm=PETSc.COMM_WORLD)
-    x = b.duplicate()
+    b = _resource_owner(PETSc.Vec().createWithArray(rhs, comm=PETSc.COMM_WORLD))
+    x = _resource_owner(b.duplicate())
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
-        if initial_guess.shape != rhs.shape:
-            raise ValueError(f"initial_guess must have shape {rhs.shape}; got {initial_guess.shape}")
         x_array = x.getArray()
         x_array[...] = initial_guess
 
-    ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
+    ksp = _resource_owner(PETSc.KSP().create(comm=PETSc.COMM_WORLD))
     ksp.setOperators(petsc_matrix)
     preset, option_keys = _configure_petsc_solver(
         PETSc,
@@ -859,6 +951,66 @@ def solve_petsc_system(
     )
 
 
+def solve_petsc_system(
+    matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
+    rhs: NDArray,
+    *,
+    preset: str = "cg_gamg",
+    levels: int | None = None,
+    options: Mapping[str, Any] | None = None,
+    initial_guess: NDArray | None = None,
+    rtol: float = 1e-13,
+    atol: float = 0.0,
+    divtol: float = 1e4,
+    maxiter: int | None = None,
+    use_monitor: bool = False,
+    raise_on_nonconvergence: bool = False,
+    verbose: bool | int = 0,
+    diagnostic_rows: NDArray | None = None,
+    diagnostic_label: str | None = None,
+) -> SolveResult:
+    """Solve with PETSc and deterministically destroy all native objects."""
+    resources = []
+
+    def own(resource):
+        resources.append(resource)
+        return resource
+
+    try:
+        result = _solve_petsc_system_impl(
+            matrix,
+            rhs,
+            preset=preset,
+            levels=levels,
+            options=options,
+            initial_guess=initial_guess,
+            rtol=rtol,
+            atol=atol,
+            divtol=divtol,
+            maxiter=maxiter,
+            use_monitor=use_monitor,
+            raise_on_nonconvergence=False,
+            verbose=verbose,
+            diagnostic_rows=diagnostic_rows,
+            diagnostic_label=diagnostic_label,
+            _resource_owner=own,
+        )
+    finally:
+        for resource in reversed(resources):
+            try:
+                resource.destroy()
+            except (AttributeError, ReferenceError):
+                pass
+
+    return finalize_solve_result(
+        result,
+        backend=f"petsc-{result.petsc_preset or preset}",
+        backend_info=result.petsc_converged_reason,
+        backend_success=(result.petsc_converged_reason or 0) > 0,
+        raise_on_nonconvergence=raise_on_nonconvergence,
+    )
+
+
 def solve_pyamgx_system(
     matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
     rhs: NDArray,
@@ -879,16 +1031,25 @@ def solve_pyamgx_system(
     The solve happens on the GPU. Diagnostics are computed on the host using the
     same conventions as the SciPy and PETSc paths.
     """
+    _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter)
     total_start = time.time()
     from ..backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
 
     physical_matrix = matrix.tocsr()
     physical_rhs = np.asarray(rhs, dtype=np.float64)
+    if physical_matrix.shape != (physical_rhs.size, physical_rhs.size):
+        raise ValueError(
+            f"matrix must have shape ({physical_rhs.size}, {physical_rhs.size}), "
+            f"got {physical_matrix.shape}"
+        )
+    _validate_finite_array(np.asarray(physical_matrix.data), "matrix data")
+    _validate_finite_array(physical_rhs, "rhs")
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, physical_rhs.size)
     if initial_guess is not None:
         initial_guess = np.asarray(initial_guess, dtype=np.float64)
         if initial_guess.shape != physical_rhs.shape:
             raise ValueError(f"initial_guess must have shape {physical_rhs.shape}; got {initial_guess.shape}")
+        _validate_finite_array(initial_guess, "initial_guess")
 
     scale_start = time.time()
     if scale_system:
@@ -915,7 +1076,7 @@ def solve_pyamgx_system(
         _solver_print(verbose, 2, "  initial residual from supplied guess: %.3e", initial_residual_norm)
 
     solve_start = time.time()
-    solution_cp = solve_pyamgx_csr(
+    solution_cp, amgx_info = solve_pyamgx_csr(
         matrix_cp,
         solve_rhs,
         initial_guess=initial_guess,
@@ -923,6 +1084,7 @@ def solve_pyamgx_system(
         tolerance=rtol,
         maxiter=maxiter,
         verbose=verbose,
+        return_info=True,
     )
     solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
     solution_is_finite = bool(np.all(np.isfinite(solution)))
@@ -949,7 +1111,6 @@ def solve_pyamgx_system(
         restricted_residual_diagnostics(physical_residual, physical_rhs, diagnostic_rows, rtol=rtol, atol=atol)
     )
 
-    info = 0 if solution_is_finite and solver_residual_norm <= solver_residual_target else 1
     total_elapsed_seconds = time.time() - total_start
     _solver_print(
         verbose,
@@ -977,25 +1138,22 @@ def solve_pyamgx_system(
         total_elapsed_seconds,
     )
 
-    if info != 0 and raise_on_nonconvergence:
-        if not solution_is_finite:
-            raise RuntimeError("PyAMGX solver returned non-finite solution values")
-        raise RuntimeError(
-            "PyAMGX solver did not satisfy the requested residual target. "
-            f"residual={solver_residual_norm:.3e}, target={solver_residual_target:.3e}, "
-            f"relative_residual={solver_relative_residual_norm:.3e}"
-        )
-
-    return SolveResult(
+    native_status = str(amgx_info.get("amgx_status", "unknown"))
+    normalized_status = native_status.lower().replace("-", "_").replace(" ", "_")
+    backend_success = normalized_status == "unknown" or not any(
+        marker in normalized_status
+        for marker in ("fail", "diverg", "not_converged", "notconverged")
+    )
+    result = SolveResult(
         x=solution,
         residual_norm=solver_residual_norm,
-        info=info,
+        info=0 if backend_success else 1,
         preconditioner=None,
         total_elapsed_seconds=total_elapsed_seconds,
         scale_elapsed_seconds=scale_elapsed_seconds,
         preconditioner_elapsed_seconds=matrix_elapsed_seconds,
         solve_elapsed_seconds=solve_elapsed_seconds,
-        iteration_count=None,
+        iteration_count=amgx_info.get("amgx_iterations"),
         initial_residual_norm=initial_residual_norm,
         rhs_norm=solver_rhs_norm,
         relative_residual_norm=solver_relative_residual_norm,
@@ -1015,6 +1173,15 @@ def solve_pyamgx_system(
         diagnostic_residual_target=diagnostic_residual_target,
         rtol=rtol,
         atol=atol,
+    )
+    return finalize_solve_result(
+        result,
+        backend="pyamgx",
+        backend_info=native_status,
+        backend_success=backend_success,
+        solution_is_finite=solution_is_finite,
+        residual_history=amgx_info.get("residual_history"),
+        raise_on_nonconvergence=raise_on_nonconvergence,
     )
 
 
@@ -1054,6 +1221,7 @@ def solve_cupyx_system(
     for the Cupyx path while preserving host-side residual diagnostics via COO
     scatter operations.
     """
+    _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     total_start = time.time()
     from ..backends.cupy import (
         asnumpy,
@@ -1073,7 +1241,8 @@ def solve_cupyx_system(
         cupy_dtype_name = "float64"
     if cupy_dtype_name not in {"float32", "float64"}:
         raise ValueError("HDGFEM_CUPYX_DTYPE must be 'float32' or 'float64'")
-    cupy_dtype = getattr(__import__("cupy"), cupy_dtype_name)
+    cupy = __import__("cupy")
+    cupy_dtype = getattr(cupy, cupy_dtype_name)
 
     normalized_cupyx_solver = str(cupyx_solver).lower().replace("-", "_")
     if normalized_cupyx_solver == "cg" and scale_system:
@@ -1106,6 +1275,14 @@ def solve_cupyx_system(
         system_size = physical_matrix.shape[0]
         row_indices = col_indices = None
         physical_values = None
+
+    _validate_finite_array(physical_rhs, "rhs")
+    if initial_guess is not None:
+        _validate_finite_array(initial_guess, "initial_guess")
+    if using_host_coo:
+        _validate_finite_array(physical_values, "matrix_values")
+    else:
+        _validate_finite_array(np.asarray(physical_matrix.data), "matrix data")
 
     scale_start = time.time()
     if scale_system:
@@ -1147,6 +1324,10 @@ def solve_cupyx_system(
     else:
         matrix_cp = prepared_device_matrix
         matrix_message = "reused from device cache"
+    if tuple(matrix_cp.shape) != (system_size, system_size):
+        raise ValueError(f"device matrix must have shape ({system_size}, {system_size}), got {matrix_cp.shape}")
+    if not bool(cupy.all(cupy.isfinite(matrix_cp.data)).get()):
+        raise ValueError("device matrix contains non-finite values")
     matrix_elapsed_seconds = time.time() - matrix_start
     matrix_nnz = int(getattr(matrix_cp, "nnz", -1))
     _solver_print(
@@ -1283,7 +1464,7 @@ def solve_cupyx_system(
                 int(upwind_block_size),
             )
             preconditioner_start = time.time()
-            from .cupy_upwind_block_gs import build_cupy_upwind_block_gs_preconditioner
+            from .upwind_block_gs_cupy import build_cupy_upwind_block_gs_preconditioner
 
             preconditioner_operator = build_cupy_upwind_block_gs_preconditioner(
                 host_matrix,
@@ -1335,6 +1516,7 @@ def solve_cupyx_system(
         restart=restart,
     )
     solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+    solution_is_finite = bool(np.all(np.isfinite(solution)))
     solve_elapsed_seconds = time.time() - solve_start
 
     if using_host_coo:
@@ -1393,15 +1575,7 @@ def solve_cupyx_system(
         total_elapsed_seconds,
     )
 
-    if info != 0 and raise_on_nonconvergence:
-        raise RuntimeError(
-            f"Cupyx {cupyx_solver} failed to converge. "
-            f"info={info}, solver_res={solver_residual_norm:.3e}, "
-            f"solver_rel={solver_relative_residual_norm:.3e}, "
-            f"solver_target={solver_residual_target:.3e}"
-        )
-
-    return SolveResult(
+    result = SolveResult(
         x=solution,
         residual_norm=solver_residual_norm,
         info=info,
@@ -1437,6 +1611,14 @@ def solve_cupyx_system(
         preconditioner_copy_seconds=getattr(preconditioner_operator, "copy_seconds", None),
         cupyx_solver=str(cupyx_solver),
         ilu_permc_spec=ilu_permc_spec if preconditioner_uses_ilu else None,
+    )
+    return finalize_solve_result(
+        result,
+        backend=f"cupyx-{normalized_cupyx_solver}",
+        backend_info=int(info),
+        backend_success=int(info) == 0,
+        solution_is_finite=solution_is_finite,
+        raise_on_nonconvergence=raise_on_nonconvergence,
     )
 
 
@@ -1492,6 +1674,165 @@ def restricted_residual_diagnostics(
     return residual_norm, rhs_norm, relative_residual_norm, residual_target
 
 
+def residual_history_is_stagnated(
+    history: Any,
+    *,
+    window: int = 50,
+    relative_improvement: float = 1.0e-6,
+) -> bool:
+    """Return whether the recent finite residual history has stopped improving."""
+    values = np.asarray(() if history is None else tuple(history), dtype=np.float64)
+    if values.size < int(window) or int(window) < 2:
+        return False
+    recent = values[-int(window):]
+    if not np.all(np.isfinite(recent)) or np.any(recent < 0.0):
+        return False
+    baseline = float(recent[0])
+    best = float(np.min(recent))
+    if baseline <= 0.0:
+        return bool(best <= 0.0)
+    improvement = max(0.0, (baseline - best) / baseline)
+    return bool(improvement <= float(relative_improvement))
+
+
+def _residual_target_met(residual_norm: float | None, target: float | None, *, rtol: float, atol: float) -> bool:
+    """Check a residual target, treating two zero tolerances as validation-disabled."""
+    if residual_norm is None or target is None or not np.isfinite(residual_norm) or not np.isfinite(target):
+        return False
+    if float(rtol) == 0.0 and float(atol) == 0.0:
+        return True
+    return bool(float(residual_norm) <= float(target))
+
+
+def _linear_solve_failure_message(result: SolveResult) -> str:
+    """Build the stable diagnostic message used by convergence exceptions."""
+    parts = [
+        f"{result.backend or 'linear'} solve did not converge",
+        f"status={result.status}",
+        f"reason={result.failure_reason or 'unknown'}",
+    ]
+    if result.backend_info is not None:
+        parts.append(f"backend_info={result.backend_info}")
+    if result.iteration_count is not None:
+        parts.append(f"iterations={result.iteration_count}")
+    if result.solver_residual_norm is not None:
+        parts.append(f"solver_residual={result.solver_residual_norm:.3e}")
+    if result.solver_residual_target is not None:
+        parts.append(f"solver_target={result.solver_residual_target:.3e}")
+    if result.physical_residual_norm is not None:
+        parts.append(f"physical_residual={result.physical_residual_norm:.3e}")
+    if result.physical_residual_target is not None:
+        parts.append(f"physical_target={result.physical_residual_target:.3e}")
+    return ", ".join(parts)
+
+
+def finalize_solve_result(
+    result: SolveResult,
+    *,
+    backend: str,
+    backend_info: int | str | None = None,
+    backend_success: bool | None = None,
+    solution_is_finite: bool | None = None,
+    residual_history: Any = None,
+    raise_on_nonconvergence: bool = False,
+    stagnation_window: int = 50,
+    stagnation_relative_improvement: float = 1.0e-6,
+) -> SolveResult:
+    """Apply one convergence contract to a backend-populated result."""
+    native_info = result.info if backend_info is None else backend_info
+    if backend_success is None:
+        backend_success = result.info in {None, 0}
+
+    history = tuple(float(value) for value in (() if residual_history is None else residual_history))[-64:]
+    if solution_is_finite is None:
+        solution_is_finite = result.x is not None and bool(np.all(np.isfinite(result.x)))
+
+    solver_values = (
+        result.solver_residual_norm,
+        result.solver_rhs_norm,
+        result.solver_relative_residual_norm,
+        result.solver_residual_target,
+    )
+    physical_values = (
+        result.physical_residual_norm,
+        result.physical_rhs_norm,
+        result.physical_relative_residual_norm,
+        result.physical_residual_target,
+    )
+    solver_residual_is_finite = all(value is not None and np.isfinite(value) for value in solver_values)
+    physical_residual_is_finite = all(value is not None and np.isfinite(value) for value in physical_values)
+    rtol = 0.0 if result.rtol is None else float(result.rtol)
+    atol = 0.0 if result.atol is None else float(result.atol)
+    solver_target_met = _residual_target_met(
+        result.solver_residual_norm,
+        result.solver_residual_target,
+        rtol=rtol,
+        atol=atol,
+    )
+    physical_target_met = _residual_target_met(
+        result.physical_residual_norm,
+        result.physical_residual_target,
+        rtol=rtol,
+        atol=atol,
+    )
+    stagnated = (
+        not solver_target_met
+        and residual_history_is_stagnated(
+            history,
+            window=stagnation_window,
+            relative_improvement=stagnation_relative_improvement,
+        )
+    )
+    converged = bool(
+        backend_success
+        and solution_is_finite
+        and solver_residual_is_finite
+        and physical_residual_is_finite
+        and solver_target_met
+        and physical_target_met
+    )
+
+    result.backend = str(backend)
+    result.backend_info = native_info
+    result.converged = converged
+    result.solution_is_finite = bool(solution_is_finite)
+    result.solver_residual_is_finite = solver_residual_is_finite
+    result.physical_residual_is_finite = physical_residual_is_finite
+    result.solver_residual_target_met = solver_target_met
+    result.physical_residual_target_met = physical_target_met
+    result.stagnated = stagnated
+    result.residual_history = history or None
+
+    if converged:
+        result.status = "converged"
+        result.failure_reason = None
+        result.info = 0
+    else:
+        if not solution_is_finite:
+            result.status = "non-finite"
+            result.failure_reason = "non-finite-solution"
+        elif not solver_residual_is_finite or not physical_residual_is_finite:
+            result.status = "non-finite"
+            result.failure_reason = "non-finite-residual"
+        elif stagnated:
+            result.status = "stagnated"
+            result.failure_reason = "stagnation"
+        elif not backend_success:
+            result.status = "not-converged"
+            result.failure_reason = "backend-nonconvergence"
+        else:
+            result.status = "not-converged"
+            result.failure_reason = "residual-target-not-met"
+        result.info = int(native_info) if isinstance(native_info, (int, np.integer)) and int(native_info) != 0 else 1
+
+    if raise_on_nonconvergence and not result.converged:
+        raise LinearSolveConvergenceError(
+            _linear_solve_failure_message(result),
+            result=result,
+        )
+    return result
+
+
 def get_iterative_solver(
     solver_name: str,
 ):
@@ -1518,8 +1859,17 @@ def solve_direct_system(
     atol: float = 0.0,
     diagnostic_rows: NDArray | None = None,
     diagnostic_label: str | None = None,
+    raise_on_nonconvergence: bool = False,
 ) -> SolveResult:
     """Solve an already assembled sparse system with ``spsolve``."""
+    _validate_solver_controls(rtol=rtol, atol=atol)
+    matrix = matrix.tocsr()
+    rhs = np.asarray(rhs, dtype=np.float64)
+    if matrix.shape != (rhs.size, rhs.size):
+        raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
+    _validate_finite_array(np.asarray(matrix.data), "matrix data")
+    _validate_finite_array(rhs, "rhs")
+
     start = time.time()
     x = spsolve(matrix.tocsr(), rhs)
     solve_elapsed_seconds = time.time() - start
@@ -1533,7 +1883,7 @@ def solve_direct_system(
         restricted_residual_diagnostics(physical_residual, rhs, diagnostic_rows, rtol=rtol, atol=atol)
     )
 
-    return SolveResult(
+    result = SolveResult(
         x=np.asarray(x),
         residual_norm=physical_residual_norm,
         rhs_norm=physical_rhs_norm,
@@ -1561,6 +1911,162 @@ def solve_direct_system(
         preconditioner_elapsed_seconds=0.0,
         solve_elapsed_seconds=solve_elapsed_seconds,
     )
+    return finalize_solve_result(
+        result,
+        backend="scipy-direct",
+        backend_info=0,
+        backend_success=True,
+        raise_on_nonconvergence=raise_on_nonconvergence,
+    )
+
+
+def solve_pypardiso_system(
+    matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
+    rhs: NDArray,
+    *,
+    rtol: float = 0.0,
+    atol: float = 0.0,
+    diagnostic_rows: NDArray | None = None,
+    diagnostic_label: str | None = None,
+    raise_on_nonconvergence: bool = False,
+    matrix_type: Literal["nonsymmetric", "spd"] = "nonsymmetric",
+) -> SolveResult:
+    """Solve a real CSR system with the optional oneMKL PARDISO backend.
+
+    PyPardiso owns process-wide solver instances and reuses their most recent
+    factorizations. Calls are serialized because those native instances are not
+    safe for concurrent solves. The SPD matrix type validates symmetry and
+    passes only the upper triangle to PARDISO mtype=2.
+    """
+    _validate_solver_controls(rtol=rtol, atol=atol)
+    rhs = np.asarray(rhs)
+    if np.issubdtype(matrix.dtype, np.complexfloating) or np.iscomplexobj(rhs):
+        raise TypeError("pypardiso supports real-valued systems only")
+    if rhs.ndim != 1:
+        raise ValueError(f"rhs must be one-dimensional, got shape {rhs.shape}")
+    matrix = scipy.sparse.csr_matrix(matrix, dtype=np.float64)
+    matrix.sum_duplicates()
+    matrix.sort_indices()
+    rhs = np.asarray(rhs, dtype=np.float64)
+    if matrix.shape != (rhs.size, rhs.size):
+        raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
+    _validate_finite_array(np.asarray(matrix.data), "matrix data")
+    _validate_finite_array(rhs, "rhs")
+
+    normalized_matrix_type = str(matrix_type).lower().replace("_", "-")
+    if normalized_matrix_type not in {"nonsymmetric", "spd"}:
+        raise ValueError("matrix_type must be 'nonsymmetric' or 'spd'")
+
+    native_matrix = matrix
+    pardiso_mtype = 11
+    backend = "pypardiso-direct"
+    if normalized_matrix_type == "spd":
+        asymmetry = matrix - matrix.T
+        max_abs_matrix = 0.0 if matrix.nnz == 0 else float(np.max(np.abs(matrix.data)))
+        max_abs_asymmetry = (
+            0.0 if asymmetry.nnz == 0 else float(np.max(np.abs(asymmetry.data)))
+        )
+        symmetry_tolerance = 1.0e-11 * max(1.0, max_abs_matrix)
+        if max_abs_asymmetry > symmetry_tolerance:
+            raise ValueError(
+                "matrix_type='spd' requires a symmetric matrix; "
+                f"max_abs_asymmetry={max_abs_asymmetry:.3e}, "
+                f"tolerance={symmetry_tolerance:.3e}"
+            )
+        native_matrix = scipy.sparse.triu(matrix, format="csr")
+        native_matrix.sum_duplicates()
+        native_matrix.sort_indices()
+        pardiso_mtype = 2
+        backend = "pypardiso-spd"
+
+    pypardiso = _import_pypardiso()
+    start = time.perf_counter()
+    with _PYPARDISO_LOCK:
+        active_solver = pypardiso.ps
+        try:
+            if pardiso_mtype == 11:
+                x = pypardiso.spsolve(native_matrix, rhs)
+            else:
+                cache_key = (id(pypardiso), pardiso_mtype)
+                active_solver = _PYPARDISO_SOLVERS.get(cache_key)
+                if active_solver is None:
+                    active_solver = pypardiso.PyPardisoSolver(mtype=pardiso_mtype)
+                    _PYPARDISO_SOLVERS[cache_key] = active_solver
+                x = pypardiso.spsolve(native_matrix, rhs, solver=active_solver)
+        except Exception as exc:
+            try:
+                active_solver.free_memory(everything=True)
+            except Exception:
+                pass
+            if pardiso_mtype != 11:
+                _PYPARDISO_SOLVERS.pop((id(pypardiso), pardiso_mtype), None)
+            raise LinearSolveError(f"pypardiso solve failed: {exc}") from exc
+    solve_elapsed_seconds = time.perf_counter() - start
+
+    physical_residual = matrix @ x - rhs
+    physical_residual_norm = float(np.linalg.norm(physical_residual))
+    physical_rhs_norm, physical_relative_residual_norm, physical_residual_target = residual_diagnostics(
+        physical_residual_norm, rhs, rtol=rtol, atol=atol
+    )
+    diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
+        restricted_residual_diagnostics(physical_residual, rhs, diagnostic_rows, rtol=rtol, atol=atol)
+    )
+
+    result = SolveResult(
+        x=np.asarray(x),
+        residual_norm=physical_residual_norm,
+        rhs_norm=physical_rhs_norm,
+        relative_residual_norm=physical_relative_residual_norm,
+        residual_target=physical_residual_target,
+        solver_residual_norm=physical_residual_norm,
+        solver_rhs_norm=physical_rhs_norm,
+        solver_relative_residual_norm=physical_relative_residual_norm,
+        solver_residual_target=physical_residual_target,
+        physical_residual_norm=physical_residual_norm,
+        physical_rhs_norm=physical_rhs_norm,
+        physical_relative_residual_norm=physical_relative_residual_norm,
+        physical_residual_target=physical_residual_target,
+        diagnostic_residual_label=diagnostic_label,
+        diagnostic_residual_norm=diagnostic_residual_norm,
+        diagnostic_rhs_norm=diagnostic_rhs_norm,
+        diagnostic_relative_residual_norm=diagnostic_relative_residual_norm,
+        diagnostic_residual_target=diagnostic_residual_target,
+        rtol=rtol,
+        atol=atol,
+        info=0,
+        preconditioner=None,
+        total_elapsed_seconds=solve_elapsed_seconds,
+        scale_elapsed_seconds=0.0,
+        preconditioner_elapsed_seconds=0.0,
+        solve_elapsed_seconds=solve_elapsed_seconds,
+    )
+    return finalize_solve_result(
+        result,
+        backend=backend,
+        backend_info=0,
+        backend_success=True,
+        raise_on_nonconvergence=raise_on_nonconvergence,
+    )
+
+
+def clear_pypardiso_cache(*, everything: bool = True) -> None:
+    """Release all optional-backend factorizations and native memory."""
+    pypardiso = _import_pypardiso()
+    with _PYPARDISO_LOCK:
+        solvers = [pypardiso.ps, *_PYPARDISO_SOLVERS.values()]
+        first_error = None
+        for solver in solvers:
+            try:
+                solver.free_memory(everything=everything)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if everything:
+            _PYPARDISO_SOLVERS.clear()
+        if first_error is not None:
+            raise LinearSolveError(
+                f"pypardiso cache cleanup failed: {first_error}"
+            ) from first_error
 
 
 def solve_iterative_system(
@@ -1588,6 +2094,19 @@ def solve_iterative_system(
     diagnostic_label: str | None = None,
 ) -> SolveResult:
     """Solve an already assembled sparse system with a SciPy Krylov method."""
+    _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
+    matrix = matrix.tocsr()
+    rhs = np.asarray(rhs, dtype=np.float64)
+    if matrix.shape != (rhs.size, rhs.size):
+        raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
+    _validate_finite_array(np.asarray(matrix.data), "matrix data")
+    _validate_finite_array(rhs, "rhs")
+    if initial_guess is not None:
+        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        if initial_guess.shape != rhs.shape:
+            raise ValueError(f"initial_guess must have shape {rhs.shape}, got {initial_guess.shape}")
+        _validate_finite_array(initial_guess, "initial_guess")
+
     total_start = time.time()
 
     solver = get_iterative_solver(solver_name)
@@ -1873,18 +2392,7 @@ def solve_iterative_system(
             0.0 if prec_copy_seconds is None else prec_copy_seconds,
         )
 
-    if info != 0 and raise_on_nonconvergence:
-        raise RuntimeError(
-            f"{solver_name} failed to converge. "
-            f"info={info}, iterations={iteration_counter.count}, "
-            f"solver_res={solver_residual_norm:.3e}, "
-            f"solver_rel={solver_relative_residual_norm:.3e}, "
-            f"solver_target={solver_residual_target:.3e}, "
-            f"physical_res={physical_residual_norm:.3e}, "
-            f"physical_rel={physical_relative_residual_norm:.3e}"
-        )
-
-    return SolveResult(
+    result = SolveResult(
         x=x,
         # Backward-compatible residual fields now refer to the solver system,
         # not the unscaled physical system.
@@ -1921,6 +2429,14 @@ def solve_iterative_system(
         preconditioner_reduce_seconds=prec_reduce_seconds,
         preconditioner_copy_seconds=prec_copy_seconds,
         ilu_permc_spec=ilu_permc_spec if isinstance(preconditioner, str) and preconditioner == "ilu" else None,
+    )
+    return finalize_solve_result(
+        result,
+        backend=f"scipy-{solver_name_upper.lower()}",
+        backend_info=int(info),
+        backend_success=int(info) == 0,
+        residual_history=iteration_counter.residual_history,
+        raise_on_nonconvergence=raise_on_nonconvergence,
     )
 
 
@@ -1976,8 +2492,11 @@ def solve_global_system(
         Number of rows and columns in the square system.
     solver
         ``"direct"`` or ``None`` uses :func:`scipy.sparse.linalg.spsolve`.
-        ``"petsc"`` uses the PETSc backend. ``"pyamgx"`` or ``"amgx"``
-        uses the optional PyAMGX backend. ``"cupyx"`` uses a Cupyx sparse
+        ``"pypardiso"`` or ``"pardiso"`` uses the optional oneMKL PARDISO
+        host backend for general real matrices. ``"pypardiso-spd"`` and
+        ``"pardiso-spd"`` validate symmetry and use its real-SPD mode.
+        ``"petsc"`` uses the PETSc backend. ``"pyamgx"`` or ``"amgx"`` uses
+        the optional PyAMGX backend. ``"cupyx"`` uses a Cupyx sparse
         Krylov solver selected by ``cupyx_solver``; aliases such as
         ``"cupyx_bicgstab"`` select the Cupyx method inline. Other names are
         looked up in the supported SciPy Krylov solver table.
@@ -2021,6 +2540,7 @@ def solve_global_system(
         strongly imposed with large penalties and should not dominate the
         physically meaningful relative residual.
     """
+    _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     row_indices = np.asarray(row_indices)
     col_indices = np.asarray(col_indices)
     matrix_values = np.asarray(matrix_values)
@@ -2034,6 +2554,14 @@ def solve_global_system(
         raise ValueError("prepared_device_matrix cannot be combined with a new matrix permutation")
 
     normalized_solver = "" if solver is None else str(solver).lower()
+    normalized_solver_family = normalized_solver.replace("_", "-")
+    solver_is_pypardiso_spd = normalized_solver_family in {"pypardiso-spd", "pardiso-spd"}
+    solver_is_pypardiso = normalized_solver_family in {
+        "pypardiso",
+        "pardiso",
+        "pypardiso-spd",
+        "pardiso-spd",
+    }
     solver_is_petsc = normalized_solver == "petsc"
     solver_is_pyamgx = normalized_solver in {"pyamgx", "amgx"}
     solver_is_cupyx = normalized_solver == "cupyx" or normalized_solver.startswith(("cupyx_", "cupyx-"))
@@ -2082,6 +2610,10 @@ def solve_global_system(
             raise ValueError(
                 f"initial_guess must have shape ({system_size},), got {initial_guess.shape}"
             )
+        _validate_finite_array(np.asarray(assembled_matrix.data), "assembled_matrix data")
+        _validate_finite_array(rhs, "rhs")
+        if initial_guess is not None:
+            _validate_finite_array(initial_guess, "initial_guess")
         matrix = assembled_matrix
         _solver_print(
             verbose,
@@ -2113,7 +2645,7 @@ def solve_global_system(
             permutation_elapsed_seconds,
         )
 
-    if solver is None or solver == "direct":
+    if normalized_solver in {"", "direct"}:
         _solver_print(verbose, 1, "  solver: scipy.sparse.linalg.spsolve")
 
         result = solve_direct_system(
@@ -2123,6 +2655,25 @@ def solve_global_system(
             atol=atol,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
+            raise_on_nonconvergence=False,
+        )
+
+    elif solver_is_pypardiso:
+        _solver_print(
+            verbose,
+            1,
+            "  solver: pypardiso oneMKL PARDISO%s",
+            " (real SPD)" if solver_is_pypardiso_spd else "",
+        )
+        result = solve_pypardiso_system(
+            matrix,
+            rhs,
+            rtol=rtol,
+            atol=atol,
+            diagnostic_rows=diagnostic_rows,
+            diagnostic_label=diagnostic_label,
+            raise_on_nonconvergence=False,
+            matrix_type="spd" if solver_is_pypardiso_spd else "nonsymmetric",
         )
 
     elif solver_is_petsc:
@@ -2163,7 +2714,7 @@ def solve_global_system(
             divtol=petsc_divtol,
             maxiter=maxiter,
             use_monitor=petsc_monitor,
-            raise_on_nonconvergence=raise_on_nonconvergence,
+            raise_on_nonconvergence=False,
             verbose=verbose,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
@@ -2193,6 +2744,14 @@ def solve_global_system(
         result.diagnostic_rhs_norm = diagnostic_rhs_norm
         result.diagnostic_relative_residual_norm = diagnostic_relative_residual_norm
         result.diagnostic_residual_target = diagnostic_residual_target
+        result = finalize_solve_result(
+            result,
+            backend=result.backend or f"petsc-{petsc_preset}",
+            backend_info=result.backend_info,
+            backend_success=(result.petsc_converged_reason or 0) > 0,
+            residual_history=result.residual_history,
+            raise_on_nonconvergence=False,
+        )
 
     elif solver_is_pyamgx:
         _solver_print(verbose, 1, "  solver: PyAMGX BICGSTAB+AMG")
@@ -2205,7 +2764,7 @@ def solve_global_system(
             atol=atol,
             maxiter=maxiter,
             scale_system=scale_system,
-            raise_on_nonconvergence=raise_on_nonconvergence,
+            raise_on_nonconvergence=False,
             verbose=verbose,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
@@ -2241,7 +2800,7 @@ def solve_global_system(
             upwind_block_size=upwind_block_size,
             upwind_level_widths=upwind_level_widths,
             upwind_diagonal_regularization=upwind_diagonal_regularization,
-            raise_on_nonconvergence=raise_on_nonconvergence,
+            raise_on_nonconvergence=False,
             verbose=verbose,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
@@ -2272,7 +2831,7 @@ def solve_global_system(
             ilu_failure=ilu_failure,
             ilu_permc_spec=ilu_permc_spec,
             scale_system=scale_system,
-            raise_on_nonconvergence=raise_on_nonconvergence,
+            raise_on_nonconvergence=False,
             verbose=verbose,
             prepared_scaled_matrix=prepared_scaled_matrix,
             prepared_inverse_diagonal=prepared_inverse_diagonal,
@@ -2288,7 +2847,7 @@ def solve_global_system(
         result.permutation_elapsed_seconds = permutation_elapsed_seconds
         result.permutation_size = int(permutation.size)
 
-    if result.info == 0:
+    if result.converged:
         _solver_print(
             verbose,
             1,
@@ -2331,27 +2890,39 @@ def solve_global_system(
             result.physical_relative_residual_norm,
         )
 
+    if raise_on_nonconvergence and not result.converged:
+        raise LinearSolveConvergenceError(
+            _linear_solve_failure_message(result),
+            result=result,
+        )
     return result
 
 
 __all__ = [
     "KrylovIterationCounter",
     "KnownDofReduction",
+    "LinearSolveConvergenceError",
+    "LinearSolveError",
     "SolveResult",
+    "SolveStatus",
     "assemble_global_matrix",
+    "clear_pypardiso_cache",
     "build_ilu_preconditioner",
     "build_jacobi_preconditioner",
     "compute_residual_norm",
     "diagonal_scale_system",
     "eliminate_known_dofs",
     "expand_known_dofs",
+    "finalize_solve_result",
     "get_iterative_solver",
     "residual_diagnostics",
+    "residual_history_is_stagnated",
     "solve_direct_system",
     "solve_global_system",
     "solve_cupyx_system",
     "solve_iterative_system",
     "solve_petsc_system",
+    "solve_pypardiso_system",
     "solve_pyamgx_system",
     "validate_global_system_inputs",
 ]

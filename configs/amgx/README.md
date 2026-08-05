@@ -1,13 +1,18 @@
 # AMGX Configs
 
-These JSON files are the readable, reusable PyAMGX configurations for the standalone GPU4 HDG runners. The Python scripts keep embedded fallback copies, but when these files are present they are loaded by default. Use `--amgx-config` to run an edited copy without changing source code.
+These JSON files are readable, reusable PyAMGX configurations for the CUDA HDG runners. The Python scripts keep embedded fallback copies, but load these files by default when present. Use `--amgx-config` to run an edited copy without changing source code.
+
+The JSON basenames retain their original `adv_rea_gpu4_hdg_*` and
+`diff_rea_gpu4_hdg_*` benchmark identifiers because archived run logs cite
+them verbatim. This historical artifact exception does not apply to Python
+packages, modules, runners, or newly generated sweep output names.
 
 In the examples below, replace `/path/to/amgx/lib` with the directory containing
 your AMGX shared library, for example `libamgxsh.so`. If AMGX is installed in a
 system or environment path already known to the dynamic loader, the
 `LD_LIBRARY_PATH=...` prefix is not needed.
 
-## Advection-Reaction GPU4 HDGFEM
+## Advection-Reaction HDGFEM
 
 Config: `adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json`
 
@@ -15,7 +20,7 @@ Current working path:
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
+  .venv/bin/python -m scripts.gpu.run_advection_reaction_cuda \
   -o 6 -ms 0.01 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-config configs/amgx/adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json
@@ -41,7 +46,7 @@ Guiding-center transport presets currently use `adv_rea_gpu4_hdg_bicgstab_aggreg
 
 Experimental advection-reaction configs retained for comparison:
 
-Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_adv_rea_disk_tangent_raw_cuda.py` with `p=4`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, fused raw-CUDA CSR, cooperative LU, and `--amgx-tolerance 1e-10`. The default BICGSTAB/classical-ILU0 AMG route needed about 2200 iterations. `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json` reduced this to 73 iterations using `PBICGSTAB + aggregation AMG + MULTICOLOR_DILU` with `presweeps=0`, `postsweeps=2`. This is a stronger diagnostic config, not yet the global default: each preconditioner application is much heavier, so the wall-clock solve was slightly slower on that screen. Use it with `--no-scale-system`; external row scaling made the PBICGSTAB aggregation-DILU variants fail, and AMGX internal `BINORMALIZATION` terminated before the runner summary with device-pool leak diagnostics.
+Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_advection_disk_tangent_cuda.py` with `p=4`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, fused raw-CUDA CSR, cooperative LU, and `--amgx-tolerance 1e-10`. The default BICGSTAB/classical-ILU0 AMG route needed about 2200 iterations. `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json` reduced this to 73 iterations using `PBICGSTAB + aggregation AMG + MULTICOLOR_DILU` with `presweeps=0`, `postsweeps=2`. This is a stronger diagnostic config, not yet the global default: each preconditioner application is much heavier, so the wall-clock solve was slightly slower on that screen. Use it with `--no-scale-system`; external row scaling made the PBICGSTAB aggregation-DILU variants fail, and AMGX internal `BINORMALIZATION` terminated before the runner summary with device-pool leak diagnostics.
 
 - `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json`: strong zero-flux disk-tangent diagnostic; requires `--no-scale-system`.
 - `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: L1 smoother baseline candidate.
@@ -56,7 +61,7 @@ Representative raw-CSR preconditioner sweep:
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  .venv/bin/python scripts/gpu/sweep_adv_rea_gpu4_hdg.py \
+  .venv/bin/python scripts/gpu/sweep_cuda_hdg.py \
   --orders 6 --mesh-sizes 0.01 --bases dub_orth \
   --trace-bases legacy-lagrange --quad-rules default \
   --amgx-configs default \
@@ -76,8 +81,8 @@ The advection runner uses the same AMGX config for CuPy, semi-fused raw, and ful
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
+  HDGFEM_CUDA_AMGX_MONITOR=0 \
+  .venv/bin/python -m scripts.gpu.run_advection_reaction_cuda \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly fused --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8 \
@@ -88,8 +93,8 @@ Use the semi-fused path to compare against the Raw CUDA kernel that receives mat
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  HDGFEM_GPU4_AMGX_MONITOR=0 \
-  .venv/bin/python -m scripts.gpu.run_adv_rea_gpu4_hdg \
+  HDGFEM_CUDA_AMGX_MONITOR=0 \
+  .venv/bin/python -m scripts.gpu.run_advection_reaction_cuda \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly precomputed --raw-block-size 32 \
   --trace-ordering none --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 8 \
@@ -107,7 +112,7 @@ Working fused stress runs on the 24 GB Quadro RTX 6000:
 
 For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR conversion OOMs before AMGX setup. The next memory target is the global sparse conversion/solver path, not local fused assembly.
 
-## Diffusion-Reaction GPU4 HDGFEM
+## Diffusion-Reaction HDGFEM
 
 Working configs:
 
@@ -120,7 +125,7 @@ Current recommended nodal path:
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  .venv/bin/python -m scripts.gpu.run_diff_rea_gpu4_hdg \
+  .venv/bin/python -m scripts.gpu.run_diffusion_reaction_cuda \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legacy-lagrange \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-solver PCGF \
@@ -131,22 +136,22 @@ Current recommended modal path:
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  .venv/bin/python -m scripts.gpu.run_diff_rea_gpu4_hdg \
+  .venv/bin/python -m scripts.gpu.run_diffusion_reaction_cuda \
   -o 6 -ms 0.05 --basis dub_orth --trace-basis legendre-modal \
   --volume-quad-1d 12 --error-volume-quad-1d 24 -pr 12 \
   --amgx-solver BICGSTAB \
   --amgx-config configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json
 ```
 
-Additional device scaling diagnostics on 2026-07-26 used `scripts/gpu/diagnose_diff_rea_matrix_scaling.py` with the existing PCGF Chebyshev/L1 config unchanged.  Symmetric Jacobi scaling is cheap and preserves symmetry, but it is not recommended for this config: on the p6/ms0.04 raw-CUDA CSR case it increased nodal PCGF iterations from 32 to 242, and modal PCGF still reached the 2000 iteration limit.  The modal matrix remained symmetric to roundoff, so the current evidence points to AMG/coarsening sensitivity rather than a raw-CUDA orientation bug.  Details are in `docs/algorithms/diff_rea_matrix_scaling_diagnostics.md`.
+Additional device scaling diagnostics on 2026-07-26 used `scripts/gpu/diagnose_diffusion_matrix_scaling.py` with the existing PCGF Chebyshev/L1 config unchanged.  Symmetric Jacobi scaling is cheap and preserves symmetry, but it is not recommended for this config: on the p6/ms0.04 raw-CUDA CSR case it increased nodal PCGF iterations from 32 to 242, and modal PCGF still reached the 2000 iteration limit.  The modal matrix remained symmetric to roundoff, so the current evidence points to AMG/coarsening sensitivity rather than a raw-CUDA orientation bug.  Details are in `docs/algorithms/diffusion_matrix_scaling_diagnostics.md`.
 
-Focused modal preconditioner sweeps on 2026-07-26 used `scripts/gpu/sweep_diff_rea_amgx_preconditioners.py`.  Disabling aggressive coarsening avoids several modal setup failures and higher Chebyshev orders reduce modal PCGF iterations, but the heavier preconditioner applications did not beat the existing modal choices on the p6/ms0.04 raw-CUDA CSR case.  Representative heavy unscaled solve times were 0.452 s for nodal PCGF/Cheb-L1 aggressive, 23.978 s for modal PCGF/Cheb-L1 aggressive, 28.869 s for modal non-aggressive Cheb order 6, 31.012 s for modal non-aggressive Cheb order 10, and 5.034 s for modal BICGSTAB/classical at physical residual 1.448e-09.  Non-Chebyshev candidates from the local AMGX sources were also generated and screened at p6/ms0.18 and p6/ms0.04 with symmetric scaling controls.  The best fine non-Cheb candidate was direct `BICGSTAB + MULTICOLOR_DILU` at about 5.37 s solve and physical residual 6.70e-11, close to but not better than the existing modal BICGSTAB/classical fallback.  Symmetric diagonal scaling stayed cheap but did not improve the practical modal runs.  AMGX internal `solver.scaling` defaults to `NONE` and is not enabled in these configs; `error_scaling=3` is coarse-grid correction scaling, not hidden matrix scaling.  Details are in `docs/algorithms/diff_rea_modal_amgx_preconditioners.md`.
+Focused modal preconditioner sweeps on 2026-07-26 used `scripts/gpu/sweep_diffusion_amgx_preconditioners.py`.  Disabling aggressive coarsening avoids several modal setup failures and higher Chebyshev orders reduce modal PCGF iterations, but the heavier preconditioner applications did not beat the existing modal choices on the p6/ms0.04 raw-CUDA CSR case.  Representative heavy unscaled solve times were 0.452 s for nodal PCGF/Cheb-L1 aggressive, 23.978 s for modal PCGF/Cheb-L1 aggressive, 28.869 s for modal non-aggressive Cheb order 6, 31.012 s for modal non-aggressive Cheb order 10, and 5.034 s for modal BICGSTAB/classical at physical residual 1.448e-09.  Non-Chebyshev candidates from the local AMGX sources were also generated and screened at p6/ms0.18 and p6/ms0.04 with symmetric scaling controls.  The best fine non-Cheb candidate was direct `BICGSTAB + MULTICOLOR_DILU` at about 5.37 s solve and physical residual 6.70e-11, close to but not better than the existing modal BICGSTAB/classical fallback.  Symmetric diagonal scaling stayed cheap but did not improve the practical modal runs.  AMGX internal `solver.scaling` defaults to `NONE` and is not enabled in these configs; `error_scaling=3` is coarse-grid correction scaling, not hidden matrix scaling.  Details are in `docs/algorithms/diffusion_modal_amgx_preconditioners.md`.
 
-AMGX hierarchy stats for p6 nodal/modal aggressive Chebyshev/L1 runs are recorded in `docs/algorithms/diff_rea_amgx_hierarchy_audit.md`.  The modal hierarchy is smaller than the nodal hierarchy on the fine p6/ms0.04 case, with operator complexity about 1.008 versus 1.038, but PCGF convergence is much worse.  Lowering `dense_lu_num_rows` from 2048 to 128 fixes the modal p6/ms0.18 setup failure and reduces nodal fine setup in one sample, but it does not fix modal PCGF iteration count; repeat this before changing the default config.
+AMGX hierarchy stats for p6 nodal/modal aggressive Chebyshev/L1 runs are recorded in `docs/algorithms/diffusion_amgx_hierarchy_audit.md`.  The modal hierarchy is smaller than the nodal hierarchy on the fine p6/ms0.04 case, with operator complexity about 1.008 versus 1.038, but PCGF convergence is much worse.  Lowering `dense_lu_num_rows` from 2048 to 128 fixes the modal p6/ms0.18 setup failure and reduces nodal fine setup in one sample, but it does not fix modal PCGF iteration count; repeat this before changing the default config.
 
 Recommendation summary from the latest coarse p=4..8 sweep at `-ms 0.18`:
 
-- Nodal best: `legacy-lagrange + PCGF + Chebyshev/L1 aggressive AMG`. Fastest average solve path; default for `scripts/gpu/run_diff_rea_gpu4_hdg.py` when `--amgx-config` is omitted.
+- Nodal best: `legacy-lagrange + PCGF + Chebyshev/L1 aggressive AMG`. Fastest average solve path; default for `scripts/gpu/run_diffusion_reaction_cuda.py` when `--amgx-config` is omitted.
 - Nodal second best: `legacy-lagrange + PCGF + ChebPoly4/L1 aggressive AMG`. Similar accuracy and solve time, with heavier setup.
 - Nodal most robust: `legacy-lagrange + PCGF + classical V-cycle GS AMG`. Conservative SPD baseline; sometimes wins total time when Chebyshev setup dominates small/coarse runs.
 - Modal best/most robust: `legendre-modal + BICGSTAB + classical AMG`. Modal PCGF is still preconditioner-sensitive even though the assembled matrix is symmetric. Direct `BICGSTAB + MULTICOLOR_DILU` is a close diagnostic baseline, but it is not promoted because it did not beat the classical AMG fallback on the fine p6 screen.
@@ -185,7 +190,7 @@ Both standalone runners load the JSON config first, then apply these command-lin
 - `--amgx-tolerance`
 - `--amgx-maxiter`
 
-Set `HDGFEM_GPU4_AMGX_MONITOR=1` to enable AMGX residual/grid/timing prints for benchmark runs. Leave it unset for less noisy timing runs.
+Set `HDGFEM_CUDA_AMGX_MONITOR=1` to enable AMGX residual/grid/timing prints for benchmark runs. Leave it unset for less noisy timing runs.
 
 ## Modal Trace Warning
 

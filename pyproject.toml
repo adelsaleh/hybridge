@@ -1,13 +1,21 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hdgfem"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Self-contained DG/HDG simulator."
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = [
     "numba",
     "numpy",
@@ -16,21 +24,17 @@ dependencies = [
 
 [project.optional-dependencies]
 mesh = ["gmsh"]
-plot = ["pyvista"]
+pardiso = ["pypardiso>=0.4.7,<0.5"]
+plot = ["matplotlib", "pyvista"]
 test = ["pytest"]
-all = ["gmsh", "pyvista", "pytest"]
+release = ["build", "twine"]
+all = ["gmsh", "matplotlib", "pyvista", "pytest"]
 
-[tool.setuptools]
-packages = [
-    "hdgfem",
-    "hdgfem.assembly",
-    "hdgfem.backends",
-    "hdgfem.core",
-    "hdgfem.io",
-    "hdgfem.kernels",
-    "hdgfem.linalg",
-    "hdgfem.solvers",
-]
+[project.urls]
+Repository = "https://github.com/adelsaleh/hdgfem"
+
+[tool.setuptools.packages.find]
+include = ["hdgfem*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

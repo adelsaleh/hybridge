@@ -662,7 +662,7 @@ def _matplotlib_pyplot(*, show: bool):
         raise RuntimeError(
             "Matplotlib is using a non-interactive backend and no interactive backend could be activated. "
             "Install PyQt/PySide or Tk support, or run with an interactive backend such as "
-            "`MPLBACKEND=QtAgg python scripts/diffusion_reaction/run_diff_rea_cases.py ... --plot`.\n"
+            "`MPLBACKEND=QtAgg python scripts/diffusion_reaction/run_cases.py ... --plot`.\n"
             f"Tried backends:\n{message}"
         )
 
@@ -860,7 +860,7 @@ def plot_solution_comparison(
 ):
     """Plot numerical solution, exact solution, and absolute error.
 
-    This is the solver-oriented helper used by :mod:`hdgfem.solvers.adv_rea`.  For a
+    This is the solver-oriented helper used by :mod:`hdgfem.solvers.advection_reaction`.  For a
     generic single-field plot use :func:`plot_field`.
 
     ``resolution`` controls the numerical and error panels.  ``exact_resolution``

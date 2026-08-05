@@ -1363,8 +1363,9 @@ def solve_pyamgx_csr(
         tolerance: float = 1e-13,
         maxiter: int | None = None,
         verbose: bool | int = 0,
+        return_info: bool = False,
 ):
-    """Solve a CuPy CSR system with PyAMGX and return a CuPy solution."""
+    """Solve a CuPy CSR system with PyAMGX and optionally return native diagnostics."""
     cupy = require_cupy()
     amgx = initialize_pyamgx_once()
     rhs_cp = cupy.asarray(rhs, dtype=cupy.float64)
@@ -1379,6 +1380,7 @@ def solve_pyamgx_csr(
     if config is not None:
         amgx_config = dict(config)
 
+    info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
     cfg = rsrc = mat = vec_b = vec_x = solver = None
     try:
         cfg = amgx.Config().create_from_dict(amgx_config)
@@ -1394,6 +1396,28 @@ def solve_pyamgx_csr(
         solver.solve(vec_b, vec_x)
         vec_x.download_raw(x_cp.data.ptr)
         cupy.cuda.get_current_stream().synchronize()
+
+        try:
+            info["amgx_status"] = str(solver.status)
+        except Exception:
+            pass
+        try:
+            info["amgx_iterations"] = int(solver.iterations_number)
+        except Exception:
+            pass
+        store_residual_history = bool(
+            amgx_config.get("solver", {}).get("store_res_history", 0)
+        )
+        if store_residual_history and info["amgx_iterations"] is not None:
+            history = []
+            first = max(0, info["amgx_iterations"] - 63)
+            for iteration in range(first, info["amgx_iterations"] + 1):
+                try:
+                    history.append(float(solver.get_residual(iteration)))
+                except Exception:
+                    history = []
+                    break
+            info["residual_history"] = tuple(history)
     finally:
         for obj in (solver, mat, vec_x, vec_b, rsrc, cfg):
             if obj is not None:
@@ -1401,7 +1425,7 @@ def solve_pyamgx_csr(
                     obj.destroy()
                 except AttributeError:
                     pass
-    return x_cp
+    return (x_cp, info) if return_info else x_cp
 
 
 _CSR_ROW_SCALE_SOURCE = r"""

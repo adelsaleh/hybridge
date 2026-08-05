@@ -142,7 +142,7 @@ Broader sanity run:
 .venv/bin/python -m pytest \
   tests/test_symmetric_triangle_quadrature_host.py \
   tests/test_space.py \
-  tests/test_diff_rea_solver_class.py \
+  tests/test_diffusion_reaction_solver.py \
   -q
 ```
 

@@ -1,0 +1,20 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "FGMRES",
+    "monitor_residual": 1,
+    "convergence": "ABSOLUTE",
+    "tolerance": 1E-14,
+    "max_iters": 500,
+    "gmres_n_restart": 100,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2",
+    "preconditioner": {
+      "solver": "MULTICOLOR_DILU",
+      "max_iters": 1
+    }
+  }
+}

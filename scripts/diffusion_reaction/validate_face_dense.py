@@ -19,13 +19,13 @@ from hdgfem.assembly.hdg import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.system import eliminate_known_dofs
-from hdgfem.solvers.diff_rea import (
+from hdgfem.solvers.diffusion_reaction import (
     assemble_diffusion_trace_system,
     diffusion_element_boundary_mats,
     local_solvers,
 )
-from hdgfem.solvers.diff_rea_face_dense import assemble_diffusion_face_dense_components
-from scripts.diffusion_reaction.diff_rea_cases import (
+from hdgfem.solvers.diffusion_face_dense import assemble_diffusion_face_dense_components
+from scripts.diffusion_reaction.cases import (
     quadratic_poisson_case,
     quadratic_variable_reaction_case,
     tensor_sine_diffusion_reaction_case,

@@ -44,7 +44,7 @@ Weaknesses and caveats:
 Example:
 
 ```bash
-.venv/bin/python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+.venv/bin/python scripts/advection_reaction/run_upwind_gs_cupyx.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -75,7 +75,7 @@ Weaknesses and caveats:
 Example:
 
 ```bash
-.venv/bin/python scripts/advection_reaction/run_adv_rea_upwind_gs_cupyx.py \
+.venv/bin/python scripts/advection_reaction/run_upwind_gs_cupyx.py \
   -o 6 -ms 0.008 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -107,7 +107,7 @@ Example:
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-.venv/bin/python scripts/gpu/run_adv_rea_gpu4_hdg.py \
+.venv/bin/python scripts/gpu/run_advection_reaction_cuda.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -140,7 +140,7 @@ Weaknesses and caveats:
 Example:
 
 ```bash
-.venv/bin/python scripts/gpu/check_upwind_scc_host_pyamgx_adv_rea.py \
+.venv/bin/python scripts/gpu/check_advection_upwind_scc_host_pyamgx.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
@@ -160,7 +160,7 @@ Use this when comparing GMRES against BiCGSTAB under the same device-side ILU(1)
 Example:
 
 ```bash
-.venv/bin/python scripts/gpu/check_upwind_scc_host_pyamgx_adv_rea.py \
+.venv/bin/python scripts/gpu/check_advection_upwind_scc_host_pyamgx.py \
   -o 6 -ms 0.01 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \

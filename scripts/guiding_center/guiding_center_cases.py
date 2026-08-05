@@ -17,6 +17,22 @@ def _zero_like_xy(x, y):
     return 0.0 * x + 0.0 * y
 
 
+def _array_namespace(*arrays):
+    """Return NumPy or CuPy for the provided arrays without requiring CuPy."""
+    for array in arrays:
+        module = type(array).__module__.split(".", 1)[0]
+        if module == "cupy" or hasattr(array, "__cuda_array_interface__"):
+            import cupy
+
+            return cupy
+    return np
+
+
+def _xy_arrays(x, y):
+    xp = _array_namespace(x, y)
+    return xp, xp.asarray(x, dtype=xp.float64), xp.asarray(y, dtype=xp.float64)
+
+
 @dataclass(frozen=True)
 class GuidingCenterCase:
     """Concrete time-dependent data for one guiding-center run."""
@@ -91,12 +107,101 @@ class GuidingCenterCaseDefinition:
         return case
 
 
-def rho_eq_diocotron_gaussian(x, y, *, r0: float = 0.45, sigma: float = 0.03):
-    """Legacy Gaussian annular density profile retained for comparisons."""
-    x = np.asarray(x, dtype=np.float64)
-    y = np.asarray(y, dtype=np.float64)
-    r = np.sqrt(x * x + y * y)
-    return np.exp(-((r - float(r0)) ** 2) / (2.0 * float(sigma) ** 2))
+def rho_eq_gaussian_annulus(x, y, *, r0: float = 0.45, sigma: float = 0.03):
+    """Legacy Gaussian annular equilibrium density profile."""
+    xp, x_arr, y_arr = _xy_arrays(x, y)
+    r = xp.sqrt(x_arr * x_arr + y_arr * y_arr)
+    width = float(sigma)
+    if width <= 0.0:
+        raise ValueError("sigma must be positive")
+    return xp.exp(-((r - float(r0)) ** 2) / (2.0 * width * width))
+
+
+def diocotron_gaussian_annulus(
+        *,
+        k: int = 3,
+        eps: float = 0.05,
+        r0: float = 0.45,
+        sigma: float = 0.03,
+        theta_shift: float = 0.0,
+) -> GuidingCenterCase:
+    """Return the legacy Gaussian-annulus diocotron perturbation case."""
+    mode = int(k)
+    amplitude = float(eps)
+    radius0 = float(r0)
+    width = float(sigma)
+    shift = float(theta_shift)
+
+    def equilibrium(x, y):
+        return rho_eq_gaussian_annulus(x, y, r0=radius0, sigma=width)
+
+    def initial_density(x, y):
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        theta = xp.arctan2(y_arr, x_arr) - shift
+        return equilibrium(x_arr, y_arr) * (1.0 + amplitude * xp.cos(mode * theta))
+
+    return GuidingCenterCase(
+        key="diocotron_gaussian_annulus",
+        description="Legacy Gaussian-annulus diocotron perturbation with one azimuthal mode, zero potential boundary, and zero density flux.",
+        initial_density=initial_density,
+        potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
+        density_boundary=None,
+        density_transport_boundary_mode="zero-flux",
+        default_domain="disc",
+        equilibrium_density=equilibrium,
+        parameters={"k": mode, "eps": amplitude, "r0": radius0, "sigma": width, "theta_shift": shift},
+    )
+
+
+def rho_eq_annular_band(
+        x,
+        y,
+        *,
+        s_minus: float = 0.79,
+        s_plus: float = 0.80,
+        rho_bar: float = 1.0,
+        edge_width: float = 0.0,
+):
+    """Annular-band equilibrium, optionally with smooth tanh transitions."""
+    inner = float(s_minus)
+    outer = float(s_plus)
+    transition = float(edge_width)
+    if not 0.0 <= inner < outer:
+        raise ValueError("expected 0 <= s_minus < s_plus")
+    if transition < 0.0:
+        raise ValueError("edge_width must be nonnegative")
+    xp, x_arr, y_arr = _xy_arrays(x, y)
+    r = xp.sqrt(x_arr * x_arr + y_arr * y_arr)
+    if transition > 0.0:
+        return 0.5 * float(rho_bar) * (
+            xp.tanh((r - inner) / transition) - xp.tanh((r - outer) / transition)
+        )
+    return xp.where((r >= inner) & (r <= outer), float(rho_bar), 0.0)
+
+
+def rho_eq_super_gaussian_annulus(
+        x,
+        y,
+        *,
+        s_bar: float = 0.795,
+        s_d: float = 0.005,
+        p: float = 10.0,
+        rho_bar: float = 1.0,
+):
+    """Super-Gaussian annulus ``rho_bar * exp(-abs((r-s_bar)/s_d)**p)``."""
+    center = float(s_bar)
+    scale = float(s_d)
+    power = float(p)
+    if center < 0.0:
+        raise ValueError("s_bar must be nonnegative")
+    if scale <= 0.0:
+        raise ValueError("s_d must be positive")
+    if power <= 0.0:
+        raise ValueError("p must be positive")
+    xp, x_arr, y_arr = _xy_arrays(x, y)
+    r = xp.sqrt(x_arr * x_arr + y_arr * y_arr)
+    return float(rho_bar) * xp.exp(-xp.abs((r - center) / scale) ** power)
+
 
 
 def diocotron_k(
@@ -107,34 +212,59 @@ def diocotron_k(
         s_minus: float = 0.79,
         s_plus: float = 0.80,
         rho_bar: float = 1.0,
+        edge_width: float = 0.0,
+        s_bar: float | None = None,
+        s_d: float | None = None,
+        p: float | None = None,
         theta_shift: float = 0.0,
 ) -> GuidingCenterCase:
-    """Return the sharp annular-band single-mode diocotron perturbation case."""
+    """Return an annular-band single-mode diocotron perturbation case.
+
+    ``k`` is the azimuthal mode. Supplying ``p`` selects the radial
+    super-Gaussian profile
+    ``exp(-abs((r-s_bar)/s_d)**p)``. By default, ``s_bar`` and ``s_d`` are
+    inferred from the midpoint and half-width of ``s_minus``/``s_plus``.
+    """
     mode = int(k)
+    if mode < 1:
+        raise ValueError("k must be at least 1")
     amplitude = float(epsilon if eps is None else eps)
     inner = float(s_minus)
     outer = float(s_plus)
     density_level = float(rho_bar)
+    transition = float(edge_width)
+    radial_center = 0.5 * (inner + outer) if s_bar is None else float(s_bar)
+    radial_scale = 0.5 * (outer - inner) if s_d is None else float(s_d)
+    radial_power = None if p is None else float(p)
     shift = float(theta_shift)
 
     def equilibrium(x, y):
-        return rho_eq_diocotron_annulus(
+        if radial_power is not None:
+            return rho_eq_super_gaussian_annulus(
+                x,
+                y,
+                s_bar=radial_center,
+                s_d=radial_scale,
+                p=radial_power,
+                rho_bar=density_level,
+            )
+        return rho_eq_annular_band(
             x,
             y,
             s_minus=inner,
             s_plus=outer,
             rho_bar=density_level,
+            edge_width=transition,
         )
 
     def initial_density(x, y):
-        x_arr = np.asarray(x, dtype=np.float64)
-        y_arr = np.asarray(y, dtype=np.float64)
-        theta = np.arctan2(y_arr, x_arr) - shift
-        return equilibrium(x_arr, y_arr) * (1.0 + amplitude * np.cos(mode * theta))
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        theta = xp.arctan2(y_arr, x_arr) - shift
+        return equilibrium(x_arr, y_arr) * (1.0 + amplitude * xp.cos(mode * theta))
 
     return GuidingCenterCase(
         key="diocotron_k",
-        description="Sharp annular-band diocotron perturbation with one azimuthal mode, zero potential boundary, and zero density flux.",
+        description=f"Annular-band diocotron perturbation with azimuthal mode k={mode}, zero potential boundary, and zero density flux.",
         initial_density=initial_density,
         potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
         density_boundary=None,
@@ -147,225 +277,10 @@ def diocotron_k(
             "s_minus": inner,
             "s_plus": outer,
             "rho_bar": density_level,
-            "theta_shift": shift,
-        },
-    )
-
-def diocotron_azimuthal_perturbation(
-        theta,
-        *,
-        m_min: int = 3,
-        n_modes: int = 100,
-        theta_shift: float = 0.0,
-        xp=np,
-):
-    """Return an equal-amplitude broadband azimuthal perturbation."""
-    if int(m_min) < 1:
-        raise ValueError("m_min must be at least 1")
-    if int(n_modes) < 1:
-        raise ValueError("n_modes must be at least 1")
-
-    theta = xp.asarray(theta)
-    psi = theta - float(theta_shift)
-    psi = (psi + xp.pi) % (2.0 * xp.pi) - xp.pi
-
-    mode_min = int(m_min)
-    mode_count = int(n_modes)
-    mode_max = mode_min + mode_count - 1
-    mean_mode = 0.5 * (mode_min + mode_max)
-    envelope = xp.sinc(mode_count * psi / (2.0 * xp.pi)) / xp.sinc(psi / (2.0 * xp.pi))
-    return envelope * xp.cos(mean_mode * psi)
-
-
-def diocotron_equilibrium_polar(
-        r,
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-        xp=np,
-):
-    """Sharp annular equilibrium ``rho_0(r)``."""
-    inner = float(s_minus)
-    outer = float(s_plus)
-    if not 0.0 <= inner < outer:
-        raise ValueError("expected 0 <= s_minus < s_plus")
-    r = xp.asarray(r)
-    return xp.where((r >= inner) & (r <= outer), float(rho_bar), 0.0)
-
-
-def diocotron_perturbation_polar(
-        r,
-        theta,
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-        epsilon: float = 2.0e-2,
-        m_min: int = 3,
-        n_modes: int = 100,
-        theta_shift: float = 0.0,
-        xp=np,
-):
-    """Return the broadband perturbation ``rho_1(r, theta, 0)``."""
-    rho_0 = diocotron_equilibrium_polar(
-        r,
-        s_minus=s_minus,
-        s_plus=s_plus,
-        rho_bar=rho_bar,
-        xp=xp,
-    )
-    eta = diocotron_azimuthal_perturbation(
-        theta,
-        m_min=m_min,
-        n_modes=n_modes,
-        theta_shift=theta_shift,
-        xp=xp,
-    )
-    return float(epsilon) * rho_0 * eta
-
-
-def diocotron_initial_density_polar(
-        r,
-        theta,
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-        epsilon: float = 2.0e-2,
-        m_min: int = 3,
-        n_modes: int = 100,
-        theta_shift: float = 0.0,
-        xp=np,
-):
-    """Return ``rho_0(r) * (1 + epsilon * eta(theta))``."""
-    rho_0 = diocotron_equilibrium_polar(
-        r,
-        s_minus=s_minus,
-        s_plus=s_plus,
-        rho_bar=rho_bar,
-        xp=xp,
-    )
-    eta = diocotron_azimuthal_perturbation(
-        theta,
-        m_min=m_min,
-        n_modes=n_modes,
-        theta_shift=theta_shift,
-        xp=xp,
-    )
-    return rho_0 * (1.0 + float(epsilon) * eta)
-
-
-def diocotron_initial_density_cartesian(
-        x,
-        y,
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-        epsilon: float = 2.0e-2,
-        m_min: int = 3,
-        n_modes: int = 100,
-        theta_shift: float = 0.0,
-        xp=np,
-):
-    """Cartesian broadband diocotron density wrapper.  Pass ``xp=cupy`` for CuPy arrays."""
-    x = xp.asarray(x)
-    y = xp.asarray(y)
-    r = xp.sqrt(x * x + y * y)
-    theta = xp.arctan2(y, x)
-    return diocotron_initial_density_polar(
-        r,
-        theta,
-        s_minus=s_minus,
-        s_plus=s_plus,
-        rho_bar=rho_bar,
-        epsilon=epsilon,
-        m_min=m_min,
-        n_modes=n_modes,
-        theta_shift=theta_shift,
-        xp=xp,
-    )
-
-
-def rho_eq_diocotron_annulus(
-        x,
-        y,
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-):
-    """Sharp annular diocotron equilibrium density profile."""
-    x = np.asarray(x, dtype=np.float64)
-    y = np.asarray(y, dtype=np.float64)
-    r = np.sqrt(x * x + y * y)
-    return diocotron_equilibrium_polar(
-        r,
-        s_minus=s_minus,
-        s_plus=s_plus,
-        rho_bar=rho_bar,
-    )
-
-
-def diocotron_broadband(
-        *,
-        s_minus: float = 0.79,
-        s_plus: float = 0.80,
-        rho_bar: float = 1.0,
-        epsilon: float = 2.0e-2,
-        eps: float | None = None,
-        m_min: int = 3,
-        n_modes: int = 100,
-        theta_shift: float = 0.0,
-) -> GuidingCenterCase:
-    """Return the sharp-annulus broadband diocotron perturbation case."""
-    inner = float(s_minus)
-    outer = float(s_plus)
-    density_level = float(rho_bar)
-    amplitude = float(epsilon if eps is None else eps)
-    mode_min = int(m_min)
-    mode_count = int(n_modes)
-    shift = float(theta_shift)
-
-    def equilibrium(x, y):
-        return rho_eq_diocotron_annulus(
-            x,
-            y,
-            s_minus=inner,
-            s_plus=outer,
-            rho_bar=density_level,
-        )
-
-    def initial_density(x, y):
-        return diocotron_initial_density_cartesian(
-            x,
-            y,
-            s_minus=inner,
-            s_plus=outer,
-            rho_bar=density_level,
-            epsilon=amplitude,
-            m_min=mode_min,
-            n_modes=mode_count,
-            theta_shift=shift,
-        )
-
-    return GuidingCenterCase(
-        key="diocotron_broadband",
-        description="Sharp-annulus broadband diocotron perturbation with modes m_min..m_min+n_modes-1.",
-        initial_density=initial_density,
-        potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
-        density_boundary=None,
-        density_transport_boundary_mode="zero-flux",
-        default_domain="disc",
-        equilibrium_density=equilibrium,
-        parameters={
-            "s_minus": inner,
-            "s_plus": outer,
-            "rho_bar": density_level,
-            "epsilon": amplitude,
-            "m_min": mode_min,
-            "n_modes": mode_count,
+            "edge_width": transition,
+            "s_bar": radial_center,
+            "s_d": radial_scale,
+            "p": radial_power,
             "theta_shift": shift,
         },
     )
@@ -389,17 +304,21 @@ def rho_helm_wave(
     laplace_factor = wave_x * wave_x + wave_y * wave_y
 
     def phase(x, y, t):
-        return wave_x * (np.asarray(x, dtype=np.float64) - velocity * float(t)) + wave_y * np.asarray(y, dtype=np.float64)
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        return wave_x * (x_arr - velocity * float(t)) + wave_y * y_arr
 
     def potential(x, y, t):
-        return np.cos(phase(x, y, t)) + velocity * np.asarray(y, dtype=np.float64)
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        return xp.cos(phase(x_arr, y_arr, t)) + velocity * y_arr
 
     def density(x, y, t):
-        return laplace_factor * np.cos(phase(x, y, t))
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        return laplace_factor * xp.cos(phase(x_arr, y_arr, t))
 
     def flux(x, y, t):
-        s = phase(x, y, t)
-        return wave_x * np.sin(s), wave_y * np.sin(s) - velocity
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        s = phase(x_arr, y_arr, t)
+        return wave_x * xp.sin(s), wave_y * xp.sin(s) - velocity
 
     return GuidingCenterCase(
         key="rho_helm_wave",
@@ -418,19 +337,19 @@ def rho_helm_wave(
 
 
 CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
-    "diocotron_k": GuidingCenterCaseDefinition(
-        key="diocotron_k",
-        description="Sharp annular-band single-mode diocotron perturbation; default azimuthal mode k=3.",
-        factory=diocotron_k,
+    "diocotron_gaussian_annulus": GuidingCenterCaseDefinition(
+        key="diocotron_gaussian_annulus",
+        description="Legacy Gaussian-annulus diocotron perturbation; default azimuthal mode k=3.",
+        factory=diocotron_gaussian_annulus,
         default_domain="disc",
         default_params={"k": 3},
     ),
-    "diocotron_broadband": GuidingCenterCaseDefinition(
-        key="diocotron_broadband",
-        description="Sharp annular-band broadband diocotron perturbation; default modes m=3,...,102.",
-        factory=diocotron_broadband,
+    "diocotron_k": GuidingCenterCaseDefinition(
+        key="diocotron_k",
+        description="Annular-band single-mode diocotron perturbation; default azimuthal mode k=3.",
+        factory=diocotron_k,
         default_domain="disc",
-        default_params={"m_min": 3, "n_modes": 100},
+        default_params={"k": 3},
     ),
     "rho_helm_wave": GuidingCenterCaseDefinition(
         key="rho_helm_wave",
@@ -458,14 +377,10 @@ __all__ = [
     "GuidingCenterCase",
     "GuidingCenterCaseDefinition",
     "case_definition_by_key",
-    "diocotron_azimuthal_perturbation",
-    "diocotron_broadband",
-    "diocotron_equilibrium_polar",
-    "diocotron_initial_density_cartesian",
-    "diocotron_initial_density_polar",
+    "diocotron_gaussian_annulus",
     "diocotron_k",
-    "diocotron_perturbation_polar",
-    "rho_eq_diocotron_gaussian",
-    "rho_eq_diocotron_annulus",
+    "rho_eq_annular_band",
+    "rho_eq_gaussian_annulus",
+    "rho_eq_super_gaussian_annulus",
     "rho_helm_wave",
 ]

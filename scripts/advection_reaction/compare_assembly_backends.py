@@ -133,27 +133,27 @@ def _load_hdgfem() -> None:
         from hdgfem.core.space import VectorDGField as _VectorDGField
         from hdgfem.linalg.ordering import upwind_scc_trace_ordering as _upwind_scc_trace_ordering
         from hdgfem.linalg.system import eliminate_known_dofs as _eliminate_known_dofs
-        from hdgfem.solvers.diff_rea import (
+        from hdgfem.solvers.diffusion_reaction import (
             _diffusion_is_identity as _diffusion_is_identity,
         )
-        from hdgfem.solvers.diff_rea import (
+        from hdgfem.solvers.diffusion_reaction import (
             _local_solver_blocks_numpy as _local_solver_blocks_numpy,
         )
-        from hdgfem.solvers.diff_rea import (
+        from hdgfem.solvers.diffusion_reaction import (
             _local_solver_pre_mats as _local_solver_pre_mats,
         )
-        from hdgfem.solvers.diff_rea import (
+        from hdgfem.solvers.diffusion_reaction import (
             _local_solver_scalar_inverse as _local_solver_scalar_inverse,
         )
-        from hdgfem.solvers.diff_rea import _normalize_tau as _normalize_tau
-        from hdgfem.solvers.diff_rea import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
-        from hdgfem.solvers.diff_rea import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
+        from hdgfem.solvers.diffusion_reaction import _normalize_tau as _normalize_tau
+        from hdgfem.solvers.diffusion_reaction import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
+        from hdgfem.solvers.diffusion_reaction import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
         try:
-            from scripts.advection_reaction.adv_rea_cases import test2 as _adv_rea_test2
-            from scripts.diffusion_reaction.diff_rea_cases import legacy_case_factories as _legacy_case_factories
+            from scripts.advection_reaction.cases import test2 as _adv_rea_test2
+            from scripts.diffusion_reaction.cases import legacy_case_factories as _legacy_case_factories
         except ModuleNotFoundError:
-            from scripts.advection_reaction.adv_rea_cases import test2 as _adv_rea_test2
-            from scripts.diffusion_reaction.diff_rea_cases import legacy_case_factories as _legacy_case_factories
+            from scripts.advection_reaction.cases import test2 as _adv_rea_test2
+            from scripts.diffusion_reaction.cases import legacy_case_factories as _legacy_case_factories
 
     DGField = _DGField
     DGSpace = _DGSpace
@@ -679,7 +679,7 @@ def parse_args() -> argparse.Namespace:
         "--diff-test",
         choices=("test0", "test2", "test3", "test5", "test6"),
         default="test2",
-        help="manufactured diffusion-reaction problem from hdgfem.solvers.diff_rea",
+        help="manufactured diffusion-reaction problem from hdgfem.solvers.diffusion_reaction",
     )
     parser.add_argument("--stabilization", type=float, default=1.0, help="diffusion-reaction HDG stabilization")
     parser.add_argument("--lc", "--mesh-size", dest="lc", type=float, default=0.35, help="Gmsh target mesh size")
@@ -697,7 +697,7 @@ def parse_args() -> argparse.Namespace:
         "--trace-ordering",
         choices=("none", "upwind-scc"),
         default="none",
-        help="optional advection trace-edge ordering, matching hdgfem.solvers.adv_rea",
+        help="optional advection trace-edge ordering, matching hdgfem.solvers.advection_reaction",
     )
     parser.add_argument(
         "--trace-ordering-flux-tolerance",

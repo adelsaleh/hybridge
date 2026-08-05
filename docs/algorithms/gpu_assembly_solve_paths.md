@@ -45,7 +45,7 @@ The direct CSR path removed essentially all CSR reconstruction time. On this med
 
 ## Validation Anchors
 
-- Diffusion raw-CUDA COO and CSR are checked against NumPy, Numba, and CuPy reduced matrix/RHS assembly through `p <= 6` in `tests/test_diff_rea_assembly_parity.py::test_diffusion_assembly_backends_match_numpy_for_p_le_6`.
+- Diffusion raw-CUDA COO and CSR are checked against NumPy, Numba, and CuPy reduced matrix/RHS assembly through `p <= 6` in `tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_assembly_backends_match_numpy_for_p_le_6`.
 - Diffusion raw-CUDA COO and CSR are checked against each other in the same parity test.
 - Advection-reaction fused raw-CUDA CSR is checked against fused raw-CUDA COO in `tests/test_cupy_backend.py::test_raw_fused_csr_assembly_matches_coo`, including `legacy-lagrange` with `safe` and `coop` LU modes and a `legendre-modal` safe-mode case.
-- Current raw-CUDA diffusion large-run timing is exposed by `scripts/gpu/run_diff_rea_gpu4_hdg.py`, including raw input prep, map/setup, zero, kernel, AMGX setup, AMGX solve, reconstruction, and plot/error timing rows.
+- Current raw-CUDA diffusion large-run timing is exposed by `scripts/gpu/run_diffusion_reaction_cuda.py`, including raw input prep, map/setup, zero, kernel, AMGX setup, AMGX solve, reconstruction, and plot/error timing rows.

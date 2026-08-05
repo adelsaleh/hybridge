@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import csv
 import json
+import shlex
 import math
 import sys
 import time
@@ -45,6 +46,16 @@ class GuidingCenterRunResult:
     diagnostics: list[dict[str, Any]]
     csv_path: Path
     jsonl_path: Path
+
+
+class GuidingCenterArgumentParser(ArgumentParser):
+    """Argument parser that supports shell-like ``@file`` response files."""
+
+    def convert_arg_line_to_args(self, arg_line: str):
+        stripped = arg_line.strip()
+        if not stripped or stripped.startswith("#"):
+            return []
+        return shlex.split(stripped, comments=True)
 
 
 class DiagnosticsRecorder:
@@ -122,7 +133,8 @@ class GuidingCenterPyVistaPanels:
                 scalar_name=self.phi_name,
             )
         shape = (1, 2) if self.include_potential else (1, 1)
-        window_size = [1500, 650] if self.include_potential else [820, 720]
+        base_window_size = [1500, 650] if self.include_potential else [820, 720]
+        window_size = [int(round(2.5 * extent)) for extent in base_window_size]
         self.plotter = self.pv.Plotter(shape=shape, window_size=window_size, off_screen=off_screen)
         self.off_screen = bool(off_screen)
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
@@ -448,6 +460,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "edge_quad_1d": args.edge_quad_1d,
         "dt": args.dt,
         "num_steps": args.num_steps,
+        "time_scheme": args.time_scheme,
         "poisson_tau": args.poisson_tau,
         "poisson_assembly_backend": args.poisson_assembly_backend,
         "poisson_local_backend": args.poisson_local_backend,
@@ -485,6 +498,9 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "transport_raw_lu_mode": args.transport_raw_lu_mode,
         "transport_raw_block_size": args.transport_raw_block_size,
         "transport_raw_matrix_format": args.transport_raw_matrix_format,
+        "transport_initial_guess": args.transport_initial_guess,
+        "transport_retry_policy": args.transport_retry_policy,
+        "transport_retry_amgx_config_path": None if args.transport_retry_amgx_config is None else str(args.transport_retry_amgx_config),
         "verbosity": args.verbosity,
         "plot_every": args.plot_every,
         "plot_resolution": args.plot_resolution,
@@ -492,6 +508,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "screenshot_dir": None if args.screenshot_dir is None else str(args.screenshot_dir),
         "diagnostics_dir": None if args.diagnostics_dir is None else str(args.diagnostics_dir),
         "diagnostics_prefix": args.diagnostics_prefix,
+        "diagnostics_every": args.diagnostics_every,
     }
     for key, value in direct_updates.items():
         if value is not None:
@@ -579,6 +596,14 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("dt must be positive")
     if not 0 <= int(config.verbosity) <= 3:
         raise ValueError("verbosity must be one of 0, 1, 2, or 3")
+    if config.time_scheme not in {"si-euler", "predictor-corrector"}:
+        raise ValueError("time_scheme must be 'si-euler' or 'predictor-corrector'")
+    if config.diagnostics_every < 1:
+        raise ValueError("diagnostics_every must be positive")
+    if config.transport_retry_policy not in {"none", "amgx-robust"}:
+        raise ValueError("transport_retry_policy must be 'none' or 'amgx-robust'")
+    if config.case == "rho_helm_wave" and config.transport_boundary_mode == "zero-flux":
+        raise ValueError("rho_helm_wave requires eliminated exact density boundary data; zero-flux is invalid")
     if config.poisson_assembly_backend == "cupy":
         raise NotImplementedError(
             "Guiding-center Poisson solves do not use assembly_backend='cupy'; "
@@ -613,6 +638,128 @@ def _ensure_field(result, label: str, space, *, name: str):
     return field_from_cupy_coefficients(space, field_device, device=device_id, name=name)
 
 
+
+def _initial_trace_guess_from_field(field, *, trace_basis: str):
+    """Build a reduced interior-edge trace guess from an L2 skeleton projection."""
+    normalized_trace = str(trace_basis).replace("_", "-").lower()
+
+    def _host_face_points(trace_ref):
+        t = trace_ref.quads
+        return np.stack(
+            (
+                np.stack((t, -np.ones_like(t)), axis=1),
+                np.stack((-t, t), axis=1),
+                np.stack((-np.ones_like(t), -t), axis=1),
+            ),
+            axis=1,
+        )
+
+    try:
+        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+        from hdgfem.backends.advection_cuda import as_cupy_trace_space
+    except (ImportError, RuntimeError):
+        cp = None
+    else:
+        cp = require_cupy()
+        cspace = as_cupy_space(field.space)
+        cached = field._device_coefficients_for(cspace.device_id)
+        if cached is not None:
+            trace_host = field.space.trace_space(normalized_trace)
+            trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
+            coeffs = as_cupy_coefficients(field, cspace)
+            basis = cp.asarray(
+                field.space.basis_at(_host_face_points(trace_host).reshape(-1, 2)).reshape(
+                    trace_host.quads.size, 3, field.space.el_dof
+                ).transpose(1, 2, 0),
+                dtype=cp.float64,
+            )
+            values = cp.einsum("ki,fiq->kfq", coeffs, basis)
+            rhs = cp.einsum("kfq,aq,q->kfa", values, trace_ref.bas1d_of_ref_edg_qds, trace_ref.weights)
+            local_coeffs = cp.linalg.solve(trace_ref.M_rf_fc, rhs.reshape(-1, trace_ref.edg_dof).T).T
+            local_coeffs = local_coeffs.reshape(cspace.mesh.num_tri, 3, trace_ref.edg_dof)
+            if cspace.mesh.num_negative_orientations:
+                negative = ~cspace.mesh.orientations
+                if normalized_trace == "legendre-modal":
+                    signs = cp.where(cp.arange(trace_ref.edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
+                    local_coeffs[negative] *= signs[None, :]
+                else:
+                    local_coeffs[negative] = local_coeffs[negative][:, ::-1]
+            full = cp.zeros((cspace.mesh.num_edg, trace_ref.edg_dof), dtype=cp.float64)
+            counts = cp.zeros(cspace.mesh.num_edg, dtype=cp.float64)
+            edge_ids = cspace.mesh.loc2glob_edge.reshape(-1)
+            cp.add.at(full, edge_ids, local_coeffs.reshape(-1, trace_ref.edg_dof))
+            cp.add.at(counts, edge_ids, cp.ones(edge_ids.size, dtype=cp.float64))
+            full /= cp.maximum(counts[:, None], 1.0)
+            return cp.ascontiguousarray(full[cspace.mesh.int_edges_inds].ravel())
+
+    trace_ref = field.space.trace_space(normalized_trace)
+    face_points = _host_face_points(trace_ref)
+    basis = field.space.basis_at(face_points.reshape(-1, 2)).reshape(
+        trace_ref.quads.size, 3, field.space.el_dof
+    ).transpose(1, 2, 0)
+    values = np.einsum("ki,fiq->kfq", field.coeffs, basis, optimize=True)
+    rhs = np.einsum("kfq,aq,q->kfa", values, trace_ref.bas1d_of_ref_edg_qds, trace_ref.weights, optimize=True)
+    local_coeffs = np.linalg.solve(trace_ref.M_rf_fc, rhs.reshape(-1, trace_ref.edg_dof).T).T
+    local_coeffs = local_coeffs.reshape(field.space.mesh.num_tri, 3, trace_ref.edg_dof)
+    negative = ~field.space.mesh.orientations
+    if np.any(negative):
+        if normalized_trace == "legendre-modal":
+            signs = np.where(np.arange(trace_ref.edg_dof) % 2 == 0, 1.0, -1.0)
+            local_coeffs[negative] *= signs[None, :]
+        else:
+            local_coeffs[negative] = local_coeffs[negative][:, ::-1]
+    full = np.zeros(field.space.layout.trace_shape, dtype=np.float64)
+    counts = np.zeros(field.space.mesh.num_edg, dtype=np.float64)
+    edge_ids = field.space.mesh.loc2glob_edge.reshape(-1)
+    np.add.at(full, edge_ids, local_coeffs.reshape(-1, trace_ref.edg_dof))
+    np.add.at(counts, edge_ids, 1.0)
+    full /= np.maximum(counts[:, None], 1.0)
+    return np.ascontiguousarray(full[field.space.mesh.int_edges_inds].ravel())
+
+
+def _initial_trace_guess_from_callable(space, initial_density, *, trace_basis: str, prefer_device: bool = False):
+    """L2-project an initial-density callable onto the reduced trace skeleton."""
+    normalized_trace = str(trace_basis).replace("_", "-").lower()
+
+    def _project(xp, mesh, trace_ref):
+        edge_vertices = mesh.node_coords[mesh.edges]
+        t = trace_ref.quads
+        points = 0.5 * (
+            (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
+            + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
+        )
+        values = xp.asarray(initial_density(points[:, :, 0], points[:, :, 1]), dtype=xp.float64)
+        num_edges = int(mesh.num_edg)
+        num_points = int(t.size)
+        expected_shape = (num_edges, num_points)
+        if values.ndim == 0:
+            values = xp.full(expected_shape, float(values), dtype=xp.float64)
+        elif tuple(values.shape) == (num_points,):
+            values = xp.broadcast_to(values[None, :], expected_shape)
+        if tuple(values.shape) != expected_shape:
+            raise ValueError(
+                "initial_density must return a scalar, edge-point vector, or "
+                f"{expected_shape} array; got {values.shape}"
+            )
+        rhs = (values * trace_ref.weights[None, :]) @ trace_ref.bas1d_of_ref_edg_qds.T
+        coeffs = xp.linalg.solve(trace_ref.M_rf_fc, rhs.T).T
+        return xp.ascontiguousarray(coeffs[mesh.int_edges_inds].ravel())
+
+    if prefer_device:
+        try:
+            from hdgfem.backends.cupy import as_cupy_space, require_cupy
+            from hdgfem.backends.advection_cuda import as_cupy_trace_space
+        except (ImportError, RuntimeError):
+            pass
+        else:
+            cp = require_cupy()
+            cspace = as_cupy_space(space)
+            trace_ref = as_cupy_trace_space(space.trace_space(normalized_trace), device=cspace.device_id)
+            return _project(cp, cspace.mesh, trace_ref)
+
+    trace_ref = space.trace_space(normalized_trace)
+    return _project(np, space.mesh, trace_ref)
+
 def _build_beta_from_flux(flux, dt: float, space):
     from hdgfem.core.space import VectorDGField
 
@@ -642,6 +789,91 @@ def _build_beta_from_flux(flux, dt: float, space):
     beta_x = space.field(-float(dt) * qy.coeffs, name="beta_x_h")
     beta_y = space.field(float(dt) * qx.coeffs, name="beta_y_h")
     return VectorDGField((beta_x, beta_y), name="beta_h")
+
+
+
+def _field_linear_combination(space, terms, *, name: str):
+    """Combine DG fields without staging device coefficients through host memory."""
+    normalized = [(float(weight), field) for weight, field in terms]
+    device_sets = [set(getattr(field, "_device_coeffs", {}) or {}) for _, field in normalized]
+    common_devices = set.intersection(*device_sets) if device_sets and all(device_sets) else set()
+    if common_devices:
+        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
+
+        cp = require_cupy()
+        device_id = min(common_devices)
+        coeffs = sum(
+            weight * field._device_coefficients_for(device_id)
+            for weight, field in normalized
+        )
+        return field_from_cupy_coefficients(
+            space,
+            cp.ascontiguousarray(coeffs),
+            device=device_id,
+            name=name,
+        )
+    coeffs = sum(weight * field.coeffs for weight, field in normalized)
+    return space.field(np.ascontiguousarray(coeffs), name=name)
+
+
+def _vector_field_linear_combination(space, terms, *, name: str):
+    """Combine vector DG fields componentwise while preserving device storage."""
+    from hdgfem.core.space import VectorDGField
+
+    components = tuple(
+        _field_linear_combination(
+            space,
+            [(weight, vector.components[component]) for weight, vector in terms],
+            name=f"{name}_{component}",
+        )
+        for component in range(2)
+    )
+    return VectorDGField(components, name=name)
+
+
+def _trace_linear_combination(terms):
+    """Return a host or device trace combination matching the supplied traces."""
+    present = [(float(weight), trace) for weight, trace in terms if trace is not None]
+    if len(present) != len(terms):
+        return None
+    first = present[0][1]
+    if type(first).__module__.split(".", 1)[0] == "cupy" or hasattr(first, "__cuda_array_interface__"):
+        from hdgfem.backends.cupy import require_cupy
+
+        cp = require_cupy()
+        return cp.ascontiguousarray(sum(weight * cp.asarray(trace) for weight, trace in present))
+    return np.ascontiguousarray(sum(weight * np.asarray(trace) for weight, trace in present))
+
+
+def _result_trace_guess(result, space, *, reduced: bool = False):
+    """Return a device reduced trace, or a host full/reduced trace as requested."""
+    trace_device = getattr(result, "trace_reduced_device", None)
+    if trace_device is not None:
+        return trace_device
+    trace = getattr(result, "trace", None)
+    if trace is None:
+        return None
+    trace_array = np.asarray(trace, dtype=np.float64)
+    if reduced:
+        trace_array = trace_array.reshape(space.mesh.num_edg, -1)[space.mesh.int_edges_inds]
+    return np.ascontiguousarray(trace_array.reshape(-1))
+
+
+def _average_boundary_data(left, right):
+    """Average two time-level boundary callables for the midpoint solve."""
+    if left is None or right is None:
+        return None
+    return lambda x, y: 0.5 * (left(x, y) + right(x, y))
+
+
+def _build_beta_from_flux_pair(left_flux, right_flux, dt: float, space):
+    """Build ``(dt/2) * v_mid = (dt/4) * (q_left + q_right)^perp``."""
+    midpoint_flux = _vector_field_linear_combination(
+        space,
+        [(0.5, left_flux), (0.5, right_flux)],
+        name="q_mid_h",
+    )
+    return _build_beta_from_flux(midpoint_flux, 0.5 * float(dt), space)
 
 
 def _integral(field) -> float:
@@ -717,6 +949,10 @@ def _solver_metrics(prefix: str, result) -> dict[str, Any]:
             safe_key = "".join(ch if ch.isalnum() else "_" for ch in str(key)).strip("_")
             row[f"{prefix}_detail_{safe_key}"] = float(value)
     if global_solve is not None:
+        attempts = getattr(global_solve, "amgx_attempts", None)
+        if attempts is not None:
+            row[f"{prefix}_amgx_attempt_count"] = int(getattr(global_solve, "amgx_attempt_count", len(attempts)))
+            row[f"{prefix}_amgx_attempts"] = list(attempts)
         row.update(
             {
                 f"{prefix}_solver_iterations": -1 if global_solve.iteration_count is None else global_solve.iteration_count,
@@ -796,7 +1032,7 @@ def _compute_diagnostics(
 
 
 def _make_poisson_options(config: GuidingCenterRunPreset):
-    from hdgfem.solvers.diff_rea import DiffusionReactionHDGOptions
+    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 
     return DiffusionReactionHDGOptions(
         diffusion=1.0,
@@ -833,7 +1069,57 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
 
 
 def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
-    from hdgfem.solvers.adv_rea import AdvectionReactionHDGOptions
+    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
+
+    retry_attempts = None
+    if config.transport_retry_policy == "amgx-robust":
+        fallback_path = config.transport_retry_amgx_config_path
+        if fallback_path is None:
+            fallback_path = str(
+                Path(__file__).resolve().parents[2]
+                / "configs"
+                / "amgx"
+                / "adv_rea_gpu4_hdg_fgmres_dilu_abs.json"
+            )
+        fallback_config = _load_amgx_config(
+            fallback_path,
+            tolerance=config.transport_solver_rtol,
+            absolute_tolerance=config.transport_solver_atol,
+        )
+        primary_config = _load_amgx_config(
+            config.transport_amgx_config_path,
+            tolerance=config.transport_solver_rtol,
+        )
+        retry_attempts = (
+            {
+                "label": "primary-zero",
+                "config": primary_config,
+                "use_initial_guess": False,
+                "scale_system": config.transport_scale_system,
+            },
+            {
+                "label": "robust-zero-unscaled",
+                "config": fallback_config,
+                "use_initial_guess": False,
+                "scale_system": False,
+            },
+            {
+                "label": "robust-correction-1",
+                "config": fallback_config,
+                "use_initial_guess": False,
+                "use_best_solution": True,
+                "residual_correction": True,
+                "scale_system": False,
+            },
+            {
+                "label": "robust-correction-2",
+                "config": fallback_config,
+                "use_initial_guess": False,
+                "use_best_solution": True,
+                "residual_correction": True,
+                "scale_system": False,
+            },
+        )
 
     return AdvectionReactionHDGOptions(
         solver=config.transport_solver,
@@ -848,6 +1134,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
         petsc_monitor=config.transport_petsc_monitor,
         cupyx_solver=config.transport_cupyx_solver,
         amgx_config=_load_amgx_config(config.transport_amgx_config_path, tolerance=config.transport_solver_rtol),
+        amgx_retry_attempts=retry_attempts,
         ilu_drop_tol=config.transport_ilu_drop_tol,
         ilu_fill_factor=config.transport_ilu_fill_factor,
         ilu_failure=config.transport_ilu_failure,
@@ -876,18 +1163,22 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
     from hdgfem.io.output import pretty_print_sections
 
     final = result.diagnostics[-1]
+    run_rows = [
+        ("preset", result.preset_key, "s"),
+        ("case", result.case_key, "s"),
+        ("DG order", result.space.order, ",d"),
+        ("triangles", result.mesh.num_tri, ",d"),
+        ("steps", result.config.num_steps, ",d"),
+        ("dt", result.config.dt, ".4e"),
+    ]
+    radial_power = result.config.case_params.get("p")
+    if radial_power is not None:
+        run_rows.insert(3, ("radial p", radial_power, ".4g"))
     pretty_print_sections(
         [
             (
                 "Run / mesh",
-                [
-                    ("preset", result.preset_key, "s"),
-                    ("case", result.case_key, "s"),
-                    ("p", result.space.order, ",d"),
-                    ("triangles", result.mesh.num_tri, ",d"),
-                    ("steps", result.config.num_steps, ",d"),
-                    ("dt", result.config.dt, ".4e"),
-                ],
+                run_rows,
             ),
             (
                 "Final diagnostics",
@@ -911,12 +1202,13 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
     )
 
 
+
 def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str = "custom") -> GuidingCenterRunResult:
-    """Run a fixed-mesh first-order semi-implicit guiding-center case."""
+    """Run a fixed-mesh guiding-center case with the selected time scheme."""
     _validate_config(config)
     from hdgfem.core.space import DGSpace
-    from hdgfem.solvers.adv_rea import AdvectionReactionHDGSolver
-    from hdgfem.solvers.diff_rea import DiffusionReactionHDGSolver, _timed_call
+    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver, _timed_call
     from scripts.guiding_center.guiding_center_cases import case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
@@ -938,7 +1230,13 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
     zero_reaction = _zero_field(space, name="zero_reaction_h")
     one_reaction = space.constant(1.0, name="one_reaction_h")
     poisson_options = _make_poisson_options(config)
-    transport_boundary_mode = case.density_transport_boundary_mode if config.transport_boundary_mode == "auto" else config.transport_boundary_mode
+    transport_boundary_mode = (
+        case.density_transport_boundary_mode
+        if config.transport_boundary_mode == "auto"
+        else config.transport_boundary_mode
+    )
+    if case.key == "rho_helm_wave" and transport_boundary_mode != "eliminate":
+        raise ValueError("rho_helm_wave requires boundary_mode='eliminate' with exact density data")
     transport_options = _make_transport_options(config, transport_boundary_mode)
 
     equilibrium_potential = None
@@ -966,6 +1264,15 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
     poisson_result = poisson_solver.solve()
     transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
 
+    prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
+    density_trace = _initial_trace_guess_from_callable(
+        space,
+        case.initial_density_at(),
+        trace_basis=config.trace_basis,
+        prefer_device=prefer_device_trace,
+    )
+    potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+
     baseline_mass = _integral(rho_field)
     baseline_q_l2 = _vector_l2_norm(poisson_result.flux)
     recorder = DiagnosticsRecorder(config.diagnostics_dir, config.diagnostics_prefix or preset_key)
@@ -975,12 +1282,11 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
         initial_extra.update(
             {
                 "phase": "initial",
+                "time_scheme": config.time_scheme,
                 "beta_build_time": 0.0,
+                "poisson_time": poisson_result.timings.total,
+                "transport_time": 0.0,
                 "transport_time_total": 0.0,
-                "transport_time_assembly": 0.0,
-                "transport_time_solve": 0.0,
-                "transport_time_reconstruction": 0.0,
-                "transport_host_device_transfer_time": 0.0,
                 "plot_time": 0.0,
             }
         )
@@ -1016,44 +1322,116 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
 
         current_time = 0.0
         for step in range(1, config.num_steps + 1):
-            beta_start = time.perf_counter()
-            beta_h = _build_beta_from_flux(poisson_result.flux, config.dt, space)
-            beta_build_time = time.perf_counter() - beta_start
             next_time = current_time + config.dt
-            density_boundary = case.density_boundary_at(next_time) if transport_boundary_mode != "zero-flux" else None
-            transport_solver.set_problem(rho_field, beta_h, one_reaction, density_boundary)
-            transport_result = transport_solver.solve()
-            rho_field = _ensure_field(transport_result, "transport", space, name="rho_h")
-            poisson_solver.set_source(rho_field)
-            poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
-            poisson_result = poisson_solver.solve()
-            current_time = next_time
+            endpoint_density_boundary = (
+                None if transport_boundary_mode == "zero-flux" else case.density_boundary_at(next_time)
+            )
+            beta_start = time.perf_counter()
+            predictor_beta = _build_beta_from_flux(poisson_result.flux, config.dt, space)
+            beta_build_time = time.perf_counter() - beta_start
 
-            extra = _solver_metrics("poisson", poisson_result)
-            extra.update(_solver_metrics("transport", transport_result))
-            extra.update(
-                {
-                    "phase": "step",
-                    "beta_build_time": beta_build_time,
-                    "poisson_time": poisson_result.timings.total,
-                    "transport_time": transport_result.timings.total,
-                    "host_device_transfer_time": _sum_detail_timings(poisson_result) + _sum_detail_timings(transport_result),
-                    "plot_time": 0.0,
-                }
+            transport_solver.set_problem(
+                rho_field,
+                predictor_beta,
+                one_reaction,
+                endpoint_density_boundary,
             )
-            row = _compute_diagnostics(
-                case=case,
-                rho_field=rho_field,
-                poisson_result=poisson_result,
-                step=step,
-                time_value=current_time,
-                baseline_mass=baseline_mass,
-                baseline_q_l2=baseline_q_l2,
-                equilibrium_potential=equilibrium_potential,
-                equilibrium_density=equilibrium_density,
-                extra=extra,
+            predictor_transport_result = transport_solver.solve(initial_guess=density_trace)
+            predictor_density = _ensure_field(
+                predictor_transport_result,
+                "predictor transport",
+                space,
+                name="rho_predictor_h",
             )
-            if config.plot_every > 0 and step % config.plot_every == 0:
+            predictor_density_trace = _result_trace_guess(
+                predictor_transport_result,
+                space,
+                reduced=True,
+            )
+
+            if config.time_scheme == "si-euler":
+                rho_field = predictor_density
+                density_trace = predictor_density_trace
+                transport_result = predictor_transport_result
+                poisson_solver.set_source(rho_field)
+                poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
+                poisson_result = poisson_solver.solve(initial_guess=potential_trace)
+                potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+                stage_extra: dict[str, Any] = {}
+                poisson_time = poisson_result.timings.total
+                transport_time = transport_result.timings.total
+            else:
+                poisson_solver.set_source(predictor_density)
+                poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
+                predictor_poisson_result = poisson_solver.solve(initial_guess=potential_trace)
+                predictor_potential_trace = _result_trace_guess(
+                    predictor_poisson_result,
+                    space,
+                    reduced=False,
+                )
+
+                midpoint_beta_start = time.perf_counter()
+                midpoint_beta = _build_beta_from_flux_pair(
+                    poisson_result.flux,
+                    predictor_poisson_result.flux,
+                    config.dt,
+                    space,
+                )
+                beta_build_time += time.perf_counter() - midpoint_beta_start
+                midpoint_boundary = (
+                    None
+                    if transport_boundary_mode == "zero-flux"
+                    else _average_boundary_data(
+                        case.density_boundary_at(current_time),
+                        endpoint_density_boundary,
+                    )
+                )
+                midpoint_trace_guess = _trace_linear_combination(
+                    [(0.5, density_trace), (0.5, predictor_density_trace)]
+                )
+                transport_solver.set_problem(
+                    rho_field,
+                    midpoint_beta,
+                    one_reaction,
+                    midpoint_boundary,
+                )
+                transport_result = transport_solver.solve(initial_guess=midpoint_trace_guess)
+                midpoint_density = _ensure_field(
+                    transport_result,
+                    "corrector transport",
+                    space,
+                    name="rho_midpoint_h",
+                )
+                midpoint_density_trace = _result_trace_guess(
+                    transport_result,
+                    space,
+                    reduced=True,
+                )
+                rho_field = _field_linear_combination(
+                    space,
+                    [(2.0, midpoint_density), (-1.0, rho_field)],
+                    name="rho_h",
+                )
+                density_trace = _trace_linear_combination(
+                    [(2.0, midpoint_density_trace), (-1.0, density_trace)]
+                )
+
+                poisson_solver.set_source(rho_field)
+                poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
+                poisson_result = poisson_solver.solve(initial_guess=predictor_potential_trace)
+                potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+                poisson_time = predictor_poisson_result.timings.total + poisson_result.timings.total
+                transport_time = predictor_transport_result.timings.total + transport_result.timings.total
+                stage_extra = _solver_metrics("predictor_transport", predictor_transport_result)
+                stage_extra.update(_solver_metrics("predictor_poisson", predictor_poisson_result))
+                stage_extra.update(_solver_metrics("corrector_transport", transport_result))
+                stage_extra.update(_solver_metrics("final_poisson", poisson_result))
+
+            current_time = next_time
+            should_plot = config.plot_every > 0 and step % config.plot_every == 0
+            should_record = step % config.diagnostics_every == 0 or step == config.num_steps
+            plot_elapsed = 0.0
+            if should_plot:
                 plot_start = time.perf_counter()
                 if plotter is None:
                     plotter = GuidingCenterPyVistaPanels(
@@ -1068,9 +1446,45 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                         include_potential=config.plot_potential,
                     )
                 plotter.update(rho_field, poisson_result.field, step=step, time_value=current_time)
-                row["plot_time"] = time.perf_counter() - plot_start
-            recorder.record(row)
-            _print_step_summary(config, row)
+                plot_elapsed = time.perf_counter() - plot_start
+
+            if should_record:
+                extra = _solver_metrics("poisson", poisson_result)
+                extra.update(_solver_metrics("transport", transport_result))
+                extra.update(stage_extra)
+                extra.update(
+                    {
+                        "phase": "step",
+                        "time_scheme": config.time_scheme,
+                        "beta_build_time": beta_build_time,
+                        "poisson_time": poisson_time,
+                        "transport_time": transport_time,
+                        "host_device_transfer_time": (
+                            _sum_detail_timings(poisson_result)
+                            + _sum_detail_timings(transport_result)
+                            + sum(
+                                float(value)
+                                for key, value in stage_extra.items()
+                                if key.endswith("host_device_transfer_time")
+                            )
+                        ),
+                        "plot_time": plot_elapsed,
+                    }
+                )
+                row = _compute_diagnostics(
+                    case=case,
+                    rho_field=rho_field,
+                    poisson_result=poisson_result,
+                    step=step,
+                    time_value=current_time,
+                    baseline_mass=baseline_mass,
+                    baseline_q_l2=baseline_q_l2,
+                    equilibrium_potential=equilibrium_potential,
+                    equilibrium_density=equilibrium_density,
+                    extra=extra,
+                )
+                recorder.record(row)
+                _print_step_summary(config, row)
     finally:
         recorder.close()
 
@@ -1107,7 +1521,7 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--poisson-ilu-drop-tol", type=float, default=None)
     parser.add_argument("--poisson-ilu-fill-factor", type=float, default=None)
     parser.add_argument("--poisson-raw-matrix-format", choices=("coo", "csr"), default=None)
-    parser.add_argument("--poisson-raw-block-size", type=int, default=None)
+    parser.add_argument("--poisson-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument("--poisson-hdg-postprocess", choices=("none", "primal", "flux", "both"), default=None)
 
     parser.add_argument("--transport-assembly-backend", choices=("numpy", "numba", "cupy", "raw-cuda", "auto"), default=None)
@@ -1129,20 +1543,25 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--transport-ilu-permc-spec", choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"), default=None)
     parser.add_argument("--transport-raw-local-assembly", choices=("precomputed", "fused"), default=None)
     parser.add_argument("--transport-raw-lu-mode", choices=("safe", "coop"), default=None)
-    parser.add_argument("--transport-raw-block-size", type=int, default=None)
+    parser.add_argument("--transport-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument("--transport-raw-matrix-format", choices=("auto", "coo", "csr"), default=None)
+    parser.add_argument("--transport-initial-guess", choices=("solver-default", "initial-density-trace"), default=None)
+    parser.add_argument("--transport-retry-policy", choices=("none", "amgx-robust"), default=None)
+    parser.add_argument("--transport-retry-amgx-config", type=Path, default=None)
     parser.add_argument("--transport-materialize-host-system", action="store_true")
     parser.add_argument("--no-transport-materialize-host-system", action="store_true")
     parser.add_argument("--transport-materialize-host-solution", choices=("auto", "on", "off"), default=None)
 
 
 def _main() -> None:
-    parser = ArgumentParser(
-        description="Run a fixed-mesh first-order semi-implicit guiding-center case.",
+    parser = GuidingCenterArgumentParser(
+        description="Run fixed-mesh semi-implicit Euler or predictor-corrector guiding-center cases.",
         formatter_class=RawDescriptionHelpFormatter,
+        fromfile_prefix_chars="@",
         epilog=(
             "Curated preset configuration lives in scripts/guiding_center/guiding_center_presets.py.\n"
-            "Cases are registered in scripts/guiding_center/guiding_center_cases.py."
+            "Cases are registered in scripts/guiding_center/guiding_center_cases.py.\n"
+            "Long commands can be stored in response files and passed as @path/to/args."
         ),
     )
     parser.add_argument("preset_name", nargs="?", default=None, choices=tuple(sorted(PRESETS)))
@@ -1167,6 +1586,7 @@ def _main() -> None:
     parser.add_argument("--edge-quad-1d", type=int, default=None)
     parser.add_argument("--dt", type=float, default=None)
     parser.add_argument("--num-steps", type=int, default=None)
+    parser.add_argument("--time-scheme", choices=("si-euler", "predictor-corrector"), default=None)
     parser.add_argument("--poisson-tau", type=float, default=None)
     _add_solver_arguments(parser)
     parser.add_argument(
@@ -1187,6 +1607,7 @@ def _main() -> None:
     parser.add_argument("--screenshot-dir", type=Path, default=None)
     parser.add_argument("--diagnostics-dir", type=Path, default=None)
     parser.add_argument("--diagnostics-prefix", default=None)
+    parser.add_argument("--diagnostics-every", type=int, default=None, help="materialize and record diagnostics every N accepted steps")
     args = parser.parse_args()
 
     if args.list_presets:

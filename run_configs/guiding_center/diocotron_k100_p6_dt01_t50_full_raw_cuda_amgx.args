@@ -1,0 +1,2 @@
+# Full single-mode k=100 super-Gaussian annular diocotron stress run.
+--preset diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx
