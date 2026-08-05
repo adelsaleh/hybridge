@@ -631,6 +631,7 @@ def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: fl
 
 
 def _matplotlib_backend_is_noninteractive(backend: str) -> bool:
+    """Return True when the backend cannot open interactive windows."""
     backend = str(backend).lower()
     return (
         backend in {"agg", "pdf", "ps", "svg", "template", "cairo"}
@@ -756,6 +757,7 @@ def plot_scalar_sample_panels_matplotlib(
             percentile: float = 95.0,
             zero_min: bool = False,
     ) -> tuple[float, float]:
+        """Resolve explicit or data-derived color limits for a plot field."""
         if requested_clim is None:
             return _robust_clim(values, percentile=percentile, zero_min=zero_min)
         minimum, maximum = float(requested_clim[0]), float(requested_clim[1])

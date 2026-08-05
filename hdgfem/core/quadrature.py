@@ -95,6 +95,7 @@ _DUNAVANT_RULE_BLOCKS = {
 
 
 def _normalize_volume_quadrature(name: str) -> str:
+    """Normalize a volume quadrature alias to its canonical name."""
     try:
         return _VOLUME_QUADRATURE_ALIASES[str(name).strip().lower()]
     except KeyError as exc:
@@ -193,6 +194,7 @@ def _normalize_basis_type(name: str) -> str:
 
 
 def _quadrature_point_count(order: int, num_1d: int | None) -> int:
+    """Resolve and validate the one-dimensional quadrature point count."""
     if num_1d is None:
         return max(2 * order + 2, 2)
     count = int(num_1d)
@@ -438,6 +440,7 @@ class ReferenceElementData:
     weighted_bas1d_of_ref_edg_qds: np.ndarray = field(init=False)
 
     def __post_init__(self) -> None:
+        """Validate options and tabulate all reference-element data."""
         order = int(self.order)
         if order < 0:
             raise ValueError("order must be nonnegative")

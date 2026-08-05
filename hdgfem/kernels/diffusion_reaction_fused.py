@@ -20,6 +20,7 @@ from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
 
 @njit(cache=True, inline="always", fastmath=True)
 def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_mode):
+    """Map a globally oriented trace dof to its element-local index."""
     if trace_orientation_mode == 1:
         return dof
     return map_edge_dof_bool(is_positive_orientation, dof, edge_dof)
@@ -27,6 +28,7 @@ def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_m
 
 @njit(cache=True, inline="always", fastmath=True)
 def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode):
+    """Return the modal sign associated with one trace orientation."""
     if trace_orientation_mode == 1 and (not is_positive_orientation) and dof % 2 == 1:
         return -1.0
     return 1.0
@@ -130,6 +132,7 @@ def _build_projected_diffusion_operator(
 
 @njit(cache=True, inline="always", fastmath=True)
 def _projected_source_moment(source_data, source_kind, mass_matrix, element, i, nel):
+    """Evaluate one projected source moment on an element."""
     if source_kind == 0:
         return 0.0
     if source_kind == 1:

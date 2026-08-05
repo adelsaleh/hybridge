@@ -22,7 +22,9 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 ### Host Fast
 
 - Command: `python scripts/dev/alpha_test_matrix.py host-fast`
-- Result: 494 passed in 29.33 seconds on 2026-08-05; zero pytest skips or warnings. The lane includes both copy-runnable documented solver examples and full-name solver API and compatibility contract coverage.
+- Result: 495 passed in 29.57 seconds on 2026-08-05; zero pytest skips or warnings.
+  The lane includes copy-runnable documented solver examples, full-name solver
+  API/compatibility coverage, and the package-wide callable docstring guard.
 - Review: no device test modules were collected. The existing optional AMGX
   library banner and deprecated-plugin notice were emitted during the wider
   host process import/CLI lifecycle; this is not GPU test evidence.
@@ -83,7 +85,7 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 ### Broad Repository Suite
 
 - Command: `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib .venv/bin/python -m pytest -q`
-- Result: 608 passed in 47.27 seconds on 2026-08-05; zero skips or pytest warnings.
+- Result: 613 passed in 51.22 seconds on 2026-08-05; zero skips or pytest warnings.
 - Skip review: none; the recommended Gmsh geometry parity parameters ran.
 - Warning review: none. Deliberately singular discontinuous-beta fixtures are
   now assembly-parity tests rather than sparse-solve convergence evidence.

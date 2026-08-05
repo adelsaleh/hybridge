@@ -54,6 +54,7 @@ class BackendCapability:
 
     @property
     def key(self) -> tuple[str, str, str, str | None]:
+        """Return the canonical lookup key for this capability row."""
         return self.equation, self.operation, self.assembly_backend, self.solver_backend
 
 
@@ -65,6 +66,7 @@ def _assembly_capability(
     trace_bases: tuple[str, ...],
     notes: str = "",
 ) -> BackendCapability:
+    """Build an assembly capability entry."""
     return BackendCapability(
         equation=equation,
         operation="assemble",
@@ -89,6 +91,7 @@ def _solve_capabilities(
     trace_bases: tuple[str, ...],
     notes: str = "",
 ) -> tuple[BackendCapability, ...]:
+    """Build solve capabilities for supported solver combinations."""
     return tuple(
         BackendCapability(
             equation=equation,
@@ -371,6 +374,7 @@ def _unsupported(
     solver_backend: str | None,
     reason: str,
 ) -> None:
+    """Raise the stable unsupported-backend error with actionable context."""
     solver_part = "none" if solver_backend is None else solver_backend
     raise UnsupportedBackendConfigurationError(
         "unsupported backend configuration: "

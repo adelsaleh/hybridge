@@ -12,4 +12,5 @@ __all__ = _implementation.__all__
 
 
 def __getattr__(name: str):
+    """Forward attribute lookup to the wrapped object."""
     return getattr(_implementation, name)

@@ -50,13 +50,16 @@ class UpwindBlockGSStats:
 
 
 def _require_numba():
+    """Return Numba or raise the optional-dependency error for this backend."""
     if njit is None:
         raise RuntimeError("upwind block Gauss-Seidel preconditioner requires numba")
 
 
 def _njit(*args, **kwargs):
+    """Compile with Numba when available or provide an identity decorator."""
     if njit is None:  # pragma: no cover
         def decorator(function):
+            """Return the decorated function unchanged when Numba is unavailable."""
             return function
 
         return decorator
@@ -65,6 +68,7 @@ def _njit(*args, **kwargs):
 
 @_njit(cache=True)
 def _count_block_couplings(indptr, indices, num_blocks, block_size, block_levels):
+    """Count lower, diagonal, and upper block couplings in matrix COO data."""
     retained = np.zeros(num_blocks, dtype=np.int64)
     same_level = np.zeros(num_blocks, dtype=np.int64)
     downstream = np.zeros(num_blocks, dtype=np.int64)
@@ -115,6 +119,7 @@ def _fill_block_data(
         block_size,
         block_levels,
 ):
+    """Partition the scalar matrix into diagonal and ordered block couplings."""
     num_blocks = lower_row_ptr.size - 1
     lower_seen = np.full(num_blocks, -1, dtype=np.int64)
     upper_seen = np.full(num_blocks, -1, dtype=np.int64)
@@ -164,6 +169,8 @@ def _forward_level_sweep(
         out,
         block_size,
 ):
+    """Apply one forward Gauss-Seidel sweep over block levels."""
+
     num_levels = level_offsets.size - 1
 
     for level in range(num_levels):
@@ -203,6 +210,8 @@ def _forward_level_sweep_serial(
         out,
         block_size,
 ):
+    """Apply a serial forward sweep over block levels."""
+
     num_levels = level_offsets.size - 1
 
     for level in range(num_levels):
@@ -242,6 +251,7 @@ def _backward_level_sweep(
         out,
         block_size,
 ):
+    """Apply one parallel backward Gauss-Seidel sweep over block levels."""
     num_levels = level_offsets.size - 1
 
     for level in range(num_levels - 1, -1, -1):
@@ -281,6 +291,7 @@ def _backward_level_sweep_serial(
         out,
         block_size,
 ):
+    """Apply one serial backward Gauss-Seidel sweep over block levels."""
     num_levels = level_offsets.size - 1
 
     for level in range(num_levels - 1, -1, -1):
@@ -311,6 +322,7 @@ def _backward_level_sweep_serial(
 
 @_njit(cache=True)
 def _apply_diagonal_blocks(diagonal_blocks, vector, out, block_size):
+    """Apply inverse diagonal blocks independently to a block vector."""
     num_blocks = diagonal_blocks.shape[0]
     for block in range(num_blocks):
         block_base = block * block_size
@@ -340,6 +352,7 @@ class UpwindBlockGSPreconditioner(LinearOperator):
             apply_mode: str,
             sweep: str,
     ):
+        """Construct and validate a level-scheduled block-GS operator."""
         self.level_offsets = np.ascontiguousarray(level_offsets, dtype=np.int64)
         self.lower_row_ptr = np.ascontiguousarray(lower_row_ptr, dtype=np.int64)
         self.lower_col_ind = np.ascontiguousarray(lower_col_ind, dtype=np.int64)
@@ -363,6 +376,7 @@ class UpwindBlockGSPreconditioner(LinearOperator):
         super().__init__(dtype=np.dtype(np.float64), shape=shape)
 
     def _matvec(self, vector):
+        """Apply the block Gauss-Seidel operator to one vector."""
         vector = np.ascontiguousarray(vector, dtype=np.float64)
         if vector.shape != (self.shape[1],):
             raise ValueError(f"vector must have shape ({self.shape[1]},), got {vector.shape}")
@@ -424,6 +438,7 @@ class UpwindBlockGSPreconditioner(LinearOperator):
         return out
 
     def _matmat(self, matrix):
+        """Apply the block Gauss-Seidel operator to multiple vectors."""
         matrix = np.asarray(matrix, dtype=np.float64)
         columns = [self._matvec(matrix[:, col]) for col in range(matrix.shape[1])]
         return np.column_stack(columns)
@@ -438,6 +453,7 @@ class UpwindBlockGSPreconditioner(LinearOperator):
 
 
 def _level_width_array(level_widths: Sequence[int] | object) -> np.ndarray:
+    """Normalize and validate the number of blocks in each level."""
     if hasattr(level_widths, "widths"):
         level_widths = getattr(level_widths, "widths")
     widths = np.asarray(tuple(level_widths), dtype=np.int64)
@@ -451,6 +467,7 @@ def _level_width_array(level_widths: Sequence[int] | object) -> np.ndarray:
 
 
 def _level_offsets_and_block_levels(widths: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Build cumulative offsets and per-block level ids from level widths."""
     level_offsets = np.empty(widths.size + 1, dtype=np.int64)
     level_offsets[0] = 0
     np.cumsum(widths, out=level_offsets[1:])

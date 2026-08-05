@@ -25,13 +25,22 @@
 
 ## Early Alpha Production
 
+### First Alpha Release Gate
+
+- [ ] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`.
+- [x] Confirm no documentation links are stale via the docs structure check (5 passed):
+  - run: `pytest tests/test_documentation_structure.py`
+  - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
+- [ ] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied.
+
+
 Research studies in later sections inform future solver choices but do not block the first alpha unless they expose a correctness or resource-lifecycle defect in a supported path.
 
 ### Release Gate
 
 - [x] Freeze the bounded public solver surface for the alpha: package-level reusable diffusion/advection solver classes, immutable option/result/timing dataclasses, the diffusion assembly result, and canonical one-shot functions. Persistent option/problem updates, per-call `initial_guess`, stable failure categories, legacy tuple returns, and compatibility-module/alias policy are documented in `docs/reference/solver_api_alpha.md` and locked by `tests/test_solver_api_contract.py`. Lower-level assembly helpers and backend combinations remain outside this completed scope.
 - [x] Publish and enforce one backend/residency capability matrix. `hdgfem/backends/capabilities.py` is the source of truth, `docs/reference/backend_capabilities.md` is generated from it, and `tests/test_backend_capabilities.py` covers every listed assembly/solve/reconstruction row plus documentation drift and early unsupported-path failures. Unsupported rows now raise the stable actionable `UnsupportedBackendConfigurationError` before coefficient sampling, optional-backend imports, raw-CUDA launch setup, or matrix assembly. This is a bounded alpha matrix, not a claim that every research backend cross-product is supported.
-- [x] Define the bounded alpha test matrix without claiming complete validation. `scripts/dev/alpha_test_matrix.py` is the executable source of truth for the release-blocking `host-fast`, `install-smoke`, `cpu-parity`, and `gpu-smoke` lanes plus explicitly confirmed `scheduled-evidence`; `tests/test_alpha_test_matrix.py` locks lane policy, targets, trace-basis scope, documentation drift, and required `README.md`/`MANUAL.md`/`TODO.md` links. The 2026-08-05 worktree passed 494 host tests, the installed-wheel smoke, 14 CPU parity cases, the expanded 10-case GPU lane with transfer accounting, and the Gmsh-enabled broad suite with 608 passes and zero skips. The focused Gmsh suite passed all four parameters, covering 16 geometry/order combinations, in 6.94 seconds; `scheduled-evidence` now preflights the optional-but-highly-recommended Gmsh runtime, injects its opt-in flag, and treats absence as a lane failure. The matrix remains representative; PETSc numerical parity, broader performance/convergence runs, hosted Python 3.10/3.12 evidence, and high-mode guiding-center recovery remain open.
+- [x] Define the bounded alpha test matrix without claiming complete validation. `scripts/dev/alpha_test_matrix.py` is the executable source of truth for the release-blocking `host-fast`, `install-smoke`, `cpu-parity`, and `gpu-smoke` lanes plus explicitly confirmed `scheduled-evidence`; `tests/test_alpha_test_matrix.py` locks lane policy, targets, trace-basis scope, documentation drift, and required `README.md`/`MANUAL.md`/`TODO.md` links. The 2026-08-05 worktree passed 495 host tests, the installed-wheel smoke, 14 CPU parity cases, the expanded 10-case GPU lane with transfer accounting, and the Gmsh-enabled broad suite with 613 passes and zero skips. The focused Gmsh suite passed all four parameters, covering 16 geometry/order combinations, in 6.94 seconds; `scheduled-evidence` now preflights the optional-but-highly-recommended Gmsh runtime, injects its opt-in flag, and treats absence as a lane failure. The matrix remains representative; PETSc numerical parity, broader performance/convergence runs, hosted Python 3.10/3.12 evidence, and high-mode guiding-center recovery remain open.
 - [x] Standardize completed-solve convergence and failure semantics across SciPy, PyPardiso, PETSc, Cupyx, host PyAMGX, and raw-CUDA-to-PyAMGX. `SolveResult` now exposes normalized status/failure/finiteness/target fields while preserving native `backend_info`; acceptance requires finite solver-system and original unscaled physical residuals; invalid non-finite inputs fail before backend setup; AMGX retries are capped at eight attempts; stored residual histories are capped at 64 values and feed shared stagnation classification; failed reusable AMGX and owned PETSc/PyAMGX resources have deterministic cleanup paths. `tests/test_solver_convergence_contract.py` covers the host-testable contract and retry terminal behavior, and `docs/reference/solver_convergence_contract.md`, `docs/reference/solver_api_alpha.md`, `README.md`, `MANUAL.md`, and `docs/releases/early_alpha.md` define the bounded scope. This does not claim numerical parity for every optional runtime.
 - [x] Add and qualify the optional `pypardiso` host direct-solver backend for Intel oneMKL-compatible machines. General `pypardiso`/`pardiso` aliases use the real nonsymmetric path; `pypardiso-spd`/`pardiso-spd` validate symmetry, convert full CSR input to upper-triangular storage, and select PARDISO `mtype=2` while validating the result against the original full, unscaled system. The optional extra, lazy imports, process-global locking and cleanup, capability rows, checker coverage, and focused alias/symmetry/cache/failure tests are in place. On the matched p=6, 51,200-triangle Poisson presets, PARDISO SPD reduced solve time from `96.555 s` to `1.605 s` and peak RSS from `5.93 GiB` to `3.05 GiB` versus SciPy SuperLU; full HDG time fell from about `100.1 s` to `6.6 s`, with both physical residuals below `6e-14`. README, manual, install, API, and release-evidence documentation define this bounded recommendation.
 - [x] Complete bounded local alpha package and clean-install qualification. Package metadata uses automatic `hdgfem*` discovery with base/test/mesh/plot/release extras; `scripts/dev/clean_install_smoke.py` verifies wheel contents, installs outside the checkout, imports from the temporary target, runs a public sparse solve, and constructs a DG space. Both the offline default lane and networked `--with-dependencies` mode passed; an sdist and wheel passed `twine check`; all four release-blocking lanes and the broad suite passed in the recorded 2026-08-05 environment. Exact commands, versions, counts, skips, scope, and limits are in `docs/getting_started/installation.md` and `docs/releases/early_alpha.md`.
@@ -44,7 +53,7 @@ Research studies in later sections inform future solver choices but do not block
   roadmap, while `MANUAL.md` and `examples/` provide release-blocking
   end-to-end workflows. `tests/test_documentation_structure.py` locks the
   taxonomy, category indexes, local Markdown links, and no-PDF policy in
-  `host-fast`. The current lane passed 494 tests in 29.33
+  `host-fast`. The current lane passed 495 tests in 29.57
   seconds on 2026-08-05; rerun evidence is recorded in
   `docs/releases/early_alpha.md`.
 - [x] Prepare the local `0.1.0a1` release candidate: remove patch-backup artifacts, ignore future `*.orig` files, rerun all four blocking lanes, build the wheel and sdist, inspect archive contents, and pass `twine check`. The exact committed revision and hosted workflow URL remain pre-tag work.
@@ -311,6 +320,10 @@ This is the highest-priority shared-API project after the bounded early-alpha re
   `docs/backends/README.md` records backend roles and naming policy, and the
   two base-install examples in `examples/` are mirrored in `MANUAL.md` and run
   by `tests/test_documented_examples.py` inside `host-fast`.
+- [x] Complete a package-wide callable documentation sweep. Every Python
+  function, method, fallback decorator, and Numba kernel under `hdgfem/` now
+  has a concise functional docstring; the AST check in
+  `tests/test_documentation_structure.py` prevents regressions.
 - [ ] Refresh guiding-center and GPU-path documentation to match the current FGMRES/direct-DILU transport fallback and modal raw-CUDA diffusion support. Remove the obsolete PBICGSTAB retry and nodal-only raw-diffusion descriptions, then add a documentation consistency check for named configs and scripts.
 
 ### Module Structure

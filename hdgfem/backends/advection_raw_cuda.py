@@ -286,6 +286,7 @@ extern "C" __global__ void finalize_csr_pattern_side_positions(
 
 
 def _csr_pattern_source(ntr: int, max_incident: int = _CSR_MAX_INCIDENT_SIDES, max_neighbors: int = _CSR_MAX_NEIGHBORS) -> str:
+    """Build the C++ source for CSR pattern kernels."""
     return (
         _RAW_CSR_PATTERN_TEMPLATE
         .replace('__CSR_NTR__', str(int(ntr)))
@@ -295,6 +296,7 @@ def _csr_pattern_source(ntr: int, max_incident: int = _CSR_MAX_INCIDENT_SIDES, m
 
 
 def _edge_to_solve_edge_device(cspace):
+    """Build the device map from global edges to reduced solve edges."""
     cupy = require_cupy()
     edge_to_solve = cupy.full(cspace.mesh.num_edg, -1, dtype=cupy.int64)
     edge_to_solve[cspace.mesh.int_edges_inds] = cupy.arange(cspace.mesh.int_edges_inds.size, dtype=cupy.int64)
@@ -1861,6 +1863,7 @@ extern "C" __global__ void reconstruct_advection_raw(
 
 
 def _normalize_raw_lu_mode(lu_mode: str) -> str:
+    """Normalize raw LU mode to supported values."""
     normalized = str(lu_mode).replace('-', '_').lower()
     if normalized not in {'safe', 'coop'}:
         raise ValueError("raw CUDA LU mode must be one of 'safe' or 'coop'")
@@ -1910,6 +1913,7 @@ def _kernel_source(
         lu_mode: str = 'safe',
         trace_orientation: str = 'nodal',
 ) -> str:
+    """Build an instantiated CUDA kernel source string for advection assembly."""
     source = template.replace('NEL', str(int(nel))).replace('NTR', str(int(ntr))).replace('NCOLS', str(int(ncols)))
     if nqf is not None:
         source = source.replace('NQF', str(int(nqf)))
@@ -1946,6 +1950,7 @@ def _kernel_source(
 
 
 def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
+    """Compute dynamic shared-memory sizes for advection assembly and reconstruction."""
     ncols = 3 * ntr + 1
     assembly_doubles = nel * nel + nel * ncols
     assembly_bytes = assembly_doubles * 8 + nel * 4 + 256
@@ -1955,6 +1960,7 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
 
 
 def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') -> tuple[int, int]:
+    """Compute shared-memory byte sizes for fused advection kernels."""
     ncols = 3 * ntr + 1
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
     # The fused kernels keep the local operator, all local trace/source columns,
@@ -1975,7 +1981,8 @@ def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') 
     return bytes_, bytes_
 
 
-def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
+def _compile_kernel(cupy, source: str, name: str, shared_bytes: int) -> str:
+    """Compile and cache a raw CUDA kernel source into a callable object."""
     kernel = cupy.RawKernel(source, name, options=('--std=c++11',))
     try:
         kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
@@ -2024,6 +2031,7 @@ def _raw_fused_csr_template() -> str:
 
 
 def _edge_to_solve_edge(mesh) -> np.ndarray:
+    """Map interior global edges to contiguous reduced solve-edge ids."""
     edge_is_free = np.ones(mesh.num_edg, dtype=bool)
     edge_is_free[mesh.bnd_edges_inds] = False
     free_edges = np.flatnonzero(edge_is_free).astype(np.int64)
@@ -2033,12 +2041,14 @@ def _edge_to_solve_edge(mesh) -> np.ndarray:
 
 
 def _interior_side_index(mesh) -> np.ndarray:
+    """Map each interior element side to its contiguous side index."""
     index = np.full((mesh.num_tri, 3), -1, dtype=np.int64)
     index[mesh.interior_elements, mesh.interior_faces] = np.arange(mesh.interior_elements.size, dtype=np.int64)
     return np.ascontiguousarray(index)
 
 
 def _side_flux_offsets(mesh, edge_to_solve_edge: np.ndarray, edg_dof: int) -> np.ndarray:
+    """Compute per-side offsets used for side-by-side flux indexing."""
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[mesh.interior_elements], axis=1).astype(np.int64)
     offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)

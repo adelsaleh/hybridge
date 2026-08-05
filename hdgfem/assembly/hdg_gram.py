@@ -17,10 +17,12 @@ except ImportError:  # pragma: no cover
     prange = range
 
     def njit(*args, **kwargs):
+        """Provide an identity decorator when Numba is unavailable."""
         if args and callable(args[0]):
             return args[0]
 
         def decorate(func):
+            """Return the decorated function unchanged."""
             return func
 
         return decorate
@@ -74,6 +76,7 @@ class ILUBiCGSTABGramInverse:
         iterations = 0
 
         def callback(_):
+            """Count one Krylov iteration."""
             nonlocal iterations
             iterations += 1
 
@@ -155,6 +158,7 @@ class CondensedHDGGramInverse:
         return int(self.local_dofs + self.trace_dofs)
 
     def _trace_matvec(self, trace_vector: np.ndarray) -> np.ndarray:
+        """Apply the statically condensed trace Schur complement."""
         trace_by_edge = np.asarray(trace_vector, dtype=np.float64).reshape(-1, self.edge_dofs)
         element_contrib = _condensed_schur_element_contrib(
             trace_by_edge,
@@ -172,6 +176,7 @@ class CondensedHDGGramInverse:
         return out.reshape(-1)
 
     def _trace_preconditioner(self, trace_vector: np.ndarray) -> np.ndarray:
+        """Apply the edge-block Jacobi inverse to a trace vector."""
         trace_by_edge = np.asarray(trace_vector, dtype=np.float64).reshape(-1, self.edge_dofs)
         out = _apply_edge_block_inverse(trace_by_edge, self.edge_block_inverse)
         return out.reshape(-1)
@@ -232,6 +237,7 @@ class CondensedHDGGramInverse:
         start = time.perf_counter()
 
         def callback(_):
+            """Count one Krylov iteration."""
             nonlocal iterations
             iterations += 1
             if self.verbose_every > 0 and iterations % self.verbose_every == 0:
@@ -359,6 +365,7 @@ class CondensedHDGGramInverse:
 
 @njit(cache=True, parallel=True)
 def _apply_local_rhs_inverse(local_rhs, aff_jacs, reference_mass_inverse, u_block_inverse, local_out, tmp_u):
+    """Apply the element-local Gram inverse to the local RHS blocks."""
     element_count = local_rhs.shape[0]
     element_dofs = reference_mass_inverse.shape[0]
     for element in prange(element_count):
@@ -380,6 +387,7 @@ def _apply_local_rhs_inverse(local_rhs, aff_jacs, reference_mass_inverse, u_bloc
 
 @njit(cache=True, parallel=True)
 def _trace_rhs_element_contrib(tmp_u, face_u_trace, face_free_edges):
+    """Form element contributions to the condensed trace RHS."""
     element_count, face_count, element_dofs, edge_dofs = face_u_trace.shape
     out = np.zeros((element_count, face_count, edge_dofs), dtype=np.float64)
     for element in prange(element_count):
@@ -395,6 +403,7 @@ def _trace_rhs_element_contrib(tmp_u, face_u_trace, face_free_edges):
 
 @njit(cache=True, parallel=True)
 def _condensed_schur_element_contrib(trace_by_edge, u_block_inverse, face_u_trace, face_trace_trace, face_free_edges):
+    """Apply each element condensed Schur block to a trace vector."""
     element_count, face_count, element_dofs, edge_dofs = face_u_trace.shape
     out = np.zeros((element_count, face_count, edge_dofs), dtype=np.float64)
     local_u = np.zeros((element_count, element_dofs), dtype=np.float64)
@@ -428,6 +437,7 @@ def _condensed_schur_element_contrib(trace_by_edge, u_block_inverse, face_u_trac
 
 @njit(cache=True, parallel=True)
 def _apply_edge_block_inverse(trace_by_edge, edge_block_inverse):
+    """Apply independent inverse diagonal blocks to edge trace values."""
     edge_count, edge_dofs = trace_by_edge.shape
     out = np.empty_like(trace_by_edge)
     for edge in prange(edge_count):
@@ -441,6 +451,7 @@ def _apply_edge_block_inverse(trace_by_edge, edge_block_inverse):
 
 @njit(cache=True, parallel=True)
 def _recover_local_u(tmp_u, trace_by_edge, u_block_inverse, face_u_trace, face_free_edges, local_out):
+    """Recover the local scalar field after the condensed trace solve."""
     element_count, face_count, element_dofs, edge_dofs = face_u_trace.shape
     for element in prange(element_count):
         local_u = np.zeros(element_dofs, dtype=np.float64)
@@ -464,6 +475,7 @@ def _recover_local_u(tmp_u, trace_by_edge, u_block_inverse, face_u_trace, face_f
 
 @njit(cache=True, parallel=True)
 def _apply_local_gram(local_solution, trace_by_edge, aff_jacs, reference_mass, u_block, face_u_trace, face_free_edges):
+    """Apply the local blocks of the HDG Gram operator."""
     element_count, face_count, element_dofs, edge_dofs = face_u_trace.shape
     out = np.zeros_like(local_solution)
     for element in prange(element_count):
@@ -494,6 +506,7 @@ def _apply_local_gram(local_solution, trace_by_edge, aff_jacs, reference_mass, u
 
 @njit(cache=True, parallel=True)
 def _trace_apply_element_contrib(local_solution, trace_by_edge, face_u_trace, face_trace_trace, face_free_edges):
+    """Form element contributions to the trace block of a Gram product."""
     element_count, face_count, element_dofs, edge_dofs = face_u_trace.shape
     out = np.zeros((element_count, face_count, edge_dofs), dtype=np.float64)
     u_offset = 0
@@ -512,6 +525,7 @@ def _trace_apply_element_contrib(local_solution, trace_by_edge, face_u_trace, fa
 
 
 def _physical_stiffness_blocks(space: DGSpace) -> np.ndarray:
+    """Assemble physical-element stiffness blocks for the scalar field."""
     mesh = space.mesh
     q = space.quad_data
     gradients = np.einsum(
@@ -531,6 +545,7 @@ def _physical_stiffness_blocks(space: DGSpace) -> np.ndarray:
 
 
 def _face_jump_weight(space: DGSpace, sigma: float, jump_weight: str) -> np.ndarray:
+    """Return unit or mesh-scaled trace jump weights for every face."""
     if jump_weight == "unit":
         return np.ones_like(space.mesh.jacs_el_fc, dtype=np.float64)
     if jump_weight != "scaled":

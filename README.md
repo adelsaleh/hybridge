@@ -60,7 +60,7 @@ python examples/diffusion_reaction_minimal.py
 
 These examples start from a structured mesh, define manufactured PDE data,
 solve the HDG trace system through the package-root API, and verify the field
-error and physical residual. See [MANUAL.md](MANUAL.md#minimal-end-to-end-examples)
+error and physical residual. See [the minimal examples](MANUAL.md#minimal-end-to-end-examples)
 for the annotated source.
 
 List checkout-only manufactured-run presets:
@@ -272,14 +272,17 @@ scheduled performance commands, current evidence, and known gaps are documented
 in [docs/development/alpha_test_matrix.md](docs/development/alpha_test_matrix.md) and
 [docs/releases/early_alpha.md](docs/releases/early_alpha.md).
 
+The host lane also requires a descriptive docstring on every package function,
+method, and Numba kernel through a package-wide AST check.
+
 The scheduled lane requires the recommended Gmsh runtime, preflights its import,
 and enables the opt-in diffusion geometry parity cases instead of silently
 recording them as skips.
 
 The current package candidate is `0.1.0a1`. On 2026-08-05 the candidate passed
-all four local release lanes: 490 host tests, the isolated wheel smoke, 14 CPU
+all four local release lanes: 495 host tests, the isolated wheel smoke, 14 CPU
 parity cases, and 10 GPU smoke cases. The earlier Gmsh-enabled broad repository
-suite passed 606 tests with zero skips, and the four focused Gmsh parameters
+suite passed 613 tests with zero skips, and the four focused Gmsh parameters
 cover 16 geometry/order combinations. The release record retains
 dependency-isolated installation and distribution metadata evidence. The first
 hosted Python 3.10/3.12 CI run remains an explicit pre-tag gate; local success

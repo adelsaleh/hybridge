@@ -53,10 +53,12 @@ class FaceTopology:
 
     @property
     def num_faces(self) -> int:
+        """Return the number of global faces in the topology."""
         return int(self.neighbors.shape[0])
 
     @property
     def num_slots(self) -> int:
+        """Return the fixed number of neighbor slots per face."""
         return int(self.neighbors.shape[1])
 
 
@@ -79,18 +81,22 @@ class FaceDenseSystem:
 
     @property
     def num_rows(self) -> int:
+        """Return the number of block rows in the face system."""
         return int(self.blocks.shape[0])
 
     @property
     def num_slots(self) -> int:
+        """Return the fixed number of block slots per row."""
         return int(self.blocks.shape[1])
 
     @property
     def block_size(self) -> int:
+        """Return the scalar dimension of each dense face block."""
         return int(self.blocks.shape[2])
 
     @property
     def num_dofs(self) -> int:
+        """Return the total number of scalar degrees of freedom."""
         return self.num_rows * self.block_size
 
 

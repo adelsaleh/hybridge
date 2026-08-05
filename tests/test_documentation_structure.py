@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
@@ -94,3 +95,20 @@ def test_local_markdown_links_resolve() -> None:
                 )
 
     assert not failures, "broken local Markdown links:\n" + "\n".join(failures)
+
+
+def test_hdgfem_functions_have_docstrings() -> None:
+    """Require a short description on every package function and method."""
+    missing: list[str] = []
+    for source in sorted((ROOT / "hdgfem").rglob("*.py")):
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if ast.get_docstring(node, clean=False):
+                continue
+            missing.append(
+                f"{source.relative_to(ROOT)}:{node.lineno} ({node.name})"
+            )
+
+    assert not missing, "functions without docstrings:\n" + "\n".join(missing)

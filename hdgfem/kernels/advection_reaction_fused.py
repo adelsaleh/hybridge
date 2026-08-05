@@ -20,6 +20,7 @@ from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
 
 @njit(cache=True, inline="always", fastmath=True)
 def _eval_scalar_coeff(coeffs, basis_values, element, point, nel):
+    """Evaluate a projected or scalar coefficient at one volume point."""
     value = 0.0
     for k in range(nel):
         value += coeffs[element, k] * basis_values[point, k]
@@ -28,6 +29,7 @@ def _eval_scalar_coeff(coeffs, basis_values, element, point, nel):
 
 @njit(cache=True, inline="always", fastmath=True)
 def _eval_scalar_face_coeff(coeffs, face_basis, element, face, point, nel):
+    """Evaluate a projected or scalar coefficient at one face point."""
     value = 0.0
     for k in range(nel):
         value += coeffs[element, k] * face_basis[face, k, point]
@@ -36,6 +38,7 @@ def _eval_scalar_face_coeff(coeffs, face_basis, element, face, point, nel):
 
 @njit(cache=True, inline="always", fastmath=True)
 def _face_normal_flux(beta_coeffs, face_basis, normals, element, face, point, nel):
+    """Evaluate the normal advection flux at one element face point."""
     beta_x = _eval_scalar_face_coeff(beta_coeffs[0], face_basis, element, face, point, nel)
     beta_y = _eval_scalar_face_coeff(beta_coeffs[1], face_basis, element, face, point, nel)
     return beta_x * normals[element, face, 0] + beta_y * normals[element, face, 1]
@@ -43,6 +46,7 @@ def _face_normal_flux(beta_coeffs, face_basis, normals, element, face, point, ne
 
 @njit(cache=True, inline="always", fastmath=True)
 def _advection_tau(tau_kind, tau_scalar, tau_coeffs, face_basis, element, face, point, nel, normal_flux):
+    """Return the upwind stabilization value for a normal flux."""
     if tau_kind == 0:
         return abs(normal_flux)
     if tau_kind == 1:
@@ -52,6 +56,7 @@ def _advection_tau(tau_kind, tau_scalar, tau_coeffs, face_basis, element, face, 
 
 @njit(cache=True, inline="always", fastmath=True)
 def _projected_source_moment(source_data, source_kind, mass_matrix, element, i, nel):
+    """Evaluate one projected source moment on an element."""
     if source_kind == 0:
         return 0.0
     if source_kind == 1:

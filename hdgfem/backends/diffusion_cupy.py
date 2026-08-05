@@ -62,6 +62,7 @@ class CupyDiffusionTraceAssembly:
 
 
 def _as_scalar_or_none(value) -> float | None:
+    """Return a finite scalar coefficient or None for non-scalar data."""
     if np.isscalar(value):
         return float(value)
     try:
@@ -74,6 +75,7 @@ def _as_scalar_or_none(value) -> float | None:
 
 
 def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, float, float] | None:
+    """Return inverse tensor components for a constant diffusion coefficient."""
     scalar = _as_scalar_or_none(diffusion)
     if scalar is not None:
         if scalar <= 0.0:
@@ -276,6 +278,7 @@ def mapped_quads_cupy(cspace):
 
 
 def _require_same_space_dg_field(value, cspace, label: str, backend: str) -> DGField:
+    """Require a DGField bound to the exact space used by device assembly."""
     host_space = cspace.host
     if isinstance(value, DGField):
         value.space.assert_same_mesh(host_space)
@@ -299,6 +302,7 @@ def _require_same_space_dg_field(value, cspace, label: str, backend: str) -> DGF
 
 
 def _raw_cuda_reaction_is_zero(reaction, cspace) -> bool:
+    """Return whether raw CUDA can treat the reaction coefficient as exactly zero."""
     if not isinstance(reaction, DGField):
         return False
     constant_value = reaction.constant_value
@@ -312,6 +316,7 @@ def _raw_cuda_reaction_is_zero(reaction, cspace) -> bool:
 
 
 def _validate_raw_cuda_source(source, cspace):
+    """Validate source data accepted by the raw CUDA diffusion path."""
     if isinstance(source, DGField):
         source.space.assert_same_mesh(cspace.host)
         if source.space is not cspace.host:

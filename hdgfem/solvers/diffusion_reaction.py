@@ -518,6 +518,7 @@ def diffusion_element_boundary_mats(
 def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity: bool | int = 0):
     """Build common local matrices for the diffusion block inverse formula."""
     def substep(label: str, function):
+        """Execute one local-matrix substep with optional timing output."""
         if _verbosity_level(verbosity) >= 2:
             return _timed_call(label, verbosity, function, level=2)[0]
         return function()
@@ -530,6 +531,7 @@ def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity
     reaction_mass = substep("assembling reaction mass matrices", lambda: hdg_assembly.reaction_mass(reaction, space))
 
     def physical_derivatives():
+        """Map reference derivative matrices onto physical elements."""
         d0 = mesh.aff_mats[:, 1, 1, None, None] * d0_base[None] - mesh.aff_mats[:, 1, 0, None, None] * d1_base[None]
         d1 = -mesh.aff_mats[:, 0, 1, None, None] * d0_base[None] + mesh.aff_mats[:, 0, 0, None, None] * d1_base[None]
         return d0, d1
@@ -537,6 +539,7 @@ def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity
     d0, d1 = substep("mapping derivative matrices to physical elements", physical_derivatives)
 
     def boundary_blocks():
+        """Assemble stabilization and normal-flux boundary blocks."""
         m_tau = reaction_mass + np.sum(
             (tau * mesh.jacs_el_fc)[..., None, None] * q.face_element_test_element_trial[None],
             axis=1,
@@ -740,6 +743,7 @@ def _local_solver_blocks_numpy(
 if njit is not None:
     @njit(parallel=True, fastmath=True, cache=True)
     def _build_res_numba(e, d0, d1, mn0, mn1, mkrf_inv, jacs_inv):
+        """Build mixed local diffusion block matrices in parallel with Numba."""
         elements, el_dof, _ = e.shape
         result = np.zeros((elements, 3 * el_dof, 3 * el_dof), dtype=e.dtype)
         identity = np.eye(el_dof, dtype=e.dtype)
@@ -1544,6 +1548,7 @@ class DiffusionReactionHDGSolver:
             options: DiffusionReactionHDGOptions | None = None,
             **option_overrides,
     ) -> None:
+        """Initialize a reusable diffusion-reaction solver for one DG space."""
         self.space = space
         self.options = (options or DiffusionReactionHDGOptions()).with_overrides(**option_overrides)
 
@@ -1636,6 +1641,7 @@ class DiffusionReactionHDGSolver:
         return self.set_problem(source_h, reaction_h, boundary_condition)
 
     def _can_preserve_operator_on_rhs_update(self) -> bool:
+        """Return whether a source update can reuse the assembled trace operator."""
         backend = "numpy" if self.options.assembly_backend == "auto" else str(self.options.assembly_backend)
         return (
             bool(self.options.cache_device_matrix)
@@ -2073,6 +2079,7 @@ class DiffusionReactionHDGSolver:
         )
 
         def assemble_raw_full():
+            """Assemble the complete reduced raw CUDA trace system."""
             source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
             reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
             return assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
@@ -2088,6 +2095,7 @@ class DiffusionReactionHDGSolver:
             )
 
         def assemble_raw_rhs():
+            """Assemble only the reduced raw CUDA RHS for a cached operator."""
             source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
             reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
             return assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
@@ -2130,6 +2138,7 @@ class DiffusionReactionHDGSolver:
 
 
         def reduced_initial_guess():
+            """Normalize an initial trace guess for the reduced solve system."""
             guess = options.initial_guess if options.initial_guess is not None else self._raw_cuda_last_trace_reduced
             if guess is None:
                 return None
@@ -2201,6 +2210,7 @@ class DiffusionReactionHDGSolver:
         self._raw_cuda_last_trace_reduced = trace_reduced_cp
 
         def reconstruct_raw():
+            """Recover trace and local fields through the raw CUDA backend."""
             trace_cp = reconstruct_trace_cupy(trace_reduced_cp, assembly_result.boundary_trace, cspace)
             raw = assembly_result.raw_assembly
             if raw is None:
@@ -2352,6 +2362,7 @@ class DiffusionReactionHDGSolver:
         return self._host_solve_matrix, self._device_solve_matrix
 
     def _can_solve_with_cached_numpy_operator(self) -> bool:
+        """Return whether the cached host trace operator can serve this solve."""
         options = self.options
         backend = "numpy" if options.assembly_backend == "auto" else str(options.assembly_backend)
         return (
@@ -2370,6 +2381,7 @@ class DiffusionReactionHDGSolver:
         )
 
     def _reduced_rhs_from_cached_numpy_operator(self, rhs_full: np.ndarray, boundary_trace: np.ndarray):
+        """Eliminate known trace values from a RHS using the cached host operator."""
         reduction = self.reduction
         if reduction is None:
             raise RuntimeError("cached reduced RHS requires a KnownDofReduction")
@@ -2412,6 +2424,7 @@ class DiffusionReactionHDGSolver:
         trace_space = self.space.trace_space(trace_basis)
 
         def assemble_rhs():
+            """Assemble the reduced RHS for the cached trace operator."""
             tau = _normalize_tau(options.stabilization, self.space)
             source_rhs = hdg_assembly.block_source_moments(self.source, self.space, num_blocks=3, source_block=0)
             trace_lift = diffusion_trace_lift(tau, self.space, trace_space=trace_space)
@@ -2478,6 +2491,7 @@ class DiffusionReactionHDGSolver:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
         def reconstruct():
+            """Recover local mixed fields from the solved trace coefficients."""
             unknowns = hdg_assembly.reconstruct_local_unknowns(
                 trace,
                 source_rhs,
@@ -2545,6 +2559,7 @@ class DiffusionReactionHDGSolver:
         )
 
         def prepare_source():
+            """Validate source and reaction fields for projected Numba assembly."""
             source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="numba")
             reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="numba")
             return source_input, reaction_input
@@ -2556,6 +2571,7 @@ class DiffusionReactionHDGSolver:
         )
 
         def assemble_rhs():
+            """Assemble the reduced RHS for the cached trace operator."""
             return assemble_projected_diffusion_trace_rhs_eliminated_numba(
                 source_input,
                 reaction_input,
@@ -2634,6 +2650,7 @@ class DiffusionReactionHDGSolver:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
         def reconstruct():
+            """Recover local mixed fields from the solved trace coefficients."""
             unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
                 trace,
                 source_input,
@@ -2683,10 +2700,12 @@ class DiffusionReactionHDGSolver:
         )
 
     def _require_problem_or_partial_update(self) -> None:
+        """Allow partial coefficient updates until a complete PDE problem is set."""
         if self.source is None and self.reaction is None and self.boundary_condition is None:
             return
 
     def _require_problem(self) -> None:
+        """Raise when the reusable solver does not hold a complete PDE problem."""
         if not self._problem_is_set:
             raise RuntimeError(
                 "no complete diffusion-reaction problem is set; call set_problem(...) "
@@ -2701,6 +2720,7 @@ class DiffusionReactionHDGSolver:
         verbosity = _verbosity_level(self.options.verbose)
 
         def postprocess():
+            """Compute requested superconvergent primal and flux postprocessing fields."""
             postprocessed_field, postprocessed_flux, cache = _postprocess_diffusion_solution(
                 result.local_unknowns,
                 result.trace,
@@ -2834,6 +2854,7 @@ def solve_diffusion_reaction_hdg(
     projected_numba_diffusion = projected_numba_identity_diffusion or projected_numba_tensor_diffusion
 
     def prepare_data():
+        """Normalize coefficients, stabilization, and backend assembly inputs."""
         tau, _ = _timed_call(
             "normalizing stabilization",
             verbosity,
@@ -2866,6 +2887,7 @@ def solve_diffusion_reaction_hdg(
     effective_local_solver_backend = "numba" if projected_numba_diffusion else local_solver_backend
 
     def build_local_solver():
+        """Build the selected element-local diffusion solver data."""
         if effective_local_solver_backend not in {"numpy", "numba"}:
             raise ValueError("local_solver_backend must be 'numpy' or 'numba'")
         if effective_local_solver_backend == "numba" and _build_res_numba is None:
@@ -2929,6 +2951,7 @@ def solve_diffusion_reaction_hdg(
         )
 
     def assemble_trace():
+        """Assemble the condensed global diffusion trace system."""
         if projected_numba_identity_diffusion:
             from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
 
@@ -3026,6 +3049,7 @@ def solve_diffusion_reaction_hdg(
     diagnostic_rows = hdg_assembly.free_trace_dofs(space, trace_space=trace_space)
     if effective_boundary_mode == "eliminate" and reduction is None:
         def eliminate_boundary_trace():
+            """Eliminate prescribed boundary trace degrees of freedom."""
             known_mask = ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space)
             known_values = trace_system.boundary_trace.ravel()
             return eliminate_known_dofs(
@@ -3096,6 +3120,7 @@ def solve_diffusion_reaction_hdg(
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
     def reconstruct():
+        """Recover local mixed fields from the solved trace coefficients."""
         if projected_numba_identity_diffusion:
             from ..backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
@@ -3149,6 +3174,7 @@ def solve_diffusion_reaction_hdg(
     postprocessing = 0.0
     if postprocess_mode != "none":
         def postprocess():
+            """Compute requested superconvergent primal and flux postprocessing fields."""
             post_field, post_flux, _ = _postprocess_diffusion_solution(
                 local_unknowns,
                 trace,

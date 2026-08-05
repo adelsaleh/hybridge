@@ -73,6 +73,7 @@ extern "C" __global__ void upwind_forward_level(
 
 
 def _forward_level_kernel_source(dtype) -> str:
+    """Build the raw CUDA source for one forward level sweep."""
     return _UPWIND_FORWARD_LEVEL_KERNEL_TEMPLATE.format(
         scalar="float" if dtype == np.dtype(np.float32) else "double"
     )
@@ -105,6 +106,7 @@ class CupyUpwindBlockGSPreconditioner:
             dtype,
             stats: CupyUpwindBlockGSStats,
     ):
+        """Initialize this object."""
         self.cupy = cupy
         self.level_offsets = level_offsets
         self.lower_row_ptr = lower_row_ptr
@@ -147,6 +149,7 @@ class CupyUpwindBlockGSPreconditioner:
         self.operator._upwind_block_gs_impl = self
 
     def _record_apply(self, elapsed: float) -> None:
+        """Record one preconditioner application and its elapsed device time."""
         self.apply_count += 1
         self.apply_seconds += elapsed
         self.local_solve_seconds += elapsed
@@ -157,6 +160,7 @@ class CupyUpwindBlockGSPreconditioner:
         self.operator.copy_seconds = self.copy_seconds
 
     def reset_timing(self) -> None:
+        """Reset accumulated preconditioner call counts and timings."""
         self.apply_count = 0
         self.apply_seconds = 0.0
         self.local_solve_seconds = 0.0
@@ -169,6 +173,7 @@ class CupyUpwindBlockGSPreconditioner:
         self.operator.copy_seconds = 0.0
 
     def matvec(self, vector):
+        """Apply a matrix-vector product."""
         cupy = self.cupy
         start_time = time.perf_counter()
         vec = cupy.asarray(vector, dtype=self.cupy_dtype).reshape(-1)

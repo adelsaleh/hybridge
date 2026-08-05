@@ -1658,6 +1658,8 @@ python scripts/dev/alpha_test_matrix.py gpu-smoke
 ```
 
 `host-fast` runs on every change and does not collect device test modules.
+`host-fast` also requires a descriptive docstring on every package function,
+method, and Numba kernel through a package-wide AST check.
 `install-smoke` builds and imports a wheel outside the source tree for every
 release candidate. `cpu-parity` covers both production trace bases.
 `gpu-smoke` is opt-in for ordinary development but is
@@ -1667,9 +1669,9 @@ skips do not count as GPU evidence.
 `scheduled-evidence` preflights the recommended Gmsh runtime and enables its
 opt-in geometry parity cases; those cases may not be counted as scheduled skips.
 
-The current package candidate is `0.1.0a1`. On 2026-08-05 it passed 490 host
+The current package candidate is `0.1.0a1`. On 2026-08-05 it passed 495 host
 tests, the isolated wheel smoke, 14 CPU parity cases, and 10 GPU smoke cases.
-The current Gmsh-enabled broad suite passed 608 tests with zero skips. The four
+The current Gmsh-enabled broad suite passed 613 tests with zero skips. The four
 focused Gmsh parameters cover 16 geometry/order combinations. The evidence
 record retains the stronger dependency-isolated install smoke and wheel/sdist
 metadata checks. The first hosted `early-alpha` workflow execution on Python

@@ -890,6 +890,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
 
 
 def _raw_assembly_csr_template() -> str:
+    """Convert the raw diffusion assembly template from COO emission to CSR updates."""
     source = _RAW_ASSEMBLY_TEMPLATE
     source = source.replace(
         'extern "C" __global__ void assemble_diffusion_raw(\n        long long* __restrict__ rows,\n        long long* __restrict__ cols,\n        double* __restrict__ data,',
@@ -1398,6 +1399,7 @@ def _kernel_source(
         rhs_only: bool = False,
         source_only: bool = False,
 ) -> str:
+    """Build a parameterized CUDA kernel source for raw diffusion assembly."""
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {'coo', 'csr'}:
         raise ValueError("matrix_format must be 'coo' or 'csr'")
@@ -1416,6 +1418,7 @@ def _kernel_source(
 
 def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     # Serial assembly stores one RHS/solution column at a time.
+    """Compute serial assembly and reconstruction shared-memory requirements."""
     assembly_doubles = 7 * nel * nel + 6 * nel
     assembly_bytes = assembly_doubles * 8 + nel * 4 + 256
     reconstruct_doubles = 7 * nel * nel + 6 * nel
@@ -1424,6 +1427,7 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
 
 
 def _coop_shared_sizes(nel: int, ntr: int, *, ncols: int | None = None) -> int:
+    """Compute cooperative assembly shared-memory requirements."""
     # Cooperative assembly stores all condensed trace/source columns plus one
     # temporary column slab for flux recovery.  For p=6 this is just under the
     # 64 KiB opt-in shared-memory limit on the original benchmark GPU.
@@ -1433,6 +1437,7 @@ def _coop_shared_sizes(nel: int, ntr: int, *, ncols: int | None = None) -> int:
 
 
 def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
+    """Compile a raw CUDA kernel and request its dynamic shared-memory budget."""
     kernel = cupy.RawKernel(source, name, options=('--std=c++11',))
     try:
         kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
@@ -1442,6 +1447,7 @@ def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
 
 
 def _edge_to_solve_edge(mesh) -> np.ndarray:
+    """Map interior global edges to contiguous reduced solve-edge ids."""
     edge_is_free = np.ones(mesh.num_edg, dtype=bool)
     edge_is_free[mesh.bnd_edges_inds] = False
     free_edges = np.flatnonzero(edge_is_free).astype(np.int64)
@@ -1451,12 +1457,14 @@ def _edge_to_solve_edge(mesh) -> np.ndarray:
 
 
 def _interior_side_index(mesh) -> np.ndarray:
+    """Map each interior element side to its contiguous side index."""
     index = np.full((mesh.num_tri, 3), -1, dtype=np.int64)
     index[mesh.interior_elements, mesh.interior_faces] = np.arange(mesh.interior_elements.size, dtype=np.int64)
     return np.ascontiguousarray(index)
 
 
 def _side_flux_offsets(mesh, edge_to_solve_edge: np.ndarray, edg_dof: int) -> np.ndarray:
+    """Compute packed flux-block offsets for all interior element sides."""
     face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
     side_col_counts = np.count_nonzero(face_is_free[mesh.interior_elements], axis=1).astype(np.int64)
     offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
@@ -1466,6 +1474,7 @@ def _side_flux_offsets(mesh, edge_to_solve_edge: np.ndarray, edg_dof: int) -> np
 
 
 def _raw_trace_orientation_mode(trace_ref) -> int:
+    """Select the raw CUDA orientation rule for the active trace basis."""
     kind = getattr(trace_ref, 'kind', '')
     if kind == 'legacy-lagrange' and getattr(trace_ref, 'nodal', False):
         return 0
@@ -2220,6 +2229,7 @@ extern "C" __global__ void primal_postprocess_diffusion_raw(
 
 
 def _raw_primal_postprocess_source(base_nel: int, post_nel: int, post_nq: int) -> str:
+    """Instantiate the raw CUDA primal postprocessing kernel source."""
     return (
         _RAW_PRIMAL_POSTPROCESS_TEMPLATE
         .replace('BASE_NEL', str(int(base_nel)))
@@ -2249,6 +2259,7 @@ def raw_cuda_primal_postprocess_supported_order(block_size: int) -> int:
 
 
 def _select_raw_primal_postprocess_block_size(order: int, requested_block_size: int) -> int:
+    """Choose a valid CUDA block size for primal postprocessing."""
     post_el_dof = (int(order) + 2) * (int(order) + 3) // 2
     post_rows = post_el_dof + 1
     allowed = (32, 64, 128)
@@ -2263,12 +2274,14 @@ def _select_raw_primal_postprocess_block_size(order: int, requested_block_size: 
 
 
 def _raw_primal_postprocess_shared_size(post_el_dof: int, post_nq: int) -> int:
+    """Compute dynamic shared memory required by primal postprocessing."""
     rows = int(post_el_dof) + 1
     doubles = rows * rows + rows + 2 * int(post_nq) + rows
     return doubles * 8 + rows * 4 + 256
 
 
 def _as_scalar_or_none(value) -> float | None:
+    """Return a finite scalar coefficient or None for non-scalar data."""
     if np.isscalar(value):
         return float(value)
     try:
@@ -2281,6 +2294,7 @@ def _as_scalar_or_none(value) -> float | None:
 
 
 def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, float, float] | None:
+    """Return inverse tensor components for a constant diffusion coefficient."""
     scalar = _as_scalar_or_none(diffusion)
     if scalar is not None:
         if scalar <= 0.0:

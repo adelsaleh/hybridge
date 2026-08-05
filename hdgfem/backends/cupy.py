@@ -92,6 +92,7 @@ class CupyReferenceElementData:
 
     @classmethod
     def from_host(cls, quad_data, *, device_id: int) -> "CupyReferenceElementData":
+        """Convert host-side data to device representation."""
         return cls(
             host=quad_data,
             device_id=int(device_id),
@@ -158,6 +159,7 @@ class CupyDGMesh:
 
     @classmethod
     def from_host(cls, mesh, *, device_id: int) -> "CupyDGMesh":
+        """Convert host-side data to device representation."""
         cupy = require_cupy()
         negative_elements, negative_faces = np.nonzero(~mesh.orientations)
         return cls(
@@ -248,6 +250,7 @@ class CupyDGSpace:
 
     @classmethod
     def from_host(cls, space: DGSpace, *, device_id: int) -> "CupyDGSpace":
+        """Convert host-side data to device representation."""
         return cls(
             host=space,
             device_id=int(device_id),
@@ -278,6 +281,7 @@ class CupyTraceReferenceData:
 
     @classmethod
     def from_host(cls, trace_space: DGTraceSpace, *, device_id: int) -> "CupyTraceReferenceData":
+        """Convert host-side data to device representation."""
         return cls(
             host=trace_space,
             device_id=int(device_id),
@@ -294,6 +298,7 @@ class CupyTraceReferenceData:
 
     @property
     def edg_dof(self) -> int:
+        """Return the number of trace degrees of freedom per edge."""
         return self.host.edg_dof
 
 
@@ -1189,6 +1194,7 @@ def build_cupyx_ilu_preconditioner(
     state = {"count": 0, "seconds": 0.0}
 
     def matvec(vec):
+        """Apply a matrix-vector product."""
         start = time.perf_counter()
         out = ilu.solve(vec)
         cupy.cuda.get_current_stream().synchronize()
@@ -1241,6 +1247,7 @@ def build_cupyx_exported_host_ilu_preconditioner(
     cupy.cuda.get_current_stream().synchronize()
 
     def matvec(vec):
+        """Apply a matrix-vector product."""
         rhs_perm = vec[inv_perm_r]
         y = linalg.spsolve_triangular(lower, rhs_perm, lower=True, unit_diagonal=True)
         z = linalg.spsolve_triangular(upper, y, lower=False)
@@ -1309,10 +1316,14 @@ def solve_cupyx_csr(
         kwargs["M"] = preconditioner
 
     class _IterationCounter:
+        """Callback class that counts iterative solver callback invocations."""
+
         def __init__(self):
+            """Initialize the instance."""
             self.count = 0
 
         def __call__(self, *_args, **_kwargs):
+            """Execute the configured call behavior."""
             self.count += 1
 
     counter = _IterationCounter()

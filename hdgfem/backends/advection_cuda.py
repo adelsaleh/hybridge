@@ -36,6 +36,7 @@ from .advection_raw_cuda import (
 
 
 def _flush_c_stdio() -> None:
+    """Flush pending C stdio output before reading native solver diagnostics."""
     try:
         ctypes.CDLL(None).fflush(None)
     except Exception:
@@ -66,6 +67,7 @@ class CupyDGTraceSpace:
 
     @classmethod
     def from_host(cls, trace_space: DGTraceSpace, *, device_id: int) -> "CupyDGTraceSpace":
+        """Convert host-side data to device representation."""
         cp = require_cupy()
         return cls(
             host=trace_space,
@@ -88,6 +90,7 @@ class CupyDGTraceSpace:
 
     @property
     def edg_dof(self) -> int:
+        """Return the number of trace degrees of freedom per edge."""
         return self.host.edg_dof
 
 
@@ -161,16 +164,19 @@ class CudaAdvectionAssembly:
 
 
 def sync_elapsed(start: float) -> float:
+    """Synchronize the active CUDA stream and return elapsed wall time."""
     cp = require_cupy()
     cp.cuda.get_current_stream().synchronize()
     return time.perf_counter() - start
 
 
 def mapped_quads_cupy(cspace: CupyDGSpace):
+    """Return physical volume quadrature points resident on the device."""
     return cspace.mapped_quads
 
 
 def project_callable_cupy(func: Callable, cspace: CupyDGSpace, timings: dict[str, float] | str | None = None, key: str | None = None):
+    """Project an analytic coefficient into the device DG space."""
     if isinstance(timings, str):
         timings = TIMINGS
     cp = require_cupy()
@@ -185,6 +191,7 @@ def project_callable_cupy(func: Callable, cspace: CupyDGSpace, timings: dict[str
 
 
 def source_coefficients_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Return device DG coefficients for the source term."""
     cp = require_cupy()
     if isinstance(source, DGField):
         source.space.assert_same_mesh(cspace.host)
@@ -193,6 +200,7 @@ def source_coefficients_cupy(source, cspace: CupyDGSpace, timings: dict[str, flo
 
 
 def reaction_coefficients_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Normalize reaction data into device coefficients or a scalar value."""
     cp = require_cupy()
     if isinstance(reaction, (int, float, np.integer, np.floating)):
         return cp.empty(1, dtype=cp.float64), float(reaction), True
@@ -204,6 +212,7 @@ def reaction_coefficients_cupy(reaction, cspace: CupyDGSpace, timings: dict[str,
 
 
 def _require_raw_dg_field(value, cspace: CupyDGSpace, label: str) -> DGField:
+    """Require a DGField bound to the exact space used by raw CUDA assembly."""
     if isinstance(value, DGField):
         value.space.assert_same_mesh(cspace.host)
         if value.space is not cspace.host:
@@ -226,6 +235,7 @@ def _require_raw_dg_field(value, cspace: CupyDGSpace, label: str) -> DGField:
 
 
 def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Build the reference advection contraction tensor on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     q = cspace.host.quad_data
@@ -237,6 +247,7 @@ def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, floa
 
 
 def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Assemble element source moments on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -260,11 +271,13 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
 
 
 def beta_dot_normal_from_coeffs(beta_coeffs, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
+    """Evaluate the element-side normal advection flux from DG coefficients."""
     cp = require_cupy()
     return cp.einsum("dKi,Kfd,fiq->Kfq", beta_coeffs, cspace.mesh.normals, trace_ref.bas_of_bd_quads, optimize=True)
 
 
 def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Assemble element reaction mass matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -295,6 +308,7 @@ def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] 
 
 
 def boundary_mass_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Assemble element upwind boundary mass matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     result = cp.einsum(
@@ -311,6 +325,7 @@ def boundary_mass_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTr
 
 
 def advection_mats_cupy(beta_coeffs, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Assemble element advection matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     q = cspace.quad_data
@@ -331,6 +346,7 @@ def advection_mats_cupy(beta_coeffs, cspace: CupyDGSpace, timings: dict[str, flo
 
 
 def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Assemble element-to-trace boundary coupling matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     flux_weight = cp.abs(beta_dot_normal) - beta_dot_normal
@@ -348,6 +364,7 @@ def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: 
 
 
 def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Assemble complete element-local advection-reaction matrices on the device."""
     return (
         reaction_mass_cupy(reaction, cspace, timings)
         + boundary_mass_cupy(beta_dot_normal, cspace, trace_ref, timings)
@@ -356,6 +373,7 @@ def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace,
 
 
 def solve_local_mats(local_mats, rhs, timings: dict[str, float] | None = None, key: str = "local.solve"):
+    """Solve a batch of dense element-local systems on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     result = cp.linalg.solve(local_mats, rhs)
@@ -365,6 +383,7 @@ def solve_local_mats(local_mats, rhs, timings: dict[str, float] | None = None, k
 
 
 def setup_reduced_indices(cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Build COO row and column indices for the reduced trace system."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -395,6 +414,7 @@ def setup_reduced_indices(cspace: CupyDGSpace, timings: dict[str, float] | None 
 
 
 def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Assemble oriented local trace-lift matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -416,6 +436,7 @@ def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTrace
 
 
 def trace_blocks_cupy(solved_el_bd_mats, trace_lift, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Form oriented element Schur-complement trace blocks on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -436,6 +457,7 @@ def trace_blocks_cupy(solved_el_bd_mats, trace_lift, cspace: CupyDGSpace, trace_
 
 
 def oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
+    """Return device trace basis values in global edge orientation."""
     cp = require_cupy()
     mesh = cspace.mesh
     basis = cp.broadcast_to(
@@ -453,6 +475,7 @@ def oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
 
 
 def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+    """Assemble upwind trace mass blocks for interior sides on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -474,6 +497,7 @@ def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_
 
 
 def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, beta_dot_normal, timings: dict[str, float] | None = None):
+    """Pack reduced trace matrix values in device COO ordering."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -491,6 +515,7 @@ def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpa
 
 
 def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Form per-face trace RHS contributions on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     result = (trace_lift @ solved_src[:, None, :, :]).squeeze(-1)
@@ -500,11 +525,13 @@ def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str
 
 
 def boundary_trace_values_cupy(boundary_condition: Callable, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
+    """Evaluate prescribed boundary trace coefficients on the device."""
     cp = require_cupy()
     return cp.asarray(trace_ref.host.boundary_coefficients(boundary_condition)[cspace.host.mesh.bnd_edges_inds], dtype=cp.float64)
 
 
 def build_dof_maps(cspace: CupyDGSpace):
+    """Build device maps for boundary and reduced trace degrees of freedom."""
     cp = require_cupy()
     mesh = cspace.mesh
     edg_dof = cspace.edg_dof
@@ -519,6 +546,7 @@ def build_dof_maps(cspace: CupyDGSpace):
 
 
 def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Eliminate prescribed boundary columns from a device COO trace system."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
@@ -696,6 +724,7 @@ def assemble_reduced_system_cuda(
 
 
 def reconstruct_trace_cupy(trace_reduced, boundary_trace, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Expand reduced trace values into the full device trace vector."""
     cp = require_cupy()
     start = time.perf_counter()
     trace = cp.empty(cspace.mesh.num_edg * cspace.edg_dof, dtype=cp.float64)
@@ -708,6 +737,7 @@ def reconstruct_trace_cupy(trace_reduced, boundary_trace, cspace: CupyDGSpace, t
 
 
 def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assembly: CudaAdvectionAssembly):
+    """Recover device element coefficients from the solved trace field."""
     cp = require_cupy()
     cspace = assembly.cspace
     trace_ref = assembly.trace_ref
@@ -763,6 +793,7 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
 
 
 def _residual_stats_cp(residual, rhs, *, rtol: float, atol: float):
+    """Compute device residual norms and the requested convergence target."""
     cp = require_cupy()
     residual_norm = float(cp.linalg.norm(residual).get())
     rhs_norm = float(cp.linalg.norm(rhs).get())
@@ -782,6 +813,7 @@ class _DeviceCsrMatrixView:
 
 
 def _as_cupyx_csr_matrix(matrix, sparse, cp):
+    """Expose a device CSR view as a Cupyx sparse matrix when needed."""
     if isinstance(matrix, _DeviceCsrMatrixView):
         return sparse.csr_matrix(
             (matrix.data, matrix.indices, matrix.indptr),
@@ -792,6 +824,7 @@ def _as_cupyx_csr_matrix(matrix, sparse, cp):
 
 
 def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
+    """Build a device CSR matrix view from assembled COO or CSR data."""
     system_size = int(assembly.rhs.size)
     if getattr(assembly, "matrix_format", "coo") == "csr":
         if assembly.indptr is None or assembly.indices is None:
@@ -869,6 +902,7 @@ _CSR_ROW_SCALE_KERNELS: dict[int, Any] = {}
 
 
 def _diagonal_scale_csr_rows_in_place(matrix, rhs):
+    """Scale device CSR rows and the RHS by robust diagonal estimates in place."""
     cp = require_cupy()
     device_id = int(cp.cuda.runtime.getDevice())
     kernel = _CSR_ROW_SCALE_KERNELS.get(device_id)
@@ -893,12 +927,14 @@ class _PyAMGXSharedResourceManager:
     """Own one process-wide AMGX Resources handle shared by live solvers."""
 
     def __init__(self):
+        """Initialize the instance."""
         self.pyamgx = None
         self.resource_cfg = None
         self.rsrc = None
         self.refcount = 0
 
     def acquire(self, pyamgx, resource_config: dict):
+        """Acquire the shared AMGX resource handle and increment its owner count."""
         initialize_pyamgx_once()
         if self.rsrc is None:
             self.pyamgx = pyamgx
@@ -908,6 +944,7 @@ class _PyAMGXSharedResourceManager:
         return self.rsrc
 
     def release(self) -> None:
+        """Release one owner and destroy shared AMGX resources when unused."""
         if self.refcount > 0:
             self.refcount -= 1
         if self.refcount != 0:
@@ -927,6 +964,7 @@ _AMGX_SHARED_RESOURCES = _PyAMGXSharedResourceManager()
 
 
 def _close_reusable_amgx_solvers() -> None:
+    """Close every registered reusable AMGX solver and prune the registry."""
     live = []
     for solver in list(_AMGX_REUSABLE_SOLVERS):
         if solver.closed:
@@ -936,6 +974,7 @@ def _close_reusable_amgx_solvers() -> None:
     _AMGX_REUSABLE_SOLVERS[:] = [solver for solver in live if not solver.closed]
 
 def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0):
+    """Build an AMGX solver configuration with normalized controls and diagnostics."""
     from .cupy import default_pyamgx_config
 
     if config is None:
@@ -969,6 +1008,7 @@ class PyAMGXCsrDeviceSolver:
             verbose: bool | int = 0,
             reusable: bool = False,
     ):
+        """Initialize this object."""
         self.cp = require_cupy()
         self.pyamgx = require_pyamgx()
         self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
@@ -994,6 +1034,7 @@ class PyAMGXCsrDeviceSolver:
             raise
 
     def setup(self, matrix) -> float:
+        """Upload and set up a fixed device CSR matrix in AMGX."""
         if self.closed:
             raise RuntimeError("cannot set up a closed PyAMGXCsrDeviceSolver")
         setup_start = time.perf_counter()
@@ -1010,6 +1051,7 @@ class PyAMGXCsrDeviceSolver:
         return time.perf_counter() - setup_start
 
     def solve(self, rhs, *, initial_guess=None):
+        """Solve the configured AMGX system for one device RHS."""
         if self.closed or not self.is_setup:
             raise RuntimeError("PyAMGXCsrDeviceSolver must be set up before solve()")
         if tuple(rhs.shape) != (self.size,):
@@ -1060,6 +1102,7 @@ class PyAMGXCsrDeviceSolver:
         return x, info
 
     def close(self) -> None:
+        """Destroy owned AMGX objects and release the shared resource handle."""
         if self.closed:
             return
         for obj in (self.solver, self.vec_x, self.vec_b, self.mat, self.cfg):
@@ -1075,6 +1118,7 @@ class PyAMGXCsrDeviceSolver:
         self.closed = True
 
     def __del__(self):
+        """Best-effort cleanup for an unclosed AMGX solver instance."""
         try:
             self.close()
         except Exception:

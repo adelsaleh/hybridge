@@ -21,6 +21,7 @@ def njit(*args, **kwargs):
     """Return ``numba.njit`` when available, otherwise a no-op decorator."""
     if nb is None:
         def decorator(function):
+            """Return the decorated function unchanged when Numba is unavailable."""
             return function
 
         return decorator

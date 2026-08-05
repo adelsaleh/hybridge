@@ -46,13 +46,16 @@ class UpwindBlockGSOnTheFlyTimings:
 
 
 def _require_numba() -> None:
+    """Return Numba or raise the optional-dependency error for this backend."""
     if njit is None:
         raise RuntimeError("triplet-driven upwind block-GS construction requires numba")
 
 
 def _njit(*args, **kwargs):
+    """Compile with Numba when available or provide an identity decorator."""
     if njit is None:  # pragma: no cover
         def decorator(function):
+            """Return the decorated function unchanged when Numba is unavailable."""
             return function
 
         return decorator
@@ -61,6 +64,7 @@ def _njit(*args, **kwargs):
 
 @_njit(cache=True)
 def _invert_permutation_kernel(permutation, inverse_permutation):
+    """Build the inverse scalar permutation in compiled code."""
     invalid_entries = 0
     num_entries = permutation.size
     seen = np.zeros(num_entries, dtype=np.uint8)
@@ -84,6 +88,7 @@ def _invert_permutation_kernel(permutation, inverse_permutation):
 
 @_njit(cache=True)
 def _find_or_insert_bounded_col(col_table, counts, row_block, col_block, max_couplings_per_block):
+    """Find or insert a block column in bounded row storage."""
     count = counts[row_block]
     for slot in range(count):
         if col_table[row_block, slot] == col_block:
@@ -113,10 +118,12 @@ def _fill_bounded_forward_blocks_from_block_coo(
         diagonal_blocks,
         lower_values_bounded,
 ):
+    """Fill bounded lower/same/downstream blocks from a block COO matrix."""
     overflow_count = 0
     num_block_entries = block_rows.size
     block_size = diagonal_blocks.shape[1]
 
+    """Fill bounded lower and diagonal blocks from block COO entries."""
     for entry in range(num_block_entries):
         row_block = block_rows[entry]
         col_block = block_cols[entry]
@@ -169,6 +176,7 @@ def _fill_bounded_forward_blocks_from_block_coo(
 
 @_njit(cache=True)
 def _scale_diagonal_and_bounded_lower_blocks(diagonal_blocks, lower_values_bounded, lower_counts, row_scale):
+    """Scale diagonal and lower blocks with per-row factors."""
     zero_diagonal_count = 0
     num_blocks = diagonal_blocks.shape[0]
     block_size = diagonal_blocks.shape[1]
@@ -214,6 +222,7 @@ def _fill_bounded_forward_blocks(
         diagonal_blocks,
         lower_values_bounded,
 ):
+    """Fill bounded forward block structures for triangular-like ordering."""
     lower_triplets = 0
     same_triplets = 0
     downstream_triplets = 0
@@ -284,6 +293,7 @@ def _compact_bounded_lower_blocks(
         lower_col_ind,
         lower_values,
 ):
+    """Compact bounded lower blocks into contiguous CSR-like block storage."""
     block_size = lower_values.shape[1]
     num_blocks = lower_counts.size
 
@@ -300,6 +310,7 @@ def _compact_bounded_lower_blocks(
 
 @_njit(cache=True)
 def _insert_relation_key(table, key):
+    """Insert one SCC relation key into an open-addressing hash table."""
     capacity = table.size
     slot = key % capacity
 
@@ -319,6 +330,7 @@ def _insert_relation_key(table, key):
 
 @_njit(cache=True)
 def _insert_or_get_relation_position(key_table, position_table, key, position):
+    """Return the storage position for one SCC relation key."""
     capacity = key_table.size
     slot = key % capacity
 
@@ -352,6 +364,7 @@ def _count_unique_block_relations(
         same_counts,
         downstream_counts,
 ):
+    """Count unique block dependencies between block row/column SCC partitions."""
     lower_triplets = 0
     same_triplets = 0
     downstream_triplets = 0
@@ -413,6 +426,7 @@ def _fill_forward_blocks(
         diagonal_blocks,
         lower_values,
 ):
+    """Fill compact forward block storage from ordered COO entries."""
     overflow_count = 0
     num_triplets = row_indices.size
 
@@ -458,6 +472,7 @@ def _fill_forward_blocks(
 
 @_njit(cache=True)
 def _sort_lower_blocks_by_column(lower_row_ptr, lower_col_ind, lower_values):
+    """Sort each compact lower-block row by block-column id."""
     block_size = lower_values.shape[1]
     num_blocks = lower_row_ptr.size - 1
 
@@ -482,6 +497,7 @@ def _sort_lower_blocks_by_column(lower_row_ptr, lower_col_ind, lower_values):
 
 @_njit(cache=True, parallel=True)
 def _scale_ordered_coo_rows_kernel(row_indices, matrix_values, rhs, row_scale, scaled_values, scaled_rhs):
+    """Apply row scaling to ordered COO values and the RHS."""
     for entry in prange(matrix_values.size):
         scaled_values[entry] = matrix_values[entry] * row_scale[row_indices[entry]]
     for row in prange(rhs.size):
@@ -489,6 +505,7 @@ def _scale_ordered_coo_rows_kernel(row_indices, matrix_values, rhs, row_scale, s
 
 
 def _level_width_array(level_widths: Sequence[int] | object) -> np.ndarray:
+    """Normalize and validate the number of blocks in each level."""
     if hasattr(level_widths, "widths"):
         level_widths = getattr(level_widths, "widths")
     widths = np.asarray(tuple(level_widths), dtype=np.int64)
@@ -502,6 +519,7 @@ def _level_width_array(level_widths: Sequence[int] | object) -> np.ndarray:
 
 
 def _level_offsets_and_block_levels(widths: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Build cumulative offsets and per-block level ids from level widths."""
     level_offsets = np.empty(widths.size + 1, dtype=np.int64)
     level_offsets[0] = 0
     np.cumsum(widths, out=level_offsets[1:])
@@ -510,6 +528,7 @@ def _level_offsets_and_block_levels(widths: np.ndarray) -> tuple[np.ndarray, np.
 
 
 def _inverse_permutation(permutation: np.ndarray, system_size: int) -> np.ndarray:
+    """Validate a scalar permutation and return its inverse."""
     if permutation.shape != (system_size,):
         raise ValueError(
             f"permutation must have shape ({system_size},), got {permutation.shape}"
@@ -526,10 +545,12 @@ def _inverse_permutation(permutation: np.ndarray, system_size: int) -> np.ndarra
 
 
 def _relation_hash_capacity(num_blocks: int, multiplier: int = 8) -> int:
+    """Choose a power-of-two capacity for the SCC relation hash table."""
     target = max(16, int(num_blocks) * int(multiplier))
     return 1 << (target - 1).bit_length()
 
 def _resolved_apply_mode(apply_mode: str, widths: np.ndarray, parallel_min_width: int) -> str:
+    """Resolve automatic serial or parallel block-sweep execution."""
     if apply_mode not in {"auto", "serial", "parallel"}:
         raise ValueError("apply_mode must be 'auto', 'serial', or 'parallel'")
     if parallel_min_width <= 0:

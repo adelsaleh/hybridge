@@ -107,6 +107,7 @@ def _locate_points_exhaustive_kernel(
 
 
 def _normalize_candidate_indices(indices: np.ndarray, n_points: int) -> np.ndarray:
+    """Normalize nearest-neighbor candidate ids to a two-dimensional array."""
     indices = np.asarray(indices, dtype=np.int64)
     if indices.ndim == 1:
         indices = indices.reshape(n_points, 1)
@@ -236,6 +237,7 @@ def _evaluate_source_values_kernel(
 
 
 def _evaluate_coefficients_at_source_points(field: DGField, xi_src: np.ndarray, src_idx: np.ndarray) -> np.ndarray:
+    """Evaluate a DG field at located source-element reference points."""
     if xi_src.shape[0] == 0:
         return np.empty(0, dtype=np.float64)
     basis_kind, bernstein_exps, bernstein_coeffs, hierarchical_modes, dubiner_pq = basis_module.modal_eval_payload(
@@ -295,6 +297,7 @@ def build_transfer_plan(
 
 
 def _project_values_on_target(values: np.ndarray, target: DGSpace) -> np.ndarray:
+    """Project target-quadrature values into target DG coefficients."""
     rhs = (values * target.quad_data.Krf_w[None, :]) @ target.quad_data.bas_of_quads.T
     coeffs = rhs @ target.quad_data.MKrf_inv
     return np.ascontiguousarray(coeffs, dtype=np.float64)

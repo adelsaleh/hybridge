@@ -469,6 +469,7 @@ class AdvectionReactionHDGSolver:
             options: AdvectionReactionHDGOptions | None = None,
             **option_overrides,
     ) -> None:
+        """Initialize a reusable advection-reaction solver for one DG space."""
         self.space = space
         self.options = (options or AdvectionReactionHDGOptions()).with_overrides(**option_overrides)
 
@@ -784,11 +785,13 @@ class AdvectionReactionHDGSolver:
             return
 
     def _has_complete_problem(self) -> bool:
+        """Return whether all PDE inputs required for a solve are available."""
         if self.source is None or self.beta is None or self.reaction is None:
             return False
         return self.boundary_condition is not None or self.options.boundary_mode == "zero-flux"
 
     def _require_problem(self) -> None:
+        """Raise when the reusable solver does not hold a complete PDE problem."""
         self._problem_is_set = self._has_complete_problem()
         if not self._problem_is_set:
             raise RuntimeError(
@@ -1062,6 +1065,7 @@ def solve_advection_reaction_hdg(
         effective_ilu_fill_factor = 20 if boundary_mode in {"eliminate", "zero-flux"} else 35
 
     def prepare_data():
+        """Normalize coefficient inputs and prepare backend-specific assembly data."""
         if effective_backend == "raw-cuda":
             source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
             reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="raw-cuda")
@@ -1096,6 +1100,7 @@ def solve_advection_reaction_hdg(
     numba_edge_order = None
 
     def trace_ordering_active_edges():
+        """Return active global edges used to build the trace ordering."""
         if boundary_mode not in {"eliminate", "zero-flux"}:
             return None
         active_edge_mask = np.ones(space.mesh.num_edg, dtype=bool)
@@ -1103,6 +1108,7 @@ def solve_advection_reaction_hdg(
         return np.flatnonzero(active_edge_mask).astype(np.int64)
 
     def build_trace_ordering():
+        """Build the upwind SCC ordering for the active trace system."""
         return upwind_scc_trace_ordering(
             space.mesh,
             beta_dot_normal,
@@ -1112,6 +1118,7 @@ def solve_advection_reaction_hdg(
         )
 
     def print_trace_ordering_diagnostics(ordering: GraphOrderingResult) -> None:
+        """Print SCC and wavefront diagnostics for the trace ordering."""
         diagnostics = ordering.diagnostics
         timings = diagnostics.timings
         levels = diagnostics.level_widths
@@ -1140,6 +1147,7 @@ def solve_advection_reaction_hdg(
         )
 
     def save_trace_ordering_diagnostics(ordering: GraphOrderingResult) -> Path | None:
+        """Persist trace-ordering diagnostics beside optional matrix patterns."""
         if matrix_pattern_dir is None:
             return None
         diagnostics = ordering.diagnostics
@@ -1481,6 +1489,7 @@ def solve_advection_reaction_hdg(
         )
 
         def assemble_local_mats():
+            """Assemble and invert the element-local advection-reaction matrices."""
             local_blocks, _ = _timed_call(
                 "assembling boundary mass matrices",
                 verbosity,
@@ -1532,6 +1541,7 @@ def solve_advection_reaction_hdg(
         )
 
         def assemble_global_trace_system():
+            """Assemble the condensed global advection-reaction trace system."""
             trace_lift, _ = _timed_call(
                 "building weighted advection trace lift",
                 verbosity,
@@ -1614,6 +1624,7 @@ def solve_advection_reaction_hdg(
         diagnostic_rows = hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
         if boundary_mode in {"eliminate", "zero-flux"} and reduction is None:
             def eliminate_boundary_trace():
+                """Eliminate prescribed boundary trace degrees of freedom."""
                 known_mask = ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space_host)
                 known_values = boundary_trace.ravel()
                 return eliminate_known_dofs(rows, cols, data, rhs, known_mask, known_values)
@@ -1673,6 +1684,7 @@ def solve_advection_reaction_hdg(
             diagnostics_path = save_trace_ordering_diagnostics(ordering_result)
 
         def save_matrix_patterns():
+            """Save original and upwind-reordered sparse matrix patterns."""
             matrix = assemble_global_matrix(solve_rows, solve_cols, solve_data, solve_rhs.size)
             return save_upwind_reordered_matrix_patterns(
                 matrix,
@@ -1824,6 +1836,7 @@ def solve_advection_reaction_hdg(
         cp = require_cupy()
 
         def raw_reduced_initial_guess():
+            """Normalize an initial trace guess for the reduced raw CUDA system."""
             guess = initial_guess
             if guess is None:
                 return None
@@ -1968,6 +1981,7 @@ def solve_advection_reaction_hdg(
                 )
             else:
                 def reconstruct_from_local_solver():
+                    """Recover element coefficients with the retained local solver data."""
                     nonlocal local_solver, element_boundary_mats
                     if local_solver is None or element_boundary_mats is None:
                         raise RuntimeError(

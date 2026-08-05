@@ -31,6 +31,7 @@ BASIS_DUBINER = 2
 
 
 def _as_points(points: np.ndarray) -> np.ndarray:
+    """Validate and cast point arrays to 2D float coordinates."""
     pts = np.asarray(points, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[1] != 2:
         raise ValueError(f"points must have shape (num_points, 2); got {pts.shape}")
@@ -59,6 +60,7 @@ def bernstein_exponents(order: int) -> tuple[tuple[int, int, int], ...]:
 
 @lru_cache(maxsize=None)
 def _bernstein_exponent_array(order: int) -> np.ndarray:
+    """Return cached Bernstein exponent triples as a contiguous integer array."""
     return np.asarray(bernstein_exponents(order), dtype=np.int64)
 
 
@@ -74,6 +76,7 @@ def bernstein_coefficients(order: int) -> np.ndarray:
 
 @nb.njit(cache=True, fastmath=True)
 def _pow_int(base: float, exponent: int) -> float:
+    """Raise a scalar to a nonnegative integer power inside compiled kernels."""
     value = 1.0
     for _ in range(exponent):
         value *= base
@@ -82,6 +85,7 @@ def _pow_int(base: float, exponent: int) -> float:
 
 @nb.njit(cache=True, fastmath=True)
 def _jacobi_p(n: int, alpha: float, beta: float, x: float) -> float:
+    """Evaluate one Jacobi polynomial by recurrence."""
     if n <= 0:
         return 1.0
     if n == 1:
@@ -108,6 +112,7 @@ def _jacobi_p(n: int, alpha: float, beta: float, x: float) -> float:
 
 @nb.njit(cache=True, fastmath=True)
 def _jacobi_derivative(n: int, alpha: float, beta: float, x: float) -> float:
+    """Evaluate the derivative of one Jacobi polynomial."""
     if n <= 0:
         return 0.0
     return 0.5 * (n + alpha + beta + 1.0) * _jacobi_p(n - 1, alpha + 1.0, beta + 1.0, x)
@@ -115,6 +120,7 @@ def _jacobi_derivative(n: int, alpha: float, beta: float, x: float) -> float:
 
 @nb.njit(cache=True, fastmath=True)
 def _jacobi_derivative_array_kernel(n: int, alpha: float, beta: float, values: np.ndarray) -> np.ndarray:
+    """Evaluate a Jacobi derivative over an array of points."""
     # ``nb.prange`` is intentional here: the default dispatcher below is
     # compiled without ``parallel=True``, while the explicit ``*_parallel``
     # dispatcher reuses the same implementation for top-level bulk tabulation.
@@ -131,6 +137,7 @@ _jacobi_derivative_array_kernel_parallel = nb.njit(parallel=True, cache=True, fa
 
 @nb.njit(cache=True, fastmath=True)
 def _bernstein_basis_kernel(points: np.ndarray, exponents: np.ndarray, coeffs: np.ndarray) -> np.ndarray:
+    """Tabulate Bernstein basis values at reference points."""
     num_points = points.shape[0]
     num_modes = exponents.shape[0]
     out = np.empty((num_points, num_modes), dtype=np.float64)
@@ -155,6 +162,7 @@ _bernstein_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=T
 
 @nb.njit(cache=True, fastmath=True)
 def _bernstein_gradient_kernel(points: np.ndarray, exponents: np.ndarray, coeffs: np.ndarray) -> np.ndarray:
+    """Tabulate Bernstein basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = exponents.shape[0]
     out = np.zeros((num_points, num_modes, 2), dtype=np.float64)
@@ -287,6 +295,7 @@ def hierarchical_c0_mode_indexing(order: int) -> np.ndarray:
 
 @nb.njit(cache=True, fastmath=True)
 def _hierarchical_c0_basis_kernel(order: int, points: np.ndarray, modes: np.ndarray) -> np.ndarray:
+    """Tabulate hierarchical C0 basis values at reference points."""
     num_points = points.shape[0]
     num_modes = modes.shape[0]
     out = np.empty((num_points, num_modes), dtype=np.float64)
@@ -337,6 +346,7 @@ _hierarchical_c0_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fast
 
 @nb.njit(cache=True, fastmath=True)
 def _hierarchical_c0_gradient_kernel(order: int, points: np.ndarray, modes: np.ndarray) -> np.ndarray:
+    """Tabulate hierarchical C0 basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = modes.shape[0]
     out = np.empty((num_points, num_modes, 2), dtype=np.float64)
@@ -469,11 +479,13 @@ def dubiner_pq_order(order: int) -> tuple[tuple[int, int], ...]:
 
 @lru_cache(maxsize=None)
 def _dubiner_pq_array(order: int) -> np.ndarray:
+    """Return cached Dubiner mode indices as a contiguous integer array."""
     return np.ascontiguousarray(np.asarray(dubiner_pq_order(order), dtype=np.int64))
 
 
 @nb.njit(cache=True, fastmath=True)
 def _dubiner_basis_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
+    """Tabulate Dubiner basis values at reference points."""
     num_points = points.shape[0]
     num_modes = pq.shape[0]
     out = np.empty((num_points, num_modes), dtype=np.float64)
@@ -508,6 +520,7 @@ _dubiner_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=Tru
 
 @nb.njit(cache=True, fastmath=True)
 def _dubiner_gradient_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
+    """Tabulate Dubiner basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = pq.shape[0]
     out = np.zeros((num_points, num_modes, 2), dtype=np.float64)
@@ -581,6 +594,7 @@ def _eval_bernstein_modal_value(
         exponents: np.ndarray,
         multinomial: np.ndarray,
 ) -> float:
+    """Evaluate a Bernstein modal basis value at the reference point."""
     lambda1 = 0.5 * (xi + 1.0)
     lambda2 = 0.5 * (eta + 1.0)
     lambda0 = 1.0 - lambda1 - lambda2
@@ -598,6 +612,7 @@ def _eval_bernstein_modal_value(
 
 @nb.njit(cache=True, fastmath=True)
 def _eval_hierarchical_c0_mode_value(order: int, xi1: float, xi2: float, p: int, r: int) -> float:
+    """Evaluate one hierarchical C0 mode at a reference point."""
     if order == 0:
         return 1.0
     denom = 1.0 - xi2
@@ -635,6 +650,7 @@ def _eval_hierarchical_c0_modal_value(
         order: int,
         modes: np.ndarray,
 ) -> float:
+    """Evaluate a hierarchical C0 expansion at a reference point."""
     value = 0.0
     for m in range(coeffs.size):
         value += coeffs[m] * _eval_hierarchical_c0_mode_value(order, xi, eta, modes[m, 0], modes[m, 1])
@@ -643,6 +659,7 @@ def _eval_hierarchical_c0_modal_value(
 
 @nb.njit(cache=True, fastmath=True)
 def _eval_dubiner_mode_value(xi: float, eta: float, p: int, r: int) -> float:
+    """Evaluate one Dubiner mode at a reference point."""
     at_vertex = abs(eta - 1.0) <= 1e-14 and abs(xi + 1.0) <= 1e-14
     if at_vertex:
         return float(r + 1) if p == 0 else 0.0
@@ -654,6 +671,7 @@ def _eval_dubiner_mode_value(xi: float, eta: float, p: int, r: int) -> float:
 
 @nb.njit(cache=True, fastmath=True)
 def _eval_dubiner_modal_value(coeffs: np.ndarray, xi: float, eta: float, pq: np.ndarray) -> float:
+    """Evaluate a Dubiner expansion at a reference point."""
     value = 0.0
     for m in range(coeffs.size):
         value += coeffs[m] * _eval_dubiner_mode_value(xi, eta, pq[m, 0], pq[m, 1])

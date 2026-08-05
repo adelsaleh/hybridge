@@ -263,6 +263,7 @@ class DGMesh:
     h: float = field(init=False)
 
     def __post_init__(self) -> None:
+        """Validate mesh arrays and derive geometry and connectivity data."""
         nodes = np.ascontiguousarray(self.node_coords, dtype=np.float64)
         tris = np.ascontiguousarray(self.triangles, dtype=np.int64)
         if nodes.ndim != 2 or nodes.shape[1] != 2:
@@ -427,6 +428,7 @@ class DGMesh:
         return np.ascontiguousarray(0.5 * lengths, dtype=np.float64)
 
     def _compute_affine_maps(self) -> tuple[np.ndarray, np.ndarray]:
+        """Compute reference-to-physical affine maps and translations."""
         vertices = self.element_vertices
         p0 = vertices[:, 0]
         p1 = vertices[:, 1]
@@ -439,6 +441,7 @@ class DGMesh:
         )
 
     def _compute_face_normals_and_jacobians(self) -> tuple[np.ndarray, np.ndarray]:
+        """Compute outward unit normals and edge Jacobians per element face."""
         vertices = self.element_vertices
         face_vertices = np.stack([vertices[:, [i, (i + 1) % 3]] for i in range(3)], axis=1)
         tangents = face_vertices[:, :, 1, :] - face_vertices[:, :, 0, :]
@@ -458,6 +461,7 @@ class DGMesh:
         )
 
     def _compute_h(self) -> float:
+        """Return the largest physical edge length in the mesh."""
         vertices = self.element_vertices
         d01 = np.linalg.norm(vertices[:, 0] - vertices[:, 1], axis=1)
         d12 = np.linalg.norm(vertices[:, 1] - vertices[:, 2], axis=1)
@@ -544,6 +548,7 @@ def rectangle_mesh(
     nodes = np.column_stack((xx.ravel(), yy.ravel()))
 
     def node_id(i: int, j: int) -> int:
+        """Map structured-grid indices to a flattened node id."""
         return j * (nx + 1) + i
 
     triangles = np.empty((2 * nx * ny, 3), dtype=np.int64)
@@ -779,6 +784,7 @@ def gmsh_rectangle_mesh(
     """
 
     def build(gmsh):
+        """Create the rectangular Gmsh surface and return its tag."""
         return gmsh.model.occ.addRectangle(
             float(xlim[0]),
             float(ylim[0]),
@@ -825,6 +831,7 @@ def gmsh_disc_mesh(
     ry = float(radius if radius_y is None else radius_y)
 
     def build(gmsh):
+        """Create the elliptical Gmsh surface and return its tag."""
         return gmsh.model.occ.addDisk(float(center[0]), float(center[1]), 0.0, float(radius), ry)
 
     return _generate_gmsh_mesh(
@@ -882,6 +889,7 @@ def gmsh_star_mesh(
     vertices = np.column_stack((cx + radii * np.cos(angles), cy + radii * np.sin(angles)))
 
     def build(gmsh):
+        """Create the polygonal star surface and return its tag."""
         occ = gmsh.model.occ
         points = [
             occ.addPoint(float(x), float(y), 0.0, mesh_size)
@@ -954,6 +962,7 @@ def gmsh_smooth_star_mesh(
     vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
 
     def build(gmsh):
+        """Create the spline-bounded star surface and return its tag."""
         occ = gmsh.model.occ
         points = [
             occ.addPoint(float(x), float(y), 0.0, mesh_size)
@@ -1038,12 +1047,14 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         raise ValueError("num_threads must be positive")
 
     def start_phase(label: str, **fields) -> float:
+        """Emit an optional phase-start record and return its start time."""
         if timing_prefix is not None:
             extras = " ".join(f"{key}={value}" for key, value in fields.items())
             print(f"{timing_prefix}_{label}_START{(' ' + extras) if extras else ''}", flush=True)
         return time.perf_counter()
 
     def finish_phase(label: str, phase_start: float, **fields) -> None:
+        """Emit an optional phase-completion record with elapsed time."""
         if timing_prefix is not None:
             extras = " ".join(f"{key}={value}" for key, value in fields.items())
             print(
@@ -1168,6 +1179,7 @@ def gmsh_triangle_mesh(
     """
 
     def build(gmsh):
+        """Create the triangular Gmsh surface and return its tag."""
         points = [
             gmsh.model.occ.addPoint(float(x), float(y), 0.0, mesh_size)
             for x, y in vertices
@@ -1221,6 +1233,7 @@ def gmsh_lshape_mesh(
     corner_mesh_size = float(mesh_size if corner_mesh_size is None else corner_mesh_size)
 
     def build(gmsh):
+        """Create the cut-square L-shaped surface and return its tag."""
         occ = gmsh.model.occ
         big = occ.addRectangle(-half_width, -half_width, 0.0, 2.0 * half_width, 2.0 * half_width)
         cut = occ.addRectangle(-half_width, -half_width, 0.0, half_width, half_width)

@@ -16,10 +16,12 @@ def _stdout_can_encode(text: str) -> bool:
 
 
 def _heavy_rule_char() -> str:
+    """Return the configured heavy horizontal rule character."""
     return "═" if _stdout_can_encode("═") else "="
 
 
 def _light_rule_char() -> str:
+    """Return the configured light horizontal rule character."""
     return "─" if _stdout_can_encode("─") else "-"
 
 
@@ -53,6 +55,7 @@ def timed_section(config, level: int, label: str, **fields):
 
 
 def pretty_print(items, title="Results", pad_lines=1, default_fmt=".5g"):
+    """Print labeled scalar values as an aligned single-column table."""
     # format all values
     formatted = []
     for label, value, fmt in items:
@@ -82,11 +85,14 @@ def pretty_print_2row(items, title="Results", pad_lines=1, default_fmt=".5g", se
     except Exception:
         from unicodedata import east_asian_width
         def wcswidth(s):
+            """Estimate the terminal display width of a Unicode string."""
             return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
 
     def pad_right(s, w):
+        """Pad a string on the right to a requested display width."""
         s = str(s); d = wcswidth(s); return s + " " * max(0, w - d)
     def pad_left(s, w):
+        """Pad a string on the left to a requested display width."""
         s = str(s); d = wcswidth(s); return " " * max(0, w - d) + s
 
     # Format values
@@ -129,10 +135,18 @@ def pretty_print_2col(items, title="Results", pad_lines=1, default_fmt=".5g", se
     except Exception:
         from unicodedata import east_asian_width
         def wcswidth(s):
+            """Estimate the terminal display width of a Unicode string."""
             return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
 
-    def pad_right(s, w): s=str(s); return s + " " * max(0, w - wcswidth(s))
-    def pad_left(s, w):  s=str(s); return " " * max(0, w - wcswidth(s)) + s
+    def pad_right(s, w):
+        """Pad a string on the right to a requested display width."""
+        s = str(s)
+        return s + " " * max(0, w - wcswidth(s))
+
+    def pad_left(s, w):
+        """Pad a string on the left to a requested display width."""
+        s = str(s)
+        return " " * max(0, w - wcswidth(s)) + s
 
     # Format values
     fmted = [(lbl, format(val, fmt or default_fmt)) for lbl, val, fmt in items]
@@ -174,11 +188,15 @@ def pretty_print_ncol(items, ncols=2, title="Results", pad_lines=1, default_fmt=
         from wcwidth import wcswidth
     except Exception:
         from unicodedata import east_asian_width
-        def wcswidth(s): return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
+        def wcswidth(s):
+            """Compute string width using Unicode east-asian width rules."""
+            return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
 
     def pad_right(s, w):
+        """Pad a string on the right to a requested display width."""
         s = str(s); return s + " " * max(0, w - wcswidth(s))
     def pad_left(s, w):
+        """Pad a string on the left to a requested display width."""
         s = str(s); return " " * max(0, w - wcswidth(s)) + s
 
     # 1) format values
@@ -233,12 +251,16 @@ def pretty_print_sections(sections, title="Results", pad_lines=1, default_fmt=".
         from wcwidth import wcswidth
     except Exception:
         from unicodedata import east_asian_width
-        def wcswidth(s): return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
+        def wcswidth(s):
+            """Compute string width using Unicode east-asian width rules."""
+            return sum(2 if east_asian_width(ch) in "WF" else 1 for ch in str(s))
 
     def pad_right(s, w):
+        """Pad a string on the right to a requested display width."""
         s = str(s); return s + " " * max(0, w - wcswidth(s))
 
     def format_value(value, fmt):
+        """Format one table value with the requested display specification."""
         spec = fmt or default_fmt
         if value is None:
             return "None"

@@ -46,6 +46,7 @@ class LinearSolveError(RuntimeError):
     """Base class for configured linear-solve failures."""
 
     def __init__(self, message: str, *, result: "SolveResult | None" = None):
+        """Initialize the instance."""
         super().__init__(message)
         self.result = result
 
@@ -95,6 +96,7 @@ class KrylovIterationCounter:
             verbose: bool | int = 0,
             solver_name: str = "KRYLOV",
     ):
+        """Initialize this object."""
         self.count = 0
         self.matrix = matrix
         self.rhs = rhs
@@ -104,6 +106,7 @@ class KrylovIterationCounter:
         self.residual_history: list[float] = []
 
     def __call__(self, value):
+        """Execute the configured call behavior."""
         self.count += 1
         residual_norm = None
         value_array = np.asarray(value)
@@ -583,6 +586,7 @@ def build_jacobi_preconditioner(
     inverse_diagonal = 1.0 / diagonal
 
     def apply(vector):
+        """Apply the inverse Jacobi diagonal to a vector."""
         return inverse_diagonal * vector
 
     return LinearOperator(matrix.shape, matvec=apply, rmatvec=apply, dtype=np.float64)
@@ -973,6 +977,7 @@ def solve_petsc_system(
     resources = []
 
     def own(resource):
+        """Register a PETSc object for deterministic cleanup."""
         resources.append(resource)
         return resource
 

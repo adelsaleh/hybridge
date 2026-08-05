@@ -107,6 +107,7 @@ class DGCoefficientLayout:
 
 
 def _normalize_trace_basis_kind(kind: str) -> TraceBasisKind:
+    """Normalize the trace basis name into supported canonical forms."""
     normalized = str(kind).replace("_", "-").lower()
     if normalized not in {"legacy-lagrange", "legendre-modal", "bernstein"}:
         raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
@@ -114,6 +115,7 @@ def _normalize_trace_basis_kind(kind: str) -> TraceBasisKind:
 
 
 def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
+    """Tabulate the Bernstein trace basis at one-dimensional edge points."""
     from math import factorial
 
     r = 0.5 * (np.asarray(points, dtype=np.float64) + 1.0)
@@ -125,6 +127,7 @@ def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
 
 
 def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
+    """Tabulate the Legendre trace basis at one-dimensional edge points."""
     points = np.asarray(points, dtype=np.float64)
     values = np.empty((order + 1, points.size), dtype=np.float64)
     for j in range(order + 1):
@@ -133,6 +136,7 @@ def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
 
 
 def _reference_edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
+    """Map one-dimensional edge coordinates onto all reference-triangle faces."""
     t = np.asarray(edge_points_1d, dtype=np.float64)
     return np.ascontiguousarray(
         np.stack(
@@ -369,6 +373,7 @@ class DGSpace:
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
     ) -> None:
+        """Initialize this object."""
         self.mesh = as_dg_mesh(mesh)
         self.reference = ReferenceElementData.triangle(
             int(order),
@@ -474,6 +479,7 @@ class DGSpace:
         return trace_space
 
     def __repr__(self) -> str:
+        """Return a human-readable representation."""
         return (
             f"DGSpace(name={self.name!r}, elements={self.mesh.num_tri}, "
             f"order={self.order}, basis={self.reference.basis_type!r})"
@@ -740,6 +746,7 @@ class DGField:
             _constant_value: float | None = None,
             _device_coeffs: dict[int, Any] | None = None,
     ) -> None:
+        """Initialize this object."""
         if isinstance(first, DGSpace):
             space = first
             data = second
@@ -851,6 +858,7 @@ class DGField:
         return array
 
     def _validate_device_coefficients(self, coeffs) -> None:
+        """Validate the shape of a backend-owned device coefficient table."""
         shape = getattr(coeffs, "shape", None)
         if shape is None or tuple(shape) != self.space.shape:
             raise ValueError(f"device coeffs must have shape {self.space.shape}; got {shape}")
@@ -864,16 +872,19 @@ class DGField:
         return coeffs
 
     def _device_coefficients_for(self, device_id: int):
+        """Return cached coefficients for a requested device, when available."""
         if not self._device_coeffs:
             return None
         return self._device_coeffs.get(int(device_id))
 
     def _first_device_coefficients(self):
+        """Return the first cached device coefficient table, when available."""
         if not self._device_coeffs:
             return None
         return next(iter(self._device_coeffs.values()))
 
     def _download_device_coefficients(self, coeffs) -> np.ndarray:
+        """Download and normalize a backend-owned device coefficient table."""
         if hasattr(coeffs, "get"):
             array = coeffs.get()
         else:
@@ -881,6 +892,7 @@ class DGField:
         return self._normalize_coefficients_array(array)
 
     def _normalize_coefficients_array(self, coeffs) -> np.ndarray:
+        """Validate and normalize host coefficients to contiguous float64 storage."""
         array = np.asarray(coeffs, dtype=np.float64)
         if array.shape != self.space.shape:
             raise ValueError(f"coeffs must have shape {self.space.shape}; got {array.shape}")
@@ -889,6 +901,7 @@ class DGField:
         return array
 
     def _materialize_constant_coefficients(self) -> np.ndarray:
+        """Materialize lazy zero or constant coefficients in the active basis."""
         constant_value = self._constant_value
         if self._coefficient_kind == "zero" or constant_value == 0.0:
             return np.zeros(self.space.shape, dtype=np.float64)
@@ -927,6 +940,7 @@ class DGField:
 
     @coeffs.setter
     def coeffs(self, value) -> None:
+        """Replace host coefficients and invalidate cached device values."""
         self._coeffs = self._normalize_coefficients_array(value)
         if getattr(self, "_device_coeffs", None):
             self._device_coeffs.clear()
@@ -961,6 +975,7 @@ class DGField:
         return self._coefficient_kind
 
     def _coefficients_match_constant(self, value: float) -> bool:
+        """Return whether all coefficients exactly represent a scalar constant."""
         scalar = float(value)
         if self._coeffs is None and self._coefficient_kind in {"zero", "constant"}:
             return self._constant_value == scalar
@@ -1269,6 +1284,7 @@ class DGField:
         return self.project_product(other, target=target, name=name)
 
     def _binary_field_op(self, other, op, symbol: str) -> "DGField":
+        """Apply a coefficient-wise binary operation to compatible DG fields."""
         if isinstance(other, DGField):
             if self.space is not other.space:
                 raise ValueError("field operations require the same DGSpace object")
@@ -1276,6 +1292,7 @@ class DGField:
         return DGField(self.space, op(self.coeffs, other), name=f"({self.name}{symbol}{other})")
 
     def _scaled_by(self, other, *, reverse: bool = False) -> "DGField":
+        """Return a DG field with coefficients scaled by a scalar value."""
         try:
             scalar = np.asarray(other, dtype=np.float64)
         except (TypeError, ValueError) as exc:
@@ -1295,17 +1312,21 @@ class DGField:
         return DGField(self.space, self.coeffs * value, name=f"({label})")
 
     def __add__(self, other):
+        """Define arithmetic operator behavior for this type."""
         return self._binary_field_op(other, np.add, "+")
 
     def __sub__(self, other):
+        """Define arithmetic operator behavior for this type."""
         return self._binary_field_op(other, np.subtract, "-")
 
     def __mul__(self, other):
+        """Define arithmetic operator behavior for this type."""
         if isinstance(other, DGField):
             return self.project_product(other)
         return self._scaled_by(other)
 
     def __rmul__(self, other):
+        """Define arithmetic operator behavior for this type."""
         return self._scaled_by(other, reverse=True)
 
 
@@ -1340,6 +1361,7 @@ class VectorDGSpace:
     name: str = "Vh_vector"
 
     def __post_init__(self) -> None:
+        """Validate vector components and bind them to the declared scalar space."""
         if len(self.components) == 0:
             raise ValueError("VectorDGSpace needs at least one component")
         mesh = self.components[0].mesh.triangulation
@@ -1454,6 +1476,7 @@ class VectorDGField:
             copy: bool = False,
             parameters=None,
     ) -> None:
+        """Initialize this object."""
         self.name = str(name)
         self.components = self._coerce_components(data, space, copy=copy, parameters=parameters)
         self.__post_init__()

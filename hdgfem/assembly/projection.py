@@ -11,6 +11,7 @@ from ..core.space import DGField, DGSpace, _normalize_callable_values
 
 
 def _call_with_optional_parameters(func: Callable, x: np.ndarray, y: np.ndarray, parameters):
+    """Call a function with optional parameters."""
     if parameters is None:
         return func(x, y)
     return func(x, y, parameters)
