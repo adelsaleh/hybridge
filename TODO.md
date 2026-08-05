@@ -27,7 +27,7 @@
 
 ### First Alpha Release Gate
 
-- [ ] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`.
+- [ ] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`. The first hosted attempt exposed release-environment gaps rather than solver failures: Python 3.10 lacked the `tomllib` backport and the test extra omitted Matplotlib while `host-fast` exercised temporal-convergence plotting. The package metadata and compatibility import now cover both; rerun evidence is pending.
 - [x] Confirm no documentation links are stale via the docs structure check (5 passed):
   - run: `pytest tests/test_documentation_structure.py`
   - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
@@ -53,11 +53,11 @@ Research studies in later sections inform future solver choices but do not block
   roadmap, while `MANUAL.md` and `examples/` provide release-blocking
   end-to-end workflows. `tests/test_documentation_structure.py` locks the
   taxonomy, category indexes, local Markdown links, and no-PDF policy in
-  `host-fast`. The current lane passed 495 tests in 29.57
+  `host-fast`. The current lane passed 495 tests in 30.45
   seconds on 2026-08-05; rerun evidence is recorded in
   `docs/releases/early_alpha.md`.
 - [x] Prepare the local `0.1.0a1` release candidate: remove patch-backup artifacts, ignore future `*.orig` files, rerun all four blocking lanes, build the wheel and sdist, inspect archive contents, and pass `twine check`. The exact committed revision and hosted workflow URL remain pre-tag work.
-- [ ] Obtain the first clean hosted `early-alpha` workflow pass on Python 3.10 and 3.12 and attach the run URL to `docs/releases/early_alpha.md`. The workflow and local Python 3.12 package evidence are in place, but an unexecuted hosted job is not release evidence; review dependency resolution, wheel/sdist checks, and host-lane results before the alpha tag.
+- [ ] Obtain the first clean hosted `early-alpha` workflow pass on Python 3.10 and 3.12 and attach the run URL to `docs/releases/early_alpha.md`. The initial run found missing Python 3.10 TOML compatibility and Matplotlib test dependencies; both contracts are fixed locally, but the rerun must pass before the alpha tag.
 
 ### Explicitly Non-Blocking Alpha Follow-Up
 

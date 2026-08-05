@@ -113,8 +113,12 @@ python -m pip install -e '.[test,mesh,plot]'
 python -m pytest
 ```
 
+The `test` extra includes pytest, Matplotlib for plotting paths exercised by
+the host matrix, and `tomli` on Python 3.10 for package-metadata validation.
+
 The installed wheel contains the `hdgfem` library; runners, configs, and
-benchmarks remain checkout-only. See `docs/getting_started/installation.md` for the complete
+benchmarks remain checkout-only. See `docs/getting_started/installation.md` for
+the complete dependency and release-qualification contract.
 
 The base package uses NumPy, SciPy, and Numba.  Tune Numba CPU parallelism
 before Python starts:

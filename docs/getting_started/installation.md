@@ -54,12 +54,12 @@ is platform-specific; the other groups are portable:
 
 | Extra | Contents | Purpose |
 |---|---|---|
-| `test` | pytest | Contract and regression tests |
+| `test` | pytest, Matplotlib, and tomli on Python 3.10 | Contract and regression tests, including exercised plotting and package-metadata paths |
 | `mesh` | gmsh | Recommended Gmsh geometry paths (optional dependency) |
 | `plot` | Matplotlib, PyVista | Plotting and visualization |
 | `release` | build, twine | Distribution construction and metadata checks |
 | `pardiso` | pypardiso | Optional oneMKL PARDISO host direct solver |
-| `all` | test, mesh, and plot dependencies | Repository development convenience |
+| `all` | test, mesh, and plot dependencies, including the Python 3.10 TOML backport | Repository development convenience |
 
 Gmsh remains optional so the structured-mesh and core solver paths stay lean,
 but the `mesh` extra is highly recommended because most scripts and realistic configurations use it.

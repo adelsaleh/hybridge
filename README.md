@@ -41,6 +41,9 @@ python -m pip install -e '.[test]'
 python -m pytest
 ```
 
+The `test` extra includes pytest, Matplotlib for exercised plotting paths, and
+the TOML compatibility dependency required by the Python 3.10 packaging tests.
+
 See [docs/getting_started/installation.md](docs/getting_started/installation.md) for dependency groups,
 installed-wheel scope, clean-install qualification, and CI commands.
 

@@ -7,7 +7,7 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 ## Current Candidate
 
 - Version: `0.1.0a1`.
-- Status: all four release-blocking lanes and the broad Gmsh/CUDA suite passed locally on 2026-08-05. The exact tag commit and first hosted Python 3.10/3.12 workflow pass remain pre-tag gates.
+- Status: all four release-blocking lanes and the broad Gmsh/CUDA suite passed locally on 2026-08-05. The first hosted run exposed missing Python 3.10 TOML compatibility and Matplotlib test dependencies; the dependency contract is corrected, but a clean Python 3.10/3.12 rerun and exact tag commit remain pre-tag gates.
 - Commit/worktree: reviewed pre-alpha candidate; the exact tag commit will be recorded by release automation.
 - Environment: Python 3.12.3, NumPy 2.4.6, SciPy 1.18.0, Numba 0.66.0,
   pytest 9.1.1, CuPy 14.1.1, CUDA runtime 12.9, CUDA driver API 13.0, AMGX 2.5.0.
@@ -19,10 +19,24 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 
 ## Evidence Log
 
+### Hosted Matrix Attempt (Pre-fix)
+
+- The reported Python 3.10 `host-fast` job stopped during collection because
+  `tests/test_packaging_contract.py` imported the Python 3.11 standard-library
+  `tomllib` module without a `tomli` fallback.
+- The reported companion host job reached 475 passes and 11 optional skips,
+  then failed because temporal-convergence plotting was exercised without
+  Matplotlib installed.
+- The `test` and `all` extras now include the Python 3.10-only `tomli` backport;
+  the `test` extra also includes Matplotlib, and the packaging contract locks
+  both requirements.
+- This failed attempt is diagnostic evidence only. Its run URL and a clean
+  Python 3.10/3.12 rerun are still required before tagging.
+
 ### Host Fast
 
 - Command: `python scripts/dev/alpha_test_matrix.py host-fast`
-- Result: 495 passed in 29.57 seconds on 2026-08-05; zero pytest skips or warnings.
+- Result: 495 passed in 30.45 seconds on 2026-08-05 after the hosted dependency-contract fix; zero pytest skips or warnings.
   The lane includes copy-runnable documented solver examples, full-name solver
   API/compatibility coverage, and the package-wide callable docstring guard.
 - Review: no device test modules were collected. The existing optional AMGX

@@ -26,9 +26,9 @@ dependencies = [
 mesh = ["gmsh"]
 pardiso = ["pypardiso>=0.4.7,<0.5"]
 plot = ["matplotlib", "pyvista"]
-test = ["pytest"]
+test = ["pytest", "matplotlib", "tomli; python_version < '3.11'"]
 release = ["build", "twine"]
-all = ["gmsh", "matplotlib", "pyvista", "pytest"]
+all = ["gmsh", "matplotlib", "pyvista", "pytest", "tomli; python_version < '3.11'"]
 
 [project.urls]
 Repository = "https://github.com/adelsaleh/hdgfem"

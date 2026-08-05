@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 from scripts.dev.alpha_test_matrix import ALPHA_TEST_LANES_BY_NAME, HOST_FAST_TARGETS
 
@@ -21,7 +25,10 @@ def test_alpha_package_metadata_declares_bounded_runtime_and_extras() -> None:
     assert project["name"] == "hdgfem"
     assert project["requires-python"] == ">=3.10"
     assert set(project["dependencies"]) == {"numba", "numpy", "scipy"}
-    assert {"mesh", "plot", "test", "release", "all"} <= set(project["optional-dependencies"])
+    extras = project["optional-dependencies"]
+    assert {"mesh", "plot", "test", "release", "all"} <= set(extras)
+    assert {"pytest", "matplotlib", "tomli; python_version < '3.11'"} <= set(extras["test"])
+    assert "tomli; python_version < '3.11'" in extras["all"]
     assert "Development Status :: 3 - Alpha" in project["classifiers"]
 
 
