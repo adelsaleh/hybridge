@@ -33,13 +33,13 @@ import math
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import basix.ufl
 import meshio
 import numpy as np
 import ufl
@@ -48,7 +48,6 @@ from petsc4py import PETSc
 
 from dolfinx import fem, mesh, plot as dolfinx_plot
 from dolfinx.fem import petsc as fem_petsc
-from dolfinx.io import XDMFFile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -134,7 +133,7 @@ def assemble_scalar(comm: MPI.Comm, form) -> float:
 
 
 def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
-    """Read a triangular Gmsh mesh through meshio/XDMF."""
+    """Read a triangular Gmsh mesh without h5py-backed XDMF conversion."""
     if comm.rank == 0:
         msh = meshio.read(path)
         triangles = None
@@ -149,13 +148,8 @@ def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
         points = np.empty((0, 2), dtype=np.float64)
         triangles = np.empty((0, 3), dtype=np.int64)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        xdmf_path = Path(tmpdir) / "mesh.xdmf"
-        if comm.rank == 0:
-            meshio.write(xdmf_path, meshio.Mesh(points=points, cells=[("triangle", triangles)]))
-        comm.barrier()
-        with XDMFFile(comm, str(xdmf_path), "r") as xdmf:
-            domain = xdmf.read_mesh(name="Grid")
+    coordinate_element = basix.ufl.element("Lagrange", "triangle", 1, shape=(2,))
+    domain = mesh.create_mesh(comm, triangles, coordinate_element, points)
     domain.topology.create_connectivity(domain.topology.dim - 1, domain.topology.dim)
     domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim - 1)
     return domain

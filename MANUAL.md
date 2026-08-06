@@ -352,6 +352,11 @@ python -c "import dolfinx, basix, ufl, mpi4py, petsc4py, gmsh; print('dolfinx ok
 python -m pip install -e .
 ```
 
+If `import gmsh` fails with `OSError: libGLU.so.1: cannot open shared object
+file`, install the missing OpenGL utility library, for example
+`conda install -c conda-forge libglu` inside the active environment or
+`sudo apt install libglu1-mesa` on Debian/Ubuntu systems.
+
 ## Command-Line Workflows
 
 ### Advection-Reaction Presets
@@ -1606,8 +1611,7 @@ python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
   --star-n 260 --order 2 --hdg-tau 10 \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
-/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py \
+python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_newton \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
   --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
   --order 2 --linear-solver mumps --terminal-every 1

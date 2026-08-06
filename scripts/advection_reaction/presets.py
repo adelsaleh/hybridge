@@ -179,6 +179,18 @@ PRESETS: dict[str, AdvectionReactionRunPreset] = {
         petsc_levels=1,
         maxiter=2000,
     ),
+    "test2_pypardiso": _test2_solver_preset(
+        description="test2 with PyPardiso direct solve and no trace ordering.",
+        solver="pypardiso",
+        preconditioner=None,
+        trace_ordering="none",
+    ),
+    "test2_pypardiso_upw": _test2_solver_preset(
+        description="test2 with PyPardiso direct solve and upwind SCC ordering.",
+        solver="pypardiso",
+        preconditioner=None,
+        trace_ordering="upwind-scc",
+    ),
     "test2_petsc_gmres_ilu": _test2_solver_preset(
         description="test2 with PETSc GMRES and ILU.",
         solver="petsc",

@@ -334,6 +334,38 @@ def test_diffusion_reaction_update_invalidates_cached_operator() -> None:
     assert solver._host_solve_matrix is None
 
 
+def test_diffusion_scipy_cache_reuses_host_and_scaled_csr() -> None:
+    space = _space()
+    solver = hdgfem.DiffusionReactionHDGSolver(
+        space,
+        assembly_backend="numba",
+        boundary_mode="eliminate",
+        solver="BICGSTAB",
+        scale_system=True,
+        cache_device_matrix=True,
+        verbose=False,
+    )
+    solver.solve_rows = np.array([0, 0, 1, 1], dtype=np.int64)
+    solver.solve_cols = np.array([0, 1, 0, 1], dtype=np.int64)
+    solver.solve_data = np.array([2.0, -1.0, -1.0, 2.0])
+    solver.solve_rhs = np.ones(2)
+
+    host_matrix, device_matrix = solver._prepared_cupyx_operator(scale_system=True)
+    scaled_matrix = solver._host_scaled_solve_matrix
+    inverse_diagonal = solver._host_inverse_diagonal
+
+    assert device_matrix is None
+    assert host_matrix is not None
+    assert scaled_matrix is not None
+    assert inverse_diagonal == pytest.approx([0.5, 0.5])
+
+    cached_host, cached_device = solver._prepared_cupyx_operator(scale_system=True)
+    assert cached_host is host_matrix
+    assert cached_device is None
+    assert solver._host_scaled_solve_matrix is scaled_matrix
+    assert solver._host_inverse_diagonal is inverse_diagonal
+
+
 @pytest.mark.parametrize("equation", ("advection-reaction", "diffusion-reaction"))
 def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -> None:
     space = _space()

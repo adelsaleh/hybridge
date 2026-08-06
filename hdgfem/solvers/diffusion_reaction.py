@@ -205,6 +205,7 @@ class DiffusionReactionHDGOptions:
     ilu_drop_tol: float = 1e-10
     ilu_fill_factor: float = 35
     ilu_failure: Literal["raise", "none"] = "raise"
+    ilu_permc_spec: str = "COLAMD"
     initial_guess: np.ndarray | None = None
     local_solver_backend: LocalSolverBackend = "numpy"
     assembly_backend: TraceAssemblyBackend = "numpy"
@@ -1715,6 +1716,9 @@ class DiffusionReactionHDGSolver:
         self._device_solve_matrix_scale_system: bool | None = None
         self._device_solve_matrix_shape: tuple[int, int] | None = None
         self._host_solve_matrix = None
+        self._host_scaled_solve_matrix = None
+        self._host_inverse_diagonal: np.ndarray | None = None
+        self._host_scaled_solve_matrix_shape: tuple[int, int] | None = None
 
         self.local_solver: np.ndarray | None = None
         self.element_boundary_mats: np.ndarray | None = None
@@ -2314,32 +2318,59 @@ class DiffusionReactionHDGSolver:
         normalized = "" if solver is None else str(solver).lower()
         return normalized == "cupyx" or normalized.startswith(("cupyx_", "cupyx-"))
 
+    def _pypardiso_solver_selected(self) -> bool:
+        """Return True when the global solve uses a PyPardiso direct backend."""
+        solver = self.options.solver
+        normalized = "" if solver is None else str(solver).lower().replace("_", "-")
+        return normalized in {"pypardiso", "pardiso", "pypardiso-spd", "pardiso-spd"}
+
+    def _scipy_iterative_solver_selected(self) -> bool:
+        """Return True when the global solve uses a SciPy Krylov backend."""
+        solver = self.options.solver
+        normalized = "" if solver is None else str(solver).upper()
+        return normalized in {"BICG", "BICGSTAB", "CG", "CGS", "GMRES", "LGMRES", "MINRES"}
+
     def _prepared_cupyx_operator(self, *, scale_system: bool):
-        """Return cached host/device matrices for a Cupyx solve when enabled.
+        """Return cached host/device matrices for repeated backend solves.
 
         The Numba diffusion path stores the reduced COO operator on the solver.
-        For repeated solves where only the RHS changes, this method converts
-        that host operator to a CuPy CSR matrix once and reuses it.  The device
-        matrix represents the same scaled or unscaled operator that
-        :func:`solve_global_system` will use for the solve; host diagnostics
-        are still computed inside the linear-system layer.
+        For repeated solves where only the RHS changes, this method builds the
+        host CSR matrix once for PyPardiso or SciPy, or converts it once to
+        CuPy CSR for Cupyx. For a scaled SciPy Krylov solve, the scaled CSR and
+        inverse diagonal are cached as well. The device matrix represents the
+        same scaled or unscaled operator that :func:`solve_global_system` will
+        use for the solve.
         """
-        if not self.options.cache_device_matrix or not self._cupyx_solver_selected():
+        use_cupyx = self._cupyx_solver_selected()
+        use_pypardiso = self._pypardiso_solver_selected()
+        use_scipy = self._scipy_iterative_solver_selected()
+        if not self.options.cache_device_matrix or not (use_cupyx or use_pypardiso or use_scipy):
             return None, None
         if self.solve_rows is None or self.solve_cols is None or self.solve_data is None or self.solve_rhs is None:
             return None, None
 
         shape = (self.solve_rhs.size, self.solve_rhs.size)
-        cache_valid = (
-            self._device_solve_matrix is not None
-            and self._device_solve_matrix_scale_system == bool(scale_system)
-            and self._device_solve_matrix_shape == shape
-            and self._host_solve_matrix is not None
+        cache_valid = self._host_solve_matrix is not None and (
+            use_pypardiso
+            or (
+                use_scipy
+                and (
+                    not scale_system
+                    or (
+                        self._host_scaled_solve_matrix is not None
+                        and self._host_inverse_diagonal is not None
+                        and self._host_scaled_solve_matrix_shape == shape
+                    )
+                )
+            )
+            or (
+                self._device_solve_matrix is not None
+                and self._device_solve_matrix_scale_system == bool(scale_system)
+                and self._device_solve_matrix_shape == shape
+            )
         )
         if cache_valid:
             return self._host_solve_matrix, self._device_solve_matrix
-
-        from ..backends.cupy import scipy_csr_to_cupy
 
         host_matrix = assemble_global_matrix(
             self.solve_rows,
@@ -2347,6 +2378,27 @@ class DiffusionReactionHDGSolver:
             self.solve_data,
             self.solve_rhs.size,
         )
+        self._host_solve_matrix = host_matrix
+        if use_pypardiso:
+            self._device_solve_matrix = None
+            self._device_solve_matrix_scale_system = None
+            self._device_solve_matrix_shape = shape
+            return self._host_solve_matrix, None
+
+        if use_scipy:
+            if scale_system:
+                scaled_matrix, inverse_diagonal = diagonal_scale_system(
+                    host_matrix,
+                    np.ones(self.solve_rhs.size, dtype=np.float64),
+                    copy_matrix=True,
+                )
+                self._host_scaled_solve_matrix = scaled_matrix
+                self._host_inverse_diagonal = inverse_diagonal
+                self._host_scaled_solve_matrix_shape = shape
+            return self._host_solve_matrix, None
+
+        from ..backends.cupy import scipy_csr_to_cupy
+
         if scale_system:
             device_host_matrix, _ = diagonal_scale_system(
                 host_matrix,
@@ -2355,7 +2407,6 @@ class DiffusionReactionHDGSolver:
             )
         else:
             device_host_matrix = host_matrix
-        self._host_solve_matrix = host_matrix
         self._device_solve_matrix = scipy_csr_to_cupy(device_host_matrix)
         self._device_solve_matrix_scale_system = bool(scale_system)
         self._device_solve_matrix_shape = shape
@@ -2474,6 +2525,7 @@ class DiffusionReactionHDGSolver:
                 ilu_drop_tol=options.ilu_drop_tol,
                 ilu_fill_factor=options.ilu_fill_factor,
                 ilu_failure=options.ilu_failure,
+                ilu_permc_spec=options.ilu_permc_spec,
                 petsc_preset=options.petsc_preset,
                 petsc_levels=options.petsc_levels,
                 petsc_options=options.petsc_options,
@@ -2595,6 +2647,10 @@ class DiffusionReactionHDGSolver:
             known_values=reduction.known_values,
             old_to_new=reduction.old_to_new,
         )
+        self.solve_rhs = solve_rhs
+        self.boundary_trace = boundary_trace
+        self.reduction = reduction
+        self._host_cached_rhs_valid = True
         if verbosity >= 2:
             print(
                 "  numba cached RHS timings: "
@@ -2631,6 +2687,7 @@ class DiffusionReactionHDGSolver:
                 ilu_drop_tol=options.ilu_drop_tol,
                 ilu_fill_factor=options.ilu_fill_factor,
                 ilu_failure=options.ilu_failure,
+                ilu_permc_spec=options.ilu_permc_spec,
                 petsc_preset=options.petsc_preset,
                 petsc_levels=options.petsc_levels,
                 petsc_options=options.petsc_options,
@@ -2641,6 +2698,8 @@ class DiffusionReactionHDGSolver:
                 scale_system=effective_scale_system,
                 scale_matrix_in_place=effective_scale_system and prepared_device_matrix is None,
                 assembled_matrix=assembled_matrix,
+                prepared_scaled_matrix=self._host_scaled_solve_matrix,
+                prepared_inverse_diagonal=self._host_inverse_diagonal,
                 prepared_device_matrix=prepared_device_matrix,
                 raise_on_nonconvergence=True,
                 verbose=verbosity,
@@ -2798,6 +2857,7 @@ def solve_diffusion_reaction_hdg(
         ilu_drop_tol: float = 1e-10,
         ilu_fill_factor: float = 35,
         ilu_failure: Literal["raise", "none"] = "raise",
+        ilu_permc_spec: str = "COLAMD",
         initial_guess: np.ndarray | None = None,
         local_solver_backend: LocalSolverBackend = "numpy",
         assembly_backend: TraceAssemblyBackend = "numpy",
@@ -3098,6 +3158,7 @@ def solve_diffusion_reaction_hdg(
             ilu_drop_tol=ilu_drop_tol,
             ilu_fill_factor=ilu_fill_factor,
             ilu_failure=ilu_failure,
+            ilu_permc_spec=ilu_permc_spec,
             petsc_preset=petsc_preset,
             petsc_levels=petsc_levels,
             petsc_options=petsc_options,

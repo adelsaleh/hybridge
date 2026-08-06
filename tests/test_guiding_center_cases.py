@@ -166,6 +166,150 @@ def test_gaussian_annulus_full_raw_cuda_t50_preset_uses_legacy_case() -> None:
     assert config.transport_materialize_host_solution is False
 
 
+def test_gaussian_annulus_k3_p6_numba_ilu_upwind_preset() -> None:
+    config = preset_by_key("diocotron_gaussian_annulus_k3_p6_30k_numba_ilu_upwind")
+
+    assert config.case == "diocotron_gaussian_annulus"
+    assert config.case_params == {"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03}
+    assert config.order == 6
+    assert config.minimum_triangles == 30_000
+    assert config.poisson_assembly_backend == "numba"
+    assert config.poisson_local_backend == "numba"
+    assert config.poisson_solver == "BICGSTAB"
+    assert config.poisson_solver_rtol == pytest.approx(1.0e-11)
+    assert config.poisson_preconditioner == "ilu"
+    assert config.poisson_ilu_fill_factor == pytest.approx(35.0)
+    assert config.poisson_ilu_permc_spec == "NATURAL"
+    assert config.poisson_reuse_equilibrium_solver is True
+    assert config.poisson_hdg_postprocess == "none"
+    assert config.transport_assembly_backend == "numba"
+    assert config.transport_solver == "BICGSTAB"
+    assert config.transport_preconditioner == "ilu"
+    assert config.transport_trace_ordering == "upwind-scc"
+    assert config.transport_ilu_permc_spec == "COLAMD"
+    assert config.transport_boundary_mode == "zero-flux"
+    assert config.transport_initial_guess == "initial-density-trace"
+
+
+def test_gaussian_annulus_k3_p6_numba_pypardiso_lu_upwind_preset() -> None:
+    config = preset_by_key(
+        "diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_lu_upwind"
+    )
+
+    assert config.case == "diocotron_gaussian_annulus"
+    assert config.case_params == {"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03}
+    assert config.order == 6
+    assert config.minimum_triangles == 30_000
+    assert config.poisson_assembly_backend == "numba"
+    assert config.poisson_local_backend == "numba"
+    assert config.poisson_solver == "pypardiso"
+    assert config.poisson_preconditioner is None
+    assert config.poisson_scale_system is False
+    assert config.poisson_reuse_equilibrium_solver is True
+    assert config.poisson_hdg_postprocess == "none"
+    assert config.transport_assembly_backend == "numba"
+    assert config.transport_solver == "BICGSTAB"
+    assert config.transport_preconditioner == "ilu"
+    assert config.transport_trace_ordering == "upwind-scc"
+    assert config.transport_ilu_permc_spec == "COLAMD"
+    assert config.transport_boundary_mode == "zero-flux"
+    assert config.transport_initial_guess == "initial-density-trace"
+
+
+@pytest.mark.parametrize(
+    ("preset_key", "poisson_solver", "poisson_preconditioner"),
+    (
+        (
+            "diocotron_gaussian_annulus_k3_p6_50k_numba_medium_ilu_upwind",
+            "BICGSTAB",
+            "ilu",
+        ),
+        (
+            "diocotron_gaussian_annulus_k3_p6_50k_numba_pypardiso_medium_ilu_upwind",
+            "pypardiso",
+            None,
+        ),
+    ),
+)
+def test_gaussian_annulus_k3_p6_50k_matched_comparison_presets(
+    preset_key: str,
+    poisson_solver: str,
+    poisson_preconditioner: str | None,
+) -> None:
+    config = preset_by_key(preset_key)
+
+    assert config.case_params == {"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03}
+    assert config.mesh_size == pytest.approx(0.012)
+    assert config.minimum_triangles == 50_000
+    assert config.order == 6
+    assert config.poisson_assembly_backend == "numba"
+    assert config.poisson_local_backend == "numba"
+    assert config.poisson_solver == poisson_solver
+    assert config.poisson_preconditioner == poisson_preconditioner
+    assert config.poisson_reuse_equilibrium_solver is True
+    assert config.poisson_hdg_postprocess == "none"
+    assert config.transport_assembly_backend == "numba"
+    assert config.transport_solver == "BICGSTAB"
+    assert config.transport_preconditioner == "ilu"
+    assert config.transport_ilu_drop_tol == pytest.approx(1.0e-5)
+    assert config.transport_ilu_fill_factor == pytest.approx(5.0)
+    assert config.transport_trace_ordering == "upwind-scc"
+    assert config.transport_ilu_permc_spec == "COLAMD"
+    assert config.transport_reuse_first_preconditioner is False
+    assert config.transport_initial_guess == "initial-density-trace"
+
+
+@pytest.mark.parametrize(
+    ("preset_key", "ordering", "permc_spec", "reuse"),
+    (
+        (
+            "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_upwind_colamd",
+            "upwind-scc",
+            "COLAMD",
+            False,
+        ),
+        (
+            "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_cached_adv_natural",
+            "none",
+            "NATURAL",
+            True,
+        ),
+        (
+            "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_cached_adv_colamd",
+            "none",
+            "COLAMD",
+            True,
+        ),
+        (
+            "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_unordered_colamd",
+            "none",
+            "COLAMD",
+            False,
+        ),
+        (
+            "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_upwind_colamd_weak_ilu",
+            "upwind-scc",
+            "COLAMD",
+            False,
+        ),
+    ),
+)
+def test_pypardiso_transport_cache_comparison_presets(
+    preset_key: str,
+    ordering: str,
+    permc_spec: str,
+    reuse: bool,
+) -> None:
+    config = preset_by_key(preset_key)
+
+    assert config.poisson_solver == "pypardiso"
+    assert config.poisson_reuse_equilibrium_solver is True
+    assert config.transport_trace_ordering == ordering
+    assert config.transport_ilu_permc_spec == permc_spec
+    assert config.transport_reuse_first_preconditioner is reuse
+    assert config.transport_initial_guess == "initial-density-trace"
+
+
 def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
     config = preset_by_key("diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx")
 

@@ -448,6 +448,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "case": args.case,
         "domain": args.domain,
         "mesh_size": args.mesh_size,
+        "minimum_triangles": args.minimum_triangles,
         "nx": args.nx,
         "ny": args.ny,
         "gmsh_verbosity": args.gmsh_verbosity,
@@ -475,6 +476,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_amgx_config_path": None if args.poisson_amgx_config is None else str(args.poisson_amgx_config),
         "poisson_ilu_drop_tol": args.poisson_ilu_drop_tol,
         "poisson_ilu_fill_factor": args.poisson_ilu_fill_factor,
+        "poisson_ilu_permc_spec": args.poisson_ilu_permc_spec,
         "poisson_raw_matrix_format": args.poisson_raw_matrix_format,
         "poisson_raw_block_size": args.poisson_raw_block_size,
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
@@ -498,6 +500,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "transport_raw_lu_mode": args.transport_raw_lu_mode,
         "transport_raw_block_size": args.transport_raw_block_size,
         "transport_raw_matrix_format": args.transport_raw_matrix_format,
+        "transport_reuse_first_preconditioner": args.transport_reuse_first_preconditioner,
         "transport_initial_guess": args.transport_initial_guess,
         "transport_retry_policy": args.transport_retry_policy,
         "transport_retry_amgx_config_path": None if args.transport_retry_amgx_config is None else str(args.transport_retry_amgx_config),
@@ -594,6 +597,8 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("num_steps must be nonnegative")
     if config.dt <= 0.0:
         raise ValueError("dt must be positive")
+    if config.minimum_triangles < 0:
+        raise ValueError("minimum_triangles must be nonnegative")
     if not 0 <= int(config.verbosity) <= 3:
         raise ValueError("verbosity must be one of 0, 1, 2, or 3")
     if config.time_scheme not in {"si-euler", "predictor-corrector"}:
@@ -602,6 +607,11 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("diagnostics_every must be positive")
     if config.transport_retry_policy not in {"none", "amgx-robust"}:
         raise ValueError("transport_retry_policy must be 'none' or 'amgx-robust'")
+    if config.transport_reuse_first_preconditioner and config.transport_trace_ordering != "none":
+        raise ValueError(
+            "transport_reuse_first_preconditioner requires trace_ordering='none' so the "
+            "cached preconditioner remains in the same trace coordinate system"
+        )
     if config.case == "rho_helm_wave" and config.transport_boundary_mode == "zero-flux":
         raise ValueError("rho_helm_wave requires eliminated exact density boundary data; zero-flux is invalid")
     if config.poisson_assembly_backend == "cupy":
@@ -969,6 +979,15 @@ def _solver_metrics(prefix: str, result) -> dict[str, Any]:
                 f"{prefix}_diagnostic_rel_residual": global_solve.diagnostic_relative_residual_norm,
                 f"{prefix}_preconditioner_time": global_solve.preconditioner_elapsed_seconds,
                 f"{prefix}_krylov_time": global_solve.solve_elapsed_seconds,
+                f"{prefix}_matrix_csr_time": global_solve.matrix_assembly_elapsed_seconds,
+                f"{prefix}_solver_global_time": global_solve.global_elapsed_seconds,
+                f"{prefix}_scale_time": global_solve.scale_elapsed_seconds,
+                f"{prefix}_initial_residual_time": global_solve.initial_residual_elapsed_seconds,
+                f"{prefix}_callback_time": global_solve.callback_elapsed_seconds,
+                f"{prefix}_final_residual_time": global_solve.residual_diagnostics_elapsed_seconds,
+                f"{prefix}_preconditioner_apply_count": global_solve.preconditioner_apply_count,
+                f"{prefix}_preconditioner_apply_time": global_solve.preconditioner_apply_seconds,
+                f"{prefix}_preconditioner_factor_nnz": global_solve.preconditioner_factor_nnz,
             }
         )
     return row
@@ -1057,6 +1076,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
         ilu_drop_tol=config.poisson_ilu_drop_tol,
         ilu_fill_factor=config.poisson_ilu_fill_factor,
         ilu_failure=config.poisson_ilu_failure,
+        ilu_permc_spec=config.poisson_ilu_permc_spec,
         local_solver_backend=config.poisson_local_backend,
         assembly_backend=config.poisson_assembly_backend,
         trace_basis=config.trace_basis,
@@ -1218,6 +1238,11 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
         _phase_verbosity(config),
         lambda: _build_mesh(config, case),
     )
+    if mesh.num_tri < config.minimum_triangles:
+        raise RuntimeError(
+            f"mesh has {mesh.num_tri:,} triangles, below the configured minimum of "
+            f"{config.minimum_triangles:,}; reduce mesh_size"
+        )
     space = DGSpace(
         mesh,
         config.order,
@@ -1241,6 +1266,8 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
 
     equilibrium_potential = None
     equilibrium_density = None
+    poisson_solver = None
+    poisson_initial_guess = None
     if case.equilibrium_density is not None:
         equilibrium_density = space.project_callable(case.equilibrium_density, name="rho_eq_h")
         equilibrium_solver = DiffusionReactionHDGSolver(
@@ -1252,17 +1279,40 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
         )
         equilibrium_result = equilibrium_solver.solve()
         equilibrium_potential = equilibrium_result.field
-        equilibrium_solver.clear_cache()
+        if config.poisson_reuse_equilibrium_solver:
+            # The Poisson operator is source-independent.  Keep the class
+            # solver's assembled operator and, for host Krylov solves, retain
+            # the ILU built for the equilibrium solve instead of factoring the
+            # identical matrix at every time step.
+            poisson_solver = equilibrium_solver
+            poisson_initial_guess = _result_trace_guess(equilibrium_result, space, reduced=False)
+            if config.poisson_preconditioner is not None:
+                global_result = equilibrium_result.global_solve_result
+                reusable_preconditioner = None if global_result is None else global_result.preconditioner
+                if reusable_preconditioner is None:
+                    raise RuntimeError(
+                        "poisson_reuse_equilibrium_solver requested a reusable preconditioner, "
+                        "but the equilibrium solve did not produce one"
+                    )
+                poisson_solver.options = poisson_solver.options.with_overrides(
+                    preconditioner=reusable_preconditioner
+                )
+            poisson_solver.set_source(rho_field)
+            poisson_solver.set_boundary_condition(case.potential_boundary_at(0.0))
+        else:
+            equilibrium_solver.clear_cache()
 
-    poisson_solver = DiffusionReactionHDGSolver(
-        space,
-        source=rho_field,
-        reaction=zero_reaction,
-        boundary_condition=case.potential_boundary_at(0.0),
-        options=poisson_options,
-    )
-    poisson_result = poisson_solver.solve()
+    if poisson_solver is None:
+        poisson_solver = DiffusionReactionHDGSolver(
+            space,
+            source=rho_field,
+            reaction=zero_reaction,
+            boundary_condition=case.potential_boundary_at(0.0),
+            options=poisson_options,
+        )
+    poisson_result = poisson_solver.solve(initial_guess=poisson_initial_guess)
     transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
+    transport_preconditioner_reused = False
 
     prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
     density_trace = _initial_trace_guess_from_callable(
@@ -1337,6 +1387,18 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                 endpoint_density_boundary,
             )
             predictor_transport_result = transport_solver.solve(initial_guess=density_trace)
+            if config.transport_reuse_first_preconditioner and not transport_preconditioner_reused:
+                global_result = predictor_transport_result.global_solve_result
+                reusable_preconditioner = None if global_result is None else global_result.preconditioner
+                if reusable_preconditioner is None:
+                    raise RuntimeError(
+                        "transport_reuse_first_preconditioner requested reuse, but the first "
+                        "transport solve did not produce a preconditioner"
+                    )
+                transport_solver.options = transport_solver.options.with_overrides(
+                    preconditioner=reusable_preconditioner
+                )
+                transport_preconditioner_reused = True
             predictor_density = _ensure_field(
                 predictor_transport_result,
                 "predictor transport",
@@ -1520,6 +1582,11 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--poisson-amgx-config", type=Path, default=None)
     parser.add_argument("--poisson-ilu-drop-tol", type=float, default=None)
     parser.add_argument("--poisson-ilu-fill-factor", type=float, default=None)
+    parser.add_argument(
+        "--poisson-ilu-permc-spec",
+        choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"),
+        default=None,
+    )
     parser.add_argument("--poisson-raw-matrix-format", choices=("coo", "csr"), default=None)
     parser.add_argument("--poisson-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument("--poisson-hdg-postprocess", choices=("none", "primal", "flux", "both"), default=None)
@@ -1546,6 +1613,12 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--transport-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument("--transport-raw-matrix-format", choices=("auto", "coo", "csr"), default=None)
     parser.add_argument("--transport-initial-guess", choices=("solver-default", "initial-density-trace"), default=None)
+    parser.add_argument(
+        "--transport-reuse-first-preconditioner",
+        action="store_true",
+        default=None,
+        help="reuse the first transport preconditioner on later matrices; requires --transport-trace-ordering none",
+    )
     parser.add_argument("--transport-retry-policy", choices=("none", "amgx-robust"), default=None)
     parser.add_argument("--transport-retry-amgx-config", type=Path, default=None)
     parser.add_argument("--transport-materialize-host-system", action="store_true")
@@ -1574,6 +1647,7 @@ def _main() -> None:
     parser.add_argument("--case-param", action="append", default=None, help="override case parameter with key=value syntax")
     parser.add_argument("--domain", choices=("auto", "structured-rectangle", "rectangle", "disc", "triangle"), default=None)
     parser.add_argument("--mesh-size", "--lc", type=float, default=None)
+    parser.add_argument("--minimum-triangles", type=int, default=None)
     parser.add_argument("--nx", type=int, default=None)
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--gmsh-verbosity", type=int, default=None)

@@ -104,9 +104,11 @@ class KrylovIterationCounter:
         self.solver_name = solver_name
         self.rhs_norm = None if rhs is None else max(float(np.linalg.norm(rhs)), 1.0e-300)
         self.residual_history: list[float] = []
+        self.elapsed_seconds = 0.0
 
     def __call__(self, value):
         """Execute the configured call behavior."""
+        callback_start = time.perf_counter()
         self.count += 1
         residual_norm = None
         value_array = np.asarray(value)
@@ -130,6 +132,7 @@ class KrylovIterationCounter:
                         f"  {self.solver_name} iter={self.count} residual={residual_norm:.6e}",
                         flush=True,
                     )
+        self.elapsed_seconds += time.perf_counter() - callback_start
 
 
 @dataclass
@@ -145,6 +148,11 @@ class SolveResult:
     scale_elapsed_seconds: float | None = None
     preconditioner_elapsed_seconds: float | None = None
     solve_elapsed_seconds: float | None = None
+    global_elapsed_seconds: float | None = None
+    matrix_assembly_elapsed_seconds: float | None = None
+    initial_residual_elapsed_seconds: float | None = None
+    callback_elapsed_seconds: float | None = None
+    residual_diagnostics_elapsed_seconds: float | None = None
 
     # Krylov diagnostics
     iteration_count: int | None = None
@@ -186,6 +194,7 @@ class SolveResult:
     preconditioner_local_solve_seconds: float | None = None
     preconditioner_reduce_seconds: float | None = None
     preconditioner_copy_seconds: float | None = None
+    preconditioner_factor_nnz: int | None = None
 
     # PETSc diagnostics, when the PETSc backend is used.
     petsc_preset: str | None = None
@@ -564,7 +573,25 @@ def build_ilu_preconditioner(
         permc_spec=permc_spec,
     )
 
-    return LinearOperator(matrix.shape, matvec=ilu_decomposition.solve)
+    apply_count = 0
+    apply_seconds = 0.0
+
+    def timed_solve(vector):
+        """Apply the SuperLU factors while accumulating reusable timing data."""
+        nonlocal apply_count, apply_seconds
+        apply_start = time.perf_counter()
+        result = ilu_decomposition.solve(vector)
+        apply_seconds += time.perf_counter() - apply_start
+        apply_count += 1
+        operator.apply_count = apply_count
+        operator.apply_seconds = apply_seconds
+        return result
+
+    operator = LinearOperator(matrix.shape, matvec=timed_solve, dtype=matrix.dtype)
+    operator.apply_count = 0
+    operator.apply_seconds = 0.0
+    operator.factor_nnz = int(ilu_decomposition.L.nnz + ilu_decomposition.U.nnz)
+    return operator
 
 
 def build_jacobi_preconditioner(
@@ -2097,6 +2124,7 @@ def solve_iterative_system(
     scale_matrix_in_place: bool = False,
     diagnostic_rows: NDArray | None = None,
     diagnostic_label: str | None = None,
+    validate_matrix: bool = True,
 ) -> SolveResult:
     """Solve an already assembled sparse system with a SciPy Krylov method."""
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
@@ -2104,7 +2132,8 @@ def solve_iterative_system(
     rhs = np.asarray(rhs, dtype=np.float64)
     if matrix.shape != (rhs.size, rhs.size):
         raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
-    _validate_finite_array(np.asarray(matrix.data), "matrix data")
+    if validate_matrix:
+        _validate_finite_array(np.asarray(matrix.data), "matrix data")
     _validate_finite_array(rhs, "rhs")
     if initial_guess is not None:
         initial_guess = np.asarray(initial_guess, dtype=np.float64)
@@ -2227,9 +2256,11 @@ def solve_iterative_system(
         else:
             _solver_print(verbose, 2, "  using supplied preconditioner")
 
+    # For vector-valued callbacks, counting should remain O(1). Computing an
+    # explicit residual here adds a full sparse matvec to every Krylov
+    # iteration and can dominate otherwise short, strongly preconditioned
+    # solves. Final residuals are still computed and validated below.
     iteration_counter = KrylovIterationCounter(
-        matrix=scaled_matrix,
-        rhs=scaled_rhs,
         verbose=verbose,
         solver_name=solver_name_upper,
     )
@@ -2268,6 +2299,7 @@ def solve_iterative_system(
 
     initial_residual_norm = None
     initial_physical_residual_norm = None
+    initial_residual_start = time.perf_counter()
     if initial_guess is not None:
         # Residual of the system actually solved by SciPy.
         initial_solver_residual = scaled_matrix @ initial_guess - scaled_rhs
@@ -2301,6 +2333,10 @@ def solve_iterative_system(
             zero_initial_residual_norm,
             zero_initial_physical_residual_norm,
         )
+    initial_residual_elapsed_seconds = time.perf_counter() - initial_residual_start
+
+    preconditioner_apply_count_before = int(getattr(M, "apply_count", 0) or 0)
+    preconditioner_apply_seconds_before = float(getattr(M, "apply_seconds", 0.0) or 0.0)
 
     solve_start = time.time()
     x, info = solver(scaled_matrix, scaled_rhs, **solver_kwargs)
@@ -2308,6 +2344,7 @@ def solve_iterative_system(
 
     x = np.asarray(x)
 
+    residual_diagnostics_start = time.perf_counter()
     # Solver diagnostics: match the exact system and RHS used by SciPy.
     solver_residual = scaled_matrix @ x - scaled_rhs
     solver_residual_norm = float(np.linalg.norm(solver_residual))
@@ -2328,6 +2365,7 @@ def solve_iterative_system(
     diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
         restricted_residual_diagnostics(physical_residual, rhs, diagnostic_rows, rtol=rtol, atol=atol)
     )
+    residual_diagnostics_elapsed_seconds = time.perf_counter() - residual_diagnostics_start
 
     total_elapsed_seconds = time.time() - total_start
 
@@ -2336,8 +2374,18 @@ def solve_iterative_system(
     # A plain scipy LinearOperator does not provide these. Our
     # ElementSchwarzPreconditioner can expose them by attaching attributes
     # to the LinearOperator or by being reachable from the solver object.
-    prec_apply_count = getattr(M, "apply_count", None)
-    prec_apply_seconds = getattr(M, "apply_seconds", None)
+    cumulative_prec_apply_count = getattr(M, "apply_count", None)
+    cumulative_prec_apply_seconds = getattr(M, "apply_seconds", None)
+    prec_apply_count = (
+        None
+        if cumulative_prec_apply_count is None
+        else int(cumulative_prec_apply_count) - preconditioner_apply_count_before
+    )
+    prec_apply_seconds = (
+        None
+        if cumulative_prec_apply_seconds is None
+        else float(cumulative_prec_apply_seconds) - preconditioner_apply_seconds_before
+    )
     prec_local_solve_seconds = getattr(M, "local_solve_seconds", None)
     prec_reduce_seconds = getattr(M, "reduce_seconds", None)
     prec_copy_seconds = getattr(M, "copy_seconds", None)
@@ -2384,6 +2432,16 @@ def solve_iterative_system(
         solve_elapsed_seconds,
         total_elapsed_seconds,
     )
+    _solver_print(
+        verbose,
+        2,
+        "  iterative breakdown: initial_residual=%.5fs, callback=%.5fs, "
+        "preconditioner_apply=%.5fs, final_residuals=%.5fs",
+        initial_residual_elapsed_seconds,
+        iteration_counter.elapsed_seconds,
+        0.0 if prec_apply_seconds is None else prec_apply_seconds,
+        residual_diagnostics_elapsed_seconds,
+    )
 
     if prec_apply_count is not None:
         _solver_print(
@@ -2408,6 +2466,9 @@ def solve_iterative_system(
         scale_elapsed_seconds=scale_elapsed_seconds,
         preconditioner_elapsed_seconds=preconditioner_elapsed_seconds,
         solve_elapsed_seconds=solve_elapsed_seconds,
+        initial_residual_elapsed_seconds=initial_residual_elapsed_seconds,
+        callback_elapsed_seconds=iteration_counter.elapsed_seconds,
+        residual_diagnostics_elapsed_seconds=residual_diagnostics_elapsed_seconds,
         iteration_count=iteration_counter.count,
         initial_residual_norm=initial_residual_norm,
         rhs_norm=solver_rhs_norm,
@@ -2433,6 +2494,7 @@ def solve_iterative_system(
         preconditioner_local_solve_seconds=prec_local_solve_seconds,
         preconditioner_reduce_seconds=prec_reduce_seconds,
         preconditioner_copy_seconds=prec_copy_seconds,
+        preconditioner_factor_nnz=getattr(M, "factor_nnz", None),
         ilu_permc_spec=ilu_permc_spec if isinstance(preconditioner, str) and preconditioner == "ilu" else None,
     )
     return finalize_solve_result(
@@ -2545,6 +2607,7 @@ def solve_global_system(
         strongly imposed with large penalties and should not dominate the
         physically meaningful relative residual.
     """
+    global_start = time.perf_counter()
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     row_indices = np.asarray(row_indices)
     col_indices = np.asarray(col_indices)
@@ -2575,6 +2638,7 @@ def solve_global_system(
         effective_cupyx_solver = str(solver)[6:]
 
     matrix = None
+    matrix_assembly_elapsed_seconds = 0.0
     if assembled_matrix is None:
         validate_global_system_inputs(
             row_indices=row_indices,
@@ -2592,11 +2656,12 @@ def solve_global_system(
                 matrix_values=matrix_values,
                 system_size=system_size,
             )
+            matrix_assembly_elapsed_seconds = time.time() - assembly_start
             _solver_print(
                 verbose,
                 2,
                 "  sparse CSR matrix assembled in %.5fs with nnz=%d",
-                time.time() - assembly_start,
+                matrix_assembly_elapsed_seconds,
                 matrix.nnz,
             )
         else:
@@ -2843,6 +2908,7 @@ def solve_global_system(
             scale_matrix_in_place=scale_matrix_in_place,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
+            validate_matrix=False,
         )
 
     if permutation is not None:
@@ -2894,6 +2960,9 @@ def solve_global_system(
             result.physical_residual_norm,
             result.physical_relative_residual_norm,
         )
+
+    result.matrix_assembly_elapsed_seconds = matrix_assembly_elapsed_seconds
+    result.global_elapsed_seconds = time.perf_counter() - global_start
 
     if raise_on_nonconvergence and not result.converged:
         raise LinearSolveConvergenceError(
