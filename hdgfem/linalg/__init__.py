@@ -22,6 +22,7 @@ from .system import (
     clear_pypardiso_cache,
     eliminate_known_dofs,
     expand_known_dofs,
+    scale_sparse_system,
     solve_global_system,
     solve_pypardiso_system,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "cupy_upwind_block_gs_from_host_preconditioner",
     "eliminate_known_dofs",
     "expand_known_dofs",
+    "scale_sparse_system",
     "save_sparse_pattern_plot",
     "save_upwind_reordered_matrix_patterns",
     "solve_global_system",

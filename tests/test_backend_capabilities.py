@@ -193,7 +193,6 @@ def _advection_preflight(**overrides):
 @pytest.mark.parametrize(
     "overrides,reason",
     (
-        ({"assembly_backend": "cupy", "materialize_host_solution": False}, "materialize_host_solution=True"),
         ({"assembly_backend": "numpy", "boundary_mode": "zero-flux"}, "boundary_mode='zero-flux'"),
         ({"assembly_backend": "raw-cuda", "trace_ordering": "upwind-scc"}, "trace_ordering='none'"),
         (
@@ -238,7 +237,7 @@ def _diffusion_preflight(**overrides):
 @pytest.mark.parametrize(
     "overrides,reason",
     (
-        ({"assembly_backend": "cupy"}, "not in the early-alpha support matrix"),
+        ({"assembly_backend": "cupy", "solver": "direct"}, "not in the early-alpha support matrix"),
         ({"assembly_backend": "numba", "boundary_mode": "penalty"}, "boundary_mode='penalty'"),
         (
             {"assembly_backend": "raw-cuda", "solver": "amgx", "raw_matrix_format": "coo"},
@@ -281,20 +280,6 @@ def test_public_solvers_preflight_before_coefficient_sampling_or_optional_backen
         nonlocal calls
         calls += 1
         raise AssertionError("coefficient sampling must not run before backend preflight")
-
-    with pytest.raises(UnsupportedBackendConfigurationError, match="materialize_host_solution=True"):
-        solve_advection_reaction_hdg(
-            unexpected_coefficient_call,
-            (unexpected_coefficient_call, unexpected_coefficient_call),
-            unexpected_coefficient_call,
-            unexpected_coefficient_call,
-            space,
-            assembly_backend="cupy",
-            boundary_mode="eliminate",
-            solver="direct",
-            materialize_host_solution=False,
-            verbose=False,
-        )
 
     with pytest.raises(UnsupportedBackendConfigurationError, match="early-alpha support matrix"):
         solve_diffusion_reaction_hdg(

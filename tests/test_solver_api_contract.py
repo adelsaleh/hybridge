@@ -171,6 +171,111 @@ def _diffusion_problem(space: DGSpace):
 
 @pytest.mark.parametrize("assembly_backend", ("numpy", "numba"))
 @pytest.mark.parametrize("equation", ("advection-reaction", "diffusion-reaction"))
+def test_functional_and_reusable_solvers_accept_real_constant_boundary_data(equation: str, assembly_backend: str) -> None:
+    space = _space()
+    boundary_value = np.float64(1.25)
+    common = dict(
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend=assembly_backend,
+        verbose=False,
+    )
+
+    if equation == "advection-reaction":
+        source, beta, reaction, _ = _advection_problem(space)
+        functional = hdgfem.solve_advection_reaction_hdg(
+            source,
+            beta,
+            reaction,
+            boundary_value,
+            space,
+            **common,
+        )
+        solver = hdgfem.AdvectionReactionHDGSolver(space, **common)
+        solver.set_problem(source, beta, reaction, boundary_value)
+    else:
+        source, reaction, _ = _diffusion_problem(space)
+        functional = hdgfem.solve_diffusion_reaction_hdg(
+            source,
+            reaction,
+            boundary_value,
+            space,
+            **common,
+        )
+        solver = hdgfem.DiffusionReactionHDGSolver(space, **common)
+        solver.set_problem(source, reaction, boundary_value)
+
+    reusable = solver.solve()
+    assert callable(solver.boundary_condition)
+    np.testing.assert_allclose(
+        functional.boundary_trace[space.mesh.bnd_edges_inds],
+        boundary_value,
+        rtol=0.0,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(reusable.trace, functional.trace, rtol=1.0e-12, atol=1.0e-12)
+
+
+@pytest.mark.parametrize("equation", ("advection-reaction", "diffusion-reaction"))
+@pytest.mark.parametrize("invalid_kind", ("dg-field", "object"))
+def test_functional_and_reusable_solvers_reject_non_callable_non_constant_boundary_data(
+    equation: str,
+    invalid_kind: str,
+) -> None:
+    space = _space()
+    invalid = space.constant(1.0, name="boundary_h") if invalid_kind == "dg-field" else object()
+    message = "boundary_condition must be a callable or real scalar constant"
+    common = dict(
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numpy",
+        verbose=False,
+    )
+
+    if equation == "advection-reaction":
+        source, beta, reaction, _ = _advection_problem(space)
+        with pytest.raises(TypeError, match=message):
+            hdgfem.solve_advection_reaction_hdg(
+                source,
+                beta,
+                reaction,
+                invalid,
+                space,
+                **common,
+            )
+        with pytest.raises(TypeError, match=message):
+            hdgfem.AdvectionReactionHDGSolver(
+                space,
+                source=source,
+                beta=beta,
+                reaction=reaction,
+                boundary_condition=invalid,
+                **common,
+            )
+    else:
+        source, reaction, _ = _diffusion_problem(space)
+        with pytest.raises(TypeError, match=message):
+            hdgfem.solve_diffusion_reaction_hdg(
+                source,
+                reaction,
+                invalid,
+                space,
+                **common,
+            )
+        with pytest.raises(TypeError, match=message):
+            hdgfem.DiffusionReactionHDGSolver(
+                space,
+                source=source,
+                reaction=reaction,
+                boundary_condition=invalid,
+                **common,
+            )
+
+
+@pytest.mark.parametrize("assembly_backend", ("numpy", "numba"))
+@pytest.mark.parametrize("equation", ("advection-reaction", "diffusion-reaction"))
 def test_host_reusable_solver_accepts_per_call_initial_guess_and_reports_true_residual(
     equation: str,
     assembly_backend: str,
@@ -382,14 +487,13 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
             source=unexpected_coefficient_call,
             beta=(unexpected_coefficient_call, unexpected_coefficient_call),
             reaction=unexpected_coefficient_call,
-            boundary_condition=unexpected_coefficient_call,
             assembly_backend="cupy",
             solver="direct",
-            boundary_mode="eliminate",
+            boundary_mode="zero-flux",
             materialize_host_solution=False,
             verbose=False,
         )
-        match = "materialize_host_solution=True"
+        match = "boundary_mode='zero-flux'"
     else:
         solver = hdgfem.DiffusionReactionHDGSolver(
             space,
@@ -406,3 +510,11 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
     with pytest.raises(UnsupportedBackendConfigurationError, match=match):
         solver.solve()
     assert calls == 0
+
+
+def test_advection_options_expose_krylov_restart() -> None:
+    options = hdgfem.AdvectionReactionHDGOptions(restart=37, verbose=False)
+
+    assert options.restart == 37
+    assert options.as_solve_kwargs()["restart"] == 37
+    assert options.with_overrides(restart=19).restart == 19

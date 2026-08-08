@@ -13,6 +13,7 @@
 
 - Documentation is part of each task's acceptance criteria, not a release-end cleanup pass. Update the public API, capability matrix, algorithm note, or release evidence in the same change whenever behavior, support, defaults, performance recommendations, or validation scope changes.
 - Keep executable source-of-truth tables synchronized with checked-in documentation through drift tests where practical.
+- When a detailed plan exists, every checklist item covered by that plan must link to it directly. `docs/development/plans/README.md` owns the active-plan index; this file remains the source of truth for task priority and status.
 - A release-quality checklist item may be checked only when its commands, tested scope, warnings/skips, known gaps, and follow-up ownership are documented.
 
 ### Current Validation Focus
@@ -63,7 +64,6 @@ Research studies in later sections inform future solver choices but do not block
 
 - [ ] Evaluate true early cancellation for stalled AMGX attempts. PyAMGX currently exposes residual history only after its blocking `solve` returns, so the alpha contract classifies stagnation post-attempt. Benchmark chunked restarts or a nonblocking native interface on the high-mode guiding-center failure before changing Krylov behavior or default iteration limits.
 - [ ] Complete PyPardiso qualification beyond assembled SPD Poisson: benchmark representative guiding-center transport matrices, repeated-RHS reuse and invalidation, thread-count scaling, and comparisons with SciPy ILU/Krylov plus PETSc where available. The large Poisson result supports `pypardiso-spd` as the tested host direct choice for that matrix class, not as a universal default or as evidence for nonsymmetric density transport.
-- [ ] Complete backend cleanup needed for ownership clarity: split assembly, sparse-solve adapters, reconstruction, device data, and launch policy by role while retaining compatibility imports for one transition period.
 
 ### Raw-CUDA Launch Policy
 
@@ -87,7 +87,7 @@ Research studies in later sections inform future solver choices but do not block
 - [ ] Investigate basis-aware modal trace scaling or mass-normalized modal trace coordinates as a stronger alternative to scalar diagonal scaling for diffusion AMG coarsening.
 - [ ] Repeat lower-DenseLU-threshold Chebyshev/L1 checks before promoting any AMGX config change: `dense_lu_num_rows=128` fixed the modal p6/ms0.18 setup failure and lowered nodal p6/ms0.04 setup in one sample, but it did not fix modal fine-grid PCGF iterations.
 - [x] Add focused generated sweep variants for non-Chebyshev AMGX candidates found in local sources and test them at p6 on coarse and fine modal diffusion meshes with and without symmetric scaling. Finding: BICGSTAB aggregation/direct DILU/GS variants are cheap on coarse meshes, but none beats the existing fine-mesh modal `BICGSTAB + classical AMG` fallback; PCGF MULTIPASS/GS reduces iterations but is slower in wall time. See `docs/research/solver_studies/diffusion_amgx_2026_07.md`.
-- [ ] Recheck modal `BICGSTAB + classical AMG` at practical tolerances such as `1e-9` and `1e-10`, since it is much faster than modal PCGF on the heavy p6 case but does not hit a strict `1e-12` residual there.
+- [x] Recheck modal `BICGSTAB + classical AMG` at practical tolerances such as `1e-9` and `1e-10`, since it is much faster than modal PCGF on the heavy p6 case but does not hit a strict `1e-12` residual there. Bounded p6, `ms=0.04` raw-CUDA CSR samples on 2026-08-07 both reached the 2,000-iteration cap; physical residuals were 6.564e-9 and 1.470e-9, respectively, so no config or default change is justified. See [`docs/research/solver_studies/diffusion_amgx_tolerance_2026_08.md`](docs/research/solver_studies/diffusion_amgx_tolerance_2026_08.md).
 
 ### Raw-CUDA Assembly And Global Solve
 
@@ -147,7 +147,8 @@ Research studies in later sections inform future solver choices but do not block
 
 ### Solver And Boundary APIs
 
-- [ ] Allow NumPy/CuPy advection-reaction assembly paths to accept a callable stabilization `tau(x, K, e)`, where `K` is the element id and `e` is the local face number.
+- [x] Allow NumPy/CuPy advection-reaction assembly paths to accept explicit stabilization, including callables `tau(x, y)` and `tau(x, y, K, e)`, where `K` is the element id and `e` is the local face number. Both paths now accept scalars, callables, `DGField` objects, compatible coefficient arrays, per-face constants, and evaluated face-quadrature tables. DG fields use coefficient contractions with reference tables from their own `DGSpace`; the CuPy path reuses device coefficients without host materialization. `tests/test_cupy_backend.py` covers NumPy/CuPy parity for both boundary modes, both production trace bases, and seven input forms; full reconstruction with a callable and projected problem data; a device-backed cross-space `DGField`; and all six cases in `scripts/advection_reaction/cases.py`.
+- [x] Add a device-resident CuPy advection-reaction pipeline. CuPy hands global trace COO/RHS directly to compatible Cupyx solves without a host copy, consumes the device trace in reconstruction, expands eliminated boundary values and applies nodal/modal orientation on-device, rebuilds local operators, and uses a batched CuPy solve. Host solvers/preconditioners and explicit host-system requests remain intentional transfer boundaries. Dense local inverses and element-boundary matrices are not retained unless explicitly cached. `tests/test_cupy_backend.py` covers zero-download device residency and end-to-end NumPy parity for both boundary modes and both production trace bases; the detailed contract is in [Advection boundary and stabilization](docs/reference/advection_boundary_stabilization.md).
 - [x] Keep Numba advection-reaction assembly kernels table-driven for stabilization: callers must pass `None`, scalars, or projected `DGField` inputs instead of Python callables.
 - [x] Make raw-CUDA advection-reaction reject explicit `advection_stabilization` inputs before device setup, instead of silently ignoring them.
 - [ ] Extend raw-CUDA advection-reaction assembly to consume evaluated per-element/per-face stabilization tables once the raw kernel tau path is wired.
@@ -160,7 +161,7 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Port tangent-zero-boundary-flux assembly to the preferred raw-CUDA fused cooperative path, including direct CSR emission for AMGX/device solves. Boundary faces now zero the raw-kernel `tau`/`gamma` face weights, do not read boundary trace values, and do not emit boundary trace rows/columns. Initial coverage includes raw-CUDA/Numba zero-flux matrix/RHS/reconstruction parity, raw COO/CSR zero-flux parity, and `scripts/gpu/run_advection_disk_tangent_cuda.py` AMGX smoke runs.
 - [ ] Broaden raw-CUDA tangent-zero-boundary-flux validation: larger disk manufactured sweeps, nodal/modal trace basis convergence checks, direct device AMGX performance runs, and a decision on whether raw-CUDA needs an SCC-compatible device trace ordering path or should keep `trace_ordering="none"`.
 - [ ] Add vectorized NumPy and CuPy tangent-zero-boundary-flux assembly. The mode is already public, so acceptance requires matrix/RHS/reconstruction parity against Numba, missing-boundary-data behavior, modal/nodal coverage, and explicit unsupported-path tests until each backend lands.
-- [ ] Document how these boundary/stabilization modes interact with boundary elimination, trace unknown ownership, active trace DOF maps, SCC ordering, reconstruction, and device assembly paths.
+- [x] Document how boundary and stabilization modes interact with trace ownership, active DOF maps, SCC ordering, reconstruction, and device paths. `docs/reference/advection_boundary_stabilization.md` is the public contract and is linked from the manual, reference index, and advection algorithm note. It distinguishes zero flux from homogeneous Dirichlet data, records backend-specific stabilization inputs, and documents full-trace expansion and residency. The contract now records NumPy/CuPy explicit stabilization and DGField reference-table evaluation, Numba projected/table inputs, and raw-CUDA default-only stabilization.
 
 ### Device Assembly Kernel Qualification
 
@@ -181,18 +182,28 @@ Research studies in later sections inform future solver choices but do not block
 
 ## Shared Discretization And Solver APIs
 
+### Reusable Solver Classes Under Unsteady Updates
+
+- [ ] Add reusable-class validation for `DiffusionReactionHDGSolver` on a heat-equation manufactured problem using first-order backward Euler, nonzero exact Dirichlet data, and multiple time steps. Follow the [unsteady solver validation plan](docs/development/plans/unsteady_solver_validation.md); check temporal order, spatial error, per-step true residual, and equality with fresh-solver results while reaction and source are shifted by `1/dt` and `u_h^n/dt`.
+- [ ] Add reusable-class validation for `AdvectionReactionHDGSolver` using the conservative manufactured case in the [unsteady solver validation plan](docs/development/plans/unsteady_solver_validation.md). Check temporal order, conservation/error diagnostics, per-step true residual, and equality with fresh-solver results; impose exact data on the whole boundary for the first patch.
+- [ ] Prioritize GPU-path coverage for the unsteady reusable-class tests: CPU/NumPy as reference, then CuPy and raw-CUDA assembly/reconstruction paths with AMGX solves; include nodal `legacy-lagrange` and modal `legendre-modal` traces once the basic class-reuse checks pass. Follow the [unsteady solver validation plan](docs/development/plans/unsteady_solver_validation.md).
+- [ ] In the unsteady reusable-class tests, verify object reuse and cache invalidation explicitly: updating source, boundary data, beta, reaction, or time-dependent coefficient callables must refresh the correct matrix/RHS pieces while preserving reusable static space/reference data. Follow the [unsteady solver validation plan](docs/development/plans/unsteady_solver_validation.md).
+- [ ] Add future advection-reaction inflow-boundary support for unsteady conservative transport tests. The stored manufactured case has inflow on `x=-1` and `y=1`, but the first validation patch will impose exact boundary data on the whole boundary to match the current boundary-elimination API.
+
+
+
 ### Trace Basis Support
 
 - [x] Separate nodal and modal boundary trace coefficient semantics: nodal `legacy-lagrange` uses interpolation-node values, while non-nodal trace bases use edge projection.
 - [x] Thread non-legacy trace-space tables through the diffusion NumPy assembly/reconstruction path and verify `legendre-modal`/`bernstein` smoke solves with postprocessing disabled.
 - [x] Make diffusion Numba assembly and host HDG postprocessing trace-space-aware for `legacy-lagrange` and `legendre-modal`; both now use explicit trace orientation modes rather than legacy-only rules.
 - [x] Extend diffusion raw-CUDA assembly/reconstruction beyond nodal `legacy-lagrange` to support `legendre-modal` through p <= 6 for the current identity-diffusion/zero-reaction raw path; Bernstein remains unwired for raw-CUDA.
-- [ ] Decide whether Bernstein trace support is required. If enabled, add matrix/RHS, reconstruction, and postprocessing parity against NumPy before advertising Numba/raw-CUDA support; a successful smoke solve alone is insufficient.
+- [x] Decide whether Bernstein trace support is required. Decision: Bernstein is not a beta production requirement. Keep the existing bounded NumPy diffusion solve/assembly contract without HDG postprocessing, retain `legacy-lagrange` and `legendre-modal` as the two production trace bases, and do not schedule Numba/raw-CUDA Bernstein expansion unless user demand justifies the full parity matrix. The policy is recorded in `docs/reference/backend_capabilities.md`.
 - [x] Extend non-raw advection-reaction assembly backends to consume `DGTraceSpace`; `legacy-lagrange` and `legendre-modal` are now wired through NumPy, CuPy, and Numba advection-reaction assembly/reconstruction paths and covered by modal matrix/reconstruction parity tests.
 
 ### Form-Driven HDG Assembly
 
-This is the highest-priority shared-API project after the bounded early-alpha release gates. Form authoring and lowering may run on the host, but the lowered representation, coefficient data, assembly, condensation, solve, and reconstruction must support host and device residency without separate mathematical APIs.
+This remains the highest-priority new shared-API design project after the unsteady reusable-class validation above. Form authoring and lowering may run on the host, but the lowered representation, coefficient data, assembly, condensation, solve, and reconstruction must support host and device residency without separate mathematical APIs.
 
 - [ ] Define a backend-neutral linear HDG form contract for named mixed interior fields and one scalar trace field. Fix the sign convention as `A u - B lambda = f` and `D lambda - C u = g`, giving the condensed system `S = D - C A^-1 B` and `r = g + C A^-1 f`.
 - [ ] Add typed cell and facet integrands that receive basis values and gradients, normals, geometry, quadrature data, and sampled coefficients. Lower them once into immutable block and quadrature descriptors that contain no Python callbacks and can be consumed by host or device executors.
@@ -211,7 +222,8 @@ This is the highest-priority shared-API project after the bounded early-alpha re
 - [ ] Preserve cross-space coefficient semantics by evaluating the supplied DG field on the output solution space quadrature/face quadrature; do not silently L2-project it into the solution space. Different-mesh coefficient fields must raise a clear error.
 - [ ] Extend backend normalization for cross-space coefficients consistently: NumPy/CuPy should evaluate directly where possible, while Numba/raw-CUDA table kernels should consume prepared values/moments/descriptors without changing the represented coefficient. Keep stabilization out of this patch.
 - [ ] Add cross-space coefficient tests for diffusion-reaction and advection-reaction covering matrix/RHS parity, reconstructed solution parity, same-mesh different order/basis inputs, and clear different-mesh rejection.
-- [ ] Boundary-condition API next patch: accept only callables and exact zero/constant boundary data; reject general `DGField` boundary data clearly until trace/field boundary semantics are designed.
+- [ ] Implement conservative projection between `DGSpace` objects on different meshes using explicit source/target cell intersections (a common-refinement overlay), not only source-cell lookup at target quadrature points. Integrate on each intersection with exact polynomial quadrature rules so constants and total mass are preserved to numerical tolerance, and add a parallel version with distributed intersection search/ownership, assembly, serial/parallel parity, and conservation tests. See the [unrelated-mesh transfer plan](docs/development/plans/unrelated_mesh_transfer.md).
+- [x] Restrict boundary-condition inputs to callables and exact real scalar constants in both solver classes and functional solvers; normalize constants once before backend dispatch and reject `DGField`, future `HDGTraceField`, and arbitrary objects until field-to-trace semantics are designed. Advection `boundary_mode="zero-flux"` requires `None` and clearly rejects supplied callables or constants. Covered for NumPy/Numba, both equations, functional and reusable APIs in `tests/test_solver_api_contract.py` and `tests/test_advection_reaction_numba.py`; see [`docs/reference/solver_api_alpha.md`](docs/reference/solver_api_alpha.md) and [`docs/reference/advection_boundary_stabilization.md`](docs/reference/advection_boundary_stabilization.md).
 - [ ] Boundary-condition API long term: allow both callable boundary conditions and field-based boundary data, with explicit semantics for nodal trace interpolation versus modal trace projection and for host/device assembly paths.
 - [x] Make `DGField` and `VectorDGField` the canonical discrete coefficient inputs for diffusion-reaction and advection-reaction solvers, while still allowing Python analytic coefficient callables on NumPy/CuPy assembly paths where direct quadrature sampling is useful.
 - [x] Keep Numba and raw-CUDA assembly/reconstruction paths table-driven for now: reject raw callables, scalars, and loose arrays with clear messages that the path requires projected `DGField`/`VectorDGField` inputs.
@@ -227,23 +239,23 @@ This is the highest-priority shared-API project after the bounded early-alpha re
 - [x] Document the distinction between exact analytic PDE coefficients, projected DG coefficient fields, lazy constant/zero DG fields, explicit coefficient-table materialization via `.coeffs`/`asarray()`, and backend support limits. See `docs/reference/coefficient_inputs.md`.
 - [x] Audit remaining secondary utilities that directly access `.coeffs` and decide case-by-case whether materialization is intentional or a zero/constant fast path is worthwhile. See `docs/reference/coefficient_inputs.md`.
 
-### Reusable Solver Classes Under Unsteady Updates
-
-- [ ] Add reusable-class validation for `DiffusionReactionHDGSolver` on a heat-equation manufactured problem using first-order backward Euler, nonzero exact Dirichlet data, and multiple time steps. Check temporal order, spatial error, per-step true residual, and equality with fresh-solver results while reaction and source are shifted by `1/dt` and `u_h^n/dt`.
-- [ ] Add reusable-class validation for `AdvectionReactionHDGSolver` on the conservative unsteady manufactured case in `docs/development/unsteady_solver_validation.md`. Check temporal order, conservation/error diagnostics, per-step true residual, and equality with fresh-solver results; impose exact data on the whole boundary for the first patch.
-- [ ] Prioritize GPU-path coverage for the unsteady reusable-class tests: CPU/NumPy as reference, then CuPy and raw-CUDA assembly/reconstruction paths with AMGX solves; include nodal `legacy-lagrange` and modal `legendre-modal` traces once the basic class-reuse checks pass.
-- [ ] In the unsteady reusable-class tests, verify object reuse and cache invalidation explicitly: updating source, boundary data, beta, reaction, or time-dependent coefficient callables must refresh the correct matrix/RHS pieces while preserving reusable static space/reference data.
-- [ ] Add future advection-reaction inflow-boundary support for unsteady conservative transport tests. The stored manufactured case has inflow on `x=-1` and `y=1`, but the first validation patch will impose exact boundary data on the whole boundary to match the current boundary-elimination API.
-
 ### Backend And Residency Contract
 
-- [x] Define the bounded solver backend/assembly/linear-solver/residency matrix in `docs/reference/backend_capabilities.md`, including intentional host transfers, assembly-only device paths, the CuPy advection host-reconstruction requirement, and the reusable-class-only raw-CUDA diffusion solve. Keep future combinations unsupported until they receive a matrix row and contract test.
+- [x] Define the bounded solver backend/assembly/linear-solver/residency matrix in `docs/reference/backend_capabilities.md`, including intentional host transfers, assembly-only device paths, CuPy device reconstruction with optional host copies, and the reusable-class-only raw-CUDA diffusion solve. Keep future combinations unsupported until they receive a matrix row and contract test.
 - [x] Add bounded constructor and per-call contract tests for the published capability matrix. Every advertised solve row now constructs through the reusable API; NumPy/Numba advection and diffusion execute per-call warm starts with independently checked physical residuals; coefficient setters exercise the documented full invalidation or RHS-only operator reuse; and reusable solvers reject unsupported combinations before coefficient sampling. Optional PETSc/PyPardiso/Cupyx/AMGX numerical parity remains limited to the dedicated runtime lanes rather than implied by constructor coverage.
-- [x] Add explicit transfer-accounting tests for representative mixed- and device-residency paths. The Cupyx host-COO solve asserts one matrix upload and one host solution download; raw-CUDA advection and diffusion CSR-to-AMGX smoke solves monkeypatch `cp.asnumpy` and require zero full-array downloads when host materialization is disabled, while checking device-backed trace/reconstruction state and the unscaled physical residual. Broader transfer profiling across every optional backend row remains scheduled evidence.
-- [ ] Before beta, decide the removal timeline for legacy module aliases and the functional `return_=(...)` tuple interface; add deprecation warnings only when a replacement and transition release are named.
+- [x] Add explicit transfer-accounting tests for representative mixed- and device-residency paths. The Cupyx host-COO solve asserts one matrix upload and one host solution download when requested; compatible CuPy-to-Cupyx advection solves and raw-CUDA advection/diffusion CSR-to-AMGX solves monkeypatch `cp.asnumpy` and require zero full-array downloads when host materialization is disabled, while checking device-backed trace/reconstruction state and the unscaled physical residual. Broader transfer profiling across every optional backend row remains scheduled evidence.
+- [ ] Make assembly, global solve, and reconstruction independently selectable in both `AdvectionReactionHDGSolver`/`solve_advection_reaction_hdg` and `DiffusionReactionHDGSolver`/`solve_diffusion_reaction_hdg`. The target Cartesian product is `(numpy | numba | cupy | raw-cuda)` assembly + `(scipy | cupyx | amgx | petsc | pypardiso)` global solve + `(numpy | numba | cupy | raw-cuda)` reconstruction, subject only to external-library availability and explicitly documented equation/feature limits. Add backend-neutral host/device system and trace adapters so matching-residency stages hand buffers through without copies and mismatched-residency combinations perform exactly the required transfer at the stage boundary. Treat residency as buffer ownership/accessibility rather than assuming separate physical memories: on supported ARM/unified-memory architectures, reuse directly accessible buffers and do not force nominal host/device copies merely because adjacent stages use different backend labels. HDGFEM must not introduce any other host/device traffic unless the user explicitly requests host/device materialization, caching, or diagnostics; transfers performed internally by imported third-party libraries are outside HDGFEM's control but must not be duplicated by its adapters. Architecture-specific combinations remain conditional on the imported solver/runtime libraries supporting that platform and memory model. Qualify each advertised combination for advection-reaction and diffusion-reaction with matrix/RHS, trace, reconstructed-field/flux, true-residual, host/device residency, physical-transfer counting, and unified-memory alias/access tests where available before adding its row to [`docs/reference/backend_capabilities.md`](docs/reference/backend_capabilities.md).
+- [x] Decide the removal timeline for legacy module aliases and the functional `return_=(...)` tuple interface: neither is deprecated or removed during alpha; after a replacement and deprecation release are named, retain both through at least one complete documented transition release and permit removal no earlier than the following release. See [`docs/reference/solver_api_alpha.md`](docs/reference/solver_api_alpha.md). Actual shim removal remains a separate post-transition TODO under Backend Architecture.
 
 ## Guiding-Center
 
+- [x] Record the bounded Gaussian-annulus k=3 host/device solver findings,
+  including nonlinear-stage SciPy ILU/upwind-SCC behavior, the 113,894-triangle
+  PARDISO/raw-CUDA comparison, strict AMGX true-residual screens, mesh-scope
+  caveats, and exact dirty-worktree source/binary/artifact hashes in
+  `docs/research/solver_studies/guiding_center_host_device_2026_08.md` and its
+  provenance manifest.
+- [ ] After the SciPy/PyPardiso host study, add reusable PETSc `Mat`/`KSP`/`PC` contexts for fixed Poisson and changing transport operators. Qualify single-rank configurations first, then root-assembled and distributed MPI runs over 2, 4, 8, 12, and 24 ranks with Hypre/MUMPS candidates; record sparsity-pattern and value reuse, setup/solve time, true residuals, peak memory, and parity with the matched Gaussian-annulus k=3 (`sigma=0.03`, `eps=0.05`) reference before selecting any production preset.
 ### Density Transport Study
 
 - [ ] Build one reproducible benchmark matrix for density transport in the perturbed diocotron equilibrium, with a manufactured case used only for calibration. Compare the production raw-CUDA/AMGX HDG path, pure-host HDG sparse direct, `upwind-scc + ILU + Krylov`, and `upwind-scc + upwGS + Krylov`, plus a pure-DG host baseline on matched meshes, polynomial orders, time steps, tolerances, and time integrators. Record setup, assembly, graph/order construction, preconditioner/factorization, solve, reconstruction, total step time, peak memory, true residual, mass/energy drift, and density/potential error or equilibrium drift.
@@ -306,7 +318,7 @@ This is the highest-priority shared-API project after the bounded early-alpha re
 
 ### Future Adaptivity
 
-- [ ] Add mesh adaptivity only after the fixed-mesh host and pure-device versions are correct: conservative DG transfer, mass/energy accounting across remeshes, boundary-geometry preservation, and later curvilinear-boundary support should be designed together with the mesh-geometry TODO items.
+- [ ] Add mesh adaptivity only after the fixed-mesh host and pure-device versions are correct: conservative DG transfer, mass/energy accounting across remeshes, boundary-geometry preservation, and later curvilinear-boundary support should be designed together with the mesh-geometry TODO items. Follow the [unrelated-mesh transfer plan](docs/development/plans/unrelated_mesh_transfer.md) for the transfer, conservation, geometry-mismatch, host, and device work.
 
 ## Backend Architecture
 
@@ -324,7 +336,7 @@ This is the highest-priority shared-API project after the bounded early-alpha re
   function, method, fallback decorator, and Numba kernel under `hdgfem/` now
   has a concise functional docstring; the AST check in
   `tests/test_documentation_structure.py` prevents regressions.
-- [ ] Refresh guiding-center and GPU-path documentation to match the current FGMRES/direct-DILU transport fallback and modal raw-CUDA diffusion support. Remove the obsolete PBICGSTAB retry and nodal-only raw-diffusion descriptions, then add a documentation consistency check for named configs and scripts.
+- [x] Refresh guiding-center and GPU-path documentation to match the current FGMRES/direct-`MULTICOLOR_DILU` transport fallback and bounded modal raw-CUDA diffusion/advection support. `MANUAL.md` now records the primary-stage/primary-zero/robust-zero/two-correction sequence, independently checked row-unscaled residual acceptance, and `configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json`; the obsolete PBICGSTAB description is removed. `tests/test_documentation_structure.py` rejects stale retry wording and missing exact `scripts/*.py` or `configs/*.json` paths. The focused documentation and capability suite passed 144 tests.
 
 ### Module Structure
 
@@ -350,9 +362,29 @@ This is the highest-priority shared-API project after the bounded early-alpha re
   duplicate/superseded notes and tracked generated PDFs. Section indexes and
   `tests/test_documentation_structure.py` enforce the resulting ownership
   boundaries.
-- [ ] Continue splitting broad canonical backend modules by responsibility:
-  CuPy data mirrors, raw-CUDA assembly, sparse-solver/PyAMGX adapters,
-  reconstruction, and reusable device data structures.
+- [x] Move reusable runner operations into public package APIs: scalar field
+  integrals/minima/maxima and cross-field norms, host/device solution and trace
+  extraction, scalar-error and guiding-center diagnostics, trace projection and
+  degree transfer, AMGX configuration, plotting/comparison helpers, face-dense
+  conversion, sparse scaling, and configurable HDG Gram inverses. Focused API
+  tests and the full suite (`703 passed, 4 skipped`) cover the bounded result.
+- [x] Make production advection-reaction, diffusion-reaction, and guiding-center
+  runners high-level consumers of package APIs. CUDA/host PDE solves now go
+  through `AdvectionReactionHDGSolver` or `DiffusionReactionHDGSolver`; the
+  former script-owned diffusion and upwind-Cupyx solver paths are removed, and
+  the scaling and Gram scripts are package-backed diagnostics rather than
+  alternate implementations.
+- [ ] Finish the remaining backend-role split under this single ownership
+  tracker. The first phase separated device diffusion solve orchestration,
+  Cupyx device-system solving, reusable diagnostics/configuration, and
+  runner-facing field/trace operations. Remaining work is to split CuPy data
+  mirrors/runtime ownership from sparse-solver/PyAMGX adapters in
+  `hdgfem/backends/cupy.py`, split advection device assembly from reconstruction
+  and reusable device data in `hdgfem/backends/advection_cuda.py`, and reduce
+  the canonical equation solver modules to stage orchestration plus supported
+  numerical kernels. Retain compatibility imports for one transition period.
+  The independently selectable assembly/solve/reconstruction Cartesian-product
+  contract remains tracked separately under Backend And Residency Contract.
 - [ ] Remove the abbreviated solver compatibility shims only after a documented
   transition release passes and downstream callers have migrated.
 

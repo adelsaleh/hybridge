@@ -686,6 +686,44 @@ class DGSpace:
         """Create a vector DG field whose components all use this scalar space."""
         return VectorDGField(components, self, name=name)
 
+    def _comparison_values(self, value: "DGField | Callable") -> np.ndarray:
+        """Evaluate a field or callable on this space's volume quadrature."""
+        if isinstance(value, DGField):
+            value.space.assert_same_mesh(self)
+            if value.space is self:
+                return value.values()
+            return value.values_at_ref(self.quad_data.Krf_quads)
+        if not callable(value):
+            raise TypeError("comparison operands must be DGField instances or callables")
+        points = self.mapped_quads()
+        raw = value(points[:, :, 0], points[:, :, 1])
+        return _normalize_callable_values(
+            raw,
+            self.mesh.num_tri,
+            self.quad_data.Krf_w.shape[0],
+        )
+
+    def l2_diff(self, left: "DGField | Callable", right: "DGField | Callable") -> float:
+        r"""Return :math:`\|left-right\|_{L^2}` for fields and/or callables.
+
+        Both operands are evaluated on this space's physical volume
+        quadrature. Fields may use a different polynomial degree provided they
+        share this mesh and element ordering.
+        """
+        difference = self._comparison_values(left) - self._comparison_values(right)
+        return float(np.sqrt(np.einsum(
+            "K,Kq,q->",
+            self.mesh.aff_jacs,
+            difference * difference,
+            self.quad_data.Krf_w,
+            optimize=True,
+        )))
+
+    def linf_diff(self, left: "DGField | Callable", right: "DGField | Callable") -> float:
+        r"""Return the quadrature-sampled :math:`L^\infty` difference."""
+        difference = self._comparison_values(left) - self._comparison_values(right)
+        return float(np.max(np.abs(difference)))
+
     def transfer_plan_from(self, source: "DGSpace", *, verbose: bool = True):
         """Build a reusable geometric transfer plan from ``source`` to ``self``.
 
@@ -1173,29 +1211,30 @@ class DGField:
             )
         )
 
+    def integral(self) -> float:
+        """Integrate the scalar field over its physical mesh."""
+        return float(np.einsum(
+            "K,Kq,q->",
+            self.space.mesh.aff_jacs,
+            self.values(),
+            self.space.quad_data.Krf_w,
+            optimize=True,
+        ))
+
+    def min_max(self) -> tuple[float, float]:
+        """Return quadrature-sampled minimum and maximum field values."""
+        values = self.values()
+        return float(np.min(values)), float(np.max(values))
+
     def l2_error(self, exact: Callable, *, parameters=None) -> float:
         """Compute the physical :math:`L^2` error against an exact callable.
 
         ``exact`` is evaluated on physical volume quadrature points.  If
         ``parameters`` is supplied, it is passed as a third positional argument.
         """
-        points = self.space.mapped_quads()
         if parameters is None:
-            exact_values = exact(points[:, :, 0], points[:, :, 1])
-        else:
-            exact_values = exact(points[:, :, 0], points[:, :, 1], parameters)
-        diff = self.values() - exact_values
-        return float(
-            np.sqrt(
-                np.einsum(
-                    "K,Kq,q->",
-                    self.space.mesh.aff_jacs,
-                    diff * diff,
-                    self.space.quad_data.Krf_w,
-                    optimize=True,
-                )
-            )
-        )
+            return self.space.l2_diff(self, exact)
+        return self.space.l2_diff(self, lambda x, y: exact(x, y, parameters))
 
     def project_to(self, target: DGSpace, *, plan=None, verbose: bool = True) -> tuple["DGField", object]:
         """Project this field into ``target`` using quadrature-based L2 transfer.
@@ -1619,6 +1658,54 @@ class VectorDGField:
         is true for the common ``V * V`` case.
         """
         return np.stack([component.values() for component in self.components], axis=0)
+
+    def l2_norm(self) -> float:
+        """Return the physical vector :math:`L^2` norm."""
+        values = self.values()
+        space = self.components[0].space
+        return float(np.sqrt(np.einsum(
+            "K,dKq,q->", space.mesh.aff_jacs, values * values, space.quad_data.Krf_w, optimize=True,
+        )))
+
+    def l2_error(self, exact: Callable) -> float:
+        """Return the physical vector :math:`L^2` error against ``exact``."""
+        space = self.components[0].space
+        points = space.mapped_quads()
+        raw = exact(points[:, :, 0], points[:, :, 1])
+        target = (space.mesh.num_tri, points.shape[1])
+        if isinstance(raw, (tuple, list)):
+            if len(raw) != self.dim:
+                raise ValueError(f"exact vector must have {self.dim} components; got {len(raw)}")
+            components = raw
+        else:
+            array = np.asarray(raw, dtype=np.float64)
+            if array.shape[:1] != (self.dim,):
+                raise ValueError(
+                    f"exact vector must return {self.dim} components or an array "
+                    f"with leading dimension {self.dim}"
+                )
+            components = array
+        normalized = []
+        for component in components:
+            values = np.asarray(component, dtype=np.float64)
+            if values.ndim == 0:
+                values = np.full(target, float(values), dtype=np.float64)
+            else:
+                try:
+                    values = np.broadcast_to(values, target)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"exact vector component must broadcast to {target}; got {values.shape}"
+                    ) from exc
+            normalized.append(values)
+        difference = self.values() - np.stack(normalized, axis=0)
+        return float(np.sqrt(np.einsum(
+            "K,dKq,q->",
+            space.mesh.aff_jacs,
+            difference * difference,
+            space.quad_data.Krf_w,
+            optimize=True,
+        )))
 
     def project_to(self, target: VectorDGSpace, *, plan=None, verbose: bool = True):
         """Project component-wise into another vector DG space."""

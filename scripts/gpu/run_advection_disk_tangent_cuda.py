@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
-import json
 import sys
 import time
 from pathlib import Path
@@ -15,20 +13,18 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
+from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_disc_mesh
 from hdgfem.core.space import DGSpace, VectorDGField
+from hdgfem.core.field_ops import solution_field
+from hdgfem.diagnostics import evaluate_scalar_error
+from hdgfem.io.comparison import plot_sampled_solution_comparison
+from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
 from hdgfem.io.output import pretty_print_sections
+from hdgfem.io.plot import plot_solution_comparison, resolve_field_plot_resolution
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
-from hdgfem.io.plot import plot_solution_comparison
-from scripts.gpu.run_advection_reaction_cuda import (
-    effective_plot_resolution,
-    evaluate_errors,
-    evaluate_errors_device,
-    plot_sampled_solution_comparison,
-)
 
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "amgx"
@@ -97,22 +93,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_amgx_config(args):
-    config_path = Path(args.amgx_config).expanduser() if args.amgx_config else None
-    if config_path is not None and config_path.exists():
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-    elif config_path is not None:
-        raise FileNotFoundError(f"AMGX config file not found: {config_path}")
-    else:
-        config = copy.deepcopy(DEFAULT_AMGX_CONFIG)
-    solver_config = config.setdefault("solver", {})
-    if args.amgx_solver is not None:
-        solver_config["solver"] = str(args.amgx_solver)
-    solver_config["tolerance"] = float(args.tolerance)
-    solver_config["max_iters"] = int(args.maxiter)
-    return config, config_path
-
-
 def _fmt(value, spec):
     if spec == "s":
         return str(value)
@@ -121,43 +101,6 @@ def _fmt(value, spec):
 
 def _maybe(value, default="n/a"):
     return default if value is None else value
-
-
-def describe_amgx_solver(config):
-    if not config:
-        return "amgx"
-    solver_config = config.get("solver", {})
-    return str(solver_config.get("solver", "amgx"))
-
-
-def describe_amgx_preconditioner(config):
-    if not config:
-        return "none"
-    preconditioner = config.get("solver", {}).get("preconditioner")
-    if preconditioner is None:
-        return "none"
-    if isinstance(preconditioner, str):
-        return preconditioner
-    if not isinstance(preconditioner, dict):
-        return type(preconditioner).__name__
-
-    parts = [str(preconditioner.get("solver", "unknown"))]
-    algorithm = preconditioner.get("algorithm")
-    if algorithm:
-        parts.append(str(algorithm))
-    smoother = preconditioner.get("smoother")
-    if isinstance(smoother, dict):
-        smoother = smoother.get("solver")
-    if smoother:
-        parts.append(str(smoother))
-    cycle = preconditioner.get("cycle")
-    if cycle:
-        parts.append(f"{cycle}-cycle")
-    presweeps = preconditioner.get("presweeps")
-    postsweeps = preconditioner.get("postsweeps")
-    if presweeps is not None or postsweeps is not None:
-        parts.append(f"pre/post={presweeps or 0}/{postsweeps or 0}")
-    return " / ".join(parts)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -198,7 +141,12 @@ def main(argv: list[str] | None = None) -> int:
         edge_quad_1d=args.edge_quad_1d,
     )
     space_time = time.perf_counter() - space_start
-    plot_resolution = effective_plot_resolution(args.plot_resolution, space.order, mesh.num_tri)
+    plot_resolution = resolve_field_plot_resolution(
+        args.plot_resolution,
+        order=space.order,
+        num_elements=mesh.num_tri,
+        default=20,
+    )
 
     case = case_definition_by_key("disk_tangent")
     beta_x, beta_y, reaction, source, exact = case.build()
@@ -216,7 +164,13 @@ def main(argv: list[str] | None = None) -> int:
     preconditioner = None
     preconditioner_display_name = "none"
     if args.solver == "amgx":
-        amgx_config, amgx_path = load_amgx_config(args)
+        amgx_config, amgx_path = load_amgx_config(
+            args.amgx_config,
+            default_config=DEFAULT_AMGX_CONFIG,
+            solver=args.amgx_solver,
+            tolerance=args.tolerance,
+            maxiter=args.maxiter,
+        )
         solver_name = "amgx"
         solver_display_name = describe_amgx_solver(amgx_config)
         preconditioner_display_name = describe_amgx_preconditioner(amgx_config)
@@ -272,30 +226,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.evaluate_errors or args.plot:
         error_start = time.perf_counter()
         if result.field_device is not None:
-            cspace = as_cupy_space(space)
-            error_result = evaluate_errors_device(
-                result.field_device,
-                cspace,
-                exact,
-                plot_resolution,
-                args.error_volume_quad_1d,
-                return_plot_samples=args.plot,
-            )
-            if args.plot:
-                l2, linf, avg_max, max_element, plot_samples = error_result
-            else:
-                l2, linf, avg_max, max_element = error_result
+            diagnostic_field = solution_field(result, space, name="u_h")
             error_mode = "device"
         elif result.field is not None:
-            l2, linf, avg_max, max_element = evaluate_errors(
-                result.field,
-                exact,
-                plot_resolution,
-                args.error_volume_quad_1d,
-            )
+            diagnostic_field = result.field
             error_mode = "host"
         else:
             raise RuntimeError("error evaluation/plotting requires a host or device field")
+        error_report = evaluate_scalar_error(
+            diagnostic_field,
+            exact,
+            volume_quad_1d=args.error_volume_quad_1d,
+            sample_resolution=plot_resolution,
+            include_samples=args.plot,
+        )
+        metrics = error_report.metrics
+        l2, linf = metrics.l2, metrics.linf
+        avg_max, max_element = metrics.mean_element_linf, metrics.max_element
+        plot_samples = error_report.samples
         error_time = time.perf_counter() - error_start
 
     total = time.perf_counter() - run_start

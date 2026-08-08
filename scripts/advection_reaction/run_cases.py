@@ -7,6 +7,7 @@ import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import replace
 from pathlib import Path
+from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -112,12 +113,6 @@ def _build_mesh(config: AdvectionReactionRunPreset, case):
     )
 
 
-def _timing_with_percent(seconds: float, total: float, *, precision: int = 1) -> str:
-    """Format elapsed seconds with its percentage of total runtime."""
-    percent = 0.0 if total <= 0.0 else 100.0 * float(seconds) / float(total)
-    return f"{float(seconds):.{precision}f} ({percent:.1f}%)"
-
-
 def _numba_thread_count() -> int | None:
     """Return the active Numba worker count when Numba is importable."""
     try:
@@ -130,17 +125,14 @@ def _numba_thread_count() -> int | None:
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
+    from hdgfem.diagnostics import evaluate_scalar_error
     from hdgfem.io.output import pretty_print_sections
 
-    l2_error = result.field.l2_error(exact)
-    numerical_values = result.field.values()
-    points = space.mapped_quads()
-    exact_values = exact(points[:, :, 0], points[:, :, 1])
-    abs_error = np.abs(numerical_values - exact_values)
-    linfty_error = float(np.max(abs_error))
-    element_max_error = np.max(abs_error, axis=1)
-    avg_error = float(np.average(element_max_error))
-    max_error_element = int(np.argmax(element_max_error))
+    metrics = evaluate_scalar_error(result.field, exact).metrics
+    l2_error = metrics.l2
+    linfty_error = metrics.linf
+    avg_error = metrics.mean_element_linf
+    max_error_element = metrics.max_element
     global_solve = result.global_solve_result
 
     run_mesh_items = [
@@ -255,110 +247,6 @@ def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, confi
         title="Advection-Reaction Preset Solve Summary",
     )
     return l2_error
-
-
-def _polynomial_plot_resolution(requested_resolution: int | None, order: int) -> int:
-    """Choose a per-element plotting grid dense enough for degree-``order`` fields."""
-    minimum = max(3, 2 * int(order) + 3)
-    if requested_resolution is None:
-        return max(20, minimum)
-    return max(int(requested_resolution), minimum)
-
-
-def _matplotlib_contour_levels(order: int) -> int:
-    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
-    return min(256, max(128, 24 * (int(order) + 1)))
-
-
-def _plot_solution_comparison_matplotlib(
-        field,
-        exact,
-        *,
-        resolution: int,
-        exact_resolution: int | str | None,
-        title: str,
-        show_mesh: bool,
-        show: bool = True,
-):
-    import numpy as np
-
-    from hdgfem.io.plot import (
-        plot_scalar_sample_panels_matplotlib,
-        resolve_exact_plot_resolution,
-        sample_callable_on_elements,
-        sample_field_on_elements,
-    )
-
-    mesh = field.space.mesh
-    reference_points, _, numerical_values = sample_field_on_elements(
-        field,
-        resolution=resolution,
-    )
-    _, _, exact_values_for_error = sample_callable_on_elements(
-        mesh,
-        exact,
-        reference_points=reference_points,
-    )
-    absolute_error = np.abs(numerical_values - exact_values_for_error)
-
-    exact_panel_resolution = resolve_exact_plot_resolution(
-        exact_resolution,
-        numerical_resolution=resolution,
-        num_elements=mesh.num_tri,
-    )
-    exact_reference_points, _, exact_values = sample_callable_on_elements(
-        mesh,
-        exact,
-        resolution=exact_panel_resolution,
-    )
-    return plot_scalar_sample_panels_matplotlib(
-        mesh,
-        (
-            ("Numerical solution", reference_points, numerical_values),
-            ("Exact solution", exact_reference_points, exact_values, {"show_mesh": False}),
-            ("Absolute error", reference_points, absolute_error, {"cmap": "magma", "zero_min": True}),
-        ),
-        suptitle=title,
-        show_mesh=show_mesh,
-        cmap="jet",
-        levels=_matplotlib_contour_levels(field.space.order),
-        share_clim=False,
-        show=show,
-    )
-
-
-def _plot_solution_comparison(
-        field,
-        exact,
-        *,
-        resolution: int,
-        exact_resolution: int | str | None,
-        title: str,
-        show_mesh: bool,
-        show: bool = True,
-):
-    if field.space.mesh.num_tri <= 130:
-        return _plot_solution_comparison_matplotlib(
-            field,
-            exact,
-            resolution=_polynomial_plot_resolution(resolution, field.space.order),
-            exact_resolution=exact_resolution,
-            title=title,
-            show_mesh=show_mesh,
-            show=show,
-        )
-
-    from hdgfem.io.plot import plot_solution_comparison
-
-    return plot_solution_comparison(
-        field,
-        exact,
-        resolution=resolution,
-        exact_resolution=exact_resolution,
-        title=title,
-        show_mesh=show_mesh,
-        show=show,
-    )
 
 
 def _main() -> None:
@@ -493,7 +381,7 @@ def _main() -> None:
         return
 
     from hdgfem.core.space import DGSpace, VectorDGField
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver, _timed_call
+    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
 
     case = case_definition_by_key(config.case)
     beta_x, beta_y, reaction, source, exact = case.build(**config.case_params)
@@ -586,11 +474,18 @@ def _main() -> None:
     )
 
     if config.plot:
+        from hdgfem.io.plot import plot_solution_comparison, resolve_field_plot_resolution
+
         title = f"{preset_key}, {case.key}, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
-        _plot_solution_comparison(
+        resolution = resolve_field_plot_resolution(
+            config.plot_resolution,
+            order=space.order,
+            num_elements=mesh.num_tri,
+        )
+        plot_solution_comparison(
             result.field,
             exact,
-            resolution=config.plot_resolution,
+            resolution=resolution,
             exact_resolution="auto" if config.exact_plot_resolution is None else config.exact_plot_resolution,
             title=title,
             show_mesh=not config.hide_mesh,

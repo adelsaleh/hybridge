@@ -11,6 +11,7 @@ from hdgfem.assembly.face_dense import (
     build_face_topology,
     expand_eliminated_solution,
     face_dense_matvec,
+    face_dense_to_dense,
 )
 from hdgfem.assembly.hdg import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
@@ -38,21 +39,6 @@ class ValidationCase:
     stabilization: object
     reference: object
     face_dense: DiffusionFaceDenseAssembly
-
-
-def _face_dense_to_dense(blocks: np.ndarray, neighbors: np.ndarray) -> np.ndarray:
-    """Small-problem reference conversion used only by validation tests."""
-    num_rows, num_slots, block_size, _ = blocks.shape
-    matrix = np.zeros((num_rows * block_size, num_rows * block_size), dtype=blocks.dtype)
-    for row_face in range(num_rows):
-        row = slice(row_face * block_size, (row_face + 1) * block_size)
-        for slot in range(num_slots):
-            column_face = int(neighbors[row_face, slot])
-            if column_face < 0:
-                continue
-            column = slice(column_face * block_size, (column_face + 1) * block_size)
-            matrix[row, column] += blocks[row_face, slot]
-    return matrix
 
 
 def _build_validation_case(
@@ -235,7 +221,7 @@ def test_penalty_face_dense_matrix_and_rhs_match_current_coo_assembly(
     )
 
     reference_matrix = _reference_penalty_dense(case)
-    face_matrix = _face_dense_to_dense(
+    face_matrix = face_dense_to_dense(
         case.face_dense.penalty_system.blocks,
         case.face_dense.penalty_system.neighbors,
     )
@@ -279,7 +265,7 @@ def test_direct_dirichlet_elimination_matches_scalar_coo_elimination(
         shape=(num_free_dofs, num_free_dofs),
     ).toarray()
     reduced = case.face_dense.eliminated_system
-    face_matrix = _face_dense_to_dense(reduced.blocks, reduced.neighbors)
+    face_matrix = face_dense_to_dense(reduced.blocks, reduced.neighbors)
 
     np.testing.assert_allclose(face_matrix, reference_matrix, rtol=1.0e-13, atol=1.0e-13)
     np.testing.assert_allclose(reduced.rhs.ravel(), reference.rhs, rtol=1.0e-13, atol=1.0e-13)
@@ -310,7 +296,7 @@ def test_face_dense_matvec_matches_explicit_matrix_for_flat_and_face_major_vecto
         if mode == "penalty"
         else case.face_dense.eliminated_system
     )
-    explicit = _face_dense_to_dense(system.blocks, system.neighbors)
+    explicit = face_dense_to_dense(system.blocks, system.neighbors)
     rng = np.random.default_rng(47821)
     x_flat = rng.standard_normal(system.num_dofs)
     x_faces = x_flat.reshape(system.num_rows, system.block_size)
@@ -337,8 +323,8 @@ def test_penalty_and_eliminated_systems_produce_the_same_full_trace_solution() -
     penalty = case.face_dense.penalty_system
     eliminated = case.face_dense.eliminated_system
 
-    penalty_matrix = _face_dense_to_dense(penalty.blocks, penalty.neighbors)
-    eliminated_matrix = _face_dense_to_dense(eliminated.blocks, eliminated.neighbors)
+    penalty_matrix = face_dense_to_dense(penalty.blocks, penalty.neighbors)
+    eliminated_matrix = face_dense_to_dense(eliminated.blocks, eliminated.neighbors)
     penalty_trace = np.linalg.solve(penalty_matrix, penalty.rhs.ravel())
     reduced_trace = np.linalg.solve(eliminated_matrix, eliminated.rhs.ravel())
     expanded_trace = expand_eliminated_solution(reduced_trace, eliminated)

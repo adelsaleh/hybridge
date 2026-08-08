@@ -121,7 +121,7 @@ def test_matplotlib_unshared_colorbars_default_to_each_panel_values():
 def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
     import matplotlib.pyplot as plt
 
-    from scripts.gpu.run_diffusion_reaction_cuda import plot_sampled_solution_comparison
+    from hdgfem.io.comparison import plot_sampled_solution_comparison
 
     mesh = rectangle_mesh(1, 1)
     reference_points = reference_plot_points(5)
@@ -149,7 +149,7 @@ def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
         numerical_resolution=5,
         exact_resolution="same",
         polynomial_order=1,
-        postprocessed_plot_samples={
+        postprocessed_samples={
             "reference_points": reference_points,
             "postprocessed_values": post_values,
             "exact_values_for_error": exact_values,

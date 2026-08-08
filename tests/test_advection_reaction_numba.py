@@ -41,6 +41,52 @@ def _elementwise_constant_field(space: DGSpace, values, *, name: str) -> DGField
     return space.field(np.ascontiguousarray(coeffs), name=name)
 
 
+def test_dg_stabilization_uses_field_space_reference_tables(monkeypatch) -> None:
+    mesh = rectangle_mesh(1, 1)
+    test_space = DGSpace(mesh, 3, basis_type="dub_orth")
+    field_space = DGSpace(mesh, 2, basis_type="dub_orth")
+    tau_h = field_space.project_callable(lambda x, y: 3.0 + x - 0.25 * y, name="tau_h")
+    trace_space = test_space.trace_space("legendre-modal")
+    basis = hdg_mats.dg_field_basis_on_trace_faces(field_space, trace_space)
+    expected = np.ascontiguousarray(np.einsum("Ki,fiq->Kfq", tau_h.coeffs, basis, optimize=True))
+
+    def fail_generic_evaluation(*_args, **_kwargs):
+        raise AssertionError("DG stabilization must use coefficient/reference-table contraction")
+
+    monkeypatch.setattr(DGField, "values_at_ref", fail_generic_evaluation)
+    beta_dot_normal = np.zeros_like(expected)
+    actual = hdg_mats.advection_trace_stabilization_values(
+        test_space,
+        beta_dot_normal,
+        tau_h,
+        trace_space=trace_space,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
+
+
+def test_context_aware_callable_stabilization_receives_element_and_face_ids() -> None:
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth")
+    trace_space = space.trace_space("legacy-lagrange")
+    shape = (mesh.num_tri, 3, trace_space.weights.size)
+
+    def tau(x, y, element, face):
+        return 4.0 + 0.0 * x * y + element + 0.25 * face
+
+    actual = hdg_mats.advection_trace_stabilization_values(
+        space,
+        np.zeros(shape, dtype=np.float64),
+        tau,
+        trace_space=trace_space,
+    )
+    expected = 4.0 + np.arange(mesh.num_tri)[:, None, None] + 0.25 * np.arange(3)[None, :, None]
+    expected = np.broadcast_to(expected, shape)
+    assert actual.shape == shape
+    np.testing.assert_allclose(actual, expected)
+
+
+
 def _numpy_weighted_advection_trace_system(
         source_h,
         beta_h,
@@ -329,13 +375,13 @@ def test_numba_zero_flux_trace_system_matches_numpy_zeroed_boundary_flux(trace_b
     assert "boundary_flux_zeroing" in zero_flux.timings
 
 
-def test_zero_flux_numba_does_not_sample_boundary_condition() -> None:
+def test_zero_flux_numba_requires_none_boundary_condition() -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, _ = _projected_test2_fields(space)
 
     def raising_boundary(x, y):
-        raise AssertionError("zero-flux mode should not sample boundary data")
+        raise AssertionError("rejected boundary callables must not be sampled")
 
     missing_boundary_solver = AdvectionReactionHDGSolver(
         space,
@@ -349,30 +395,47 @@ def test_zero_flux_numba_does_not_sample_boundary_condition() -> None:
         verbose=False,
     )
     missing_boundary = missing_boundary_solver.solve()
-    raising_boundary_result = solve_advection_reaction_hdg(
-        source_h,
-        beta_h,
-        reaction_h,
-        raising_boundary,
-        space,
-        solver="direct",
-        preconditioner=None,
-        boundary_mode="zero-flux",
-        assembly_backend="numba",
-        verbose=False,
-    )
 
     assert missing_boundary.boundary_mode == "zero-flux"
-    assert raising_boundary_result.boundary_mode == "zero-flux"
     np.testing.assert_allclose(missing_boundary.boundary_trace, 0.0)
-    np.testing.assert_allclose(raising_boundary_result.boundary_trace, 0.0)
-    np.testing.assert_allclose(raising_boundary_result.trace, missing_boundary.trace, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(
-        raising_boundary_result.field.coeffs,
-        missing_boundary.field.coeffs,
-        rtol=1e-12,
-        atol=1e-12,
-    )
+
+    match = "boundary_condition must be None"
+    for invalid_boundary in (raising_boundary, 0.0):
+        with pytest.raises(ValueError, match=match):
+            solve_advection_reaction_hdg(
+                source_h,
+                beta_h,
+                reaction_h,
+                invalid_boundary,
+                space,
+                solver="direct",
+                preconditioner=None,
+                boundary_mode="zero-flux",
+                assembly_backend="numba",
+                verbose=False,
+            )
+        with pytest.raises(ValueError, match=match):
+            AdvectionReactionHDGSolver(
+                space,
+                source=source_h,
+                beta=beta_h,
+                reaction=reaction_h,
+                boundary_condition=invalid_boundary,
+                solver="direct",
+                preconditioner=None,
+                boundary_mode="zero-flux",
+                assembly_backend="numba",
+                verbose=False,
+            )
+        with pytest.raises(ValueError, match=match):
+            assemble_projected_trace_system_eliminated_numba(
+                source_h,
+                beta_h,
+                reaction_h,
+                invalid_boundary,
+                space,
+                zero_boundary_flux=True,
+            )
 
 
 def test_zero_flux_numba_upwind_scc_matches_unordered() -> None:

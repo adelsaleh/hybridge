@@ -37,7 +37,7 @@ drivers.
 
 | Path | Assembly storage | Solve handoff | Role |
 |---|---|---|---|
-| CuPy | Vectorized device arrays followed by CuPy COO/CSR construction | Cupyx sparse solvers or PyAMGX | Device reference and parity path |
+| CuPy | Vectorized device arrays followed by CuPy COO/CSR construction | Direct device Cupyx for compatible preconditioners; explicit host staging for host solvers/preconditioners | Device reference and parity path |
 | Raw-CUDA COO | Reduced COO triplets and RHS emitted by raw kernels | CuPy COO-to-CSR, then Cupyx or PyAMGX | Inspectable correctness path |
 | Raw-CUDA CSR | Values emitted directly into a known reduced CSR pattern | Direct device CSR view | Preferred large-run path |
 | Direct CSR-to-AMGX | Existing device `indptr`, `indices`, and values | PyAMGX device upload/view | Avoids host staging and COO conversion |

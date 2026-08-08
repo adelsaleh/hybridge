@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-07",
+  "case": {
+    "name": "diocotron_gaussian_annulus",
+    "k": 3,
+    "sigma": 0.03,
+    "eps": 0.05,
+    "order": 6,
+    "dt": 0.1
+  },
+  "environment": {
+    "python": "3.12.3",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "pypardiso": "0.4.7",
+    "cupy_cuda12x": "14.1.1",
+    "pyamgx": "0.1",
+    "gpu": "Quadro RTX 6000",
+    "nvidia_driver": "580.173.02",
+    "cuda_compiler": "12.8.93"
+  },
+  "hdgfem": {
+    "package_version": "0.1.0a1",
+    "repository_head": "6dc3af7d932936a1c50d5533ccb54d6ef5bd9e48",
+    "branch": "master",
+    "working_tree_clean": false,
+    "sha256": {
+      "hdgfem/linalg/system.py": "de40e29c6f539379d73fa4d067b5372d6d19e2329846a1809cac735a065e4772",
+      "scripts/guiding_center/benchmark_host_solver_stages.py": "93b308ad0d9f7867d8ea80eaf74386cf85df382ff68dcd791bfe1118afe31071",
+      "scripts/guiding_center/guiding_center_presets.py": "c551074c071e5bc09fea88034e5d1ccc2e131c594ff8070c4fcaafbd3ad551ba",
+      "scripts/guiding_center/run_guiding_center_cases.py": "69de1c9b07071f416fd9e9779740b8e8dfb79d479ac1b46352fd0aed2c19e987",
+      "configs/amgx/diff_rea_gpu4_hdg_gmres_cheb_l1_classical_reliable.json": "8d7dc7de260efe32a48b930bb90ad0dd6247da5134b5753e7343563ea8bfc7f9",
+      "run_outputs/guiding_center_host_solver_stages_reuse/host_solver_stage_summary.json": "c9e759bb031df765539863d7fab97b0afd813eeaeea52e7958b467b93bf1e5ca",
+      "run_outputs/guiding_center_100k_pypardiso/pypardiso_both_100k_3step.csv": "3f72354e99140e1786aea55b71a25e7d3f5c4f9d5b1b266d9627d1351ae5893f",
+      "run_outputs/guiding_center_100k_rawcuda_amgx/rawcuda_amgx_100k_3step.csv": "71aef38b95f9ea27990add39a93d276e89cf463c1f04af6d0a69732d8b8407ed"
+    }
+  },
+  "amgx": {
+    "repository": "https://github.com/NVIDIA/AMGX.git",
+    "repository_head": "91a8413ef267b1c32aff4014c02820e1c5897ac2",
+    "branch": "hdg/gmres-true-residual",
+    "working_tree_clean": false,
+    "sha256": {
+      "include/solvers/gmres_solver.h": "4459c7948778c83c4e791bf8a22d8e8b24ce457ef392e8150addd3ee428cf820",
+      "src/solvers/gmres_solver.cu": "c82db5732deb7a67f563d09651d6a11922b76b2cf396f77f3369fcd7ff314adb",
+      "src/core.cu": "a4b6300f07a7dc0292d95cb154977d52df6fd7286dd5b99fcdef91f105196e64",
+      "src/tests/gmres_reliable_residual.cu": "9c5f042d3316b6c8e2f5d8d47f472c2f68199dbb05eafe50d765e58034539a93",
+      "installed_libamgxsh.so": "df6349da5b9dd3f23c3e14fac02ba273fca9950156c7b835d33f141675e6cb8e"
+    }
+  }
+}

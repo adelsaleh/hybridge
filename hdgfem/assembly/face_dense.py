@@ -514,6 +514,29 @@ def face_dense_matvec(
     return y_faces.reshape(-1) if flat_input else y_faces
 
 
+def face_dense_to_dense(blocks: np.ndarray, neighbors: np.ndarray) -> np.ndarray:
+    """Materialize a face-dense block matrix as a scalar dense matrix."""
+    blocks = np.asarray(blocks)
+    neighbors = np.asarray(neighbors, dtype=np.int64)
+    if blocks.ndim != 4:
+        raise ValueError("blocks must have shape (Nrow, S, b, b)")
+    num_rows, num_slots, block_size, block_size_2 = blocks.shape
+    if block_size != block_size_2 or neighbors.shape != (num_rows, num_slots):
+        raise ValueError("face block or neighbor dimensions are inconsistent")
+    dense = np.zeros((num_rows * block_size, num_rows * block_size), dtype=blocks.dtype)
+    for row in range(num_rows):
+        row_slice = slice(row * block_size, (row + 1) * block_size)
+        for slot in range(num_slots):
+            column = int(neighbors[row, slot])
+            if column < 0:
+                continue
+            if column >= num_rows:
+                raise ValueError("neighbors contains a row index outside the system")
+            column_slice = slice(column * block_size, (column + 1) * block_size)
+            dense[row_slice, column_slice] += blocks[row, slot]
+    return np.ascontiguousarray(dense)
+
+
 def expand_eliminated_solution(
     reduced_trace: np.ndarray,
     system: FaceDenseSystem,

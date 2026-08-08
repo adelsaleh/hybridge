@@ -2,6 +2,9 @@
 
 - [`solver_api_alpha.md`](solver_api_alpha.md): supported solver imports,
   objects, updates, return values, and failure behavior.
+- [`advection_boundary_stabilization.md`](advection_boundary_stabilization.md):
+  boundary modes, stabilization inputs, active trace ownership, ordering, and
+  reconstruction semantics.
 - [`coefficient_inputs.md`](coefficient_inputs.md): analytic, projected, lazy,
   host, and device coefficient semantics.
 - [`backend_capabilities.md`](backend_capabilities.md): assembly, sparse solve,

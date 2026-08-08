@@ -140,6 +140,7 @@ class SolveResult:
     """Solution vector and diagnostics returned by :func:`solve_global_system`."""
 
     x: NDArray | None
+    x_device: Any | None = None
     residual_norm: float | None = None
     info: int | None = None
     preconditioner: scipy.sparse.linalg.LinearOperator | None = None
@@ -554,6 +555,44 @@ def diagonal_scale_system(
     scaled_rhs = inverse_diagonal * rhs
 
     return scaled_matrix, scaled_rhs
+
+
+def scale_sparse_system(
+    matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
+    rhs: NDArray,
+    mode: bool | Literal["none", "left", "symmetric"] = "none",
+) -> tuple[scipy.sparse.csr_array, NDArray, NDArray | None]:
+    """Scale a square sparse system and return its solution transform.
+
+    ``"left"`` applies Jacobi row scaling and leaves the unknown unchanged.
+    ``"symmetric"`` applies ``D**-1/2 A D**-1/2`` and
+    ``D**-1/2 b``; the returned vector is ``D**-1/2`` and maps the scaled
+    unknown back to the physical one by elementwise multiplication. Boolean
+    values are accepted for compatibility, with ``True`` meaning ``"left"``.
+    """
+    normalized = "left" if mode is True else "none" if mode is False else str(mode).lower()
+    normalized = {"on": "left", "off": "none"}.get(normalized, normalized)
+    if normalized not in {"none", "left", "symmetric"}:
+        raise ValueError("mode must be one of 'none', 'left', or 'symmetric'")
+
+    csr = matrix.tocsr(copy=True)
+    vector = np.ascontiguousarray(rhs, dtype=np.float64)
+    if csr.shape != (vector.size, vector.size):
+        raise ValueError(f"matrix must have shape ({vector.size}, {vector.size}); got {csr.shape}")
+    if normalized == "none":
+        return csr, vector.copy(), None
+    if normalized == "left":
+        scaled_matrix, scaled_rhs = diagonal_scale_system(csr, vector, copy_matrix=False)
+        return scaled_matrix, np.ascontiguousarray(scaled_rhs), None
+
+    diagonal = np.asarray(csr.diagonal(), dtype=np.float64)
+    if np.any(~np.isfinite(diagonal)) or np.any(diagonal <= 0.0):
+        raise ValueError("symmetric scaling requires a finite, strictly positive diagonal")
+    inverse_sqrt = 1.0 / np.sqrt(diagonal)
+    scaling = scipy.sparse.diags(inverse_sqrt, format="csr")
+    scaled_matrix = (scaling @ csr @ scaling).tocsr()
+    scaled_rhs = np.ascontiguousarray(inverse_sqrt * vector)
+    return scaled_matrix, scaled_rhs, np.ascontiguousarray(inverse_sqrt)
 
 
 def build_ilu_preconditioner(
@@ -1242,6 +1281,7 @@ def solve_cupyx_system(
     upwind_level_widths: Any | None = None,
     upwind_diagonal_regularization: float = 0.0,
     raise_on_nonconvergence: bool = False,
+    materialize_host_solution: bool = True,
     verbose: bool | int = 0,
     diagnostic_rows: NDArray | None = None,
     diagnostic_label: str | None = None,
@@ -1326,6 +1366,9 @@ def solve_cupyx_system(
             solve_rhs = inverse_diagonal * physical_rhs
             solve_matrix = None
         else:
+            diagonal = np.asarray(physical_matrix.diagonal(), dtype=np.float64)
+            diagonal[diagonal == 0.0] = 1.0
+            inverse_diagonal = 1.0 / diagonal
             solve_matrix, solve_rhs = diagonal_scale_system(physical_matrix, physical_rhs, copy_matrix=True)
             solve_values = None
     else:
@@ -1547,18 +1590,33 @@ def solve_cupyx_system(
         maxiter=maxiter,
         restart=restart,
     )
-    solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
-    solution_is_finite = bool(np.all(np.isfinite(solution)))
+    solution = (
+        np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+        if materialize_host_solution
+        else None
+    )
+    solution_is_finite = bool(cupy.all(cupy.isfinite(solution_cp)).item())
     solve_elapsed_seconds = time.time() - solve_start
 
-    if using_host_coo:
+    if materialize_host_solution and using_host_coo:
         solver_residual = _coo_residual(row_indices, col_indices, solve_values, solution, solve_rhs, system_size)
         physical_residual = _coo_residual(row_indices, col_indices, physical_values, solution, physical_rhs, system_size)
-    else:
+    elif materialize_host_solution:
         solver_residual = solve_matrix @ solution - solve_rhs
         physical_residual = physical_matrix @ solution - physical_rhs
+    else:
+        solve_rhs_cp = cupy.asarray(solve_rhs, dtype=solution_cp.dtype)
+        solver_residual = matrix_cp @ solution_cp - solve_rhs_cp
+        if scale_system:
+            inverse_diagonal_cp = cupy.asarray(inverse_diagonal, dtype=solution_cp.dtype)
+            physical_residual = solver_residual / inverse_diagonal_cp
+        else:
+            physical_residual = solver_residual
 
-    solver_residual_norm = float(np.linalg.norm(solver_residual))
+    if materialize_host_solution:
+        solver_residual_norm = float(np.linalg.norm(solver_residual))
+    else:
+        solver_residual_norm = float(cupy.linalg.norm(solver_residual).item())
     solver_rhs_norm, solver_relative_residual_norm, solver_residual_target = residual_diagnostics(
         solver_residual_norm,
         solve_rhs,
@@ -1566,16 +1624,31 @@ def solve_cupyx_system(
         atol=atol,
     )
 
-    physical_residual_norm = float(np.linalg.norm(physical_residual))
+    if materialize_host_solution:
+        physical_residual_norm = float(np.linalg.norm(physical_residual))
+    else:
+        physical_residual_norm = float(cupy.linalg.norm(physical_residual).item())
     physical_rhs_norm, physical_relative_residual_norm, physical_residual_target = residual_diagnostics(
         physical_residual_norm,
         physical_rhs,
         rtol=rtol,
         atol=atol,
     )
-    diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
-        restricted_residual_diagnostics(physical_residual, physical_rhs, diagnostic_rows, rtol=rtol, atol=atol)
-    )
+    if diagnostic_rows is None:
+        diagnostic_residual_norm = diagnostic_rhs_norm = diagnostic_relative_residual_norm = diagnostic_residual_target = None
+    elif materialize_host_solution:
+        diagnostic_residual_norm, diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = (
+            restricted_residual_diagnostics(physical_residual, physical_rhs, diagnostic_rows, rtol=rtol, atol=atol)
+        )
+    else:
+        diagnostic_residual_cp = physical_residual[cupy.asarray(diagnostic_rows)]
+        diagnostic_residual_norm = float(cupy.linalg.norm(diagnostic_residual_cp).item())
+        diagnostic_rhs_norm, diagnostic_relative_residual_norm, diagnostic_residual_target = residual_diagnostics(
+            diagnostic_residual_norm,
+            physical_rhs[diagnostic_rows],
+            rtol=rtol,
+            atol=atol,
+        )
 
     total_elapsed_seconds = time.time() - total_start
     _solver_print(
@@ -1609,6 +1682,7 @@ def solve_cupyx_system(
 
     result = SolveResult(
         x=solution,
+        x_device=solution_cp,
         residual_norm=solver_residual_norm,
         info=info,
         preconditioner=preconditioner_operator,
@@ -2537,6 +2611,7 @@ def solve_global_system(
     cupyx_solver: str = "bicgstab",
     scale_system: bool = True,
     raise_on_nonconvergence: bool = False,
+    materialize_host_solution: bool = True,
     verbose: bool | int = 0,
     assembled_matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None = None,
     prepared_scaled_matrix: scipy.sparse.spmatrix | scipy.sparse.sparray | None = None,
@@ -2871,6 +2946,7 @@ def solve_global_system(
             upwind_level_widths=upwind_level_widths,
             upwind_diagonal_regularization=upwind_diagonal_regularization,
             raise_on_nonconvergence=False,
+            materialize_host_solution=materialize_host_solution,
             verbose=verbose,
             diagnostic_rows=diagnostic_rows,
             diagnostic_label=diagnostic_label,
@@ -2912,9 +2988,15 @@ def solve_global_system(
         )
 
     if permutation is not None:
-        unpermuted = np.empty_like(result.x)
-        unpermuted[permutation] = result.x
-        result.x = unpermuted
+        if result.x is not None:
+            unpermuted = np.empty_like(result.x)
+            unpermuted[permutation] = result.x
+            result.x = unpermuted
+        if result.x_device is not None:
+            cupy = __import__("cupy")
+            unpermuted_device = cupy.empty_like(result.x_device)
+            unpermuted_device[cupy.asarray(permutation)] = result.x_device
+            result.x_device = unpermuted_device
         result.permutation_elapsed_seconds = permutation_elapsed_seconds
         result.permutation_size = int(permutation.size)
 
@@ -2991,6 +3073,7 @@ __all__ = [
     "get_iterative_solver",
     "residual_diagnostics",
     "residual_history_is_stagnated",
+    "scale_sparse_system",
     "solve_direct_system",
     "solve_global_system",
     "solve_cupyx_system",

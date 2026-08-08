@@ -63,7 +63,10 @@ python examples/diffusion_reaction_minimal.py
 
 These examples start from a structured mesh, define manufactured PDE data,
 solve the HDG trace system through the package-root API, and verify the field
-error and physical residual. See [the minimal examples](MANUAL.md#minimal-end-to-end-examples)
+error and physical residual. Reusable post-solve operations such as
+`evaluate_scalar_error`, `solution_field`, `solution_trace`, `DGSpace.l2_diff`,
+`DGField.integral`, and `DGField.min_max` also live in the package rather than
+in runner scripts. See [the minimal examples](MANUAL.md#minimal-end-to-end-examples)
 for the annotated source.
 
 List checkout-only manufactured-run presets:
@@ -102,12 +105,11 @@ python scripts/advection_reaction/run_upwind_gs_cupyx.py --help
 python scripts/advection_reaction/experiments/check_upwind_block_gs_on_the_fly.py --help
 ```
 
-The first script is the narrow fast path: Numba eliminated assembly emits
-ordered scalar COO plus dense trace-block COO, a forward upwind block-GS
-preconditioner is built from those blocks, the compact preconditioner is
-transferred to CuPy, and Cupyx solves the scaled ordered trace system.  The
-experimental checker compares the CSR-reference, scalar-COO, and ordered
-block-COO builders before using the fast path for benchmark claims.
+The first script is a thin front end to `AdvectionReactionHDGSolver`: it selects
+Numba eliminated assembly, upwind-SCC trace ordering, the package-owned forward
+upwind block-GS preconditioner, and a Cupyx Krylov solve. The experimental
+checker remains available for low-level parity and performance comparisons of
+the CSR-reference, scalar-COO, and ordered block-COO builders.
 
 Standalone GPU benchmark runners live under `scripts/gpu/`:
 
@@ -120,10 +122,12 @@ python -m scripts.gpu.check_advection_upwind_scc_host_pyamgx --help
 
 The advection GPU runner supports CuPy assembly, raw-CUDA fused assembly, direct
 raw-CUDA CSR emission, Cupyx solver experiments, and AMGX solves through
-PyAMGX.  The diffusion GPU runner supports NumPy/Numba/CuPy/raw-CUDA reduced
-assembly, direct raw-CUDA CSR emission, raw-CUDA reconstruction, device primal
-postprocessing, and fixed-operator/RHS-only reuse for unsteady Poisson-like
-steps. Public raw-CUDA solver and runner defaults use the equation- and
+PyAMGX. The diffusion GPU runner is a thin `DiffusionReactionHDGSolver` front
+end for CuPy or raw-CUDA assembly with AMGX; the solver class owns assembly,
+scaling, device CSR handoff, reconstruction, diagnostics, and optional CuPy
+primal postprocessing. Raw-CUDA diffusion uses direct CSR and currently omits
+solver-call HDG postprocessing. Public raw-CUDA solver and runner defaults use
+the equation- and
 order-aware `raw_block_size="auto"` policy documented in
 [the raw-CUDA backend guide](docs/backends/raw_cuda.md); explicit launch sizes
 remain available for benchmark reproduction. See
@@ -153,8 +157,8 @@ in `MANUAL.md` and the Strategy A notes under `docs/research/strategy_a_band_par
 
 ## Package Map
 
-- `hdgfem/core/`: meshes, mesh caching, bases, quadrature, DG spaces, DG fields,
-  vector fields, transfer, and adaptivity helpers.
+- `hdgfem/core/`: meshes, mesh caching, bases, quadrature, DG spaces/fields,
+  reusable field/trace operations, trace transfer, and adaptivity helpers.
 - `hdgfem/assembly/`: NumPy HDG local matrices, trace assembly helpers,
   projection helpers, face-dense diffusion assembly, and Gram operators.
 - `hdgfem/backends/`: optional Numba, CuPy, Cupyx, raw-CUDA, PyAMGX, and fused
@@ -170,7 +174,10 @@ in `MANUAL.md` and the Strategy A notes under `docs/research/strategy_a_band_par
 - `hdgfem/solvers/`: advection-reaction and diffusion-reaction solver APIs,
   including reusable stateful solver classes in descriptive full-name
   implementation modules and temporary abbreviated compatibility shims.
-- `hdgfem/io/`: plotting and console-output helpers.
+- `hdgfem/io/`: shared AMGX configuration, plotting/comparison, timing, and
+  console-output helpers.
+- `hdgfem/diagnostics.py`: scalar error reports and reusable solver/application
+  diagnostics.
 - `scripts/`: command-line runners, benchmarks, diagnostics, and experiments.
 - `tests/`: focused regression tests.
 
@@ -323,10 +330,12 @@ and end-to-end examples. [docs/README.md](docs/README.md) is the organized
 index for contracts, backend guides, algorithm notes, and research outputs.
 Useful supporting notes include:
 
+- [docs/reference/advection_boundary_stabilization.md](docs/reference/advection_boundary_stabilization.md): boundary modes, stabilization inputs, active trace ownership, ordering, and reconstruction semantics.
 - [docs/reference/solver_api_alpha.md](docs/reference/solver_api_alpha.md): bounded early-alpha public solver API and compatibility contract.
 - [docs/reference/solver_convergence_contract.md](docs/reference/solver_convergence_contract.md): normalized status, residual acceptance, retry, and cleanup contract.
 - [docs/getting_started/installation.md](docs/getting_started/installation.md): package dependency groups, wheel scope, install smoke, and CI qualification.
 - [docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md): authoritative early-alpha backend and residency matrix.
+- [docs/development/plans/](docs/development/plans/): indexed active implementation and qualification plans; task priority remains in `TODO.md`.
 - [docs/development/alpha_test_matrix.md](docs/development/alpha_test_matrix.md): executable host, CPU parity, GPU smoke, and scheduled validation matrix.
 - [docs/releases/early_alpha.md](docs/releases/early_alpha.md): current release evidence, reviewed skips, and known gaps.
 - [docs/backends/README.md](docs/backends/README.md): backend role map, module ownership, and naming rules.

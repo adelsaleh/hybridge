@@ -22,6 +22,10 @@ On a no-through-flow boundary, `beta . n = 0` and upwind stabilization gives
 require trace unknowns. Retaining boundary trace degrees of freedom while
 removing their flux equation produces an artificial singular block.
 
+The public boundary-mode, stabilization-input, active-DOF, ordering, and
+reconstruction semantics are defined in
+[`../../reference/advection_boundary_stabilization.md`](../../reference/advection_boundary_stabilization.md).
+
 Implementation parity for discontinuous advection is recorded in
 [`../../backends/raw_cuda.md`](../../backends/raw_cuda.md) and checked by the
 advection conservation and CuPy/raw-CUDA parity tests.

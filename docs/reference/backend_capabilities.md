@@ -8,8 +8,11 @@ guarantee.
 
 `host -> device -> host` means the public API assembles or owns host data,
 uploads it for the sparse solve, and returns a host solution. `device -> host`
-means device assembly is followed by an intentional host materialization. Only
-rows whose three active phases say `device` are fully device resident.
+means device assembly is followed by an intentional host materialization.
+`device (optional host copy)` means device data remain authoritative and are
+downloaded only for an explicitly host-dependent operation. Only
+rows whose active phases say `device`, or say `device (optional host copy)`
+with host materialization disabled, are fully device resident.
 
 The Python source of truth is
 `hdgfem.backends.capabilities.BACKEND_CAPABILITIES`. The generated block below
@@ -20,7 +23,7 @@ is checked by `tests/test_backend_capabilities.py`.
 |---|---|---|---|---|---|---|---|---|---|
 | advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | - |
 | advection-reaction | assemble | numba | none | host | none | none | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
-| advection-reaction | assemble | cupy | none | device -> host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | The public assembly result is host materialized. |
+| advection-reaction | assemble | cupy | none | device (optional host copy) | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | COO values and RHS remain on-device unless host assembly diagnostics are requested. |
 | advection-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate, zero-flux | legacy-lagrange, legendre-modal | Assembly-only diagnostics materialize the reduced system on the host. |
 | advection-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
@@ -32,16 +35,16 @@ is checked by `tests/test_backend_capabilities.py`.
 | advection-reaction | solve | numba | petsc | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numba | cupyx | host | host -> device -> host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numba | amgx | host | host -> device -> host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
-| advection-reaction | solve | cupy | scipy | device -> host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | Full solves require materialize_host_solution=True. |
-| advection-reaction | solve | cupy | pypardiso | device -> host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | Full solves require materialize_host_solution=True. |
-| advection-reaction | solve | cupy | petsc | device -> host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | Full solves require materialize_host_solution=True. |
-| advection-reaction | solve | cupy | cupyx | device -> host | host -> device -> host | host | penalty, eliminate | legacy-lagrange, legendre-modal | Full solves require materialize_host_solution=True. |
-| advection-reaction | solve | cupy | amgx | device -> host | host -> device -> host | host | penalty, eliminate | legacy-lagrange, legendre-modal | Full solves require materialize_host_solution=True. |
+| advection-reaction | solve | cupy | scipy | device (optional host copy) | host | device (optional host copy) | penalty, eliminate | legacy-lagrange, legendre-modal | Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system. |
+| advection-reaction | solve | cupy | pypardiso | device (optional host copy) | host | device (optional host copy) | penalty, eliminate | legacy-lagrange, legendre-modal | Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system. |
+| advection-reaction | solve | cupy | petsc | device (optional host copy) | host | device (optional host copy) | penalty, eliminate | legacy-lagrange, legendre-modal | Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system. |
+| advection-reaction | solve | cupy | cupyx | device (optional host copy) | device (optional host copy) | device (optional host copy) | penalty, eliminate | legacy-lagrange, legendre-modal | Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system. |
+| advection-reaction | solve | cupy | amgx | device (optional host copy) | host -> device -> host | device (optional host copy) | penalty, eliminate | legacy-lagrange, legendre-modal | Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system. |
 | advection-reaction | solve | raw-cuda | scipy | device -> host | host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
 | advection-reaction | solve | raw-cuda | pypardiso | device -> host | host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
 | advection-reaction | solve | raw-cuda | petsc | device -> host | host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
 | advection-reaction | solve | raw-cuda | cupyx | device -> host | host -> device -> host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
-| advection-reaction | solve | raw-cuda | amgx | device | device | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | Direct device AMGX is the only fully device-resident public advection path. |
+| advection-reaction | solve | raw-cuda | amgx | device | device | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | Direct device AMGX and compatible CuPy-to-Cupyx solves are fully device-resident. |
 | diffusion-reaction | assemble | numpy | none | host | none | none | eliminate | legacy-lagrange, legendre-modal, bernstein | - |
 | diffusion-reaction | assemble | numba | none | host | none | none | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
@@ -56,6 +59,7 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | solve | numba | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
+| diffusion-reaction | solve | cupy | amgx | device | device | device (optional host copy) | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host. |
 | diffusion-reaction | solve | raw-cuda | amgx | device | device | device | eliminate | legacy-lagrange, legendre-modal | Requires CSR, identity diffusion, scalar stabilization, and no HDG postprocessing. |
 <!-- END GENERATED CAPABILITY MATRIX -->
 
@@ -81,13 +85,19 @@ runtime.
   guesses, true physical residuals, and documented cache invalidation/reuse.
 - The GPU release lane asserts one host-matrix upload and one solution download
   for host-assembled Cupyx, and zero `cp.asnumpy` full-array downloads for
-  raw-CUDA advection/diffusion CSR-to-AMGX solves without host materialization.
+  raw-CUDA advection/diffusion CSR-to-AMGX and compatible CuPy-to-Cupyx
+  advection solves without host materialization.
 
 ## Important Limits
 
-- CuPy advection full solves require `materialize_host_solution=True` because
-  that path has no public device reconstruction result. Use
-  `AdvectionReactionHDGSolver.assemble_trace_system()` for assembly diagnostics.
+- CuPy advection reconstructs directly from a device trace and returns
+  `field_device`/`trace_device`; host `field`/`trace` copies are made only when
+  `materialize_host_solution=True`. Local inverses and element-boundary blocks
+  are recomputed for reconstruction and retained only when explicitly cached.
+- CuPy hands device COO/RHS directly to Cupyx with no preconditioner, an
+  existing device operator, or device ILU(1). Host solvers, host ILU export,
+  matrix diagnostics, and `materialize_host_system=True` intentionally
+  materialize the trace system.
 - Raw-CUDA advection with non-AMGX sparse solvers downloads the reduced system;
   Cupyx then uploads it again. This is supported mixed residency, not a direct
   device pipeline.
@@ -103,3 +113,6 @@ runtime.
 - The two production trace bases are `legacy-lagrange` and `legendre-modal`.
   NumPy diffusion additionally has a bounded Bernstein solve/assembly contract
   without HDG postprocessing.
+  Bernstein is not a beta production requirement, so no Numba or raw-CUDA
+  expansion is planned for beta; the existing bounded NumPy contract remains
+  supported and broader work can be reconsidered from user demand.

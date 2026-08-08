@@ -56,8 +56,15 @@ Important module groups:
 - `hdgfem.core.basis`, `hdgfem.core.quadrature`, and `hdgfem.core.space`:
   reference bases, quadrature tables, `DGSpace`, `DGTraceSpace`, `DGField`, and
   `VectorDGField`.
+- `hdgfem.core.field_ops` and `hdgfem.core.trace_transfer`: reusable scalar/vector
+  field combinations, host/device solution and trace extraction, skeleton
+  projection, and trace-degree prolongation.
 - `hdgfem.core.transfer` and `hdgfem.core.adaptivity`: field transfer between
   meshes and PDE-agnostic indicator/remeshing utilities.
+- `hdgfem.diagnostics`: reusable scalar error reports, drift calculations,
+  solver/timing summaries, and guiding-center modal diagnostics.
+- `hdgfem.io.config`, `hdgfem.io.comparison`, and `hdgfem.io.plot`: shared
+  AMGX configuration, sampled comparisons, and plotting support used by runners.
 - `hdgfem.assembly.matrices_numpy`: reference NumPy HDG matrix builders and
   output-buffer accumulation routines used by CPU solvers and validation code.
 - `hdgfem.assembly.hdg`: reusable static-condensation and trace-assembly
@@ -436,46 +443,28 @@ variants.  Use `--config NAME`, `--include-direct`, `--json-out PATH`,
 `--upwind-bgs-apply-mode MODE`, and `--upwind-bgs-sweep SWEEP` to narrow or
 expand a benchmark run.
 
-### Fast Upwind-GS/Cupyx Advection Runner
+### Package-Backed Upwind-GS/Cupyx Advection Runner
 
-`scripts/advection_reaction/run_upwind_gs_cupyx.py` is the current
-narrow performance path for upwind-SCC ordered advection-reaction trace solves.
-It is separate from `run_cases.py` while the reusable API is still being
-shaped.
+`scripts/advection_reaction/run_upwind_gs_cupyx.py` is a specialized CLI front
+end to `AdvectionReactionHDGSolver`; it no longer owns a second assembly,
+preconditioner, sparse-solve, or reconstruction implementation.
 
-Pipeline:
+The selected public solver configuration is:
 
 ```text
-1. Build a rectangle mesh and DG space.
-2. Project source, beta, and reaction onto the DG space.
-3. Compute upwind-SCC ordering for free trace edges.
-4. Assemble the boundary-eliminated trace system in that order with Numba.
-5. Emit dense ordered edge-block COO entries during the same assembly pass.
-6. Build forward upwind block-GS from the block stream and reuse its row scale.
-7. Build a CuPy CSR matrix from scaled COO and solve with Cupyx Krylov.
-8. Copy the reduced trace back for reconstruction and field-error checks.
+1. Project source, beta, and reaction into one DGSpace.
+2. Assemble the eliminated trace system with the Numba backend.
+3. Order active trace edges with package upwind-SCC ordering.
+4. Build the package forward upwind block-GS preconditioner.
+5. Solve with the selected Cupyx Krylov method.
+6. Reconstruct through the solver class and evaluate package error diagnostics.
 ```
 
-Typical GMRES run:
+Typical run:
 
 ```bash
 python scripts/advection_reaction/run_upwind_gs_cupyx.py \
   -o 6 -ms 0.01 \
-  --basis dub_orth \
-  --trace-basis legacy-lagrange \
-  --cupyx-solver gmres \
-  --gmres-restart 50 \
-  --maxiter 1500 \
-  --rtol 1e-13 \
-  --check-rtol 1e-10 \
-  -v 2
-```
-
-Typical BiCGSTAB run:
-
-```bash
-python scripts/advection_reaction/run_upwind_gs_cupyx.py \
-  -o 6 -ms 0.008 \
   --basis dub_orth \
   --trace-basis legacy-lagrange \
   --cupyx-solver bicgstab \
@@ -490,20 +479,20 @@ Important controls:
 ```text
 --case                         manufactured case key from cases.py
 --mesh-type                    rectangle or structured-rectangle
---basis                        dub_orth, hierarchical C0, or bernstein element basis
---trace-basis                  legacy-lagrange, legendre-modal, or bernstein trace basis
+--basis                        dub_orth, hierarchical C0, or Bernstein element basis
+--trace-basis                  legacy-lagrange or legendre-modal
 --cupyx-solver                 bicgstab, gmres, cg, or cgs
---gmres-restart                restart length for Cupyx GMRES
---apply-mode                   auto, serial, or parallel preconditioner application
---parallel-min-width           minimum level width for parallel apply in auto mode
---max-couplings-per-block      bounded builder capacity for retained block couplings
+--gmres-restart                optional GMRES restart forwarded through the solver API
+--diagonal-regularization      regularize singular/near-singular edge diagonal blocks
+--trace-ordering-flux-tolerance ignore graph fluxes below this magnitude
 --numba-threads                runtime Numba thread count within NUMBA_NUM_THREADS
+--check-rtol                   independently accepted physical residual threshold
 --json-output                  write inputs, diagnostics, timings, and errors
 ```
 
-This runner requires Numba, CuPy, and Cupyx sparse linear algebra.  It does not
-require PyAMGX.  The preconditioner is still built on the host and transferred
-to device; `TODO.md` records the planned CuPy/raw-CUDA builders.
+This runner requires Numba, CuPy, and Cupyx sparse linear algebra, but not
+PyAMGX. Low-level builder tuning belongs to the experiment below; the production
+runner deliberately exposes only controls supported by the reusable solver API.
 
 The structural check harness compares the CSR-reference, scalar-COO, and
 ordered block-COO preconditioner builders:
@@ -610,6 +599,12 @@ The CuPy/PyAMGX advection runner is backed by the reusable package solver in
 assembly, AMGX solve, trace reconstruction, field reconstruction, and error
 evaluation on device unless host materialization is explicitly requested.
 
+The diffusion runner is likewise a thin `DiffusionReactionHDGSolver` front end.
+It selects CuPy or raw-CUDA assembly and AMGX, while package code owns scaling,
+device CSR handoff, reconstruction, error evaluation, timings, and plotting
+samples. CuPy supports optional primal HDG postprocessing; raw-CUDA requires
+direct CSR and currently rejects solver-call HDG postprocessing.
+
 [The AMGX guide](configs/amgx/README.md) contains current presets. The
 [July 2026 advection solver study](docs/research/solver_studies/advection_reaction_2026_07.md)
 retains dated SCC, ILU, upwind-GS, Krylov, and AMGX measurements; it is
@@ -641,6 +636,32 @@ DGMesh -> DGSpace -> DGField/VectorDGField -> local HDG assembly
        -> local reconstruction into DGField/VectorDGField
        -> diagnostics, plotting, transfer, or adaptivity
 ```
+
+### Reusable Field, Trace, And Diagnostic Operations
+
+Runner-independent postprocessing is part of the package API:
+
+```python
+from hdgfem import evaluate_scalar_error, solution_field, solution_trace
+
+field = solution_field(result, space)
+trace_guess = solution_trace(result, space, reduced=True)
+report = evaluate_scalar_error(field, exact, include_samples=False)
+
+mass = field.integral()
+minimum, maximum = field.min_max()
+difference = space.l2_diff(field, reference_field)
+```
+
+`DGSpace.l2_diff(left, right)` accepts any `DGField | Callable` pairing and
+evaluates both operands on the receiving space quadrature. Same-mesh fields may
+have different polynomial orders or bases. `solution_field` and
+`solution_trace` preserve device-backed results when available, so unsteady
+applications can feed solver outputs into the next solve without recreating the
+old runner-specific extraction helpers. Scalar error reports, field
+combinations, trace projections, drift metrics, solver summaries, AMGX config
+loading, and plotting comparisons follow the same ownership rule: reusable
+numerics live under `hdgfem`; scripts select cases and present results.
 
 ### Minimal End-to-End Examples
 
@@ -1335,11 +1356,18 @@ hdg_mats.add_advection_mats(local, space, beta_h, scale=-1.0)
 ```
 
 For advection-reaction, `stabilization` is the element-side trace stabilization
-`tau`.  `None` uses the upwind value `abs(beta_h . n)`.  The NumPy path accepts
-scalars, callables, `DGField` objects, coefficient arrays, or already evaluated
-face-quadrature values.  The fused Numba path accepts `None`, scalars, or
-projected same-space `DGField`/coefficient data and evaluates DG `tau` on face
-quadrature inside the kernel.
+`tau`.  `None` uses the upwind value `abs(beta_h . n)`.  NumPy and CuPy accept
+scalars, callables, `DGField` objects, coefficient arrays, per-face constants,
+or already evaluated face-quadrature values. Callables are sampled directly;
+DG fields instead use coefficient contractions with the face reference tables
+of their own `DGSpace`, with CuPy retaining device-backed coefficients. The
+fused Numba path accepts `None`, scalars, or projected same-space
+`DGField`/coefficient data and evaluates DG `tau` on face quadrature inside the
+kernel.
+
+Raw-CUDA currently requires `advection_stabilization=None`. The complete
+backend and boundary interaction is defined in
+[the advection boundary and stabilization contract](docs/reference/advection_boundary_stabilization.md).
 
 The solver uses accumulation style so it does not keep three full local element
 tensors alive at the same time.  Return-style functions remain useful for tests
@@ -1367,18 +1395,31 @@ timer; package-level assembly also includes wrapper work needed by solvers.
 
 ### Boundary Elimination and Upwind Ordering
 
-The advection-reaction solver supports two boundary modes:
+The advection-reaction solver supports three boundary modes:
 
 ```text
 penalty     keep all trace unknowns and impose Dirichlet values with a large diagonal penalty
 eliminate   remove known boundary trace dofs before the global solve
+zero-flux   solve interior traces only and force exterior numerical fluxes to zero
 ```
+
+Penalty and elimination require boundary data. Elimination projects the data
+into the selected trace basis, solves only for interior edges, and reinserts
+the prescribed boundary coefficients before reconstruction. Zero-flux never
+samples boundary data; its full-trace boundary slots are zero placeholders and
+its boundary lift weights are zero. It is therefore a flux condition, not
+homogeneous Dirichlet data. See
+[the complete contract](docs/reference/advection_boundary_stabilization.md).
 
 `trace_ordering="upwind-scc"` builds a directed graph from signs of
 `beta_h . n`, computes strongly connected components, topologically orders the
 component DAG, and converts that order to a trace-dof permutation.  On acyclic
 advection-dominated cases this can expose nearly triangular structure to ILU or
 upwind block-GS.
+
+For penalty mode the graph contains all trace edges. Elimination and zero-flux
+order only active interior edges. Numba supports this reduced SCC ordering;
+raw-CUDA requires `trace_ordering="none"`.
 
 Matrix-pattern diagnostics can be generated with `--plot-matrix-pattern`.  Those
 images are run artifacts and should generally not be committed unless a specific
@@ -1402,6 +1443,7 @@ from hdgfem.assembly.hdg_gram import (
     assemble_hdg_gram,
     build_condensed_hdg_gram_inverse,
     build_ilu_bicgstab_inverse,
+    build_krylov_hdg_gram_inverse,
 )
 
 gram = assemble_hdg_gram(space, sigma=10.0, jump_weight="unit")
@@ -1415,6 +1457,8 @@ inverse = build_condensed_hdg_gram_inverse(
 hminus2, diagnostics = inverse.dual_norm_squared(residual)
 ```
 
+`build_krylov_hdg_gram_inverse` provides reusable Jacobi, ILU, or unpreconditioned
+CG/GMRES/BiCGSTAB applications for an assembled Gram matrix.
 `build_condensed_hdg_gram_inverse` never forms or factors the full Gram matrix.
 It inverts the local flux/scalar block elementwise and applies CG to the trace
 Schur complement with an edge-block Jacobi preconditioner.
@@ -1548,6 +1592,10 @@ and transport assembly, device AMGX solves, raw-CUDA reconstruction, density-onl
 PyVista plotting by default, and an absolute Poisson AMGX config.  Poisson setup
 is cached after the first step when scaling is disabled and the operator is
 fixed; transport setup is rebuilt because the matrix changes with `beta`.
+Both production trace bases, `legacy-lagrange` and `legendre-modal`, are wired
+through the bounded raw-CUDA diffusion and advection paths used by this driver.
+Raw-CUDA diffusion remains limited to identity diffusion, zero reaction, scalar
+stabilization, and no solver-call HDG postprocessing.
 
 Every time stage passes an explicit trace guess through the solver-class
 `initial_guess` argument. Raw-CUDA runs keep current, predicted, midpoint, and
@@ -1557,9 +1605,14 @@ endpoint density data; its corrector uses the average of exact density traces at
 `boundary_mode=eliminate` is mandatory and zero-flux configurations are rejected.
 
 `--transport-retry-policy amgx-robust` keeps the assembled CSR/RHS on device and
-tries primary/stage-guess, primary/zero, PBICGSTAB aggregation-DILU postsmooth2
-with the stage guess and scaling off, then the same fallback from zero. Each
-attempt and residual is stored in CSV/JSONL diagnostics.
+tries the configured primary solve with the stage guess, the same primary solve
+from zero, then unscaled absolute-convergence FGMRES with direct
+`MULTICOLOR_DILU` from zero. If needed, two additional FGMRES solves correct the
+best iterate using the independently formed residual. Every candidate is
+accepted only when its finite, row-unscaled physical residual meets the target;
+attempt labels and residuals are stored in CSV/JSONL diagnostics. The fallback
+configuration is
+`configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json`.
 
 Temporal convergence for Euler, predictor-corrector, or both is available with:
 

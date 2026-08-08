@@ -127,10 +127,10 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
     _assembly_capability(
         "advection-reaction",
         "cupy",
-        "device -> host",
+        "device (optional host copy)",
         ("penalty", "eliminate"),
         _PRODUCTION_TRACE_BASES,
-        "The public assembly result is host materialized.",
+        "COO values and RHS remain on-device unless host assembly diagnostics are requested.",
     ),
     _assembly_capability(
         "advection-reaction",
@@ -173,18 +173,18 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
     *_solve_capabilities(
         "advection-reaction",
         "cupy",
-        "device -> host",
+        "device (optional host copy)",
         {
             "scipy": "host",
             "pypardiso": "host",
             "petsc": "host",
-            "cupyx": "host -> device -> host",
+            "cupyx": "device (optional host copy)",
             "amgx": "host -> device -> host",
         },
-        "host",
+        "device (optional host copy)",
         ("penalty", "eliminate"),
         _PRODUCTION_TRACE_BASES,
-        "Full solves require materialize_host_solution=True.",
+        "Cupyx stays device-native with no preconditioner, a device operator, or device ILU(1); host solvers and host ILU export materialize the trace system.",
     ),
     *_solve_capabilities(
         "advection-reaction",
@@ -211,7 +211,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         reconstruction_residency="device (optional host copy)",
         boundary_modes=("eliminate", "zero-flux"),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes="Direct device AMGX is the only fully device-resident public advection path.",
+        notes="Direct device AMGX and compatible CuPy-to-Cupyx solves are fully device-resident.",
     ),
     _assembly_capability(
         "diffusion-reaction",
@@ -273,6 +273,18 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
+    ),
+    BackendCapability(
+        equation="diffusion-reaction",
+        operation="solve",
+        assembly_backend="cupy",
+        solver_backend="amgx",
+        assembly_residency="device",
+        solve_residency="device",
+        reconstruction_residency="device (optional host copy)",
+        boundary_modes=("eliminate",),
+        trace_bases=_PRODUCTION_TRACE_BASES,
+        notes="Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host.",
     ),
     BackendCapability(
         equation="diffusion-reaction",
@@ -424,15 +436,6 @@ def validate_advection_backend_configuration(
             backend,
             solver_backend,
             f"trace_basis={basis!r} is unsupported; choose one of {capability.trace_bases!r}",
-        )
-    if operation == "solve" and backend == "cupy" and not materialize_host_solution:
-        _unsupported(
-            "advection-reaction",
-            operation,
-            backend,
-            solver_backend,
-            "CuPy does not expose a device reconstruction result; set materialize_host_solution=True "
-            "or use AdvectionReactionHDGSolver.assemble_trace_system()",
         )
     if backend == "raw-cuda":
         if trace_ordering != "none":

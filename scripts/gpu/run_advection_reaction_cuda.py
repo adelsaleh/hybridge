@@ -8,8 +8,6 @@ is intentionally a thin CLI wrapper for benchmark/sweep compatibility.
 from __future__ import annotations
 
 import argparse
-import copy
-import json
 import sys
 import time
 from pathlib import Path
@@ -19,19 +17,18 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse, require_pyamgx
+from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.core.quadrature import ReferenceElementData
 from hdgfem.core.space import DGSpace, VectorDGField
+from hdgfem.core.field_ops import solution_field
+from hdgfem.diagnostics import evaluate_scalar_error
+from hdgfem.io.comparison import plot_sampled_solution_comparison
+from hdgfem.io.config import load_amgx_config
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.io.plot import (
-    _require_pyvista,
-    _robust_clim,
-    add_samples_to_plotter,
     plot_solution_comparison,
-    resolve_exact_plot_resolution,
-    sample_callable_on_elements,
+    resolve_field_plot_resolution,
 )
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
@@ -55,23 +52,6 @@ AMGX_CONFIG = {
         "preconditioner": {"solver": "AMG", "algorithm": "CLASSICAL", "selector": "PMIS", "cycle": "W"},
     },
 }
-
-
-def load_amgx_config(args):
-    config_path = Path(args.amgx_config).expanduser() if args.amgx_config else DEFAULT_AMGX_CONFIG_PATH
-    if config_path.exists():
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-    elif args.amgx_config:
-        raise FileNotFoundError(f"AMGX config file not found: {config_path}")
-    else:
-        config = copy.deepcopy(AMGX_CONFIG)
-        config_path = None
-    solver_config = config.setdefault("solver", {})
-    if args.amgx_solver is not None:
-        solver_config["solver"] = str(args.amgx_solver)
-    solver_config["tolerance"] = float(args.amgx_tolerance)
-    solver_config["max_iters"] = int(args.amgx_maxiter)
-    return config, config_path
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -222,198 +202,6 @@ def _print_timing_rows(title: str, rows: list[tuple[str, float]], denominator: f
         print(sep.join((_pad_right(label, widths[0]), _pad_left(seconds_text, widths[1]), _pad_left(percent_text, widths[2]))))
 
 
-def effective_plot_resolution(requested_resolution: int, order: int, num_elements: int) -> int:
-    """Use a polynomial-degree minimum for coarse per-element plots."""
-    resolution = int(requested_resolution)
-    if int(num_elements) <= 130:
-        return max(resolution, 2 * int(order) + 3, 3)
-    return resolution
-
-
-def matplotlib_contour_levels(order: int) -> int:
-    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
-    return min(256, max(128, 24 * (int(order) + 1)))
-
-
-def evaluate_errors_device(
-        coeffs,
-        cspace,
-        exact,
-        plot_resolution: int,
-        error_volume_quad_1d: int | None,
-        *,
-        return_plot_samples: bool = False,
-):
-    cp = require_cupy()
-    error_volume_quad_1d = None if error_volume_quad_1d is None else int(error_volume_quad_1d)
-    if error_volume_quad_1d is None:
-        q_points = cspace.quad_data.Krf_quads
-        weights = cspace.quad_data.Krf_w
-        basis_values = cspace.quad_data.bas_of_quads
-        mapped = cspace.mapped_quads
-    else:
-        err_ref = ReferenceElementData.triangle(
-            cspace.order,
-            basis_type=cspace.host.quad_data.basis_type,
-            volume_quad_1d=error_volume_quad_1d,
-            edge_quad_1d=cspace.host.quad_data.edge_quad_1d,
-        )
-        q_points = cp.asarray(err_ref.Krf_quads, dtype=cp.float64)
-        weights = cp.asarray(err_ref.Krf_w, dtype=cp.float64)
-        basis_values = cp.asarray(err_ref.bas_of_quads, dtype=cp.float64)
-        mapped = cp.einsum("Krc,qc->Krq", cspace.mesh.aff_mats, q_points) + cspace.mesh.aff_vecs[:, :, None]
-
-    exact_q = exact(mapped[:, 0, :], mapped[:, 1, :])
-    exact_q = cp.asarray(exact_q, dtype=cp.float64)
-    uh_q = coeffs @ basis_values
-    diff_q = uh_q - exact_q
-    l2 = cp.sqrt(cp.sum(cspace.mesh.aff_jacs[:, None] * diff_q * diff_q * weights[None, :]))
-
-    grid = cp.linspace(-1.0, 1.0, int(plot_resolution), endpoint=True, dtype=cp.float64)
-    xx, yy = cp.meshgrid(grid, grid)
-    mask = yy <= -xx
-    ref_points = cp.stack((xx[mask], yy[mask]), axis=1)
-    basis_plot = cp.asarray(cspace.host.basis_at(cp.asnumpy(ref_points)), dtype=cp.float64)
-    mapped_plot = cp.einsum("Krc,qc->Krq", cspace.mesh.aff_mats, ref_points) + cspace.mesh.aff_vecs[:, :, None]
-    exact_plot = cp.asarray(exact(mapped_plot[:, 0, :], mapped_plot[:, 1, :]), dtype=cp.float64)
-    uh_plot = coeffs @ basis_plot.T
-    abs_err = cp.abs(uh_plot - exact_plot)
-    element_max = cp.max(abs_err, axis=-1)
-    cp.cuda.get_current_stream().synchronize()
-    metrics = (
-        float(l2.get()),
-        float(cp.max(element_max).get()),
-        float(cp.mean(element_max).get()),
-        int(cp.argmax(element_max).get()),
-    )
-    if not return_plot_samples:
-        return metrics
-    plot_samples = {
-        "reference_points": cp.asnumpy(ref_points),
-        "numerical_values": cp.asnumpy(uh_plot),
-        "exact_values_for_error": cp.asnumpy(exact_plot),
-    }
-    return (*metrics, plot_samples)
-
-
-def evaluate_errors(field, exact, plot_resolution: int, error_volume_quad_1d: int | None):
-    space = field.space
-    if error_volume_quad_1d is None:
-        l2 = field.l2_error(exact)
-    else:
-        err_ref = ReferenceElementData.triangle(
-            space.order,
-            basis_type=space.quad_data.basis_type,
-            volume_quad_1d=int(error_volume_quad_1d),
-            edge_quad_1d=space.quad_data.edge_quad_1d,
-        )
-        mapped = space.mesh.map_reference_points(err_ref.Krf_quads)
-        exact_q = exact(mapped[:, :, 0], mapped[:, :, 1])
-        uh_q = field.coeffs @ err_ref.bas_of_quads
-        l2 = float(np.sqrt(np.einsum("K,Kq,q->", space.mesh.aff_jacs, (uh_q - exact_q) ** 2, err_ref.Krf_w)))
-
-    grid = np.linspace(-1.0, 1.0, int(plot_resolution), endpoint=True)
-    xx, yy = np.meshgrid(grid, grid)
-    ref_points = np.column_stack((xx[yy <= -xx], yy[yy <= -xx]))
-    basis_plot = space.basis_at(ref_points)
-    mapped_plot = space.mesh.map_reference_points(ref_points)
-    exact_plot = exact(mapped_plot[:, :, 0], mapped_plot[:, :, 1])
-    uh_plot = field.coeffs @ basis_plot.T
-    abs_err = np.abs(uh_plot - exact_plot)
-    linf = float(np.max(abs_err))
-    avg_max = float(np.average(np.max(abs_err, axis=-1)))
-    max_element = int(np.argmax(np.max(abs_err, axis=-1)))
-    return l2, linf, avg_max, max_element
-
-
-def plot_sampled_solution_comparison(
-        mesh,
-        exact_solution,
-        plot_samples: dict[str, np.ndarray],
-        *,
-        numerical_resolution: int,
-        exact_resolution: int | str | None,
-        polynomial_order: int | None = None,
-        title: str = "",
-        show_mesh: bool = True,
-        show: bool = True,
-        off_screen: bool = False,
-):
-    """Plot device-sampled numerical/exact/error data using host plot helpers."""
-    reference_points = np.ascontiguousarray(plot_samples["reference_points"], dtype=np.float64)
-    numerical_values = np.asarray(plot_samples["numerical_values"], dtype=np.float64)
-    exact_values_for_error = np.asarray(plot_samples["exact_values_for_error"], dtype=np.float64)
-    absolute_error = np.abs(numerical_values - exact_values_for_error)
-    error_clim = _robust_clim(absolute_error, zero_min=True)
-
-    exact_panel_resolution = resolve_exact_plot_resolution(
-        exact_resolution,
-        numerical_resolution=numerical_resolution,
-        num_elements=mesh.num_tri,
-    )
-    exact_reference_points, _, exact_display_values = sample_callable_on_elements(
-        mesh,
-        exact_solution,
-        resolution=exact_panel_resolution,
-    )
-
-    if mesh.num_tri <= 130:
-        from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib
-
-        return plot_scalar_sample_panels_matplotlib(
-            mesh,
-            (
-                ("Numerical solution", reference_points, numerical_values),
-                ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
-                ("Absolute error", reference_points, absolute_error, {"cmap": "magma", "zero_min": True}),
-            ),
-            suptitle=title or None,
-            show_mesh=show_mesh,
-            cmap="jet",
-            levels=matplotlib_contour_levels(
-                polynomial_order if polynomial_order is not None else max((int(numerical_resolution) - 3) // 2, 0)
-            ),
-            share_clim=False,
-            show=show,
-        )
-
-    pv = _require_pyvista()
-    field_clim = _robust_clim(np.concatenate((numerical_values.reshape(-1), exact_display_values.reshape(-1))))
-
-    plotter = pv.Plotter(shape=(1, 3), window_size=[1800, 650], off_screen=off_screen)
-    scalar_bar_args = {
-        "vertical": False,
-        "width": 0.55,
-        "height": 0.08,
-        "position_x": 0.225,
-        "position_y": 0.02,
-    }
-    panels = (
-        ("Numerical solution", reference_points, numerical_values, field_clim, "viridis"),
-        ("Exact solution", exact_reference_points, exact_display_values, field_clim, "viridis"),
-        ("Absolute error", reference_points, absolute_error, error_clim, "magma"),
-    )
-    for column, (panel_title, panel_reference_points, values, clim, cmap) in enumerate(panels):
-        display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
-        add_samples_to_plotter(
-            plotter,
-            mesh,
-            panel_reference_points,
-            values,
-            scalar_name=f"field_{column}",
-            title=display_title,
-            subplot=(0, column),
-            show_mesh=show_mesh and column != 1,
-            cmap=cmap,
-            clim=clim,
-            scalar_bar_args=scalar_bar_args,
-        )
-    plotter.link_views()
-    if show:
-        plotter.show()
-    return plotter
-
-
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     if args.assembly_backend == "raw-cuda":
@@ -438,7 +226,12 @@ def main(argv: list[str] | None = None) -> int:
     space_start = time.perf_counter()
     space = DGSpace(mesh, args.order, basis_type=args.basis, volume_quad_1d=args.volume_quad_1d, edge_quad_1d=args.edge_quad_1d)
     space_time = time.perf_counter() - space_start
-    plot_resolution = effective_plot_resolution(args.plot_resolution, space.order, mesh.num_tri)
+    plot_resolution = resolve_field_plot_resolution(
+        args.plot_resolution,
+        order=space.order,
+        num_elements=mesh.num_tri,
+        default=20,
+    )
     problem_start = time.perf_counter()
     try:
         case = case_definition_by_key(args.case)
@@ -459,7 +252,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raw_input_projection_time = 0.0
     if args.solver in {"amgx", "pyamgx"}:
-        amgx_config, amgx_config_path = load_amgx_config(args)
+        amgx_config, amgx_config_path = load_amgx_config(
+            args.amgx_config,
+            default_path=DEFAULT_AMGX_CONFIG_PATH,
+            default_config=AMGX_CONFIG,
+            solver=args.amgx_solver,
+            tolerance=args.amgx_tolerance,
+            maxiter=args.amgx_maxiter,
+        )
         effective_amgx_solver = str(amgx_config.get("solver", {}).get("solver", "unknown"))
     else:
         amgx_config, amgx_config_path = None, None
@@ -505,25 +305,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.evaluate_errors:
         error_start = time.perf_counter()
         if result.field_device is not None:
-            cspace = as_cupy_space(space)
-            error_result = evaluate_errors_device(
-                result.field_device,
-                cspace,
-                exact,
-                plot_resolution,
-                args.error_volume_quad_1d,
-                return_plot_samples=args.plot,
-            )
-            if args.plot:
-                l2, linf, avg_max, max_element, plot_samples = error_result
-            else:
-                l2, linf, avg_max, max_element = error_result
+            diagnostic_field = solution_field(result, space, name="u_h")
             error_eval_mode = "device"
         else:
             if result.field is None:
                 raise RuntimeError("error evaluation requires a device field or a host-materialized DGField")
-            l2, linf, avg_max, max_element = evaluate_errors(result.field, exact, plot_resolution, args.error_volume_quad_1d)
+            diagnostic_field = result.field
             error_eval_mode = "host"
+        error_report = evaluate_scalar_error(
+            diagnostic_field,
+            exact,
+            volume_quad_1d=args.error_volume_quad_1d,
+            sample_resolution=plot_resolution,
+            include_samples=args.plot,
+        )
+        metrics = error_report.metrics
+        l2, linf = metrics.l2, metrics.linf
+        avg_max, max_element = metrics.mean_element_linf, metrics.max_element
+        plot_samples = error_report.samples
         error_time = time.perf_counter() - error_start
         error_items = [
             ("h^(p+1)", mesh.h ** (args.order + 1), ".3e"),

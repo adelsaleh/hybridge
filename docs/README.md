@@ -19,7 +19,7 @@ the active roadmap. Detailed documents belong to one category below.
 |---|---|
 | [`getting_started/`](getting_started/) | Installation and onboarding. |
 | [`reference/`](reference/) | Supported API, coefficient, backend, residency, and convergence contracts. |
-| [`development/`](development/) | Release gates and contributor validation plans. |
+| [`development/`](development/) | Active plans, executable qualification, and contributor validation. |
 | [`backends/`](backends/) | Backend architecture, CUDA execution, and launch policy. |
 | [`algorithms/`](algorithms/) | Maintained numerical formulations and derivations. |
 | [`research/`](research/) | Dated solver studies, application research, and generated study outputs. |

@@ -58,8 +58,11 @@ unscaled matrix.
 compatibility shims for the full-name implementation modules. Their lower-level assembly
 helpers and the aliases `adv_rea_hdg_solv` and `diff_rea_hdg_solve` are not
 part of the frozen
-package-level surface. Existing aliases will remain available for at least one
-documented transition release after a deprecation is announced.
+package-level surface. Decision: neither these aliases nor the functional
+`return_=(...)` tuple interface will be deprecated or removed during alpha.
+After a replacement and deprecation release are named, both interfaces remain
+available for at least one complete documented transition release; removal can
+occur no earlier than the following release.
 
 ## Object And Update Semantics
 
@@ -70,9 +73,16 @@ documented transition release after a deprecation is announced.
   Problem/coefficient objects are held by reference.
 - `with_options(**overrides)` persists valid overrides and conservatively clears
   cached solve artifacts. Unknown option names raise `TypeError`.
+- Boundary conditions accept only callables `g(x, y)` and real scalar
+  constants. Scalar constants are normalized to constant callables before
+  backend dispatch. `DGField` and future `HDGTraceField` boundary inputs are
+  rejected until their trace projection/interpolation semantics are designed.
+  Advection `boundary_mode="zero-flux"` instead requires
+  `boundary_condition=None` and rejects all supplied boundary data.
 - Complete problem arguments passed to `solve(...)` replace the stored problem.
   Partial problem bundles raise `ValueError`. Advection zero-flux mode is the
-  documented exception: it does not require boundary data.
+  documented exception: its problem bundle requires no boundary argument (or
+  an explicit `None`).
 - Other option keywords passed to `solve(...)` persist on the solver. The
   explicit `initial_guess=` argument applies only to that call and is not stored
   in the option dataclass.
@@ -95,7 +105,8 @@ documented transition release after a deprecation is announced.
 
 The default return from each canonical functional solver is its corresponding
 result dataclass. The legacy `return_=(...)` tuple-selection interface remains
-supported during the alpha; unknown return keys raise `ValueError`. New code
+supported throughout alpha and through the transition policy above; unknown
+return keys raise `ValueError`. New code
 should consume the result object instead of depending on tuple position.
 
 `DiffusionReactionHDGSolver.assemble_global_matrix()` returns

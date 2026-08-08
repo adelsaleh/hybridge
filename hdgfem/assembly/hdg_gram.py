@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.sparse import coo_array
-from scipy.sparse.linalg import LinearOperator, bicgstab, cg, spilu
+from scipy.sparse.linalg import LinearOperator, bicgstab, cg, gmres, spilu
 
 try:  # pragma: no cover - import behavior depends on optional runtime package.
     from numba import njit, prange
@@ -53,6 +53,119 @@ class GramSolveDiagnostics:
     relative_residual: float
     elapsed: float
 
+@dataclass(frozen=True)
+class KrylovHDGGramInverse:
+    """Reusable configurable Krylov inverse for an assembled HDG Gram matrix."""
+
+    gram: object
+    preconditioner: LinearOperator | None
+    preconditioner_name: str
+    setup_seconds: float
+    fill_ratio: float
+
+    def solve(
+        self,
+        rhs: np.ndarray,
+        *,
+        method: str = "cg",
+        rtol: float = 1.0e-11,
+        atol: float = 0.0,
+        maxiter: int | None = None,
+    ) -> tuple[np.ndarray, GramSolveDiagnostics]:
+        """Solve ``G z = rhs`` with the configured reusable preconditioner."""
+        rhs = np.asarray(rhs, dtype=np.float64)
+        if rhs.shape != (self.gram.shape[0],):
+            raise ValueError(f"rhs must have shape ({self.gram.shape[0]},); got {rhs.shape}")
+        if method == "cg" and self.preconditioner_name == "spilu":
+            raise ValueError("CG requires an SPD preconditioner; use Jacobi/none or another Krylov method")
+        iterations = 0
+
+        def callback(_):
+            """Count one Krylov callback."""
+            nonlocal iterations
+            iterations += 1
+
+        common = dict(M=self.preconditioner, rtol=rtol, atol=atol, maxiter=maxiter, callback=callback)
+        start = time.perf_counter()
+        if method == "cg":
+            solution, info = cg(self.gram, rhs, **common)
+        elif method == "gmres":
+            solution, info = gmres(self.gram, rhs, callback_type="pr_norm", **common)
+        elif method == "bicgstab":
+            solution, info = bicgstab(self.gram, rhs, **common)
+        else:
+            raise ValueError("method must be 'cg', 'gmres', or 'bicgstab'")
+        elapsed = time.perf_counter() - start
+        relative_residual = float(
+            np.linalg.norm(rhs - self.gram @ solution) / max(np.linalg.norm(rhs), 1.0e-300)
+        )
+        return solution, GramSolveDiagnostics(
+            info=int(info),
+            iterations=int(iterations),
+            relative_residual=relative_residual,
+            elapsed=float(elapsed),
+        )
+
+    def dual_norm_squared(
+        self,
+        residual: np.ndarray,
+        *,
+        method: str = "cg",
+        rtol: float = 1.0e-11,
+        atol: float = 0.0,
+        maxiter: int | None = None,
+    ) -> tuple[float, GramSolveDiagnostics]:
+        """Return ``residual.T @ G^{-1} @ residual``."""
+        solution, diagnostics = self.solve(
+            residual, method=method, rtol=rtol, atol=atol, maxiter=maxiter
+        )
+        value = float(np.asarray(residual, dtype=np.float64) @ solution)
+        if value < 0.0 and abs(value) < 1.0e-12:
+            value = 0.0
+        if value < 0.0:
+            raise FloatingPointError(f"negative HDG dual-norm square {value}")
+        return value, diagnostics
+
+
+def build_krylov_hdg_gram_inverse(
+    gram: HDGGram | object,
+    *,
+    preconditioner: str = "jacobi",
+    drop_tol: float = 1.0e-12,
+    fill_factor: float = 50.0,
+) -> KrylovHDGGramInverse:
+    """Build a Jacobi, ILU, or unpreconditioned reusable Gram inverse."""
+    matrix = gram.matrix if isinstance(gram, HDGGram) else gram
+    name = str(preconditioner).lower()
+    start = time.perf_counter()
+    if name == "jacobi":
+        diagonal = np.asarray(matrix.diagonal(), dtype=np.float64)
+        if np.any(diagonal <= 0.0):
+            raise ValueError("Jacobi Gram preconditioning requires a positive diagonal")
+        inverse_diagonal = 1.0 / diagonal
+        operator = LinearOperator(matrix.shape, matvec=lambda x: inverse_diagonal * x, dtype=np.float64)
+        fill_ratio = float(diagonal.size / max(matrix.nnz, 1))
+    elif name == "spilu":
+        ilu = spilu(
+            matrix.tocsc(),
+            drop_tol=float(drop_tol),
+            fill_factor=float(fill_factor),
+            permc_spec="COLAMD",
+        )
+        operator = LinearOperator(matrix.shape, matvec=ilu.solve, dtype=np.float64)
+        fill_ratio = float((ilu.L.nnz + ilu.U.nnz) / max(matrix.nnz, 1))
+    elif name == "none":
+        operator = None
+        fill_ratio = 0.0
+    else:
+        raise ValueError("preconditioner must be 'jacobi', 'spilu', or 'none'")
+    return KrylovHDGGramInverse(
+        gram=matrix,
+        preconditioner=operator,
+        preconditioner_name=name,
+        setup_seconds=time.perf_counter() - start,
+        fill_ratio=fill_ratio,
+    )
 
 @dataclass(frozen=True)
 class ILUBiCGSTABGramInverse:
@@ -798,6 +911,7 @@ def build_ilu_bicgstab_inverse(
 
 __all__ = [
     "HDGGram",
+    "KrylovHDGGramInverse",
     "ILUBiCGSTABGramInverse",
     "GramSolveDiagnostics",
     "CondensedHDGGramInverse",
@@ -805,4 +919,5 @@ __all__ = [
     "build_condensed_hdg_gram_inverse",
     "build_flux_jump_gram_inverse",
     "build_ilu_bicgstab_inverse",
+    "build_krylov_hdg_gram_inverse",
 ]

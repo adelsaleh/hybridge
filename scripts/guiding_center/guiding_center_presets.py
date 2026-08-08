@@ -487,6 +487,32 @@ PRESETS.update(
             transport_initial_guess="initial-density-trace",
             diagnostics_prefix="diocotron_gaussian_annulus_k3_p6_50k_numba_pypardiso_medium_ilu_upwind",
         ),
+        "diocotron_gaussian_annulus_k3_p6_100k_numba_pypardiso_both_3step": replace(
+            _PYPARDISO_LU_BASE,
+            description=(
+                "Three-step Gaussian-annulus diocotron k=3 timing case on at least 100k "
+                "triangles with reusable SPD PARDISO Poisson and nonsymmetric PARDISO "
+                "transport. The fixed Poisson operator is cached; changing transport "
+                "values require a fresh numeric factorization."
+            ),
+            mesh_size=0.008,
+            minimum_triangles=100_000,
+            num_steps=3,
+            poisson_solver="pypardiso-spd",
+            poisson_preconditioner=None,
+            poisson_solver_atol=1.0e-12,
+            poisson_scale_system=False,
+            poisson_reuse_equilibrium_solver=True,
+            transport_solver="pypardiso",
+            transport_preconditioner=None,
+            transport_scale_system=False,
+            transport_trace_ordering="none",
+            transport_reuse_first_preconditioner=False,
+            transport_initial_guess="solver-default",
+            plot_every=0,
+            diagnostics_every=1,
+            diagnostics_prefix="diocotron_gaussian_annulus_k3_p6_100k_numba_pypardiso_both_3step",
+        ),
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_upwind_colamd": replace(
             _PYPARDISO_LU_BASE,
             description=(

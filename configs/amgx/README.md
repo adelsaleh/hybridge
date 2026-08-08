@@ -121,6 +121,17 @@ Working configs:
 - `diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json`: second nodal candidate and experimental modal PCGF candidate.
 - `diff_rea_gpu4_hdg_pcgf_classical_amg.json`: conservative classical AMG baseline and modal BICGSTAB preconditioner.
 
+Strict true-residual diagnostic:
+
+- `diff_rea_gpu4_hdg_gmres_cheb_l1_classical_reliable.json` requires the
+  `hdg/gmres-true-residual` AMGX branch. It enables explicit residual
+  verification and DGKS reorthogonalization without changing AMGX's global
+  `Epsilon_conv`. It is not a production preset: on the 113,894-triangle
+  Gaussian-annulus k=3 screen, restart 50 reached only a (1.158\times10^{-11})
+  true relative residual after 500 iterations (13.76 s). Restart 20/DGKS and
+  restart 50/ALWAYS showed the same floor after 200 iterations, so the planned
+  three-step run was rejected by the (10^{-12}) qualification gate.
+
 Current recommended nodal path:
 
 ```bash

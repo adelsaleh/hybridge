@@ -36,7 +36,15 @@ ALGORITHM_CONTENTS = {
         "symmetric_triangle_quadrature.tex",
     },
 }
+DEVELOPMENT_PLAN_CONTENTS = {
+    "README.md",
+    "unrelated_mesh_transfer.md",
+    "unsteady_solver_validation.md",
+}
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+DOCUMENTED_REPOSITORY_PATH = re.compile(
+    r"`((?:configs|scripts)/[^`\s*?\[\]]+\.(?:json|py))`"
+)
 
 
 def _documentation_markdown() -> tuple[Path, ...]:
@@ -79,6 +87,17 @@ def test_algorithm_tree_contains_only_maintained_topics() -> None:
         assert actual == expected, topic
 
 
+def test_development_plan_tree_is_indexed_and_linked_from_todo() -> None:
+    plans = DOCS / "development" / "plans"
+    assert {path.name for path in plans.iterdir()} == DEVELOPMENT_PLAN_CONTENTS
+
+    index = (plans / "README.md").read_text(encoding="utf-8")
+    todo = (ROOT / "TODO.md").read_text(encoding="utf-8")
+    for filename in DEVELOPMENT_PLAN_CONTENTS - {"README.md"}:
+        assert f"]({filename})" in index, filename
+        assert f"docs/development/plans/{filename}" in todo, filename
+
+
 def test_generated_pdfs_are_not_tracked_as_documentation() -> None:
     assert not tuple(DOCS.rglob("*.pdf"))
 
@@ -95,6 +114,45 @@ def test_local_markdown_links_resolve() -> None:
                 )
 
     assert not failures, "broken local Markdown links:\n" + "\n".join(failures)
+
+
+def test_documented_script_and_config_paths_resolve() -> None:
+    failures: list[str] = []
+    for source in _documentation_markdown():
+        text = source.read_text(encoding="utf-8")
+        for match in DOCUMENTED_REPOSITORY_PATH.finditer(text):
+            raw_path = match.group(1)
+            if not (ROOT / raw_path).is_file():
+                failures.append(f"{source.relative_to(ROOT)} -> {raw_path}")
+
+    assert not failures, "missing documented scripts/configs:\n" + "\n".join(failures)
+
+
+def test_advection_boundary_contract_covers_public_modes() -> None:
+    contract = (DOCS / "reference" / "advection_boundary_stabilization.md").read_text(
+        encoding="utf-8"
+    )
+    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
+    for mode in ("penalty", "eliminate", "zero-flux"):
+        assert f"| `{mode}` |" in contract, mode
+    assert "supports three boundary modes" in manual
+    assert "advection_stabilization=None" in contract
+    assert "| CuPy | `penalty`, `eliminate` | Same forms as NumPy |" in contract
+    assert "face-basis reference tables" in contract
+    assert "CuPy stabilization is rejected" not in manual
+    assert "NumPy and CuPy accept" in manual
+
+
+def test_guiding_center_gpu_documentation_matches_current_retry() -> None:
+    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
+    assert "PBICGSTAB aggregation-DILU postsmooth2" not in manual
+    for required in (
+        "configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json",
+        "FGMRES",
+        "`MULTICOLOR_DILU`",
+        "`legendre-modal`",
+    ):
+        assert required in manual, required
 
 
 def test_hdgfem_functions_have_docstrings() -> None:

@@ -8,6 +8,7 @@ legacy module.
 
 from __future__ import annotations
 
+import inspect
 from typing import Callable
 
 import numpy as np
@@ -91,6 +92,90 @@ def _require_normal_flux(
     return flux
 
 
+def dg_field_basis_on_trace_faces(
+        field_space: DGSpace,
+        trace_space: DGTraceSpace,
+) -> np.ndarray:
+    """Return a cached reference basis table on trace quadrature."""
+    if field_space is trace_space.space:
+        return trace_space.bas_of_bd_quads
+
+    field_trace = field_space.trace_space(trace_space.kind)
+    if np.array_equal(field_trace.quads, trace_space.quads):
+        return field_trace.bas_of_bd_quads
+
+    cache = getattr(trace_space, "_hdgfem_dg_field_face_basis_cache", None)
+    if cache is None:
+        cache = {}
+        object.__setattr__(trace_space, "_hdgfem_dg_field_face_basis_cache", cache)
+    if field_space not in cache:
+        face_points = _reference_edge_points_from_1d(trace_space.quads).reshape(-1, 2)
+        num_face_quads = trace_space.weights.size
+        cache[field_space] = np.ascontiguousarray(
+            field_space.basis_at(face_points)
+            .reshape(num_face_quads, 3, field_space.el_dof)
+            .transpose(1, 2, 0)
+        )
+    return cache[field_space]
+
+
+def dg_field_values_on_trace_faces(
+        field: DGField,
+        test_space: DGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
+    """Contract DG coefficients with a face reference table.
+
+    This is deliberately separate from generic point evaluation: a DGField is
+    discrete coefficient data, so face sampling should reuse the reference
+    tables owned by its DGSpace rather than pass through callable or physical
+    point evaluation.
+    """
+    field.space.assert_same_mesh(test_space)
+    trace_ref = _trace_ref(test_space, trace_space)
+    constant_value = field.constant_value
+    if constant_value is not None:
+        return np.full(
+            (test_space.mesh.num_tri, 3, trace_ref.weights.size),
+            constant_value,
+            dtype=np.float64,
+        )
+    basis = dg_field_basis_on_trace_faces(field.space, trace_ref)
+    return np.ascontiguousarray(np.einsum("Ki,fiq->Kfq", field.coeffs, basis, optimize=True))
+
+
+def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: int) -> np.ndarray:
+    """Evaluate tau(x, y) or context-aware tau(x, y, K, e)."""
+    x = mapped_points[:, :, 0]
+    y = mapped_points[:, :, 1]
+    use_context = False
+    try:
+        callable_signature = inspect.signature(values)
+        try:
+            callable_signature.bind(x, y)
+        except TypeError:
+            callable_signature.bind(
+                x,
+                y,
+                np.empty_like(x, dtype=np.int64),
+                np.empty_like(x, dtype=np.int64),
+            )
+            use_context = True
+    except (TypeError, ValueError):
+        pass
+
+    if not use_context:
+        return values(x, y)
+    num_elements = mapped_points.shape[0]
+    element_ids = np.broadcast_to(np.arange(num_elements, dtype=np.int64)[:, None], x.shape)
+    face_ids = np.broadcast_to(
+        np.tile(np.arange(3, dtype=np.int64), num_face_quads)[None, :],
+        x.shape,
+    )
+    return values(x, y, element_ids, face_ids)
+
+
 def _face_quadrature_values_from_scalar_input(
         values,
         space: DGSpace,
@@ -112,19 +197,13 @@ def _face_quadrature_values_from_scalar_input(
         return np.full((mesh.num_tri, 3, num_face_quads), float(values), dtype=np.float64)
 
     if isinstance(values, DGField):
-        values.space.assert_same_mesh(space)
-        face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
-        face_values = values.values_at_ref(face_points)
-        return np.ascontiguousarray(
-            face_values.reshape(mesh.num_tri, num_face_quads, 3).transpose(0, 2, 1),
-            dtype=np.float64,
-        )
+        return dg_field_values_on_trace_faces(values, space, trace_space=trace_ref)
 
     if callable(values):
         face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
         mapped_points = mesh.map_reference_points(face_points)
         flat_values = _normalize_callable_values(
-            values(mapped_points[:, :, 0], mapped_points[:, :, 1]),
+            _evaluate_face_callable(values, mapped_points, num_face_quads),
             mesh.num_tri,
             face_points.shape[0],
         )

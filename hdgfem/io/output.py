@@ -35,6 +35,25 @@ def logv(config, level: int, message: str) -> None:
         print(message, flush=True)
 
 
+def format_elapsed_percent(seconds: float, total: float, *, precision: int = 1) -> str:
+    """Format elapsed seconds followed by its percentage of ``total``."""
+    percent = 0.0 if float(total) <= 0.0 else 100.0 * float(seconds) / float(total)
+    return f"{float(seconds):.{int(precision)}f} ({percent:.1f}%)"
+
+
+def timed_call(label: str, verbosity: bool | int, function):
+    """Call ``function``, optionally printing a concise elapsed-time line."""
+    level = 1 if isinstance(verbosity, bool) and verbosity else int(verbosity or 0)
+    if level:
+        print(f"{label} ... ", end="", flush=True)
+    start = time.perf_counter()
+    result = function()
+    elapsed = time.perf_counter() - start
+    if level:
+        print(f"done in {elapsed:.5f}s", flush=True)
+    return result, elapsed
+
+
 @contextmanager
 def timed_section(config, level: int, label: str, **fields):
     """Emit ``LABEL_START`` and ``LABEL_DONE time=...`` messages around a block.

@@ -6,13 +6,13 @@ This reference defines coefficient-input semantics for the HDG solver APIs. It p
 
 ### Analytic PDE coefficients
 
-Analytic source, reaction, diffusion, advection, boundary, or stabilization data are Python callables that describe the exact PDE coefficient. NumPy and CuPy assembly paths may sample these callables directly at quadrature points. This is not the same abstraction as a projected DG coefficient field: direct analytic assembly computes quadrature integrals from the exact callable samples, while a projected DG field first replaces the callable by its L2 projection in the chosen DG space.
+Analytic source, reaction, diffusion, advection, boundary, or stabilization data are Python callables that describe the exact PDE coefficient. NumPy and CuPy assembly paths may sample supported callable coefficients directly at quadrature points; accepted forms remain coefficient- and backend-specific. Both NumPy and CuPy sample callable advection stabilization on element-side face quadrature, while Numba requires callable stabilization to be projected first and raw-CUDA currently requires the default upwind value. See [`advection_boundary_stabilization.md`](advection_boundary_stabilization.md). This is not the same abstraction as a projected DG coefficient field: direct analytic assembly computes quadrature integrals from the exact callable samples, while a projected DG field first replaces the callable by its L2 projection in the chosen DG space.
 
 Callables remain outside `DGField`. Use them when the backend can sample them directly and exact quadrature sampling is desired.
 
 ### Projected DG coefficient fields
 
-`DGField` and `VectorDGField` are the canonical discrete coefficient inputs. A projected field created with `space.project_callable(...)` represents a polynomial/table approximation to an analytic coefficient in that DG space. Its `coefficient_kind` is `"projected"`.
+`DGField` and `VectorDGField` are the canonical discrete coefficient inputs. A projected field created with `space.project_callable(...)` represents a polynomial/table approximation to an analytic coefficient in that DG space. Its `coefficient_kind` is `"projected"`. NumPy and CuPy evaluate DG stabilization by contracting its coefficients with the face-basis reference tables belonging to that field's `DGSpace`; they do not route a `DGField` through analytic callable or physical point-location evaluation.
 
 Use projected fields when a backend requires tables, when repeat solves should reuse the same discretized coefficient, or when projected-coefficient semantics are desired intentionally.
 
@@ -46,7 +46,7 @@ The remaining package-code `.coeffs` uses fall into these categories:
 - NumPy assembly helpers in `hdgfem.assembly`: intentional host assembly. Source/reaction/mass helpers use scalar or `constant_value` fast paths before table access where that avoids unnecessary materialization.
 - Numba backend adapters: intentional host table/descriptors. Numba is CPU-side and should not depend on device preparation.
 - CuPy backend adapters: device paths now use `as_cupy_coefficients` or `as_cupy_vector_coefficients`; the only remaining `.coeffs` fallback is inside `as_cupy_coefficients` when uploading a host-born nonconstant field to the active device.
-- Diffusion postprocessing, transfer, diagnostics, plotting, and result comparisons: intentional host operations. These utilities produce host fields, host norms, host plots, or host transfers, so materialization is expected.
+- Host diffusion postprocessing, mesh transfer, plotting, and explicit result inspection intentionally materialize host arrays. Device-capable scalar-error evaluation, field combinations, and solver-result extraction instead use resident coefficients/traces when available; host-only reductions such as `DGField.integral()` and `DGField.min_max()` remain explicit materialization boundaries.
 - Tests and example scripts: intentional inspection or comparison of host coefficient arrays.
 
 Current decision: no additional secondary utility needs a new zero/constant fast path beyond the existing host assembly and CuPy helper paths. Future GPU-specific utilities should avoid direct `.coeffs` access and use backend coefficient accessors instead.

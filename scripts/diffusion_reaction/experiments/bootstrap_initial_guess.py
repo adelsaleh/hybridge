@@ -18,7 +18,6 @@ if __package__ in {None, ""}:
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
-from math import comb
 from typing import Literal
 
 import numpy as np
@@ -33,6 +32,7 @@ from hdgfem.solvers.diffusion_reaction import (
     solve_diffusion_reaction_hdg as _solve_plain_diffusion_reaction_hdg,
 )
 from hdgfem.core.space import DGSpace
+from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
 
 
 @dataclass(frozen=True)
@@ -56,56 +56,6 @@ def _parse_key_value_options(option_strings: Iterable[str] | None) -> dict[str, 
             raise ValueError(f"option {item!r} has an empty key")
         parsed[key] = value.strip()
     return parsed
-
-
-def bernstein_degree_elevation_matrix(source_order: int, target_order: int) -> np.ndarray:
-    r"""Return the exact 1D Bernstein degree-elevation matrix.
-
-    The matrix :math:`E \in \mathbb{R}^{(p+1)\times(P+1)}` satisfies
-    :math:`c_P = c_p E`, where ``source_order`` is :math:`p` and
-    ``target_order`` is :math:`P`.  HDG trace unknowns use a 1D Bernstein edge
-    basis, so this gives an exact same-mesh trace prolongation from a coarse
-    bootstrap solve to the target trace space.
-    """
-    source_order = int(source_order)
-    target_order = int(target_order)
-    if source_order < 0 or target_order < 0:
-        raise ValueError("source_order and target_order must be nonnegative")
-    if source_order > target_order:
-        raise ValueError("source_order must be <= target_order for degree elevation")
-    if source_order == target_order:
-        return np.eye(source_order + 1, dtype=np.float64)
-
-    degree_gap = target_order - source_order
-    elevation = np.zeros((source_order + 1, target_order + 1), dtype=np.float64)
-    for i in range(source_order + 1):
-        start = i
-        stop = i + degree_gap
-        for j in range(start, stop + 1):
-            elevation[i, j] = (
-                comb(source_order, i)
-                * comb(degree_gap, j - i)
-                / comb(target_order, j)
-            )
-    return np.ascontiguousarray(elevation)
-
-
-def prolong_trace_coefficients(trace: np.ndarray, source_order: int, target_order: int) -> np.ndarray:
-    """Degree-elevate global trace coefficients from ``source_order`` to ``target_order``.
-
-    The operation is applied independently on each global mesh edge.  It is
-    exact for the lower-order trace polynomial because both spaces use the same
-    Bernstein edge basis.
-    """
-    trace = np.asarray(trace, dtype=np.float64)
-    source_dof = int(source_order) + 1
-    if trace.ndim != 1:
-        raise ValueError("trace must be a one-dimensional global trace vector")
-    if source_dof <= 0 or trace.size % source_dof != 0:
-        raise ValueError("trace size is incompatible with source_order")
-    elevation = bernstein_degree_elevation_matrix(source_order, target_order)
-    low_coeffs = trace.reshape(trace.size // source_dof, source_dof)
-    return np.ascontiguousarray((low_coeffs @ elevation).ravel())
 
 
 def bootstrap_trace_initial_guess(

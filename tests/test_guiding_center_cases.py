@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+
 import json
 import math
 import subprocess
@@ -18,7 +20,8 @@ from scripts.guiding_center.guiding_center_cases import (
     rho_eq_super_gaussian_annulus,
 )
 from scripts.guiding_center.guiding_center_presets import preset_by_key
-from scripts.guiding_center.run_guiding_center_cases import _initial_trace_guess_from_callable, run_guiding_center_case
+from hdgfem.core.field_ops import project_callable_to_trace
+from scripts.guiding_center.run_guiding_center_cases import run_guiding_center_case
 
 
 def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
@@ -381,11 +384,12 @@ def test_initial_density_trace_guess_projects_constant_to_reduced_skeleton() -> 
     from hdgfem.core.space import DGSpace
 
     space = DGSpace(rectangle_mesh(2, 2), 2)
-    guess = _initial_trace_guess_from_callable(
+    guess = project_callable_to_trace(
         space,
         lambda x, y: 2.5 + 0.0 * x + 0.0 * y,
         trace_basis="legacy-lagrange",
-        prefer_device=False,
+        reduced=True,
+        backend="host",
     )
 
     assert guess.shape == (space.mesh.int_edges_inds.size * space.trace_space("legacy-lagrange").edg_dof,)
@@ -467,3 +471,24 @@ def test_guiding_center_cli_accepts_response_file(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "Preset: diocotron_gaussian_annulus_host_smoke" in completed.stdout
     assert "num_steps: 0" in completed.stdout
+def test_guiding_center_runner_uses_only_public_solver_classes_for_gpu_paths() -> None:
+    path = Path("scripts/guiding_center/run_guiding_center_cases.py")
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    imported_modules = {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+    }
+    imported_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    }
+    source = path.read_text(encoding="utf-8")
+
+    assert "hdgfem.backends" not in "\n".join(sorted(imported_modules))
+    assert not {"cupy", "pyamgx"} & imported_names
+    assert "_device_coefficients_for" not in source
+    assert "DiffusionReactionHDGSolver" in source
+    assert "AdvectionReactionHDGSolver" in source

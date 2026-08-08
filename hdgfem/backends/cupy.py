@@ -18,6 +18,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 
 from ..assembly import hdg as hdg_assembly
+from ..assembly import matrices_numpy as hdg_mats
 from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from ..linalg.system import KnownDofReduction
 
@@ -330,12 +331,87 @@ def as_cupy_trace_reference(
 class CupyAdvectionTraceAssembly:
     """Advection-reaction trace data assembled with CuPy."""
 
-    trace_system: hdg_assembly.TraceSystem
+    trace_system: hdg_assembly.TraceSystem | None
     beta_dot_normal: np.ndarray
     local_solver: Any | None
     element_boundary_mats: Any | None
     timings: dict[str, float]
     reduction: KnownDofReduction | None = None
+    rows_device: Any | None = None
+    cols_device: Any | None = None
+    data_device: Any | None = None
+    rhs_device: Any | None = None
+    boundary_trace: np.ndarray | None = None
+    local_solver_device: Any | None = None
+    element_boundary_mats_device: Any | None = None
+
+
+def expand_known_dofs_cupy(reduced_solution, reduction: KnownDofReduction):
+    """Expand a reduced trace vector on-device without a host round trip."""
+    cupy = require_cupy()
+    reduced_cp = cupy.asarray(reduced_solution, dtype=cupy.float64)
+    expected_size = int(np.count_nonzero(reduction.free_mask))
+    if reduced_cp.shape != (expected_size,):
+        raise ValueError(f"reduced_solution must have shape ({expected_size},); got {reduced_cp.shape}")
+    full = cupy.asarray(reduction.known_values, dtype=cupy.float64).copy()
+    full[cupy.asarray(reduction.free_mask)] = reduced_cp
+    return cupy.ascontiguousarray(full)
+
+
+def expand_boundary_trace_cupy(
+        reduced_solution,
+        boundary_trace,
+        space: DGSpace | CupyDGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+):
+    """Insert a reduced interior-edge trace into its full device trace table."""
+    cupy = require_cupy()
+    cspace = as_cupy_space(space)
+    trace_ref = as_cupy_trace_reference(trace_space, cspace)
+    reduced_cp = cupy.asarray(reduced_solution, dtype=cupy.float64)
+    expected = int(cspace.mesh.int_edges_inds.size * trace_ref.edg_dof)
+    if reduced_cp.shape != (expected,):
+        raise ValueError(f"reduced_solution must have shape ({expected},); got {reduced_cp.shape}")
+    full = cupy.asarray(boundary_trace, dtype=cupy.float64).copy()
+    full[cspace.mesh.int_edges_inds] = reduced_cp.reshape((-1, trace_ref.edg_dof))
+    return cupy.ascontiguousarray(full.ravel())
+
+
+def element_traces_cupy(
+        trace,
+        space: DGSpace | CupyDGSpace,
+        *,
+        trace_space: DGTraceSpace | None = None,
+):
+    """Gather and orient global trace coefficients entirely on-device."""
+    cupy = require_cupy()
+    cspace = as_cupy_space(space)
+    trace_ref = as_cupy_trace_reference(trace_space, cspace)
+    expected_size = int(cspace.mesh.num_edg * trace_ref.edg_dof)
+    trace_cp = cupy.asarray(trace, dtype=cupy.float64)
+    if trace_cp.shape != (expected_size,):
+        raise ValueError(f"trace must have shape ({expected_size},); got {trace_cp.shape}")
+
+    traces = trace_cp.reshape((cspace.mesh.num_edg, trace_ref.edg_dof))[
+        cspace.mesh.loc2glob_edge
+    ].copy()
+    if cspace.mesh.num_negative_orientations:
+        elements = cspace.mesh.negative_orientation_elements
+        faces = cspace.mesh.negative_orientation_faces
+        negative = traces[elements, faces]
+        if trace_ref.kind == "legendre-modal":
+            signs = cupy.where(
+                cupy.arange(trace_ref.edg_dof, dtype=cupy.int64) % 2 == 0,
+                1.0,
+                -1.0,
+            )
+            traces[elements, faces] = negative * signs[None, :]
+        else:
+            traces[elements, faces] = negative[:, ::-1]
+    return cupy.ascontiguousarray(
+        traces.reshape((cspace.mesh.num_tri, 3 * trace_ref.edg_dof))
+    )
 
 
 def require_cupy():
@@ -660,34 +736,135 @@ def _advection_mats_cupy(
     )
 
 
-def _boundary_mass_from_normal_flux_cupy(cspace: CupyDGSpace, beta_dot_normal, trace_ref: CupyTraceReferenceData):
-    """Assemble upwind boundary mass matrices on the GPU."""
+def _advection_trace_weights_cupy(
+        stabilization,
+        cspace: CupyDGSpace,
+        beta_dot_normal,
+        trace_ref: CupyTraceReferenceData,
+):
+    """Return device tau and gamma tables on element-side face quadrature."""
+    cupy = require_cupy()
+    if stabilization is None:
+        tau_face = cupy.abs(beta_dot_normal)
+    elif np.isscalar(stabilization):
+        tau_face = cupy.full(beta_dot_normal.shape, float(stabilization), dtype=cupy.float64)
+    elif isinstance(stabilization, DGField):
+        stabilization.space.assert_same_mesh(cspace.host)
+        constant_value = stabilization.constant_value
+        if constant_value is not None:
+            tau_face = cupy.full(beta_dot_normal.shape, constant_value, dtype=cupy.float64)
+        else:
+            field_cspace = as_cupy_space(stabilization.space, device=cspace.device_id)
+            coefficients = as_cupy_coefficients(stabilization, field_cspace)
+            if stabilization.space is cspace.host:
+                face_basis = trace_ref.bas_of_bd_quads
+            else:
+                face_basis = cupy.asarray(
+                    hdg_mats.dg_field_basis_on_trace_faces(stabilization.space, trace_ref.host),
+                    dtype=cupy.float64,
+                )
+            tau_face = cupy.einsum("Ki,fiq->Kfq", coefficients, face_basis, optimize=True)
+    else:
+        tau_host = hdg_mats.advection_trace_stabilization_values(
+            cspace.host,
+            cupy.asnumpy(beta_dot_normal),
+            stabilization,
+            trace_space=trace_ref.host,
+        )
+        tau_face = cupy.asarray(tau_host, dtype=cupy.float64)
+    tau_face = cupy.ascontiguousarray(tau_face)
+    return tau_face, cupy.ascontiguousarray(tau_face - beta_dot_normal)
+
+
+def _boundary_mass_from_trace_stabilization_cupy(cspace: CupyDGSpace, tau_face, trace_ref: CupyTraceReferenceData):
+    """Assemble tau-weighted boundary mass matrices on the GPU."""
     cupy = require_cupy()
     mesh = cspace.mesh
     return cupy.einsum(
         "Kf,Kfq,fiq,fjq->Kij",
         mesh.jacs_el_fc,
-        cupy.abs(beta_dot_normal),
+        tau_face,
         trace_ref.bas_of_bd_quads,
         trace_ref.weighted_bas_of_bd_quads,
         optimize=True,
     )
 
 
-def _element_boundary_mats_from_normal_flux_cupy(cspace: CupyDGSpace, beta_dot_normal, trace_ref: CupyTraceReferenceData):
-    """Assemble element-to-trace upwind coupling matrices on the GPU."""
+def _element_boundary_mats_from_trace_weight_cupy(cspace: CupyDGSpace, gamma_face, trace_ref: CupyTraceReferenceData):
+    """Assemble gamma-weighted element-to-trace coupling matrices on the GPU."""
     cupy = require_cupy()
     mesh = cspace.mesh
-    flux_weight = cupy.abs(beta_dot_normal) - beta_dot_normal
     result = cupy.einsum(
         "Kf,Kfq,fiq,jq->Kifj",
         mesh.jacs_el_fc,
-        flux_weight,
+        gamma_face,
         trace_ref.bas_of_bd_quads,
         trace_ref.weighted_bas1d_of_ref_edg_qds,
         optimize=True,
     )
     return result.reshape(mesh.num_tri, cspace.el_dof, 3 * trace_ref.edg_dof)
+
+
+def reconstruct_advection_reaction_field_cupy(
+        trace,
+        source_rhs,
+        beta_field: VectorDGField | None,
+        beta_callables: tuple[Callable, Callable] | None,
+        beta_dot_normal,
+        reaction,
+        space: DGSpace | CupyDGSpace,
+        *,
+        advection_stabilization=None,
+        trace_space: DGTraceSpace | None = None,
+        local_solver_device=None,
+        element_boundary_mats_device=None,
+):
+    """Reconstruct element coefficients on-device, rebuilding uncached operators.
+
+    The condensed local inverse and element-boundary matrices are intentionally
+    not retained by default. If explicitly cached, they are reused directly;
+    otherwise reconstruction performs one fresh batched local solve.
+    """
+    cupy = require_cupy()
+    cspace = as_cupy_space(space)
+    trace_ref = as_cupy_trace_reference(trace_space, cspace)
+    has_local_solver = local_solver_device is not None
+    has_boundary_mats = element_boundary_mats_device is not None
+    if has_local_solver != has_boundary_mats:
+        raise ValueError(
+            "cached local solver and element-boundary matrices must be supplied together"
+        )
+    if has_local_solver:
+        traces = element_traces_cupy(trace, cspace, trace_space=trace_ref.host)
+        source_cp = cupy.asarray(source_rhs, dtype=cupy.float64)
+        boundary_cp = cupy.asarray(element_boundary_mats_device, dtype=cupy.float64)
+        rhs = source_cp[..., None] + boundary_cp @ traces[..., None]
+        solver_cp = cupy.asarray(local_solver_device, dtype=cupy.float64)
+        return cupy.ascontiguousarray((solver_cp @ rhs).squeeze(-1))
+
+    beta_normal_cp = cupy.asarray(beta_dot_normal, dtype=cupy.float64)
+    tau_face, gamma_face = _advection_trace_weights_cupy(
+        advection_stabilization,
+        cspace,
+        beta_normal_cp,
+        trace_ref,
+    )
+    local_mats = _boundary_mass_from_trace_stabilization_cupy(cspace, tau_face, trace_ref)
+    local_mats += _reaction_mass_cupy(reaction, cspace)
+    local_mats -= _advection_mats_cupy(
+        cspace,
+        beta_field=beta_field,
+        beta_callables=beta_callables,
+    )
+    element_boundary = _element_boundary_mats_from_trace_weight_cupy(
+        cspace,
+        gamma_face,
+        trace_ref,
+    )
+    traces = element_traces_cupy(trace, cspace, trace_space=trace_ref.host)
+    source_cp = cupy.asarray(source_rhs, dtype=cupy.float64)
+    rhs = source_cp[..., None] + element_boundary @ traces[..., None]
+    return cupy.ascontiguousarray(cupy.linalg.solve(local_mats, rhs).squeeze(-1))
 
 
 def _oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyTraceReferenceData):
@@ -707,7 +884,7 @@ def _oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyTraceReferenc
     return cupy.ascontiguousarray(basis)
 
 
-def _advection_trace_lift_cupy(cspace: CupyDGSpace, beta_dot_normal, trace_ref: CupyTraceReferenceData):
+def _advection_trace_lift_cupy(cspace: CupyDGSpace, tau_face, trace_ref: CupyTraceReferenceData):
     """Return the tau-weighted row lift used by advection trace equations."""
     cupy = require_cupy()
     mesh = cspace.mesh
@@ -716,7 +893,7 @@ def _advection_trace_lift_cupy(cspace: CupyDGSpace, beta_dot_normal, trace_ref: 
         cupy.einsum(
             "Kf,Kfq,Kfaq,fiq,q->Kfai",
             mesh.jacs_el_fc,
-            cupy.abs(beta_dot_normal),
+            tau_face,
             oriented_trace,
             trace_ref.bas_of_bd_quads,
             trace_ref.weights,
@@ -748,11 +925,10 @@ def _element_to_trace_matrix_cupy(
     return cupy.ascontiguousarray(schur.swapaxes(2, 3))
 
 
-def _advection_interior_trace_mass_blocks_cupy(cspace: CupyDGSpace, beta_dot_normal, trace_ref: CupyTraceReferenceData):
-    """Return side-wise interior trace masses for gamma=|beta.n|-beta.n."""
+def _advection_interior_trace_mass_blocks_cupy(cspace: CupyDGSpace, gamma_face, trace_ref: CupyTraceReferenceData):
+    """Return side-wise interior trace masses for explicit gamma weights."""
     cupy = require_cupy()
     mesh = cspace.mesh
-    gamma_face = cupy.abs(beta_dot_normal) - beta_dot_normal
     oriented_trace = _oriented_trace_basis_cupy(cspace, trace_ref)
     side_blocks = cupy.einsum(
         "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
@@ -770,7 +946,7 @@ def _trace_matrix_data_cupy(
         trace_blocks,
         cspace: CupyDGSpace,
         trace_ref: CupyTraceReferenceData,
-        beta_dot_normal,
+        gamma_face,
         boundary_penalty: float,
 ):
     """Return COO data values matching :func:`hdg_assembly.trace_matrix_indices`."""
@@ -789,7 +965,7 @@ def _trace_matrix_data_cupy(
     offset = n_interior_flux
     data[offset:offset + n_interior_mass] = _advection_interior_trace_mass_blocks_cupy(
         cspace,
-        beta_dot_normal,
+        gamma_face,
         trace_ref,
     ).ravel()
 
@@ -832,7 +1008,7 @@ def _reduced_trace_matrix_data_cupy(
         trace_blocks,
         cspace: CupyDGSpace,
         trace_ref: CupyTraceReferenceData,
-        beta_dot_normal,
+        gamma_face,
 ):
     """Return COO data values before boundary block elimination."""
     cupy = require_cupy()
@@ -847,7 +1023,7 @@ def _reduced_trace_matrix_data_cupy(
     data[:n_interior_flux] = -trace_blocks[valid_elements, valid_faces].ravel()
     data[n_interior_flux:] = _advection_interior_trace_mass_blocks_cupy(
         cspace,
-        beta_dot_normal,
+        gamma_face,
         trace_ref,
     ).ravel()
     return data
@@ -883,7 +1059,9 @@ def _eliminate_boundary_trace_dofs_cupy(
         boundary_trace,
         cspace: CupyDGSpace,
         trace_ref: CupyTraceReferenceData,
-) -> KnownDofReduction:
+        *,
+        transfer_host: bool = True,
+):
     """Eliminate boundary trace columns on-device using the legacy block layout."""
     cupy = require_cupy()
     mesh = cspace.mesh
@@ -922,19 +1100,28 @@ def _eliminate_boundary_trace_dofs_cupy(
         )
     reduced_rhs = rhs.reshape((mesh.num_edg, edg_dof))[mesh.int_edges_inds].ravel()
 
-    free_mask = cupy.asnumpy(free_mask_cp)
-    old_to_new = cupy.asnumpy(old_to_new_cp)
-    known_mask = ~free_mask
-    known_values = boundary_trace.ravel()
-    return KnownDofReduction(
-        rows=np.ascontiguousarray(cupy.asnumpy(reduced_rows)),
-        cols=np.ascontiguousarray(cupy.asnumpy(reduced_cols)),
-        data=np.ascontiguousarray(cupy.asnumpy(reduced_data)),
-        rhs=np.ascontiguousarray(cupy.asnumpy(reduced_rhs)),
-        free_mask=np.ascontiguousarray(free_mask),
-        known_mask=np.ascontiguousarray(known_mask),
-        known_values=np.ascontiguousarray(known_values),
-        old_to_new=np.ascontiguousarray(old_to_new),
+    reduction = None
+    if transfer_host:
+        free_mask = cupy.asnumpy(free_mask_cp)
+        old_to_new = cupy.asnumpy(old_to_new_cp)
+        known_mask = ~free_mask
+        known_values = boundary_trace.ravel()
+        reduction = KnownDofReduction(
+            rows=np.ascontiguousarray(cupy.asnumpy(reduced_rows)),
+            cols=np.ascontiguousarray(cupy.asnumpy(reduced_cols)),
+            data=np.ascontiguousarray(cupy.asnumpy(reduced_data)),
+            rhs=np.ascontiguousarray(cupy.asnumpy(reduced_rhs)),
+            free_mask=np.ascontiguousarray(free_mask),
+            known_mask=np.ascontiguousarray(known_mask),
+            known_values=np.ascontiguousarray(known_values),
+            old_to_new=np.ascontiguousarray(old_to_new),
+        )
+    return (
+        reduction,
+        reduced_rows,
+        reduced_cols,
+        reduced_data,
+        reduced_rhs,
     )
 
 
@@ -981,9 +1168,15 @@ def assemble_advection_reaction_trace_system_cupy(
         space: DGSpace | CupyDGSpace,
         *,
         boundary_penalty: float = 1e20,
+        transfer_local_solver: bool = False,
+        transfer_trace_system: bool = False,
+        advection_stabilization=None,
         trace_space: DGTraceSpace | None = None,
 ) -> CupyAdvectionTraceAssembly:
-    """Assemble the full advection-reaction HDG trace system with CuPy."""
+    """Assemble the full advection-reaction HDG trace system with CuPy.
+
+    COO values and RHS remain device-resident unless ``transfer_trace_system`` is set.
+    """
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)
@@ -992,10 +1185,16 @@ def assemble_advection_reaction_trace_system_cupy(
 
     start = time.perf_counter()
     beta_dot_normal_cp = cupy.asarray(np.ascontiguousarray(beta_dot_normal, dtype=np.float64))
-    local_mats = _boundary_mass_from_normal_flux_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    tau_face, gamma_face = _advection_trace_weights_cupy(
+        advection_stabilization,
+        cspace,
+        beta_dot_normal_cp,
+        trace_ref,
+    )
+    local_mats = _boundary_mass_from_trace_stabilization_cupy(cspace, tau_face, trace_ref)
     local_mats += _reaction_mass_cupy(reaction, cspace)
     local_mats -= _advection_mats_cupy(cspace, beta_field=beta_field, beta_callables=beta_callables)
-    element_boundary_mats = _element_boundary_mats_from_normal_flux_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    element_boundary_mats = _element_boundary_mats_from_trace_weight_cupy(cspace, gamma_face, trace_ref)
     timings["local_assembly"] = time.perf_counter() - start
 
     start = time.perf_counter()
@@ -1003,14 +1202,16 @@ def assemble_advection_reaction_trace_system_cupy(
     timings["local_inverse"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    trace_lift = _advection_trace_lift_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    trace_lift = _advection_trace_lift_cupy(cspace, tau_face, trace_ref)
     trace_blocks = _element_to_trace_matrix_cupy(local_solver, element_boundary_mats, trace_lift, cspace, trace_ref)
     rows, cols = hdg_assembly.trace_matrix_indices(
         host_space,
         interior_mass_mode="face",
         trace_space=trace_ref.host,
     )
-    data = _trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, beta_dot_normal_cp, boundary_penalty)
+    rows_device = cupy.asarray(rows, dtype=cupy.int64)
+    cols_device = cupy.asarray(cols, dtype=cupy.int64)
+    data = _trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face, boundary_penalty)
     rhs, boundary_trace = _global_rhs_cupy(
         source_rhs,
         local_solver,
@@ -1024,25 +1225,38 @@ def assemble_advection_reaction_trace_system_cupy(
     timings["trace_assembly"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    trace_system = hdg_assembly.TraceSystem(
-        rows=np.ascontiguousarray(rows),
-        cols=np.ascontiguousarray(cols),
-        data=cupy.asnumpy(data),
-        rhs=cupy.asnumpy(rhs),
-        boundary_trace=boundary_trace,
-    )
-    local_solver_host = cupy.asnumpy(local_solver)
-    element_boundary_mats_host = cupy.asnumpy(element_boundary_mats)
-    beta_dot_normal_host = cupy.asnumpy(beta_dot_normal_cp)
+    trace_system = None
+    if transfer_trace_system:
+        trace_system = hdg_assembly.TraceSystem(
+            rows=np.ascontiguousarray(rows),
+            cols=np.ascontiguousarray(cols),
+            data=cupy.asnumpy(data),
+            rhs=cupy.asnumpy(rhs),
+            boundary_trace=boundary_trace,
+        )
+    if transfer_local_solver:
+        local_solver_result = np.ascontiguousarray(cupy.asnumpy(local_solver))
+        element_boundary_mats_result = np.ascontiguousarray(cupy.asnumpy(element_boundary_mats))
+    else:
+        local_solver_result = None
+        element_boundary_mats_result = None
+    beta_dot_normal_host = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     timings["host_transfer"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
 
     return CupyAdvectionTraceAssembly(
         trace_system=trace_system,
         beta_dot_normal=beta_dot_normal_host,
-        local_solver=np.ascontiguousarray(local_solver_host),
-        element_boundary_mats=np.ascontiguousarray(element_boundary_mats_host),
+        local_solver=local_solver_result,
+        element_boundary_mats=element_boundary_mats_result,
         timings=timings,
+        rows_device=rows_device,
+        cols_device=cols_device,
+        data_device=data,
+        rhs_device=rhs,
+        boundary_trace=boundary_trace,
+        local_solver_device=local_solver if transfer_local_solver else None,
+        element_boundary_mats_device=element_boundary_mats if transfer_local_solver else None,
     )
 
 
@@ -1057,9 +1271,14 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
         space: DGSpace | CupyDGSpace,
         *,
         transfer_local_solver: bool = False,
+        transfer_trace_system: bool = False,
+        advection_stabilization=None,
         trace_space: DGTraceSpace | None = None,
 ) -> CupyAdvectionTraceAssembly:
-    """Assemble the reduced advection-reaction HDG trace system with CuPy."""
+    """Assemble the reduced advection-reaction HDG trace system with CuPy.
+
+    Reduced COO values and RHS stay on-device unless explicitly transferred.
+    """
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)
@@ -1067,10 +1286,16 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
 
     start = time.perf_counter()
     beta_dot_normal_cp = cupy.asarray(np.ascontiguousarray(beta_dot_normal, dtype=np.float64))
-    local_mats = _boundary_mass_from_normal_flux_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    tau_face, gamma_face = _advection_trace_weights_cupy(
+        advection_stabilization,
+        cspace,
+        beta_dot_normal_cp,
+        trace_ref,
+    )
+    local_mats = _boundary_mass_from_trace_stabilization_cupy(cspace, tau_face, trace_ref)
     local_mats += _reaction_mass_cupy(reaction, cspace)
     local_mats -= _advection_mats_cupy(cspace, beta_field=beta_field, beta_callables=beta_callables)
-    element_boundary_mats = _element_boundary_mats_from_normal_flux_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    element_boundary_mats = _element_boundary_mats_from_trace_weight_cupy(cspace, gamma_face, trace_ref)
     cupy.cuda.get_current_stream().synchronize()
     timings["local_assembly"] = time.perf_counter() - start
 
@@ -1080,10 +1305,10 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
     timings["local_inverse"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    trace_lift = _advection_trace_lift_cupy(cspace, beta_dot_normal_cp, trace_ref)
+    trace_lift = _advection_trace_lift_cupy(cspace, tau_face, trace_ref)
     trace_blocks = _element_to_trace_matrix_cupy(local_solver, element_boundary_mats, trace_lift, cspace, trace_ref)
     rows_cp, cols_cp = _reduced_trace_matrix_indices_cupy(cspace, trace_ref)
-    data_cp = _reduced_trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, beta_dot_normal_cp)
+    data_cp = _reduced_trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face)
     rhs_cp = _global_rhs_without_boundary_penalty_cupy(source_rhs, local_solver, trace_lift, cspace, trace_ref)
     boundary_trace = hdg_assembly.boundary_trace_coefficients(
         boundary_condition,
@@ -1094,7 +1319,13 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
     timings["trace_assembly"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    reduction = _eliminate_boundary_trace_dofs_cupy(
+    (
+        reduction,
+        reduced_rows_device,
+        reduced_cols_device,
+        reduced_data_device,
+        reduced_rhs_device,
+    ) = _eliminate_boundary_trace_dofs_cupy(
         rows_cp,
         cols_cp,
         data_cp,
@@ -1102,28 +1333,31 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
         boundary_trace,
         cspace,
         trace_ref,
+        transfer_host=transfer_trace_system,
     )
     cupy.cuda.get_current_stream().synchronize()
     timings["boundary_elimination"] = time.perf_counter() - start
 
     start = time.perf_counter()
-    beta_dot_normal_host = cupy.asnumpy(beta_dot_normal_cp)
+    beta_dot_normal_host = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     if transfer_local_solver:
         local_solver_result = np.ascontiguousarray(cupy.asnumpy(local_solver))
         element_boundary_mats_result = np.ascontiguousarray(cupy.asnumpy(element_boundary_mats))
     else:
-        local_solver_result = local_solver
-        element_boundary_mats_result = element_boundary_mats
+        local_solver_result = None
+        element_boundary_mats_result = None
     timings["host_transfer"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
 
-    trace_system = hdg_assembly.TraceSystem(
-        rows=reduction.rows,
-        cols=reduction.cols,
-        data=reduction.data,
-        rhs=reduction.rhs,
-        boundary_trace=boundary_trace,
-    )
+    trace_system = None
+    if transfer_trace_system:
+        trace_system = hdg_assembly.TraceSystem(
+            rows=reduction.rows,
+            cols=reduction.cols,
+            data=reduction.data,
+            rhs=reduction.rhs,
+            boundary_trace=boundary_trace,
+        )
     return CupyAdvectionTraceAssembly(
         trace_system=trace_system,
         beta_dot_normal=beta_dot_normal_host,
@@ -1131,6 +1365,13 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
         element_boundary_mats=element_boundary_mats_result,
         timings=timings,
         reduction=reduction,
+        rows_device=reduced_rows_device,
+        cols_device=reduced_cols_device,
+        data_device=reduced_data_device,
+        rhs_device=reduced_rhs_device,
+        boundary_trace=boundary_trace,
+        local_solver_device=local_solver if transfer_local_solver else None,
+        element_boundary_mats_device=element_boundary_mats if transfer_local_solver else None,
     )
 
 
@@ -1598,6 +1839,10 @@ __all__ = [
     "CupyReferenceElementData",
     "assemble_advection_reaction_trace_system_cupy",
     "assemble_advection_reaction_trace_system_eliminated_cupy",
+    "element_traces_cupy",
+    "expand_boundary_trace_cupy",
+    "expand_known_dofs_cupy",
+    "reconstruct_advection_reaction_field_cupy",
     "as_cupy_space",
     "as_cupy_coefficients",
     "as_cupy_vector_coefficients",

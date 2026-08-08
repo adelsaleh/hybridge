@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from numbers import Real
 from typing import Literal
 
 import numpy as np
@@ -161,8 +162,43 @@ def block_source_moments(
     return result
 
 
+def normalize_boundary_condition(boundary_condition, *, require_none: bool = False):
+    """Return a callable boundary condition from a callable or real constant.
+
+    When ``require_none`` is true, ``None`` is the only accepted value.
+    Discrete volume and trace fields are deliberately not boundary-condition
+    inputs. Their projection/interpolation semantics will be designed as a
+    separate API rather than inferred here.
+    """
+    if require_none and boundary_condition is not None:
+        raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
+    if boundary_condition is None:
+        if require_none:
+            return None
+        raise ValueError("boundary_condition may not be None")
+    if isinstance(boundary_condition, DGField):
+        raise TypeError(
+            "boundary_condition must be a callable or real scalar constant; "
+            "DGField and HDGTraceField boundary data are not supported"
+        )
+    if callable(boundary_condition):
+        return boundary_condition
+    if isinstance(boundary_condition, Real):
+        value = float(boundary_condition)
+
+        def constant_boundary_condition(_x, _y):
+            """Return the normalized constant boundary value."""
+            return value
+
+        return constant_boundary_condition
+    raise TypeError(
+        "boundary_condition must be a callable or real scalar constant; "
+        "DGField and HDGTraceField boundary data are not supported"
+    )
+
+
 def boundary_trace_coefficients(
-        boundary_condition: Callable,
+        boundary_condition,
         space: DGSpace,
         *,
         trace_basis: str = "legacy-lagrange",
@@ -170,6 +206,7 @@ def boundary_trace_coefficients(
 ) -> np.ndarray:
     """Return Dirichlet coefficients for the requested trace basis."""
     trace_ref = space.trace_space(trace_basis) if trace_space is None else trace_space
+    boundary_condition = normalize_boundary_condition(boundary_condition)
     return trace_ref.boundary_coefficients(boundary_condition)
 
 
@@ -588,6 +625,7 @@ __all__ = [
     "element_to_trace_matrix_from_lift",
     "element_traces",
     "element_to_trace_matrix",
+    "normalize_boundary_condition",
     "free_trace_dofs",
     "global_rhs",
     "h1_flux_jump_norm",

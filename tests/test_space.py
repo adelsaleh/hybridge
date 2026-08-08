@@ -48,8 +48,8 @@ from hdgfem.solvers.diffusion_reaction import (
     impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg,
 )
+from hdgfem.core.trace_transfer import prolong_trace_coefficients
 from scripts.diffusion_reaction.experiments.bootstrap_initial_guess import (
-    prolong_trace_coefficients,
     solve_diffusion_reaction_hdg as solve_diffusion_reaction_hdg_with_bootstrap,
 )
 from hdgfem.linalg.system import eliminate_known_dofs, expand_known_dofs, solve_global_system

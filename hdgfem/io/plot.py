@@ -123,6 +123,47 @@ def reference_plot_points(resolution: int) -> np.ndarray:
     return np.ascontiguousarray(np.column_stack((xx[inside], yy[inside])), dtype=np.float64)
 
 
+def resolve_field_plot_resolution(
+        requested_resolution: int | None,
+        *,
+        order: int,
+        num_elements: int,
+        default: int = 20,
+        coarse_element_limit: int = 130,
+) -> int:
+    """Choose a plot grid with a polynomial-degree minimum on coarse meshes."""
+    requested = int(default if requested_resolution is None else requested_resolution)
+    if requested < 2:
+        raise ValueError("plot resolution must be at least 2")
+    if int(num_elements) <= int(coarse_element_limit):
+        return max(requested, 2 * int(order) + 3, 3)
+    return requested
+
+
+def resolve_postprocessed_plot_resolution(
+        requested_resolution: int | None,
+        *,
+        order: int,
+        num_elements: int,
+        default: int = 20,
+) -> int:
+    """Choose a plot grid able to display degree-``order + 1`` data."""
+    base = resolve_field_plot_resolution(
+        requested_resolution, order=order, num_elements=num_elements, default=default,
+    )
+    return resolve_field_plot_resolution(
+        max(base, 2 * (int(order) + 1) + 3),
+        order=int(order) + 1,
+        num_elements=num_elements,
+        default=default,
+    )
+
+
+def contour_levels_for_order(order: int) -> int:
+    """Choose enough Matplotlib contour bands for a degree-``order`` field."""
+    return min(256, max(128, 24 * (int(order) + 1)))
+
+
 def _triangle_grid_point_count(resolution: int) -> int:
     """Return the number of points produced by :func:`reference_plot_points`."""
     resolution = int(resolution)
@@ -870,7 +911,6 @@ def plot_solution_comparison(
     sampling that is independent of the DG polynomial order.  ``None`` preserves the historical
     behavior and samples the exact panel on the same grid as the numerical panel.
     """
-    pv = _require_pyvista()
     reference_points, physical_points, numerical_values = sample_field_on_elements(
         field,
         resolution=resolution,
@@ -893,7 +933,28 @@ def plot_solution_comparison(
         exact_solution,
         resolution=exact_panel_resolution,
     )
+    if field.space.mesh.num_tri <= 130:
+        return plot_scalar_sample_panels_matplotlib(
+            field.space.mesh,
+            (
+                ("Numerical solution", reference_points, numerical_values),
+                ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
+                (
+                    "Absolute error",
+                    reference_points,
+                    absolute_error,
+                    {"cmap": "magma", "zero_min": True},
+                ),
+            ),
+            suptitle=title or None,
+            show_mesh=show_mesh,
+            cmap="jet",
+            levels=contour_levels_for_order(field.space.order),
+            share_clim=False,
+            show=show,
+        )
 
+    pv = _require_pyvista()
     field_clim = _robust_clim(np.concatenate((numerical_values.reshape(-1), exact_display_values.reshape(-1))))
     error_clim = _robust_clim(absolute_error, zero_min=True)
 
@@ -951,6 +1012,7 @@ __all__ = [
     "add_matplotlib_mesh",
     "add_samples_to_plotter",
     "coarse_mesh_polydata",
+    "contour_levels_for_order",
     "matplotlib_discontinuous_triangulation",
     "plot_field",
     "plot_fields",
@@ -959,6 +1021,8 @@ __all__ = [
     "reference_plot_connectivity",
     "reference_plot_points",
     "resolve_exact_plot_resolution",
+    "resolve_field_plot_resolution",
+    "resolve_postprocessed_plot_resolution",
     "refined_field_polydata",
     "refined_sample_polydata",
     "sample_callable_on_elements",

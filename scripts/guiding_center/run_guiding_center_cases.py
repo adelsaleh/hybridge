@@ -13,13 +13,29 @@ import time
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from hdgfem.core.field_ops import (
+    field_linear_combination,
+    perpendicular_vector_field,
+    project_callable_to_trace,
+    solution_field,
+    solution_trace,
+    trace_linear_combination,
+    vector_field_linear_combination,
+)
+from hdgfem.diagnostics import (
+    azimuthal_mode_diagnostics,
+    relative_drift,
+    result_transfer_time,
+    solver_result_metrics,
+)
+from hdgfem.io.config import load_amgx_config
 from scripts.guiding_center.guiding_center_cases import CASE_DEFINITIONS
 from scripts.guiding_center.guiding_center_presets import (
     DEFAULT_PRESET,
@@ -46,6 +62,25 @@ class GuidingCenterRunResult:
     diagnostics: list[dict[str, Any]]
     csv_path: Path
     jsonl_path: Path
+
+
+@dataclass(frozen=True)
+class GuidingCenterStepSnapshot:
+    """Accepted SI-Euler step state exposed to solver benchmark observers."""
+
+    step: int
+    time: float
+    space: Any
+    transport_source: Any
+    transport_beta: Any
+    transport_reaction: Any
+    transport_boundary: Any
+    transport_initial_guess: Any
+    transport_result: Any
+    accepted_density: Any
+    poisson_boundary: Any
+    poisson_initial_guess: Any
+    poisson_result: Any
 
 
 class GuidingCenterArgumentParser(ArgumentParser):
@@ -244,9 +279,7 @@ def _load_amgx_config(
 ) -> dict | None:
     if path is None:
         return None
-    config_path = Path(path)
-    with config_path.open("r", encoding="utf-8") as handle:
-        config = json.load(handle)
+    config, _ = load_amgx_config(path)
     solver = config.setdefault("solver", {})
     convergence = str(solver.get("convergence", "")).upper()
     if convergence == "ABSOLUTE" and absolute_tolerance is not None:
@@ -628,247 +661,6 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             raise ValueError("raw-CUDA guiding-center Poisson currently requires poisson_hdg_postprocess='none'")
 
 
-def _zero_field(space, *, name: str):
-    return space.zeros(name=name)
-
-
-def _ensure_field(result, label: str, space, *, name: str):
-    field = getattr(result, "field", None)
-    if field is not None:
-        return field
-    field_device = getattr(result, "field_device", None)
-    if field_device is None:
-        raise RuntimeError(
-            f"{label} result did not materialize a host or device DGField. "
-            "Enable materialize_host_solution or use a raw-CUDA path that returns field_device."
-        )
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
-
-    device_id = int(getattr(getattr(field_device, "device", None), "id", 0))
-    return field_from_cupy_coefficients(space, field_device, device=device_id, name=name)
-
-
-
-def _initial_trace_guess_from_field(field, *, trace_basis: str):
-    """Build a reduced interior-edge trace guess from an L2 skeleton projection."""
-    normalized_trace = str(trace_basis).replace("_", "-").lower()
-
-    def _host_face_points(trace_ref):
-        t = trace_ref.quads
-        return np.stack(
-            (
-                np.stack((t, -np.ones_like(t)), axis=1),
-                np.stack((-t, t), axis=1),
-                np.stack((-np.ones_like(t), -t), axis=1),
-            ),
-            axis=1,
-        )
-
-    try:
-        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
-        from hdgfem.backends.advection_cuda import as_cupy_trace_space
-    except (ImportError, RuntimeError):
-        cp = None
-    else:
-        cp = require_cupy()
-        cspace = as_cupy_space(field.space)
-        cached = field._device_coefficients_for(cspace.device_id)
-        if cached is not None:
-            trace_host = field.space.trace_space(normalized_trace)
-            trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
-            coeffs = as_cupy_coefficients(field, cspace)
-            basis = cp.asarray(
-                field.space.basis_at(_host_face_points(trace_host).reshape(-1, 2)).reshape(
-                    trace_host.quads.size, 3, field.space.el_dof
-                ).transpose(1, 2, 0),
-                dtype=cp.float64,
-            )
-            values = cp.einsum("ki,fiq->kfq", coeffs, basis)
-            rhs = cp.einsum("kfq,aq,q->kfa", values, trace_ref.bas1d_of_ref_edg_qds, trace_ref.weights)
-            local_coeffs = cp.linalg.solve(trace_ref.M_rf_fc, rhs.reshape(-1, trace_ref.edg_dof).T).T
-            local_coeffs = local_coeffs.reshape(cspace.mesh.num_tri, 3, trace_ref.edg_dof)
-            if cspace.mesh.num_negative_orientations:
-                negative = ~cspace.mesh.orientations
-                if normalized_trace == "legendre-modal":
-                    signs = cp.where(cp.arange(trace_ref.edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
-                    local_coeffs[negative] *= signs[None, :]
-                else:
-                    local_coeffs[negative] = local_coeffs[negative][:, ::-1]
-            full = cp.zeros((cspace.mesh.num_edg, trace_ref.edg_dof), dtype=cp.float64)
-            counts = cp.zeros(cspace.mesh.num_edg, dtype=cp.float64)
-            edge_ids = cspace.mesh.loc2glob_edge.reshape(-1)
-            cp.add.at(full, edge_ids, local_coeffs.reshape(-1, trace_ref.edg_dof))
-            cp.add.at(counts, edge_ids, cp.ones(edge_ids.size, dtype=cp.float64))
-            full /= cp.maximum(counts[:, None], 1.0)
-            return cp.ascontiguousarray(full[cspace.mesh.int_edges_inds].ravel())
-
-    trace_ref = field.space.trace_space(normalized_trace)
-    face_points = _host_face_points(trace_ref)
-    basis = field.space.basis_at(face_points.reshape(-1, 2)).reshape(
-        trace_ref.quads.size, 3, field.space.el_dof
-    ).transpose(1, 2, 0)
-    values = np.einsum("ki,fiq->kfq", field.coeffs, basis, optimize=True)
-    rhs = np.einsum("kfq,aq,q->kfa", values, trace_ref.bas1d_of_ref_edg_qds, trace_ref.weights, optimize=True)
-    local_coeffs = np.linalg.solve(trace_ref.M_rf_fc, rhs.reshape(-1, trace_ref.edg_dof).T).T
-    local_coeffs = local_coeffs.reshape(field.space.mesh.num_tri, 3, trace_ref.edg_dof)
-    negative = ~field.space.mesh.orientations
-    if np.any(negative):
-        if normalized_trace == "legendre-modal":
-            signs = np.where(np.arange(trace_ref.edg_dof) % 2 == 0, 1.0, -1.0)
-            local_coeffs[negative] *= signs[None, :]
-        else:
-            local_coeffs[negative] = local_coeffs[negative][:, ::-1]
-    full = np.zeros(field.space.layout.trace_shape, dtype=np.float64)
-    counts = np.zeros(field.space.mesh.num_edg, dtype=np.float64)
-    edge_ids = field.space.mesh.loc2glob_edge.reshape(-1)
-    np.add.at(full, edge_ids, local_coeffs.reshape(-1, trace_ref.edg_dof))
-    np.add.at(counts, edge_ids, 1.0)
-    full /= np.maximum(counts[:, None], 1.0)
-    return np.ascontiguousarray(full[field.space.mesh.int_edges_inds].ravel())
-
-
-def _initial_trace_guess_from_callable(space, initial_density, *, trace_basis: str, prefer_device: bool = False):
-    """L2-project an initial-density callable onto the reduced trace skeleton."""
-    normalized_trace = str(trace_basis).replace("_", "-").lower()
-
-    def _project(xp, mesh, trace_ref):
-        edge_vertices = mesh.node_coords[mesh.edges]
-        t = trace_ref.quads
-        points = 0.5 * (
-            (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
-            + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
-        )
-        values = xp.asarray(initial_density(points[:, :, 0], points[:, :, 1]), dtype=xp.float64)
-        num_edges = int(mesh.num_edg)
-        num_points = int(t.size)
-        expected_shape = (num_edges, num_points)
-        if values.ndim == 0:
-            values = xp.full(expected_shape, float(values), dtype=xp.float64)
-        elif tuple(values.shape) == (num_points,):
-            values = xp.broadcast_to(values[None, :], expected_shape)
-        if tuple(values.shape) != expected_shape:
-            raise ValueError(
-                "initial_density must return a scalar, edge-point vector, or "
-                f"{expected_shape} array; got {values.shape}"
-            )
-        rhs = (values * trace_ref.weights[None, :]) @ trace_ref.bas1d_of_ref_edg_qds.T
-        coeffs = xp.linalg.solve(trace_ref.M_rf_fc, rhs.T).T
-        return xp.ascontiguousarray(coeffs[mesh.int_edges_inds].ravel())
-
-    if prefer_device:
-        try:
-            from hdgfem.backends.cupy import as_cupy_space, require_cupy
-            from hdgfem.backends.advection_cuda import as_cupy_trace_space
-        except (ImportError, RuntimeError):
-            pass
-        else:
-            cp = require_cupy()
-            cspace = as_cupy_space(space)
-            trace_ref = as_cupy_trace_space(space.trace_space(normalized_trace), device=cspace.device_id)
-            return _project(cp, cspace.mesh, trace_ref)
-
-    trace_ref = space.trace_space(normalized_trace)
-    return _project(np, space.mesh, trace_ref)
-
-def _build_beta_from_flux(flux, dt: float, space):
-    from hdgfem.core.space import VectorDGField
-
-    qx, qy = flux.components
-    device_ids = set(getattr(qx, "_device_coeffs", {}) or {}).intersection(set(getattr(qy, "_device_coeffs", {}) or {}))
-    if device_ids:
-        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
-
-        cp = require_cupy()
-        device_id = min(device_ids)
-        qx_cp = qx._device_coefficients_for(device_id)
-        qy_cp = qy._device_coefficients_for(device_id)
-        beta_x = field_from_cupy_coefficients(
-            space,
-            cp.ascontiguousarray(-float(dt) * qy_cp),
-            device=device_id,
-            name="beta_x_h",
-        )
-        beta_y = field_from_cupy_coefficients(
-            space,
-            cp.ascontiguousarray(float(dt) * qx_cp),
-            device=device_id,
-            name="beta_y_h",
-        )
-        return VectorDGField((beta_x, beta_y), name="beta_h")
-
-    beta_x = space.field(-float(dt) * qy.coeffs, name="beta_x_h")
-    beta_y = space.field(float(dt) * qx.coeffs, name="beta_y_h")
-    return VectorDGField((beta_x, beta_y), name="beta_h")
-
-
-
-def _field_linear_combination(space, terms, *, name: str):
-    """Combine DG fields without staging device coefficients through host memory."""
-    normalized = [(float(weight), field) for weight, field in terms]
-    device_sets = [set(getattr(field, "_device_coeffs", {}) or {}) for _, field in normalized]
-    common_devices = set.intersection(*device_sets) if device_sets and all(device_sets) else set()
-    if common_devices:
-        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
-
-        cp = require_cupy()
-        device_id = min(common_devices)
-        coeffs = sum(
-            weight * field._device_coefficients_for(device_id)
-            for weight, field in normalized
-        )
-        return field_from_cupy_coefficients(
-            space,
-            cp.ascontiguousarray(coeffs),
-            device=device_id,
-            name=name,
-        )
-    coeffs = sum(weight * field.coeffs for weight, field in normalized)
-    return space.field(np.ascontiguousarray(coeffs), name=name)
-
-
-def _vector_field_linear_combination(space, terms, *, name: str):
-    """Combine vector DG fields componentwise while preserving device storage."""
-    from hdgfem.core.space import VectorDGField
-
-    components = tuple(
-        _field_linear_combination(
-            space,
-            [(weight, vector.components[component]) for weight, vector in terms],
-            name=f"{name}_{component}",
-        )
-        for component in range(2)
-    )
-    return VectorDGField(components, name=name)
-
-
-def _trace_linear_combination(terms):
-    """Return a host or device trace combination matching the supplied traces."""
-    present = [(float(weight), trace) for weight, trace in terms if trace is not None]
-    if len(present) != len(terms):
-        return None
-    first = present[0][1]
-    if type(first).__module__.split(".", 1)[0] == "cupy" or hasattr(first, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import require_cupy
-
-        cp = require_cupy()
-        return cp.ascontiguousarray(sum(weight * cp.asarray(trace) for weight, trace in present))
-    return np.ascontiguousarray(sum(weight * np.asarray(trace) for weight, trace in present))
-
-
-def _result_trace_guess(result, space, *, reduced: bool = False):
-    """Return a device reduced trace, or a host full/reduced trace as requested."""
-    trace_device = getattr(result, "trace_reduced_device", None)
-    if trace_device is not None:
-        return trace_device
-    trace = getattr(result, "trace", None)
-    if trace is None:
-        return None
-    trace_array = np.asarray(trace, dtype=np.float64)
-    if reduced:
-        trace_array = trace_array.reshape(space.mesh.num_edg, -1)[space.mesh.int_edges_inds]
-    return np.ascontiguousarray(trace_array.reshape(-1))
-
-
 def _average_boundary_data(left, right):
     """Average two time-level boundary callables for the midpoint solve."""
     if left is None or right is None:
@@ -878,119 +670,12 @@ def _average_boundary_data(left, right):
 
 def _build_beta_from_flux_pair(left_flux, right_flux, dt: float, space):
     """Build ``(dt/2) * v_mid = (dt/4) * (q_left + q_right)^perp``."""
-    midpoint_flux = _vector_field_linear_combination(
+    midpoint_flux = vector_field_linear_combination(
         space,
         [(0.5, left_flux), (0.5, right_flux)],
         name="q_mid_h",
     )
-    return _build_beta_from_flux(midpoint_flux, 0.5 * float(dt), space)
-
-
-def _integral(field) -> float:
-    values = field.values()
-    space = field.space
-    return float(np.einsum("K,Kq,q->", space.mesh.aff_jacs, values, space.quad_data.Krf_w, optimize=True))
-
-
-def _field_min_max(field) -> tuple[float, float]:
-    values = np.asarray(field.values(), dtype=np.float64)
-    return float(np.min(values)), float(np.max(values))
-
-
-def _field_l2_norm_from_values(space, values: np.ndarray) -> float:
-    return float(np.sqrt(np.einsum("K,Kq,q->", space.mesh.aff_jacs, values * values, space.quad_data.Krf_w, optimize=True)))
-
-
-def _field_l2_difference(field, reference_field) -> float:
-    return _field_l2_norm_from_values(field.space, field.values() - reference_field.values())
-
-
-def _field_linf_difference(field, reference_field) -> float:
-    return float(np.max(np.abs(field.values() - reference_field.values())))
-
-
-def _field_exact_errors(field, exact) -> tuple[float | None, float | None]:
-    if exact is None:
-        return None, None
-    points = field.space.mapped_quads()
-    exact_values = np.asarray(exact(points[:, :, 0], points[:, :, 1]), dtype=np.float64)
-    diff = field.values() - exact_values
-    return _field_l2_norm_from_values(field.space, diff), float(np.max(np.abs(diff)))
-
-
-def _vector_l2_norm(vector_field) -> float:
-    values = np.asarray(vector_field.values(), dtype=np.float64)
-    space = vector_field.components[0].space
-    return float(np.sqrt(np.einsum("K,dKq,q->", space.mesh.aff_jacs, values * values, space.quad_data.Krf_w, optimize=True)))
-
-
-def _relative_drift(value: float, baseline: float) -> float:
-    scale = max(abs(float(baseline)), 1.0e-300)
-    return (float(value) - float(baseline)) / scale
-
-
-def _sum_detail_timings(result) -> float:
-    timings = getattr(result, "timings", None)
-    details = getattr(timings, "details", None) or {}
-    total = 0.0
-    for key, value in details.items():
-        key_text = str(key)
-        if "host" in key_text or "to_device" in key_text or "materialization" in key_text:
-            total += float(value)
-    return total
-
-
-def _solver_metrics(prefix: str, result) -> dict[str, Any]:
-    timings = result.timings
-    global_solve = result.global_solve_result
-    row: dict[str, Any] = {
-        f"{prefix}_assembly_backend": result.assembly_backend,
-        f"{prefix}_boundary_mode": result.boundary_mode,
-        f"{prefix}_time_total": timings.total,
-        f"{prefix}_time_assembly": timings.assembly,
-        f"{prefix}_time_solve": timings.solve,
-        f"{prefix}_time_reconstruction": timings.reconstruction,
-        f"{prefix}_host_device_transfer_time": _sum_detail_timings(result),
-    }
-    if hasattr(timings, "postprocessing"):
-        row[f"{prefix}_time_postprocessing"] = timings.postprocessing
-    for key, value in (getattr(timings, "details", None) or {}).items():
-        if isinstance(value, (int, float)):
-            safe_key = "".join(ch if ch.isalnum() else "_" for ch in str(key)).strip("_")
-            row[f"{prefix}_detail_{safe_key}"] = float(value)
-    if global_solve is not None:
-        attempts = getattr(global_solve, "amgx_attempts", None)
-        if attempts is not None:
-            row[f"{prefix}_amgx_attempt_count"] = int(getattr(global_solve, "amgx_attempt_count", len(attempts)))
-            row[f"{prefix}_amgx_attempts"] = list(attempts)
-        row.update(
-            {
-                f"{prefix}_solver_iterations": -1 if global_solve.iteration_count is None else global_solve.iteration_count,
-                f"{prefix}_solver_residual": global_solve.solver_residual_norm,
-                f"{prefix}_solver_rhs_norm": global_solve.solver_rhs_norm,
-                f"{prefix}_solver_residual_target": global_solve.solver_residual_target,
-                f"{prefix}_solver_rel_residual": global_solve.solver_relative_residual_norm,
-                f"{prefix}_physical_residual": global_solve.physical_residual_norm,
-                f"{prefix}_physical_rhs_norm": global_solve.physical_rhs_norm,
-                f"{prefix}_physical_residual_target": global_solve.physical_residual_target,
-                f"{prefix}_physical_rel_residual": global_solve.physical_relative_residual_norm,
-                f"{prefix}_diagnostic_residual": global_solve.diagnostic_residual_norm,
-                f"{prefix}_diagnostic_residual_target": global_solve.diagnostic_residual_target,
-                f"{prefix}_diagnostic_rel_residual": global_solve.diagnostic_relative_residual_norm,
-                f"{prefix}_preconditioner_time": global_solve.preconditioner_elapsed_seconds,
-                f"{prefix}_krylov_time": global_solve.solve_elapsed_seconds,
-                f"{prefix}_matrix_csr_time": global_solve.matrix_assembly_elapsed_seconds,
-                f"{prefix}_solver_global_time": global_solve.global_elapsed_seconds,
-                f"{prefix}_scale_time": global_solve.scale_elapsed_seconds,
-                f"{prefix}_initial_residual_time": global_solve.initial_residual_elapsed_seconds,
-                f"{prefix}_callback_time": global_solve.callback_elapsed_seconds,
-                f"{prefix}_final_residual_time": global_solve.residual_diagnostics_elapsed_seconds,
-                f"{prefix}_preconditioner_apply_count": global_solve.preconditioner_apply_count,
-                f"{prefix}_preconditioner_apply_time": global_solve.preconditioner_apply_seconds,
-                f"{prefix}_preconditioner_factor_nnz": global_solve.preconditioner_factor_nnz,
-            }
-        )
-    return row
+    return perpendicular_vector_field(midpoint_flux, 0.5 * float(dt), space, name="beta_h")
 
 
 def _compute_diagnostics(
@@ -1008,21 +693,25 @@ def _compute_diagnostics(
 ) -> dict[str, Any]:
     start = time.perf_counter()
     phi_field = poisson_result.field
-    q_l2 = _vector_l2_norm(poisson_result.flux)
-    mass = _integral(rho_field)
-    rho_min, rho_max = _field_min_max(rho_field)
-    phi_min, phi_max = _field_min_max(phi_field)
-    rho_l2_error, rho_linf_error = _field_exact_errors(rho_field, case.exact_density_at(time_value))
-    phi_l2_error, phi_linf_error = _field_exact_errors(phi_field, case.exact_potential_at(time_value))
+    q_l2 = poisson_result.flux.l2_norm()
+    mass = rho_field.integral()
+    rho_min, rho_max = rho_field.min_max()
+    phi_min, phi_max = phi_field.min_max()
+    exact_density = case.exact_density_at(time_value)
+    exact_potential = case.exact_potential_at(time_value)
+    rho_l2_error = None if exact_density is None else rho_field.space.l2_diff(rho_field, exact_density)
+    rho_linf_error = None if exact_density is None else rho_field.space.linf_diff(rho_field, exact_density)
+    phi_l2_error = None if exact_potential is None else phi_field.space.l2_diff(phi_field, exact_potential)
+    phi_linf_error = None if exact_potential is None else phi_field.space.linf_diff(phi_field, exact_potential)
     row: dict[str, Any] = {
         "step": int(step),
         "time": float(time_value),
         "mass": mass,
         "mass_drift": mass - baseline_mass,
-        "mass_relative_drift": _relative_drift(mass, baseline_mass),
+        "mass_relative_drift": relative_drift(mass, baseline_mass),
         "q_l2": q_l2,
         "q_l2_drift": q_l2 - baseline_q_l2,
-        "q_l2_relative_drift": _relative_drift(q_l2, baseline_q_l2),
+        "q_l2_relative_drift": relative_drift(q_l2, baseline_q_l2),
         "energy_from_q_l2": 0.5 * q_l2 * q_l2,
         "rho_min": rho_min,
         "rho_max": rho_max,
@@ -1034,16 +723,19 @@ def _compute_diagnostics(
         "phi_linf_error": phi_linf_error,
     }
     if equilibrium_potential is not None:
-        phi_eq_l2 = _field_l2_difference(phi_field, equilibrium_potential)
+        phi_eq_l2 = phi_field.space.l2_diff(phi_field, equilibrium_potential)
         eq_norm = max(equilibrium_potential.l2_norm(), 1.0e-300)
         row["diocotron_phi_eq_l2"] = phi_eq_l2
         row["diocotron_phi_eq_relative_l2"] = phi_eq_l2 / eq_norm
-        row["diocotron_phi_eq_linf"] = _field_linf_difference(phi_field, equilibrium_potential)
+        row["diocotron_phi_eq_linf"] = phi_field.space.linf_diff(phi_field, equilibrium_potential)
     if equilibrium_density is not None:
-        rho_eq_l2 = _field_l2_difference(rho_field, equilibrium_density)
+        rho_eq_l2 = rho_field.space.l2_diff(rho_field, equilibrium_density)
         eq_norm = max(equilibrium_density.l2_norm(), 1.0e-300)
         row["diocotron_rho_eq_l2"] = rho_eq_l2
         row["diocotron_rho_eq_relative_l2"] = rho_eq_l2 / eq_norm
+        row.update(
+            azimuthal_mode_diagnostics(rho_field, equilibrium_density, int(case.parameters.get("k", 0)))
+        )
     if extra:
         row.update(extra)
     row["diagnostics_time"] = time.perf_counter() - start
@@ -1223,17 +915,26 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
 
 
 
-def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str = "custom") -> GuidingCenterRunResult:
+def run_guiding_center_case(
+        config: GuidingCenterRunPreset,
+        *,
+        preset_key: str = "custom",
+        step_observer: Callable[[GuidingCenterStepSnapshot], None] | None = None,
+) -> GuidingCenterRunResult:
     """Run a fixed-mesh guiding-center case with the selected time scheme."""
     _validate_config(config)
+    if step_observer is not None and config.time_scheme != "si-euler":
+        raise ValueError("step_observer currently supports only the accepted SI-Euler stage")
+
     from hdgfem.core.space import DGSpace
     from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver, _timed_call
+    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+    from hdgfem.io.output import timed_call
     from scripts.guiding_center.guiding_center_cases import case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
     case = case_definition.build(**config.case_params)
-    mesh, _ = _timed_call(
+    mesh, _ = timed_call(
         f"generating {case.default_domain if config.domain == 'auto' else config.domain} mesh",
         _phase_verbosity(config),
         lambda: _build_mesh(config, case),
@@ -1252,7 +953,7 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
         edge_quad_1d=config.edge_quad_1d,
     )
     rho_field = space.project_callable(case.initial_density_at(), name="rho_h")
-    zero_reaction = _zero_field(space, name="zero_reaction_h")
+    zero_reaction = space.zeros(name="zero_reaction_h")
     one_reaction = space.constant(1.0, name="one_reaction_h")
     poisson_options = _make_poisson_options(config)
     transport_boundary_mode = (
@@ -1285,7 +986,7 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
             # the ILU built for the equilibrium solve instead of factoring the
             # identical matrix at every time step.
             poisson_solver = equilibrium_solver
-            poisson_initial_guess = _result_trace_guess(equilibrium_result, space, reduced=False)
+            poisson_initial_guess = solution_trace(equilibrium_result, space, reduced=False)
             if config.poisson_preconditioner is not None:
                 global_result = equilibrium_result.global_solve_result
                 reusable_preconditioner = None if global_result is None else global_result.preconditioner
@@ -1315,20 +1016,21 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
     transport_preconditioner_reused = False
 
     prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
-    density_trace = _initial_trace_guess_from_callable(
+    density_trace = project_callable_to_trace(
         space,
         case.initial_density_at(),
         trace_basis=config.trace_basis,
-        prefer_device=prefer_device_trace,
+        reduced=True,
+        backend="device" if prefer_device_trace else "host",
     )
-    potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+    potential_trace = solution_trace(poisson_result, space, reduced=False)
 
-    baseline_mass = _integral(rho_field)
-    baseline_q_l2 = _vector_l2_norm(poisson_result.flux)
+    baseline_mass = rho_field.integral()
+    baseline_q_l2 = poisson_result.flux.l2_norm()
     recorder = DiagnosticsRecorder(config.diagnostics_dir, config.diagnostics_prefix or preset_key)
     plotter = None
     try:
-        initial_extra = _solver_metrics("poisson", poisson_result)
+        initial_extra = solver_result_metrics("poisson", poisson_result)
         initial_extra.update(
             {
                 "phase": "initial",
@@ -1376,8 +1078,13 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
             endpoint_density_boundary = (
                 None if transport_boundary_mode == "zero-flux" else case.density_boundary_at(next_time)
             )
+            endpoint_poisson_boundary = case.potential_boundary_at(next_time)
+            step_transport_source = rho_field
+            step_transport_initial_guess = density_trace
+            step_poisson_initial_guess = potential_trace
+
             beta_start = time.perf_counter()
-            predictor_beta = _build_beta_from_flux(poisson_result.flux, config.dt, space)
+            predictor_beta = perpendicular_vector_field(poisson_result.flux, config.dt, space)
             beta_build_time = time.perf_counter() - beta_start
 
             transport_solver.set_problem(
@@ -1399,13 +1106,10 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                     preconditioner=reusable_preconditioner
                 )
                 transport_preconditioner_reused = True
-            predictor_density = _ensure_field(
-                predictor_transport_result,
-                "predictor transport",
-                space,
-                name="rho_predictor_h",
+            predictor_density = solution_field(
+                predictor_transport_result, space, name="rho_predictor_h",
             )
-            predictor_density_trace = _result_trace_guess(
+            predictor_density_trace = solution_trace(
                 predictor_transport_result,
                 space,
                 reduced=True,
@@ -1418,15 +1122,33 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
                 poisson_result = poisson_solver.solve(initial_guess=potential_trace)
-                potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+                potential_trace = solution_trace(poisson_result, space, reduced=False)
                 stage_extra: dict[str, Any] = {}
                 poisson_time = poisson_result.timings.total
                 transport_time = transport_result.timings.total
+                if step_observer is not None:
+                    step_observer(
+                        GuidingCenterStepSnapshot(
+                            step=step,
+                            time=next_time,
+                            space=space,
+                            transport_source=step_transport_source,
+                            transport_beta=predictor_beta,
+                            transport_reaction=one_reaction,
+                            transport_boundary=endpoint_density_boundary,
+                            transport_initial_guess=step_transport_initial_guess,
+                            transport_result=transport_result,
+                            accepted_density=rho_field,
+                            poisson_boundary=endpoint_poisson_boundary,
+                            poisson_initial_guess=step_poisson_initial_guess,
+                            poisson_result=poisson_result,
+                        )
+                    )
             else:
                 poisson_solver.set_source(predictor_density)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
                 predictor_poisson_result = poisson_solver.solve(initial_guess=potential_trace)
-                predictor_potential_trace = _result_trace_guess(
+                predictor_potential_trace = solution_trace(
                     predictor_poisson_result,
                     space,
                     reduced=False,
@@ -1448,7 +1170,7 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                         endpoint_density_boundary,
                     )
                 )
-                midpoint_trace_guess = _trace_linear_combination(
+                midpoint_trace_guess = trace_linear_combination(
                     [(0.5, density_trace), (0.5, predictor_density_trace)]
                 )
                 transport_solver.set_problem(
@@ -1458,36 +1180,33 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                     midpoint_boundary,
                 )
                 transport_result = transport_solver.solve(initial_guess=midpoint_trace_guess)
-                midpoint_density = _ensure_field(
-                    transport_result,
-                    "corrector transport",
-                    space,
-                    name="rho_midpoint_h",
+                midpoint_density = solution_field(
+                    transport_result, space, name="rho_midpoint_h",
                 )
-                midpoint_density_trace = _result_trace_guess(
+                midpoint_density_trace = solution_trace(
                     transport_result,
                     space,
                     reduced=True,
                 )
-                rho_field = _field_linear_combination(
+                rho_field = field_linear_combination(
                     space,
                     [(2.0, midpoint_density), (-1.0, rho_field)],
                     name="rho_h",
                 )
-                density_trace = _trace_linear_combination(
+                density_trace = trace_linear_combination(
                     [(2.0, midpoint_density_trace), (-1.0, density_trace)]
                 )
 
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
                 poisson_result = poisson_solver.solve(initial_guess=predictor_potential_trace)
-                potential_trace = _result_trace_guess(poisson_result, space, reduced=False)
+                potential_trace = solution_trace(poisson_result, space, reduced=False)
                 poisson_time = predictor_poisson_result.timings.total + poisson_result.timings.total
                 transport_time = predictor_transport_result.timings.total + transport_result.timings.total
-                stage_extra = _solver_metrics("predictor_transport", predictor_transport_result)
-                stage_extra.update(_solver_metrics("predictor_poisson", predictor_poisson_result))
-                stage_extra.update(_solver_metrics("corrector_transport", transport_result))
-                stage_extra.update(_solver_metrics("final_poisson", poisson_result))
+                stage_extra = solver_result_metrics("predictor_transport", predictor_transport_result)
+                stage_extra.update(solver_result_metrics("predictor_poisson", predictor_poisson_result))
+                stage_extra.update(solver_result_metrics("corrector_transport", transport_result))
+                stage_extra.update(solver_result_metrics("final_poisson", poisson_result))
 
             current_time = next_time
             should_plot = config.plot_every > 0 and step % config.plot_every == 0
@@ -1511,8 +1230,8 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                 plot_elapsed = time.perf_counter() - plot_start
 
             if should_record:
-                extra = _solver_metrics("poisson", poisson_result)
-                extra.update(_solver_metrics("transport", transport_result))
+                extra = solver_result_metrics("poisson", poisson_result)
+                extra.update(solver_result_metrics("transport", transport_result))
                 extra.update(stage_extra)
                 extra.update(
                     {
@@ -1522,8 +1241,8 @@ def run_guiding_center_case(config: GuidingCenterRunPreset, *, preset_key: str =
                         "poisson_time": poisson_time,
                         "transport_time": transport_time,
                         "host_device_transfer_time": (
-                            _sum_detail_timings(poisson_result)
-                            + _sum_detail_timings(transport_result)
+                            result_transfer_time(poisson_result)
+                            + result_transfer_time(transport_result)
                             + sum(
                                 float(value)
                                 for key, value in stage_extra.items()

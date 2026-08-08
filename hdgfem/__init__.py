@@ -18,6 +18,28 @@ from .core.mesh import (
     rectangle_mesh,
 )
 from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from .core.field_ops import (
+    coefficient_field,
+    field_linear_combination,
+    perpendicular_vector_field,
+    project_callable_to_trace,
+    project_field_to_trace,
+    solution_field,
+    solution_trace,
+    trace_linear_combination,
+    vector_field_linear_combination,
+)
+from .core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
+from .diagnostics import (
+    ScalarComparisonSamples,
+    ScalarErrorMetrics,
+    ScalarErrorReport,
+    azimuthal_mode_diagnostics,
+    evaluate_scalar_error,
+    relative_drift,
+    result_transfer_time,
+    solver_result_metrics,
+)
 
 
 _SOLVER_EXPORTS = {
@@ -89,10 +111,18 @@ __all__ = [
     "LinearSolveError",
     "SolveStatus",
     "SolveResult",
+    "ScalarComparisonSamples",
+    "ScalarErrorMetrics",
+    "ScalarErrorReport",
     "VectorDGField",
     "VectorDGSpace",
     "as_dg_mesh",
+    "azimuthal_mode_diagnostics",
+    "bernstein_degree_elevation_matrix",
+    "coefficient_field",
     "default_mesh_cache_dir",
+    "evaluate_scalar_error",
+    "field_linear_combination",
     "gmsh_disc_mesh",
     "gmsh_lshape_mesh",
     "gmsh_rectangle_mesh",
@@ -100,7 +130,18 @@ __all__ = [
     "gmsh_star_mesh",
     "gmsh_triangle_mesh",
     "rectangle_mesh",
+    "perpendicular_vector_field",
+    "project_callable_to_trace",
+    "project_field_to_trace",
+    "prolong_trace_coefficients",
+    "relative_drift",
+    "result_transfer_time",
     "solve_advection_reaction_hdg",
     "solve_diffusion_reaction_hdg",
     "solve_global_system",
+    "solution_field",
+    "solution_trace",
+    "solver_result_metrics",
+    "trace_linear_combination",
+    "vector_field_linear_combination",
 ]

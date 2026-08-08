@@ -24,7 +24,16 @@ from ..linalg.system import (
     SolveResult,
     finalize_solve_result,
 )
-from .cupy import CupyDGSpace, as_cupy_coefficients, as_cupy_space, initialize_pyamgx_once, require_cupy, require_cupyx_sparse, require_pyamgx
+from .cupy import (
+    CupyDGSpace,
+    as_cupy_coefficients,
+    as_cupy_space,
+    initialize_pyamgx_once,
+    require_cupy,
+    require_cupyx_sparse,
+    require_pyamgx,
+    symmetric_scale_cupy_csr_in_place,
+)
 from .raw_cuda import RawCudaBlockSize
 from .advection_raw_cuda import (
     RawAdvectionAssemblyResult,
@@ -593,6 +602,8 @@ def assemble_reduced_system_cuda(
     zero_boundary_flux: bool = False,
 ) -> CudaAdvectionAssembly:
     """Assemble the boundary-eliminated advection trace system on device."""
+    if zero_boundary_flux and boundary_condition is not None:
+        raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
     cp = require_cupy()
     cspace = as_cupy_space(cspace)
     trace_ref = trace_space if isinstance(trace_space, CupyDGTraceSpace) else as_cupy_trace_space(trace_space, device=cspace.device_id)
@@ -1146,6 +1157,18 @@ def _pyamgx_solve_csr_device(
     return x, info
 
 
+def _normalize_device_scale_mode(value) -> str:
+    """Normalize public boolean/string scaling controls for device solves."""
+    if isinstance(value, (bool, np.bool_)):
+        return "left" if bool(value) else "none"
+    normalized = str(value).replace("_", "-").lower()
+    aliases = {"on": "left", "off": "none", "true": "left", "false": "none"}
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"none", "left", "symmetric"}:
+        raise ValueError("scale_system must be bool or one of 'none', 'left', 'symmetric'")
+    return normalized
+
+
 def _solve_reduced_system_amgx_device_once(
     assembly: CudaAdvectionAssembly,
     *,
@@ -1156,7 +1179,7 @@ def _solve_reduced_system_amgx_device_once(
     maxiter: int | None = None,
     initial_guess=None,
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
-    scale_system: bool = True,
+    scale_system: bool | str = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
@@ -1214,15 +1237,26 @@ def _solve_reduced_system_amgx_device_once(
     matrix_elapsed = time.perf_counter() - matrix_start
 
     physical_rhs = assembly.rhs
+    scale_mode = _normalize_device_scale_mode(scale_system)
     row_diagonal = None
+    inverse_sqrt_diagonal = None
     scale_start = time.perf_counter()
-    if scale_system:
+    if scale_mode == "left":
         solve_matrix = matrix
         solve_rhs = physical_rhs.copy()
         row_diagonal = _diagonal_scale_csr_rows_in_place(solve_matrix, solve_rhs)
+        solve_initial_guess = initial_guess
+    elif scale_mode == "symmetric":
+        solve_matrix = matrix
+        solve_rhs = physical_rhs.copy()
+        inverse_sqrt_diagonal = symmetric_scale_cupy_csr_in_place(solve_matrix, solve_rhs)
+        solve_initial_guess = (
+            None if initial_guess is None else cp.asarray(initial_guess) / inverse_sqrt_diagonal
+        )
     else:
         solve_matrix = matrix
         solve_rhs = physical_rhs
+        solve_initial_guess = initial_guess
     cp.cuda.get_current_stream().synchronize()
     scale_elapsed = time.perf_counter() - scale_start
 
@@ -1231,7 +1265,7 @@ def _solve_reduced_system_amgx_device_once(
         x_cp, amgx_info = _pyamgx_solve_csr_device(
             solve_matrix,
             solve_rhs,
-            initial_guess=initial_guess,
+            initial_guess=solve_initial_guess,
             config=config,
             tolerance=solve_tolerance,
             maxiter=maxiter,
@@ -1241,8 +1275,11 @@ def _solve_reduced_system_amgx_device_once(
         setup_elapsed = 0.0
         if not reusable_solver.is_setup:
             setup_elapsed = reusable_solver.setup(solve_matrix)
-        x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=initial_guess)
+        x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=solve_initial_guess)
         amgx_info["amgx_setup_elapsed_seconds"] = setup_elapsed
+    solver_x_cp = x_cp
+    if inverse_sqrt_diagonal is not None:
+        x_cp = inverse_sqrt_diagonal * solver_x_cp
     amgx_call_elapsed = time.perf_counter() - amgx_call_start
 
     finite_start = time.perf_counter()
@@ -1251,7 +1288,7 @@ def _solve_reduced_system_amgx_device_once(
 
     solver_residual_start = time.perf_counter()
     residual_matrix = _as_cupyx_csr_matrix(solve_matrix, sparse, cp)
-    solver_residual = residual_matrix @ x_cp - solve_rhs
+    solver_residual = residual_matrix @ solver_x_cp - solve_rhs
     solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
         solver_residual,
         solve_rhs,
@@ -1264,6 +1301,9 @@ def _solve_reduced_system_amgx_device_once(
     if row_diagonal is not None:
         physical_residual = row_diagonal * solver_residual
         physical_residual_rhs = row_diagonal * solve_rhs
+    elif inverse_sqrt_diagonal is not None:
+        physical_residual = solver_residual / inverse_sqrt_diagonal
+        physical_residual_rhs = physical_rhs
     else:
         physical_residual = residual_matrix @ x_cp - physical_rhs
         physical_residual_rhs = physical_rhs
@@ -1324,6 +1364,7 @@ def _solve_reduced_system_amgx_device_once(
         atol=atol,
     )
     result.cupyx_solver = "pyamgx-device"
+    result.device_scale_mode = scale_mode
     result.amgx_csr_elapsed_seconds = matrix_elapsed
     result.amgx_setup_elapsed_seconds = amgx_info["amgx_setup_elapsed_seconds"]
     result.amgx_solve_elapsed_seconds = amgx_info["amgx_solve_elapsed_seconds"]
@@ -1362,7 +1403,7 @@ def solve_reduced_system_amgx_device(
     maxiter: int | None = None,
     initial_guess=None,
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
-    scale_system: bool = True,
+    scale_system: bool | str = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
@@ -1377,7 +1418,7 @@ def solve_reduced_system_amgx_device(
             "label": "primary-stage-guess" if initial_guess is not None else "primary-zero",
             "config": config,
             "initial_guess": initial_guess,
-            "scale_system": bool(scale_system),
+            "scale_system": _normalize_device_scale_mode(scale_system),
             "reusable_solver": reusable_solver,
             "use_best_solution": False,
             "residual_correction": False,
@@ -1390,7 +1431,7 @@ def solve_reduced_system_amgx_device(
                 "label": str(retry.get("label", f"retry-{index}")),
                 "config": retry.get("config", config),
                 "initial_guess": initial_guess if use_initial_guess else None,
-                "scale_system": bool(retry.get("scale_system", scale_system)),
+                "scale_system": _normalize_device_scale_mode(retry.get("scale_system", scale_system)),
                 "reusable_solver": None,
                 "use_best_solution": bool(retry.get("use_best_solution", False)),
                 "residual_correction": bool(retry.get("residual_correction", False)),

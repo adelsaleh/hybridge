@@ -21,6 +21,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
+from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -358,12 +359,6 @@ def _build_mesh(config: DiffusionReactionRunPreset, case):
     )
 
 
-def _timing_with_percent(seconds: float, total: float, *, precision: int = 1) -> str:
-    """Format elapsed seconds with its percentage of total runtime."""
-    percent = 0.0 if total <= 0.0 else 100.0 * float(seconds) / float(total)
-    return f"{float(seconds):.{precision}f} ({percent:.1f}%)"
-
-
 def _summarize_solve(
         result,
         exact,
@@ -377,11 +372,13 @@ def _summarize_solve(
         config: DiffusionReactionRunPreset,
 ) -> float:
     import numpy as np
+    from hdgfem.diagnostics import evaluate_scalar_error
     from hdgfem.io.output import pretty_print_sections
-    from hdgfem.solvers.diffusion_reaction import _diffusion_is_identity
+    from hdgfem.solvers.diffusion_reaction import is_identity_diffusion
 
-    l2_error = result.field.l2_error(exact)
-    flux_l2_error = _vector_l2_error(result.flux, exact_flux)
+    metrics = evaluate_scalar_error(result.field, exact).metrics
+    l2_error = metrics.l2
+    flux_l2_error = result.flux.l2_error(exact_flux)
     post_primal_l2_error = (
         np.nan
         if result.postprocessed_field is None
@@ -390,16 +387,11 @@ def _summarize_solve(
     post_flux_l2_error = (
         np.nan
         if result.postprocessed_flux is None
-        else _vector_l2_error(result.postprocessed_flux, exact_flux)
+        else result.postprocessed_flux.l2_error(exact_flux)
     )
-    numerical_values = result.field.values()
-    points = space.mapped_quads()
-    exact_values = exact(points[:, :, 0], points[:, :, 1])
-    abs_error = np.abs(numerical_values - exact_values)
-    linfty_error = float(np.max(abs_error))
-    element_max_error = np.max(abs_error, axis=1)
-    avg_error = float(np.average(element_max_error))
-    max_error_element = int(np.argmax(element_max_error))
+    linfty_error = metrics.linf
+    avg_error = metrics.mean_element_linf
+    max_error_element = metrics.max_element
     global_solve = result.global_solve_result
 
     run_mesh_items = [
@@ -417,7 +409,7 @@ def _summarize_solve(
         ("boundary mode", result.boundary_mode, "s"),
         ("trace basis", config.trace_basis, "s"),
         ("postprocess", config.hdg_postprocess, "s"),
-        ("diffusion", "identity" if _diffusion_is_identity(diffusion) else "tensor", "s"),
+        ("diffusion", "identity" if is_identity_diffusion(diffusion) else "tensor", "s"),
         ("tau", config.tau, ".3e"),
     ]
     solver_items = [
@@ -516,299 +508,6 @@ def _summarize_solve(
     return l2_error
 
 
-def _dense_exact_plot_resolution(
-        exact_resolution: int | str | None,
-        *,
-        numerical_resolution: int,
-        num_elements: int,
-) -> int | str | None:
-    """Choose a dense exact-panel resolution while bounding memory use.
-
-    Exact callables are cheap to sample and should look smooth in comparison
-    plots, but Matplotlib contouring becomes expensive for very dense triangular
-    refinements.  Small meshes use a higher default than DG panels, capped by a
-    total point budget.
-    """
-    if exact_resolution is not None:
-        return exact_resolution
-    if int(num_elements) <= 130:
-        target = max(4 * int(numerical_resolution), 80)
-    else:
-        target = max(2 * int(numerical_resolution), int(numerical_resolution) + 20)
-    max_total_points = 15_000_000
-    while target > 2 and num_elements * target * (target + 1) // 2 > max_total_points:
-        target -= 1
-    return target
-
-
-def _polynomial_plot_resolution(requested_resolution: int | None, order: int) -> int:
-    """Choose a per-element plotting grid dense enough for degree-``order`` fields."""
-    minimum = max(3, 2 * int(order) + 3)
-    if requested_resolution is None:
-        return max(20, minimum)
-    return max(int(requested_resolution), minimum)
-
-
-def _matplotlib_contour_levels(order: int) -> int:
-    """Choose enough contour bands for coarse per-element degree-``order`` plots."""
-    return min(256, max(128, 24 * (int(order) + 1)))
-
-
-def _exact_centered_clim(
-        exact_values,
-        *comparison_values,
-        relative_padding: float = 0.04,
-        max_relative_expansion: float = 0.15,
-) -> tuple[float, float]:
-    """Return exact-dominated robust color limits with capped numerical expansion.
-
-    The central 95 percent of the exact solution determines the dominant color
-    scale.  Numerical and postprocessed values may expand the limits to avoid
-    clipping moderate overshoot, but only up to ``max_relative_expansion`` of
-    the exact robust range.
-    """
-    import numpy as np
-
-    from hdgfem.io.plot import _robust_clim
-
-    exact_min, exact_max = _robust_clim(exact_values, percentile=95.0)
-
-    span = exact_max - exact_min
-    padding = relative_padding * span
-    lower = exact_min - padding
-    upper = exact_max + padding
-    lower_cap = exact_min - max_relative_expansion * span
-    upper_cap = exact_max + max_relative_expansion * span
-    for values in comparison_values:
-        values_min, values_max = _robust_clim(values, percentile=95.0)
-        if np.isfinite(values_min):
-            lower = max(lower_cap, min(lower, values_min - padding))
-        if np.isfinite(values_max):
-            upper = min(upper_cap, max(upper, values_max + padding))
-    if lower == upper:
-        upper = lower + 1.0
-    return lower, upper
-
-
-def _normalize_quadrature_values(values, target_shape: tuple[int, int]):
-    import numpy as np
-
-    array = np.asarray(values, dtype=np.float64)
-    if array.shape == target_shape:
-        return array
-    if array.ndim == 0:
-        return np.full(target_shape, float(array), dtype=np.float64)
-    try:
-        return np.asarray(np.broadcast_to(array, target_shape), dtype=np.float64)
-    except ValueError as exc:
-        raise ValueError(f"values must broadcast to {target_shape}; got {array.shape}") from exc
-
-
-def _exact_flux_values(exact_flux, points):
-    import numpy as np
-
-    raw_values = exact_flux(points[:, :, 0], points[:, :, 1])
-    target_shape = points.shape[:2]
-    if isinstance(raw_values, tuple | list):
-        if len(raw_values) != 2:
-            raise ValueError(f"exact flux must have two components; got {len(raw_values)}")
-        qx, qy = raw_values
-    else:
-        raw_array = np.asarray(raw_values, dtype=np.float64)
-        if raw_array.shape[:1] != (2,):
-            raise ValueError("exact flux must return a pair of components or an array with leading dimension 2")
-        qx, qy = raw_array[0], raw_array[1]
-    return np.stack(
-        (
-            _normalize_quadrature_values(qx, target_shape),
-            _normalize_quadrature_values(qy, target_shape),
-        ),
-        axis=0,
-    )
-
-
-def _vector_l2_error(vector_field, exact_flux) -> float:
-    import numpy as np
-
-    if vector_field.dim != 2:
-        raise ValueError(f"expected a two-component flux field; got {vector_field.dim}")
-    space = vector_field.components[0].space
-    points = space.mapped_quads()
-    numerical_values = vector_field.values()
-    exact_values = _exact_flux_values(exact_flux, points)
-    diff = numerical_values - exact_values
-    return float(
-        np.sqrt(
-            np.einsum(
-                "K,dKq,q->",
-                space.mesh.aff_jacs,
-                diff * diff,
-                space.quad_data.Krf_w,
-                optimize=True,
-            )
-        )
-    )
-
-
-def _plot_primal_postprocess_comparison(
-        result,
-        exact,
-        *,
-        resolution: int,
-        exact_resolution: int | str | None,
-        suptitle: str,
-        hdg_title: str,
-        post_title: str,
-        show_mesh: bool,
-):
-    """Plot HDG, postprocessed primal, and exact scalar panels.
-
-    Meshes with at most 130 triangles use the Matplotlib discontinuous contour
-    helper for high-detail per-element inspection.  Larger meshes use the
-    PyVista refined-mesh path, which is more responsive for larger point sets.
-    """
-    from hdgfem.io.plot import (
-        _require_pyvista,
-        _resolve_exact_plot_resolution,
-        add_field_to_plotter,
-        add_samples_to_plotter,
-        sample_callable_on_elements,
-        sample_field_on_elements,
-    )
-
-    if result.field.space.mesh.num_tri <= 130:
-        return _plot_primal_postprocess_comparison_matplotlib(
-            result,
-            exact,
-            resolution=resolution,
-            exact_resolution=exact_resolution,
-            suptitle=suptitle,
-            hdg_title=hdg_title,
-            post_title=post_title,
-            show_mesh=show_mesh,
-        )
-
-    pv = _require_pyvista()
-    reference_points, _, primal_values = sample_field_on_elements(
-        result.field,
-        resolution=resolution,
-    )
-    postprocessed_field = result.postprocessed_field if result.postprocessed_field is not None else result.field
-    postprocessed_values = postprocessed_field.values_at_ref(reference_points)
-    exact_panel_resolution = _resolve_exact_plot_resolution(
-        exact_resolution,
-        numerical_resolution=resolution,
-        num_elements=result.field.space.mesh.num_tri,
-    )
-    exact_reference_points, _, exact_values = sample_callable_on_elements(
-        result.field.space.mesh,
-        exact,
-        resolution=exact_panel_resolution,
-    )
-
-    shared_clim = _exact_centered_clim(exact_values, primal_values, postprocessed_values)
-
-    plotter = pv.Plotter(shape=(1, 3), window_size=[1800, 650])
-    scalar_bar_args = {
-        "vertical": False,
-        "width": 0.55,
-        "height": 0.08,
-        "position_x": 0.225,
-        "position_y": 0.02,
-    }
-    exact_title = "Exact solution" if not suptitle else f"Exact solution | {suptitle}"
-    panels = (
-        (hdg_title, "primal", reference_points, primal_values, result.field),
-        (post_title, "post_primal", reference_points, postprocessed_values, postprocessed_field),
-        (exact_title, "exact", exact_reference_points, exact_values, None),
-    )
-    for column, (panel_title, scalar_name, panel_reference_points, values, field) in enumerate(panels):
-        if field is None:
-            add_samples_to_plotter(
-                plotter,
-                result.field.space.mesh,
-                panel_reference_points,
-                values,
-                scalar_name=scalar_name,
-                title=None,
-                subplot=(0, column),
-                show_mesh=False,
-                cmap="viridis",
-                clim=shared_clim,
-                scalar_bar_args=scalar_bar_args,
-            )
-        else:
-            add_field_to_plotter(
-                plotter,
-                field,
-                reference_points=panel_reference_points,
-                values=values,
-                scalar_name=scalar_name,
-                title=None,
-                subplot=(0, column),
-                show_mesh=show_mesh,
-                cmap="viridis",
-                clim=shared_clim,
-                scalar_bar_args=scalar_bar_args,
-            )
-        plotter.add_text(panel_title, position="upper_left", font_size=10, shadow=False)
-    plotter.link_views()
-    plotter.show()
-    return plotter
-
-
-def _plot_primal_postprocess_comparison_matplotlib(
-        result,
-        exact,
-        *,
-        resolution: int,
-        exact_resolution: int | str | None,
-        suptitle: str,
-        hdg_title: str,
-        post_title: str,
-        show_mesh: bool,
-):
-    from hdgfem.io.plot import (
-        _resolve_exact_plot_resolution,
-        plot_scalar_sample_panels_matplotlib,
-        sample_callable_on_elements,
-        sample_field_on_elements,
-    )
-
-    mesh = result.field.space.mesh
-    reference_points, _, primal_values = sample_field_on_elements(
-        result.field,
-        resolution=resolution,
-    )
-    postprocessed_field = result.postprocessed_field if result.postprocessed_field is not None else result.field
-    postprocessed_values = postprocessed_field.values_at_ref(reference_points)
-    exact_panel_resolution = _resolve_exact_plot_resolution(
-        exact_resolution,
-        numerical_resolution=resolution,
-        num_elements=mesh.num_tri,
-    )
-    exact_reference_points, _, exact_values = sample_callable_on_elements(
-        mesh,
-        exact,
-        resolution=exact_panel_resolution,
-    )
-    shared_clim = _exact_centered_clim(exact_values, primal_values, postprocessed_values)
-    return plot_scalar_sample_panels_matplotlib(
-        mesh,
-        (
-            (hdg_title, reference_points, primal_values),
-            (post_title, reference_points, postprocessed_values),
-            ("Exact solution", exact_reference_points, exact_values, {"show_mesh": False}),
-        ),
-        suptitle=suptitle,
-        show_mesh=show_mesh,
-        cmap="jet",
-        levels=_matplotlib_contour_levels(postprocessed_field.space.order),
-        clim=shared_clim,
-        share_clim=True,
-    )
-
-
 def _main() -> None:
     parser = ArgumentParser(
         description="Run one manufactured diffusion-reaction preset.",
@@ -865,7 +564,7 @@ def _main() -> None:
 
     import numpy as np
 
-    from scripts.diffusion_reaction.cases import CASE_BY_KEY, case_definition_by_key, zero_coefficient
+    from scripts.diffusion_reaction.cases import CASE_BY_KEY, case_definition_by_key
 
     if config.case not in CASE_BY_KEY:
         parser.error(f"preset {preset_key!r} references unknown case {config.case!r}")
@@ -874,8 +573,9 @@ def _main() -> None:
         _print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.space import DGField, DGSpace
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver, _timed_call
+    from hdgfem.core.field_ops import coefficient_field
+    from hdgfem.core.space import DGSpace
+    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
 
     case = case_definition_by_key(config.case)
     problem = case.build(**config.case_params)
@@ -895,26 +595,12 @@ def _main() -> None:
         edge_quad_1d=config.edge_quad_1d,
     )
 
-    def scalar_field_input(value, *, name: str) -> DGField:
-        if isinstance(value, DGField):
-            value.space.assert_same_mesh(space)
-            if value.space is not space:
-                raise ValueError(f"{name} must live in this run's DGSpace object")
-            return value
-        if value is zero_coefficient:
-            return space.zeros(name=name)
-        if callable(value):
-            return space.project_callable(value, name=name)
-        if isinstance(value, (int, float, np.integer, np.floating)):
-            return space.constant(float(value), name=name)
-        return space.field(value, name=name)
-
     effective_backend = "numpy" if config.assembly_backend == "auto" else str(config.assembly_backend)
     source_input = source
     reaction_input = reaction
     if effective_backend in {"numba", "raw-cuda"}:
-        source_input = scalar_field_input(source, name="source_h")
-        reaction_input = scalar_field_input(reaction, name="reaction_h")
+        source_input = coefficient_field(space, source, name="source_h")
+        reaction_input = coefficient_field(space, reaction, name="reaction_h")
 
     options = DiffusionReactionHDGOptions(
         diffusion=diffusion,
@@ -961,29 +647,40 @@ def _main() -> None:
     )
 
     if config.plot:
-        plot_resolution = _polynomial_plot_resolution(config.plot_resolution, space.order + 1)
-        post_primal_l2_error = (
-            None if result.postprocessed_field is None else result.postprocessed_field.l2_error(exact)
+        from hdgfem.diagnostics import evaluate_scalar_error
+        from hdgfem.io.comparison import plot_sampled_solution_comparison
+        from hdgfem.io.plot import resolve_postprocessed_plot_resolution
+
+        plot_resolution = resolve_postprocessed_plot_resolution(
+            config.plot_resolution,
+            order=space.order,
+            num_elements=mesh.num_tri,
         )
-        suptitle = f"{case.name} - {preset_key}"
-        hdg_title = f"HDG solution\np={space.order}, elements={mesh.num_tri:,}, L2={l2_error:.2e}"
-        post_title = (
-            "Postprocessed primal"
-            if post_primal_l2_error is None
-            else f"Postprocessed primal\nL2={post_primal_l2_error:.2e}"
-        )
-        _plot_primal_postprocess_comparison(
-            result,
+        primary_samples = evaluate_scalar_error(
+            result.field,
             exact,
-            resolution=plot_resolution,
-            exact_resolution=_dense_exact_plot_resolution(
-                config.exact_plot_resolution,
-                numerical_resolution=plot_resolution,
-                num_elements=mesh.num_tri,
-            ),
-            suptitle=suptitle,
-            hdg_title=hdg_title,
-            post_title=post_title,
+            sample_resolution=plot_resolution,
+            include_samples=True,
+        ).samples
+        postprocessed_samples = (
+            None
+            if result.postprocessed_field is None
+            else evaluate_scalar_error(
+                result.postprocessed_field,
+                exact,
+                sample_resolution=plot_resolution,
+                include_samples=True,
+            ).samples
+        )
+        plot_sampled_solution_comparison(
+            mesh,
+            exact,
+            primary_samples,
+            numerical_resolution=plot_resolution,
+            exact_resolution="auto" if config.exact_plot_resolution is None else config.exact_plot_resolution,
+            polynomial_order=space.order,
+            postprocessed_samples=postprocessed_samples,
+            title=f"{case.name} - {preset_key}",
             show_mesh=not config.hide_mesh,
         )
 

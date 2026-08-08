@@ -9,7 +9,7 @@ import pytest
 from hdgfem import DGMesh, DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
-from scripts.advection_reaction.cases import test2 as adv_rea_test2
+from scripts.advection_reaction.cases import CASE_DEFINITIONS, test2 as adv_rea_test2
 
 
 def _cupy_runtime_available():
@@ -193,11 +193,277 @@ def test_advection_reaction_cupy_assembly_matches_numpy():
         boundary_mode="eliminate",
         assembly_backend="cupy",
         materialize_host_solution=True,
+        cache_local_solvers=True,
         verbose=False,
     )
 
+    assert isinstance(cupy_result.local_solver, np.ndarray)
+    assert isinstance(cupy_result.element_boundary_mats, np.ndarray)
     np.testing.assert_allclose(cupy_result.trace, numpy_result.trace, rtol=1e-10, atol=1e-11)
     np.testing.assert_allclose(cupy_result.field.coeffs, numpy_result.field.coeffs, rtol=1e-10, atol=1e-11)
+
+@pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
+@pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize("preconditioner", (None, "cupyx_ilu1"))
+def test_cupy_reconstruction_consumes_device_trace_without_local_caches(boundary_mode, trace_basis, preconditioner, monkeypatch):
+    from hdgfem.backends.cupy import require_cupy
+
+    cp = require_cupy()
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 1, basis_type="dub_orth", volume_quad_1d=5)
+    beta = (
+        lambda x, y: 1.0 + 0.1 * x,
+        lambda x, y: -0.25 + 0.1 * y,
+    )
+    source = lambda x, y: 1.0 + x - y
+    reaction = lambda x, y: 2.0 + 0.1 * x * y
+    boundary = lambda x, y: x + 0.5 * y
+    common = dict(
+        boundary_mode=boundary_mode,
+        trace_basis=trace_basis,
+        solver_rtol=1.0e-10,
+        maxiter=500,
+        verbose=False,
+    )
+
+    numpy_result = solve_advection_reaction_hdg(
+        source, beta, reaction, boundary, space,
+        solver="direct", assembly_backend="numpy", materialize_host_solution=True,
+        **common,
+    )
+    downloads = 0
+    original_asnumpy = cp.asnumpy
+
+    def counted_asnumpy(array, *args, **kwargs):
+        nonlocal downloads
+        downloads += 1
+        return original_asnumpy(array, *args, **kwargs)
+
+    monkeypatch.setattr(cp, "asnumpy", counted_asnumpy)
+    cupy_result = solve_advection_reaction_hdg(
+        source, beta, reaction, boundary, space,
+        solver="cupyx", preconditioner=preconditioner, ilu_fill_factor=1.0,
+        assembly_backend="cupy",
+        materialize_host_solution=False,
+        **common,
+    )
+    assert downloads == 0
+    monkeypatch.setattr(cp, "asnumpy", original_asnumpy)
+
+    assert cupy_result.field is None
+    assert cupy_result.trace is None
+    assert cupy_result.field_device is not None
+    assert cupy_result.trace_device is not None
+    assert cupy_result.trace_reduced_device is not None
+    assert cupy_result.global_solve_result.x is None
+    assert cupy_result.global_solve_result.x_device is cupy_result.trace_reduced_device
+    assert cupy_result.local_solver is None
+    assert cupy_result.element_boundary_mats is None
+    assert cupy_result.matrix_rows is None
+    assert cupy_result.matrix_cols is None
+    assert cupy_result.matrix_data is None
+    assert cupy_result.rhs is None
+    assert cupy_result.solve_matrix_rows is None
+    assert cupy_result.solve_matrix_cols is None
+    assert cupy_result.solve_matrix_data is None
+    assert cupy_result.solve_rhs is None
+    np.testing.assert_allclose(cp.asnumpy(cupy_result.trace_device), numpy_result.trace, rtol=1.0e-9, atol=1.0e-10)
+    np.testing.assert_allclose(cp.asnumpy(cupy_result.field_device), numpy_result.field.coeffs, rtol=1.0e-9, atol=1.0e-10)
+
+
+def _explicit_stabilization_input(kind: str, space: DGSpace, trace_basis: str):
+    trace_space = space.trace_space(trace_basis)
+    projected = space.project_callable(lambda x, y: 6.0 + 0.2 * x - 0.1 * y, name="tau_h")
+    if kind == "scalar":
+        return 6.0
+    if kind == "callable":
+        return lambda x, y: 6.0 + 0.2 * x - 0.1 * y
+    if kind == "context-callable":
+        return lambda x, y, element, face: 6.0 + 0.2 * x - 0.1 * y + 0.05 * element + 0.03 * face
+    if kind == "dg-field":
+        return projected
+    if kind == "coefficients":
+        return projected.coeffs
+    if kind == "face-constants":
+        return 6.0 + 0.05 * np.arange(space.mesh.num_tri)[:, None] + 0.03 * np.arange(3)[None, :]
+    if kind == "face-values":
+        face_constants = 6.0 + 0.05 * np.arange(space.mesh.num_tri)[:, None] + 0.03 * np.arange(3)[None, :]
+        return np.broadcast_to(
+            face_constants[:, :, None],
+            (space.mesh.num_tri, 3, trace_space.weights.size),
+        ).copy()
+    raise AssertionError(kind)
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+@pytest.mark.parametrize("boundary_mode", ("penalty", "eliminate"))
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize(
+    "stabilization_kind",
+    ("scalar", "callable", "context-callable", "dg-field", "coefficients", "face-constants", "face-values"),
+)
+def test_advection_reaction_cupy_explicit_stabilization_matches_numpy(
+        boundary_mode,
+        stabilization_kind,
+        trace_basis,
+):
+    mesh = rectangle_mesh(2, 1, xlim=(-1.0, 1.0), ylim=(0.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    _, _, source_h, reaction_h, beta_h, boundary = _discontinuous_advection_fields(space)
+    stabilization = _explicit_stabilization_input(stabilization_kind, space, trace_basis)
+    common = dict(
+        solver="direct",
+        boundary_mode=boundary_mode,
+        advection_stabilization=stabilization,
+        trace_basis=trace_basis,
+        materialize_host_system=True,
+        matrix_pattern_only=True,
+        verbose=False,
+    )
+
+    numpy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="numpy",
+        **common,
+    )
+    cupy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="cupy",
+        materialize_host_solution=False,
+        **common,
+    )
+
+    _assert_solver_systems_match(cupy_result, numpy_result)
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_cupy_callable_stabilization_reconstructs_projected_problem():
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    _, _, source_h, reaction_h, beta_h, boundary = _discontinuous_advection_fields(space)
+    stabilization = lambda x, y: 8.0 + 0.2 * x - 0.1 * y
+    common = dict(
+        solver="direct",
+        boundary_mode="eliminate",
+        advection_stabilization=stabilization,
+        materialize_host_solution=True,
+        verbose=False,
+    )
+
+    numpy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="numpy",
+        **common,
+    )
+    cupy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="cupy",
+        **common,
+    )
+
+    np.testing.assert_allclose(cupy_result.trace, numpy_result.trace, rtol=1.0e-10, atol=1.0e-11)
+    np.testing.assert_allclose(
+        cupy_result.field.coeffs,
+        numpy_result.field.coeffs,
+        rtol=1.0e-10,
+        atol=1.0e-11,
+    )
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_cupy_dg_stabilization_uses_device_coefficients_and_field_space_reference_table():
+    import cupy as cp
+
+    from hdgfem.backends.cupy import as_cupy_space
+
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 3, basis_type="dub_orth")
+    stabilization_space = DGSpace(mesh, 2, basis_type="dub_orth")
+    stabilization_host = stabilization_space.project_callable(
+        lambda x, y: 7.0 + 0.25 * x - 0.15 * y,
+        name="tau_h",
+    )
+    stabilization_cspace = as_cupy_space(stabilization_space)
+    stabilization_device = stabilization_cspace.field(
+        cp.asarray(stabilization_host.coeffs),
+        name="tau_device",
+    )
+    _, _, source_h, reaction_h, beta_h, boundary = _discontinuous_advection_fields(space)
+    common = dict(
+        solver="direct",
+        boundary_mode="eliminate",
+        materialize_host_system=True,
+        matrix_pattern_only=True,
+        verbose=False,
+    )
+
+    numpy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="numpy",
+        advection_stabilization=stabilization_host,
+        **common,
+    )
+    cupy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        boundary,
+        space,
+        assembly_backend="cupy",
+        advection_stabilization=stabilization_device,
+        materialize_host_solution=False,
+        **common,
+    )
+
+    _assert_solver_systems_match(cupy_result, numpy_result)
+    assert not stabilization_device.coefficients_materialized
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+@pytest.mark.parametrize("case_key", tuple(sorted(CASE_DEFINITIONS)))
+def test_standard_advection_reaction_case_runs_with_callable_cupy_path(case_key):
+    case = CASE_DEFINITIONS[case_key]
+    beta_x, beta_y, reaction, source, exact = case.build()
+    mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+
+    result = solve_advection_reaction_hdg(
+        source,
+        (beta_x, beta_y),
+        reaction,
+        exact,
+        space,
+        solver="direct",
+        boundary_mode="eliminate",
+        assembly_backend="cupy",
+        advection_stabilization=lambda x, y: 50.0 + 0.1 * x**2 + 0.1 * y**2,
+        materialize_host_solution=True,
+        verbose=False,
+    )
+
+    assert np.all(np.isfinite(result.trace))
+    assert np.all(np.isfinite(result.field.coeffs))
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
@@ -562,6 +828,47 @@ def test_cupyx_solver_matches_direct_small_system(monkeypatch):
     assert upload_count == 1
     assert download_count == 1
     np.testing.assert_allclose(cupyx.x, direct.x, rtol=1e-10, atol=1e-11)
+
+
+@pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
+def test_cupyx_solver_keeps_solution_on_device_unless_host_copy_requested(monkeypatch):
+    import hdgfem.backends.cupy as cupy_backend
+
+    download_count = 0
+    original_download = cupy_backend.asnumpy
+
+    def counted_download(array):
+        nonlocal download_count
+        download_count += 1
+        return original_download(array)
+
+    monkeypatch.setattr(cupy_backend, "asnumpy", counted_download)
+    rows = np.array([0, 0, 1, 1], dtype=np.int64)
+    cols = np.array([0, 1, 0, 1], dtype=np.int64)
+    data = np.array([4.0, 1.0, 1.0, 3.0], dtype=np.float64)
+    rhs = np.array([1.0, 2.0], dtype=np.float64)
+
+    result = solve_global_system(
+        rows,
+        cols,
+        data,
+        rhs,
+        2,
+        solver="cupyx",
+        scale_system=False,
+        rtol=1.0e-12,
+        materialize_host_solution=False,
+    )
+
+    assert result.x is None
+    assert result.x_device is not None
+    assert download_count == 0
+    np.testing.assert_allclose(
+        original_download(result.x_device),
+        np.array([1.0 / 11.0, 7.0 / 11.0]),
+        rtol=1.0e-10,
+        atol=1.0e-11,
+    )
 
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
@@ -1143,8 +1450,8 @@ def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materi
     assert not device_source.coefficients_materialized
 
 
-def test_raw_cuda_diffusion_source_input_keeps_callable_unprojected():
-    from scripts.gpu.run_diffusion_reaction_cuda import _raw_cuda_diffusion_source_input
+def test_coefficient_field_projects_callable_through_package_api():
+    from hdgfem.core.field_ops import coefficient_field
 
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=5)
@@ -1152,9 +1459,11 @@ def test_raw_cuda_diffusion_source_input_keeps_callable_unprojected():
     def source(x, y):
         return 1.0 + x + y
 
-    source_input = _raw_cuda_diffusion_source_input(source, space)
+    source_input = coefficient_field(space, source, name="source_h")
+    expected = space.project_callable(source)
 
-    assert source_input is source
+    assert source_input.space is space
+    np.testing.assert_allclose(source_input.coeffs, expected.coeffs, rtol=1.0e-13, atol=1.0e-13)
 
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")

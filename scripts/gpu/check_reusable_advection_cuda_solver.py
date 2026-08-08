@@ -13,8 +13,6 @@ global solvers selected through class options.
 from __future__ import annotations
 
 import argparse
-import copy
-import json
 import sys
 from pathlib import Path
 
@@ -25,6 +23,7 @@ if __package__ in {None, ""}:
 
 from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg, require_pyamgx
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+from hdgfem.io.config import load_amgx_config
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
@@ -45,21 +44,6 @@ def _runtime_available(solver: str) -> tuple[bool, str | None]:
     except Exception as exc:
         return False, str(exc)
     return True, None
-
-
-def _load_amgx_config(path: Path, *, solver: str, tolerance: float, maxiter: int | None, verbose: bool) -> dict:
-    config = json.loads(path.read_text(encoding="utf-8"))
-    config = copy.deepcopy(config)
-    solver_config = config.setdefault("solver", {})
-    solver_config["solver"] = str(solver).upper()
-    solver_config["tolerance"] = float(tolerance)
-    if maxiter is not None:
-        solver_config["max_iters"] = int(maxiter)
-    solver_config["print_solve_stats"] = int(verbose)
-    solver_config["obtain_timings"] = int(verbose)
-    if isinstance(solver_config.get("preconditioner"), dict):
-        solver_config["preconditioner"]["print_grid_stats"] = int(verbose)
-    return config
 
 
 def _selected_solvers(value: str) -> list[str]:
@@ -148,12 +132,12 @@ def _solve_gpu(space: DGSpace, source, beta, reaction, exact, solver_name: str, 
         options["cupyx_solver"] = args.cupyx_solver
         options["preconditioner"] = args.cupyx_preconditioner
     elif solver_name == "amgx":
-        options["amgx_config"] = _load_amgx_config(
+        options["amgx_config"], _ = load_amgx_config(
             args.amgx_config,
             solver=args.amgx_solver,
             tolerance=args.amgx_tolerance,
             maxiter=args.maxiter,
-            verbose=bool(args.verbose),
+            verbose=args.verbose,
         )
 
     solver = AdvectionReactionHDGSolver(

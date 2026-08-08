@@ -14,7 +14,7 @@ from typing import Callable
 import numpy as np
 from scipy.sparse import coo_array
 
-from hdgfem.assembly.face_dense import face_dense_matvec
+from hdgfem.assembly.face_dense import face_dense_matvec, face_dense_to_dense
 from hdgfem.assembly.hdg import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
@@ -41,20 +41,6 @@ class CaseSpec:
     basis_type: str
     problem_factory: Callable
     stabilization_kind: str
-
-
-def face_dense_to_dense(blocks: np.ndarray, neighbors: np.ndarray) -> np.ndarray:
-    num_rows, num_slots, block_size, _ = blocks.shape
-    matrix = np.zeros((num_rows * block_size, num_rows * block_size), dtype=blocks.dtype)
-    for row_face in range(num_rows):
-        row = slice(row_face * block_size, (row_face + 1) * block_size)
-        for slot in range(num_slots):
-            column_face = int(neighbors[row_face, slot])
-            if column_face < 0:
-                continue
-            column = slice(column_face * block_size, (column_face + 1) * block_size)
-            matrix[row, column] += blocks[row_face, slot]
-    return matrix
 
 
 def stabilization_for(spec: CaseSpec, num_elements: int):

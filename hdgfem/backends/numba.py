@@ -702,6 +702,8 @@ def assemble_projected_trace_system_eliminated_numba(
         trace_space: DGTraceSpace | None = None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
+    if zero_boundary_flux and boundary_condition is not None:
+        raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 

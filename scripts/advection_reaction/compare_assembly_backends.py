@@ -145,7 +145,7 @@ def _load_hdgfem() -> None:
         from hdgfem.solvers.diffusion_reaction import (
             _local_solver_scalar_inverse as _local_solver_scalar_inverse,
         )
-        from hdgfem.solvers.diffusion_reaction import _normalize_tau as _normalize_tau
+        from hdgfem.solvers.diffusion_reaction import normalize_diffusion_stabilization as _normalize_tau
         from hdgfem.solvers.diffusion_reaction import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
         from hdgfem.solvers.diffusion_reaction import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
         try:

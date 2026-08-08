@@ -135,7 +135,7 @@ class DiffusionReactionResult:
     element_boundary_mats: np.ndarray | None = None
     initial_guess: np.ndarray | None = None
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
-    scale_system: bool = True
+    scale_system: bool | Literal["none", "left", "symmetric"] = True
     assembly_backend: AssemblyBackend = "numpy"
     global_solve_result: SolveResult | None = None
 
@@ -193,7 +193,7 @@ class DiffusionReactionHDGOptions:
     solver_rtol: float = 1e-13
     solver_atol: float = 0.0
     maxiter: int | None = None
-    scale_system: bool = True
+    scale_system: bool | Literal["none", "left", "symmetric"] = True
     petsc_preset: str = "cg_gamg"
     petsc_levels: int | None = None
     petsc_options: dict | None = None
@@ -269,7 +269,7 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
     return result, elapsed
 
 
-def _normalize_tau(stabilization, space: DGSpace) -> np.ndarray:
+def normalize_diffusion_stabilization(stabilization, space: DGSpace) -> np.ndarray:
     """Return element-face stabilization parameters with shape ``(K, 3)``."""
     if np.isscalar(stabilization):
         return np.full((space.mesh.num_tri, 3), float(stabilization), dtype=np.float64)
@@ -281,7 +281,7 @@ def _normalize_tau(stabilization, space: DGSpace) -> np.ndarray:
     return np.ascontiguousarray(tau)
 
 
-def _diffusion_is_identity(diffusion) -> bool:
+def is_identity_diffusion(diffusion) -> bool:
     """Return whether diffusion represents the identity tensor exactly enough."""
     if np.isscalar(diffusion):
         return bool(float(diffusion) == 1.0)
@@ -296,6 +296,9 @@ def _diffusion_is_identity(diffusion) -> bool:
     if array.shape == (4,):
         return bool(np.allclose(array, np.array([1.0, 0.0, 0.0, 1.0]), rtol=0.0, atol=0.0))
     return False
+
+
+_diffusion_is_identity = is_identity_diffusion
 
 
 def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np.ndarray:
@@ -475,7 +478,7 @@ def diffusion_trace_lift(
     The result has shape ``(num_elements, 3, edg_dof, 3*el_dof)`` and maps the
     mixed local unknown vector ``[u_h, q_{x,h}, q_{y,h}]`` onto element faces.
     """
-    tau = _normalize_tau(stabilization, space)
+    tau = normalize_diffusion_stabilization(stabilization, space)
     mesh = space.mesh
     q = space.quad_data
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
@@ -495,7 +498,7 @@ def diffusion_element_boundary_mats(
         trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     r"""Assemble local trace-coupling matrices for diffusion-reaction."""
-    tau = _normalize_tau(stabilization, space)
+    tau = normalize_diffusion_stabilization(stabilization, space)
     mesh = space.mesh
     q = space.quad_data
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
@@ -524,7 +527,7 @@ def _local_solver_pre_mats(reaction, stabilization, space: DGSpace, *, verbosity
             return _timed_call(label, verbosity, function, level=2)[0]
         return function()
 
-    tau = _normalize_tau(stabilization, space)
+    tau = normalize_diffusion_stabilization(stabilization, space)
     mesh = space.mesh
     q = space.quad_data
 
@@ -582,7 +585,7 @@ def hdg_residual(
     space = field.space
     mesh = space.mesh
     q = space.quad_data
-    tau = _normalize_tau(stabilization, space)
+    tau = normalize_diffusion_stabilization(stabilization, space)
     d0, d1, m_tau, m_n0, m_n1, _ = _local_solver_pre_mats(0.0, tau, space)
     element_boundary = diffusion_element_boundary_mats(tau, space)
     source = hdg_assembly.block_source_moments(
@@ -848,7 +851,7 @@ def interior_stabilization_mass_blocks(
         trace_space: DGTraceSpace | None = None,
 ) -> np.ndarray:
     """Return per-element-side trace mass blocks on interior faces."""
-    tau = _normalize_tau(stabilization, space)
+    tau = normalize_diffusion_stabilization(stabilization, space)
     mesh = space.mesh
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     valid_elements = mesh.interior_elements
@@ -1353,7 +1356,7 @@ def _postprocess_diffusion_solution(
             or cache.flux_schur_pivots is None
         ):
             raise RuntimeError("missing flux post-processing factorization")
-        tau = _normalize_tau(stabilization, space)
+        tau = normalize_diffusion_stabilization(stabilization, space)
         coeffs = np.empty((2, space.mesh.num_tri, cache.post_space.el_dof), dtype=np.float64)
         if postprocessed_field is not None and _diffusion_is_identity(diffusion):
             solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
@@ -1628,16 +1631,16 @@ class DiffusionReactionHDGSolver:
         self.clear_cache()
         return self
 
-    def set_problem(self, source, reaction, boundary_condition: Callable) -> "DiffusionReactionHDGSolver":
+    def set_problem(self, source, reaction, boundary_condition: Callable | float) -> "DiffusionReactionHDGSolver":
         """Set source, reaction, and Dirichlet boundary data."""
         self.source = source
         self.reaction = reaction
-        self.boundary_condition = boundary_condition
+        self.boundary_condition = hdg_assembly.normalize_boundary_condition(boundary_condition)
         self._problem_is_set = True
         self.clear_cache()
         return self
 
-    def set_discrete_problem(self, source_h, reaction_h, boundary_condition: Callable) -> "DiffusionReactionHDGSolver":
+    def set_discrete_problem(self, source_h, reaction_h, boundary_condition: Callable | float) -> "DiffusionReactionHDGSolver":
         """Set already-discretized source/reaction data."""
         return self.set_problem(source_h, reaction_h, boundary_condition)
 
@@ -1670,10 +1673,10 @@ class DiffusionReactionHDGSolver:
         self.clear_cache()
         return self
 
-    def set_boundary_condition(self, boundary_condition: Callable) -> "DiffusionReactionHDGSolver":
+    def set_boundary_condition(self, boundary_condition: Callable | float) -> "DiffusionReactionHDGSolver":
         """Replace Dirichlet trace data and invalidate cached artifacts."""
         self._require_problem_or_partial_update()
-        self.boundary_condition = boundary_condition
+        self.boundary_condition = hdg_assembly.normalize_boundary_condition(boundary_condition)
         self._problem_is_set = self.source is not None and self.reaction is not None
         if self._can_preserve_operator_on_rhs_update():
             self.clear_rhs_and_solution()
@@ -1842,7 +1845,7 @@ class DiffusionReactionHDGSolver:
             timings.update(assembled.timings)
 
         elif backend == "numpy":
-            tau = _normalize_tau(options.stabilization, self.space)
+            tau = normalize_diffusion_stabilization(options.stabilization, self.space)
             source_rhs = hdg_assembly.block_source_moments(self.source, self.space, num_blocks=3, source_block=0)
             local_solver = local_solvers(
                 self.reaction,
@@ -1993,6 +1996,10 @@ class DiffusionReactionHDGSolver:
             )
             if backend == "raw-cuda":
                 result = self._solve_raw_cuda_device_amgx()
+            elif backend == "cupy":
+                from .diffusion_device import solve_cupy_device_amgx
+
+                result = solve_cupy_device_amgx(self)
             elif self._can_solve_with_cached_numpy_operator():
                 result = self._solve_numpy_with_cached_operator()
             elif (
@@ -2084,8 +2091,10 @@ class DiffusionReactionHDGSolver:
 
         def assemble_raw_full():
             """Assemble the complete reduced raw CUDA trace system."""
-            source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
-            reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
+            from ..core.field_ops import coefficient_field
+
+            source_input = coefficient_field(self.space, self.source, name="source_h")
+            reaction_input = coefficient_field(self.space, self.reaction, name="reaction_h")
             return assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
                 source_input,
                 reaction_input,
@@ -2100,8 +2109,10 @@ class DiffusionReactionHDGSolver:
 
         def assemble_raw_rhs():
             """Assemble only the reduced raw CUDA RHS for a cached operator."""
-            source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
-            reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
+            from ..core.field_ops import coefficient_field
+
+            source_input = coefficient_field(self.space, self.source, name="source_h")
+            reaction_input = coefficient_field(self.space, self.reaction, name="reaction_h")
             return assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
                 source_input,
                 reaction_input,
@@ -2159,9 +2170,14 @@ class DiffusionReactionHDGSolver:
                 f"got {guess_cp.size}"
             )
 
-        effective_scale_system = False if normalized_solver == "petsc" else bool(options.scale_system)
+        effective_scale_system = False if normalized_solver == "petsc" else options.scale_system
+        scale_mode = (
+            "left" if effective_scale_system is True
+            else "none" if effective_scale_system is False
+            else str(effective_scale_system).lower()
+        )
         reusable_solver = None
-        if options.cache_device_matrix and not effective_scale_system:
+        if options.cache_device_matrix and scale_mode in {"none", "off", "false"}:
             solver_key = (
                 id(self.space),
                 trace_basis,
@@ -2476,7 +2492,7 @@ class DiffusionReactionHDGSolver:
 
         def assemble_rhs():
             """Assemble the reduced RHS for the cached trace operator."""
-            tau = _normalize_tau(options.stabilization, self.space)
+            tau = normalize_diffusion_stabilization(options.stabilization, self.space)
             source_rhs = hdg_assembly.block_source_moments(self.source, self.space, num_blocks=3, source_block=0)
             trace_lift = diffusion_trace_lift(tau, self.space, trace_space=trace_space)
             rhs_full, boundary_trace = hdg_assembly.trace_rhs_from_lift(
@@ -2835,7 +2851,7 @@ class DiffusionReactionHDGSolver:
 def solve_diffusion_reaction_hdg(
         source,
         reaction,
-        boundary_condition: Callable,
+        boundary_condition: Callable | float,
         space: DGSpace,
         *,
         diffusion=1.0,
@@ -2884,7 +2900,11 @@ def solve_diffusion_reaction_hdg(
     also accepted.  ``cache_device_matrix`` is used by the stateful solver
     class for repeated RHS-only solves and has no effect in this one-shot
     function.
+
+    ``boundary_condition`` accepts a callable ``g(x, y)`` or a real scalar
+    constant. Discrete field boundary inputs are rejected.
     """
+    boundary_condition = hdg_assembly.normalize_boundary_condition(boundary_condition)
     postprocess_mode = _normalize_hdg_postprocess_mode(hdg_postprocess)
     effective_backend = normalize_assembly_backend(assembly_backend)
     trace_basis = normalize_trace_basis(trace_basis)
@@ -2918,7 +2938,7 @@ def solve_diffusion_reaction_hdg(
         tau, _ = _timed_call(
             "normalizing stabilization",
             verbosity,
-            lambda: _normalize_tau(stabilization, space),
+            lambda: normalize_diffusion_stabilization(stabilization, space),
             level=2,
         )
         source_input = source
@@ -3360,8 +3380,10 @@ __all__ = [
     "flux_coefficients",
     "hdg_residual",
     "interior_stabilization_mass_blocks",
+    "is_identity_diffusion",
     "impose_boundary_trace_on_guess",
     "local_solvers",
+    "normalize_diffusion_stabilization",
     "local_solvers_numba",
     "local_solvers_numpy",
     "solve_diffusion_reaction_hdg",
