@@ -21,11 +21,16 @@ import numpy as np
 
 from .cupy import require_cupy_device
 from .cupy_face_dense import CuPyFaceDenseOperator
-from .cupy_preconditionners import CuPyFaceAdditiveSchwarzPreconditioner
+from .cupy_preconditionners import (
+    CuPyFaceAdditiveSchwarzPreconditioner,
+    CuPyFaceBlockJacobiPreconditioner,
+)
 from .cupy_profiling import CudaTimingStats
 
 AUTOTUNE_CACHE_SCHEMA_VERSION = 1
-AUTOTUNE_KERNEL_ABI_VERSION = 2
+# Version 4 adds matmul candidates and Block-Jacobi application tuning.  Older
+# entries cannot represent these candidate sets and are intentionally ignored.
+AUTOTUNE_KERNEL_ABI_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -78,6 +83,8 @@ class FaceDenseAutotuneResult:
     asm_choice: str | None
     operator_candidates: tuple[KernelCandidateTiming, ...]
     asm_candidates: tuple[KernelCandidateTiming, ...]
+    block_jacobi_choice: str | None = None
+    block_jacobi_candidates: tuple[KernelCandidateTiming, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -86,8 +93,12 @@ class FaceDenseAutotuneResult:
             "num_dofs": self.num_dofs,
             "block_size": self.block_size,
             "operator_choice": self.operator_choice,
+            "block_jacobi_choice": self.block_jacobi_choice,
             "asm_choice": self.asm_choice,
             "operator_candidates": [x.to_dict() for x in self.operator_candidates],
+            "block_jacobi_candidates": [
+                x.to_dict() for x in self.block_jacobi_candidates
+            ],
             "asm_candidates": [x.to_dict() for x in self.asm_candidates],
         }
 
@@ -99,12 +110,21 @@ class FaceDenseAutotuneResult:
             num_dofs=int(payload["num_dofs"]),
             block_size=int(payload["block_size"]),
             operator_choice=str(payload["operator_choice"]),
+            block_jacobi_choice=(
+                None
+                if payload.get("block_jacobi_choice") is None
+                else str(payload["block_jacobi_choice"])
+            ),
             asm_choice=(
                 None if payload.get("asm_choice") is None else str(payload["asm_choice"])
             ),
             operator_candidates=tuple(
                 KernelCandidateTiming.from_dict(item)
                 for item in payload.get("operator_candidates", ())
+            ),
+            block_jacobi_candidates=tuple(
+                KernelCandidateTiming.from_dict(item)
+                for item in payload.get("block_jacobi_candidates", ())
             ),
             asm_candidates=tuple(
                 KernelCandidateTiming.from_dict(item)
@@ -138,6 +158,7 @@ class FaceDenseAutotuneKey:
     local_solver: str
     operator_implementations: tuple[str, ...]
     asm_applications: tuple[str, ...]
+    block_jacobi_applications: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -151,6 +172,7 @@ class FaceDenseAutotuneKey:
             "polynomial_order": self.polynomial_order,
             "local_solver": self.local_solver,
             "operator_implementations": list(self.operator_implementations),
+            "block_jacobi_applications": list(self.block_jacobi_applications),
             "asm_applications": list(self.asm_applications),
         }
 
@@ -180,6 +202,9 @@ class FaceDenseAutotuneKey:
             local_solver=str(payload["local_solver"]),
             operator_implementations=tuple(
                 str(item) for item in payload.get("operator_implementations", ())
+            ),
+            block_jacobi_applications=tuple(
+                str(item) for item in payload.get("block_jacobi_applications", ())
             ),
             asm_applications=tuple(
                 str(item) for item in payload.get("asm_applications", ())
@@ -252,10 +277,25 @@ class PersistentFaceDenseAutotuneCache:
         except (KeyError, TypeError, ValueError):
             return None
         requested_operators = set(key.operator_implementations)
+        requested_block_jacobi = set(key.block_jacobi_applications)
         requested_asm = set(key.asm_applications)
         if result.operator_choice not in requested_operators:
             return None
-        if result.asm_choice is not None and result.asm_choice not in requested_asm:
+        if not result.operator_candidates:
+            return None
+        if requested_block_jacobi:
+            if result.block_jacobi_choice not in requested_block_jacobi:
+                return None
+            if not result.block_jacobi_candidates:
+                return None
+        elif result.block_jacobi_choice is not None:
+            return None
+        if requested_asm:
+            if result.asm_choice not in requested_asm:
+                return None
+            if not result.asm_candidates:
+                return None
+        elif result.asm_choice is not None:
             return None
         return result
 
@@ -319,10 +359,12 @@ def build_face_dense_autotune_key(
     local_solver: str,
     operator_implementations: Iterable[str],
     asm_applications: Iterable[str],
+    block_jacobi_applications: Iterable[str] = (),
 ) -> FaceDenseAutotuneKey:
     cp = require_cupy_device()
     dtype = cp.dtype(dtype)
     operators = tuple(str(item) for item in operator_implementations)
+    block_jacobi = tuple(str(item) for item in block_jacobi_applications)
     asm = tuple(str(item) for item in asm_applications)
     return FaceDenseAutotuneKey(
         kernel_abi_version=AUTOTUNE_KERNEL_ABI_VERSION,
@@ -337,6 +379,7 @@ def build_face_dense_autotune_key(
         ),
         local_solver=str(local_solver),
         operator_implementations=operators,
+        block_jacobi_applications=block_jacobi,
         asm_applications=asm,
     )
 
@@ -427,14 +470,15 @@ def autotune_face_dense_gpu(
     loc2glob_face: np.ndarray | None = None,
     dtype: Any = np.float64,
     device_id: int = 0,
-    operator_implementations: Iterable[str] = ("raw", "raw_fused"),
-    asm_applications: Iterable[str] = ("raw", "fused"),
+    operator_implementations: Iterable[str] = ("raw", "raw_fused", "matmul"),
+    block_jacobi_applications: Iterable[str] = (),
+    asm_applications: Iterable[str] = ("raw", "fused", "matmul"),
     local_solver: str = "cublas_inverse",
     warmup: int = 10,
     repeats: int = 50,
     validation_tolerance: float | None = None,
 ) -> FaceDenseAutotuneResult:
-    """Benchmark and select operator/ASM application kernels.
+    """Benchmark and select operator, Block-Jacobi, and ASM kernels.
 
     Candidate calls are measured in alternating order within one event stream,
     reducing the bias caused by thermal state, GPU clocks, and always timing
@@ -451,6 +495,9 @@ def autotune_face_dense_gpu(
         else float(validation_tolerance)
     )
     operator_names = tuple(str(item) for item in operator_implementations)
+    block_jacobi_names = tuple(
+        str(item) for item in block_jacobi_applications
+    )
     asm_names = tuple(str(item) for item in asm_applications)
     if not operator_names:
         raise ValueError("at least one operator implementation is required")
@@ -508,6 +555,69 @@ def autotune_face_dense_gpu(
             for name in operator_names
         ]
         operator_choice = min(operator_rows, key=lambda item: item.median_ms).name
+
+        block_jacobi_rows: list[KernelCandidateTiming] = []
+        block_jacobi_choice = None
+        if block_jacobi_names:
+            block_jacobi_preconditioners: dict[str, Any] = {}
+            block_jacobi_outputs: dict[str, Any] = {}
+            block_jacobi_errors: dict[str, float] = {}
+            block_jacobi_reference = None
+            for name in block_jacobi_names:
+                preconditioner = CuPyFaceBlockJacobiPreconditioner.from_system(
+                    system,
+                    dtype=dtype,
+                    device_id=device_id,
+                    local_solver=local_solver,
+                    application=name,
+                )
+                block_jacobi_preconditioners[name] = preconditioner
+                out = cp.empty_like(x)
+                block_jacobi_outputs[name] = out
+                preconditioner.apply_into(x, out)
+                cp.cuda.get_current_stream().synchronize()
+                if block_jacobi_reference is None:
+                    block_jacobi_reference = out.copy()
+                    error = 0.0
+                else:
+                    error = _relative_device_error(cp, out, block_jacobi_reference)
+                    if error > tolerance:
+                        raise AssertionError(
+                            "block-Jacobi candidate "
+                            f"{name!r} differs from reference by {error:.3e}"
+                        )
+                block_jacobi_errors[name] = error
+
+            block_jacobi_timings = _benchmark_interleaved_cuda_calls(
+                {
+                    name: (
+                        lambda pc=block_jacobi_preconditioners[name],
+                        target=block_jacobi_outputs[name]: pc.apply_into(x, target)
+                    )
+                    for name in block_jacobi_names
+                },
+                warmup=warmup,
+                repeats=repeats,
+                device_id=device_id,
+            )
+            block_jacobi_rows = [
+                _timing_row(
+                    name=name,
+                    timing=block_jacobi_timings[name],
+                    workspace_bytes=int(
+                        getattr(
+                            block_jacobi_preconditioners[name],
+                            "workspace_bytes",
+                            0,
+                        )
+                    ),
+                    relative_error=block_jacobi_errors[name],
+                )
+                for name in block_jacobi_names
+            ]
+            block_jacobi_choice = min(
+                block_jacobi_rows, key=lambda item: item.median_ms
+            ).name
 
         asm_rows: list[KernelCandidateTiming] = []
         asm_choice = None
@@ -574,8 +684,10 @@ def autotune_face_dense_gpu(
             num_dofs=int(system.num_dofs),
             block_size=int(system.block_size),
             operator_choice=operator_choice,
+            block_jacobi_choice=block_jacobi_choice,
             asm_choice=asm_choice,
             operator_candidates=tuple(operator_rows),
+            block_jacobi_candidates=tuple(block_jacobi_rows),
             asm_candidates=tuple(asm_rows),
         )
 
@@ -588,8 +700,9 @@ def autotune_face_dense_gpu_cached(
     dtype: Any = np.float64,
     device_id: int = 0,
     polynomial_order: int | None = None,
-    operator_implementations: Iterable[str] = ("raw", "raw_fused"),
-    asm_applications: Iterable[str] = ("raw", "fused"),
+    operator_implementations: Iterable[str] = ("raw", "raw_fused", "matmul"),
+    block_jacobi_applications: Iterable[str] = (),
+    asm_applications: Iterable[str] = ("raw", "fused", "matmul"),
     local_solver: str = "cublas_inverse",
     warmup: int = 10,
     repeats: int = 50,
@@ -601,6 +714,7 @@ def autotune_face_dense_gpu_cached(
     """Load a compatible tuning result or benchmark and persist a new one."""
 
     operators = tuple(str(item) for item in operator_implementations)
+    block_jacobi = tuple(str(item) for item in block_jacobi_applications)
     asm = tuple(str(item) for item in asm_applications)
     key = build_face_dense_autotune_key(
         system,
@@ -609,6 +723,7 @@ def autotune_face_dense_gpu_cached(
         polynomial_order=polynomial_order,
         local_solver=local_solver,
         operator_implementations=operators,
+        block_jacobi_applications=block_jacobi,
         asm_applications=asm,
     )
     cache = PersistentFaceDenseAutotuneCache(cache_path) if use_cache else None
@@ -629,6 +744,7 @@ def autotune_face_dense_gpu_cached(
         dtype=dtype,
         device_id=device_id,
         operator_implementations=operators,
+        block_jacobi_applications=block_jacobi,
         asm_applications=asm,
         local_solver=local_solver,
         warmup=warmup,

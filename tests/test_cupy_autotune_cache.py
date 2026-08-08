@@ -30,6 +30,7 @@ def _key(*, order: int = 2, mode: str = "eliminate") -> FaceDenseAutotuneKey:
         polynomial_order=order,
         local_solver="cublas_inverse",
         operator_implementations=("raw", "raw_fused"),
+        block_jacobi_applications=("raw", "matmul"),
         asm_applications=("raw", "fused"),
     )
 
@@ -41,6 +42,7 @@ def _result() -> FaceDenseAutotuneResult:
         num_dofs=36480,
         block_size=3,
         operator_choice="raw",
+        block_jacobi_choice="raw",
         asm_choice="fused",
         operator_candidates=(
             KernelCandidateTiming(
@@ -50,6 +52,9 @@ def _result() -> FaceDenseAutotuneResult:
                 p90_ms=0.12,
                 repeats=50,
             ),
+        ),
+        block_jacobi_candidates=(
+            KernelCandidateTiming("raw", 0.05, 0.04, 0, 0.0),
         ),
         asm_candidates=(
             KernelCandidateTiming("fused", 0.07, 0.06, 512, 1.0e-16),

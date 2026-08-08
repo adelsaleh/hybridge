@@ -634,6 +634,22 @@ class CuPyPolynomialPreconditioner:
     def allocates_during_apply(self) -> bool:
         return False
 
+    @property
+    def workspace_bytes(self) -> int:
+        """Device workspace retained by the composite preconditioner."""
+
+        own = sum(
+            int(array.nbytes)
+            for array in (
+                self._q,
+                self._bq,
+                self._b2q,
+                self._operator_output,
+            )
+        )
+        base = int(getattr(self.base_preconditioner, "workspace_bytes", 0))
+        return own + base
+
     def _validate_vector(self, vector: Any, *, name: str) -> Any:
         cp = self._cp
         if not isinstance(vector, cp.ndarray):

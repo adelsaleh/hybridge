@@ -48,6 +48,14 @@ def test_gpu_options_normalize_mapping_and_validate() -> None:
         options.with_overrides(polynomial_degree=0).validate()
 
 
+@pytest.mark.parametrize(
+    "preconditioner",
+    ("none", "poly", "block_jacobi", "block_jacobi_poly", "asm", "asm_poly"),
+)
+def test_gpu_options_accept_every_production_preconditioner(preconditioner: str) -> None:
+    DiffusionReactionGPUOptions(preconditioner=preconditioner).validate()
+
+
 def test_hdg_options_accept_gpu_configuration() -> None:
     gpu = DiffusionReactionGPUOptions(operator="raw", autotune=False)
     options = DiffusionReactionHDGOptions(
@@ -188,3 +196,51 @@ def test_integrated_gpu_solve_matches_cpu_direct(boundary_mode: str) -> None:
     assert gpu.gpu_diagnostics is not None
     assert gpu.gpu_diagnostics.gmres_result.converged
     assert gpu.global_solve_result.iteration_count > 0
+
+
+@pytest.mark.parametrize(
+    "preconditioner",
+    ("none", "poly", "block_jacobi", "block_jacobi_poly", "asm", "asm_poly"),
+)
+def test_integrated_gpu_preconditioner_family_matches_direct(preconditioner: str) -> None:
+    """Exercise every production composition on one small eliminated system."""
+
+    _cupy_or_skip()
+    space = DGSpace(rectangle_mesh(2, 2), 1, basis_type="dub_orth")
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+    cpu = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=1.3,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        verbose=False,
+    )
+    gpu = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=1.3,
+        solver="gpu_face_dense",
+        solver_rtol=1.0e-10,
+        maxiter=1000,
+        boundary_mode="eliminate",
+        gpu_options={
+            "operator": "raw",
+            "preconditioner": preconditioner,
+            "block_jacobi_application": "raw",
+            "asm_application": "raw",
+            "polynomial_degree": 4,
+            "restart": 30,
+            "autotune": False,
+        },
+        verbose=False,
+    )
+    np.testing.assert_allclose(gpu.trace, cpu.trace, rtol=3.0e-9, atol=3.0e-9)
+    assert gpu.gpu_diagnostics.gmres_result.converged

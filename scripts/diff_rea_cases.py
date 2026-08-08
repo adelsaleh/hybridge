@@ -230,6 +230,78 @@ def tensor_sine_exact_gradients(m: int = 1, n: int = 1) -> tuple[Callable, Calla
     return gradx, grady
 
 
+def rotated_anisotropic_sine_case(
+    anisotropy_ratio: float = 1.0e3,
+    angle_degrees: float = 30.0,
+    m: int = 1,
+    n: int = 1,
+) -> ProblemTuple:
+    r"""Sine solution with a constant rotated anisotropic diffusion tensor.
+
+    The tensor eigenvalues are ``1`` and ``1 / anisotropy_ratio``.  Rotating
+    its principal axes exercises the mixed derivative term and prevents the
+    mesh axes from hiding anisotropy-related errors.  The exact solution
+    vanishes on the boundary of ``[-1, 1]^2``.
+    """
+
+    ratio = float(anisotropy_ratio)
+    angle = float(angle_degrees)
+    if not np.isfinite(ratio) or ratio < 1.0:
+        raise ValueError("anisotropy_ratio must be finite and at least one")
+    if not np.isfinite(angle):
+        raise ValueError("angle_degrees must be finite")
+    if isinstance(m, bool) or int(m) != m or int(m) <= 0:
+        raise ValueError("m must be a positive integer")
+    if isinstance(n, bool) or int(n) != n or int(n) <= 0:
+        raise ValueError("n must be a positive integer")
+
+    theta = np.deg2rad(angle)
+    cosine = float(np.cos(theta))
+    sine = float(np.sin(theta))
+    parallel = 1.0
+    perpendicular = 1.0 / ratio
+    k00 = parallel * cosine**2 + perpendicular * sine**2
+    k01 = (parallel - perpendicular) * cosine * sine
+    k11 = parallel * sine**2 + perpendicular * cosine**2
+
+    alpha = 0.5 * int(m) * np.pi
+    beta = 0.5 * int(n) * np.pi
+
+    def exact(x, y):
+        return np.sin(alpha * (x + 1.0)) * np.sin(beta * (y + 1.0))
+
+    def gradx(x, y):
+        return alpha * np.cos(alpha * (x + 1.0)) * np.sin(beta * (y + 1.0))
+
+    def grady(x, y):
+        return beta * np.sin(alpha * (x + 1.0)) * np.cos(beta * (y + 1.0))
+
+    def source(x, y):
+        u = exact(x, y)
+        uxx = -(alpha**2) * u
+        uyy = -(beta**2) * u
+        uxy = (
+            alpha
+            * beta
+            * np.cos(alpha * (x + 1.0))
+            * np.cos(beta * (y + 1.0))
+        )
+        return -(k00 * uxx + 2.0 * k01 * uxy + k11 * uyy)
+
+    def exact_flux(x, y):
+        ux = gradx(x, y)
+        uy = grady(x, y)
+        return (-(k00 * ux + k01 * uy), -(k01 * ux + k11 * uy))
+
+    return DiffusionReactionProblem(
+        diffusion=(k00, k01, k11),
+        reaction=zero_coefficient,
+        source=source,
+        exact=exact,
+        exact_flux=exact_flux,
+    )
+
+
 CASE_DEFINITIONS: tuple[DiffusionReactionCase, ...] = (
     DiffusionReactionCase(0, "quadratic-poisson", "quadratic Poisson", quadratic_poisson_case),
     DiffusionReactionCase(2, "exponential-bubble", "exponential bubble Poisson", exponential_bubble_poisson_case),
@@ -246,6 +318,13 @@ CASE_DEFINITIONS: tuple[DiffusionReactionCase, ...] = (
         "tensor-sine",
         "tensor sine diffusion-reaction",
         tensor_sine_diffusion_reaction_case,
+    ),
+    DiffusionReactionCase(
+        8,
+        "rotated-anisotropic-sine",
+        "rotated strongly anisotropic sine diffusion",
+        rotated_anisotropic_sine_case,
+        "structured-rectangle",
     ),
 )
 
@@ -302,6 +381,7 @@ __all__ = [
     "lshape_singular_harmonic_case",
     "quadratic_poisson_case",
     "quadratic_variable_reaction_case",
+    "rotated_anisotropic_sine_case",
     "tensor_sine_diffusion_reaction_case",
     "tensor_sine_exact_gradients",
     "trigonometric_poisson_case",

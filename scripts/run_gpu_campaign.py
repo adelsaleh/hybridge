@@ -21,7 +21,7 @@ import sys
 import time
 from typing import Iterable, Literal
 
-CampaignName = Literal["smoke", "medium", "full"]
+CampaignName = Literal["smoke", "medium", "full", "hard"]
 
 
 @dataclass(frozen=True)
@@ -58,8 +58,8 @@ def build_campaign_commands(
 ) -> list[CampaignCommand]:
     """Return the deterministic command matrix for one campaign level."""
 
-    if campaign not in {"smoke", "medium", "full"}:
-        raise ValueError("campaign must be smoke, medium, or full")
+    if campaign not in {"smoke", "medium", "full", "hard"}:
+        raise ValueError("campaign must be smoke, medium, full, or hard")
     output = Path(output_dir)
     commands: list[CampaignCommand] = []
 
@@ -78,9 +78,35 @@ def build_campaign_commands(
                     "tests/test_cupy_autotune_cache.py",
                     "tests/test_cupy_fused_additive_schwarz.py",
                     "tests/test_cupy_polynomial.py",
+                    "tests/test_face_dense_hard_cases.py",
                 ),
             )
         )
+
+    if campaign == "hard":
+        hard_prefix = output / "hard_cases_v100"
+        commands.append(
+            CampaignCommand(
+                "hard_cases_v100",
+                _python_command(
+                    python_executable,
+                    "scripts/validate_face_dense_hard_cases.py",
+                    "--preset",
+                    "v100",
+                    "--backend",
+                    "gpu",
+                    "--rtol",
+                    "1e-12",
+                    "--autotune-cache-file",
+                    str(output / "hard_case_autotune_cache.json"),
+                    "--strict",
+                    "--output-prefix",
+                    str(hard_prefix),
+                ),
+                (str(hard_prefix) + ".csv", str(hard_prefix) + ".json"),
+            )
+        )
+        return commands
 
     smoke_prefix = output / "smoke"
     commands.extend(
@@ -463,7 +489,11 @@ def run_campaign(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--campaign", choices=("smoke", "medium", "full"), default="smoke")
+    parser.add_argument(
+        "--campaign",
+        choices=("smoke", "medium", "full", "hard"),
+        default="smoke",
+    )
     parser.add_argument("--output", required=True, help="campaign output directory")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument("--skip-tests", action="store_true")

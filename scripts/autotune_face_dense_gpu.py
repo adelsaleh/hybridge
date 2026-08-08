@@ -57,6 +57,9 @@ def main() -> None:
         dtype=dtype,
         device_id=args.device,
         polynomial_order=args.order,
+        operator_implementations=("raw", "raw_fused", "matmul"),
+        block_jacobi_applications=("raw", "matmul"),
+        asm_applications=("raw", "fused", "matmul"),
         warmup=args.warmup,
         repeats=args.repeats,
         cache_path=args.cache_file,
@@ -82,6 +85,14 @@ def main() -> None:
             f"{row.workspace_bytes / 2**20:14.3f} {row.relative_error:.3e}"
         )
     print(f"selected operator: {result.operator_choice}")
+    print()
+    print("Block-Jacobi candidate median[ms] minimum[ms] workspace[MiB] relerr")
+    for row in result.block_jacobi_candidates:
+        print(
+            f"{row.name:22s} {row.median_ms:10.4f} {row.minimum_ms:11.4f} "
+            f"{row.workspace_bytes / 2**20:14.3f} {row.relative_error:.3e}"
+        )
+    print(f"selected Block-Jacobi path: {result.block_jacobi_choice}")
     print()
     print("ASM candidate        median[ms] minimum[ms] workspace[MiB] relerr")
     for row in result.asm_candidates:

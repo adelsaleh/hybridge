@@ -41,9 +41,16 @@ from ..linalg.system import SolveResult
 from .diff_rea_face_dense import assemble_diffusion_face_dense_components
 
 GPUOperatorChoice = Literal["auto", "raw", "raw_fused", "matmul"]
-GPUPreconditionerChoice = Literal["none", "block_jacobi", "asm", "asm_poly"]
+GPUPreconditionerChoice = Literal[
+    "none",
+    "poly",
+    "block_jacobi",
+    "block_jacobi_poly",
+    "asm",
+    "asm_poly",
+]
 GPUASMApplication = Literal["auto", "matmul", "raw", "fused"]
-GPUBlockJacobiApplication = Literal["matmul", "raw"]
+GPUBlockJacobiApplication = Literal["auto", "matmul", "raw"]
 
 
 @dataclass(frozen=True)
@@ -62,7 +69,7 @@ class DiffusionReactionGPUOptions:
     local_solver: Literal[
         "cpu_inverse", "gpu_inverse", "cublas_inverse", "gpu_solve"
     ] = "cublas_inverse"
-    block_jacobi_application: GPUBlockJacobiApplication = "raw"
+    block_jacobi_application: GPUBlockJacobiApplication = "auto"
     asm_application: GPUASMApplication = "auto"
     polynomial_degree: int = 18
     polynomial_seed: int = 1729
@@ -111,11 +118,18 @@ class DiffusionReactionGPUOptions:
             raise ValueError("GPU dtype must be 'float32' or 'float64'")
         if self.operator not in {"auto", "raw", "raw_fused", "matmul"}:
             raise ValueError("invalid GPU operator implementation")
-        if self.preconditioner not in {"none", "block_jacobi", "asm", "asm_poly"}:
+        if self.preconditioner not in {
+            "none",
+            "poly",
+            "block_jacobi",
+            "block_jacobi_poly",
+            "asm",
+            "asm_poly",
+        }:
             raise ValueError("invalid GPU preconditioner")
         if self.asm_application not in {"auto", "matmul", "raw", "fused"}:
             raise ValueError("invalid ASM application")
-        if self.block_jacobi_application not in {"matmul", "raw"}:
+        if self.block_jacobi_application not in {"auto", "matmul", "raw"}:
             raise ValueError("invalid block-Jacobi application")
         if self.polynomial_degree <= 0:
             raise ValueError("polynomial_degree must be positive")
@@ -134,6 +148,7 @@ class DiffusionReactionGPUDiagnostics:
     dtype: str
     operator: str
     preconditioner: str
+    block_jacobi_application: str | None
     asm_application: str | None
     local_solver: str | None
     polynomial_degree: int | None
@@ -265,23 +280,50 @@ def build_diffusion_reaction_gpu_solver(
     setup_times = {"autotune": 0.0, "operator": 0.0, "preconditioner": 0.0}
 
     needs_asm = options.preconditioner in {"asm", "asm_poly"}
+    needs_block_jacobi = options.preconditioner in {
+        "block_jacobi",
+        "block_jacobi_poly",
+    }
+    needs_polynomial = options.preconditioner in {
+        "poly",
+        "block_jacobi_poly",
+        "asm_poly",
+    }
     autotune_result = None
     operator_choice = options.operator
+    block_jacobi_choice = (
+        options.block_jacobi_application if needs_block_jacobi else None
+    )
     asm_choice = options.asm_application if needs_asm else None
+    tune_operator = options.operator == "auto"
+    tune_block_jacobi = (
+        needs_block_jacobi and options.block_jacobi_application == "auto"
+    )
+    tune_asm = needs_asm and options.asm_application == "auto"
     should_tune = options.autotune and (
-        options.operator == "auto" or (needs_asm and options.asm_application == "auto")
+        tune_operator or tune_block_jacobi or tune_asm
     )
     if should_tune:
         start = time.perf_counter()
         autotune_result = autotune_face_dense_gpu_cached(
             system,
-            element_blocks=element_blocks if needs_asm else None,
-            loc2glob_face=loc2glob_face if needs_asm else None,
+            element_blocks=element_blocks if tune_asm else None,
+            loc2glob_face=loc2glob_face if tune_asm else None,
             dtype=dtype,
             device_id=device_id,
             polynomial_order=int(polynomial_order),
-            operator_implementations=("raw", "raw_fused"),
-            asm_applications=("raw", "fused"),
+            operator_implementations=(
+                ("raw", "raw_fused", "matmul")
+                if tune_operator
+                else (str(operator_choice),)
+            ),
+            block_jacobi_applications=(
+                ("raw", "matmul") if tune_block_jacobi else ()
+            ),
+            # Keep operator-only and operator+ASM cache entries distinct.  An
+            # operator-only tune has no valid ASM winner and must never be
+            # reused by a later ASM solve of the same system.
+            asm_applications=("raw", "fused", "matmul") if tune_asm else (),
             local_solver=options.local_solver,
             warmup=options.autotune_warmup,
             repeats=options.autotune_repeats,
@@ -293,11 +335,15 @@ def build_diffusion_reaction_gpu_solver(
         setup_times["autotune"] = time.perf_counter() - start
         if operator_choice == "auto":
             operator_choice = autotune_result.result.operator_choice
+        if needs_block_jacobi and block_jacobi_choice == "auto":
+            block_jacobi_choice = autotune_result.result.block_jacobi_choice
         if needs_asm and asm_choice == "auto":
             asm_choice = autotune_result.result.asm_choice
 
     if operator_choice == "auto":
         operator_choice = "raw"
+    if needs_block_jacobi and block_jacobi_choice == "auto":
+        block_jacobi_choice = "raw"
     if needs_asm and asm_choice == "auto":
         asm_choice = "raw"
 
@@ -314,14 +360,15 @@ def build_diffusion_reaction_gpu_solver(
     start = time.perf_counter()
     preconditioner = None
     base_preconditioner = None
-    if options.preconditioner == "block_jacobi":
-        preconditioner = CuPyFaceBlockJacobiPreconditioner.from_system(
+    if needs_block_jacobi:
+        base_preconditioner = CuPyFaceBlockJacobiPreconditioner.from_system(
             system,
             device_id=device_id,
             dtype=dtype,
             local_solver=options.local_solver,
-            application=options.block_jacobi_application,
+            application=str(block_jacobi_choice),
         )
+        preconditioner = base_preconditioner
     elif needs_asm:
         base_preconditioner = CuPyFaceAdditiveSchwarzPreconditioner.from_system(
             system,
@@ -334,15 +381,15 @@ def build_diffusion_reaction_gpu_solver(
         )
         if options.preconditioner == "asm":
             preconditioner = base_preconditioner
-        else:
-            preconditioner = CuPyPolynomialPreconditioner.from_operator(
-                operator,
-                degree=options.polynomial_degree,
-                base_preconditioner=base_preconditioner,
-                seed=options.polynomial_seed,
-                setup_orthogonalization=options.polynomial_setup_orthogonalization,
-                breakdown_tolerance=options.breakdown_tolerance,
-            )
+    if needs_polynomial:
+        preconditioner = CuPyPolynomialPreconditioner.from_operator(
+            operator,
+            degree=options.polynomial_degree,
+            base_preconditioner=base_preconditioner,
+            seed=options.polynomial_seed,
+            setup_orthogonalization=options.polynomial_setup_orthogonalization,
+            breakdown_tolerance=options.breakdown_tolerance,
+        )
     cp.cuda.get_current_stream().synchronize()
     setup_times["preconditioner"] = time.perf_counter() - start
 
@@ -550,6 +597,13 @@ def solve_diffusion_reaction_face_dense_gpu(
             if options.asm_application == "auto" and tuned is not None
             else options.asm_application
         )
+    block_jacobi_application = None
+    if options.preconditioner in {"block_jacobi", "block_jacobi_poly"}:
+        block_jacobi_application = (
+            tuned.result.block_jacobi_choice
+            if options.block_jacobi_application == "auto" and tuned is not None
+            else options.block_jacobi_application
+        )
     operator_choice = (
         tuned.result.operator_choice
         if options.operator == "auto" and tuned is not None
@@ -562,10 +616,22 @@ def solve_diffusion_reaction_face_dense_gpu(
         dtype=options.dtype,
         operator=str(operator_choice),
         preconditioner=options.preconditioner,
+        block_jacobi_application=(
+            None
+            if block_jacobi_application is None
+            else str(block_jacobi_application)
+        ),
         asm_application=None if asm_application is None else str(asm_application),
-        local_solver=(None if options.preconditioner == "none" else options.local_solver),
+        local_solver=(
+            options.local_solver
+            if options.preconditioner
+            in {"block_jacobi", "block_jacobi_poly", "asm", "asm_poly"}
+            else None
+        ),
         polynomial_degree=(
-            options.polynomial_degree if options.preconditioner == "asm_poly" else None
+            options.polynomial_degree
+            if options.preconditioner in {"poly", "block_jacobi_poly", "asm_poly"}
+            else None
         ),
         autotune_cache_hit=None if tuned is None else bool(tuned.cache_hit),
         autotune_cache_key=cache_key,

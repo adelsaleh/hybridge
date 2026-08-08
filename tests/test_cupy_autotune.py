@@ -34,8 +34,12 @@ def test_autotune_result_is_json_serializable() -> None:
         num_dofs=100,
         block_size=3,
         operator_choice="raw",
+        block_jacobi_choice="raw",
         asm_choice="fused",
         operator_candidates=(row,),
+        block_jacobi_candidates=(
+            KernelCandidateTiming("raw", 0.5, 0.4, 0, 0.0),
+        ),
         asm_candidates=(KernelCandidateTiming("fused", 2.0, 1.8, 512, 0.0),),
     )
     payload = result.to_dict()
@@ -59,10 +63,15 @@ def test_gpu_autotuner_selects_numerically_equivalent_candidates() -> None:
         assembly.eliminated_system,
         element_blocks=assembly.element_blocks,
         loc2glob_face=space.mesh.loc2glob_edge,
+        block_jacobi_applications=("raw", "matmul"),
         warmup=1,
         repeats=3,
     )
-    assert result.operator_choice in {"raw", "raw_fused"}
-    assert result.asm_choice in {"raw", "fused"}
+    assert result.operator_choice in {"raw", "raw_fused", "matmul"}
+    assert result.block_jacobi_choice in {"raw", "matmul"}
+    assert result.asm_choice in {"raw", "fused", "matmul"}
     assert all(row.relative_error < 5e-12 for row in result.operator_candidates)
+    assert all(
+        row.relative_error < 5e-12 for row in result.block_jacobi_candidates
+    )
     assert all(row.relative_error < 5e-12 for row in result.asm_candidates)

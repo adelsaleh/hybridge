@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run manufactured diffusion-reaction presets.
 
 Preset definitions live in this file, in the ``PRESETS`` dictionary below.
