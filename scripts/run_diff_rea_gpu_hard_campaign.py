@@ -131,6 +131,7 @@ def build_commands(
                     "-m",
                     "pytest",
                     "-q",
+                    "tests/test_diff_rea_gpu_hard_campaign.py",
                     "tests/test_diff_rea_gpu_integration.py",
                     "tests/test_cupy_solver.py",
                     "tests/test_cupy_autotune.py",
@@ -182,7 +183,7 @@ def build_commands(
             "10",
             "--reference-solver",
             "direct",
-            "--strict",
+            "--require-coverage",
         )
     )
     if level == "smoke":
@@ -229,7 +230,7 @@ def build_commands(
             "50",
             "--reference-solver",
             "direct",
-            "--strict",
+            "--require-coverage",
         )
     )
     if level == "validation":
@@ -281,7 +282,7 @@ def build_commands(
             "100",
             "--max-iterations",
             "5000",
-            "--strict",
+            "--require-coverage",
         )
     )
 
@@ -336,7 +337,7 @@ def build_commands(
             "100",
             "--max-iterations",
             "5000",
-            "--strict",
+            "--require-coverage",
         )
     )
 

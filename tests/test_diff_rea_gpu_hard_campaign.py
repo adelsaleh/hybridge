@@ -9,6 +9,8 @@ from scripts.analyze_diff_rea_gpu_hard_results import _robust_rankings
 from scripts.validate_diff_rea_gpu_hard_cases import (
     _aggregate_rows,
     _best_rows,
+    _uncovered_case_orders,
+    _validation_exit_code,
     build_solver_configurations,
 )
 
@@ -52,6 +54,7 @@ def test_all_registered_diffusion_reaction_cases_are_covered() -> None:
         "quadratic-variable-reaction",
         "lshape-singular",
         "tensor-sine",
+        "rotated-anisotropic-sine",
     )
 
 
@@ -169,6 +172,47 @@ def test_retuned_cold_sample_controls_cold_rank() -> None:
     assert summaries[0]["retuned_autotune_ms"] == 100.0
 
 
+def test_coverage_allows_failed_candidates_but_requires_one_robust_choice() -> None:
+    summaries = [
+        {"case": "a", "order": 4, "configuration": "none", "all_passed": False},
+        {"case": "a", "order": 4, "configuration": "asm", "all_passed": True},
+        {"case": "b", "order": 4, "configuration": "none", "all_passed": False},
+    ]
+    assert _uncovered_case_orders(summaries) == [("b", 4)]
+    summaries.append(
+        {"case": "b", "order": 4, "configuration": "asm", "all_passed": True}
+    )
+    assert _uncovered_case_orders(summaries) == []
+
+
+def test_coverage_exit_policy_does_not_hide_uncovered_or_exceptional_runs() -> None:
+    candidate_failure = {
+        "any_candidate_failed": True,
+        "uncovered_count": 0,
+        "exception_count": 0,
+    }
+    assert _validation_exit_code(
+        strict=False, require_coverage=True, **candidate_failure
+    ) == 0
+    assert _validation_exit_code(
+        strict=True, require_coverage=False, **candidate_failure
+    ) == 1
+    assert _validation_exit_code(
+        strict=False,
+        require_coverage=True,
+        any_candidate_failed=True,
+        uncovered_count=1,
+        exception_count=0,
+    ) == 1
+    assert _validation_exit_code(
+        strict=False,
+        require_coverage=True,
+        any_candidate_failed=False,
+        uncovered_count=0,
+        exception_count=1,
+    ) == 1
+
+
 def test_robust_ranking_requires_every_case_order() -> None:
     rows = [
         {
@@ -195,6 +239,14 @@ def test_robust_ranking_requires_every_case_order() -> None:
 
 
 def test_campaign_levels_are_deterministic(tmp_path: Path) -> None:
+    smoke_with_tests = build_commands(
+        "smoke",
+        output_dir=tmp_path,
+        python="python",
+        skip_tests=False,
+        with_nsys=False,
+        with_ncu=False,
+    )
     smoke = build_commands(
         "smoke",
         output_dir=tmp_path,
@@ -219,12 +271,22 @@ def test_campaign_levels_are_deterministic(tmp_path: Path) -> None:
         with_nsys=True,
         with_ncu=True,
     )
+    regression = smoke_with_tests[0]
+    assert regression.name == "gpu_regression_tests"
+    assert "tests/test_diff_rea_gpu_hard_campaign.py" in regression.argv
     assert [item.name for item in smoke] == ["smoke_hard_cases"]
     assert [item.name for item in validation] == [
         "smoke_hard_cases",
         "all_cases_p4_p6_validation",
         "final_analysis",
     ]
+    validation_command = next(
+        item for item in validation if item.name == "all_cases_p4_p6_validation"
+    )
+    assert "--require-coverage" in validation_command.argv
+    assert "--strict" not in validation_command.argv
+    cases_start = validation_command.argv.index("--cases") + 1
+    assert validation_command.argv[cases_start] == "all"
     component = next(item for item in full if item.name == "component_profile_p4_p6")
     assert component.argv[component.argv.index("--cases") + 1 : component.argv.index("--orders")] == (
         "trigonometric-poisson",

@@ -213,7 +213,20 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--release-memory-between-configs", action="store_true")
     parser.add_argument("--max-configurations", type=int, default=None)
     parser.add_argument("--fail-fast", action="store_true")
-    parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--require-coverage",
+        action="store_true",
+        help=(
+            "Return a nonzero status for execution exceptions or when any "
+            "case/order has no configuration whose measured repetitions all pass. "
+            "Individual failed candidates remain report data."
+        ),
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return a nonzero status if any requested candidate fails.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--output-prefix",
@@ -839,6 +852,41 @@ def _best_rows(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return best
 
 
+def _uncovered_case_orders(
+    summaries: list[dict[str, Any]],
+) -> list[tuple[Any, Any]]:
+    """Return case/order pairs without a fully passing configuration."""
+
+    pairs = sorted({(row["case"], row["order"]) for row in summaries})
+    return [
+        (case_key, order)
+        for case_key, order in pairs
+        if not any(
+            row["case"] == case_key
+            and row["order"] == order
+            and bool(row.get("all_passed"))
+            for row in summaries
+        )
+    ]
+
+
+def _validation_exit_code(
+    *,
+    strict: bool,
+    require_coverage: bool,
+    any_candidate_failed: bool,
+    uncovered_count: int,
+    exception_count: int,
+) -> int:
+    """Apply the requested candidate-level or coverage-level failure policy."""
+
+    if strict and any_candidate_failed:
+        return 1
+    if require_coverage and (uncovered_count > 0 or exception_count > 0):
+        return 1
+    return 0
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = sorted({field for row in rows for field in row})
@@ -1088,9 +1136,17 @@ def main() -> int:
     print(f"  summary   : {summary_csv}")
     print(f"  full JSON : {json_path}")
     print(f"  passed    : {sum(bool(row.get('passed')) for row in rows)}/{len(rows)}")
-    if args.strict and failed:
-        return 1
-    return 0
+    uncovered_case_orders = _uncovered_case_orders(summaries)
+    exception_count = sum(bool(row.get("exception_type")) for row in rows)
+    print(f"  uncovered : {len(uncovered_case_orders)} case/order pair(s)")
+    print(f"  exceptions: {exception_count}")
+    return _validation_exit_code(
+        strict=args.strict,
+        require_coverage=args.require_coverage,
+        any_candidate_failed=failed,
+        uncovered_count=len(uncovered_case_orders),
+        exception_count=exception_count,
+    )
 
 
 if __name__ == "__main__":

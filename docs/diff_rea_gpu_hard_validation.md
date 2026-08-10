@@ -90,7 +90,8 @@ PYTHONPATH=. python scripts/run_diff_rea_gpu_hard_campaign.py \
     --continue-on-error
 ```
 
-Then run the mathematical validation on all six cases and `p=4,5,6`:
+Then run the mathematical validation on all seven registered cases, including
+`rotated-anisotropic-sine`, at `p=4,5,6`:
 
 ```bash
 PYTHONPATH=. python scripts/run_diff_rea_gpu_hard_campaign.py \
@@ -204,6 +205,12 @@ Only configurations whose every repetition passed receive ranks.  A failed
 unpreconditioned run is useful information about robustness; it does not by
 itself imply a GMRES implementation defect if the preconditioned variants meet
 the same tight residual and trace checks.
+
+The campaign uses `--require-coverage`: an individual failed candidate is kept
+in the reports without making the command fail, provided another configuration
+passes every repetition for the same case/order.  The validator still returns a
+nonzero status for execution exceptions or an uncovered case/order.  Use
+`--strict` instead only when every requested candidate is required to pass.
 
 ## Profiling
 
