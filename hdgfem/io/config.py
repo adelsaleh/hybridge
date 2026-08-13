@@ -75,4 +75,22 @@ def describe_amgx_preconditioner(config: Mapping[str, Any]) -> str:
     return " / ".join(parts)
 
 
-__all__ = ["describe_amgx_preconditioner", "describe_amgx_solver", "load_amgx_config"]
+def format_amgx_configuration(config: Mapping[str, Any]) -> str:
+    """Format the effective AMGX iterative solver controls for console logs."""
+    solver = config.get("solver", {})
+    return (
+        "  AMGX configuration:\n"
+        f"    iterative solver: {describe_amgx_solver(config)}\n"
+        f"    preconditioner: {describe_amgx_preconditioner(config)}\n"
+        f"    convergence: {solver.get('convergence', 'default')}\n"
+        f"    tolerance: {solver.get('tolerance', 'default')}\n"
+        f"    max iterations: {solver.get('max_iters', 'default')}"
+    )
+
+
+__all__ = [
+    "describe_amgx_preconditioner",
+    "describe_amgx_solver",
+    "format_amgx_configuration",
+    "load_amgx_config",
+]

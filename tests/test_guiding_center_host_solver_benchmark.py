@@ -38,7 +38,6 @@ def test_100k_pypardiso_both_preset_is_host_direct_and_reuses_poisson() -> None:
     assert config.num_steps == 3
     assert config.poisson_solver == "pypardiso-spd"
     assert config.poisson_preconditioner is None
-    assert config.poisson_reuse_equilibrium_solver
     assert config.transport_solver == "pypardiso"
     assert config.transport_preconditioner is None
     assert config.transport_trace_ordering == "none"

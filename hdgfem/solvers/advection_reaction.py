@@ -1422,6 +1422,10 @@ def solve_advection_reaction_hdg(
             ),
             multiline=verbosity >= 2,
         )
+        cuda_assembly.timings['solver.headline.wall'] = float(trace_assembly)
+        cuda_assembly.timings['solver.headline.unaccounted'] = max(
+            0.0, float(trace_assembly) - float(cuda_assembly.timings.get('total', 0.0))
+        )
         if raw_cuda_device_amgx and not wants_host_system:
             reduction = None
             rows = cols = data = rhs = boundary_trace = None
@@ -2178,6 +2182,7 @@ def solve_advection_reaction_hdg(
             ("solve.preconditioner_or_setup", "preconditioner_elapsed_seconds"),
             ("solve.iteration", "solve_elapsed_seconds"),
             ("solve.amgx.csr", "amgx_csr_elapsed_seconds"),
+            ("solve.amgx.matrix_unscale", "amgx_matrix_unscale_elapsed_seconds"),
             ("solve.amgx.setup", "amgx_setup_elapsed_seconds"),
             ("solve.amgx.solve", "amgx_solve_elapsed_seconds"),
             ("solve.amgx.total", "amgx_call_elapsed_seconds"),
@@ -2188,6 +2193,12 @@ def solve_advection_reaction_hdg(
             ("solve.validation.total", "solve_validation_elapsed_seconds"),
             ("solve.global.overhead", "solve_global_overhead_elapsed_seconds"),
             ("solve.unaccounted", "solve_unaccounted_elapsed_seconds"),
+            ("solve.retry.matrix_backup_to_host", "amgx_retry_matrix_backup_elapsed_seconds"),
+            ("solve.retry.matrix_restore_to_device", "amgx_retry_matrix_restore_elapsed_seconds"),
+            ("solve.retry.matrix_restore_count", "amgx_retry_matrix_restore_count"),
+            ("solve.retry.matrix_backup_bytes", "amgx_retry_matrix_backup_bytes"),
+            ("solve.retry.wrapper", "amgx_retry_wrapper_elapsed_seconds"),
+            ("solve.retry.outer_overhead", "amgx_retry_outer_overhead_elapsed_seconds"),
         ):
             value = getattr(global_solve_result, attr, None)
             if value is not None:

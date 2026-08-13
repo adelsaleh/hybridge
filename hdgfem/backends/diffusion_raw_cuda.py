@@ -45,6 +45,62 @@ class RawDiffusionAssemblyResult:
     indices: Any | None = None
     matrix_format: str = 'coo'
     csr_pattern: Any | None = None
+    schur_lu: Any | None = None
+    schur_pivots: Any | None = None
+    local_factor_key: tuple[Any, ...] | None = None
+    local_factor_bytes: int = 0
+    local_factor_kind: str = "none"
+
+
+def _allocate_local_schur_factors(cupy, *, num_elements: int, nel: int, factor_kind: str):
+    """Allocate persistent per-element Schur factors with a clear OOM error."""
+    if factor_kind != "schur-lu":
+        raise ValueError("raw CUDA local factors support only 'schur-lu'")
+    lu_bytes = int(num_elements) * int(nel) * int(nel) * np.dtype(np.float64).itemsize
+    pivot_bytes = int(num_elements) * int(nel) * np.dtype(np.int32).itemsize
+    required = lu_bytes + pivot_bytes
+    free, _total = cupy.cuda.runtime.memGetInfo()
+    if int(free) < required:
+        raise MemoryError(
+            "raw-CUDA local Schur-LU cache requires "
+            f"{required} bytes ({required / (1024 ** 3):.3f} GiB), but only "
+            f"{int(free)} bytes ({int(free) / (1024 ** 3):.3f} GiB) are available"
+        )
+    try:
+        schur_lu = cupy.empty((num_elements, nel, nel), dtype=cupy.float64)
+        schur_pivots = cupy.empty((num_elements, nel), dtype=cupy.int32)
+    except Exception as exc:
+        out_of_memory = getattr(cupy.cuda.memory, "OutOfMemoryError", ())
+        if out_of_memory and isinstance(exc, out_of_memory):
+            raise MemoryError(
+                "raw-CUDA local Schur-LU cache allocation failed for "
+                f"{required} bytes ({required / (1024 ** 3):.3f} GiB); "
+                f"the device reported {int(free)} bytes free before allocation"
+            ) from exc
+        raise
+    return schur_lu, schur_pivots, required
+
+
+def _validate_local_schur_factors(cached_raw, *, num_elements: int, nel: int, local_factor_key=None):
+    """Return cached factors after validating ownership metadata and shape."""
+    schur_lu = cached_raw.schur_lu
+    schur_pivots = cached_raw.schur_pivots
+    if schur_lu is None or schur_pivots is None:
+        raise ValueError("raw-CUDA cached Schur factors were requested but are unavailable")
+    cached_kind = str(getattr(cached_raw, "local_factor_kind", "schur-lu"))
+    expected_lu = (int(num_elements), int(nel), int(nel))
+    if cached_kind != "schur-lu":
+        raise ValueError("raw CUDA cached local factors must use 'schur-lu'")
+    expected_pivots = (int(num_elements), int(nel))
+    if tuple(schur_lu.shape) != expected_lu or tuple(schur_pivots.shape) != expected_pivots:
+        raise ValueError(
+            "raw-CUDA cached Schur factor shape mismatch: "
+            f"expected {expected_lu}/{expected_pivots}, got "
+            f"{tuple(schur_lu.shape)}/{tuple(schur_pivots.shape)}"
+        )
+    if local_factor_key is not None and cached_raw.local_factor_key != local_factor_key:
+        raise ValueError("raw-CUDA cached Schur factor key does not match the current operator")
+    return schur_lu, schur_pivots
 
 
 _RAW_TRACE_ORIENTATION_HELPERS = r"""
@@ -233,6 +289,8 @@ extern "C" __global__ void assemble_diffusion_raw(
         long long* __restrict__ cols,
         double* __restrict__ data,
         double* __restrict__ rhs,
+        double* __restrict__ schur_lu_cache,
+        int* __restrict__ schur_pivot_cache,
         const long long* __restrict__ loc2glob_edge,
         const bool* __restrict__ orientations,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -314,10 +372,15 @@ extern "C" __global__ void assemble_diffusion_raw(
                 d1[ij] = d1v;
                 mn0[ij] = normal_x_value - d0v;
                 mn1[ij] = normal_y_value - d1v;
+#if RAW_USE_CACHED_FACTORS
+                schur_matrix[ij] = schur_lu_cache[element * NEL * NEL + ij];
+#else
                 schur_matrix[ij] = tau_value;
+#endif
             }
         }
 
+#if !RAW_USE_CACHED_FACTORS
         // Precompute M^{-1}D once.  This costs two extra NEL x NEL shared
         // arrays, but p=6 still fits below this GPU's 64 KiB opt-in shared
         // memory limit and avoids an otherwise dominant O(NEL^4) recomputation.
@@ -345,6 +408,9 @@ extern "C" __global__ void assemble_diffusion_raw(
             }
         }
 
+#endif
+
+#if !RAW_USE_CACHED_FACTORS
         // In-place dense partial-pivot LU.  The pivot sequence is reused for
         // every trace/source column solved below; no local inverse is formed.
         for (int k = 0; k < NEL; ++k) {
@@ -378,6 +444,20 @@ extern "C" __global__ void assemble_diffusion_raw(
                 }
             }
         }
+
+#if RAW_WRITE_CACHED_FACTORS
+        for (int idx = 0; idx < NEL * NEL; ++idx) {
+            schur_lu_cache[element * NEL * NEL + idx] = schur_matrix[idx];
+        }
+        for (int k = 0; k < NEL; ++k) {
+            schur_pivot_cache[element * NEL + k] = pivots[k];
+        }
+#endif
+#else
+        for (int k = 0; k < NEL; ++k) {
+            pivots[k] = schur_pivot_cache[element * NEL + k];
+        }
+#endif
 
         // Source column: solve once and add its numerical flux contribution to
         // the reduced RHS for every interior row side of this element.
@@ -481,6 +561,12 @@ _RAW_ASSEMBLY_COOP_TEMPLATE = r"""
 #ifndef RAW_SOURCE_ONLY
 #define RAW_SOURCE_ONLY 0
 #endif
+#ifndef RAW_BATCHED_FULL
+#define RAW_BATCHED_FULL 0
+#endif
+#ifndef RAW_BATCH_COLS
+#define RAW_BATCH_COLS 8
+#endif
 
 __device__ __forceinline__ void factor_diffusion_schur_lu_coop_raw(
         double* __restrict__ schur_lu,
@@ -533,38 +619,71 @@ __device__ __forceinline__ void solve_diffusion_all_columns_coop_raw(
         double* __restrict__ columns)
 {
     const int tid = threadIdx.x;
-    for (int k = 0; k < NEL; ++k) {
-        const int pivot = pivots[k];
-        if (pivot != k) {
-            for (int col = tid; col < NCOLS; col += blockDim.x) {
+    // Columns are independent after the shared LU factorization.  Let each
+    // thread carry its columns through pivoting and both triangular solves so
+    // dependencies remain thread-local.  The previous row-wise formulation
+    // imposed 3 * NEL block barriers even though no column consumed another
+    // column's values.
+    for (int col = tid; col < NCOLS; col += blockDim.x) {
+        for (int k = 0; k < NEL; ++k) {
+            const int pivot = pivots[k];
+            if (pivot != k) {
                 const double tmp = columns[k * NCOLS + col];
                 columns[k * NCOLS + col] = columns[pivot * NCOLS + col];
                 columns[pivot * NCOLS + col] = tmp;
             }
         }
-        __syncthreads();
-    }
 
-    for (int i = 0; i < NEL; ++i) {
-        for (int col = tid; col < NCOLS; col += blockDim.x) {
+        for (int i = 0; i < NEL; ++i) {
             double value = columns[i * NCOLS + col];
             for (int j = 0; j < i; ++j) {
                 value -= schur_lu[i * NEL + j] * columns[j * NCOLS + col];
             }
             columns[i * NCOLS + col] = value;
         }
-        __syncthreads();
-    }
-    for (int i = NEL - 1; i >= 0; --i) {
-        for (int col = tid; col < NCOLS; col += blockDim.x) {
+        for (int i = NEL - 1; i >= 0; --i) {
             double value = columns[i * NCOLS + col];
             for (int j = i + 1; j < NEL; ++j) {
                 value -= schur_lu[i * NEL + j] * columns[j * NCOLS + col];
             }
             columns[i * NCOLS + col] = value / schur_lu[i * NEL + i];
         }
-        __syncthreads();
     }
+    __syncthreads();
+}
+
+__device__ __forceinline__ void solve_diffusion_column_batch_coop_raw(
+        const double* __restrict__ schur_lu,
+        const int* __restrict__ pivots,
+        double* __restrict__ columns,
+        const int batch_cols)
+{
+    const int tid = threadIdx.x;
+    for (int col = tid; col < batch_cols; col += blockDim.x) {
+        for (int k = 0; k < NEL; ++k) {
+            const int pivot = pivots[k];
+            if (pivot != k) {
+                const double tmp = columns[k * RAW_BATCH_COLS + col];
+                columns[k * RAW_BATCH_COLS + col] = columns[pivot * RAW_BATCH_COLS + col];
+                columns[pivot * RAW_BATCH_COLS + col] = tmp;
+            }
+        }
+        for (int i = 0; i < NEL; ++i) {
+            double value = columns[i * RAW_BATCH_COLS + col];
+            for (int j = 0; j < i; ++j) {
+                value -= schur_lu[i * NEL + j] * columns[j * RAW_BATCH_COLS + col];
+            }
+            columns[i * RAW_BATCH_COLS + col] = value;
+        }
+        for (int i = NEL - 1; i >= 0; --i) {
+            double value = columns[i * RAW_BATCH_COLS + col];
+            for (int j = i + 1; j < NEL; ++j) {
+                value -= schur_lu[i * NEL + j] * columns[j * RAW_BATCH_COLS + col];
+            }
+            columns[i * RAW_BATCH_COLS + col] = value / schur_lu[i * NEL + i];
+        }
+    }
+    __syncthreads();
 }
 
 extern "C" __global__ void assemble_diffusion_raw_coop(
@@ -573,6 +692,8 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
         const int* __restrict__ csr_indptr,
         double* __restrict__ data,
         double* __restrict__ rhs,
+        double* __restrict__ schur_lu_cache,
+        int* __restrict__ schur_pivot_cache,
         const long long* __restrict__ loc2glob_edge,
         const bool* __restrict__ orientations,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -589,6 +710,9 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
         const double* __restrict__ normals,
         const double* __restrict__ mass_matrix,
         const double* __restrict__ mass_inverse,
+        const double* __restrict__ mass_inverse_d0_reference,
+        const double* __restrict__ mass_inverse_d1_reference,
+        const double* __restrict__ mass_inverse_face_element_trace,
         const double* __restrict__ face_element_mass,
         const double* __restrict__ face_element_trace,
         const double* __restrict__ edge_mass,
@@ -606,16 +730,39 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
     double* shared = reinterpret_cast<double*>(shared_raw);
     double* schur_matrix = shared;
     double* d0 = schur_matrix + (NEL * NEL);
+#if RAW_SOURCE_ONLY
+    // The source-only path builds x/y contributions sequentially and reuses
+    // these three matrix workspaces.  This keeps p=6 below half an SM's shared
+    // memory, allowing two resident blocks on a 64 KiB/SM device.
+    double* mn0 = d0 + (NEL * NEL);
+    double* k_d0 = mn0 + (NEL * NEL);
+    double* local_rhs = k_d0 + (NEL * NEL);
+#elif RAW_BATCHED_FULL
+    // Retain both normal-minus-derivative matrices, but reuse the fourth
+    // matrix workspace for Schur construction and flux recovery.  Only a
+    // small batch of condensed columns is live at once.
+    double* mn0 = d0;
+    double* mn1 = mn0 + (NEL * NEL);
+    double* k_d0 = mn1 + (NEL * NEL);
+    double* local_rhs = k_d0 + (NEL * NEL);
+#else
     double* d1 = d0 + (NEL * NEL);
     double* mn0 = d1 + (NEL * NEL);
     double* mn1 = mn0 + (NEL * NEL);
     double* k_d0 = mn1 + (NEL * NEL);
     double* k_d1 = k_d0 + (NEL * NEL);
     double* local_rhs = k_d1 + (NEL * NEL);
+#endif
+#if RAW_BATCHED_FULL
+    double* tmp_cols = local_rhs + (NEL * RAW_BATCH_COLS);
+    double* row_values = tmp_cols + (NEL * RAW_BATCH_COLS);
+    int* pivots = reinterpret_cast<int*>(row_values + (3 * NTR * RAW_BATCH_COLS));
+#else
     double* qx_cols = local_rhs + (NEL * NCOLS);
     double* qy_cols = qx_cols + (NEL * NCOLS);
     double* tmp_cols = qy_cols + (NEL * NCOLS);
     int* pivots = reinterpret_cast<int*>(tmp_cols + (NEL * NCOLS));
+#endif
 
     const int tid = threadIdx.x;
     const long long element = blockIdx.x;
@@ -629,6 +776,151 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
         const double jac = aff_jacs[element];
         const double jac_inv = 1.0 / jac;
 
+#if RAW_SOURCE_ONLY
+        // Build the two directional Schur contributions sequentially through
+        // one derivative, normal-minus-derivative, and M^{-1}D workspace.
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            const double derivative = aff11 * d0_reference[idx] - aff10 * d1_reference[idx];
+            double normal_value = 0.0;
+            double tau_value = 0.0;
+            for (int face = 0; face < 3; ++face) {
+                const double face_mass_value = face_element_mass[(face * NEL + i) * NEL + j];
+                const double face_scale = jacs_el_fc[element * 3 + face];
+                tau_value += tau * face_scale * face_mass_value;
+                normal_value += face_scale * normals[(element * 3 + face) * 2 + 0] * face_mass_value;
+            }
+            d0[idx] = derivative;
+            mn0[idx] = normal_value - derivative;
+#if RAW_USE_CACHED_FACTORS
+            schur_matrix[idx] = schur_lu_cache[element * NEL * NEL + idx];
+#else
+            schur_matrix[idx] = tau_value;
+#endif
+        }
+        __syncthreads();
+#if !RAW_USE_CACHED_FACTORS
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mass_inverse[i * NEL + k] * d0[k * NEL + j];
+            }
+            k_d0[idx] = value;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mn0[i * NEL + k] * k_d0[k * NEL + j];
+            }
+            schur_matrix[idx] += jac_inv * value;
+        }
+        __syncthreads();
+
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            const double derivative = -aff01 * d0_reference[idx] + aff00 * d1_reference[idx];
+            double normal_value = 0.0;
+            for (int face = 0; face < 3; ++face) {
+                const double face_mass_value = face_element_mass[(face * NEL + i) * NEL + j];
+                const double face_scale = jacs_el_fc[element * 3 + face];
+                normal_value += face_scale * normals[(element * 3 + face) * 2 + 1] * face_mass_value;
+            }
+            d0[idx] = derivative;
+            mn0[idx] = normal_value - derivative;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mass_inverse[i * NEL + k] * d0[k * NEL + j];
+            }
+            k_d0[idx] = value;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mn0[i * NEL + k] * k_d0[k * NEL + j];
+            }
+            schur_matrix[idx] += jac_inv * value;
+        }
+        __syncthreads();
+#endif
+#elif RAW_BATCHED_FULL
+        // Build the factor once while retaining only the two matrices needed
+        // to condense subsequent batches of trace/source columns.
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            const double derivative_x = aff11 * d0_reference[idx] - aff10 * d1_reference[idx];
+            const double derivative_y = -aff01 * d0_reference[idx] + aff00 * d1_reference[idx];
+            double normal_x_value = 0.0;
+            double normal_y_value = 0.0;
+            double tau_value = 0.0;
+            for (int face = 0; face < 3; ++face) {
+                const double face_mass_value = face_element_mass[(face * NEL + i) * NEL + j];
+                const double face_scale = jacs_el_fc[element * 3 + face];
+                tau_value += tau * face_scale * face_mass_value;
+                normal_x_value += face_scale * normals[(element * 3 + face) * 2 + 0] * face_mass_value;
+                normal_y_value += face_scale * normals[(element * 3 + face) * 2 + 1] * face_mass_value;
+            }
+            mn0[idx] = normal_x_value - derivative_x;
+            mn1[idx] = normal_y_value - derivative_y;
+#if RAW_USE_CACHED_FACTORS
+            schur_matrix[idx] = schur_lu_cache[element * NEL * NEL + idx];
+#else
+            schur_matrix[idx] = tau_value;
+#endif
+        }
+        __syncthreads();
+#if !RAW_USE_CACHED_FACTORS
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            k_d0[idx] = aff11 * mass_inverse_d0_reference[idx]
+                      - aff10 * mass_inverse_d1_reference[idx];
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mn0[i * NEL + k] * k_d0[k * NEL + j];
+            }
+            schur_matrix[idx] += jac_inv * value;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            k_d0[idx] = -aff01 * mass_inverse_d0_reference[idx]
+                       + aff00 * mass_inverse_d1_reference[idx];
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            const int i = idx / NEL;
+            const int j = idx - i * NEL;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mn1[i * NEL + k] * k_d0[k * NEL + j];
+            }
+            schur_matrix[idx] += jac_inv * value;
+        }
+        __syncthreads();
+#endif
+#else
         for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
             const int i = idx / NEL;
             const int j = idx - i * NEL;
@@ -648,9 +940,14 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             d1[idx] = d1v;
             mn0[idx] = normal_x_value - d0v;
             mn1[idx] = normal_y_value - d1v;
+#if RAW_USE_CACHED_FACTORS
+            schur_matrix[idx] = schur_lu_cache[element * NEL * NEL + idx];
+#else
             schur_matrix[idx] = tau_value;
+#endif
         }
         __syncthreads();
+#if !RAW_USE_CACHED_FACTORS
 
         for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
             const int i = idx / NEL;
@@ -678,6 +975,18 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             schur_matrix[idx] += jac_inv * (value0 + value1);
         }
 
+#endif
+
+#endif
+
+#if RAW_SOURCE_ONLY
+        for (int i = tid; i < NEL; i += blockDim.x) {
+            local_rhs[i * NCOLS + source_col] = source_rhs[element * 3 * NEL + i];
+        }
+        __syncthreads();
+#elif RAW_BATCHED_FULL
+        // Column data is prepared below one batch at a time.
+#else
         for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
             const int i = idx / NCOLS;
             const int col = idx - i * NCOLS;
@@ -742,10 +1051,369 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             local_rhs[idx] += jac_inv * value;
         }
         __syncthreads();
+#endif
 
+#if RAW_USE_CACHED_FACTORS
+        for (int k = tid; k < NEL; k += blockDim.x) {
+            pivots[k] = schur_pivot_cache[element * NEL + k];
+        }
+        __syncthreads();
+#else
         factor_diffusion_schur_lu_coop_raw(schur_matrix, pivots);
+#if RAW_WRITE_CACHED_FACTORS
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            schur_lu_cache[element * NEL * NEL + idx] = schur_matrix[idx];
+        }
+        for (int k = tid; k < NEL; k += blockDim.x) {
+            schur_pivot_cache[element * NEL + k] = pivots[k];
+        }
+        __syncthreads();
+#endif
+#endif
+#if RAW_BATCHED_FULL
+        for (int batch_start = 0; batch_start < NCOLS; batch_start += RAW_BATCH_COLS) {
+            const int batch_cols = min(RAW_BATCH_COLS, NCOLS - batch_start);
+
+            // Form the scalar local right-hand sides for this batch.
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int col = batch_start + batch_col;
+                    double value = 0.0;
+                    if (col == source_col) {
+                        value = source_rhs[element * 3 * NEL + i];
+                    } else {
+                        const int col_face = col / NTR;
+                        const int local_trace_dof = col - col_face * NTR;
+                        const double face_scale = jacs_el_fc[element * 3 + col_face];
+                        const double coupling = face_scale
+                            * face_element_trace[(col_face * NEL + i) * NTR + local_trace_dof];
+                        value = tau * coupling;
+                    }
+                    local_rhs[idx] = value;
+                }
+            }
+            __syncthreads();
+
+            // Add (N_x-D_x) M^{-1} qhat_x to the scalar equations.
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int col = batch_start + batch_col;
+                    double value = 0.0;
+                    if (col != source_col) {
+                        const int col_face = col / NTR;
+                        const int local_trace_dof = col - col_face * NTR;
+                        const double face_scale = jacs_el_fc[element * 3 + col_face];
+                        const double normal = normals[(element * 3 + col_face) * 2 + 0];
+                        value = face_scale * normal
+                            * mass_inverse_face_element_trace[
+                                (col_face * NEL + i) * NTR + local_trace_dof];
+                    }
+                    tmp_cols[idx] = value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    double value = 0.0;
+                    for (int k = 0; k < NEL; ++k) {
+                        value += mn0[i * NEL + k] * tmp_cols[k * RAW_BATCH_COLS + batch_col];
+                    }
+                    local_rhs[idx] += jac_inv * value;
+                }
+            }
+            __syncthreads();
+
+            // Add (N_y-D_y) M^{-1} qhat_y.
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int col = batch_start + batch_col;
+                    double value = 0.0;
+                    if (col != source_col) {
+                        const int col_face = col / NTR;
+                        const int local_trace_dof = col - col_face * NTR;
+                        const double face_scale = jacs_el_fc[element * 3 + col_face];
+                        const double normal = normals[(element * 3 + col_face) * 2 + 1];
+                        value = face_scale * normal
+                            * mass_inverse_face_element_trace[
+                                (col_face * NEL + i) * NTR + local_trace_dof];
+                    }
+                    tmp_cols[idx] = value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    double value = 0.0;
+                    for (int k = 0; k < NEL; ++k) {
+                        value += mn1[i * NEL + k] * tmp_cols[k * RAW_BATCH_COLS + batch_col];
+                    }
+                    local_rhs[idx] += jac_inv * value;
+                }
+            }
+            __syncthreads();
+
+            solve_diffusion_column_batch_coop_raw(
+                schur_matrix, pivots, local_rhs, batch_cols);
+
+            // Start each numerical-flux row with tau * <test, u_h>.
+            for (int idx = tid; idx < 3 * NTR * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int task = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - task * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int row_face = task / NTR;
+                    const int row_dof = task - row_face * NTR;
+                    const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
+                    const double scale = jacs_el_fc[element * 3 + row_face];
+                    double value = 0.0;
+                    for (int i = 0; i < NEL; ++i) {
+                        const double lift = scale
+                            * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                        value += tau * lift * local_rhs[i * RAW_BATCH_COLS + batch_col];
+                    }
+                    row_values[idx] = value;
+                }
+            }
+            __syncthreads();
+
+            // Recover q_x into the reusable matrix workspace.
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int col = batch_start + batch_col;
+                    double value = 0.0;
+                    for (int j = 0; j < NEL; ++j) {
+                        const int derivative_idx = i * NEL + j;
+                        const double derivative = aff11 * d0_reference[derivative_idx]
+                                                - aff10 * d1_reference[derivative_idx];
+                        value += derivative * local_rhs[j * RAW_BATCH_COLS + batch_col];
+                    }
+                    if (col != source_col) {
+                        const int col_face = col / NTR;
+                        const int local_trace_dof = col - col_face * NTR;
+                        const double face_scale = jacs_el_fc[element * 3 + col_face];
+                        const double coupling = face_scale
+                            * face_element_trace[(col_face * NEL + i) * NTR + local_trace_dof];
+                        value -= normals[(element * 3 + col_face) * 2 + 0] * coupling;
+                    }
+                    tmp_cols[idx] = value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    double value = 0.0;
+                    for (int k = 0; k < NEL; ++k) {
+                        value += mass_inverse[i * NEL + k]
+                               * tmp_cols[k * RAW_BATCH_COLS + batch_col];
+                    }
+                    k_d0[idx] = jac_inv * value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < 3 * NTR * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int task = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - task * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int row_face = task / NTR;
+                    const int row_dof = task - row_face * NTR;
+                    const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
+                    const double scale = jacs_el_fc[element * 3 + row_face];
+                    const double nx = normals[(element * 3 + row_face) * 2 + 0];
+                    double value = 0.0;
+                    for (int i = 0; i < NEL; ++i) {
+                        const double lift = scale
+                            * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                        value += nx * lift * k_d0[i * RAW_BATCH_COLS + batch_col];
+                    }
+                    row_values[idx] += value;
+                }
+            }
+            __syncthreads();
+
+            // Recover q_y and complete the numerical-flux rows.
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int col = batch_start + batch_col;
+                    double value = 0.0;
+                    for (int j = 0; j < NEL; ++j) {
+                        const int derivative_idx = i * NEL + j;
+                        const double derivative = -aff01 * d0_reference[derivative_idx]
+                                                + aff00 * d1_reference[derivative_idx];
+                        value += derivative * local_rhs[j * RAW_BATCH_COLS + batch_col];
+                    }
+                    if (col != source_col) {
+                        const int col_face = col / NTR;
+                        const int local_trace_dof = col - col_face * NTR;
+                        const double face_scale = jacs_el_fc[element * 3 + col_face];
+                        const double coupling = face_scale
+                            * face_element_trace[(col_face * NEL + i) * NTR + local_trace_dof];
+                        value -= normals[(element * 3 + col_face) * 2 + 1] * coupling;
+                    }
+                    tmp_cols[idx] = value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < NEL * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int i = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - i * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    double value = 0.0;
+                    for (int k = 0; k < NEL; ++k) {
+                        value += mass_inverse[i * NEL + k]
+                               * tmp_cols[k * RAW_BATCH_COLS + batch_col];
+                    }
+                    k_d0[idx] = jac_inv * value;
+                }
+            }
+            __syncthreads();
+            for (int idx = tid; idx < 3 * NTR * RAW_BATCH_COLS; idx += blockDim.x) {
+                const int task = idx / RAW_BATCH_COLS;
+                const int batch_col = idx - task * RAW_BATCH_COLS;
+                if (batch_col < batch_cols) {
+                    const int row_face = task / NTR;
+                    const int row_dof = task - row_face * NTR;
+                    const long long oriented_face = loc2oriented_face_coupling[element * 3 + row_face];
+                    const double scale = jacs_el_fc[element * 3 + row_face];
+                    const double ny = normals[(element * 3 + row_face) * 2 + 1];
+                    double value = 0.0;
+                    for (int i = 0; i < NEL; ++i) {
+                        const double lift = scale
+                            * oriented_lifts[(oriented_face * NTR + row_dof) * NEL + i];
+                        value += ny * lift * k_d0[i * RAW_BATCH_COLS + batch_col];
+                    }
+                    row_values[idx] += value;
+                }
+            }
+            __syncthreads();
+
+            // Scatter only the columns present in this batch.
+            for (int task = tid; task < 3 * NTR; task += blockDim.x) {
+                const int row_face = task / NTR;
+                const int row_dof = task - row_face * NTR;
+                const long long side_id = interior_side_index[element * 3 + row_face];
+                const long long row_edge = loc2glob_edge[element * 3 + row_face];
+                const long long row_solve_edge = edge_to_solve_edge[row_edge];
+                if (side_id < 0 || row_solve_edge < 0) {
+                    continue;
+                }
+#if !RAW_MATRIX_CSR
+                const long long side_base = side_flux_offsets[side_id];
+#endif
+                double rhs_value = 0.0;
+                if (source_col >= batch_start && source_col < batch_start + batch_cols) {
+                    rhs_value = row_values[task * RAW_BATCH_COLS + source_col - batch_start];
+                }
+                int col_block_pos = 0;
+                for (int col_face = 0; col_face < 3; ++col_face) {
+                    const long long col_edge = loc2glob_edge[element * 3 + col_face];
+                    const long long col_solve_edge = edge_to_solve_edge[col_edge];
+                    const bool positive = orientations[element * 3 + col_face];
+                    for (int col_dof = 0; col_dof < NTR; ++col_dof) {
+                        const int local_col_dof = raw_trace_local_dof(positive, col_dof, NTR);
+                        const double col_sign = raw_trace_orientation_sign(positive, col_dof);
+                        const int column = col_face * NTR + local_col_dof;
+                        if (column < batch_start || column >= batch_start + batch_cols) {
+                            continue;
+                        }
+                        const double schur_value = col_sign
+                            * row_values[task * RAW_BATCH_COLS + column - batch_start];
+                        if (col_solve_edge >= 0) {
+#if !RAW_RHS_ONLY
+#if RAW_MATRIX_CSR
+                            const int block_pos = side_csr_block_pos[side_id * 3 + col_face];
+                            const long long row = row_solve_edge * NTR + row_dof;
+                            const long long out = (long long)csr_indptr[row]
+                                                + ((long long)block_pos * NTR + col_dof);
+                            atomicAdd(&data[out], -schur_value);
+#else
+                            const long long out = side_base
+                                + ((long long)col_block_pos * NTR + row_dof) * NTR + col_dof;
+                            rows[out] = row_solve_edge * NTR + row_dof;
+                            cols[out] = col_solve_edge * NTR + col_dof;
+                            data[out] = -schur_value;
+#endif
+#endif
+                        } else {
+                            rhs_value += schur_value * boundary_trace[col_edge * NTR + col_dof];
+                        }
+                    }
+                    if (col_solve_edge >= 0) {
+                        col_block_pos += 1;
+                    }
+                }
+                atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
+            }
+            __syncthreads();
+        }
+#else
         solve_diffusion_all_columns_coop_raw(schur_matrix, pivots, local_rhs);
 
+#if RAW_SOURCE_ONLY
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            d0[idx] = aff11 * d0_reference[idx] - aff10 * d1_reference[idx];
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
+            const int i = idx / NCOLS;
+            const int col = idx - i * NCOLS;
+            double value = 0.0;
+            for (int j = 0; j < NEL; ++j) {
+                value += d0[i * NEL + j] * local_rhs[j * NCOLS + col];
+            }
+            tmp_cols[idx] = value;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
+            const int i = idx / NCOLS;
+            const int col = idx - i * NCOLS;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mass_inverse[i * NEL + k] * tmp_cols[k * NCOLS + col];
+            }
+            qx_cols[idx] = jac_inv * value;
+        }
+        __syncthreads();
+
+        for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+            d0[idx] = -aff01 * d0_reference[idx] + aff00 * d1_reference[idx];
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
+            const int i = idx / NCOLS;
+            const int col = idx - i * NCOLS;
+            double value = 0.0;
+            for (int j = 0; j < NEL; ++j) {
+                value += d0[i * NEL + j] * local_rhs[j * NCOLS + col];
+            }
+            tmp_cols[idx] = value;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
+            const int i = idx / NCOLS;
+            const int col = idx - i * NCOLS;
+            double value = 0.0;
+            for (int k = 0; k < NEL; ++k) {
+                value += mass_inverse[i * NEL + k] * tmp_cols[k * NCOLS + col];
+            }
+            qy_cols[idx] = jac_inv * value;
+        }
+        __syncthreads();
+#else
         for (int idx = tid; idx < NEL * NCOLS; idx += blockDim.x) {
             const int i = idx / NCOLS;
             const int col = idx - i * NCOLS;
@@ -787,6 +1455,8 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             qy_cols[idx] = jac_inv * value;
         }
         __syncthreads();
+
+#endif
 
         for (int task = tid; task < 3 * NTR; task += blockDim.x) {
             const int row_face = task / NTR;
@@ -858,6 +1528,7 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
 #endif
             atomicAdd(&rhs[row_solve_edge * NTR + row_dof], rhs_value);
         }
+#endif
     }
 
     if (element < num_int_edges) {
@@ -920,6 +1591,8 @@ extern "C" __global__ void reconstruct_diffusion_raw(
         double* __restrict__ uh,
         double* __restrict__ local_unknowns,
         const int write_local_unknowns,
+        const double* __restrict__ schur_lu_cache,
+        const int* __restrict__ schur_pivot_cache,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -989,7 +1662,11 @@ extern "C" __global__ void reconstruct_diffusion_raw(
             d1[ij] = d1v;
             mn0[ij] = normal_x_value - d0v;
             mn1[ij] = normal_y_value - d1v;
+#if RAW_USE_CACHED_FACTORS
+            schur_matrix[ij] = schur_lu_cache[element * NEL * NEL + ij];
+#else
             schur_matrix[ij] = tau_value;
+#endif
         }
     }
 
@@ -1014,6 +1691,7 @@ extern "C" __global__ void reconstruct_diffusion_raw(
         }
     }
 
+#if !RAW_USE_CACHED_FACTORS
     for (int i = 0; i < NEL; ++i) {
         for (int j = 0; j < NEL; ++j) {
             double value0 = 0.0;
@@ -1038,6 +1716,8 @@ extern "C" __global__ void reconstruct_diffusion_raw(
         }
     }
 
+#endif
+
     for (int i = 0; i < NEL; ++i) {
         double value1 = 0.0;
         double value2 = 0.0;
@@ -1058,6 +1738,7 @@ extern "C" __global__ void reconstruct_diffusion_raw(
         red_rhs[i] = rhs0[i] + jac_inv * (acc0 + acc1);
     }
 
+#if !RAW_USE_CACHED_FACTORS
     for (int k = 0; k < NEL; ++k) {
         int pivot = k;
         double max_value = fabs(schur_matrix[k * NEL + k]);
@@ -1086,6 +1767,11 @@ extern "C" __global__ void reconstruct_diffusion_raw(
             }
         }
     }
+#else
+    for (int k = 0; k < NEL; ++k) {
+        pivots[k] = schur_pivot_cache[element * NEL + k];
+    }
+#endif
     for (int k = 0; k < NEL; ++k) {
         const int pivot = pivots[k];
         if (pivot != k) {
@@ -1182,10 +1868,46 @@ __device__ __forceinline__ void factor_diffusion_reconstruct_lu_coop_raw(
     }
 }
 
+__device__ __forceinline__ void solve_diffusion_lu_column_raw(
+        const double* __restrict__ factor,
+        const int* __restrict__ pivots,
+        double* __restrict__ rhs)
+{
+    // A single condensed RHS has strict row dependencies.  Keeping the whole
+    // solve in one thread avoids 3*NEL block barriers and warp reductions.
+    if (threadIdx.x == 0) {
+        for (int k = 0; k < NEL; ++k) {
+            const int pivot = pivots[k];
+            if (pivot != k) {
+                const double tmp = rhs[k];
+                rhs[k] = rhs[pivot];
+                rhs[pivot] = tmp;
+            }
+        }
+        for (int i = 0; i < NEL; ++i) {
+            double value = rhs[i];
+            for (int j = 0; j < i; ++j) {
+                value -= factor[i * NEL + j] * rhs[j];
+            }
+            rhs[i] = value;
+        }
+        for (int i = NEL - 1; i >= 0; --i) {
+            double value = rhs[i];
+            for (int j = i + 1; j < NEL; ++j) {
+                value -= factor[i * NEL + j] * rhs[j];
+            }
+            rhs[i] = value / factor[i * NEL + i];
+        }
+    }
+    __syncthreads();
+}
+
 extern "C" __global__ void reconstruct_diffusion_raw_coop(
         double* __restrict__ uh,
         double* __restrict__ local_unknowns,
         const int write_local_unknowns,
+        const double* __restrict__ schur_lu_cache,
+        const int* __restrict__ schur_pivot_cache,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -1194,6 +1916,8 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
         const double* __restrict__ jacs_el_fc,
         const double* __restrict__ normals,
         const double* __restrict__ mass_inverse,
+        const double* __restrict__ mass_inverse_d0_reference,
+        const double* __restrict__ mass_inverse_d1_reference,
         const double* __restrict__ face_element_mass,
         const double* __restrict__ face_element_trace,
         const double* __restrict__ d0_reference,
@@ -1205,13 +1929,10 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
     extern __shared__ unsigned char shared_raw[];
     double* shared = reinterpret_cast<double*>(shared_raw);
     double* schur_matrix = shared;
-    double* d0 = schur_matrix + (NEL * NEL);
-    double* d1 = d0 + (NEL * NEL);
-    double* mn0 = d1 + (NEL * NEL);
+    double* mn0 = schur_matrix + (NEL * NEL);
     double* mn1 = mn0 + (NEL * NEL);
-    double* k_d0 = mn1 + (NEL * NEL);
-    double* k_d1 = k_d0 + (NEL * NEL);
-    double* rhs0 = k_d1 + (NEL * NEL);
+    double* matrix_work = mn1 + (NEL * NEL);
+    double* rhs0 = matrix_work + (NEL * NEL);
     double* rhs1 = rhs0 + NEL;
     double* rhs2 = rhs1 + NEL;
     double* red_rhs = rhs2 + NEL;
@@ -1246,11 +1967,13 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
             normal_x_value += face_scale * normals[(element * 3 + face) * 2 + 0] * face_mass_value;
             normal_y_value += face_scale * normals[(element * 3 + face) * 2 + 1] * face_mass_value;
         }
-        d0[idx] = d0v;
-        d1[idx] = d1v;
         mn0[idx] = normal_x_value - d0v;
         mn1[idx] = normal_y_value - d1v;
+#if RAW_USE_CACHED_FACTORS
+        schur_matrix[idx] = schur_lu_cache[element * NEL * NEL + idx];
+#else
         schur_matrix[idx] = tau_value;
+#endif
     }
 
     for (int i = tid; i < NEL; i += blockDim.x) {
@@ -1276,32 +1999,40 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
         rhs2[i] = value2;
     }
     __syncthreads();
+#if !RAW_USE_CACHED_FACTORS
 
+    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+        matrix_work[idx] = aff11 * mass_inverse_d0_reference[idx]
+                         - aff10 * mass_inverse_d1_reference[idx];
+    }
+    __syncthreads();
     for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
         const int i = idx / NEL;
         const int j = idx - i * NEL;
-        double value0 = 0.0;
-        double value1 = 0.0;
+        double value = 0.0;
         for (int k = 0; k < NEL; ++k) {
-            value0 += mass_inverse[i * NEL + k] * d0[k * NEL + j];
-            value1 += mass_inverse[i * NEL + k] * d1[k * NEL + j];
+            value += mn0[i * NEL + k] * matrix_work[k * NEL + j];
         }
-        k_d0[idx] = value0;
-        k_d1[idx] = value1;
+        schur_matrix[idx] += jac_inv * value;
+    }
+    __syncthreads();
+    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+        matrix_work[idx] = -aff01 * mass_inverse_d0_reference[idx]
+                          + aff00 * mass_inverse_d1_reference[idx];
+    }
+    __syncthreads();
+    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+        const int i = idx / NEL;
+        const int j = idx - i * NEL;
+        double value = 0.0;
+        for (int k = 0; k < NEL; ++k) {
+            value += mn1[i * NEL + k] * matrix_work[k * NEL + j];
+        }
+        schur_matrix[idx] += jac_inv * value;
     }
     __syncthreads();
 
-    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
-        const int i = idx / NEL;
-        const int j = idx - i * NEL;
-        double value0 = 0.0;
-        double value1 = 0.0;
-        for (int k = 0; k < NEL; ++k) {
-            value0 += mn0[i * NEL + k] * k_d0[k * NEL + j];
-            value1 += mn1[i * NEL + k] * k_d1[k * NEL + j];
-        }
-        schur_matrix[idx] += jac_inv * (value0 + value1);
-    }
+#endif
 
     for (int i = tid; i < NEL; i += blockDim.x) {
         double value1 = 0.0;
@@ -1326,53 +2057,30 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
     }
     __syncthreads();
 
-    factor_diffusion_reconstruct_lu_coop_raw(schur_matrix, pivots);
-
-    if (tid == 0) {
-        for (int k = 0; k < NEL; ++k) {
-            const int pivot = pivots[k];
-            if (pivot != k) {
-                const double tmp = red_rhs[k];
-                red_rhs[k] = red_rhs[pivot];
-                red_rhs[pivot] = tmp;
-            }
-        }
-        for (int i = 0; i < NEL; ++i) {
-            double value = red_rhs[i];
-            for (int j = 0; j < i; ++j) {
-                value -= schur_matrix[i * NEL + j] * red_rhs[j];
-            }
-            red_rhs[i] = value;
-        }
-        for (int i = NEL - 1; i >= 0; --i) {
-            double value = red_rhs[i];
-            for (int j = i + 1; j < NEL; ++j) {
-                value -= schur_matrix[i * NEL + j] * red_rhs[j];
-            }
-            red_rhs[i] = value / schur_matrix[i * NEL + i];
-        }
+#if RAW_USE_CACHED_FACTORS
+    for (int k = tid; k < NEL; k += blockDim.x) {
+        pivots[k] = schur_pivot_cache[element * NEL + k];
     }
     __syncthreads();
+#else
+    factor_diffusion_reconstruct_lu_coop_raw(schur_matrix, pivots);
+#endif
+    solve_diffusion_lu_column_raw(schur_matrix, pivots, red_rhs);
 
     if (write_local_unknowns) {
         for (int i = tid; i < NEL; i += blockDim.x) {
-            double value0 = 0.0;
-            double value1 = 0.0;
+            double qx_value = -tmp1[i];
+            double qy_value = -tmp2[i];
             for (int j = 0; j < NEL; ++j) {
-                value0 += d0[i * NEL + j] * red_rhs[j];
-                value1 += d1[i * NEL + j] * red_rhs[j];
-            }
-            tmp1[i] = value0 - rhs1[i];
-            tmp2[i] = value1 - rhs2[i];
-        }
-        __syncthreads();
-
-        for (int i = tid; i < NEL; i += blockDim.x) {
-            double qx_value = 0.0;
-            double qy_value = 0.0;
-            for (int k = 0; k < NEL; ++k) {
-                qx_value += mass_inverse[i * NEL + k] * tmp1[k];
-                qy_value += mass_inverse[i * NEL + k] * tmp2[k];
+                const double u_value = red_rhs[j];
+                qx_value += (
+                    aff11 * mass_inverse_d0_reference[i * NEL + j]
+                    - aff10 * mass_inverse_d1_reference[i * NEL + j]
+                ) * u_value;
+                qy_value += (
+                    -aff01 * mass_inverse_d0_reference[i * NEL + j]
+                    + aff00 * mass_inverse_d1_reference[i * NEL + j]
+                ) * u_value;
             }
             local_unknowns[element * 3 * NEL + i] = red_rhs[i];
             local_unknowns[element * 3 * NEL + NEL + i] = jac_inv * qx_value;
@@ -1388,6 +2096,22 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
 """
 
 
+def _batched_full_column_count(nel: int, ntr: int, ncols: int) -> int:
+    """Largest full-assembly batch that keeps shared memory at most 32 KiB."""
+    nel = int(nel)
+    ntr = int(ntr)
+    ncols = int(ncols)
+    fixed_bytes = nel * 4 + 256
+    available_doubles = max(0, (32 * 1024 - fixed_bytes) // 8)
+    per_column_doubles = 2 * nel + 3 * ntr
+    by_shared_memory = max(
+        1,
+        (available_doubles - 4 * nel * nel) // per_column_doubles,
+    )
+    # Recovered fluxes alias one NEL-by-NEL matrix workspace.
+    return max(1, min(ncols, nel, by_shared_memory))
+
+
 def _kernel_source(
         template: str,
         *,
@@ -1398,6 +2122,9 @@ def _kernel_source(
         trace_orientation_mode: int = 0,
         rhs_only: bool = False,
         source_only: bool = False,
+        batched_full: bool = False,
+        use_cached_factors: bool = False,
+        write_cached_factors: bool = False,
 ) -> str:
     """Build a parameterized CUDA kernel source for raw diffusion assembly."""
     matrix_format = str(matrix_format).lower()
@@ -1410,6 +2137,10 @@ def _kernel_source(
         f"#define RAW_MATRIX_CSR {1 if matrix_format == 'csr' else 0}\n"
         f"#define RAW_RHS_ONLY {1 if rhs_only else 0}\n"
         f"#define RAW_SOURCE_ONLY {1 if source_only else 0}\n"
+        f"#define RAW_BATCHED_FULL {1 if batched_full else 0}\n"
+        f"#define RAW_BATCH_COLS {_batched_full_column_count(nel, ntr, ncols)}\n"
+        f"#define RAW_USE_CACHED_FACTORS {1 if use_cached_factors else 0}\n"
+        f"#define RAW_WRITE_CACHED_FACTORS {1 if write_cached_factors else 0}\n"
         f"#define TRACE_ORIENTATION_MODE {trace_orientation_mode}\n"
     )
     source = template.replace('NEL', str(int(nel))).replace('NTR', str(int(ntr))).replace('NCOLS', str(int(ncols)))
@@ -1426,13 +2157,38 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     return assembly_bytes, reconstruct_bytes
 
 
-def _coop_shared_sizes(nel: int, ntr: int, *, ncols: int | None = None) -> int:
+def _coop_reconstruct_shared_size(nel: int) -> int:
+    """Shared memory for compact cooperative mixed-field reconstruction."""
+    reconstruct_doubles = 4 * nel * nel + 6 * nel
+    return reconstruct_doubles * 8 + nel * 4 + 256
+
+
+def _coop_shared_sizes(
+        nel: int,
+        ntr: int,
+        *,
+        ncols: int | None = None,
+        source_only: bool = False,
+        batched_full: bool = False,
+) -> int:
     """Compute cooperative assembly shared-memory requirements."""
-    # Cooperative assembly stores all condensed trace/source columns plus one
-    # temporary column slab for flux recovery.  For p=6 this is just under the
-    # 64 KiB opt-in shared-memory limit on the original benchmark GPU.
     ncols = 3 * ntr + 1 if ncols is None else int(ncols)
-    assembly_doubles = 7 * nel * nel + 4 * nel * ncols
+    if source_only:
+        # Source-only RHS assembly reuses one matrix workspace for each spatial
+        # direction instead of retaining all six derivative intermediates.
+        assembly_doubles = 4 * nel * nel + 4 * nel * ncols
+    elif batched_full:
+        # Full assembly retains the Schur factor and two directional coupling
+        # matrices, then condenses the widest column batch that remains at or
+        # below 32 KiB.  Limiting it to NEL lets a matrix workspace hold fluxes.
+        batch_cols = _batched_full_column_count(nel, ntr, ncols)
+        assembly_doubles = (
+            4 * nel * nel
+            + 2 * nel * batch_cols
+            + 3 * ntr * batch_cols
+        )
+    else:
+        assembly_doubles = 7 * nel * nel + 4 * nel * ncols
     return assembly_doubles * 8 + nel * 4 + 256
 
 
@@ -1444,6 +2200,14 @@ def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
     except Exception:
         pass
     return kernel
+
+
+def _compile_kernel_timed(cupy, source: str, name: str, shared_bytes: int):
+    """Eagerly compile a raw kernel and return its host-side JIT/load time."""
+    start = time.perf_counter()
+    kernel = _compile_kernel(cupy, source, name, shared_bytes)
+    kernel.compile()
+    return kernel, time.perf_counter() - start
 
 
 def _edge_to_solve_edge(mesh) -> np.ndarray:
@@ -1514,9 +2278,12 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         tau: float,
         csr_pattern,
         block_size: RawCudaBlockSize = "auto",
+        cached_factors: RawDiffusionAssemblyResult | None = None,
+        local_factor_key: tuple[Any, ...] | None = None,
 ) -> RawDiffusionAssemblyResult:
     """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
     cupy = require_cupy()
+    raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
     if csr_pattern is None:
         raise ValueError('csr_pattern is required for raw-CUDA cached RHS assembly')
@@ -1531,8 +2298,25 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
     ntr = int(cspace.edg_dof)
     boundary_is_zero = bool(cupy.all(boundary_trace == 0.0).get())
     ncols = 1 if boundary_is_zero else 3 * ntr + 1
-    assembly_shared = _shared_sizes(nel, ntr)[0] if block_size == 1 else _coop_shared_sizes(nel, ntr, ncols=ncols)
+    assembly_shared = (
+        _shared_sizes(nel, ntr)[0]
+        if block_size == 1
+        else _coop_shared_sizes(nel, ntr, ncols=ncols, source_only=boundary_is_zero)
+    )
     trace_orientation_mode = _raw_trace_orientation_mode(trace_ref)
+    use_cached_factors = cached_factors is not None
+    factor_kind = str(getattr(cached_factors, "local_factor_kind", "schur-lu")) if use_cached_factors else "schur-lu"
+    if factor_kind != "schur-lu":
+        raise ValueError("raw CUDA cached local factors must use 'schur-lu'")
+    if use_cached_factors:
+        schur_lu, schur_pivots = _validate_local_schur_factors(
+            cached_factors, num_elements=int(cspace.mesh.num_tri), nel=nel, local_factor_key=local_factor_key
+        )
+        local_factor_bytes = int(cached_factors.local_factor_bytes)
+    else:
+        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_pivots = cupy.empty(1, dtype=cupy.int32)
+        local_factor_bytes = 0
 
     edge_to_solve = csr_pattern.edge_to_solve_edge
     side_index = csr_pattern.interior_side_index
@@ -1541,6 +2325,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
     side_map_arg = csr_pattern.side_csr_block_pos
     mass_map_arg = csr_pattern.mass_csr_block_pos
 
+    timings['raw.setup'] = time.perf_counter() - raw_wall_start
     zero_start = time.perf_counter()
     dummy_data = cupy.zeros(1 if block_size != 1 else indices.size, dtype=cupy.float64)
     rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
@@ -1559,12 +2344,15 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             ncols=ncols,
             matrix_format='csr',
             trace_orientation_mode=trace_orientation_mode,
+            use_cached_factors=use_cached_factors,
         )
-        kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
+        kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
         kernel_args = (
             indptr,
             dummy_data,
             rhs,
+            schur_lu,
+            schur_pivots,
             cspace.mesh.loc2glob_edge,
             cspace.mesh.orientations,
             cspace.mesh.loc2oriented_face_coupling,
@@ -1605,14 +2393,17 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             trace_orientation_mode=trace_orientation_mode,
             rhs_only=True,
             source_only=boundary_is_zero,
+            use_cached_factors=use_cached_factors,
         )
-        kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
+        kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
         kernel_args = (
             dummy_i64,
             dummy_i64,
             indptr,
             dummy_data,
             rhs,
+            schur_lu,
+            schur_pivots,
             cspace.mesh.loc2glob_edge,
             cspace.mesh.orientations,
             cspace.mesh.loc2oriented_face_coupling,
@@ -1629,6 +2420,9 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             cspace.mesh.normals,
             cspace.quad_data.MKrf,
             cspace.quad_data.MKrf_inv,
+            d0_reference,
+            d1_reference,
+            trace_ref.face_element_test_trace_trial,
             face_element_mass,
             trace_ref.face_element_test_trace_trial,
             trace_ref.M_rf_fc,
@@ -1642,12 +2436,37 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(0),
         )
+    stream = cupy.cuda.get_current_stream()
+    stream.synchronize()
+    timings['raw.kernel.jit'] = kernel_jit
+    timings['raw.kernel.prepare'] = max(0.0, time.perf_counter() - start - kernel_jit)
     grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+    begin = cupy.cuda.Event()
+    end = cupy.cuda.Event()
+    launch_wall_start = time.perf_counter()
+    begin.record(stream)
     kernel(grid, (block_size,), kernel_args, shared_mem=int(assembly_shared))
-    cupy.cuda.get_current_stream().synchronize()
-    timings['raw.cached_rhs_kernel'] = time.perf_counter() - start
+    end.record(stream)
+    end.synchronize()
+    device_seconds = cupy.cuda.get_elapsed_time(begin, end) / 1000.0
+    launch_wall_seconds = time.perf_counter() - launch_wall_start
+    timings['raw.kernel.device'] = device_seconds
+    timings['raw.kernel.wall'] = launch_wall_seconds
+    timings['raw.cached_rhs_kernel'] = device_seconds
     timings['raw.block_size'] = float(block_size)
-    timings['raw.total'] = timings.get('raw.cached_rhs_zero', 0.0) + timings.get('raw.cached_rhs_kernel', 0.0)
+    timings['raw.local_factors.reused'] = float(use_cached_factors)
+    timings['raw.local_factors.bytes'] = float(local_factor_bytes)
+    timings['raw.total'] = (
+        timings.get('raw.setup', 0.0)
+        + timings.get('raw.cached_rhs_zero', 0.0)
+        + timings.get('raw.kernel.jit', 0.0)
+        + timings.get('raw.kernel.prepare', 0.0)
+        + timings.get('raw.kernel.wall', 0.0)
+    )
+    timings['raw.wall_total'] = time.perf_counter() - raw_wall_start
+    timings['raw.unaccounted'] = max(
+        0.0, timings['raw.wall_total'] - timings['raw.total']
+    )
     return RawDiffusionAssemblyResult(
         rows=None,
         cols=None,
@@ -1663,6 +2482,11 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         indices=indices,
         matrix_format='csr',
         csr_pattern=csr_pattern,
+        schur_lu=None if not use_cached_factors else schur_lu,
+        schur_pivots=None if not use_cached_factors else schur_pivots,
+        local_factor_key=None if not use_cached_factors else cached_factors.local_factor_key,
+        local_factor_bytes=local_factor_bytes,
+        local_factor_kind=factor_kind if use_cached_factors else "none",
     )
 
 
@@ -1678,13 +2502,19 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
         tau: float,
         matrix_format: str = 'coo',
         block_size: RawCudaBlockSize = "auto",
+        cache_local_factors: bool = False,
+        local_factor_kind: str = "schur-lu",
+        local_factor_key: tuple[Any, ...] | None = None,
 ) -> RawDiffusionAssemblyResult:
     """Assemble the reduced trace system/RHS with a Raw CUDA fused element loop."""
     cupy = require_cupy()
+    raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {'coo', 'csr'}:
         raise ValueError("matrix_format must be 'coo' or 'csr'")
+    if local_factor_kind != "schur-lu":
+        raise ValueError("raw CUDA local_factor_kind must be 'schur-lu'")
     block_size = resolve_raw_cuda_block_size(
         block_size, equation="diffusion-reaction", order=cspace.order
     )
@@ -1695,8 +2525,39 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     nel = int(cspace.el_dof)
     ntr = int(cspace.edg_dof)
     ncols = 3 * ntr + 1
-    assembly_shared = _shared_sizes(nel, ntr)[0] if block_size == 1 else _coop_shared_sizes(nel, ntr)
+    assembly_shared = (
+        _shared_sizes(nel, ntr)[0]
+        if block_size == 1
+        else _coop_shared_sizes(nel, ntr, batched_full=True)
+    )
     trace_orientation_mode = _raw_trace_orientation_mode(trace_ref)
+    reference_precompute_start = time.perf_counter()
+    if block_size != 1:
+        mass_inverse = cspace.quad_data.MKrf_inv
+        mass_inverse_d0_reference = cupy.ascontiguousarray(mass_inverse @ d0_reference)
+        mass_inverse_d1_reference = cupy.ascontiguousarray(mass_inverse @ d1_reference)
+        mass_inverse_face_element_trace = cupy.ascontiguousarray(
+            cupy.einsum(
+                "ik,fkj->fij",
+                mass_inverse,
+                trace_ref.face_element_test_trace_trial,
+                optimize=True,
+            )
+        )
+    cupy.cuda.get_current_stream().synchronize()
+    timings['raw.reference_precompute'] = time.perf_counter() - reference_precompute_start
+    factor_allocation_start = time.perf_counter()
+    if cache_local_factors:
+        schur_lu, schur_pivots, local_factor_bytes = _allocate_local_schur_factors(
+            cupy, num_elements=int(cspace.mesh.num_tri), nel=nel, factor_kind=local_factor_kind
+        )
+    else:
+        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_pivots = cupy.empty(1, dtype=cupy.int32)
+        local_factor_bytes = 0
+    timings['raw.local_factors.allocate'] = time.perf_counter() - factor_allocation_start
+    timings['raw.local_factors.bytes'] = float(local_factor_bytes)
+    timings['raw.local_factors.created'] = float(bool(cache_local_factors))
 
     csr_pattern = None
     indptr = indices = None
@@ -1758,12 +2619,15 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
                 ncols=ncols,
                 matrix_format=matrix_format,
                 trace_orientation_mode=trace_orientation_mode,
+                write_cached_factors=bool(cache_local_factors),
             )
-            kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
+            kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_csr', assembly_shared)
             kernel_args = (
                 indptr,
                 data,
                 rhs,
+                schur_lu,
+                schur_pivots,
                 cspace.mesh.loc2glob_edge,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
@@ -1800,13 +2664,16 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
                 ncols=ncols,
                 matrix_format=matrix_format,
                 trace_orientation_mode=trace_orientation_mode,
+                write_cached_factors=bool(cache_local_factors),
             )
-            kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw', assembly_shared)
+            kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw', assembly_shared)
             kernel_args = (
                 rows,
                 cols,
                 data,
                 rhs,
+                schur_lu,
+                schur_pivots,
                 cspace.mesh.loc2glob_edge,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
@@ -1858,14 +2725,18 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             ncols=ncols,
             matrix_format=matrix_format,
             trace_orientation_mode=trace_orientation_mode,
+            batched_full=True,
+            write_cached_factors=bool(cache_local_factors),
         )
-        kernel = _compile_kernel(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
+        kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
         kernel_args = (
             rows_arg,
             cols_arg,
             csr_indptr_arg,
             data,
             rhs,
+            schur_lu,
+            schur_pivots,
             cspace.mesh.loc2glob_edge,
             cspace.mesh.orientations,
             cspace.mesh.loc2oriented_face_coupling,
@@ -1882,6 +2753,9 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             cspace.mesh.normals,
             cspace.quad_data.MKrf,
             cspace.quad_data.MKrf_inv,
+            mass_inverse_d0_reference,
+            mass_inverse_d1_reference,
+            mass_inverse_face_element_trace,
             face_element_mass,
             trace_ref.face_element_test_trace_trial,
             trace_ref.M_rf_fc,
@@ -1895,16 +2769,37 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(n_flux),
         )
+    stream = cupy.cuda.get_current_stream()
+    stream.synchronize()
+    timings['raw.kernel.jit'] = kernel_jit
+    timings['raw.kernel.prepare'] = max(0.0, time.perf_counter() - start - kernel_jit)
     grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+    begin = cupy.cuda.Event()
+    end = cupy.cuda.Event()
+    launch_wall_start = time.perf_counter()
+    begin.record(stream)
     kernel(grid, (block_size,), kernel_args, shared_mem=int(assembly_shared))
-    cupy.cuda.get_current_stream().synchronize()
-    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = time.perf_counter() - start
+    end.record(stream)
+    end.synchronize()
+    device_seconds = cupy.cuda.get_elapsed_time(begin, end) / 1000.0
+    launch_wall_seconds = time.perf_counter() - launch_wall_start
+    timings['raw.kernel.device'] = device_seconds
+    timings['raw.kernel.wall'] = launch_wall_seconds
+    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = device_seconds
     timings['raw.block_size'] = float(block_size)
+    map_wall = timings.get('raw.csr_pattern.wrapper', timings.get('raw.map_setup', 0.0))
     timings['raw.total'] = (
-        timings.get('raw.map_setup', 0.0)
-        + timings.get('raw.kernel', 0.0)
+        timings.get('raw.reference_precompute', 0.0)
+        + timings.get('raw.local_factors.allocate', 0.0)
+        + map_wall
         + timings.get('raw.csr_zero', 0.0)
-        + timings.get('raw.csr_kernel', 0.0)
+        + timings.get('raw.kernel.jit', 0.0)
+        + timings.get('raw.kernel.prepare', 0.0)
+        + timings.get('raw.kernel.wall', 0.0)
+    )
+    timings['raw.wall_total'] = time.perf_counter() - raw_wall_start
+    timings['raw.unaccounted'] = max(
+        0.0, timings['raw.wall_total'] - timings['raw.total']
     )
     return RawDiffusionAssemblyResult(
         rows=rows,
@@ -1921,6 +2816,11 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
         indices=indices,
         matrix_format=matrix_format,
         csr_pattern=csr_pattern,
+        schur_lu=None if not cache_local_factors else schur_lu,
+        schur_pivots=None if not cache_local_factors else schur_pivots,
+        local_factor_key=local_factor_key if cache_local_factors else None,
+        local_factor_bytes=local_factor_bytes,
+        local_factor_kind=local_factor_kind if cache_local_factors else "none",
     )
 
 
@@ -1936,6 +2836,8 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         tau: float,
         block_size: RawCudaBlockSize = "auto",
         return_local_unknowns: bool = False,
+        cached_factors: RawDiffusionAssemblyResult | None = None,
+        local_factor_key: tuple[Any, ...] | None = None,
 ):
     """Recover primal coefficients, optionally with full mixed local unknowns."""
     cupy = require_cupy()
@@ -1947,7 +2849,35 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         raise ValueError('raw CUDA diffusion reconstruction block_size must be one of 1, 32, 64, 128')
     nel = int(cspace.el_dof)
     ntr = int(cspace.edg_dof)
-    _, reconstruct_shared = _shared_sizes(nel, ntr)
+    use_cached_factors = cached_factors is not None
+    factor_kind = str(getattr(cached_factors, "local_factor_kind", "schur-lu")) if use_cached_factors else "schur-lu"
+    if factor_kind != "schur-lu":
+        raise ValueError("raw CUDA reconstruction supports only cached 'schur-lu' factors")
+    if use_cached_factors:
+        schur_lu, schur_pivots = _validate_local_schur_factors(
+            cached_factors, num_elements=int(cspace.mesh.num_tri), nel=nel, local_factor_key=local_factor_key
+        )
+    else:
+        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_pivots = cupy.empty(1, dtype=cupy.int32)
+    reconstruct_shared = (
+        _shared_sizes(nel, ntr)[1]
+        if block_size == 1
+        else _coop_reconstruct_shared_size(nel)
+    )
+    if block_size == 1:
+        reference_args = (
+            cspace.quad_data.MKrf_inv,
+            face_element_mass,
+        )
+    else:
+        mass_inverse = cspace.quad_data.MKrf_inv
+        reference_args = (
+            mass_inverse,
+            cupy.ascontiguousarray(mass_inverse @ d0_reference),
+            cupy.ascontiguousarray(mass_inverse @ d1_reference),
+            face_element_mass,
+        )
     uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
     local_unknowns = (
         cupy.empty((cspace.mesh.num_tri, 3 * nel), dtype=cupy.float64)
@@ -1962,6 +2892,7 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         ntr=ntr,
         ncols=1,
         trace_orientation_mode=_raw_trace_orientation_mode(trace_ref),
+        use_cached_factors=use_cached_factors,
     )
     kernel = _compile_kernel(cupy, source, kernel_name, reconstruct_shared)
     start = time.perf_counter()
@@ -1972,6 +2903,8 @@ def reconstruct_projected_diffusion_field_raw_cuda(
             uh,
             local_unknowns,
             np.int32(1 if return_local_unknowns else 0),
+            schur_lu,
+            schur_pivots,
             trace.reshape(-1),
             cspace.mesh.loc2glob_edge,
             cspace.mesh.loc2oriented_face_coupling,
@@ -1979,8 +2912,7 @@ def reconstruct_projected_diffusion_field_raw_cuda(
             cspace.mesh.aff_jacs,
             cspace.mesh.jacs_el_fc,
             cspace.mesh.normals,
-            cspace.quad_data.MKrf_inv,
-            face_element_mass,
+            *reference_args,
             trace_ref.face_trace_test_element_trial_oriented,
             d0_reference,
             d1_reference,

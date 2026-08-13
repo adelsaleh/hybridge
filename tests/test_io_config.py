@@ -7,6 +7,7 @@ import pytest
 from hdgfem.io.config import (
     describe_amgx_preconditioner,
     describe_amgx_solver,
+    format_amgx_configuration,
     load_amgx_config,
 )
 
@@ -30,6 +31,25 @@ def test_load_amgx_config_applies_standard_overrides(tmp_path) -> None:
     assert config["solver"]["max_iters"] == 75
     assert config["solver"]["print_solve_stats"] == 1
     assert describe_amgx_preconditioner(config) == "AMG / CLASSICAL / PMIS"
+
+
+def test_format_amgx_configuration_names_solver_preconditioner_and_controls() -> None:
+    config = {
+        "solver": {
+            "solver": "BICGSTAB",
+            "preconditioner": {"solver": "AMG", "algorithm": "AGGREGATION", "smoother": "DILU"},
+            "convergence": "ABSOLUTE",
+            "tolerance": 1.0e-12,
+            "max_iters": 250,
+        }
+    }
+
+    text = format_amgx_configuration(config)
+    assert "iterative solver: BICGSTAB" in text
+    assert "preconditioner: AMG / AGGREGATION / DILU" in text
+    assert "convergence: ABSOLUTE" in text
+    assert "tolerance: 1e-12" in text
+    assert "max iterations: 250" in text
 
 
 def test_load_amgx_config_uses_an_independent_embedded_default(tmp_path) -> None:

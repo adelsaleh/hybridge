@@ -2,9 +2,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 import hdgfem.core.mesh as mesh_module
-from hdgfem.core.mesh import default_mesh_cache_dir, gmsh_rectangle_mesh
+from hdgfem.core.mesh import DGMesh, default_mesh_cache_dir, gmsh_rectangle_mesh
 
 
 class _FakeGmshOption:
@@ -13,6 +14,9 @@ class _FakeGmshOption:
 
     def setNumber(self, name, value):
         self.values[name] = value
+
+    def getNumber(self, name):
+        return self.values[name]
 
 
 class _FakeGmshOcc:
@@ -39,7 +43,7 @@ class _FakeGmshMesh:
     def getNodes(self):
         return (
             np.array([1, 2, 3], dtype=np.int64),
-            np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], dtype=np.float64),
+            np.array([0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.25, 0.0], dtype=np.float64),
             np.empty(0, dtype=np.float64),
         )
 
@@ -169,3 +173,66 @@ def test_gmsh_rectangle_mesh_falls_back_when_default_cache_write_fails(monkeypat
     assert fake.model.mesh.generate_calls == 1
     np.testing.assert_allclose(mesh2.node_coords, mesh1.node_coords)
     np.testing.assert_array_equal(mesh2.triangles, mesh1.triangles)
+
+
+def test_malformed_uniform_mesh_cache_is_rejected_and_regenerated(monkeypatch, tmp_path, capsys):
+    fake = _FakeGmsh()
+    monkeypatch.setitem(sys.modules, "gmsh", fake)
+
+    expected = gmsh_rectangle_mesh(0.25, xlim=(0.0, 1.0), ylim=(0.0, 1.0), cache_dir=tmp_path)
+    cache_path = next(tmp_path.glob("rectangle-*.npz"))
+    malformed = DGMesh.from_arrays(
+        np.array([[0.0, 0.0], [2.0, 0.0], [0.0, 2.0]]),
+        np.array([[0, 1, 2]]),
+    )
+    _, cache_key_json = mesh_module._mesh_cache_files(
+        "rectangle",
+        0.25,
+        algorithm=None,
+        cache_key_data={"geometry": "rectangle", "xlim": (0.0, 1.0), "ylim": (0.0, 1.0)},
+        cache_dir=tmp_path,
+    )
+    mesh_module._write_cached_gmsh_mesh(cache_path, malformed, cache_key_json)
+    capsys.readouterr()
+
+    regenerated = gmsh_rectangle_mesh(0.25, xlim=(0.0, 1.0), ylim=(0.0, 1.0), cache_dir=tmp_path)
+    log = capsys.readouterr().out
+
+    assert "mesh cache read failed" in log
+    assert "violates requested sizing" in log
+    assert fake.model.mesh.generate_calls == 2
+    np.testing.assert_allclose(regenerated.node_coords, expected.node_coords)
+    np.testing.assert_array_equal(regenerated.triangles, expected.triangles)
+
+
+def test_malformed_fresh_uniform_mesh_is_not_cached(monkeypatch, tmp_path):
+    fake = _FakeGmsh()
+    monkeypatch.setitem(sys.modules, "gmsh", fake)
+    malformed = DGMesh.from_arrays(
+        np.array([[0.0, 0.0], [2.0, 0.0], [0.0, 2.0]]),
+        np.array([[0, 1, 2]]),
+    )
+    monkeypatch.setattr(mesh_module, "_gmsh_model_to_mesh", lambda *args, **kwargs: malformed)
+
+    with pytest.raises(ValueError, match="violates requested sizing"):
+        gmsh_rectangle_mesh(0.25, cache_dir=tmp_path)
+
+    assert not list(tmp_path.glob("rectangle-*.npz"))
+
+
+
+def test_required_uniform_size_option_is_verified(monkeypatch, tmp_path):
+    fake = _FakeGmsh()
+    monkeypatch.setitem(sys.modules, "gmsh", fake)
+
+    def altered_value(name):
+        value = fake.option.values[name]
+        return 2.0 * value if name == "Mesh.MeshSizeMax" else value
+
+    fake.option.getNumber = altered_value
+
+    with pytest.raises(RuntimeError, match="Mesh.MeshSizeMax.*was not applied"):
+        gmsh_rectangle_mesh(0.25, cache_dir=tmp_path)
+
+    assert fake.model.mesh.generate_calls == 0
+    assert not list(tmp_path.glob("rectangle-*.npz"))

@@ -512,6 +512,58 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
     assert calls == 0
 
 
+def test_diffusion_options_expose_local_factor_cache_policy() -> None:
+    options = hdgfem.DiffusionReactionHDGOptions(cache_local_factors="schur-lu", verbose=False)
+
+    assert options.cache_local_factors == "schur-lu"
+    assert options.as_solve_kwargs()["cache_local_factors"] == "schur-lu"
+    assert options.with_overrides(cache_local_factors="none").cache_local_factors == "none"
+
+    cholesky = options.with_overrides(cache_local_factors="schur-cholesky")
+    assert cholesky.cache_local_factors == "schur-cholesky"
+    assert cholesky.as_solve_kwargs()["cache_local_factors"] == "schur-cholesky"
+
+
+def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_runtime_setup() -> None:
+    space = _space()
+    solver = hdgfem.DiffusionReactionHDGSolver(
+        space,
+        source=space.constant(1.0),
+        reaction=space.zeros(),
+        boundary_condition=0.0,
+        assembly_backend="numpy",
+        cache_local_factors="schur-lu",
+        verbose=False,
+    )
+    with pytest.raises(ValueError, match="assembly_backend='raw-cuda'"):
+        solver.solve()
+
+    with pytest.raises(ValueError, match="stateful DiffusionReactionHDGSolver"):
+        hdgfem.solve_diffusion_reaction_hdg(
+            1.0,
+            0.0,
+            0.0,
+            space,
+            cache_local_factors="schur-lu",
+            verbose=False,
+        )
+
+    raw_cholesky = hdgfem.DiffusionReactionHDGSolver(
+        space,
+        source=space.constant(1.0),
+        reaction=space.zeros(),
+        boundary_condition=0.0,
+        assembly_backend="numpy",
+        raw_matrix_format="csr",
+        boundary_mode="eliminate",
+        cache_local_factors="schur-cholesky",
+        verbose=False,
+    )
+    with pytest.raises(ValueError, match="requires assembly_backend='cupy' or 'raw-cuda'"):
+        raw_cholesky.solve()
+
+
+
 def test_advection_options_expose_krylov_restart() -> None:
     options = hdgfem.AdvectionReactionHDGOptions(restart=37, verbose=False)
 

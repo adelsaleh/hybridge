@@ -48,10 +48,14 @@ GRID_COMPLEXITY_RE = re.compile(r"Grid Complexity:\s*([0-9.eE+-]+|nan|inf|-inf)"
 OPERATOR_COMPLEXITY_RE = re.compile(r"Operator Complexity:\s*([0-9.eE+-]+|nan|inf|-inf)")
 GRID_MEMORY_RE = re.compile(r"Total Memory Usage:\s*([0-9.eE+-]+|nan|inf|-inf)\s*GB")
 TOTAL_ITERATIONS_RE = re.compile(r"Total Iterations:\s*([0-9,]+)")
-AVG_RATE_RE = re.compile(r"Avg Convergence Rate:\s*([0-9.eE+-]+|nan|inf|-inf)")
-FINAL_RESIDUAL_RE = re.compile(r"Final Residual:\s*([0-9.eE+-]+|nan|inf|-inf)")
-TOTAL_REDUCTION_RE = re.compile(r"Total Reduction in Residual:\s*([0-9.eE+-]+|nan|inf|-inf)")
+AVG_RATE_RE = re.compile(r"(?:Geometric mean res/previous|Average residual ratio|Avg Convergence Rate):\s*([0-9.eE+-]+|nan|inf|-inf)")
+FINAL_RESIDUAL_RE = re.compile(r"Final (?:monitored r|R)esidual:\s*([0-9.eE+-]+|nan|inf|-inf)")
+TOTAL_REDUCTION_RE = re.compile(r"(?:Final residual/initial|Residual/initial|Total Reduction in Residual):\s*([0-9.eE+-]+|nan|inf|-inf)")
 MAX_MEMORY_RE = re.compile(r"Maximum Memory Usage:\s*([0-9.eE+-]+|nan|inf|-inf)\s*GB")
+AMGX_MEMORY_RE = re.compile(
+    r"AMGX memory \(process, GiB\): current used=([0-9.eE+-]+) held=([0-9.eE+-]+); "
+    r"sampled solve peak used=([0-9.eE+-]+) held=([0-9.eE+-]+)"
+)
 AMGX_TOTAL_TIME_RE = re.compile(r"^Total Time:\s*([0-9.eE+-]+|nan|inf|-inf)\s*$", re.MULTILINE)
 AMGX_SETUP_TIME_RE = re.compile(r"^\s+setup:\s*([0-9.eE+-]+|nan|inf|-inf)\s*s\s*$", re.MULTILINE)
 AMGX_SOLVE_TIME_RE = re.compile(r"^\s+solve:\s*([0-9.eE+-]+|nan|inf|-inf)\s*s\s*$", re.MULTILINE)
@@ -213,14 +217,21 @@ def parse_output(stdout: str) -> dict[str, Any]:
             parsed["first_coarsening_ratio"] = levels[1].get("rows") / levels[0].get("rows")
         if levels[0].get("rows"):
             parsed["coarsest_ratio"] = levels[-1].get("rows") / levels[0].get("rows")
+    if match := AMGX_MEMORY_RE.search(stdout):
+        parsed["amgx_current_used_gib"] = _parse_float(match.group(1))
+        parsed["amgx_current_held_gib"] = _parse_float(match.group(2))
+        parsed["amgx_peak_used_gib"] = _parse_float(match.group(3))
+        parsed["amgx_peak_held_gib"] = _parse_float(match.group(4))
+        # Preserve the historical aggregate key for existing sweep consumers.
+        parsed["amgx_max_memory_gb"] = parsed["amgx_peak_held_gib"]
     for key, regex in (
         ("grid_complexity", GRID_COMPLEXITY_RE),
         ("operator_complexity", OPERATOR_COMPLEXITY_RE),
         ("grid_memory_gb", GRID_MEMORY_RE),
         ("amgx_total_iterations", TOTAL_ITERATIONS_RE),
-        ("amgx_avg_convergence_rate", AVG_RATE_RE),
+        ("amgx_average_residual_ratio", AVG_RATE_RE),
         ("amgx_final_residual", FINAL_RESIDUAL_RE),
-        ("amgx_total_reduction", TOTAL_REDUCTION_RE),
+        ("amgx_residual_over_initial", TOTAL_REDUCTION_RE),
         ("amgx_max_memory_gb", MAX_MEMORY_RE),
         ("amgx_total_time_seconds", AMGX_TOTAL_TIME_RE),
         ("amgx_reported_setup_seconds", AMGX_SETUP_TIME_RE),
@@ -314,7 +325,12 @@ def write_results(rows: list[dict[str, Any]], csv_path: Path, jsonl_path: Path) 
         "pyamgx_solve_seconds",
         "pyamgx_iterations",
         "physical_rel_residual",
-        "amgx_avg_convergence_rate",
+        "amgx_average_residual_ratio",
+        "amgx_residual_over_initial",
+        "amgx_current_used_gib",
+        "amgx_current_held_gib",
+        "amgx_peak_used_gib",
+        "amgx_peak_held_gib",
         "amgx_max_memory_gb",
         "failure_reason",
         "raw_output_path",

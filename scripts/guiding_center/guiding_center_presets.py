@@ -55,8 +55,8 @@ class GuidingCenterRunPreset:
     poisson_ilu_permc_spec: str = "COLAMD"
     poisson_raw_matrix_format: str = "coo"
     poisson_raw_block_size: int | str = "auto"
+    poisson_cache_local_factors: str = "none"
     poisson_hdg_postprocess: str = "none"
-    poisson_reuse_equilibrium_solver: bool = False
     transport_assembly_backend: str = "numpy"
     transport_solver: str | None = "direct"
     transport_preconditioner: str | None = None
@@ -151,7 +151,6 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_ilu_fill_factor=35.0,
         poisson_ilu_permc_spec="NATURAL",
         poisson_hdg_postprocess="none",
-        poisson_reuse_equilibrium_solver=True,
         transport_assembly_backend="numba",
         transport_solver="BICGSTAB",
         transport_preconditioner="ilu",
@@ -192,7 +191,6 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_maxiter=None,
         poisson_scale_system=False,
         poisson_hdg_postprocess="none",
-        poisson_reuse_equilibrium_solver=True,
         transport_assembly_backend="numba",
         transport_solver="BICGSTAB",
         transport_preconditioner="ilu",
@@ -241,7 +239,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
     ),
     "diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx": GuidingCenterRunPreset(
         case="diocotron_gaussian_annulus",
-        description="Long T=50 legacy Gaussian-annulus diocotron k=3 run with raw-CUDA Poisson/transport CSR assembly, device AMGX solves, and raw-CUDA reconstruction.",
+        description="Long T=50 legacy Gaussian-annulus diocotron k=3 run with raw-CUDA global CSR assembly, device AMGX solves, and CuPy/cuBLAS cached Poisson local solves.",
         case_params={"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03},
         domain="auto",
         mesh_size=0.02,
@@ -257,6 +255,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_scale_system=False,
         poisson_raw_matrix_format="csr",
         poisson_raw_block_size="auto",
+        poisson_cache_local_factors="schur-cholesky",
         transport_assembly_backend="raw-cuda",
         transport_solver="amgx",
         transport_preconditioner=None,
@@ -277,7 +276,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
     ),
     "diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx": GuidingCenterRunPreset(
         case="diocotron_k",
-        description="Long T=50 sharp annular-band diocotron k=3 run with raw-CUDA Poisson/transport CSR assembly, device AMGX solves, and raw-CUDA reconstruction.",
+        description="Long T=50 sharp annular-band diocotron k=3 run with raw-CUDA global CSR assembly, device AMGX solves, and CuPy/cuBLAS cached Poisson local solves.",
         case_params={"k": 3},
         domain="auto",
         mesh_size=0.02,
@@ -293,6 +292,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_scale_system=False,
         poisson_raw_matrix_format="csr",
         poisson_raw_block_size="auto",
+        poisson_cache_local_factors="schur-cholesky",
         transport_assembly_backend="raw-cuda",
         transport_solver="amgx",
         transport_preconditioner=None,
@@ -313,7 +313,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
     ),
     "diocotron_k10_p6_dt01_t50_full_raw_cuda_amgx": GuidingCenterRunPreset(
         case="diocotron_k",
-        description="Long T=50 sharp annular-band diocotron k=10 run with raw-CUDA Poisson/transport CSR assembly, device AMGX solves, and raw-CUDA reconstruction.",
+        description="Long T=50 sharp annular-band diocotron k=10 run with raw-CUDA global CSR assembly, device AMGX solves, and CuPy/cuBLAS cached Poisson local solves.",
         case_params={"k": 10, "eps": 0.05},
         domain="auto",
         mesh_size=0.008,
@@ -329,6 +329,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_scale_system=False,
         poisson_raw_matrix_format="csr",
         poisson_raw_block_size="auto",
+        poisson_cache_local_factors="schur-cholesky",
         transport_assembly_backend="raw-cuda",
         transport_solver="amgx",
         transport_preconditioner=None,
@@ -365,6 +366,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         poisson_scale_system=False,
         poisson_raw_matrix_format="csr",
         poisson_raw_block_size="auto",
+        poisson_cache_local_factors="schur-cholesky",
         transport_assembly_backend="raw-cuda",
         transport_solver="amgx",
         transport_preconditioner=None,
@@ -459,7 +461,6 @@ PRESETS.update(
             poisson_ilu_drop_tol=1.0e-10,
             poisson_ilu_fill_factor=35.0,
             poisson_ilu_permc_spec="COLAMD",
-            poisson_reuse_equilibrium_solver=True,
             transport_solver="BICGSTAB",
             transport_preconditioner="ilu",
             transport_ilu_drop_tol=1.0e-5,
@@ -502,7 +503,6 @@ PRESETS.update(
             poisson_preconditioner=None,
             poisson_solver_atol=1.0e-12,
             poisson_scale_system=False,
-            poisson_reuse_equilibrium_solver=True,
             transport_solver="pypardiso",
             transport_preconditioner=None,
             transport_scale_system=False,

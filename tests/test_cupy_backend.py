@@ -1146,6 +1146,16 @@ def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
         raw_block_size=64,
         raw_matrix_format="csr",
     )
+    for key in (
+        "raw.kernel.prepare",
+        "raw.kernel.jit",
+        "raw.kernel.device",
+        "raw.kernel.wall",
+        "raw.wall_total",
+        "raw.unaccounted",
+    ):
+        assert key in csr.timings
+        assert csr.timings[key] >= 0.0
 
     shape = (coo.rhs.size, coo.rhs.size)
     coo_matrix = scipy.sparse.coo_matrix(
@@ -1430,6 +1440,59 @@ def test_cuda_row_scaling_uses_row_max_for_near_zero_diagonal():
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_cuda_row_scaling_restore_round_trip():
+    import cupyx.scipy.sparse as sparse
+
+    from hdgfem.backends.cupy import require_cupy, symmetric_scale_cupy_csr_in_place
+    from hdgfem.backends.advection_cuda import (
+        _diagonal_scale_csr_rows_in_place,
+        _restore_scaled_csr_rows_in_place,
+    )
+
+    cp = require_cupy()
+    matrix_host = np.asarray(
+        [
+            [4.0, -1.0, 0.5, 0.0],
+            [-1.0, 9.0, 2.0, 0.25],
+            [0.5, 2.0, 16.0, -3.0],
+            [0.0, 0.25, -3.0, 25.0],
+        ],
+        dtype=np.float64,
+    )
+    rhs_host = np.asarray([1.5, -2.0, 3.0, 4.0], dtype=np.float64)
+
+    left_matrix = sparse.csr_matrix(cp.asarray(matrix_host))
+    left_rhs = cp.asarray(rhs_host)
+    row_diagonal = _diagonal_scale_csr_rows_in_place(left_matrix, left_rhs)
+    _restore_scaled_csr_rows_in_place(left_matrix, row_diagonal=row_diagonal)
+
+    symmetric_matrix = sparse.csr_matrix(cp.asarray(matrix_host))
+    symmetric_rhs = cp.asarray(rhs_host)
+    inverse_sqrt_diagonal = symmetric_scale_cupy_csr_in_place(
+        symmetric_matrix,
+        symmetric_rhs,
+    )
+    _restore_scaled_csr_rows_in_place(
+        symmetric_matrix,
+        inverse_sqrt_diagonal=inverse_sqrt_diagonal,
+    )
+    cp.cuda.get_current_stream().synchronize()
+
+    np.testing.assert_allclose(
+        left_matrix.get().toarray(),
+        matrix_host,
+        rtol=2.0e-15,
+        atol=2.0e-15,
+    )
+    np.testing.assert_allclose(
+        symmetric_matrix.get().toarray(),
+        matrix_host,
+        rtol=2.0e-15,
+        atol=2.0e-15,
+    )
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materialization():
     from hdgfem.backends.cupy import as_cupy_space, require_cupy
     from hdgfem.backends.diffusion_cupy import source_moments_cupy
@@ -1467,7 +1530,7 @@ def test_coefficient_field_projects_callable_through_package_api():
 
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
-def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch):
+def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch, capsys):
     from hdgfem.backends.cupy import require_cupy
 
     cp = require_cupy()
@@ -1513,8 +1576,13 @@ def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch):
         raw_block_size=32,
         raw_matrix_format="csr",
         materialize_host_solution=False,
-        verbose=False,
+        verbose=2,
     )
+
+    output = capsys.readouterr().out
+    assert "iterative solver: BICGSTAB" in output
+    assert "preconditioner: AMG / CLASSICAL / PMIS / ILU0 / W-cycle / pre/post=4/4" in output
+    assert "convergence: RELATIVE_INI_CORE" in output
 
     assert result.field is None
     assert result.trace is None

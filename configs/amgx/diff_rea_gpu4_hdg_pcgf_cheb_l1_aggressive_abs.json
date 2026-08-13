@@ -10,7 +10,7 @@
       "interpolator": "D2",
       "cycle": "V",
       "presweeps": 0,
-      "postsweeps": 3,
+      "postsweeps": 2,
       "smoother": {
         "solver": "CHEBYSHEV",
         "preconditioner": {

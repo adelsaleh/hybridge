@@ -18,8 +18,10 @@ from typing import Any, Literal
 import numpy as np
 
 from ..core.space import DGField, DGSpace, DGTraceSpace
+from ..io.config import format_amgx_configuration
 from ..linalg.system import (
     KnownDofReduction,
+    LinearSolveCapacityError,
     LinearSolveConvergenceError,
     SolveResult,
     finalize_solve_result,
@@ -931,6 +933,87 @@ def _diagonal_scale_csr_rows_in_place(matrix, rhs):
     return diagonal
 
 
+_CSR_ROW_UNSCALE_SOURCE = r"""
+extern "C" __global__ void restore_left_scaled_csr_rows(
+        const int* __restrict__ indptr,
+        double* __restrict__ data,
+        const double* __restrict__ row_diagonal,
+        const long long nrows)
+{
+    const long long row = blockIdx.x;
+    if (row >= nrows) {
+        return;
+    }
+    const int start = indptr[row];
+    const int end = indptr[row + 1];
+    const double row_scale = row_diagonal[row];
+    for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
+        data[p] *= row_scale;
+    }
+}
+
+extern "C" __global__ void restore_symmetric_scaled_csr_rows(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        double* __restrict__ data,
+        const double* __restrict__ inverse_sqrt_diagonal,
+        const long long nrows)
+{
+    const long long row = blockIdx.x;
+    if (row >= nrows) {
+        return;
+    }
+    const int start = indptr[row];
+    const int end = indptr[row + 1];
+    const double row_scale = inverse_sqrt_diagonal[row];
+    for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
+        data[p] /= row_scale * inverse_sqrt_diagonal[indices[p]];
+    }
+}
+"""
+_CSR_ROW_UNSCALE_KERNELS: dict[int, tuple[Any, Any]] = {}
+
+
+def _restore_scaled_csr_rows_in_place(
+    matrix,
+    *,
+    row_diagonal=None,
+    inverse_sqrt_diagonal=None,
+):
+    """Restore CSR values after left or symmetric device scaling."""
+    if row_diagonal is None and inverse_sqrt_diagonal is None:
+        return
+    if row_diagonal is not None and inverse_sqrt_diagonal is not None:
+        raise ValueError("exactly one CSR scaling vector may be restored")
+    cp = require_cupy()
+    device_id = int(cp.cuda.runtime.getDevice())
+    kernels = _CSR_ROW_UNSCALE_KERNELS.get(device_id)
+    if kernels is None:
+        left_kernel = cp.RawKernel(_CSR_ROW_UNSCALE_SOURCE, "restore_left_scaled_csr_rows")
+        symmetric_kernel = cp.RawKernel(
+            _CSR_ROW_UNSCALE_SOURCE,
+            "restore_symmetric_scaled_csr_rows",
+        )
+        kernels = (left_kernel, symmetric_kernel)
+        _CSR_ROW_UNSCALE_KERNELS[device_id] = kernels
+    nrows = int(matrix.shape[0])
+    if not nrows:
+        return
+    left_kernel, symmetric_kernel = kernels
+    if row_diagonal is not None:
+        left_kernel(
+            (nrows,),
+            (128,),
+            (matrix.indptr, matrix.data, row_diagonal, np.int64(nrows)),
+        )
+    else:
+        symmetric_kernel(
+            (nrows,),
+            (128,),
+            (matrix.indptr, matrix.indices, matrix.data, inverse_sqrt_diagonal, np.int64(nrows)),
+        )
+
+
 _AMGX_REUSABLE_SOLVERS = []
 
 
@@ -1007,6 +1090,93 @@ def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: in
     return amgx_config
 
 
+_AMGX_NO_MEMORY_CODE = 7
+
+
+def _is_amgx_capacity_error(exc: BaseException) -> bool:
+    """Return whether an exception chain denotes exhausted device capacity."""
+    pending = [exc]
+    seen = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, LinearSolveCapacityError):
+            return True
+        code = getattr(current, "error_code", None)
+        try:
+            if code is not None and int(code) == _AMGX_NO_MEMORY_CODE:
+                return True
+        except (TypeError, ValueError):
+            if getattr(code, "name", None) == "NO_MEMORY":
+                return True
+        kind = type(current).__name__.replace("_", "").lower()
+        message = str(current).lower()
+        if (
+            "outofmemory" in kind
+            or "out of memory" in message
+            or "not enough memory" in message
+            or "memory allocation" in message
+        ):
+            return True
+        pending.extend(
+            nested
+            for nested in (
+                getattr(current, "__cause__", None),
+                getattr(current, "__context__", None),
+            )
+            if nested is not None
+        )
+    return False
+
+
+def _as_amgx_capacity_error(exc, *, phase: str, cp, pyamgx):
+    """Convert a classified backend exception into a terminal HDG failure."""
+    if isinstance(exc, LinearSolveCapacityError):
+        return exc
+    if not _is_amgx_capacity_error(exc):
+        return None
+    memory: dict[str, Any] = {}
+    get_stats = getattr(pyamgx, "get_device_memory_stats", None)
+    if get_stats is not None:
+        try:
+            memory["amgx"] = {key: int(value) for key, value in get_stats().items()}
+        except Exception as stats_exc:
+            memory["amgx_error"] = f"{type(stats_exc).__name__}: {stats_exc}"
+    try:
+        free_bytes, total_bytes = cp.cuda.runtime.memGetInfo()
+        memory["device"] = {
+            "free_bytes": int(free_bytes),
+            "used_bytes": int(total_bytes) - int(free_bytes),
+            "total_bytes": int(total_bytes),
+        }
+    except Exception as stats_exc:
+        memory["device_error"] = f"{type(stats_exc).__name__}: {stats_exc}"
+    gib = 1024.0 ** 3
+    amgx = memory.get("amgx")
+    device = memory.get("device")
+    amgx_text = (
+        "unavailable"
+        if amgx is None
+        else f"live/reserved={amgx['live_bytes']/gib:.3f}/{amgx['reserved_bytes']/gib:.3f} GiB"
+    )
+    device_text = (
+        "unavailable"
+        if device is None
+        else "used/free/total="
+        f"{device['used_bytes']/gib:.3f}/{device['free_bytes']/gib:.3f}/"
+        f"{device['total_bytes']/gib:.3f} GiB"
+    )
+    return LinearSolveCapacityError(
+        f"pyamgx-device capacity failure during {phase}: {exc}; "
+        f"AMGX memory {amgx_text}; device memory {device_text}",
+        backend="pyamgx-device",
+        phase=phase,
+        memory=memory,
+    )
+
+
 class PyAMGXCsrDeviceSolver:
     """Reusable PyAMGX CSR solver for a fixed device-resident matrix."""
 
@@ -1023,6 +1193,11 @@ class PyAMGXCsrDeviceSolver:
         self.cp = require_cupy()
         self.pyamgx = require_pyamgx()
         self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
+        self.verbose_level = (
+            1
+            if isinstance(verbose, bool) and verbose
+            else (0 if not verbose else int(verbose))
+        )
         self.cfg = self.rsrc = self.mat = self.vec_b = self.vec_x = self.solver = None
         self.shape = None
         self.size = None
@@ -1030,18 +1205,26 @@ class PyAMGXCsrDeviceSolver:
         self.closed = False
         self.reusable = bool(reusable)
         self._shared_resources_acquired = False
+        failure_phase = "resource acquisition"
         try:
             self.rsrc = _AMGX_SHARED_RESOURCES.acquire(self.pyamgx, self.config_dict)
             self._shared_resources_acquired = True
+            failure_phase = "configuration creation"
             self.cfg = self.pyamgx.Config().create_from_dict(self.config_dict)
+            failure_phase = "solver-object creation"
             self.mat = self.pyamgx.Matrix().create(self.rsrc, mode="dDDI")
             self.vec_b = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
             self.vec_x = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
             self.solver = self.pyamgx.Solver().create(self.rsrc, self.cfg)
             if self.reusable:
                 _AMGX_REUSABLE_SOLVERS.append(self)
-        except Exception:
-            self.close()
+        except Exception as exc:
+            capacity_error = _as_amgx_capacity_error(
+                exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
+            )
+            self.close(suppress_errors=True)
+            if capacity_error is not None:
+                raise capacity_error from exc
             raise
 
     def setup(self, matrix) -> float:
@@ -1049,15 +1232,23 @@ class PyAMGXCsrDeviceSolver:
         if self.closed:
             raise RuntimeError("cannot set up a closed PyAMGXCsrDeviceSolver")
         setup_start = time.perf_counter()
+        failure_phase = "matrix upload"
         try:
             self.mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
+            failure_phase = "solver setup"
             self.solver.setup(self.mat)
+            failure_phase = "setup synchronization"
             self.cp.cuda.get_current_stream().synchronize()
             self.shape = tuple(matrix.shape)
             self.size = int(matrix.shape[0])
             self.is_setup = True
-        except Exception:
-            self.close()
+        except Exception as exc:
+            capacity_error = _as_amgx_capacity_error(
+                exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
+            )
+            self.close(suppress_errors=True)
+            if capacity_error is not None:
+                raise capacity_error from exc
             raise
         return time.perf_counter() - setup_start
 
@@ -1076,15 +1267,25 @@ class PyAMGXCsrDeviceSolver:
                 raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
             zero_initial_guess = False
         info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
+        if self.verbose_level >= 2:
+            print(format_amgx_configuration(self.config_dict), flush=True)
         solve_start = time.perf_counter()
+        failure_phase = "vector upload"
         try:
             self.vec_b.upload_raw(rhs.data.ptr, rhs.size)
             self.vec_x.upload_raw(x.data.ptr, x.size)
+            failure_phase = "solver iteration"
             self.solver.solve(self.vec_b, self.vec_x, zero_initial_guess=zero_initial_guess)
+            failure_phase = "solution download"
             self.vec_x.download_raw(x.data.ptr)
             self.cp.cuda.get_current_stream().synchronize()
-        except Exception:
-            self.close()
+        except Exception as exc:
+            capacity_error = _as_amgx_capacity_error(
+                exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
+            )
+            self.close(suppress_errors=True)
+            if capacity_error is not None:
+                raise capacity_error from exc
             raise
         solve_elapsed = time.perf_counter() - solve_start
         try:
@@ -1112,26 +1313,36 @@ class PyAMGXCsrDeviceSolver:
         info["amgx_solve_elapsed_seconds"] = solve_elapsed
         return x, info
 
-    def close(self) -> None:
+    def close(self, *, suppress_errors: bool = False) -> None:
         """Destroy owned AMGX objects and release the shared resource handle."""
         if self.closed:
             return
+        first_error = None
         for obj in (self.solver, self.vec_x, self.vec_b, self.mat, self.cfg):
             if obj is not None:
                 try:
                     obj.destroy()
                 except AttributeError:
                     pass
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
         if self._shared_resources_acquired:
-            _AMGX_SHARED_RESOURCES.release()
+            try:
+                _AMGX_SHARED_RESOURCES.release()
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
             self._shared_resources_acquired = False
         self.solver = self.mat = self.vec_x = self.vec_b = self.rsrc = self.cfg = None
         self.closed = True
+        if first_error is not None and not suppress_errors:
+            raise first_error
 
     def __del__(self):
         """Best-effort cleanup for an unclosed AMGX solver instance."""
         try:
-            self.close()
+            self.close(suppress_errors=True)
         except Exception:
             pass
 
@@ -1259,62 +1470,86 @@ def _solve_reduced_system_amgx_device_once(
         solve_initial_guess = initial_guess
     cp.cuda.get_current_stream().synchronize()
     scale_elapsed = time.perf_counter() - scale_start
+    matrix_is_scaled = row_diagonal is not None or inverse_sqrt_diagonal is not None
 
-    amgx_call_start = time.perf_counter()
-    if reusable_solver is None:
-        x_cp, amgx_info = _pyamgx_solve_csr_device(
+    def restore_scaled_matrix() -> float:
+        nonlocal matrix_is_scaled
+        if not matrix_is_scaled:
+            return 0.0
+        restore_start = time.perf_counter()
+        _restore_scaled_csr_rows_in_place(
             solve_matrix,
-            solve_rhs,
-            initial_guess=solve_initial_guess,
-            config=config,
-            tolerance=solve_tolerance,
-            maxiter=maxiter,
-            verbose=verbose,
+            row_diagonal=row_diagonal,
+            inverse_sqrt_diagonal=inverse_sqrt_diagonal,
         )
-    else:
-        setup_elapsed = 0.0
-        if not reusable_solver.is_setup:
-            setup_elapsed = reusable_solver.setup(solve_matrix)
-        x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=solve_initial_guess)
-        amgx_info["amgx_setup_elapsed_seconds"] = setup_elapsed
-    solver_x_cp = x_cp
-    if inverse_sqrt_diagonal is not None:
-        x_cp = inverse_sqrt_diagonal * solver_x_cp
-    amgx_call_elapsed = time.perf_counter() - amgx_call_start
+        cp.cuda.get_current_stream().synchronize()
+        matrix_is_scaled = False
+        return time.perf_counter() - restore_start
 
-    finite_start = time.perf_counter()
-    solution_is_finite = bool(cp.all(cp.isfinite(x_cp)).get())
-    finite_elapsed = time.perf_counter() - finite_start
+    try:
+        amgx_call_start = time.perf_counter()
+        if reusable_solver is None:
+            x_cp, amgx_info = _pyamgx_solve_csr_device(
+                solve_matrix,
+                solve_rhs,
+                initial_guess=solve_initial_guess,
+                config=config,
+                tolerance=solve_tolerance,
+                maxiter=maxiter,
+                verbose=verbose,
+            )
+        else:
+            setup_elapsed = 0.0
+            if not reusable_solver.is_setup:
+                setup_elapsed = reusable_solver.setup(solve_matrix)
+            x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=solve_initial_guess)
+            amgx_info["amgx_setup_elapsed_seconds"] = setup_elapsed
+        solver_x_cp = x_cp
+        if inverse_sqrt_diagonal is not None:
+            x_cp = inverse_sqrt_diagonal * solver_x_cp
+        amgx_call_elapsed = time.perf_counter() - amgx_call_start
+    except BaseException:
+        restore_scaled_matrix()
+        raise
 
-    solver_residual_start = time.perf_counter()
-    residual_matrix = _as_cupyx_csr_matrix(solve_matrix, sparse, cp)
-    solver_residual = residual_matrix @ solver_x_cp - solve_rhs
-    solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
-        solver_residual,
-        solve_rhs,
-        rtol=result_check_rtol,
-        atol=atol,
-    )
-    solver_residual_elapsed = time.perf_counter() - solver_residual_start
+    try:
+        finite_start = time.perf_counter()
+        solution_is_finite = bool(cp.all(cp.isfinite(x_cp)).get())
+        finite_elapsed = time.perf_counter() - finite_start
 
-    physical_residual_start = time.perf_counter()
-    if row_diagonal is not None:
-        physical_residual = row_diagonal * solver_residual
-        physical_residual_rhs = row_diagonal * solve_rhs
-    elif inverse_sqrt_diagonal is not None:
-        physical_residual = solver_residual / inverse_sqrt_diagonal
-        physical_residual_rhs = physical_rhs
-    else:
-        physical_residual = residual_matrix @ x_cp - physical_rhs
-        physical_residual_rhs = physical_rhs
-    physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
-        physical_residual,
-        physical_residual_rhs,
-        rtol=result_check_rtol,
-        atol=atol,
-    )
-    physical_residual_elapsed = time.perf_counter() - physical_residual_start
-    validation_elapsed = finite_elapsed + solver_residual_elapsed + physical_residual_elapsed
+        solver_residual_start = time.perf_counter()
+        residual_matrix = _as_cupyx_csr_matrix(solve_matrix, sparse, cp)
+        solver_residual = residual_matrix @ solver_x_cp - solve_rhs
+        solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
+            solver_residual,
+            solve_rhs,
+            rtol=result_check_rtol,
+            atol=atol,
+        )
+        solver_residual_elapsed = time.perf_counter() - solver_residual_start
+
+        physical_residual_start = time.perf_counter()
+        if row_diagonal is not None:
+            physical_residual = row_diagonal * solver_residual
+            physical_residual_rhs = row_diagonal * solve_rhs
+        elif inverse_sqrt_diagonal is not None:
+            physical_residual = solver_residual / inverse_sqrt_diagonal
+            physical_residual_rhs = physical_rhs
+        else:
+            physical_residual = residual_matrix @ x_cp - physical_rhs
+            physical_residual_rhs = physical_rhs
+        physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
+            physical_residual,
+            physical_residual_rhs,
+            rtol=result_check_rtol,
+            atol=atol,
+        )
+        physical_residual_elapsed = time.perf_counter() - physical_residual_start
+        validation_elapsed = finite_elapsed + solver_residual_elapsed + physical_residual_elapsed
+    except BaseException:
+        restore_scaled_matrix()
+        raise
+    unscale_elapsed = restore_scaled_matrix()
     native_status = str(amgx_info.get("amgx_status", "unknown"))
     normalized_status = native_status.lower().replace("-", "_").replace(" ", "_")
     backend_success = normalized_status == "unknown" or not any(
@@ -1327,6 +1562,7 @@ def _solve_reduced_system_amgx_device_once(
         print("  PyAMGX device solve timings:", flush=True)
         print(f"    csr build: {matrix_elapsed:.5f}s", flush=True)
         print(f"    row scaling: {scale_elapsed:.5f}s", flush=True)
+        print(f"    matrix unscale: {unscale_elapsed:.5f}s", flush=True)
         print(f"    setup: {amgx_info['amgx_setup_elapsed_seconds']:.5f}s", flush=True)
         print(f"    iterate: {amgx_info['amgx_solve_elapsed_seconds']:.5f}s", flush=True)
         print(f"    amgx call total: {amgx_call_elapsed:.5f}s", flush=True)
@@ -1366,6 +1602,7 @@ def _solve_reduced_system_amgx_device_once(
     result.cupyx_solver = "pyamgx-device"
     result.device_scale_mode = scale_mode
     result.amgx_csr_elapsed_seconds = matrix_elapsed
+    result.amgx_matrix_unscale_elapsed_seconds = unscale_elapsed
     result.amgx_setup_elapsed_seconds = amgx_info["amgx_setup_elapsed_seconds"]
     result.amgx_solve_elapsed_seconds = amgx_info["amgx_solve_elapsed_seconds"]
     result.amgx_call_elapsed_seconds = amgx_call_elapsed
@@ -1377,7 +1614,9 @@ def _solve_reduced_system_amgx_device_once(
     result.solve_solver_residual_elapsed_seconds = solver_residual_elapsed
     result.solve_physical_residual_elapsed_seconds = physical_residual_elapsed
     result.solve_validation_elapsed_seconds = validation_elapsed
-    result.solve_accounted_elapsed_seconds = matrix_elapsed + scale_elapsed + amgx_call_elapsed + validation_elapsed
+    result.solve_accounted_elapsed_seconds = (
+        matrix_elapsed + scale_elapsed + amgx_call_elapsed + validation_elapsed + unscale_elapsed
+    )
     result.solve_unaccounted_elapsed_seconds = max(0.0, total_elapsed - result.solve_accounted_elapsed_seconds)
     result.solve_global_overhead_elapsed_seconds = result.solve_unaccounted_elapsed_seconds
     result = finalize_solve_result(
@@ -1455,7 +1694,7 @@ def solve_reduced_system_amgx_device(
         )
 
     cp = require_cupy()
-    original_data = assembly.data.copy()
+    retry_wrapper_start = time.perf_counter()
     attempt_log = []
     last_result = None
     last_error = None
@@ -1466,7 +1705,6 @@ def solve_reduced_system_amgx_device(
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
     try:
         for index, attempt in enumerate(attempts, start=1):
-            assembly.data[...] = original_data
             try:
                 attempt_initial_guess = (
                     best_solution
@@ -1578,18 +1816,33 @@ def solve_reduced_system_amgx_device(
                     result.amgx_attempt_count = index
                     return result, solution
             except Exception as exc:
-                last_error = exc
-                attempt_log.append(
-                    {
-                        "attempt": index,
-                        "label": attempt["label"],
-                        "success": False,
-                        "finite": False,
-                        "scale_system": attempt["scale_system"],
-                        "residual_correction": attempt["residual_correction"],
-                        "error": f"{type(exc).__name__}: {exc}",
-                    }
+                capacity_error = _as_amgx_capacity_error(
+                    exc, phase="AMGX call", cp=cp, pyamgx=None
                 )
+                entry = {
+                    "attempt": index,
+                    "label": attempt["label"],
+                    "success": False,
+                    "finite": False,
+                    "scale_system": attempt["scale_system"],
+                    "residual_correction": attempt["residual_correction"],
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                if capacity_error is not None:
+                    entry["terminal_capacity_failure"] = True
+                    entry["phase"] = capacity_error.phase
+                    attempt_log.append(entry)
+                    capacity_error.amgx_attempts = tuple(attempt_log)
+                    capacity_error.amgx_attempt_count = index
+                    if verbose_level:
+                        print(
+                            f"  AMGX attempt {index}/{len(attempts)} {attempt['label']}: "
+                            f"terminal capacity failure ({capacity_error})",
+                            flush=True,
+                        )
+                    raise capacity_error
+                last_error = exc
+                attempt_log.append(entry)
                 if verbose_level:
                     print(
                         f"  AMGX attempt {index}/{len(attempts)} {attempt['label']}: "
@@ -1597,7 +1850,22 @@ def solve_reduced_system_amgx_device(
                         flush=True,
                     )
     finally:
-        assembly.data[...] = original_data
+        retry_wrapper_elapsed = time.perf_counter() - retry_wrapper_start
+        timed_result = last_result if last_result is not None else best_result
+        if timed_result is not None:
+            timed_result.amgx_retry_matrix_backup_elapsed_seconds = 0.0
+            timed_result.amgx_retry_matrix_restore_elapsed_seconds = 0.0
+            timed_result.amgx_retry_matrix_restore_count = 0
+            timed_result.amgx_retry_matrix_backup_bytes = 0
+            timed_result.amgx_retry_wrapper_elapsed_seconds = retry_wrapper_elapsed
+            attempt_elapsed = float(getattr(timed_result, "total_elapsed_seconds", 0.0) or 0.0)
+            timed_result.amgx_retry_outer_overhead_elapsed_seconds = max(
+                0.0, retry_wrapper_elapsed - attempt_elapsed
+            )
+        if verbose_level >= 2:
+            print("  AMGX retry-wrapper timings:", flush=True)
+            print("    matrix backup to host: disabled", flush=True)
+            print(f"    wrapper total: {retry_wrapper_elapsed:.5f}s", flush=True)
 
     if not raise_on_nonconvergence and (best_result is not None or last_result is not None):
         selected_result = best_result or last_result

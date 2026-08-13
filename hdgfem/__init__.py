@@ -66,6 +66,7 @@ def __getattr__(name: str):
         globals()[name] = value
         return value
     if name in {
+        "LinearSolveCapacityError",
         "LinearSolveConvergenceError",
         "LinearSolveError",
         "SolveResult",
@@ -73,6 +74,7 @@ def __getattr__(name: str):
         "solve_global_system",
     }:
         from .linalg.system import (
+            LinearSolveCapacityError,
             LinearSolveConvergenceError,
             LinearSolveError,
             SolveResult,
@@ -81,6 +83,7 @@ def __getattr__(name: str):
         )
 
         symbols = {
+            "LinearSolveCapacityError": LinearSolveCapacityError,
             "LinearSolveConvergenceError": LinearSolveConvergenceError,
             "LinearSolveError": LinearSolveError,
             "SolveResult": SolveResult,
@@ -107,6 +110,7 @@ __all__ = [
     "DGField",
     "DGMesh",
     "DGSpace",
+    "LinearSolveCapacityError",
     "LinearSolveConvergenceError",
     "LinearSolveError",
     "SolveStatus",

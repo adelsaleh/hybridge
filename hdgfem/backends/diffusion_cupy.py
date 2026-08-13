@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
 
 from ..assembly import hdg as hdg_assembly
 from ..core.space import DGField
-from .cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+from .cupy import as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse
 from .raw_cuda import RawCudaBlockSize
 from .diffusion_raw_cuda import (
     RawDiffusionAssemblyResult,
@@ -59,6 +59,25 @@ class CupyDiffusionTraceAssembly:
     element_boundary_mats: Any | None = None
     source_rhs: Any | None = None
     raw_assembly: RawDiffusionAssemblyResult | None = None
+    schur_cholesky_cache: Any | None = None
+    trace_flux_mats: Any | None = None
+
+
+@dataclass(frozen=True)
+class CupyDiffusionSchurCholeskyCache:
+    """Reusable scalar Schur factors and coupling matrices on the CUDA device."""
+
+    factor: Any
+    coupling_x: Any
+    coupling_y: Any
+    mass_inverse: Any
+    jac_inverse: Any
+    factor_ptrs: Any
+    symmetry_error: float
+    coupling_adjoint_error: float
+    local_factor_bytes: int
+    timings: dict[str, float]
+    factor_kind: str = "schur-cholesky"
 
 
 def _as_scalar_or_none(value) -> float | None:
@@ -460,6 +479,214 @@ def solve_local_mats(local_lhs, rhs):
     return cupy.ascontiguousarray(cupy.linalg.solve(local_lhs, rhs))
 
 
+def _batched_cublas_cholesky_solve(cache: CupyDiffusionSchurCholeskyCache, rhs, *, chunk_size: int = 32768):
+    """Solve batched SPD systems from cached Cholesky factors through cuBLAS TRSM."""
+    cupy = require_cupy()
+    from cupy.cuda import cublas
+
+    rhs_array = cupy.asarray(rhs, dtype=cupy.float64)
+    squeeze = rhs_array.ndim == 2
+    if squeeze:
+        rhs_array = rhs_array[..., None]
+    if rhs_array.ndim != 3:
+        raise ValueError("batched Cholesky RHS must have shape (K, N) or (K, N, NRHS)")
+    factor = cache.factor
+    batch_count, n, n_rhs = map(int, rhs_array.shape)
+    if tuple(factor.shape) != (batch_count, n, n):
+        raise ValueError(
+            f"batched Cholesky factor/RHS shape mismatch: factor={tuple(factor.shape)}, "
+            f"rhs={tuple(rhs_array.shape)}"
+        )
+
+    # A C-contiguous row-major L is seen by cuBLAS as column-major L^T. The
+    # transposed RHS work array is likewise a column-major N x NRHS matrix.
+    work = cupy.ascontiguousarray(rhs_array.transpose(0, 2, 1))
+    rhs_stride = n * n_rhs * np.dtype(np.float64).itemsize
+    alpha = np.array(1.0, dtype=np.float64)
+    handle = cupy.cuda.device.get_cublas_handle()
+    chunk_size = max(1, int(chunk_size))
+    for begin in range(0, batch_count, chunk_size):
+        count = min(chunk_size, batch_count - begin)
+        factor_ptrs = cache.factor_ptrs[begin : begin + count]
+        rhs_ptrs = cupy.ascontiguousarray(
+            work.data.ptr + cupy.arange(begin, begin + count, dtype=cupy.uintp) * rhs_stride
+        )
+        cublas.dtrsmBatched(
+            handle, cublas.CUBLAS_SIDE_LEFT, cublas.CUBLAS_FILL_MODE_UPPER,
+            cublas.CUBLAS_OP_T, cublas.CUBLAS_DIAG_NON_UNIT, n, n_rhs,
+            alpha.ctypes.data, factor_ptrs.data.ptr, n, rhs_ptrs.data.ptr, n, count,
+        )
+        cublas.dtrsmBatched(
+            handle, cublas.CUBLAS_SIDE_LEFT, cublas.CUBLAS_FILL_MODE_UPPER,
+            cublas.CUBLAS_OP_N, cublas.CUBLAS_DIAG_NON_UNIT, n, n_rhs,
+            alpha.ctypes.data, factor_ptrs.data.ptr, n, rhs_ptrs.data.ptr, n, count,
+        )
+    solution = cupy.ascontiguousarray(work.transpose(0, 2, 1))
+    return solution[..., 0] if squeeze else solution
+
+
+def build_scalar_schur_cholesky_cache_cupy(
+        reaction,
+        cspace,
+        trace_ref,
+        tau: float,
+        *,
+        symmetry_rtol: float = 5.0e-11,
+) -> CupyDiffusionSchurCholeskyCache:
+    """Build and factor the SPD scalar local Schur operators."""
+    cupy = require_cupy()
+    timings: dict[str, float] = {}
+    stream = cupy.cuda.get_current_stream()
+    total_start = time.perf_counter()
+    phase_start = total_start
+    if float(tau) <= 0.0:
+        raise ValueError("Schur-Cholesky caching requires strictly positive stabilization")
+    mesh = cspace.mesh
+    mass_inverse = cupy.ascontiguousarray(cspace.quad_data.MKrf_inv)
+    d0t, d1t = reference_derivative_mats(cspace)
+    face_mass = face_element_mass(trace_ref)
+    reaction_mass = reaction_mass_cupy(reaction, cspace)
+    boundary_mass = cupy.sum(
+        float(tau) * mesh.jacs_el_fc[..., None, None] * face_mass[None, ...], axis=1
+    )
+    a_uu = cupy.ascontiguousarray(reaction_mass + boundary_mass)
+    coupling_x = cupy.ascontiguousarray(
+        cupy.sum(
+            (mesh.jacs_el_fc * mesh.normals[..., 0])[..., None, None] * face_mass[None, ...],
+            axis=1,
+        )
+        - mesh.aff_mats[:, 1, 1][:, None, None] * d0t[None, ...]
+        + mesh.aff_mats[:, 1, 0][:, None, None] * d1t[None, ...]
+    )
+    coupling_y = cupy.ascontiguousarray(
+        cupy.sum(
+            (mesh.jacs_el_fc * mesh.normals[..., 1])[..., None, None] * face_mass[None, ...],
+            axis=1,
+        )
+        + mesh.aff_mats[:, 0, 1][:, None, None] * d0t[None, ...]
+        - mesh.aff_mats[:, 0, 0][:, None, None] * d1t[None, ...]
+    )
+    derivative_x = cupy.ascontiguousarray(
+        mesh.aff_mats[:, 1, 1][:, None, None] * d0t[None, ...]
+        - mesh.aff_mats[:, 1, 0][:, None, None] * d1t[None, ...]
+    )
+    derivative_y = cupy.ascontiguousarray(
+        -mesh.aff_mats[:, 0, 1][:, None, None] * d0t[None, ...]
+        + mesh.aff_mats[:, 0, 0][:, None, None] * d1t[None, ...]
+    )
+    stream.synchronize()
+    timings["cupy.local_cache.prepare_and_jit"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
+    scale = cupy.maximum(
+        cupy.maximum(cupy.max(cupy.abs(coupling_x)), cupy.max(cupy.abs(coupling_y))), 1.0
+    )
+    coupling_adjoint_error = float(
+        (
+            cupy.maximum(
+                cupy.max(cupy.abs(coupling_x - derivative_x.transpose(0, 2, 1))),
+                cupy.max(cupy.abs(coupling_y - derivative_y.transpose(0, 2, 1))),
+            )
+            / scale
+        ).get()
+    )
+    if coupling_adjoint_error > float(symmetry_rtol):
+        raise ValueError(
+            "diffusion local coupling blocks are not adjoints within tolerance: "
+            f"relative error={coupling_adjoint_error:.3e}, tolerance={float(symmetry_rtol):.3e}"
+        )
+    timings["cupy.local_cache.coupling_validation"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
+
+    jac_inverse = cupy.ascontiguousarray(1.0 / mesh.aff_jacs)
+    minv_dx = mass_inverse[None, ...] @ derivative_x
+    minv_dy = mass_inverse[None, ...] @ derivative_y
+    schur = cupy.ascontiguousarray(
+        a_uu + jac_inverse[:, None, None] * (coupling_x @ minv_dx + coupling_y @ minv_dy)
+    )
+    stream.synchronize()
+    timings["cupy.local_cache.schur_build"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
+    schur_scale = cupy.maximum(cupy.max(cupy.abs(schur)), 1.0)
+    symmetry_error = float(
+        (cupy.max(cupy.abs(schur - schur.transpose(0, 2, 1))) / schur_scale).get()
+    )
+    if symmetry_error > float(symmetry_rtol):
+        raise ValueError(
+            "diffusion scalar Schur matrix is not symmetric within tolerance: "
+            f"relative error={symmetry_error:.3e}, tolerance={float(symmetry_rtol):.3e}"
+        )
+    schur = cupy.ascontiguousarray(0.5 * (schur + schur.transpose(0, 2, 1)))
+    stream.synchronize()
+    timings["cupy.local_cache.symmetry_validation"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
+    try:
+        factor = cupy.ascontiguousarray(cupy.linalg.cholesky(schur))
+        stream.synchronize()
+    except Exception as exc:
+        raise ValueError(
+            "diffusion scalar Schur matrix is not numerically positive definite; "
+            "check stabilization, reaction, diffusion, quadrature, and mesh quality"
+        ) from exc
+    timings["cupy.local_cache.cholesky"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
+    n = int(cspace.el_dof)
+    factor_stride = n * n * np.dtype(np.float64).itemsize
+    factor_ptrs = cupy.ascontiguousarray(
+        factor.data.ptr + cupy.arange(int(mesh.num_tri), dtype=cupy.uintp) * factor_stride
+    )
+    local_factor_bytes = int(
+        factor.nbytes + coupling_x.nbytes + coupling_y.nbytes + factor_ptrs.nbytes
+    )
+    stream.synchronize()
+    timings["cupy.local_cache.finalize"] = time.perf_counter() - phase_start
+    timings["cupy.local_cache.factor_total"] = time.perf_counter() - total_start
+    return CupyDiffusionSchurCholeskyCache(
+        factor=factor,
+        coupling_x=coupling_x,
+        coupling_y=coupling_y,
+        mass_inverse=mass_inverse,
+        jac_inverse=jac_inverse,
+        factor_ptrs=factor_ptrs,
+        symmetry_error=symmetry_error,
+        coupling_adjoint_error=coupling_adjoint_error,
+        local_factor_bytes=local_factor_bytes,
+        timings=timings,
+    )
+
+
+def solve_mixed_from_scalar_cholesky_cupy(cache: CupyDiffusionSchurCholeskyCache, rhs):
+    """Solve mixed local diffusion systems through cached scalar Schur factors."""
+    cupy = require_cupy()
+    rhs_array = cupy.asarray(rhs, dtype=cupy.float64)
+    squeeze = rhs_array.ndim == 2
+    if squeeze:
+        rhs_array = rhs_array[..., None]
+    n = int(cache.factor.shape[1])
+    if rhs_array.ndim != 3 or int(rhs_array.shape[1]) != 3 * n:
+        raise ValueError(f"mixed local RHS must have shape (K, {3 * n}) or (K, {3 * n}, NRHS)")
+    rhs_u = rhs_array[:, :n]
+    rhs_x = rhs_array[:, n : 2 * n]
+    rhs_y = rhs_array[:, 2 * n :]
+    minv_rhs_x = cache.mass_inverse[None, ...] @ rhs_x
+    minv_rhs_y = cache.mass_inverse[None, ...] @ rhs_y
+    condensed_rhs = cupy.ascontiguousarray(
+        rhs_u
+        + cache.jac_inverse[:, None, None]
+        * (cache.coupling_x @ minv_rhs_x + cache.coupling_y @ minv_rhs_y)
+    )
+    u = _batched_cublas_cholesky_solve(cache, condensed_rhs)
+    qx = cache.jac_inverse[:, None, None] * (
+        cache.mass_inverse[None, ...]
+        @ (cache.coupling_x.transpose(0, 2, 1) @ u - rhs_x)
+    )
+    qy = cache.jac_inverse[:, None, None] * (
+        cache.mass_inverse[None, ...]
+        @ (cache.coupling_y.transpose(0, 2, 1) @ u - rhs_y)
+    )
+    solution = cupy.ascontiguousarray(cupy.concatenate((u, qx, qy), axis=1))
+    return solution[..., 0] if squeeze else solution
+
+
 def b_trace_mats_cupy(cspace, trace_ref, tau: float):
     """Assemble device trace lift matrices."""
     cupy = require_cupy()
@@ -649,6 +876,7 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
         *,
         trace_basis: str = "legacy-lagrange",
         trace_ref=None,
+        use_schur_cholesky: bool = False,
 ) -> CupyDiffusionTraceAssembly:
     """Assemble a reduced diffusion trace system using CuPy operations."""
     cupy = require_cupy()
@@ -660,12 +888,20 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
 
     start = time.perf_counter()
     rows, cols = setup_reduced_indices(cspace)
-    local_lhs = local_lhs_mats_cupy(reaction, cspace, trace_ref, float(stabilization))
+    local_lhs = None if use_schur_cholesky else local_lhs_mats_cupy(reaction, cspace, trace_ref, float(stabilization))
     b_el_fc = b_trace_mats_cupy(cspace, trace_ref, float(stabilization))
     element_boundary = element_boundary_mats_cupy(cspace, trace_ref, float(stabilization))
     source_rhs = source_moments_cupy(source, cspace)
     local_rhs = cupy.concatenate((element_boundary, source_rhs[..., None]), axis=2)
-    solved = solve_local_mats(local_lhs, local_rhs)
+    schur_cholesky_cache = None
+    if use_schur_cholesky:
+        schur_cholesky_cache = build_scalar_schur_cholesky_cache_cupy(
+            reaction, cspace, trace_ref, float(stabilization)
+        )
+        timings.update(schur_cholesky_cache.timings)
+        solved = solve_mixed_from_scalar_cholesky_cupy(schur_cholesky_cache, local_rhs)
+    else:
+        solved = solve_local_mats(local_lhs, local_rhs)
     solved_el_bd = solved[:, :, : 3 * cspace.edg_dof]
     solved_src = solved[:, :, 3 * cspace.edg_dof]
     blocks = trace_blocks_cupy(b_el_fc, solved_el_bd, cspace, trace_ref)
@@ -680,7 +916,25 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
     )
     boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
     rows, cols, data, rhs = eliminate_boundary_cupy(rows, cols, data, rhs_full, boundary_trace, maps, cspace)
+    csr_start = time.perf_counter()
+    sparse = require_cupyx_sparse()
+    system_size = int(rhs.size)
+    matrix = sparse.coo_matrix(
+        (data, (rows.astype(cupy.int32), cols.astype(cupy.int32))),
+        shape=(system_size, system_size),
+        dtype=cupy.float64,
+    ).tocsr()
+    matrix.sum_duplicates()
+    if matrix.indices.dtype != cupy.int32 or matrix.indptr.dtype != cupy.int32:
+        matrix = sparse.csr_matrix(
+            (matrix.data, matrix.indices.astype(cupy.int32), matrix.indptr.astype(cupy.int32)),
+            shape=matrix.shape,
+            dtype=cupy.float64,
+        )
+    rows = cols = None
+    data, indices, indptr = matrix.data, matrix.indices, matrix.indptr
     cupy.cuda.get_current_stream().synchronize()
+    timings["csr"] = time.perf_counter() - csr_start
     timings["total"] = time.perf_counter() - start
     return CupyDiffusionTraceAssembly(
         rows=rows,
@@ -689,10 +943,97 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
         rhs=rhs,
         boundary_trace=boundary_trace,
         timings=timings,
-        matrix_format="coo",
+        matrix_format="csr",
+        indptr=indptr,
+        indices=indices,
         local_lhs=local_lhs,
         element_boundary_mats=element_boundary,
         source_rhs=source_rhs,
+        schur_cholesky_cache=schur_cholesky_cache,
+        trace_flux_mats=b_el_fc,
+    )
+
+def assemble_projected_diffusion_trace_rhs_cached_cupy(
+        source,
+        boundary_condition: Callable,
+        cspace,
+        trace_ref,
+        cached: CupyDiffusionTraceAssembly,
+) -> CupyDiffusionTraceAssembly:
+    """Rebuild only a zero-Dirichlet reduced RHS from cached CuPy Schur data."""
+    cupy = require_cupy()
+    cache = cached.schur_cholesky_cache
+    b_el_fc = cached.trace_flux_mats
+    if cache is None or b_el_fc is None:
+        raise ValueError("cached CuPy RHS assembly requires Schur-Cholesky and trace-flux caches")
+    start = time.perf_counter()
+    boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+    if boundary_trace.size and not bool(cupy.all(boundary_trace == 0.0).get()):
+        raise ValueError("cached CuPy RHS assembly currently requires zero Dirichlet trace data")
+    source_rhs = source_moments_cupy(source, cspace)
+    solved_src = solve_mixed_from_scalar_cholesky_cupy(cache, source_rhs)
+    faces = face_rhs_cupy(b_el_fc, solved_src, cspace)
+    rhs_full = cupy.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=cupy.float64)
+    rhs_full_r = rhs_full.reshape((cspace.mesh.num_edg, cspace.edg_dof))
+    cupy.add.at(
+        rhs_full_r,
+        cspace.mesh.loc2glob_edge[cspace.mesh.interior_elements, cspace.mesh.interior_faces],
+        faces[cspace.mesh.interior_elements, cspace.mesh.interior_faces],
+    )
+    rhs = cupy.ascontiguousarray(rhs_full_r[cspace.mesh.int_edges_inds].ravel())
+    cupy.cuda.get_current_stream().synchronize()
+    return CupyDiffusionTraceAssembly(
+        rows=cached.rows,
+        cols=cached.cols,
+        data=cached.data,
+        rhs=rhs,
+        boundary_trace=boundary_trace,
+        timings={"cached_rhs.total": time.perf_counter() - start},
+        matrix_format=cached.matrix_format,
+        indptr=cached.indptr,
+        indices=cached.indices,
+        local_lhs=None,
+        element_boundary_mats=cached.element_boundary_mats,
+        source_rhs=source_rhs,
+        raw_assembly=cached.raw_assembly,
+        schur_cholesky_cache=cache,
+        trace_flux_mats=b_el_fc,
+    )
+
+
+def attach_schur_cholesky_cache_cupy(
+        assembled: CupyDiffusionTraceAssembly,
+        reaction,
+        cspace,
+        trace_ref,
+        stabilization: float,
+) -> CupyDiffusionTraceAssembly:
+    """Attach reusable CuPy local data to an already assembled trace operator.
+
+    Raw CUDA may construct the global CSR operator once while later local RHS
+    condensation and reconstruction use scalar Schur Cholesky factors through
+    cuBLAS.  The raw local LU factors are deliberately not retained.
+    """
+    cupy = require_cupy()
+    start = time.perf_counter()
+    cache = build_scalar_schur_cholesky_cache_cupy(
+        reaction, cspace, trace_ref, float(stabilization)
+    )
+    element_boundary = element_boundary_mats_cupy(
+        cspace, trace_ref, float(stabilization)
+    )
+    trace_flux = b_trace_mats_cupy(cspace, trace_ref, float(stabilization))
+    cupy.cuda.get_current_stream().synchronize()
+    timings = dict(assembled.timings or {})
+    timings.update(cache.timings)
+    timings["cupy.local_cache.total"] = time.perf_counter() - start
+    return replace(
+        assembled,
+        timings=timings,
+        local_lhs=None,
+        element_boundary_mats=element_boundary,
+        schur_cholesky_cache=cache,
+        trace_flux_mats=trace_flux,
     )
 
 
@@ -707,6 +1048,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         trace_basis: str = "legacy-lagrange",
         block_size: RawCudaBlockSize = "auto",
         trace_ref=None,
+        local_factor_key: tuple[Any, ...] | None = None,
 ) -> CupyDiffusionTraceAssembly:
     """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
     cupy = require_cupy()
@@ -727,8 +1069,15 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         raise ValueError("raw-CUDA cached RHS assembly requires a cached CSR raw assembly")
 
     start = time.perf_counter()
+    phase_start = time.perf_counter()
     source_rhs = source_moments_cupy(source, cspace)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.source_moments'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.boundary_trace'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     raw = assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         source_rhs=source_rhs,
         boundary_trace=boundary_trace,
@@ -740,10 +1089,20 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         tau=float(stabilization),
         csr_pattern=cached_raw.csr_pattern,
         block_size=block_size,
+        cached_factors=cached_raw if cached_raw.schur_lu is not None else None,
+        local_factor_key=local_factor_key,
     )
+    timings['wrapper.raw_call'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.finalize'] = time.perf_counter() - phase_start
     timings.update(raw.timings)
     timings["total"] = time.perf_counter() - start
+    timings['wrapper.accounted'] = sum(
+        timings.get(key, 0.0)
+        for key in ('wrapper.source_moments', 'wrapper.boundary_trace', 'wrapper.raw_call', 'wrapper.finalize')
+    )
+    timings['wrapper.unaccounted'] = max(0.0, timings["total"] - timings['wrapper.accounted'])
     return CupyDiffusionTraceAssembly(
         rows=None,
         cols=None,
@@ -770,6 +1129,11 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
             indices=cached_raw.indices,
             matrix_format="csr",
             csr_pattern=cached_raw.csr_pattern,
+            schur_lu=raw.schur_lu,
+            schur_pivots=raw.schur_pivots,
+            local_factor_key=raw.local_factor_key,
+            local_factor_bytes=raw.local_factor_bytes,
+            local_factor_kind=raw.local_factor_kind,
         ),
     )
 
@@ -785,6 +1149,9 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         matrix_format: str = "coo",
         block_size: RawCudaBlockSize = "auto",
         trace_ref=None,
+        cache_local_factors: bool = False,
+        local_factor_kind: str = "schur-lu",
+        local_factor_key: tuple[Any, ...] | None = None,
 ) -> CupyDiffusionTraceAssembly:
     """Assemble a reduced diffusion trace system with the raw CUDA backend."""
     cupy = require_cupy()
@@ -803,10 +1170,20 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
     validate_raw_cuda_supported(cspace, trace_ref)
 
     start = time.perf_counter()
+    phase_start = time.perf_counter()
     source_rhs = source_moments_cupy(source, cspace)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.source_moments'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.boundary_trace'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     d0_reference, d1_reference = reference_derivative_mats(cspace)
     face_mass = face_element_mass(trace_ref)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.reference_data'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     raw = assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
         source_rhs=source_rhs,
         boundary_trace=boundary_trace,
@@ -818,10 +1195,21 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         tau=float(stabilization),
         matrix_format=matrix_format,
         block_size=block_size,
+        cache_local_factors=cache_local_factors,
+        local_factor_kind=local_factor_kind,
+        local_factor_key=local_factor_key,
     )
+    timings['wrapper.raw_call'] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     cupy.cuda.get_current_stream().synchronize()
+    timings['wrapper.finalize'] = time.perf_counter() - phase_start
     timings.update(raw.timings)
     timings["total"] = time.perf_counter() - start
+    timings['wrapper.accounted'] = sum(
+        timings.get(key, 0.0)
+        for key in ('wrapper.source_moments', 'wrapper.boundary_trace', 'wrapper.reference_data', 'wrapper.raw_call', 'wrapper.finalize')
+    )
+    timings['wrapper.unaccounted'] = max(0.0, timings["total"] - timings['wrapper.accounted'])
     return CupyDiffusionTraceAssembly(
         rows=raw.rows,
         cols=raw.cols,
@@ -959,8 +1347,11 @@ def postprocess_projected_diffusion_primal_cupy(
 
 __all__ = [
     "CupyDiffusionTraceAssembly",
+    "CupyDiffusionSchurCholeskyCache",
     "TraceReferenceData",
     "assemble_projected_diffusion_trace_system_eliminated_cupy",
+    "assemble_projected_diffusion_trace_rhs_cached_cupy",
+    "attach_schur_cholesky_cache_cupy",
     "assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy",
     "assemble_projected_diffusion_trace_system_eliminated_raw_cupy",
     "boundary_trace_values_cupy",
@@ -973,4 +1364,7 @@ __all__ = [
     "postprocess_projected_diffusion_primal_cupy",
     "raw_cuda_diffusion_fallback_reason",
     "source_moments_cupy",
+    "build_scalar_schur_cholesky_cache_cupy",
+    "solve_mixed_from_scalar_cholesky_cupy",
+    "_batched_cublas_cholesky_solve",
 ]

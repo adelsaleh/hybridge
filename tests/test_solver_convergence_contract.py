@@ -7,6 +7,7 @@ import scipy.sparse
 import hdgfem
 import hdgfem.linalg.system as system
 from hdgfem.linalg.system import (
+    LinearSolveCapacityError,
     LinearSolveConvergenceError,
     SolveResult,
     finalize_solve_result,
@@ -262,6 +263,10 @@ class _DeviceScalar:
 
 class _FakeCupy:
     @staticmethod
+    def asnumpy(value):
+        return np.asarray(value).copy()
+
+    @staticmethod
     def isfinite(value):
         return np.isfinite(value)
 
@@ -273,6 +278,189 @@ class _FakeCupy:
 class _FakeAmgxAssembly:
     def __init__(self):
         self.data = np.ones(1)
+
+
+class _FakeAMGXNoMemoryError(RuntimeError):
+    def __init__(self, message="CUDA allocation failed"):
+        super().__init__(message)
+        self.error_code = 7
+
+
+def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    class FakeDeviceData:
+        nbytes = 16
+
+        def __array__(self, dtype=None):
+            raise AssertionError("retry wrapper must not materialize the full matrix on the host")
+
+        def set(self, _host_values):
+            raise AssertionError("retry wrapper must not restore the matrix from the host")
+
+    class FakeCsrAssembly:
+        matrix_format = "csr"
+
+        def __init__(self):
+            self.data = FakeDeviceData()
+
+    result = _diagnostic_result(
+        solver_residual=1.0e-8,
+        solver_target=1.0e-6,
+        physical_residual=1.0e-8,
+        physical_target=1.0e-6,
+    )
+    finalize_solve_result(result, backend="pyamgx-device", backend_success=True)
+    solution = np.ones(2)
+    assembly = FakeCsrAssembly()
+    monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
+    monkeypatch.setattr(
+        raw_amgx,
+        "_solve_reduced_system_amgx_device_once",
+        lambda *_args, **_kwargs: (result, solution),
+    )
+
+    returned_result, returned_solution = raw_amgx.solve_reduced_system_amgx_device(
+        assembly,
+        scale_system="none",
+        retry_attempts=({"label": "scaled-retry", "scale_system": "left"},),
+    )
+
+    assert returned_result is result
+    assert returned_solution is solution
+    assert result.amgx_retry_matrix_backup_elapsed_seconds == 0.0
+    assert result.amgx_retry_matrix_restore_elapsed_seconds == 0.0
+    assert result.amgx_retry_matrix_restore_count == 0
+    assert result.amgx_retry_matrix_backup_bytes == 0
+    assert result.amgx_retry_wrapper_elapsed_seconds >= 0.0
+
+def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    calls = []
+
+    def fail_with_oom(*_args, **_kwargs):
+        calls.append("attempt")
+        raise _FakeAMGXNoMemoryError()
+
+    monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
+    monkeypatch.setattr(
+        raw_amgx,
+        "_solve_reduced_system_amgx_device_once",
+        fail_with_oom,
+    )
+
+    with pytest.raises(LinearSolveCapacityError) as raised:
+        raw_amgx.solve_reduced_system_amgx_device(
+            _FakeAmgxAssembly(),
+            retry_attempts=({"label": "retry-1"}, {"label": "retry-2"}),
+            scale_system=False,
+        )
+
+    assert calls == ["attempt"]
+    assert raised.value.backend == "pyamgx-device"
+    assert raised.value.phase == "AMGX call"
+    assert raised.value.amgx_attempt_count == 1
+    assert raised.value.amgx_attempts[0]["terminal_capacity_failure"]
+
+
+def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    calls = []
+
+    def fail_generically(*_args, **_kwargs):
+        calls.append("attempt")
+        raise RuntimeError("transient backend failure")
+
+    monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
+    monkeypatch.setattr(
+        raw_amgx,
+        "_solve_reduced_system_amgx_device_once",
+        fail_generically,
+    )
+
+    with pytest.raises(LinearSolveConvergenceError, match="exhausted 3 bounded attempts"):
+        raw_amgx.solve_reduced_system_amgx_device(
+            _FakeAmgxAssembly(),
+            retry_attempts=({"label": "retry-1"}, {"label": "retry-2"}),
+            scale_system=False,
+        )
+
+    assert calls == ["attempt", "attempt", "attempt"]
+
+
+def test_raw_amgx_capacity_error_reports_structured_memory() -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    class FakeRuntime:
+        @staticmethod
+        def memGetInfo():
+            return 2 * 1024**3, 8 * 1024**3
+
+    class FakeCuda:
+        runtime = FakeRuntime
+
+    class FakeCupyWithMemory:
+        cuda = FakeCuda
+
+    class FakePyAMGX:
+        @staticmethod
+        def get_device_memory_stats():
+            return {
+                "live_bytes": 3 * 1024**3,
+                "reserved_bytes": 4 * 1024**3,
+                "peak_live_bytes": 5 * 1024**3,
+                "peak_reserved_bytes": 6 * 1024**3,
+            }
+
+    error = raw_amgx._as_amgx_capacity_error(
+        _FakeAMGXNoMemoryError(),
+        phase="solver setup",
+        cp=FakeCupyWithMemory,
+        pyamgx=FakePyAMGX,
+    )
+
+    assert isinstance(error, LinearSolveCapacityError)
+    assert error.phase == "solver setup"
+    assert error.memory["amgx"]["live_bytes"] == 3 * 1024**3
+    assert error.memory["device"]["used_bytes"] == 6 * 1024**3
+    assert "AMGX memory live/reserved=3.000/4.000 GiB" in str(error)
+    assert "device memory used/free/total=6.000/2.000/8.000 GiB" in str(error)
+
+
+def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    destroyed = []
+
+    class FakeObject:
+        def __init__(self, label, *, fail=False):
+            self.label = label
+            self.fail = fail
+
+        def destroy(self):
+            destroyed.append(self.label)
+            if self.fail:
+                raise RuntimeError(f"{self.label} destroy failed")
+
+    solver = raw_amgx.PyAMGXCsrDeviceSolver.__new__(
+        raw_amgx.PyAMGXCsrDeviceSolver
+    )
+    solver.solver = FakeObject("solver", fail=True)
+    solver.vec_x = FakeObject("x")
+    solver.vec_b = FakeObject("b")
+    solver.mat = FakeObject("matrix")
+    solver.cfg = FakeObject("config")
+    solver.rsrc = None
+    solver.closed = False
+    solver._shared_resources_acquired = False
+
+    solver.close(suppress_errors=True)
+
+    assert destroyed == ["solver", "x", "b", "matrix", "config"]
+    assert solver.closed
+    assert solver.solver is None
 
 
 def test_raw_amgx_config_enables_residual_history_without_mutating_input() -> None:
@@ -348,6 +536,7 @@ def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) ->
 
 
 def test_convergence_contract_is_available_from_public_packages() -> None:
+    assert hdgfem.LinearSolveCapacityError is LinearSolveCapacityError
     assert hdgfem.LinearSolveConvergenceError is LinearSolveConvergenceError
     assert hdgfem.LinearSolveError is system.LinearSolveError
     assert "SolveStatus" in hdgfem.__all__

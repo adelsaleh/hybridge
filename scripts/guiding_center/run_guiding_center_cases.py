@@ -62,6 +62,8 @@ class GuidingCenterRunResult:
     diagnostics: list[dict[str, Any]]
     csv_path: Path
     jsonl_path: Path
+    timings_csv_path: Path
+    timings_jsonl_path: Path
 
 
 @dataclass(frozen=True)
@@ -300,6 +302,9 @@ def _solver_verbosity(config: GuidingCenterRunPreset) -> int:
 def _phase_verbosity(config: GuidingCenterRunPreset) -> int:
     return 1 if _verbosity_level(config) >= 2 else 0
 
+def _detail_verbosity(config: GuidingCenterRunPreset) -> int:
+    return 1 if _verbosity_level(config) >= 3 else 0
+
 
 def _format_metric(value: Any, fmt: str = ".3e") -> str:
     if value is None:
@@ -326,11 +331,15 @@ def _print_step_summary(config: GuidingCenterRunPreset, row: dict[str, Any]) -> 
     step = int(row.get("step", 0))
     phase = str(row.get("phase", "step"))
     step_label = "initial" if phase == "initial" else f"{step:05d}/{int(config.num_steps):05d}"
+    if _verbosity_level(config) >= 2:
+        _print_diagnostics_block(config, row, step_label=step_label, phase=phase)
+        return
+
     pieces = [
         f"[gc] step={step_label}",
         f"t={_format_metric(row.get('time'), '.6f')}",
-        f"mass_rel={_format_metric(row.get('mass_relative_drift'))}",
-        f"q_rel={_format_metric(row.get('q_l2_relative_drift'))}",
+        f"mass_rel_drift={_format_metric(row.get('mass_relative_drift'))}",
+        f"energy_rel_drift={_format_metric(row.get('energy_relative_drift'))}",
         (
             "rho=["
             f"{_format_metric(row.get('rho_min'))},"
@@ -365,8 +374,129 @@ def _print_step_summary(config: GuidingCenterRunPreset, row: dict[str, Any]) -> 
     if row.get("phi_l2_error") is not None:
         pieces.append(f"phi_l2={_format_metric(row.get('phi_l2_error'))}")
     if row.get("diocotron_phi_eq_relative_l2") is not None:
-        pieces.append(f"phi_eq_rel={_format_metric(row.get('diocotron_phi_eq_relative_l2'))}")
+        pieces.append(f"instability_l2={_format_metric(row.get('diocotron_phi_eq_l2'))}")
     print(" ".join(pieces), flush=True)
+
+
+def _print_diagnostics_block(
+        config: GuidingCenterRunPreset,
+        row: dict[str, Any],
+        *,
+        step_label: str,
+        phase: str,
+) -> None:
+    """Print accepted-state physics separately from backend solver logs."""
+    lines = [
+        "",
+        "=" * 78,
+        (
+            "GUIDING-CENTER ACCEPTED-STATE DIAGNOSTICS"
+            f" | step {step_label} | t={_format_metric(row.get('time'), '.6f')}"
+        ),
+        "-" * 78,
+        "Conservation",
+        f"  mass                                  {_format_metric(row.get('mass'), '.10e')}",
+        f"  relative mass drift                   {_format_metric(row.get('mass_relative_drift'))}",
+        f"  electrostatic energy (1/2 ||q||²)     {_format_metric(row.get('energy_from_q_l2'), '.10e')}",
+        f"  relative energy drift                 {_format_metric(row.get('energy_relative_drift'))}",
+        f"  electric-field norm ||q|| L2          {_format_metric(row.get('q_l2'), '.10e')}",
+    ]
+
+    if row.get("diocotron_phi_eq_l2") is not None:
+        lines.extend(
+            [
+                "",
+                "Instability relative to equilibrium",
+                f"  potential amplitude ||phi-phi_eq|| L2 {_format_metric(row.get('diocotron_phi_eq_l2'))}",
+                f"  relative potential amplitude          {_format_metric(row.get('diocotron_phi_eq_relative_l2'))}",
+                f"  potential difference Linf             {_format_metric(row.get('diocotron_phi_eq_linf'))}",
+            ]
+        )
+    if row.get("diocotron_rho_eq_l2") is not None:
+        lines.extend(
+            [
+                f"  density amplitude ||rho-rho_eq|| L2   {_format_metric(row.get('diocotron_rho_eq_l2'))}",
+                f"  relative density amplitude            {_format_metric(row.get('diocotron_rho_eq_relative_l2'))}",
+            ]
+        )
+    if row.get("diocotron_mode_1k_amplitude") is not None:
+        mode = _format_metric(row.get("diocotron_mode_base"), ".0f")
+        lines.extend(
+            [
+                (
+                    f"  {f'normalized mode k={mode} amplitude':<38}"
+                    f"{_format_metric(row.get('diocotron_mode_1k_amplitude'))}"
+                ),
+                f"  normalized mode 2k amplitude           {_format_metric(row.get('diocotron_mode_2k_amplitude'))}",
+                f"  normalized mode 3k amplitude           {_format_metric(row.get('diocotron_mode_3k_amplitude'))}",
+                f"  harmonic ratio (2k/k)                  {_format_metric(row.get('diocotron_harmonic_ratio'))}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "Field ranges",
+            (
+                "  density rho                           "
+                f"[{_format_metric(row.get('rho_min'))}, {_format_metric(row.get('rho_max'))}]"
+            ),
+            (
+                "  potential phi                        "
+                f"[{_format_metric(row.get('phi_min'))}, {_format_metric(row.get('phi_max'))}]"
+            ),
+        ]
+    )
+    if row.get("rho_l2_error") is not None or row.get("phi_l2_error") is not None:
+        lines.extend(
+            [
+                "",
+                "Manufactured-solution errors",
+                f"  density L2 / Linf                    {_format_metric(row.get('rho_l2_error'))} / {_format_metric(row.get('rho_linf_error'))}",
+                f"  potential L2 / Linf                  {_format_metric(row.get('phi_l2_error'))} / {_format_metric(row.get('phi_linf_error'))}",
+            ]
+        )
+
+    lines.extend(["", "Linear-solver checks"])
+    if row.get("poisson_solver_rel_residual") is not None:
+        lines.append(
+            "  Poisson independently checked residual "
+            f"{_format_metric(row.get('poisson_solver_rel_residual'))}"
+        )
+    if phase != "initial" and row.get("transport_solver_rel_residual") is not None:
+        lines.append(
+            "  transport independently checked residual "
+            f"{_format_metric(row.get('transport_solver_rel_residual'))}"
+        )
+
+    lines.extend(["", "Phase timings"])
+    timing_rows = [
+        ("beta construction", row.get("beta_build_time") if phase != "initial" else None),
+        ("transport HDG solve", _first_metric(row, "transport_time_total", "transport_time") if phase != "initial" else None),
+        ("Poisson HDG solve", _first_metric(row, "poisson_time_total", "poisson_time")),
+        ("accepted potential trace", row.get("potential_trace_update_time")),
+        ("plot update", row.get("plot_time") if row.get("plot_time") else None),
+        ("accepted-state diagnostics", row.get("diagnostics_time")),
+        ("post-Poisson application work", row.get("post_poisson_application_time")),
+    ]
+    for label, value in timing_rows:
+        if value is not None:
+            lines.append(f"  {label:<38} {_format_metric(value, '.5f')} s")
+    if _verbosity_level(config) >= 3:
+        lines.extend(
+            [
+                "  diagnostics: core                     "
+                f"{_format_metric(row.get('diagnostics_core_time'), '.5f')} s",
+                "  diagnostics: equilibrium potential    "
+                f"{_format_metric(row.get('diagnostics_equilibrium_potential_time'), '.5f')} s",
+                "  diagnostics: equilibrium density      "
+                f"{_format_metric(row.get('diagnostics_equilibrium_density_time'), '.5f')} s",
+                "  diagnostics: azimuthal modes           "
+                f"{_format_metric(row.get('diagnostics_azimuthal_mode_time'), '.5f')} s",
+            ]
+        )
+    lines.extend(["=" * 78, ""])
+    print("\n".join(lines), flush=True)
 
 
 def _parse_case_param(raw: str) -> tuple[str, Any]:
@@ -512,6 +642,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_ilu_permc_spec": args.poisson_ilu_permc_spec,
         "poisson_raw_matrix_format": args.poisson_raw_matrix_format,
         "poisson_raw_block_size": args.poisson_raw_block_size,
+        "poisson_cache_local_factors": args.poisson_cache_local_factors,
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
         "transport_assembly_backend": args.transport_assembly_backend,
         "transport_solver": args.transport_solver,
@@ -648,10 +779,12 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
     if config.case == "rho_helm_wave" and config.transport_boundary_mode == "zero-flux":
         raise ValueError("rho_helm_wave requires eliminated exact density boundary data; zero-flux is invalid")
     if config.poisson_assembly_backend == "cupy":
-        raise NotImplementedError(
-            "Guiding-center Poisson solves do not use assembly_backend='cupy'; "
-            "use 'numba' for host assembly + GPU solve or 'raw-cuda' for direct device CSR AMGX."
-        )
+        if not _is_amgx_solver(config.poisson_solver):
+            raise ValueError("poisson_assembly_backend='cupy' requires poisson_solver='amgx'")
+        if config.poisson_cache_local_factors not in {"none", "schur-cholesky"}:
+            raise ValueError("CuPy guiding-center Poisson local-factor caching requires 'schur-cholesky'")
+        if config.poisson_hdg_postprocess != "none":
+            raise ValueError("CuPy guiding-center Poisson currently requires poisson_hdg_postprocess='none'")
     if config.poisson_assembly_backend == "raw-cuda":
         if not _is_amgx_solver(config.poisson_solver):
             raise ValueError("poisson_assembly_backend='raw-cuda' requires poisson_solver='amgx'")
@@ -659,6 +792,23 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             raise ValueError("poisson_assembly_backend='raw-cuda' requires poisson_raw_matrix_format='csr'")
         if config.poisson_hdg_postprocess != "none":
             raise ValueError("raw-CUDA guiding-center Poisson currently requires poisson_hdg_postprocess='none'")
+
+
+def _fixed_operator_trace_predictor(current, previous=None, older=None):
+    """Predict the next trace from up to three accepted fixed-operator solves."""
+    if older is not None:
+        return (
+            trace_linear_combination(
+                [(3.0, current), (-3.0, previous), (1.0, older)]
+            ),
+            2,
+        )
+    if previous is not None:
+        return (
+            trace_linear_combination([(2.0, current), (-1.0, previous)]),
+            1,
+        )
+    return current, 0
 
 
 def _average_boundary_data(left, right):
@@ -689,9 +839,12 @@ def _compute_diagnostics(
         baseline_q_l2: float,
         equilibrium_potential=None,
         equilibrium_density=None,
+        equilibrium_potential_l2: float | None = None,
+        equilibrium_density_l2: float | None = None,
         extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
+    core_start = time.perf_counter()
     phi_field = poisson_result.field
     q_l2 = poisson_result.flux.l2_norm()
     mass = rho_field.integral()
@@ -703,6 +856,7 @@ def _compute_diagnostics(
     rho_linf_error = None if exact_density is None else rho_field.space.linf_diff(rho_field, exact_density)
     phi_l2_error = None if exact_potential is None else phi_field.space.l2_diff(phi_field, exact_potential)
     phi_linf_error = None if exact_potential is None else phi_field.space.linf_diff(phi_field, exact_potential)
+    core_time = time.perf_counter() - core_start
     row: dict[str, Any] = {
         "step": int(step),
         "time": float(time_value),
@@ -713,6 +867,11 @@ def _compute_diagnostics(
         "q_l2_drift": q_l2 - baseline_q_l2,
         "q_l2_relative_drift": relative_drift(q_l2, baseline_q_l2),
         "energy_from_q_l2": 0.5 * q_l2 * q_l2,
+        "energy_drift": 0.5 * (q_l2 * q_l2 - baseline_q_l2 * baseline_q_l2),
+        "energy_relative_drift": relative_drift(
+            0.5 * q_l2 * q_l2,
+            0.5 * baseline_q_l2 * baseline_q_l2,
+        ),
         "rho_min": rho_min,
         "rho_max": rho_max,
         "phi_min": phi_min,
@@ -721,21 +880,41 @@ def _compute_diagnostics(
         "rho_linf_error": rho_linf_error,
         "phi_l2_error": phi_l2_error,
         "phi_linf_error": phi_linf_error,
+        "diagnostics_core_time": core_time,
+        "diagnostics_equilibrium_potential_time": 0.0,
+        "diagnostics_equilibrium_density_time": 0.0,
+        "diagnostics_azimuthal_mode_time": 0.0,
     }
     if equilibrium_potential is not None:
+        phase_start = time.perf_counter()
         phi_eq_l2 = phi_field.space.l2_diff(phi_field, equilibrium_potential)
-        eq_norm = max(equilibrium_potential.l2_norm(), 1.0e-300)
+        eq_norm = max(
+            equilibrium_potential.l2_norm()
+            if equilibrium_potential_l2 is None
+            else float(equilibrium_potential_l2),
+            1.0e-300,
+        )
         row["diocotron_phi_eq_l2"] = phi_eq_l2
         row["diocotron_phi_eq_relative_l2"] = phi_eq_l2 / eq_norm
         row["diocotron_phi_eq_linf"] = phi_field.space.linf_diff(phi_field, equilibrium_potential)
+        row["diagnostics_equilibrium_potential_time"] = time.perf_counter() - phase_start
     if equilibrium_density is not None:
+        phase_start = time.perf_counter()
         rho_eq_l2 = rho_field.space.l2_diff(rho_field, equilibrium_density)
-        eq_norm = max(equilibrium_density.l2_norm(), 1.0e-300)
+        eq_norm = max(
+            equilibrium_density.l2_norm()
+            if equilibrium_density_l2 is None
+            else float(equilibrium_density_l2),
+            1.0e-300,
+        )
         row["diocotron_rho_eq_l2"] = rho_eq_l2
         row["diocotron_rho_eq_relative_l2"] = rho_eq_l2 / eq_norm
+        row["diagnostics_equilibrium_density_time"] = time.perf_counter() - phase_start
+        phase_start = time.perf_counter()
         row.update(
             azimuthal_mode_diagnostics(rho_field, equilibrium_density, int(case.parameters.get("k", 0)))
         )
+        row["diagnostics_azimuthal_mode_time"] = time.perf_counter() - phase_start
     if extra:
         row.update(extra)
     row["diagnostics_time"] = time.perf_counter() - start
@@ -774,6 +953,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
         trace_basis=config.trace_basis,
         raw_matrix_format=config.poisson_raw_matrix_format,
         raw_block_size=config.poisson_raw_block_size,
+        cache_local_factors=config.poisson_cache_local_factors,
         boundary_mode="eliminate",
         hdg_postprocess=config.poisson_hdg_postprocess,
         verbose=_solver_verbosity(config),
@@ -886,6 +1066,30 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
     radial_power = result.config.case_params.get("p")
     if radial_power is not None:
         run_rows.insert(3, ("radial p", radial_power, ".4g"))
+    final_rows = [
+        ("time", final["time"], ".4e"),
+        ("relative mass drift", final["mass_relative_drift"], ".4e"),
+        ("electrostatic energy", final["energy_from_q_l2"], ".4e"),
+        ("relative energy drift", final["energy_relative_drift"], ".4e"),
+    ]
+    if final.get("diocotron_phi_eq_l2") is not None:
+        final_rows.extend(
+            [
+                ("||phi - phi_eq|| L2", final["diocotron_phi_eq_l2"], ".4e"),
+                ("relative equilibrium departure", final["diocotron_phi_eq_relative_l2"], ".4e"),
+            ]
+        )
+    if final.get("diocotron_mode_1k_amplitude") is not None:
+        final_rows.extend(
+            [
+                ("normalized k-mode amplitude", final["diocotron_mode_1k_amplitude"], ".4e"),
+                ("2k/k harmonic ratio", final["diocotron_harmonic_ratio"], ".4e"),
+            ]
+        )
+    if final.get("rho_l2_error") is not None:
+        final_rows.append(("rho L2 error", final["rho_l2_error"], ".4e"))
+    if final.get("phi_l2_error") is not None:
+        final_rows.append(("phi L2 error", final["phi_l2_error"], ".4e"))
     pretty_print_sections(
         [
             (
@@ -894,19 +1098,15 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
             ),
             (
                 "Final diagnostics",
-                [
-                    ("time", final["time"], ".4e"),
-                    ("mass drift", final["mass_relative_drift"], ".4e"),
-                    ("q L2 drift", final["q_l2_relative_drift"], ".4e"),
-                    ("rho L2 error", np.nan if final.get("rho_l2_error") is None else final["rho_l2_error"], ".4e"),
-                    ("phi L2 error", np.nan if final.get("phi_l2_error") is None else final["phi_l2_error"], ".4e"),
-                ],
+                final_rows,
             ),
             (
                 "Outputs",
                 [
-                    ("CSV", str(result.csv_path), "s"),
-                    ("JSONL", str(result.jsonl_path), "s"),
+                    ("Diagnostics CSV", str(result.csv_path), "s"),
+                    ("Diagnostics JSONL", str(result.jsonl_path), "s"),
+                    ("Every-step timings CSV", str(result.timings_csv_path), "s"),
+                    ("Every-step timings JSONL", str(result.timings_jsonl_path), "s"),
                 ],
             ),
         ],
@@ -944,15 +1144,27 @@ def run_guiding_center_case(
             f"mesh has {mesh.num_tri:,} triangles, below the configured minimum of "
             f"{config.minimum_triangles:,}; reduce mesh_size"
         )
-    space = DGSpace(
-        mesh,
-        config.order,
-        basis_type=config.basis,
-        volume_quadrature=config.volume_quadrature,
-        volume_quad_1d=config.volume_quad_1d,
-        edge_quad_1d=config.edge_quad_1d,
+    post_mesh_start = time.perf_counter()
+    space, _ = timed_call(
+        "[gc:init] building DG space and quadrature data",
+        _detail_verbosity(config),
+        lambda: DGSpace(
+            mesh,
+            config.order,
+            basis_type=config.basis,
+            volume_quadrature=config.volume_quadrature,
+            volume_quad_1d=config.volume_quad_1d,
+            edge_quad_1d=config.edge_quad_1d,
+        ),
     )
-    rho_field = space.project_callable(case.initial_density_at(), name="rho_h")
+    rho_field, _ = timed_call(
+        "[gc:init] projecting initial density",
+        _detail_verbosity(config),
+        lambda: space.project_callable(case.initial_density_at(), name="rho_h"),
+    )
+    solver_data_start = time.perf_counter()
+    if _detail_verbosity(config):
+        print("[gc:init] preparing solver fields and options ... ", end="", flush=True)
     zero_reaction = space.zeros(name="zero_reaction_h")
     one_reaction = space.constant(1.0, name="one_reaction_h")
     poisson_options = _make_poisson_options(config)
@@ -964,53 +1176,87 @@ def run_guiding_center_case(
     if case.key == "rho_helm_wave" and transport_boundary_mode != "eliminate":
         raise ValueError("rho_helm_wave requires boundary_mode='eliminate' with exact density data")
     transport_options = _make_transport_options(config, transport_boundary_mode)
+    if _detail_verbosity(config):
+        print(
+            f"done in {time.perf_counter() - solver_data_start:.5f}s",
+            flush=True,
+        )
 
     equilibrium_potential = None
     equilibrium_density = None
+    equilibrium_potential_l2 = None
+    equilibrium_density_l2 = None
     poisson_solver = None
     poisson_initial_guess = None
     if case.equilibrium_density is not None:
-        equilibrium_density = space.project_callable(case.equilibrium_density, name="rho_eq_h")
-        equilibrium_solver = DiffusionReactionHDGSolver(
-            space,
-            source=equilibrium_density,
-            reaction=zero_reaction,
-            boundary_condition=case.potential_boundary_at(0.0),
-            options=poisson_options,
+        equilibrium_density, _ = timed_call(
+            "[gc:init] projecting equilibrium density",
+            _detail_verbosity(config),
+            lambda: space.project_callable(case.equilibrium_density, name="rho_eq_h"),
         )
+        equilibrium_density_l2, _ = timed_call(
+            "[gc:init] computing equilibrium-density norm",
+            _detail_verbosity(config),
+            equilibrium_density.l2_norm,
+        )
+        equilibrium_solver, _ = timed_call(
+            "[gc:init] constructing equilibrium Poisson solver",
+            _detail_verbosity(config),
+            lambda: DiffusionReactionHDGSolver(
+                space,
+                source=equilibrium_density,
+                reaction=zero_reaction,
+                boundary_condition=case.potential_boundary_at(0.0),
+                options=poisson_options,
+            ),
+        )
+        if _detail_verbosity(config):
+            print(
+                "[gc:init] mesh-to-first-Poisson setup ... "
+                f"done in {time.perf_counter() - post_mesh_start:.5f}s",
+                flush=True,
+            )
         equilibrium_result = equilibrium_solver.solve()
         equilibrium_potential = equilibrium_result.field
-        if config.poisson_reuse_equilibrium_solver:
-            # The Poisson operator is source-independent.  Keep the class
-            # solver's assembled operator and, for host Krylov solves, retain
-            # the ILU built for the equilibrium solve instead of factoring the
-            # identical matrix at every time step.
-            poisson_solver = equilibrium_solver
-            poisson_initial_guess = solution_trace(equilibrium_result, space, reduced=False)
-            if config.poisson_preconditioner is not None:
-                global_result = equilibrium_result.global_solve_result
-                reusable_preconditioner = None if global_result is None else global_result.preconditioner
-                if reusable_preconditioner is None:
-                    raise RuntimeError(
-                        "poisson_reuse_equilibrium_solver requested a reusable preconditioner, "
-                        "but the equilibrium solve did not produce one"
-                    )
-                poisson_solver.options = poisson_solver.options.with_overrides(
-                    preconditioner=reusable_preconditioner
+        equilibrium_potential_l2 = equilibrium_potential.l2_norm()
+        # The guiding-center Poisson operator is fixed for the complete run.
+        # Retain the equilibrium solver unconditionally so the perturbed initial
+        # state and every accepted step reuse its trace operator, local factors,
+        # global factorization/preconditioner, and AMGX hierarchy.
+        poisson_solver = equilibrium_solver
+        poisson_initial_guess = solution_trace(equilibrium_result, space, reduced=False)
+        if config.poisson_preconditioner is not None:
+            global_result = equilibrium_result.global_solve_result
+            reusable_preconditioner = None if global_result is None else global_result.preconditioner
+            if reusable_preconditioner is None:
+                raise RuntimeError(
+                    "fixed guiding-center Poisson reuse requires a reusable preconditioner, "
+                    "but the equilibrium solve did not produce one"
                 )
-            poisson_solver.set_source(rho_field)
-            poisson_solver.set_boundary_condition(case.potential_boundary_at(0.0))
-        else:
-            equilibrium_solver.clear_cache()
+            poisson_solver.options = poisson_solver.options.with_overrides(
+                preconditioner=reusable_preconditioner
+            )
+        poisson_solver.set_source(rho_field)
+        poisson_solver.set_boundary_condition(case.potential_boundary_at(0.0))
 
     if poisson_solver is None:
-        poisson_solver = DiffusionReactionHDGSolver(
-            space,
-            source=rho_field,
-            reaction=zero_reaction,
-            boundary_condition=case.potential_boundary_at(0.0),
-            options=poisson_options,
+        poisson_solver, _ = timed_call(
+            "[gc:init] constructing initial Poisson solver",
+            _detail_verbosity(config),
+            lambda: DiffusionReactionHDGSolver(
+                space,
+                source=rho_field,
+                reaction=zero_reaction,
+                boundary_condition=case.potential_boundary_at(0.0),
+                options=poisson_options,
+            ),
         )
+        if _detail_verbosity(config):
+            print(
+                "[gc:init] mesh-to-first-Poisson setup ... "
+                f"done in {time.perf_counter() - post_mesh_start:.5f}s",
+                flush=True,
+            )
     poisson_result = poisson_solver.solve(initial_guess=poisson_initial_guess)
     transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
     transport_preconditioner_reused = False
@@ -1024,10 +1270,14 @@ def run_guiding_center_case(
         backend="device" if prefer_device_trace else "host",
     )
     potential_trace = solution_trace(poisson_result, space, reduced=False)
+    previous_potential_trace = None
+    older_potential_trace = None
 
     baseline_mass = rho_field.integral()
     baseline_q_l2 = poisson_result.flux.l2_norm()
-    recorder = DiagnosticsRecorder(config.diagnostics_dir, config.diagnostics_prefix or preset_key)
+    output_stem = config.diagnostics_prefix or preset_key
+    recorder = DiagnosticsRecorder(config.diagnostics_dir, output_stem)
+    timing_recorder = DiagnosticsRecorder(config.diagnostics_dir, f"{output_stem}_timings")
     plotter = None
     try:
         initial_extra = solver_result_metrics("poisson", poisson_result)
@@ -1042,6 +1292,7 @@ def run_guiding_center_case(
                 "plot_time": 0.0,
             }
         )
+        timing_recorder.record({"step": 0, "time": 0.0, **initial_extra})
         row = _compute_diagnostics(
             case=case,
             rho_field=rho_field,
@@ -1052,6 +1303,8 @@ def run_guiding_center_case(
             baseline_q_l2=baseline_q_l2,
             equilibrium_potential=equilibrium_potential,
             equilibrium_density=equilibrium_density,
+            equilibrium_potential_l2=equilibrium_potential_l2,
+            equilibrium_density_l2=equilibrium_density_l2,
             extra=initial_extra,
         )
         if config.plot_every > 0:
@@ -1081,7 +1334,14 @@ def run_guiding_center_case(
             endpoint_poisson_boundary = case.potential_boundary_at(next_time)
             step_transport_source = rho_field
             step_transport_initial_guess = density_trace
-            step_poisson_initial_guess = potential_trace
+            accepted_potential_trace = potential_trace
+            step_poisson_initial_guess, poisson_predictor_order = _fixed_operator_trace_predictor(
+                potential_trace,
+                previous_potential_trace,
+                older_potential_trace,
+            )
+            potential_trace_time = 0.0
+            post_poisson_start = None
 
             beta_start = time.perf_counter()
             predictor_beta = perpendicular_vector_field(poisson_result.flux, config.dt, space)
@@ -1121,8 +1381,13 @@ def run_guiding_center_case(
                 transport_result = predictor_transport_result
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
-                poisson_result = poisson_solver.solve(initial_guess=potential_trace)
-                potential_trace = solution_trace(poisson_result, space, reduced=False)
+                poisson_result = poisson_solver.solve(initial_guess=step_poisson_initial_guess)
+                post_poisson_start = time.perf_counter()
+                potential_trace, potential_trace_time = timed_call(
+                    "[gc] updating accepted potential trace",
+                    _detail_verbosity(config),
+                    lambda: solution_trace(poisson_result, space, reduced=False),
+                )
                 stage_extra: dict[str, Any] = {}
                 poisson_time = poisson_result.timings.total
                 transport_time = transport_result.timings.total
@@ -1147,7 +1412,7 @@ def run_guiding_center_case(
             else:
                 poisson_solver.set_source(predictor_density)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
-                predictor_poisson_result = poisson_solver.solve(initial_guess=potential_trace)
+                predictor_poisson_result = poisson_solver.solve(initial_guess=step_poisson_initial_guess)
                 predictor_potential_trace = solution_trace(
                     predictor_poisson_result,
                     space,
@@ -1200,7 +1465,12 @@ def run_guiding_center_case(
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
                 poisson_result = poisson_solver.solve(initial_guess=predictor_potential_trace)
-                potential_trace = solution_trace(poisson_result, space, reduced=False)
+                post_poisson_start = time.perf_counter()
+                potential_trace, potential_trace_time = timed_call(
+                    "[gc] updating accepted potential trace",
+                    _detail_verbosity(config),
+                    lambda: solution_trace(poisson_result, space, reduced=False),
+                )
                 poisson_time = predictor_poisson_result.timings.total + poisson_result.timings.total
                 transport_time = predictor_transport_result.timings.total + transport_result.timings.total
                 stage_extra = solver_result_metrics("predictor_transport", predictor_transport_result)
@@ -1208,11 +1478,33 @@ def run_guiding_center_case(
                 stage_extra.update(solver_result_metrics("corrector_transport", transport_result))
                 stage_extra.update(solver_result_metrics("final_poisson", poisson_result))
 
+            stage_extra["poisson_predictor_order"] = poisson_predictor_order
+            timing_row = solver_result_metrics("poisson", poisson_result)
+            timing_row.update(solver_result_metrics("transport", transport_result))
+            timing_row.update(stage_extra)
+            timing_row.update(
+                {
+                    "step": step,
+                    "time": next_time,
+                    "phase": "step",
+                    "time_scheme": config.time_scheme,
+                    "beta_build_time": beta_build_time,
+                    "poisson_time": poisson_time,
+                    "transport_time": transport_time,
+                    "potential_trace_update_time": potential_trace_time,
+                }
+            )
+            timing_recorder.record(timing_row)
+            older_potential_trace = previous_potential_trace
+            previous_potential_trace = accepted_potential_trace
+
             current_time = next_time
             should_plot = config.plot_every > 0 and step % config.plot_every == 0
             should_record = step % config.diagnostics_every == 0 or step == config.num_steps
             plot_elapsed = 0.0
             if should_plot:
+                if _detail_verbosity(config):
+                    print("[gc] updating PyVista plot ... ", end="", flush=True)
                 plot_start = time.perf_counter()
                 if plotter is None:
                     plotter = GuidingCenterPyVistaPanels(
@@ -1228,6 +1520,8 @@ def run_guiding_center_case(
                     )
                 plotter.update(rho_field, poisson_result.field, step=step, time_value=current_time)
                 plot_elapsed = time.perf_counter() - plot_start
+                if _detail_verbosity(config):
+                    print(f"done in {plot_elapsed:.5f}s", flush=True)
 
             if should_record:
                 extra = solver_result_metrics("poisson", poisson_result)
@@ -1250,24 +1544,44 @@ def run_guiding_center_case(
                             )
                         ),
                         "plot_time": plot_elapsed,
+                        "potential_trace_update_time": potential_trace_time,
                     }
                 )
-                row = _compute_diagnostics(
-                    case=case,
-                    rho_field=rho_field,
-                    poisson_result=poisson_result,
-                    step=step,
-                    time_value=current_time,
-                    baseline_mass=baseline_mass,
-                    baseline_q_l2=baseline_q_l2,
-                    equilibrium_potential=equilibrium_potential,
-                    equilibrium_density=equilibrium_density,
-                    extra=extra,
+                row, diagnostics_wall_time = timed_call(
+                    "[gc] computing accepted-step diagnostics",
+                    _detail_verbosity(config),
+                    lambda: _compute_diagnostics(
+                        case=case,
+                        rho_field=rho_field,
+                        poisson_result=poisson_result,
+                        step=step,
+                        time_value=current_time,
+                        baseline_mass=baseline_mass,
+                        baseline_q_l2=baseline_q_l2,
+                        equilibrium_potential=equilibrium_potential,
+                        equilibrium_density=equilibrium_density,
+                        equilibrium_potential_l2=equilibrium_potential_l2,
+                        equilibrium_density_l2=equilibrium_density_l2,
+                        extra=extra,
+                    ),
                 )
-                recorder.record(row)
+                row["diagnostics_wall_time"] = diagnostics_wall_time
+                row["post_poisson_application_time"] = (
+                    time.perf_counter() - post_poisson_start
+                    if post_poisson_start is not None
+                    else potential_trace_time + plot_elapsed + diagnostics_wall_time
+                )
+                timed_call(
+                    "[gc] writing diagnostics JSONL",
+                    _detail_verbosity(config),
+                    lambda: recorder.record(row),
+                )
                 _print_step_summary(config, row)
     finally:
-        recorder.close()
+        try:
+            recorder.close()
+        finally:
+            timing_recorder.close()
 
     result = GuidingCenterRunResult(
         config=config,
@@ -1281,6 +1595,8 @@ def run_guiding_center_case(
         diagnostics=recorder.rows,
         csv_path=recorder.csv_path,
         jsonl_path=recorder.jsonl_path,
+        timings_csv_path=timing_recorder.csv_path,
+        timings_jsonl_path=timing_recorder.jsonl_path,
     )
     _print_run_summary(result)
     return result
@@ -1308,6 +1624,11 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     )
     parser.add_argument("--poisson-raw-matrix-format", choices=("coo", "csr"), default=None)
     parser.add_argument("--poisson-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
+    parser.add_argument(
+        "--poisson-cache-local-factors",
+        choices=("none", "schur-lu", "schur-cholesky"),
+        default=None,
+    )
     parser.add_argument("--poisson-hdg-postprocess", choices=("none", "primal", "flux", "both"), default=None)
 
     parser.add_argument("--transport-assembly-backend", choices=("numpy", "numba", "cupy", "raw-cuda", "auto"), default=None)

@@ -23,6 +23,8 @@ import numpy as np
 _MESH_CACHE_VERSION = 2
 _MESH_CACHE_MAGIC = b"HDGFEM_MESH_CACHE_V2\n"
 _DEFAULT_MESH_CACHE_DIR = Path(".cache") / "hdgfem" / "meshes"
+_UNIFORM_GMSH_MAX_EDGE_FACTOR = 4.0
+_MESH_VALIDATION_CHUNK_SIZE = 262_144
 
 
 def default_mesh_cache_dir() -> Path:
@@ -98,7 +100,65 @@ def _mesh_cache_files(
     return [default_mesh_cache_dir() / filename, _fallback_mesh_cache_dir() / filename], payload_json
 
 
-def _load_cached_gmsh_mesh(cache_path: Path, expected_cache_key_json: str) -> DGMesh:
+def _validate_uniform_gmsh_mesh_arrays(
+        node_coords: np.ndarray,
+        triangles: np.ndarray,
+        mesh_size: float,
+) -> None:
+    """Validate raw arrays produced for a uniformly sized Gmsh mesh.
+
+    The cache key authenticates the requested geometry, not the generated
+    arrays. In particular, Gmsh can leave a finely discretized boundary around
+    a severely under-resolved interior if generation terminates abnormally.
+    Work in chunks so validation does not create element-sized temporary arrays
+    for an entire large mesh at once.
+    """
+    nodes = np.asarray(node_coords)
+    tris = np.asarray(triangles)
+    target_size = float(mesh_size)
+    if not np.isfinite(target_size) or target_size <= 0.0:
+        raise ValueError("uniform Gmsh mesh_size must be finite and positive")
+    if nodes.ndim != 2 or nodes.shape[1] != 2 or nodes.shape[0] == 0:
+        raise ValueError(f"invalid uniform Gmsh node array shape {nodes.shape}")
+    if tris.ndim != 2 or tris.shape[1] != 3 or tris.shape[0] == 0:
+        raise ValueError(f"invalid uniform Gmsh triangle array shape {tris.shape}")
+    for start in range(0, nodes.shape[0], _MESH_VALIDATION_CHUNK_SIZE):
+        if not np.all(np.isfinite(nodes[start:start + _MESH_VALIDATION_CHUNK_SIZE])):
+            raise ValueError("uniform Gmsh mesh contains non-finite node coordinates")
+    if np.min(tris) < 0 or np.max(tris) >= nodes.shape[0]:
+        raise ValueError("uniform Gmsh mesh contains out-of-range node indices")
+
+    maximum_edge_squared = (_UNIFORM_GMSH_MAX_EDGE_FACTOR * target_size) ** 2
+    for start in range(0, tris.shape[0], _MESH_VALIDATION_CHUNK_SIZE):
+        chunk = tris[start:start + _MESH_VALIDATION_CHUNK_SIZE]
+        vertices = nodes[chunk]
+        area_twice = (
+            (vertices[:, 1, 0] - vertices[:, 0, 0])
+            * (vertices[:, 2, 1] - vertices[:, 0, 1])
+            - (vertices[:, 1, 1] - vertices[:, 0, 1])
+            * (vertices[:, 2, 0] - vertices[:, 0, 0])
+        )
+        if not np.all(np.isfinite(area_twice)) or np.any(area_twice == 0.0):
+            raise ValueError("uniform Gmsh mesh contains degenerate triangles")
+        for first, second in ((0, 1), (1, 2), (2, 0)):
+            delta = vertices[:, first] - vertices[:, second]
+            edge_squared = np.einsum("ij,ij->i", delta, delta)
+            largest_edge_squared = float(np.max(edge_squared))
+            if largest_edge_squared > maximum_edge_squared:
+                largest_edge = float(np.sqrt(largest_edge_squared))
+                raise ValueError(
+                    "uniform Gmsh mesh violates requested sizing: "
+                    f"maximum edge {largest_edge:.6g} exceeds "
+                    f"{_UNIFORM_GMSH_MAX_EDGE_FACTOR:g} * mesh_size "
+                    f"({target_size:.6g})"
+                )
+
+
+def _load_cached_gmsh_mesh(
+        cache_path: Path,
+        expected_cache_key_json: str,
+        mesh_size: float,
+) -> DGMesh:
     """Load a cached mesh from ``cache_path`` and rebuild derived connectivity.
 
     Version 2 cache files are a simple streaming format: a short magic header,
@@ -120,6 +180,7 @@ def _load_cached_gmsh_mesh(cache_path: Path, expected_cache_key_json: str) -> DG
                 raise ValueError("mesh cache key mismatch")
             node_coords = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.float64)
             triangles = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.int64)
+            _validate_uniform_gmsh_mesh_arrays(node_coords, triangles, mesh_size)
             return DGMesh.from_arrays(node_coords, triangles)
 
         handle.seek(0)
@@ -130,6 +191,7 @@ def _load_cached_gmsh_mesh(cache_path: Path, expected_cache_key_json: str) -> DG
                     raise ValueError("mesh cache key mismatch")
             node_coords = np.ascontiguousarray(data["node_coords"], dtype=np.float64)
             triangles = np.ascontiguousarray(data["triangles"], dtype=np.int64)
+        _validate_uniform_gmsh_mesh_arrays(node_coords, triangles, mesh_size)
         return DGMesh.from_arrays(node_coords, triangles)
 
 
@@ -573,6 +635,21 @@ def _set_gmsh_number_option(gmsh, name: str, value: float | int) -> None:
         pass
 
 
+def _set_required_gmsh_number_option(gmsh, name: str, value: float | int) -> None:
+    """Set and verify a numeric Gmsh option required for mesh correctness."""
+    requested = float(value)
+    try:
+        gmsh.option.setNumber(name, requested)
+        actual = float(gmsh.option.getNumber(name))
+    except Exception as exc:
+        raise RuntimeError(f"required Gmsh option {name!r} is unavailable") from exc
+    if not np.isclose(actual, requested, rtol=1.0e-12, atol=0.0):
+        raise RuntimeError(
+            f"required Gmsh option {name!r} was not applied: "
+            f"requested {requested:g}, got {actual:g}"
+        )
+
+
 def _gmsh_model_to_mesh(gmsh, *, write_path: str | None = None) -> DGMesh:
     """Extract first-order triangular cells from the active Gmsh model."""
     if write_path is not None:
@@ -673,7 +750,7 @@ def _generate_gmsh_mesh(
         for index, cache_path in enumerate(cache_paths):
             if cache_path.exists():
                 try:
-                    mesh = _load_cached_gmsh_mesh(cache_path, cache_key_json)
+                    mesh = _load_cached_gmsh_mesh(cache_path, cache_key_json, mesh_size)
                 except Exception as exc:
                     _mesh_cache_log(
                         f"mesh cache read failed for {model_name!r} at {cache_path}: {exc}; regenerating",
@@ -714,8 +791,8 @@ def _generate_gmsh_mesh(
         gmsh.model.add(model_name)
         _set_gmsh_number_option(gmsh, "General.Verbosity", int(verbosity))
         _set_gmsh_number_option(gmsh, "Mesh.ElementOrder", 1)
-        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMin", mesh_size)
-        _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMax", mesh_size)
+        _set_required_gmsh_number_option(gmsh, "Mesh.MeshSizeMin", mesh_size)
+        _set_required_gmsh_number_option(gmsh, "Mesh.MeshSizeMax", mesh_size)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMin", mesh_size)
         _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMax", mesh_size)
         _set_gmsh_thread_options(gmsh, num_threads)
@@ -737,6 +814,7 @@ def _generate_gmsh_mesh(
         gmsh.model.addPhysicalGroup(2, [surface_tag], tag=1, name=model_name)
         gmsh.model.mesh.generate(2)
         mesh = _gmsh_model_to_mesh(gmsh, write_path=write_path)
+        _validate_uniform_gmsh_mesh_arrays(mesh.node_coords, mesh.triangles, mesh_size)
         _mesh_cache_log(
             f"generated Gmsh mesh for {model_name!r} "
             f"(nodes={mesh.node_coords.shape[0]}, triangles={mesh.num_tri})",

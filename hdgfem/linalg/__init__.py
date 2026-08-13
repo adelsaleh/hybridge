@@ -14,6 +14,7 @@ from .ordering import (
 )
 from .system import (
     KnownDofReduction,
+    LinearSolveCapacityError,
     LinearSolveConvergenceError,
     LinearSolveError,
     SolveStatus,
@@ -43,6 +44,7 @@ __all__ = [
     "GraphOrderingResult",
     "GraphOrderingTimings",
     "KnownDofReduction",
+    "LinearSolveCapacityError",
     "LinearSolveConvergenceError",
     "LinearSolveError",
     "LevelWidthDiagnostics",

@@ -55,6 +55,25 @@ class LinearSolveConvergenceError(LinearSolveError):
     """Raised when a backend does not produce a validated solution."""
 
 
+class LinearSolveCapacityError(LinearSolveError):
+    """Raised when a backend cannot proceed because device capacity is exhausted."""
+
+    def __init__(
+            self,
+            message: str,
+            *,
+            backend: str | None = None,
+            phase: str | None = None,
+            memory: Mapping[str, Any] | None = None,
+            result: "SolveResult | None" = None,
+    ):
+        """Initialize a terminal capacity failure with structured diagnostics."""
+        super().__init__(message, result=result)
+        self.backend = backend
+        self.phase = phase
+        self.memory = dict(memory or {})
+
+
 def _import_pypardiso():
     """Import the optional oneMKL PARDISO adapter only when requested."""
     try:
@@ -3057,6 +3076,7 @@ def solve_global_system(
 __all__ = [
     "KrylovIterationCounter",
     "KnownDofReduction",
+    "LinearSolveCapacityError",
     "LinearSolveConvergenceError",
     "LinearSolveError",
     "SolveResult",

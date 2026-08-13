@@ -21,7 +21,12 @@ from scripts.guiding_center.guiding_center_cases import (
 )
 from scripts.guiding_center.guiding_center_presets import preset_by_key
 from hdgfem.core.field_ops import project_callable_to_trace
-from scripts.guiding_center.run_guiding_center_cases import run_guiding_center_case
+from scripts.guiding_center.run_guiding_center_cases import (
+    _fixed_operator_trace_predictor,
+    _print_step_summary,
+    _validate_config,
+    run_guiding_center_case,
+)
 
 
 def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
@@ -54,8 +59,16 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
     csv_path = tmp_path / "diocotron_gaussian_smoke_test.csv"
     jsonl_path = tmp_path / "diocotron_gaussian_smoke_test.jsonl"
+    timings_csv_path = tmp_path / "diocotron_gaussian_smoke_test_timings.csv"
+    timings_jsonl_path = tmp_path / "diocotron_gaussian_smoke_test_timings.jsonl"
     assert csv_path.exists()
     assert jsonl_path.exists()
+    assert timings_csv_path.exists()
+    assert timings_jsonl_path.exists()
+    timing_rows = [json.loads(line) for line in timings_jsonl_path.read_text().splitlines()]
+    assert [row["step"] for row in timing_rows] == [0, 1]
+    assert "poisson_time_total" in timing_rows[-1]
+    assert "transport_time_total" in timing_rows[-1]
 
     final = json.loads(jsonl_path.read_text().strip().splitlines()[-1])
     for key in ("mass_relative_drift", "q_l2_relative_drift", "rho_min", "rho_max", "transport_solver_residual"):
@@ -67,6 +80,24 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
 
 def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
     assert tuple(CASE_DEFINITIONS) == ("diocotron_gaussian_annulus", "diocotron_k", "rho_helm_wave")
+
+
+def test_fixed_operator_trace_predictor_uses_constant_linear_then_quadratic_history() -> None:
+    current = np.array([3.0, -1.0])
+    previous = np.array([2.0, -2.0])
+    older = np.array([1.5, -4.0])
+
+    constant, order = _fixed_operator_trace_predictor(current)
+    assert constant is current
+    assert order == 0
+
+    linear, order = _fixed_operator_trace_predictor(current, previous)
+    np.testing.assert_allclose(linear, 2.0 * current - previous)
+    assert order == 1
+
+    quadratic, order = _fixed_operator_trace_predictor(current, previous, older)
+    np.testing.assert_allclose(quadratic, 3.0 * current - 3.0 * previous + older)
+    assert order == 2
 
 
 def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
@@ -183,7 +214,6 @@ def test_gaussian_annulus_k3_p6_numba_ilu_upwind_preset() -> None:
     assert config.poisson_preconditioner == "ilu"
     assert config.poisson_ilu_fill_factor == pytest.approx(35.0)
     assert config.poisson_ilu_permc_spec == "NATURAL"
-    assert config.poisson_reuse_equilibrium_solver is True
     assert config.poisson_hdg_postprocess == "none"
     assert config.transport_assembly_backend == "numba"
     assert config.transport_solver == "BICGSTAB"
@@ -208,7 +238,6 @@ def test_gaussian_annulus_k3_p6_numba_pypardiso_lu_upwind_preset() -> None:
     assert config.poisson_solver == "pypardiso"
     assert config.poisson_preconditioner is None
     assert config.poisson_scale_system is False
-    assert config.poisson_reuse_equilibrium_solver is True
     assert config.poisson_hdg_postprocess == "none"
     assert config.transport_assembly_backend == "numba"
     assert config.transport_solver == "BICGSTAB"
@@ -249,7 +278,6 @@ def test_gaussian_annulus_k3_p6_50k_matched_comparison_presets(
     assert config.poisson_local_backend == "numba"
     assert config.poisson_solver == poisson_solver
     assert config.poisson_preconditioner == poisson_preconditioner
-    assert config.poisson_reuse_equilibrium_solver is True
     assert config.poisson_hdg_postprocess == "none"
     assert config.transport_assembly_backend == "numba"
     assert config.transport_solver == "BICGSTAB"
@@ -306,7 +334,6 @@ def test_pypardiso_transport_cache_comparison_presets(
     config = preset_by_key(preset_key)
 
     assert config.poisson_solver == "pypardiso"
-    assert config.poisson_reuse_equilibrium_solver is True
     assert config.transport_trace_ordering == ordering
     assert config.transport_ilu_permc_spec == permc_spec
     assert config.transport_reuse_first_preconditioner is reuse
@@ -325,6 +352,7 @@ def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
     assert config.poisson_assembly_backend == "raw-cuda"
     assert config.poisson_solver == "amgx"
     assert config.poisson_raw_matrix_format == "csr"
+    assert config.poisson_cache_local_factors == "schur-cholesky"
     assert config.transport_assembly_backend == "raw-cuda"
     assert config.transport_solver == "amgx"
     assert config.transport_raw_matrix_format == "csr"
@@ -349,7 +377,24 @@ def test_diocotron_k100_stress_preset_uses_resolved_single_mode_band() -> None:
     assert config.transport_solver_rtol == pytest.approx(1.0e-11)
     assert config.transport_initial_guess == "initial-density-trace"
     assert config.poisson_raw_matrix_format == "csr"
+    assert config.poisson_cache_local_factors == "schur-cholesky"
     assert config.transport_raw_matrix_format == "csr"
+
+
+def test_guiding_center_accepts_cupy_schur_cholesky_poisson_configuration() -> None:
+    base = preset_by_key("diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx")
+    config = replace(
+        base,
+        poisson_assembly_backend="cupy",
+        poisson_cache_local_factors="schur-cholesky",
+        poisson_hdg_postprocess="none",
+    )
+
+    _validate_config(config)
+
+    with pytest.raises(ValueError, match="requires 'schur-cholesky'"):
+        _validate_config(replace(config, poisson_cache_local_factors="schur-lu"))
+
 
 
 
@@ -441,11 +486,113 @@ def test_rho_helm_wave_host_accuracy_preset_runs_few_steps(tmp_path: Path) -> No
 
     assert result.csv_path.exists()
     assert result.jsonl_path.exists()
+    assert result.timings_csv_path.exists()
+    assert result.timings_jsonl_path.exists()
+    timing_rows = [json.loads(line) for line in result.timings_jsonl_path.read_text().splitlines()]
+    assert len(timing_rows) == config.num_steps + 1
     assert len(result.diagnostics) == config.num_steps + 1
     assert final["rho_l2_error"] is not None
     assert final["phi_l2_error"] is not None
     assert final["rho_l2_error"] < 2.0e-2
     assert final["phi_l2_error"] < 2.0e-2
+
+
+def test_guiding_center_verbose_logging_reports_post_poisson_work(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = replace(
+        preset_by_key("rho_helm_wave_host_accuracy"),
+        nx=2,
+        ny=2,
+        order=1,
+        num_steps=1,
+        diagnostics_dir=str(tmp_path),
+        diagnostics_prefix="post_poisson_logging_test",
+        verbosity=3,
+        plot_every=0,
+    )
+
+    result = run_guiding_center_case(config, preset_key="rho_helm_wave_host_accuracy")
+    output = capsys.readouterr().out
+    final = result.diagnostics[-1]
+
+    assert "[gc] updating accepted potential trace" in output
+    assert "[gc] computing accepted-step diagnostics" in output
+    assert "[gc] writing diagnostics JSONL" in output
+    assert "GUIDING-CENTER ACCEPTED-STATE DIAGNOSTICS" in output
+    assert "Conservation" in output
+    assert "relative mass drift" in output
+    assert "relative energy drift" in output
+    assert "Linear-solver checks" in output
+    assert "Phase timings" in output
+    assert "accepted-state diagnostics" in output
+    assert "post-Poisson application work" in output
+    assert final["energy_relative_drift"] == pytest.approx(
+        (final["q_l2"] ** 2 - result.diagnostics[0]["q_l2"] ** 2)
+        / result.diagnostics[0]["q_l2"] ** 2
+    )
+    for key in (
+        "potential_trace_update_time",
+        "diagnostics_core_time",
+        "diagnostics_equilibrium_potential_time",
+        "diagnostics_equilibrium_density_time",
+        "diagnostics_azimuthal_mode_time",
+        "diagnostics_wall_time",
+        "post_poisson_application_time",
+    ):
+        assert final[key] >= 0.0
+
+
+def test_diagnostics_block_clearly_labels_instability_and_modes(capsys) -> None:
+    config = replace(
+        preset_by_key("diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx"),
+        verbosity=3,
+    )
+    row = {
+        "phase": "step",
+        "step": 12,
+        "time": 1.2,
+        "mass": 0.25,
+        "mass_relative_drift": 2.0e-14,
+        "q_l2": 0.125,
+        "energy_from_q_l2": 0.0078125,
+        "energy_relative_drift": 4.0e-6,
+        "rho_min": -1.0e-8,
+        "rho_max": 1.04,
+        "phi_min": 2.0e-6,
+        "phi_max": 1.0e-2,
+        "diocotron_phi_eq_l2": 3.0e-5,
+        "diocotron_phi_eq_relative_l2": 7.0e-4,
+        "diocotron_phi_eq_linf": 8.0e-5,
+        "diocotron_rho_eq_l2": 9.0e-4,
+        "diocotron_rho_eq_relative_l2": 1.0e-3,
+        "diocotron_mode_base": 50.0,
+        "diocotron_mode_1k_amplitude": 0.05,
+        "diocotron_mode_2k_amplitude": 0.002,
+        "diocotron_mode_3k_amplitude": 0.0001,
+        "diocotron_harmonic_ratio": 0.04,
+        "poisson_solver_rel_residual": 1.0e-9,
+        "transport_solver_rel_residual": 2.0e-14,
+        "poisson_time": 0.9,
+        "transport_time": 0.4,
+        "diagnostics_time": 0.2,
+        "diagnostics_core_time": 0.03,
+        "diagnostics_equilibrium_potential_time": 0.02,
+        "diagnostics_equilibrium_density_time": 0.01,
+        "diagnostics_azimuthal_mode_time": 0.14,
+    }
+
+    _print_step_summary(config, row)
+    output = capsys.readouterr().out
+
+    assert output.startswith("\n" + "=" * 78)
+    assert "Instability relative to equilibrium" in output
+    assert "potential amplitude ||phi-phi_eq|| L2" in output
+    assert "density amplitude ||rho-rho_eq|| L2" in output
+    assert "normalized mode k=50 amplitude" in output
+    assert "harmonic ratio (2k/k)" in output
+    assert output.endswith("=" * 78 + "\n\n")
 
 
 def test_guiding_center_cli_accepts_response_file(tmp_path: Path) -> None:

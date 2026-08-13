@@ -1991,6 +1991,27 @@ def _compile_kernel(cupy, source: str, name: str, shared_bytes: int) -> str:
     return kernel
 
 
+def _compile_kernel_timed(cupy, source: str, name: str, shared_bytes: int):
+    """Eagerly compile a raw kernel and return its host-side JIT/load time."""
+    start = time.perf_counter()
+    kernel = _compile_kernel(cupy, source, name, shared_bytes)
+    kernel.compile()
+    return kernel, time.perf_counter() - start
+
+
+def _apply_fused_assembly_launch_bounds(
+        source: str, *, kernel_name: str, nel: int, block_size: int
+) -> str:
+    """Apply the measured p6/128-thread occupancy specialization."""
+    if int(nel) != 28 or int(block_size) != 128:
+        return source
+    needle = f'extern "C" __global__ void {kernel_name}('
+    replacement = f'extern "C" __global__ __launch_bounds__(128, 3) void {kernel_name}('
+    if source.count(needle) != 1:
+        raise RuntimeError(f"expected one {kernel_name} entry point for launch-bound specialization")
+    return source.replace(needle, replacement, 1)
+
+
 def _raw_fused_csr_template() -> str:
     """Return the fused raw template with the assembly entry point writing CSR."""
     source = _RAW_FUSED_TEMPLATE
@@ -2219,6 +2240,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         label='fused raw CUDA advection assembly',
     )
     timings: dict[str, float] = {}
+    raw_wall_start = time.perf_counter()
     mesh_h = cspace.host.mesh
     nel = int(cspace.el_dof)
     ntr = int(cspace.edg_dof)
@@ -2247,6 +2269,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=cupy.float64)
     else:
         boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=cupy.float64)
+    cupy.cuda.get_current_stream().synchronize()
+    timings['raw.input_prepare'] = time.perf_counter() - raw_wall_start
 
     csr_pattern = None
     indptr = indices = None
@@ -2296,7 +2320,20 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
             _raw_fused_csr_template(), nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
         )
-        kernel = _compile_kernel(cupy, source, 'assemble_advection_raw_fused_csr', assembly_shared)
+        source = _apply_fused_assembly_launch_bounds(
+            source, kernel_name='assemble_advection_raw_fused_csr', nel=nel, block_size=block_size
+        )
+        compile_start = time.perf_counter()
+        kernel, kernel_jit = _compile_kernel_timed(
+            cupy, source, 'assemble_advection_raw_fused_csr', assembly_shared
+        )
+        timings['raw.kernel.prepare'] = compile_start - start
+        timings['raw.kernel.jit'] = kernel_jit
+        stream = cupy.cuda.get_current_stream()
+        begin = cupy.cuda.Event()
+        end = cupy.cuda.Event()
+        launch_wall_start = time.perf_counter()
+        begin.record(stream)
         grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
         kernel(
             grid,
@@ -2343,7 +2380,20 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
             _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
         )
-        kernel = _compile_kernel(cupy, source, 'assemble_advection_raw_fused', assembly_shared)
+        source = _apply_fused_assembly_launch_bounds(
+            source, kernel_name='assemble_advection_raw_fused', nel=nel, block_size=block_size
+        )
+        compile_start = time.perf_counter()
+        kernel, kernel_jit = _compile_kernel_timed(
+            cupy, source, 'assemble_advection_raw_fused', assembly_shared
+        )
+        timings['raw.kernel.prepare'] = compile_start - start
+        timings['raw.kernel.jit'] = kernel_jit
+        stream = cupy.cuda.get_current_stream()
+        begin = cupy.cuda.Event()
+        end = cupy.cuda.Event()
+        launch_wall_start = time.perf_counter()
+        begin.record(stream)
         grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
         kernel(
             grid,
@@ -2386,14 +2436,26 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
             ),
             shared_mem=int(assembly_shared),
         )
-    cupy.cuda.get_current_stream().synchronize()
-    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = time.perf_counter() - start
+    end.record(stream)
+    end.synchronize()
+    device_seconds = cupy.cuda.get_elapsed_time(begin, end) / 1000.0
+    launch_wall_seconds = time.perf_counter() - launch_wall_start
+    timings['raw.kernel.device'] = device_seconds
+    timings['raw.kernel.wall'] = launch_wall_seconds
+    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = device_seconds
     timings['raw.block_size'] = float(block_size)
+    map_wall = timings.get('raw.csr_pattern.wrapper', timings.get('raw.map_setup', 0.0))
     timings['raw.total'] = (
-        timings.get('raw.map_setup', 0.0)
-        + timings.get('raw.kernel', 0.0)
+        timings.get('raw.input_prepare', 0.0)
+        + map_wall
         + timings.get('raw.csr_zero', 0.0)
-        + timings.get('raw.csr_kernel', 0.0)
+        + timings.get('raw.kernel.prepare', 0.0)
+        + timings.get('raw.kernel.jit', 0.0)
+        + timings.get('raw.kernel.wall', 0.0)
+    )
+    timings['raw.wall_total'] = time.perf_counter() - raw_wall_start
+    timings['raw.unaccounted'] = max(
+        0.0, timings['raw.wall_total'] - timings['raw.total']
     )
     return RawAdvectionAssemblyResult(
         rows=rows,

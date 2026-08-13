@@ -67,6 +67,7 @@ CPU_PARITY_TARGETS = (
 )
 
 GPU_SMOKE_TARGETS = (
+    "tests/test_pyamgx_logging.py::test_amgx_bicgstab_iteration_log_reports_changing_residuals",
     "tests/test_cupy_backend.py::test_advection_reaction_modal_trace_all_backends_match_numpy",
     "tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_zero_flux_matches_numba",
     "tests/test_cupy_backend.py::test_cupyx_solver_matches_direct_small_system",
