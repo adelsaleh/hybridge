@@ -117,9 +117,44 @@ For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR convers
 Working configs:
 
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`: current relative-convergence default for nodal trace standalone diffusion runs.
+- `diff_rea_gpu4_hdg_fgmres_cheb_l1_block_graph_identity_bsr.json`: validated opt-in pure-BSR classical hierarchy using a Frobenius block graph, D2 scalar weights, identity-lifted BSR transfers, weighted BSR Galerkin, and FGMRES; requires the accompanying patched AMGX source.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_identity_bsr.json`: validated PCGF path for the identity-lifted pure-BSR hierarchy. After fixing the multilevel correction overrun, all radius-5 disk cases at 99,896, 124,831, and 150,209 triangles for p=1..6 converge; its high iteration count reflects weak interpolation, not PCGF incompatibility.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_dense_bsr.json`: validated one-step/additive PCGF/Chebyshev baseline for fixed-support dense block interpolation, exact block transpose, and dense BSR Galerkin. It requires the patched AMGX source and sets `aggressive_levels=0`: aggressive D2 can leave fine block rows without interpolation support, whereas the dense mode enforces `sum_c P_ic = I_b` on every row.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_extended_i_dense_bsr.json`: rejected block Extended+i diagnostic retained for reproduction. It is correct and memory-safe, but is one to two PCGF iterations worse than projected Jacobi on the 152,909-triangle p=2/p=6 cases at thresholds 0.25 and 0.47.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_scalar_guided_dense_bsr.json`: rejected mode-aware coarse-face diagnostic retained for reproduction. Any-mode promotion regresses the production-size p=2 case from 20 to 28 iterations and its temporary scalar expansion exceeds the available p=6 setup memory.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_inverse_scaled_dense_bsr.json`: completed diagnostic for the symmetric inverse-diagonal block-action metric. It is slightly worse than raw Frobenius and has higher setup cost; retain it for reproduction, not production.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_normalized_dense_bsr.json`: completed diagnostic for diagonal-normalized Frobenius strength. It shifts the p=6 hierarchy transition but does not beat the raw-Frobenius optimum; retain it for reproduction, not as a production default.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_energy_bsr.json` and `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_energy_strong_bsr.json`: rejected diagnostic configs retained only to reproduce the interpolation screen. Right normalization greatly increases iterations and fails on deeper levels with two or more smoothing steps; do not use these configs for production solves.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive_abs.json`: same PCGF + Chebyshev/L1 hierarchy with `convergence=ABSOLUTE`; used by guiding-center Poisson presets so `poisson_solver_atol` is the AMGX stopping tolerance.
 - `diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json`: second nodal candidate and experimental modal PCGF candidate.
 - `diff_rea_gpu4_hdg_pcgf_classical_amg.json`: conservative classical AMG baseline and modal BICGSTAB preconditioner.
+- `diff_rea_gpu4_hdg_pcgf_aggregation_block_jacobi_bsr.json`: stock-AMGX face-BSR aggregation-AMG path for p=1..4 (block sizes 2..5).
+- `diff_rea_gpu4_hdg_pcgf_aggregation_block_jacobi_frobenius_bsr.json`: opt-in p=1..4 diagnostic using whole-block Frobenius aggregation weights and fused 2x2/3x3/5x5 block Jacobi; requires the accompanying patched AMGX source to be rebuilt.
+- `diff_rea_gpu4_hdg_pcgf_block_jacobi_bsr.json`: face-BSR fallback for p=5..6 (block sizes 6..7), which the current AMGX aggregation kernels do not instantiate.
+
+Direct face-BSR comparison:
+
+```bash
+.venv/bin/python -m scripts.diffusion_reaction.compare_cuda_bsr_csr
+```
+
+The default comparison is trigonometric Poisson on an unstructured radius-5
+disk with mesh size 0.0345 (about 153,000 triangles) at p=6. It keeps scalar
+CSR on the established PCGF/classical-AMG configuration and chooses a
+degree-compatible BSR configuration. On the 2026-08-18 p=6 run, BSR reduced
+compressed-pattern storage from 217.2 MiB to 5.2 MiB and trace assembly from
+1.569 s to 0.937 s. AMGX solve time increased from 0.447 s (26 CSR AMG
+iterations) to 8.834 s (3,089 BSR block-Jacobi iterations), so p=6 BSR is
+currently an assembly/storage improvement, not a faster complete solve.
+
+For p=1..4, the stock BSR config uses aggregation AMG because AMGX classical
+AMG rejects block matrices. Consequently, a CSR-classical versus
+BSR-aggregation timing is not a storage-format-only comparison. The patched
+Frobenius config is an A/B diagnostic for two measured block-path costs: it
+uses all dense-block entries when selecting aggregates and replaces the two
+legacy BSR multiplies in generic 2x2, 3x3, and 5x5 block-Jacobi sweeps with one
+fused kernel. The 4x4 path was already fused. External HDG scaling remains
+disabled for BSR until block-aware scaling is implemented.
 
 Strict true-residual diagnostic:
 

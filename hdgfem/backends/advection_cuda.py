@@ -825,8 +825,51 @@ class _DeviceCsrMatrixView:
     shape: tuple[int, int]
 
 
+@dataclass(frozen=True)
+class _DeviceBsrMatrixView:
+    """Device-owned face-BSR arrays accepted directly by PyAMGX."""
+
+    data: Any
+    indices: Any
+    indptr: Any
+    shape: tuple[int, int]
+    block_size: int
+
+
+_DEVICE_BSR_MATVEC_SOURCE = r"""
+extern "C" __global__ void device_bsr_matvec(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        const double* __restrict__ data,
+        const double* __restrict__ x,
+        double* __restrict__ y,
+        const int num_block_rows,
+        const int block_size)
+{
+    const int scalar_row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int num_rows = num_block_rows * block_size;
+    if (scalar_row >= num_rows) {
+        return;
+    }
+    const int block_row = scalar_row / block_size;
+    const int row_dof = scalar_row - block_row * block_size;
+    double value = 0.0;
+    for (int block = indptr[block_row]; block < indptr[block_row + 1]; ++block) {
+        const int column_base = indices[block] * block_size;
+        const long long data_base = (
+            (long long)block * block_size + row_dof
+        ) * block_size;
+        for (int col_dof = 0; col_dof < block_size; ++col_dof) {
+            value += data[data_base + col_dof] * x[column_base + col_dof];
+        }
+    }
+    y[scalar_row] = value;
+}
+"""
+
+
 def _as_cupyx_csr_matrix(matrix, sparse, cp):
-    """Expose a device CSR view as a Cupyx sparse matrix when needed."""
+    """Expose a scalar compressed device view as a Cupyx CSR matrix."""
     if isinstance(matrix, _DeviceCsrMatrixView):
         return sparse.csr_matrix(
             (matrix.data, matrix.indices, matrix.indptr),
@@ -836,10 +879,35 @@ def _as_cupyx_csr_matrix(matrix, sparse, cp):
     return matrix
 
 
+def _device_compressed_matvec(matrix, vector, sparse, cp):
+    """Apply a device CSR or face-BSR matrix without host materialization."""
+    if not isinstance(matrix, _DeviceBsrMatrixView):
+        return _as_cupyx_csr_matrix(matrix, sparse, cp) @ vector
+    output = cp.empty(matrix.shape[0], dtype=cp.float64)
+    threads = 256
+    blocks = (matrix.shape[0] + threads - 1) // threads
+    kernel = cp.RawKernel(_DEVICE_BSR_MATVEC_SOURCE, "device_bsr_matvec")
+    kernel(
+        (blocks,),
+        (threads,),
+        (
+            matrix.indptr,
+            matrix.indices,
+            matrix.data,
+            vector,
+            output,
+            np.int32(matrix.shape[0] // matrix.block_size),
+            np.int32(matrix.block_size),
+        ),
+    )
+    return output
+
+
 def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
     """Build a device CSR matrix view from assembled COO or CSR data."""
     system_size = int(assembly.rhs.size)
-    if getattr(assembly, "matrix_format", "coo") == "csr":
+    matrix_format = getattr(assembly, "matrix_format", "coo")
+    if matrix_format == "csr":
         if assembly.indptr is None or assembly.indices is None:
             raise RuntimeError("CSR assembly is missing indptr/indices")
         return _DeviceCsrMatrixView(
@@ -847,6 +915,17 @@ def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
             indices=assembly.indices.astype(cp.int32, copy=False),
             indptr=assembly.indptr.astype(cp.int32, copy=False),
             shape=(system_size, system_size),
+        )
+    if matrix_format == "bsr":
+        if assembly.indptr is None or assembly.indices is None:
+            raise RuntimeError("BSR assembly is missing block indptr/indices")
+        block_size = int(assembly.data.shape[-1])
+        return _DeviceBsrMatrixView(
+            data=assembly.data,
+            indices=assembly.indices.astype(cp.int32, copy=False),
+            indptr=assembly.indptr.astype(cp.int32, copy=False),
+            shape=(system_size, system_size),
+            block_size=block_size,
         )
 
     matrix = sparse.coo_matrix(
@@ -1201,6 +1280,8 @@ class PyAMGXCsrDeviceSolver:
         self.cfg = self.rsrc = self.mat = self.vec_b = self.vec_x = self.solver = None
         self.shape = None
         self.size = None
+        self.block_rows = None
+        self.block_dim = 1
         self.is_setup = False
         self.closed = False
         self.reusable = bool(reusable)
@@ -1228,19 +1309,36 @@ class PyAMGXCsrDeviceSolver:
             raise
 
     def setup(self, matrix) -> float:
-        """Upload and set up a fixed device CSR matrix in AMGX."""
+        """Upload and set up a fixed device CSR or face-BSR matrix in AMGX."""
         if self.closed:
             raise RuntimeError("cannot set up a closed PyAMGXCsrDeviceSolver")
         setup_start = time.perf_counter()
         failure_phase = "matrix upload"
         try:
-            self.mat.upload(matrix.indptr, matrix.indices, matrix.data, shape=matrix.shape)
+            block_dim = int(getattr(matrix, "block_size", 1))
+            if block_dim < 1 or matrix.shape[0] % block_dim or matrix.shape[1] % block_dim:
+                raise ValueError(
+                    f"matrix shape {matrix.shape} is incompatible with block size {block_dim}"
+                )
+            block_shape = (
+                int(matrix.shape[0] // block_dim),
+                int(matrix.shape[1] // block_dim),
+            )
+            self.mat.upload(
+                matrix.indptr,
+                matrix.indices,
+                matrix.data,
+                block_dims=[block_dim, block_dim],
+                shape=block_shape,
+            )
             failure_phase = "solver setup"
             self.solver.setup(self.mat)
             failure_phase = "setup synchronization"
             self.cp.cuda.get_current_stream().synchronize()
             self.shape = tuple(matrix.shape)
             self.size = int(matrix.shape[0])
+            self.block_rows = int(block_shape[0])
+            self.block_dim = block_dim
             self.is_setup = True
         except Exception as exc:
             capacity_error = _as_amgx_capacity_error(
@@ -1272,8 +1370,8 @@ class PyAMGXCsrDeviceSolver:
         solve_start = time.perf_counter()
         failure_phase = "vector upload"
         try:
-            self.vec_b.upload_raw(rhs.data.ptr, rhs.size)
-            self.vec_x.upload_raw(x.data.ptr, x.size)
+            self.vec_b.upload_raw(rhs.data.ptr, self.block_rows, self.block_dim)
+            self.vec_x.upload_raw(x.data.ptr, self.block_rows, self.block_dim)
             failure_phase = "solver iteration"
             self.solver.solve(self.vec_b, self.vec_x, zero_initial_guess=zero_initial_guess)
             failure_phase = "solution download"
@@ -1418,7 +1516,8 @@ def _solve_reduced_system_amgx_device_once(
         raise ValueError("initial_guess contains non-finite values")
 
     matrix_start = time.perf_counter()
-    if getattr(assembly, "matrix_format", "coo") == "csr":
+    matrix_format = getattr(assembly, "matrix_format", "coo")
+    if matrix_format == "csr":
         if assembly.indptr is None or assembly.indices is None:
             raise RuntimeError("CSR assembly is missing indptr/indices")
         matrix = _DeviceCsrMatrixView(
@@ -1426,6 +1525,25 @@ def _solve_reduced_system_amgx_device_once(
             indices=assembly.indices.astype(cp.int32, copy=False),
             indptr=assembly.indptr.astype(cp.int32, copy=False),
             shape=(system_size, system_size),
+        )
+    elif matrix_format == "bsr":
+        if assembly.indptr is None or assembly.indices is None:
+            raise RuntimeError("BSR assembly is missing block indptr/indices")
+        if assembly.data.ndim != 3 or assembly.data.shape[1] != assembly.data.shape[2]:
+            raise RuntimeError(
+                f"BSR data must have shape (nnzb, block_size, block_size); got {assembly.data.shape}"
+            )
+        block_dim = int(assembly.data.shape[1])
+        if system_size % block_dim:
+            raise RuntimeError(
+                f"system size {system_size} is not divisible by BSR block size {block_dim}"
+            )
+        matrix = _DeviceBsrMatrixView(
+            data=assembly.data,
+            indices=assembly.indices.astype(cp.int32, copy=False),
+            indptr=assembly.indptr.astype(cp.int32, copy=False),
+            shape=(system_size, system_size),
+            block_size=block_dim,
         )
     else:
         matrix = sparse.coo_matrix(
@@ -1449,6 +1567,11 @@ def _solve_reduced_system_amgx_device_once(
 
     physical_rhs = assembly.rhs
     scale_mode = _normalize_device_scale_mode(scale_system)
+    if isinstance(matrix, _DeviceBsrMatrixView) and scale_mode != "none":
+        raise ValueError(
+            "device BSR solves currently require scale_system=False; "
+            "block-aware row scaling has not yet been implemented"
+        )
     row_diagonal = None
     inverse_sqrt_diagonal = None
     scale_start = time.perf_counter()
@@ -1473,6 +1596,7 @@ def _solve_reduced_system_amgx_device_once(
     matrix_is_scaled = row_diagonal is not None or inverse_sqrt_diagonal is not None
 
     def restore_scaled_matrix() -> float:
+        """Restore the physical CSR coefficients after an in-place scaled solve."""
         nonlocal matrix_is_scaled
         if not matrix_is_scaled:
             return 0.0
@@ -1518,8 +1642,10 @@ def _solve_reduced_system_amgx_device_once(
         finite_elapsed = time.perf_counter() - finite_start
 
         solver_residual_start = time.perf_counter()
-        residual_matrix = _as_cupyx_csr_matrix(solve_matrix, sparse, cp)
-        solver_residual = residual_matrix @ solver_x_cp - solve_rhs
+        solver_residual = (
+            _device_compressed_matvec(solve_matrix, solver_x_cp, sparse, cp)
+            - solve_rhs
+        )
         solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
             solver_residual,
             solve_rhs,
@@ -1536,7 +1662,10 @@ def _solve_reduced_system_amgx_device_once(
             physical_residual = solver_residual / inverse_sqrt_diagonal
             physical_residual_rhs = physical_rhs
         else:
-            physical_residual = residual_matrix @ x_cp - physical_rhs
+            physical_residual = (
+                _device_compressed_matvec(solve_matrix, x_cp, sparse, cp)
+                - physical_rhs
+            )
             physical_residual_rhs = physical_rhs
         physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
             physical_residual,
@@ -1716,10 +1845,10 @@ def solve_reduced_system_amgx_device(
                 residual_matrix = None
                 if attempt["residual_correction"] and best_solution is not None:
                     sparse = require_cupyx_sparse()
-                    residual_matrix = _as_cupyx_csr_matrix(
-                        _assembly_device_csr_matrix(assembly, cp, sparse), sparse, cp
+                    residual_matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+                    correction_rhs = assembly.rhs - _device_compressed_matvec(
+                        residual_matrix, best_solution, sparse, cp
                     )
-                    correction_rhs = assembly.rhs - residual_matrix @ best_solution
                     solve_assembly = replace(assembly, rhs=correction_rhs)
                     base_solution = best_solution
                     attempt_initial_guess = None
@@ -1742,7 +1871,10 @@ def solve_reduced_system_amgx_device(
                     result.amgx_correction_info = int(result.info)
                     result.amgx_correction_relative_residual_norm = result.solver_relative_residual_norm
                     solution = base_solution + solution
-                    combined_residual = residual_matrix @ solution - assembly.rhs
+                    combined_residual = (
+                        _device_compressed_matvec(residual_matrix, solution, sparse, cp)
+                        - assembly.rhs
+                    )
                     result_check_rtol = float(tolerance) if check_rtol is None else float(check_rtol)
                     residual_norm, rhs_norm, relative_residual, residual_target = _residual_stats_cp(
                         combined_residual,

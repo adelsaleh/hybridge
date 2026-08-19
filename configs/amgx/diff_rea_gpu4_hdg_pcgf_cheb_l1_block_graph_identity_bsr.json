@@ -4,10 +4,13 @@
     "preconditioner": {
       "solver": "AMG",
       "algorithm": "CLASSICAL",
+      "classical_bsr_hierarchy": "block_graph_identity",
+      "bsr_spmv_backend": "cusparse_generic",
       "selector": "PMIS",
       "strength": "AHAT",
       "strength_threshold": 0.25,
       "interpolator": "D2",
+      "aggressive_interpolator": "D2",
       "cycle": "V",
       "presweeps": 0,
       "postsweeps": 3,

@@ -1050,7 +1050,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         trace_ref=None,
         local_factor_key: tuple[Any, ...] | None = None,
 ) -> CupyDiffusionTraceAssembly:
-    """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
+    """Assemble only the reduced RHS for a cached raw-CUDA CSR/BSR operator."""
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)
@@ -1065,8 +1065,8 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         _, detail = fallback
         raise NotImplementedError(detail)
     validate_raw_cuda_supported(cspace, trace_ref)
-    if str(cached_raw.matrix_format).lower() != "csr" or cached_raw.csr_pattern is None:
-        raise ValueError("raw-CUDA cached RHS assembly requires a cached CSR raw assembly")
+    if str(cached_raw.matrix_format).lower() not in {"csr", "bsr"} or cached_raw.csr_pattern is None:
+        raise ValueError("raw-CUDA cached RHS assembly requires a cached CSR or BSR raw assembly")
 
     start = time.perf_counter()
     phase_start = time.perf_counter()

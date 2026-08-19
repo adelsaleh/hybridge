@@ -555,6 +555,9 @@ _RAW_ASSEMBLY_COOP_TEMPLATE = r"""
 #ifndef RAW_MATRIX_CSR
 #define RAW_MATRIX_CSR 0
 #endif
+#ifndef RAW_MATRIX_BSR
+#define RAW_MATRIX_BSR 0
+#endif
 #ifndef RAW_RHS_ONLY
 #define RAW_RHS_ONLY 0
 #endif
@@ -1336,9 +1339,15 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
 #if !RAW_RHS_ONLY
 #if RAW_MATRIX_CSR
                             const int block_pos = side_csr_block_pos[side_id * 3 + col_face];
+#if RAW_MATRIX_BSR
+                            const long long out = (
+                                ((long long)csr_indptr[row_solve_edge] + block_pos) * NTR
+                                + row_dof) * NTR + col_dof;
+#else
                             const long long row = row_solve_edge * NTR + row_dof;
                             const long long out = (long long)csr_indptr[row]
                                                 + ((long long)block_pos * NTR + col_dof);
+#endif
                             atomicAdd(&data[out], -schur_value);
 #else
                             const long long out = side_base
@@ -1507,8 +1516,14 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
 #if !RAW_RHS_ONLY
 #if RAW_MATRIX_CSR
                         const int block_pos = side_csr_block_pos[side_id * 3 + col_face];
+#if RAW_MATRIX_BSR
+                        const long long out = (
+                            ((long long)csr_indptr[row_solve_edge] + block_pos) * NTR
+                            + row_dof) * NTR + col_dof;
+#else
                         const long long row = row_solve_edge * NTR + row_dof;
                         const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + col_dof);
+#endif
                         atomicAdd(&data[out], -schur_value);
 #else
                         const long long out = side_base + ((long long)col_block_pos * NTR + row_dof) * NTR + col_dof;
@@ -1543,8 +1558,13 @@ extern "C" __global__ void assemble_diffusion_raw_coop(
             const int j = idx - i * NTR;
 #if !RAW_RHS_ONLY
 #if RAW_MATRIX_CSR
+#if RAW_MATRIX_BSR
+            const long long out = (
+                ((long long)csr_indptr[solve_edge] + block_pos) * NTR + i) * NTR + j;
+#else
             const long long row = solve_edge * NTR + i;
             const long long out = (long long)csr_indptr[row] + ((long long)block_pos * NTR + j);
+#endif
             atomicAdd(&data[out], scale * edge_mass[i * NTR + j]);
 #else
             const long long base = n_flux + element * NTR * NTR;
@@ -2128,13 +2148,14 @@ def _kernel_source(
 ) -> str:
     """Build a parameterized CUDA kernel source for raw diffusion assembly."""
     matrix_format = str(matrix_format).lower()
-    if matrix_format not in {'coo', 'csr'}:
-        raise ValueError("matrix_format must be 'coo' or 'csr'")
+    if matrix_format not in {'coo', 'csr', 'bsr'}:
+        raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
     trace_orientation_mode = int(trace_orientation_mode)
     if trace_orientation_mode not in {0, 1}:
         raise ValueError("trace_orientation_mode must be 0 or 1")
     prefix = (
-        f"#define RAW_MATRIX_CSR {1 if matrix_format == 'csr' else 0}\n"
+        f"#define RAW_MATRIX_CSR {1 if matrix_format in {'csr', 'bsr'} else 0}\n"
+        f"#define RAW_MATRIX_BSR {1 if matrix_format == 'bsr' else 0}\n"
         f"#define RAW_RHS_ONLY {1 if rhs_only else 0}\n"
         f"#define RAW_SOURCE_ONLY {1 if source_only else 0}\n"
         f"#define RAW_BATCHED_FULL {1 if batched_full else 0}\n"
@@ -2281,17 +2302,22 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         cached_factors: RawDiffusionAssemblyResult | None = None,
         local_factor_key: tuple[Any, ...] | None = None,
 ) -> RawDiffusionAssemblyResult:
-    """Assemble only the reduced RHS for a cached raw-CUDA CSR diffusion operator."""
+    """Assemble only the reduced RHS for a cached compressed diffusion operator."""
     cupy = require_cupy()
     raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
     if csr_pattern is None:
         raise ValueError('csr_pattern is required for raw-CUDA cached RHS assembly')
+    matrix_format = str(getattr(csr_pattern, "matrix_format", "csr")).lower()
+    if matrix_format not in {"csr", "bsr"}:
+        raise ValueError("cached raw-CUDA RHS assembly requires a CSR or BSR face graph")
     block_size = resolve_raw_cuda_block_size(
         block_size, equation="diffusion-reaction", order=cspace.order
     )
     if block_size not in {1, 32, 64, 128}:
         raise ValueError('raw CUDA diffusion block_size must be one of 1, 32, 64, 128')
+    if matrix_format == "bsr" and block_size == 1:
+        raise ValueError("raw CUDA cached BSR RHS assembly requires a cooperative block size")
     timings: dict[str, float] = {}
     mesh_h = cspace.host.mesh
     nel = int(cspace.el_dof)
@@ -2384,18 +2410,26 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
     else:
         dummy_i64 = cupy.empty(1, dtype=cupy.int64)
         dummy_i32 = cupy.empty(1, dtype=cupy.int32)
+        kernel_template = _RAW_ASSEMBLY_COOP_TEMPLATE
+        kernel_name = 'assemble_diffusion_raw_coop'
+        if matrix_format == 'bsr':
+            kernel_name = 'assemble_diffusion_raw_coop_bsr'
+            kernel_template = kernel_template.replace(
+                'void assemble_diffusion_raw_coop(',
+                'void assemble_diffusion_raw_coop_bsr(',
+            )
         source = _kernel_source(
-            _RAW_ASSEMBLY_COOP_TEMPLATE,
+            kernel_template,
             nel=nel,
             ntr=ntr,
             ncols=ncols,
-            matrix_format='csr',
+            matrix_format=matrix_format,
             trace_orientation_mode=trace_orientation_mode,
             rhs_only=True,
             source_only=boundary_is_zero,
             use_cached_factors=use_cached_factors,
         )
-        kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
+        kernel, kernel_jit = _compile_kernel_timed(cupy, source, kernel_name, assembly_shared)
         kernel_args = (
             dummy_i64,
             dummy_i64,
@@ -2480,7 +2514,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         timings=timings,
         indptr=indptr,
         indices=indices,
-        matrix_format='csr',
+        matrix_format=matrix_format,
         csr_pattern=csr_pattern,
         schur_lu=None if not use_cached_factors else schur_lu,
         schur_pivots=None if not use_cached_factors else schur_pivots,
@@ -2511,8 +2545,8 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
     matrix_format = str(matrix_format).lower()
-    if matrix_format not in {'coo', 'csr'}:
-        raise ValueError("matrix_format must be 'coo' or 'csr'")
+    if matrix_format not in {'coo', 'csr', 'bsr'}:
+        raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
     if local_factor_kind != "schur-lu":
         raise ValueError("raw CUDA local_factor_kind must be 'schur-lu'")
     block_size = resolve_raw_cuda_block_size(
@@ -2520,6 +2554,8 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     )
     if block_size not in {1, 32, 64, 128}:
         raise ValueError('raw CUDA diffusion block_size must be one of 1, 32, 64, 128')
+    if matrix_format == 'bsr' and block_size == 1:
+        raise ValueError("raw CUDA BSR assembly requires a cooperative block_size of 32, 64, or 128")
     timings: dict[str, float] = {}
     mesh_h = cspace.host.mesh
     nel = int(cspace.el_dof)
@@ -2561,28 +2597,34 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
 
     csr_pattern = None
     indptr = indices = None
-    if matrix_format == 'csr':
+    if matrix_format in {'csr', 'bsr'}:
         from .advection_raw_cuda import build_reduced_csr_pattern_raw
 
         start = time.perf_counter()
-        csr_pattern = build_reduced_csr_pattern_raw(cspace, timings)
+        csr_pattern = build_reduced_csr_pattern_raw(
+            cspace, timings, matrix_format=matrix_format
+        )
         edge_to_solve = csr_pattern.edge_to_solve_edge
         side_index = csr_pattern.interior_side_index
         indptr = csr_pattern.indptr
         indices = csr_pattern.indices
         cupy.cuda.get_current_stream().synchronize()
         timings['raw.map_setup'] = timings.get('raw.csr_pattern.total', 0.0)
-        timings['raw.csr_pattern.wrapper'] = time.perf_counter() - start
+        timings[f'raw.{matrix_format}_pattern.wrapper'] = time.perf_counter() - start
 
         zero_start = time.perf_counter()
         rows = cols = None
-        data = cupy.zeros(indices.size, dtype=cupy.float64)
+        data = (
+            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=cupy.float64)
+            if matrix_format == 'bsr'
+            else cupy.zeros(indices.size, dtype=cupy.float64)
+        )
         rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
         boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
         cupy.cuda.get_current_stream().synchronize()
-        timings['raw.csr_zero'] = time.perf_counter() - zero_start
+        timings[f'raw.{matrix_format}_zero'] = time.perf_counter() - zero_start
         n_flux = 0
         side_map_arg = csr_pattern.side_csr_block_pos
         mass_map_arg = csr_pattern.mass_csr_block_pos
@@ -2704,7 +2746,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     else:
         dummy_i64 = cupy.empty(1, dtype=cupy.int64)
         dummy_i32 = cupy.empty(1, dtype=cupy.int32)
-        if matrix_format == 'csr':
+        if matrix_format in {'csr', 'bsr'}:
             rows_arg = dummy_i64
             cols_arg = dummy_i64
             csr_indptr_arg = indptr
@@ -2718,8 +2760,16 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             side_offsets_arg = side_map_arg
             side_csr_arg = dummy_i32
             mass_csr_arg = dummy_i32
+        kernel_template = _RAW_ASSEMBLY_COOP_TEMPLATE
+        kernel_name = 'assemble_diffusion_raw_coop'
+        if matrix_format == 'bsr':
+            kernel_name = 'assemble_diffusion_raw_coop_bsr'
+            kernel_template = kernel_template.replace(
+                'void assemble_diffusion_raw_coop(',
+                'void assemble_diffusion_raw_coop_bsr(',
+            )
         source = _kernel_source(
-            _RAW_ASSEMBLY_COOP_TEMPLATE,
+            kernel_template,
             nel=nel,
             ntr=ntr,
             ncols=ncols,
@@ -2728,7 +2778,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             batched_full=True,
             write_cached_factors=bool(cache_local_factors),
         )
-        kernel, kernel_jit = _compile_kernel_timed(cupy, source, 'assemble_diffusion_raw_coop', assembly_shared)
+        kernel, kernel_jit = _compile_kernel_timed(cupy, source, kernel_name, assembly_shared)
         kernel_args = (
             rows_arg,
             cols_arg,
@@ -2785,14 +2835,16 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     launch_wall_seconds = time.perf_counter() - launch_wall_start
     timings['raw.kernel.device'] = device_seconds
     timings['raw.kernel.wall'] = launch_wall_seconds
-    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = device_seconds
+    timings['raw.kernel' if matrix_format == 'coo' else f'raw.{matrix_format}_kernel'] = device_seconds
     timings['raw.block_size'] = float(block_size)
-    map_wall = timings.get('raw.csr_pattern.wrapper', timings.get('raw.map_setup', 0.0))
+    map_wall = timings.get(
+        f'raw.{matrix_format}_pattern.wrapper', timings.get('raw.map_setup', 0.0)
+    )
     timings['raw.total'] = (
         timings.get('raw.reference_precompute', 0.0)
         + timings.get('raw.local_factors.allocate', 0.0)
         + map_wall
-        + timings.get('raw.csr_zero', 0.0)
+        + timings.get(f'raw.{matrix_format}_zero', 0.0)
         + timings.get('raw.kernel.jit', 0.0)
         + timings.get('raw.kernel.prepare', 0.0)
         + timings.get('raw.kernel.wall', 0.0)

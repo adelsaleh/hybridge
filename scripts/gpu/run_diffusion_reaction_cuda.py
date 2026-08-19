@@ -72,7 +72,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="cupy")
     parser.add_argument("--raw-matrix-format", choices=("coo", "csr"), default="csr")
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"), default="auto")
-    parser.add_argument("--tau", type=float, default=1.0)
+    parser.add_argument(
+        "--tau",
+        type=float,
+        default=None,
+        help="explicit constant tau_d; selects explicit mode",
+    )
+    parser.add_argument(
+        "--diffusion-stabilization-mode",
+        choices=("global-length", "explicit"),
+        default="global-length",
+        help="global gamma_d*kappa/L_Omega (default) or explicit --tau",
+    )
+    parser.add_argument(
+        "--diffusion-domain-length",
+        default="auto",
+        help="positive L_Omega or auto for 2*area/boundary-length",
+    )
+    parser.add_argument(
+        "--diffusion-stabilization-gamma",
+        type=float,
+        default=1.0,
+        help="positive gamma_d multiplier for global-length mode",
+    )
     parser.add_argument("--plot", action="store_true")
     parser.add_argument("--plot-postprocess-primal", action="store_true")
     parser.add_argument(
@@ -113,7 +135,7 @@ def build_mesh(args, case):
     if domain == "disc":
         radius = args.disc_radius if args.disc_radius is not None else (5.0 if case.key == "trigonometric-poisson" else 1.0)
         return gmsh_disc_mesh(
-            args.mesh_size, args.mesh_size, center=(0.0, 0.0), radius=radius,
+            args.mesh_size, center=(0.0, 0.0), radius=radius,
             verbosity=args.gmsh_verbosity, algorithm=args.gmsh_algorithm, log_cache=log_cache,
         ), domain
     if domain == "lshape":
@@ -134,7 +156,18 @@ def _optional_int(value) -> str:
     return "default" if value is None else f"{int(value):,d}"
 
 
-def _print_summary(args, domain, mesh, space, result, report, elapsed, config_path) -> None:
+def _print_summary(
+        args,
+        domain,
+        mesh,
+        space,
+        result,
+        report,
+        elapsed,
+        config_path,
+        stabilization_mode,
+        tau_value,
+) -> None:
     metrics = report.metrics
     solve = result.global_solve_result
     timings = result.timings
@@ -149,6 +182,8 @@ def _print_summary(args, domain, mesh, space, result, report, elapsed, config_pa
                 ("basis", args.basis, "s"),
                 ("trace basis", args.trace_basis, "s"),
                 ("scaling", _scale_mode(args.scale_system), "s"),
+                ("diffusion stabilization", stabilization_mode, "s"),
+                ("tau_d", tau_value, ".6g"),
             ],
         ),
         (
@@ -218,6 +253,30 @@ def main(argv: list[str] | None = None) -> int:
         volume_quad_1d=args.volume_quad_1d,
         edge_quad_1d=args.edge_quad_1d,
     )
+    from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+
+    stabilization_mode = args.diffusion_stabilization_mode
+    if args.tau is not None:
+        stabilization_mode = "explicit"
+    if stabilization_mode == "explicit":
+        if args.tau is None:
+            raise ValueError(
+                "--diffusion-stabilization-mode explicit requires --tau"
+            )
+        stabilization = float(args.tau)
+        tau_value = stabilization
+    else:
+        domain_length = (
+            "auto"
+            if args.diffusion_domain_length == "auto"
+            else float(args.diffusion_domain_length)
+        )
+        stabilization = GlobalLengthDiffusion(
+            gamma_d=args.diffusion_stabilization_gamma,
+            domain_length=domain_length,
+        )
+        tau_value = stabilization.resolve(problem.diffusion, space)
+
     config, config_path = load_amgx_config(
         args.amgx_config,
         default_path=DEFAULT_AMGX_CONFIG_PATH,
@@ -229,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     solver = DiffusionReactionHDGSolver(
         space,
         diffusion=problem.diffusion,
-        stabilization=args.tau,
+        stabilization=stabilization,
         solver="amgx",
         solver_rtol=args.amgx_tolerance,
         maxiter=args.amgx_maxiter,
@@ -270,7 +329,18 @@ def main(argv: list[str] | None = None) -> int:
         ).samples
 
     elapsed = time.perf_counter() - started
-    _print_summary(args, domain, mesh, space, result, report, elapsed, config_path)
+    _print_summary(
+        args,
+        domain,
+        mesh,
+        space,
+        result,
+        report,
+        elapsed,
+        config_path,
+        stabilization_mode,
+        tau_value,
+    )
     if args.plot:
         plot_sampled_solution_comparison(
             mesh,

@@ -46,6 +46,11 @@ Raw-CUDA CSR pattern construction and block-position maps remain on device.
 The direct path avoids both global COO-to-CSR reconstruction and large
 per-element condensed tensor materialization.
 
+The experimental direct-BSR path and its classical-AMG hierarchy lifecycle are
+documented in [`amgx_classical_bsr.md`](amgx_classical_bsr.md). Its retained
+fine operator is BSR, while the currently validated transfer and coarse
+operators remain scalar CSR.
+
 ## Advection-Reaction Modes
 
 The fused cooperative path builds local matrices from projected coefficients,

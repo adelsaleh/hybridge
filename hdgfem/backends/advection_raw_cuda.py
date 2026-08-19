@@ -44,7 +44,12 @@ from .raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 
 @dataclass(frozen=True)
 class ReducedTraceCsrPattern:
-    """Device-side reduced trace CSR pattern and raw-kernel lookup maps."""
+    """Device-side reduced trace face-block graph and lookup maps.
+
+    ``block_indptr``/``block_neighbors`` always describe the compressed face
+    graph. For scalar CSR, ``indptr``/``indices`` contain its scalar expansion;
+    for BSR they alias the block graph directly.
+    """
 
     indptr: Any
     indices: Any
@@ -56,6 +61,7 @@ class ReducedTraceCsrPattern:
     interior_side_index: Any
     num_blocks: int
     timings: dict[str, float]
+    matrix_format: str = "csr"
 
 
 @dataclass(frozen=True)
@@ -248,6 +254,31 @@ extern "C" __global__ void finalize_csr_pattern_rows(
     }
 }
 
+extern "C" __global__ void finalize_bsr_pattern_rows(
+        const int* __restrict__ block_counts,
+        const int* __restrict__ block_indptr,
+        const long long* __restrict__ fixed_neighbors,
+        int* __restrict__ block_neighbors,
+        int* __restrict__ mass_csr_block_pos,
+        const long long num_free_edges)
+{
+    const long long row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= num_free_edges) {
+        return;
+    }
+    const int count = block_counts[row];
+    const int block_start = block_indptr[row];
+    int mass_pos = -1;
+    for (int p = 0; p < count; ++p) {
+        const int neighbor = (int)fixed_neighbors[row * CSR_MAX_NEIGHBORS + p];
+        block_neighbors[block_start + p] = neighbor;
+        if (neighbor == row) {
+            mass_pos = p;
+        }
+    }
+    mass_csr_block_pos[row] = mass_pos;
+}
+
 extern "C" __global__ void finalize_csr_pattern_side_positions(
         const long long* __restrict__ interior_elements,
         const long long* __restrict__ interior_faces,
@@ -303,9 +334,17 @@ def _edge_to_solve_edge_device(cspace):
     return edge_to_solve
 
 
-def build_reduced_csr_pattern_raw(cspace, timings: dict[str, float] | None = None) -> ReducedTraceCsrPattern:
-    """Build the reduced trace CSR pattern with raw CUDA kernels."""
+def build_reduced_csr_pattern_raw(
+        cspace,
+        timings: dict[str, float] | None = None,
+        *,
+        matrix_format: str = "csr",
+) -> ReducedTraceCsrPattern:
+    """Build the reduced trace scalar-CSR or face-BSR pattern on the device."""
     cupy = require_cupy()
+    matrix_format = str(matrix_format).lower()
+    if matrix_format not in {"csr", "bsr"}:
+        raise ValueError("matrix_format must be 'csr' or 'bsr'")
     mesh = cspace.mesh
     ntr = int(cspace.edg_dof)
     num_free = int(mesh.int_edges_inds.size)
@@ -376,27 +415,44 @@ def build_reduced_csr_pattern_raw(cspace, timings: dict[str, float] | None = Non
     local_timings['raw.csr_pattern.cumsum'] = time.perf_counter() - start
 
     start = time.perf_counter()
-    scalar_nnz = num_blocks * ntr * ntr
-    indptr = cupy.empty(system_size + 1, dtype=cupy.int32)
-    indices = cupy.empty(scalar_nnz, dtype=cupy.int32)
     block_neighbors = cupy.empty(num_blocks, dtype=cupy.int32)
     side_csr_block_pos = cupy.empty(num_sides * 3, dtype=cupy.int32)
     mass_csr_block_pos = cupy.empty(num_free, dtype=cupy.int32)
-    finalize_rows = _compile_kernel(cupy, source, 'finalize_csr_pattern_rows', 0)
-    finalize_rows(
-        ((num_free + threads - 1) // threads,),
-        (threads,),
-        (
-            block_counts,
-            block_indptr,
-            fixed_neighbors.reshape(-1),
-            block_neighbors,
-            indptr,
-            indices,
-            mass_csr_block_pos,
-            np.int64(num_free),
-        ),
-    )
+    if matrix_format == "csr":
+        scalar_nnz = num_blocks * ntr * ntr
+        indptr = cupy.empty(system_size + 1, dtype=cupy.int32)
+        indices = cupy.empty(scalar_nnz, dtype=cupy.int32)
+        finalize_rows = _compile_kernel(cupy, source, 'finalize_csr_pattern_rows', 0)
+        finalize_rows(
+            ((num_free + threads - 1) // threads,),
+            (threads,),
+            (
+                block_counts,
+                block_indptr,
+                fixed_neighbors.reshape(-1),
+                block_neighbors,
+                indptr,
+                indices,
+                mass_csr_block_pos,
+                np.int64(num_free),
+            ),
+        )
+    else:
+        finalize_rows = _compile_kernel(cupy, source, 'finalize_bsr_pattern_rows', 0)
+        finalize_rows(
+            ((num_free + threads - 1) // threads,),
+            (threads,),
+            (
+                block_counts,
+                block_indptr,
+                fixed_neighbors.reshape(-1),
+                block_neighbors,
+                mass_csr_block_pos,
+                np.int64(num_free),
+            ),
+        )
+        indptr = block_indptr
+        indices = block_neighbors
     finalize_positions = _compile_kernel(cupy, source, 'finalize_csr_pattern_side_positions', 0)
     finalize_positions(
         ((num_sides * 3 + threads - 1) // threads,),
@@ -413,7 +469,9 @@ def build_reduced_csr_pattern_raw(cspace, timings: dict[str, float] | None = Non
         ),
     )
     cupy.cuda.get_current_stream().synchronize()
-    local_timings['raw.csr_pattern.expand'] = time.perf_counter() - start
+    local_timings[
+        'raw.csr_pattern.expand' if matrix_format == "csr" else 'raw.bsr_pattern.finalize'
+    ] = time.perf_counter() - start
     local_timings['raw.csr_pattern.total'] = time.perf_counter() - total_start
     if timings is not None:
         timings.update(local_timings)
@@ -428,6 +486,7 @@ def build_reduced_csr_pattern_raw(cspace, timings: dict[str, float] | None = Non
         interior_side_index=interior_side_index,
         num_blocks=num_blocks,
         timings=local_timings,
+        matrix_format=matrix_format,
     )
 
 
