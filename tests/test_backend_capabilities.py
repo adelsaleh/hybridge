@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from hdgfem import (
+    AdvectionDiffusionReactionHDGSolver,
     AdvectionReactionHDGSolver,
     DGSpace,
     DiffusionReactionHDGSolver,
@@ -19,6 +20,7 @@ from hdgfem.backends.capabilities import (
     normalize_solver_backend,
     render_backend_capability_table,
     validate_advection_backend_configuration,
+    validate_advection_diffusion_backend_configuration,
     validate_diffusion_backend_configuration,
 )
 from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
@@ -74,6 +76,12 @@ def test_every_published_capability_passes_preflight(capability) -> None:
             requires_host_system=False,
             advection_stabilization_is_default=True,
         )
+    elif capability.equation == "advection-diffusion-reaction":
+        actual = validate_advection_diffusion_backend_configuration(
+            **common,
+            postprocess_mode="both",
+            scalar_diffusion=True,
+        )
     else:
         actual = validate_diffusion_backend_configuration(
             **common,
@@ -117,6 +125,9 @@ def test_every_published_solve_capability_constructs_through_reusable_api(capabi
             raw_matrix_format="csr" if capability.solver_backend == "amgx" else "auto",
         )
         solver = AdvectionReactionHDGSolver(space, **options)
+    elif capability.equation == "advection-diffusion-reaction":
+        options.update(hdg_postprocess="both")
+        solver = AdvectionDiffusionReactionHDGSolver(space, **options)
     else:
         options.update(
             raw_matrix_format="csr" if capability.assembly_backend == "raw-cuda" else "coo",

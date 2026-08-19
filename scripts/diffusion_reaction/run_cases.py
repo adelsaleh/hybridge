@@ -9,16 +9,18 @@ To create a new manufactured test:
 2. Register it in ``CASE_DEFINITIONS`` in that same file.
 3. Add one or more ``DiffusionReactionRunPreset`` entries in ``PRESETS`` below.
 
-To change mesh size, polynomial order, stabilization, quadrature, solver, PETSc
-settings, HDG post-processing, plotting, or case parameters such as tensor-sine
-``m``/``n``, edit the corresponding preset here.
+Use ``--mesh-size`` and ``--order`` for one-run mesh/degree overrides. To change
+stabilization, quadrature, solver, PETSc settings, HDG post-processing, plotting,
+or case parameters such as tensor-sine ``m``/``n``, edit the corresponding preset.
 """
 
 from __future__ import annotations
 
+import os
 import sys
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from dataclasses import asdict, dataclass, field, replace
+from math import isfinite
 from pathlib import Path
 from typing import Any
 from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
@@ -46,6 +48,9 @@ class DiffusionReactionRunPreset:
     volume_quad_1d: int | None = None
     edge_quad_1d: int | None = None
     tau: float = 1.0
+    diffusion_stabilization_mode: str = "global-length"
+    diffusion_domain_length: float | str | None = "auto"
+    diffusion_stabilization_gamma: float = 1.0
     local_backend: str = "numpy"
     assembly_backend: str = "numpy"
     solver: str | None = "BICGSTAB"
@@ -64,11 +69,51 @@ class DiffusionReactionRunPreset:
     ilu_failure: str = "none"
     boundary_mode: str = "penalty"
     hdg_postprocess: str = "both"
+    flux_postprocess_space: str = "l2_closest"
+    postprocessing_backend: str = "auto"
     verbosity: int = 1
     plot: bool = False
+    plot_gl_mode: str = "mesa-software"
     plot_resolution: int = 20
     exact_plot_resolution: int | str | None = None
     hide_mesh: bool = False
+
+
+def _positive_mesh_size(value: str) -> float:
+    """Parse a finite, strictly positive target mesh size."""
+    try:
+        mesh_size = float(value)
+    except ValueError as exc:
+        raise ArgumentTypeError("mesh size must be a number") from exc
+    if not isfinite(mesh_size) or mesh_size <= 0.0:
+        raise ArgumentTypeError("mesh size must be finite and strictly positive")
+    return mesh_size
+
+
+def _nonnegative_order(value: str) -> int:
+    """Parse a nonnegative polynomial degree."""
+    try:
+        order = int(value)
+    except ValueError as exc:
+        raise ArgumentTypeError("order must be an integer") from exc
+    if order < 0:
+        raise ArgumentTypeError("order must be nonnegative")
+    return order
+
+
+def _configure_plot_gl_environment(mode: str) -> None:
+    """Select the OpenGL implementation before importing PyVista/VTK."""
+    if mode == "system":
+        return
+    if mode != "mesa-software":
+        raise ValueError(f"unsupported plot GL mode {mode!r}")
+    os.environ.update(
+        {
+            "__GLX_VENDOR_LIBRARY_NAME": "mesa",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+        }
+    )
 
 
 # Edit this dictionary to change existing runs or add new preset names.
@@ -81,6 +126,52 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
     "exponential_bubble": DiffusionReactionRunPreset(
         case="exponential-bubble",
         description="Legacy exponential bubble pure-Poisson case.",
+    ),
+    "trigonometric_poisson_rt_numpy_plot": DiffusionReactionRunPreset(
+        case="trigonometric-poisson",
+        description=(
+            "Coarse radius-5 disk trigonometric Poisson plot with NumPy "
+            "assembly/local algebra and host-Numba RT flux postprocessing."
+        ),
+        domain="auto",
+        mesh_size=2.25,
+        order=3,
+        local_backend="numpy",
+        assembly_backend="numpy",
+        solver="direct",
+        preconditioner=None,
+        scale_system=False,
+        boundary_mode="eliminate",
+        hdg_postprocess="both",
+        flux_postprocess_space="RT_projection",
+        postprocessing_backend="numba",
+        verbosity=2,
+        plot=True,
+        plot_resolution=16,
+        exact_plot_resolution=64,
+    ),
+    "trigonometric_poisson_rt_numba_plot": DiffusionReactionRunPreset(
+        case="trigonometric-poisson",
+        description=(
+            "Coarse radius-5 disk trigonometric Poisson plot with fused Numba "
+            "assembly and host-Numba RT flux postprocessing."
+        ),
+        domain="auto",
+        mesh_size=2.25,
+        order=3,
+        local_backend="numba",
+        assembly_backend="numba",
+        solver="direct",
+        preconditioner=None,
+        scale_system=False,
+        boundary_mode="eliminate",
+        hdg_postprocess="both",
+        flux_postprocess_space="RT_projection",
+        postprocessing_backend="numba",
+        verbosity=2,
+        plot=True,
+        plot_resolution=16,
+        exact_plot_resolution=64,
     ),
     "trigonometric_poisson_direct": DiffusionReactionRunPreset(
         case="trigonometric-poisson",
@@ -95,6 +186,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         verbosity=2,
         mesh_size=0.06,
         tau=1.0,
+        diffusion_stabilization_mode="explicit",
     ),
     "trigonometric_poisson_50k_scipy_direct": DiffusionReactionRunPreset(
         case="trigonometric-poisson",
@@ -105,6 +197,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         trace_basis="legendre-modal",
         order=6,
         tau=1.0,
+        diffusion_stabilization_mode="explicit",
         assembly_backend="numba",
         solver="direct",
         preconditioner=None,
@@ -123,6 +216,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         trace_basis="legendre-modal",
         order=6,
         tau=1.0,
+        diffusion_stabilization_mode="explicit",
         assembly_backend="numba",
         solver="pypardiso-spd",
         preconditioner=None,
@@ -145,6 +239,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         verbosity=2,
         mesh_size=1.5,
         tau=1.0,
+        diffusion_stabilization_mode="explicit",
     ),
     "trigonometric_poisson_cg_hypre": DiffusionReactionRunPreset(
         case="trigonometric-poisson",
@@ -223,6 +318,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         ny=8,
         order=2,
         tau=4.0,
+        diffusion_stabilization_mode="explicit",
         assembly_backend="numba",
         boundary_mode="eliminate",
         volume_quad_1d=4,
@@ -237,6 +333,7 @@ PRESETS: dict[str, DiffusionReactionRunPreset] = {
         ny=50,
         order=6,
         tau=4.0,
+        diffusion_stabilization_mode="explicit",
         assembly_backend="numba",
         solver="petsc",
         preconditioner=None,
@@ -290,20 +387,43 @@ def _print_preset_details(preset_key: str, config: DiffusionReactionRunPreset) -
 
 
 def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReactionRunPreset:
-    """Apply CLI presentation/diagnostic choices without changing numerical inputs."""
+    """Apply supported CLI overrides without mutating the selected preset."""
     updates = {}
+    if args.mesh_size is not None:
+        updates["mesh_size"] = args.mesh_size
+    if args.order is not None:
+        updates["order"] = args.order
     if args.volume_quadrature is not None:
         updates["volume_quadrature"] = args.volume_quadrature
     if args.trace_basis is not None:
         updates["trace_basis"] = args.trace_basis
     if args.hdg_postprocess is not None:
         updates["hdg_postprocess"] = args.hdg_postprocess
+    if args.flux_postprocess_space is not None:
+        updates["flux_postprocess_space"] = args.flux_postprocess_space
+    if args.postprocessing_backend is not None:
+        updates["postprocessing_backend"] = args.postprocessing_backend
+    if args.diffusion_stabilization_mode is not None:
+        updates["diffusion_stabilization_mode"] = args.diffusion_stabilization_mode
+    if args.diffusion_domain_length is not None:
+        updates["diffusion_domain_length"] = (
+            "auto"
+            if args.diffusion_domain_length == "auto"
+            else float(args.diffusion_domain_length)
+        )
+    if args.diffusion_stabilization_gamma is not None:
+        updates["diffusion_stabilization_gamma"] = args.diffusion_stabilization_gamma
+    if args.diffusion_stabilization is not None:
+        updates["tau"] = args.diffusion_stabilization
+        updates["diffusion_stabilization_mode"] = "explicit"
     if args.verbosity is not None:
         updates["verbosity"] = args.verbosity
     if args.quiet:
         updates["verbosity"] = 0
     if args.plot:
         updates["plot"] = True
+    if args.plot_gl_mode is not None:
+        updates["plot_gl_mode"] = args.plot_gl_mode
     if args.plot_resolution is not None:
         updates["plot_resolution"] = args.plot_resolution
     if args.exact_plot_resolution is not None:
@@ -402,6 +522,21 @@ def _summarize_solve(
         ("edges", mesh.num_edg, ",d"),
         ("trace dofs", result.trace.size, ",d"),
     ]
+    if config.diffusion_stabilization_mode == "global-length":
+        from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+
+        policy = GlobalLengthDiffusion(
+            gamma_d=config.diffusion_stabilization_gamma,
+            domain_length=config.diffusion_domain_length,
+        )
+        domain_length = policy.resolved_domain_length(space)
+        tau_value = policy.resolve(diffusion, space)
+        tau_label = f"{tau_value:.6g} = gamma_d*kappa/L_Omega"
+    else:
+        domain_length = None
+        tau_value = float(config.tau)
+        tau_label = f"{config.tau:.6g} (explicit)"
+
     option_items = [
         ("assembly backend", result.assembly_backend, "s"),
         ("local backend",
@@ -409,9 +544,23 @@ def _summarize_solve(
         ("boundary mode", result.boundary_mode, "s"),
         ("trace basis", config.trace_basis, "s"),
         ("postprocess", config.hdg_postprocess, "s"),
+        ("flux postprocess space", result.flux_postprocess_space, "s"),
+        ("postprocessing backend", result.postprocessing_backend, "s"),
         ("diffusion", "identity" if is_identity_diffusion(diffusion) else "tensor", "s"),
-        ("tau", config.tau, ".3e"),
+        ("tau", tau_label, "s"),
     ]
+    if config.plot:
+        option_items.append(("plot GL mode", config.plot_gl_mode, "s"))
+    if domain_length is not None:
+        option_items.extend(
+            [
+                ("diffusion stabilization", "global_length", "s"),
+                ("domain length", domain_length, ".6g"),
+                ("gamma_d", config.diffusion_stabilization_gamma, ".6g"),
+                ("min tau_d", tau_value, ".6g"),
+                ("max tau_d", tau_value, ".6g"),
+            ]
+        )
     solver_items = [
         ("solver", "none" if config.solver is None else config.solver, "s"),
         ("preconditioner", "petsc" if str(config.solver).lower() == "petsc" else config.preconditioner or "none", "s"),
@@ -516,13 +665,31 @@ def _main() -> None:
             "Preset configuration lives in this file, scripts/diffusion_reaction/run_cases.py.\n"
             "Edit PRESETS to change numerical parameters or add a new run.\n"
             "Add new manufactured PDE cases in scripts/diffusion_reaction/cases.py.\n"
-            "CLI flags cover plotting, verbosity, quadrature, trace basis, and postprocessing."
+            "CLI flags cover mesh size, degree, plotting, verbosity, quadrature, trace basis, and postprocessing."
         ),
     )
     parser.add_argument("preset", nargs="?", default=DEFAULT_PRESET, choices=tuple(sorted(PRESETS)))
     parser.add_argument("--list-presets", action="store_true", help="print available presets and where to edit them")
     parser.add_argument("--print-preset", action="store_true", help="print the selected preset fields and exit")
     parser.add_argument("--dry-run", action="store_true", help="validate and print the selected preset without solving")
+    parser.add_argument(
+        "--mesh-size",
+        type=_positive_mesh_size,
+        default=None,
+        help=(
+            "override the target mesh size for Gmsh/unstructured presets; "
+            "structured-rectangle presets continue to use their preset nx/ny"
+        ),
+    )
+    parser.add_argument(
+        "--order",
+        "--degree",
+        "-p",
+        dest="order",
+        type=_nonnegative_order,
+        default=None,
+        help="override the preset polynomial degree for this run only",
+    )
     parser.add_argument(
         "--volume-quadrature",
         choices=("auto", "symmetric", "duffy"),
@@ -541,10 +708,54 @@ def _main() -> None:
         default=None,
         help="override HDG postprocessing for this run only",
     )
+    parser.add_argument(
+        "--flux-postprocess-space",
+        choices=("l2_closest", "RT_projection", "full-p-plus-1", "rt-p"),
+        default=None,
+        help="select full minimum-L2 or Raviart--Thomas flux recovery",
+    )
+    parser.add_argument(
+        "--postprocessing-backend",
+        choices=("auto", "numba", "cupy"),
+        default=None,
+        help="select host Numba or CuPy RT flux postprocessing",
+    )
+    parser.add_argument(
+        "--diffusion-stabilization",
+        type=float,
+        default=None,
+        help="override the preset with an explicit constant tau_d",
+    )
+    parser.add_argument(
+        "--diffusion-stabilization-mode",
+        choices=("explicit", "global-length"),
+        default=None,
+        help="select global gamma_d*kappa/L_Omega or a preset/CLI explicit tau",
+    )
+    parser.add_argument(
+        "--diffusion-domain-length",
+        default=None,
+        help="positive L_Omega or 'auto' for 2*area/boundary-length",
+    )
+    parser.add_argument(
+        "--diffusion-stabilization-gamma",
+        type=float,
+        default=None,
+        help="positive gamma_d multiplier for global-length mode",
+    )
     parser.add_argument("--verbosity", "-v", type=int, default=None,
                         help="override logging verbosity for this run only")
     parser.add_argument("--quiet", action="store_true", help="run with verbosity 0 for this run only")
     parser.add_argument("--plot", action="store_true", help="show HDG/postprocessed/exact plots for this run only")
+    parser.add_argument(
+        "--plot-gl-mode",
+        choices=("mesa-software", "system"),
+        default=None,
+        help=(
+            "select Mesa llvmpipe (default) or preserve the inherited system "
+            "OpenGL environment"
+        ),
+    )
     parser.add_argument("--plot-resolution", type=int, default=None, help="plot sampling resolution for this run only")
     parser.add_argument(
         "--exact-plot-resolution",
@@ -576,6 +787,7 @@ def _main() -> None:
     from hdgfem.core.field_ops import coefficient_field
     from hdgfem.core.space import DGSpace
     from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
+    from hdgfem.solvers.stabilization import GlobalLengthDiffusion
 
     case = case_definition_by_key(config.case)
     problem = case.build(**config.case_params)
@@ -602,9 +814,17 @@ def _main() -> None:
         source_input = coefficient_field(space, source, name="source_h")
         reaction_input = coefficient_field(space, reaction, name="reaction_h")
 
+    stabilization = (
+        GlobalLengthDiffusion(
+            gamma_d=config.diffusion_stabilization_gamma,
+            domain_length=config.diffusion_domain_length,
+        )
+        if config.diffusion_stabilization_mode == "global-length"
+        else config.tau
+    )
     options = DiffusionReactionHDGOptions(
         diffusion=diffusion,
-        stabilization=config.tau,
+        stabilization=stabilization,
         solver=config.solver,
         preconditioner=config.preconditioner,
         solver_rtol=config.solver_rtol,
@@ -624,6 +844,8 @@ def _main() -> None:
         trace_basis=config.trace_basis,
         boundary_mode=config.boundary_mode,
         hdg_postprocess=config.hdg_postprocess,
+        flux_postprocess_space=config.flux_postprocess_space,
+        postprocessing_backend=config.postprocessing_backend,
         verbose=config.verbosity,
     )
     solver = DiffusionReactionHDGSolver(
@@ -647,6 +869,8 @@ def _main() -> None:
     )
 
     if config.plot:
+        _configure_plot_gl_environment(config.plot_gl_mode)
+
         from hdgfem.diagnostics import evaluate_scalar_error
         from hdgfem.io.comparison import plot_sampled_solution_comparison
         from hdgfem.io.plot import resolve_postprocessed_plot_resolution

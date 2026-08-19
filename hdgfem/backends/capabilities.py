@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-Equation = Literal["advection-reaction", "diffusion-reaction"]
+Equation = Literal["advection-reaction", "advection-diffusion-reaction", "diffusion-reaction"]
 Operation = Literal["assemble", "solve"]
 AssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda"]
 SolverBackend = Literal["scipy", "pypardiso", "petsc", "cupyx", "amgx"]
@@ -212,6 +212,50 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         boundary_modes=("eliminate", "zero-flux"),
         trace_bases=_PRODUCTION_TRACE_BASES,
         notes="Direct device AMGX and compatible CuPy-to-Cupyx solves are fully device-resident.",
+    ),
+    *_solve_capabilities(
+        "advection-diffusion-reaction",
+        "numpy",
+        "host",
+        {
+            "scipy": "host",
+            "pypardiso": "host",
+            "petsc": "host",
+            "cupyx": "host -> device -> host",
+            "amgx": "host -> device -> host",
+        },
+        "host",
+        ("eliminate",),
+        _PRODUCTION_TRACE_BASES,
+        "Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy.",
+    ),
+    *_solve_capabilities(
+        "advection-diffusion-reaction",
+        "numba",
+        "host",
+        {
+            "scipy": "host",
+            "pypardiso": "host",
+            "petsc": "host",
+            "cupyx": "host -> device -> host",
+            "amgx": "host -> device -> host",
+        },
+        "host",
+        ("eliminate",),
+        _PRODUCTION_TRACE_BASES,
+        "Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy.",
+    ),
+    BackendCapability(
+        equation="advection-diffusion-reaction",
+        operation="solve",
+        assembly_backend="raw-cuda",
+        solver_backend="amgx",
+        assembly_residency="device",
+        solve_residency="device",
+        reconstruction_residency="device (postprocessing currently materializes host fields)",
+        boundary_modes=("eliminate",),
+        trace_bases=_PRODUCTION_TRACE_BASES,
+        notes="Positive constant scalar diffusion; device COO-to-CSR, direct AMGX, incidence-wise face stabilization masses; RT_p CuPy postprocessing currently follows host materialization and re-upload.",
     ),
     _assembly_capability(
         "diffusion-reaction",
@@ -493,6 +537,46 @@ def validate_advection_backend_configuration(
     return capability
 
 
+def validate_advection_diffusion_backend_configuration(
+    *,
+    operation: Operation,
+    assembly_backend: str,
+    solver: str | None,
+    cupyx_solver: str,
+    boundary_mode: str,
+    trace_basis: str,
+    postprocess_mode: str,
+    scalar_diffusion: bool,
+) -> BackendCapability:
+    """Validate stationary ADR backend support before optional-runtime setup."""
+    if operation != "solve":
+        _unsupported(
+            "advection-diffusion-reaction", operation, assembly_backend, None,
+            "the first public ADR release exposes complete solves only",
+        )
+    backend = normalize_assembly_backend(assembly_backend)
+    basis = normalize_trace_basis(trace_basis)
+    if boundary_mode != "eliminate":
+        raise ValueError("stationary ADR currently requires boundary_mode='eliminate'")
+    if postprocess_mode not in {"none", "primal", "flux", "both"}:
+        raise ValueError("hdg_postprocess must be 'none', 'primal', 'flux', or 'both'")
+    solver_backend = normalize_solver_backend(solver, cupyx_solver=cupyx_solver)
+    capability = get_backend_capability(
+        "advection-diffusion-reaction", operation, backend, solver_backend
+    )
+    if basis not in capability.trace_bases:
+        _unsupported(
+            "advection-diffusion-reaction", operation, backend, solver_backend,
+            f"trace_basis={basis!r} is unsupported; choose one of {capability.trace_bases!r}",
+        )
+    if backend in {"numba", "raw-cuda"} and not scalar_diffusion:
+        _unsupported(
+            "advection-diffusion-reaction", operation, backend, solver_backend,
+            "fused Numba and Raw CUDA currently require positive constant scalar diffusion",
+        )
+    return capability
+
+
 def validate_diffusion_backend_configuration(
     *,
     operation: Operation,
@@ -515,8 +599,8 @@ def validate_diffusion_backend_configuration(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if local_solver_backend not in {"numpy", "numba"}:
         raise ValueError("local_solver_backend must be 'numpy' or 'numba'")
-    if raw_matrix_format not in {"coo", "csr"}:
-        raise ValueError("raw_matrix_format must be 'coo' or 'csr'")
+    if raw_matrix_format not in {"coo", "csr", "bsr"}:
+        raise ValueError("raw_matrix_format must be 'coo', 'csr', or 'bsr'")
     if postprocess_mode not in {"none", "primal", "flux", "both"}:
         raise ValueError("hdg_postprocess must be 'none', 'primal', 'flux', or 'both'")
     solver_backend = None if operation == "assemble" else normalize_solver_backend(solver, cupyx_solver=cupyx_solver)
@@ -570,13 +654,13 @@ def validate_diffusion_backend_configuration(
             "device assembly supports scalar stabilization only",
         )
     if operation == "solve" and backend == "raw-cuda":
-        if raw_matrix_format != "csr":
+        if raw_matrix_format not in {"csr", "bsr"}:
             _unsupported(
                 "diffusion-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw-CUDA diffusion solves require raw_matrix_format='csr'",
+                "raw-CUDA diffusion solves require raw_matrix_format='csr' or 'bsr'",
             )
         if postprocess_mode != "none":
             _unsupported(
@@ -627,5 +711,6 @@ __all__ = [
     "normalize_trace_basis",
     "render_backend_capability_table",
     "validate_advection_backend_configuration",
+    "validate_advection_diffusion_backend_configuration",
     "validate_diffusion_backend_configuration",
 ]

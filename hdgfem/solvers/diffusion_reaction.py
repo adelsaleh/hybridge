@@ -40,6 +40,7 @@ from ..linalg.system import (
     solve_global_system,
 )
 from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from .stabilization import resolve_diffusion_stabilization
 
 try:  # pragma: no cover - availability depends on the runtime environment.
     from numba import njit, prange
@@ -52,6 +53,8 @@ LocalSolverBackend = Literal["numpy", "numba"]
 AssemblyBackend = Literal["numpy", "numba", "auto"]
 TraceAssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda", "auto"]
 HDGPostprocessMode = Literal["none", "primal", "flux", "both"]
+FluxPostprocessSpace = Literal["l2_closest", "RT_projection"]
+PostprocessingBackend = Literal["auto", "numba", "cupy"]
 LocalFactorCachePolicy = Literal["none", "schur-lu", "schur-cholesky"]
 ReturnKey = Literal[
     "result",
@@ -121,6 +124,8 @@ class DiffusionReactionResult:
     trace_reduced_device: Any = None
     postprocessed_field: DGField | None = None
     postprocessed_flux: VectorDGField | None = None
+    flux_postprocess_space: str = "none"
+    postprocessing_backend: str = "none"
     local_unknowns: np.ndarray | None = None
     matrix_rows: np.ndarray | None = None
     matrix_cols: np.ndarray | None = None
@@ -152,7 +157,7 @@ class DiffusionReactionAssemblyResult:
     boundary_trace: np.ndarray
     reduction: Any
     assembly_backend: TraceAssemblyBackend
-    matrix_format: Literal["coo", "csr"] = "coo"
+    matrix_format: Literal["coo", "csr", "bsr"] = "coo"
     indptr: np.ndarray | None = None
     indices: np.ndarray | None = None
     timings: dict[str, float] | None = None
@@ -184,11 +189,15 @@ class DiffusionReactionHDGOptions:
     ``assembly_backend`` selects where the trace operator is built, while
     ``solver`` independently selects its sparse inversion backend. Their valid
     combinations are checked against :mod:`hdgfem.backends.capabilities`
-    before coefficient sampling or optional-runtime setup.
+    before coefficient sampling or optional-runtime setup. The
+    ``stabilization="global_length"`` is the production default. It resolves
+    :class:`GlobalLengthDiffusion` from constant isotropic diffusion and the
+    current physical mesh before backend dispatch. Explicit positive scalar or
+    incidence-wise stabilization inputs remain supported.
     """
 
     diffusion: Any = 1.0
-    stabilization: Any = 1.0
+    stabilization: Any = "global_length"
     solver: str | None = "BICGSTAB"
     preconditioner: Any = "ilu"
     solver_rtol: float = 1e-13
@@ -212,11 +221,13 @@ class DiffusionReactionHDGOptions:
     local_solver_backend: LocalSolverBackend = "numpy"
     assembly_backend: TraceAssemblyBackend = "numpy"
     trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
-    raw_matrix_format: Literal["coo", "csr"] = "coo"
+    raw_matrix_format: Literal["coo", "csr", "bsr"] = "coo"
     raw_block_size: RawCudaBlockSize = "auto"
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
     hdg_postprocess: HDGPostprocessMode = "none"
+    flux_postprocess_space: FluxPostprocessSpace = "l2_closest"
+    postprocessing_backend: PostprocessingBackend = "auto"
     verbose: bool | int = True
 
     def with_overrides(self, **overrides) -> "DiffusionReactionHDGOptions":
@@ -261,8 +272,8 @@ def _validate_local_factor_cache_configuration(options, backend: str, *, statefu
         raise ValueError(f"cache_local_factors='{policy}' requires cache_device_matrix=True")
     if options.boundary_mode != "eliminate":
         raise ValueError(f"cache_local_factors='{policy}' requires boundary_mode='eliminate'")
-    if backend == "raw-cuda" and str(options.raw_matrix_format).lower() != "csr":
-        raise ValueError(f"cache_local_factors='{policy}' requires raw_matrix_format='csr'")
+    if backend == "raw-cuda" and str(options.raw_matrix_format).lower() not in {"csr", "bsr"}:
+        raise ValueError(f"cache_local_factors='{policy}' requires raw_matrix_format='csr' or 'bsr'")
     if policy == "schur-cholesky" and (not np.isscalar(options.stabilization) or float(options.stabilization) <= 0.0):
         raise ValueError("cache_local_factors='schur-cholesky' requires strictly positive scalar stabilization")
     return policy
@@ -1043,6 +1054,70 @@ def _normalize_hdg_postprocess_mode(mode) -> HDGPostprocessMode:
     return text
 
 
+def _normalize_flux_postprocess_space(value) -> FluxPostprocessSpace:
+    """Normalize the public diffusion/ADR flux reconstruction selector."""
+    key = str(value).strip().lower().replace("_", "-")
+    aliases = {
+        "full": "l2_closest",
+        "l2": "l2_closest",
+        "l2-closest": "l2_closest",
+        "full-p-plus-1": "l2_closest",
+        "p-plus-1": "l2_closest",
+        "rt": "RT_projection",
+        "rt-projection": "RT_projection",
+        "rt-p": "RT_projection",
+        "raviart-thomas": "RT_projection",
+        "p-plus-xp": "RT_projection",
+    }
+    normalized = aliases.get(key, key)
+    if normalized not in {"l2_closest", "RT_projection"}:
+        raise ValueError(
+            "flux_postprocess_space must be 'l2_closest' or 'RT_projection'"
+        )
+    return normalized
+
+
+def _resolve_diffusion_postprocessing_backend(
+        assembly_backend: str,
+        mode: HDGPostprocessMode,
+        flux_space: FluxPostprocessSpace,
+        requested: str,
+) -> str:
+    """Resolve the host/CuPy diffusion postprocessing execution path."""
+    backend = str(requested).strip().lower().replace("_", "-")
+    want_flux = mode in {"flux", "both"}
+    if mode == "none":
+        return "none"
+    if backend == "auto":
+        backend = (
+            "cupy"
+            if assembly_backend in {"cupy", "raw-cuda"}
+            and want_flux
+            and flux_space == "RT_projection"
+            else "numba"
+        )
+    if backend not in {"numba", "cupy"}:
+        raise ValueError(
+            "postprocessing_backend must be 'auto', 'numba', or 'cupy'"
+        )
+    if backend == "cupy" and (not want_flux or flux_space != "RT_projection"):
+        raise NotImplementedError(
+            "postprocessing_backend='cupy' currently supports only "
+            "flux postprocessing with flux_postprocess_space='RT_projection'"
+        )
+    return backend
+
+
+def _reported_diffusion_postprocessing_backend(
+        backend: str,
+        mode: HDGPostprocessMode,
+) -> str:
+    """Report mixed CuPy flux and host-Numba primal recovery explicitly."""
+    if backend == "cupy" and mode == "both":
+        return "cupy+numba"
+    return backend
+
+
 def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     """Return Legendre-Gauss-Lobatto nodes and weights on ``[-1, 1]``."""
     if num_points < 1:
@@ -1254,7 +1329,7 @@ def _build_hdg_postprocess_cache(
     and a stateful :class:`DiffusionReactionHDGSolver` reuses the resulting
     cache on subsequent solves with the same space.
     """
-    if njit is None:
+    if njit is None and (want_primal or want_flux):
         raise RuntimeError("HDG post-processing requires numba")
     if cache is None or cache.base_space is not space or cache.trace_space is not trace_space:
         cache = _new_hdg_postprocess_cache(space, trace_space)
@@ -1304,6 +1379,172 @@ def _build_hdg_postprocess_cache(
     return cache
 
 
+def _postprocess_rt_flux_from_samples(
+        total_flux_values: np.ndarray,
+        numerical_normal_flux: np.ndarray,
+        space: DGSpace,
+        post_space: DGSpace,
+        *,
+        backend: str,
+        name: str,
+) -> VectorDGField:
+    r"""Reconstruct an RT_p flux from volume and numerical-normal targets."""
+    from ..kernels.advection_diffusion_reaction_fused import (
+        solve_adr_rt_total_flux_postprocess_kernel,
+    )
+
+    qpost = post_space.quad_data
+    nqf = qpost.weights_JGL.size
+    face_points = qpost.pts_fc.reshape(-1, 2)
+    base_volume = np.ascontiguousarray(space.basis_at(qpost.Krf_quads))
+    base_face = np.ascontiguousarray(
+        space.basis_at(face_points)
+        .reshape(nqf, 3, space.el_dof)
+        .transpose(1, 2, 0)
+    )
+    if space.order == 0:
+        low_volume = np.empty((qpost.Krf_w.size, 0), dtype=np.float64)
+    else:
+        low_space = DGSpace(
+            space.mesh,
+            space.order - 1,
+            basis_type=space.reference.basis_type,
+            name=f"{space.name}_rt_post_low",
+        )
+        low_volume = np.ascontiguousarray(
+            low_space.basis_at(qpost.Krf_quads)
+        )
+
+    face_test = _edge_lagrange_basis(space.order, qpost.quads_JGL)
+    r_volume = qpost.Krf_quads[:, 0]
+    s_volume = qpost.Krf_quads[:, 1]
+    radial_volume = np.empty(
+        (2, space.order + 1, qpost.Krf_w.size), dtype=np.float64
+    )
+    radial_face = np.empty(
+        (2, 3, space.order + 1, nqf), dtype=np.float64
+    )
+    for degree_r in range(space.order + 1):
+        homogeneous = (
+            r_volume**degree_r * s_volume ** (space.order - degree_r)
+        )
+        radial_volume[0, degree_r] = r_volume * homogeneous
+        radial_volume[1, degree_r] = s_volume * homogeneous
+        homogeneous_face = (
+            qpost.pts_fc[..., 0] ** degree_r
+            * qpost.pts_fc[..., 1] ** (space.order - degree_r)
+        )
+        radial_face[0, :, degree_r, :] = (
+            qpost.pts_fc[..., 0] * homogeneous_face
+        ).T
+        radial_face[1, :, degree_r, :] = (
+            qpost.pts_fc[..., 1] * homogeneous_face
+        ).T
+
+    rt_inputs = (
+        np.ascontiguousarray(total_flux_values),
+        np.ascontiguousarray(numerical_normal_flux),
+        np.ascontiguousarray(space.mesh.aff_mats),
+        np.ascontiguousarray(space.mesh.aff_jacs),
+        np.ascontiguousarray(space.mesh.jacs_el_fc),
+        np.ascontiguousarray(space.mesh.normals),
+        np.ascontiguousarray(qpost.Krf_w),
+        np.ascontiguousarray(qpost.weights_JGL),
+        np.ascontiguousarray(qpost.weighted_phi),
+        np.ascontiguousarray(qpost.MKrf_inv),
+        base_volume,
+        base_face,
+        np.ascontiguousarray(radial_volume),
+        np.ascontiguousarray(radial_face),
+        low_volume,
+        np.ascontiguousarray(face_test),
+    )
+    if backend == "cupy":
+        from ..backends.advection_diffusion_reaction_cupy import (
+            solve_adr_rt_total_flux_postprocess_cupy,
+        )
+
+        coeffs = solve_adr_rt_total_flux_postprocess_cupy(*rt_inputs)
+    elif backend == "numba":
+        if njit is None:
+            raise RuntimeError("Numba RT flux postprocessing requires numba")
+        coeffs = np.empty(
+            (2, space.mesh.num_tri, post_space.el_dof), dtype=np.float64
+        )
+        solve_adr_rt_total_flux_postprocess_kernel(coeffs, *rt_inputs)
+    else:
+        raise ValueError("RT flux postprocessing backend must be 'numba' or 'cupy'")
+    return (post_space * post_space).field(
+        (coeffs[0], coeffs[1]),
+        name=name,
+    )
+
+
+def _postprocess_diffusion_rt_flux(
+        local_unknowns: np.ndarray,
+        trace: np.ndarray,
+        space: DGSpace,
+        trace_space: DGTraceSpace,
+        stabilization,
+        post_space: DGSpace,
+        *,
+        backend: str,
+) -> VectorDGField:
+    r"""Recover q_h in RT_p from qhat_h.n and q_h interior moments."""
+    qpost = post_space.quad_data
+    nqf = qpost.weights_JGL.size
+    face_points = qpost.pts_fc.reshape(-1, 2)
+    base_volume = np.ascontiguousarray(space.basis_at(qpost.Krf_quads))
+    base_face = np.ascontiguousarray(
+        space.basis_at(face_points)
+        .reshape(nqf, 3, space.el_dof)
+        .transpose(1, 2, 0)
+    )
+    trace_basis = _trace_basis_at(trace_space, qpost.quads_JGL)
+    local_trace = trace_space.element_coefficients(trace).reshape(
+        space.mesh.num_tri, 3, trace_space.edg_dof
+    )
+    blocks = local_unknowns.reshape(
+        space.mesh.num_tri, 3, space.el_dof
+    )
+    u_face = np.einsum(
+        "Ki,fiq->Kfq", blocks[:, 0], base_face, optimize=True
+    )
+    qx_face = np.einsum(
+        "Ki,fiq->Kfq", blocks[:, 1], base_face, optimize=True
+    )
+    qy_face = np.einsum(
+        "Ki,fiq->Kfq", blocks[:, 2], base_face, optimize=True
+    )
+    hat_face = np.einsum(
+        "Kfa,aq->Kfq", local_trace, trace_basis, optimize=True
+    )
+    normals = space.mesh.normals
+    tau = normalize_diffusion_stabilization(stabilization, space)
+    numerical_normal_flux = (
+        normals[..., 0, None] * qx_face
+        + normals[..., 1, None] * qy_face
+        + tau[..., None] * (u_face - hat_face)
+    )
+    total_flux_values = np.ascontiguousarray(
+        np.stack(
+            (
+                blocks[:, 1] @ base_volume.T,
+                blocks[:, 2] @ base_volume.T,
+            ),
+            axis=0,
+        )
+    )
+    return _postprocess_rt_flux_from_samples(
+        total_flux_values,
+        numerical_normal_flux,
+        space,
+        post_space,
+        backend=backend,
+        name="q_h_star_rt_p",
+    )
+
+
 def _postprocess_diffusion_solution(
         local_unknowns: np.ndarray,
         trace: np.ndarray,
@@ -1314,22 +1555,33 @@ def _postprocess_diffusion_solution(
         *,
         trace_space: DGTraceSpace | None = None,
         cache: _HDGPostprocessCache | None = None,
+        flux_postprocess_space: FluxPostprocessSpace = "l2_closest",
+        postprocessing_backend: str = "numba",
 ) -> tuple[DGField | None, VectorDGField | None, _HDGPostprocessCache | None]:
     """Apply optional scalar and/or H(div) HDG post-processing.
 
     ``mode`` accepts ``"primal"``, ``"flux"``, or ``"both"``.  The primal
     postprocessor computes an element-local degree ``p+1`` scalar field using
-    the recovered mixed flux and a mean constraint.  The flux postprocessor
-    computes a degree ``p+1`` vector field whose normal moments match the HDG
-    numerical flux on every face and whose interior moments match the raw HDG
-    flux against ``[P_{p-1}]^d``.  For identity diffusion in ``"both"`` mode,
+    the recovered mixed flux and a mean constraint. With
+    ``flux_postprocess_space="l2_closest"``, the flux postprocessor computes a
+    full degree ``p+1`` vector field whose normal moments match the HDG
+    numerical flux and whose interior moments match the raw HDG flux.
+    ``"RT_projection"`` instead returns the unique member of
+    ``[P_p]^2 + x P_p`` with the numerical ``P_p(F)`` normal moments and raw
+    ``[P_{p-1}]^2`` interior moments. For identity diffusion in ``"both"``
+    mode with ``l2_closest``,
     the constrained flux uses ``-grad(u_h_star)`` as the minimum-distance
     reference, which improves the unconstrained high-order modes while
     preserving the same HDG conservation constraints.
     """
     mode = _normalize_hdg_postprocess_mode(mode)
+    flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
     if mode == "none":
         return None, None, cache
+    if postprocessing_backend not in {"numba", "cupy"}:
+        raise ValueError(
+            "postprocessing_backend must resolve to 'numba' or 'cupy'"
+        )
 
     local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=np.float64))
     expected_unknowns = (space.mesh.num_tri, 3 * space.el_dof)
@@ -1349,7 +1601,7 @@ def _postprocess_diffusion_solution(
         space,
         trace_ref,
         want_primal=want_primal,
-        want_flux=want_flux,
+        want_flux=want_flux and flux_space == "l2_closest",
         cache=cache,
     )
 
@@ -1380,7 +1632,18 @@ def _postprocess_diffusion_solution(
         )
         postprocessed_field = cache.post_space.field(coeffs, name="u_h_star")
 
-    if want_flux:
+    if want_flux and flux_space == "RT_projection":
+        postprocessed_flux = _postprocess_diffusion_rt_flux(
+            local_unknowns,
+            trace,
+            space,
+            trace_ref,
+            stabilization,
+            cache.post_space,
+            backend=postprocessing_backend,
+        )
+
+    if want_flux and flux_space == "l2_closest":
         from ..kernels.diffusion_reaction_fused import (
             solve_hdiv_flux_min_distance_postprocess_kernel,
             solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel,
@@ -1455,6 +1718,8 @@ def _result_with_hdg_postprocessing(
         *,
         postprocessed_field: DGField | None,
         postprocessed_flux: VectorDGField | None,
+        flux_postprocess_space: str,
+        postprocessing_backend: str,
         elapsed: float,
 ) -> DiffusionReactionResult:
     """Return ``result`` with optional post-processed fields attached."""
@@ -1469,6 +1734,8 @@ def _result_with_hdg_postprocessing(
     result_values["timings"] = timings
     result_values["postprocessed_field"] = postprocessed_field
     result_values["postprocessed_flux"] = postprocessed_flux
+    result_values["flux_postprocess_space"] = flux_postprocess_space
+    result_values["postprocessing_backend"] = postprocessing_backend
     return DiffusionReactionResult(**result_values)
 
 
@@ -1623,6 +1890,17 @@ class DiffusionReactionHDGSolver:
     def edg_dof(self) -> int:
         """Number of trace degrees of freedom per mesh edge."""
         return self.space.quad_data.edg_dof
+
+    def _resolved_options(self) -> DiffusionReactionHDGOptions:
+        """Return options with built-in stabilization policies lowered for this mesh."""
+        stabilization = resolve_diffusion_stabilization(
+            self.options.stabilization,
+            self.options.diffusion,
+            self.space,
+        )
+        if stabilization is self.options.stabilization:
+            return self.options
+        return self.options.with_overrides(stabilization=stabilization)
 
     def with_options(self, **overrides) -> "DiffusionReactionHDGSolver":
         """Update solver options in place and clear stale artifacts."""
@@ -1825,7 +2103,7 @@ class DiffusionReactionHDGSolver:
             self.with_options(**option_overrides)
 
         self._require_problem()
-        options = self.options
+        options = self._resolved_options()
         backend = normalize_assembly_backend(options.assembly_backend)
         trace_basis = normalize_trace_basis(options.trace_basis)
         validate_diffusion_backend_configuration(
@@ -2022,8 +2300,13 @@ class DiffusionReactionHDGSolver:
 
         self._require_problem()
         stored_options = self.options
-        if initial_guess is not _UNSET:
-            self.options = stored_options.with_overrides(initial_guess=initial_guess)
+        active_options = (
+            stored_options
+            if initial_guess is _UNSET
+            else stored_options.with_overrides(initial_guess=initial_guess)
+        )
+        self.options = active_options
+        self.options = self._resolved_options()
         try:
             options = self.options
             backend = normalize_assembly_backend(options.assembly_backend)
@@ -2079,7 +2362,7 @@ class DiffusionReactionHDGSolver:
         return result
 
     def _solve_raw_cuda_device_amgx(self) -> DiffusionReactionResult:
-        """Solve a raw-CUDA diffusion trace system directly with device CSR AMGX."""
+        """Solve a raw-CUDA diffusion trace system directly with device CSR/BSR AMGX."""
         options = self.options
         raw_block_size = resolve_raw_cuda_block_size(
             options.raw_block_size,
@@ -2089,8 +2372,11 @@ class DiffusionReactionHDGSolver:
         normalized_solver = "" if options.solver is None else str(options.solver).lower()
         if normalized_solver not in {"amgx", "pyamgx"}:
             raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx' for direct device solves")
-        if str(options.raw_matrix_format).lower() != "csr":
-            raise ValueError("assembly_backend='raw-cuda' with DiffusionReactionHDGSolver.solve requires raw_matrix_format='csr'")
+        if str(options.raw_matrix_format).lower() not in {"csr", "bsr"}:
+            raise ValueError(
+                "assembly_backend='raw-cuda' with DiffusionReactionHDGSolver.solve "
+                "requires raw_matrix_format='csr' or 'bsr'"
+            )
         if options.boundary_mode != "eliminate":
             raise ValueError("assembly_backend='raw-cuda' requires boundary_mode='eliminate'")
         if not _diffusion_is_identity(options.diffusion):
@@ -2230,7 +2516,7 @@ class DiffusionReactionHDGSolver:
             self._raw_cuda_rhs_valid = True
         else:
             assembly_result, trace_assembly = _timed_call(
-                "assembling reduced global trace system (raw-cuda csr)",
+                f"assembling reduced global trace system (raw-cuda {options.raw_matrix_format})",
                 verbosity,
                 assemble_raw_full,
                 multiline=verbosity >= 2,
@@ -2269,14 +2555,16 @@ class DiffusionReactionHDGSolver:
             else:
                 print("  local Schur factor cache: disabled", flush=True)
             assembly_timings = assembly_result.timings or {}
+            compressed_format = str(options.raw_matrix_format).upper()
+            compressed_key = str(options.raw_matrix_format).lower()
             timing_rows = (
                 ("source moments", "wrapper.source_moments"),
                 ("boundary trace", "wrapper.boundary_trace"),
                 ("reference data", "wrapper.reference_data"),
                 ("raw reference precompute", "raw.reference_precompute"),
                 ("raw setup", "raw.setup"),
-                ("CSR pattern", "raw.csr_pattern.wrapper"),
-                ("CSR zero/allocation", "raw.csr_zero"),
+                (f"{compressed_format} pattern", f"raw.{compressed_key}_pattern.wrapper"),
+                (f"{compressed_format} zero/allocation", f"raw.{compressed_key}_zero"),
                 ("raw kernel host preparation", "raw.kernel.prepare"),
                 ("raw kernel NVRTC JIT/load", "raw.kernel.jit"),
                 ("raw kernel device execution", "raw.kernel.device"),
@@ -2991,6 +3279,15 @@ class DiffusionReactionHDGSolver:
         mode = _normalize_hdg_postprocess_mode(self.options.hdg_postprocess)
         if mode == "none":
             return result
+        flux_space = _normalize_flux_postprocess_space(
+            self.options.flux_postprocess_space
+        )
+        postprocessing_backend = _resolve_diffusion_postprocessing_backend(
+            normalize_assembly_backend(self.options.assembly_backend),
+            mode,
+            flux_space,
+            self.options.postprocessing_backend,
+        )
         verbosity = _verbosity_level(self.options.verbose)
 
         def postprocess():
@@ -3004,6 +3301,8 @@ class DiffusionReactionHDGSolver:
                 mode,
                 trace_space=self.space.trace_space(self.options.trace_basis),
                 cache=self._hdg_postprocess_cache,
+                flux_postprocess_space=flux_space,
+                postprocessing_backend=postprocessing_backend,
             )
             self._hdg_postprocess_cache = cache
             return postprocessed_field, postprocessed_flux
@@ -3017,6 +3316,11 @@ class DiffusionReactionHDGSolver:
             result,
             postprocessed_field=postprocessed_field,
             postprocessed_flux=postprocessed_flux,
+            flux_postprocess_space=flux_space,
+            postprocessing_backend=_reported_diffusion_postprocessing_backend(
+                postprocessing_backend,
+                mode,
+            ),
             elapsed=elapsed,
         )
 
@@ -3054,7 +3358,7 @@ def solve_diffusion_reaction_hdg(
         space: DGSpace,
         *,
         diffusion=1.0,
-        stabilization=1.0,
+        stabilization="global_length",
         solver: str | None = "BICGSTAB",
         preconditioner="ilu",
         solver_rtol: float = 1e-13,
@@ -3078,11 +3382,13 @@ def solve_diffusion_reaction_hdg(
         local_solver_backend: LocalSolverBackend = "numpy",
         assembly_backend: TraceAssemblyBackend = "numpy",
         trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
-        raw_matrix_format: Literal["coo", "csr"] = "coo",
+        raw_matrix_format: Literal["coo", "csr", "bsr"] = "coo",
         raw_block_size: RawCudaBlockSize = "auto",
         boundary_penalty: float = 1e20,
         boundary_mode: Literal["penalty", "eliminate"] = "penalty",
         hdg_postprocess: HDGPostprocessMode = "none",
+        flux_postprocess_space: FluxPostprocessSpace = "l2_closest",
+        postprocessing_backend: PostprocessingBackend = "auto",
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
 ):
@@ -3101,6 +3407,10 @@ def solve_diffusion_reaction_hdg(
     class for repeated RHS-only solves and has no effect in this one-shot
     function.
 
+    ``stabilization="global_length"`` is the production default and resolves
+    ``gamma_d*kappa/L_Omega`` before backend dispatch. Explicit positive
+    stabilization inputs override it.
+
     ``boundary_condition`` accepts a callable ``g(x, y)`` or a real scalar
     constant. Discrete field boundary inputs are rejected.
     """
@@ -3110,7 +3420,21 @@ def solve_diffusion_reaction_hdg(
         raise ValueError("cache_local_factors='schur-lu' requires the stateful DiffusionReactionHDGSolver")
     postprocess_mode = _normalize_hdg_postprocess_mode(hdg_postprocess)
     effective_backend = normalize_assembly_backend(assembly_backend)
+    flux_postprocess_space = _normalize_flux_postprocess_space(
+        flux_postprocess_space
+    )
+    postprocessing_backend = _resolve_diffusion_postprocessing_backend(
+        effective_backend,
+        postprocess_mode,
+        flux_postprocess_space,
+        postprocessing_backend,
+    )
     trace_basis = normalize_trace_basis(trace_basis)
+    effective_stabilization = resolve_diffusion_stabilization(
+        stabilization,
+        diffusion,
+        space,
+    )
     validate_diffusion_backend_configuration(
         operation="solve",
         assembly_backend=effective_backend,
@@ -3122,7 +3446,7 @@ def solve_diffusion_reaction_hdg(
         raw_matrix_format=raw_matrix_format,
         postprocess_mode=postprocess_mode,
         identity_diffusion=_diffusion_is_identity(diffusion),
-        scalar_stabilization=np.isscalar(stabilization),
+        scalar_stabilization=np.isscalar(effective_stabilization),
         allow_raw_device_solve=False,
     )
     total_start = time.perf_counter()
@@ -3141,7 +3465,7 @@ def solve_diffusion_reaction_hdg(
         tau, _ = _timed_call(
             "normalizing stabilization",
             verbosity,
-            lambda: normalize_diffusion_stabilization(stabilization, space),
+            lambda: normalize_diffusion_stabilization(effective_stabilization, space),
             level=2,
         )
         source_input = source
@@ -3467,6 +3791,8 @@ def solve_diffusion_reaction_hdg(
                 diffusion,
                 postprocess_mode,
                 trace_space=trace_space,
+                flux_postprocess_space=flux_postprocess_space,
+                postprocessing_backend=postprocessing_backend,
             )
             return post_field, post_flux
 
@@ -3495,6 +3821,13 @@ def solve_diffusion_reaction_hdg(
         timings=timings,
         postprocessed_field=postprocessed_field,
         postprocessed_flux=postprocessed_flux,
+        flux_postprocess_space=(
+            flux_postprocess_space if postprocess_mode in {"flux", "both"} else "none"
+        ),
+        postprocessing_backend=_reported_diffusion_postprocessing_backend(
+            postprocessing_backend,
+            postprocess_mode,
+        ),
         local_unknowns=local_unknowns,
         matrix_rows=trace_system.rows,
         matrix_cols=trace_system.cols,

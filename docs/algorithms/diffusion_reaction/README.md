@@ -9,7 +9,9 @@ elimination, reduced trace assembly, reconstruction, and postprocessing.
   LDG-H numerical flux, element matrices, static condensation, boundary
   elimination, and the NumPy and fused-Numba workflows.
 - [`postprocessing.tex`](postprocessing.tex) derives the degree-`p+1` primal
-  postprocess and the constrained H(div)-oriented flux postprocess, with their
+  postprocess and both selectable H(div)-oriented flux recoveries:
+  `l2_closest` in the full `[P_{p+1}]^2` space and
+  `RT_projection` in `[P_p]^2 + x P_p`, with their
   verification invariants.
 
 ## Implementation Anchors

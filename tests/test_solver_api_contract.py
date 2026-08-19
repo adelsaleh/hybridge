@@ -12,6 +12,10 @@ from hdgfem.backends import UnsupportedBackendConfigurationError
 
 
 _PRIMARY_SOLVER_EXPORTS = {
+    "AdvectionDiffusionReactionHDGOptions",
+    "AdvectionDiffusionReactionHDGSolver",
+    "AdvectionDiffusionReactionResult",
+    "AdvectionDiffusionReactionTimings",
     "AdvectionReactionHDGOptions",
     "AdvectionReactionHDGSolver",
     "AdvectionReactionResult",
@@ -21,7 +25,13 @@ _PRIMARY_SOLVER_EXPORTS = {
     "DiffusionReactionHDGSolver",
     "DiffusionReactionResult",
     "DiffusionReactionTimings",
+    "GlobalLengthDiffusion",
+    "automatic_domain_length",
+    "compute_domain_length",
+    "geometric_diffusion_tau",
+    "mesh_domain_measures",
     "solve_advection_reaction_hdg",
+    "solve_advection_diffusion_reaction_hdg",
     "solve_diffusion_reaction_hdg",
 }
 
@@ -34,6 +44,7 @@ def test_supported_solver_exports_are_identical_at_both_package_levels() -> None
     assert _PRIMARY_SOLVER_EXPORTS <= set(hdgfem.__all__)
     assert set(solver_api.__all__) == _PRIMARY_SOLVER_EXPORTS | {
         "advection_reaction",
+        "advection_diffusion_reaction",
         "adv_rea",
         "diffusion_reaction",
         "diff_rea",
@@ -62,6 +73,10 @@ def test_solver_module_facades_and_legacy_aliases_remain_importable() -> None:
     "options_type, unknown_message",
     (
         (hdgfem.AdvectionReactionHDGOptions, "unknown advection-reaction solver option"),
+        (
+            hdgfem.AdvectionDiffusionReactionHDGOptions,
+            "unknown advection-diffusion-reaction solver option",
+        ),
         (hdgfem.DiffusionReactionHDGOptions, "unknown diffusion-reaction solver option"),
     ),
 )
@@ -82,6 +97,8 @@ def test_options_are_immutable_and_reject_unknown_overrides(options_type, unknow
     (
         hdgfem.AdvectionReactionTimings,
         hdgfem.AdvectionReactionResult,
+        hdgfem.AdvectionDiffusionReactionTimings,
+        hdgfem.AdvectionDiffusionReactionResult,
         hdgfem.DiffusionReactionTimings,
         hdgfem.DiffusionReactionResult,
         hdgfem.DiffusionReactionAssemblyResult,
@@ -522,6 +539,22 @@ def test_diffusion_options_expose_local_factor_cache_policy() -> None:
     cholesky = options.with_overrides(cache_local_factors="schur-cholesky")
     assert cholesky.cache_local_factors == "schur-cholesky"
     assert cholesky.as_solve_kwargs()["cache_local_factors"] == "schur-cholesky"
+
+
+def test_diffusion_options_expose_flux_postprocessing_policy() -> None:
+    options = hdgfem.DiffusionReactionHDGOptions(verbose=False)
+
+    assert options.flux_postprocess_space == "l2_closest"
+    assert options.postprocessing_backend == "auto"
+    kwargs = options.as_solve_kwargs()
+    assert kwargs["flux_postprocess_space"] == "l2_closest"
+    assert kwargs["postprocessing_backend"] == "auto"
+    updated = options.with_overrides(
+        flux_postprocess_space="RT_projection",
+        postprocessing_backend="cupy",
+    )
+    assert updated.flux_postprocess_space == "RT_projection"
+    assert updated.postprocessing_backend == "cupy"
 
 
 def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_runtime_setup() -> None:

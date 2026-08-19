@@ -1,6 +1,8 @@
 # Coefficient Inputs
 
-This reference defines coefficient-input semantics for the HDG solver APIs. It prevents accidental host materialization and distinguishes mathematical coefficient meaning from backend residency. Exact support limits remain governed by [`backend_capabilities.md`](backend_capabilities.md).
+This reference defines coefficient-input semantics for the HDG solver APIs. It prevents accidental host materialization and distinguishes mathematical coefficient meaning from backend residency. Exact support limits remain governed by [`backend_capabilities.md`](backend_capabilities.md). The per-solver/backend user forms,
+stabilization policies, callable vectorization rules, and lowering behavior are
+listed in [`coefficient_stabilization_matrix.md`](coefficient_stabilization_matrix.md).
 
 ## Coefficient Forms
 

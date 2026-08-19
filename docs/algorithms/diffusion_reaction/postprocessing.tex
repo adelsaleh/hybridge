@@ -144,6 +144,36 @@ $[P_{p+1}(K)]^2$. Thus the new path leaves
 selects the unconstrained high-order part of $q_h^\star$ from the more
 accurate scalar recovery.
 
+subsection*{Selectable Raviart--Thomas Projection}
+
+The alternative erb|flux_postprocess_space="RT_projection"| defines
+$q_h^{mathrm{RT}}$ as the unique member of
+[
+    [P_p(K)]^2 + x P_p(K)
+]
+satisfying
+egin{align}
+langle q_h^{mathrm{RT}}cdot n,mu
+angle_F
+  &= langle q_hcdot n+	au(u_h-widehat u_h),mu
+angle_F
+  &&orall muin P_p(F),quad Fsubsetpartial K,\
+(q_h^{mathrm{RT}},r)_K
+  &= (q_h,r)_K
+  &&orall rin[P_{p-1}(K)]^2,quad pgeq1.
+end{align}
+For $p=0$, only the face-normal moments are present. These are the unisolvent
+Raviart--Thomas degrees of freedom. Because the HDG numerical normal flux is
+single-valued on interior faces, the elementwise reconstruction belongs to
+$H(operatorname{div},Omega)$. Its two polynomial components are stored
+exactly in the existing degree-$p+1$ DG vector space; that storage choice does
+not enlarge the reconstructed RT space.
+
+The RT moment system can be solved with the host Numba kernel or the batched
+CuPy implementation. The default erb|l2_closest| method remains the
+full-space constrained recovery above. Compatibility spellings
+erb|full-p-plus-1| and erb|rt-p| map to those two canonical choices.
+
 \section{Implementation}
 
 For identity diffusion and \verb|hdg_postprocess="both"|, the flux

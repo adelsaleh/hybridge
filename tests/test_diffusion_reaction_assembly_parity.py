@@ -110,7 +110,14 @@ def _assemble(space: DGSpace, backend: str, *, raw_matrix_format: str = "coo", t
 
 def _canonical_csr(assembly):
     shape = (assembly.rhs.size, assembly.rhs.size)
-    if assembly.matrix_format == "csr":
+    if assembly.matrix_format == "bsr":
+        assert assembly.indptr is not None
+        assert assembly.indices is not None
+        matrix = scipy.sparse.bsr_matrix(
+            (assembly.data, assembly.indices, assembly.indptr),
+            shape=shape,
+        ).tocsr()
+    elif assembly.matrix_format == "csr":
         assert assembly.indptr is not None
         assert assembly.indices is not None
         matrix = scipy.sparse.csr_matrix((assembly.data, assembly.indices, assembly.indptr), shape=shape)
@@ -134,7 +141,18 @@ def _assert_trace_system_close(expected, actual, label: str) -> None:
 
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
-def test_diffusion_raw_cuda_csr_amgx_full_solve_stays_device_resident(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "matrix_format,config_name",
+    (
+        ("csr", "diff_rea_gpu4_hdg_pcgf_classical_amg.json"),
+        ("bsr", "diff_rea_gpu4_hdg_pcgf_aggregation_block_jacobi_bsr.json"),
+    ),
+)
+def test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident(
+    monkeypatch,
+    matrix_format: str,
+    config_name: str,
+) -> None:
     from hdgfem.backends.cupy import require_cupy
 
     cp = require_cupy()
@@ -153,7 +171,7 @@ def test_diffusion_raw_cuda_csr_amgx_full_solve_stays_device_resident(monkeypatc
     source_h = space.project_callable(_source, name="source_h")
     reaction_h = space.zeros(name="reaction_h")
     amgx_config = json.loads(
-        Path("configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json").read_text(encoding="utf-8")
+        (Path("configs/amgx") / config_name).read_text(encoding="utf-8")
     )
     solver = DiffusionReactionHDGSolver(
         space,
@@ -170,7 +188,7 @@ def test_diffusion_raw_cuda_csr_amgx_full_solve_stays_device_resident(monkeypatc
         scale_system=False,
         amgx_config=amgx_config,
         trace_basis="legacy-lagrange",
-        raw_matrix_format="csr",
+        raw_matrix_format=matrix_format,
         raw_block_size="auto",
         boundary_mode="eliminate",
         hdg_postprocess="none",
@@ -488,6 +506,36 @@ def test_diffusion_modal_assembly_backends_match_numpy_for_p_le_6(mesh_name, mes
     _assert_trace_system_close(numpy_assembly, raw_coo, f"{mesh_name} p={order} modal raw coo")
     _assert_trace_system_close(numpy_assembly, raw_csr, f"{mesh_name} p={order} modal raw csr")
     _assert_trace_system_close(raw_coo, raw_csr, f"{mesh_name} p={order} modal raw csr vs coo")
+
+
+@GPU_RUNTIME_MARK
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize("order", (2, 6))
+def test_diffusion_raw_cuda_bsr_matches_csr(trace_basis: str, order: int) -> None:
+    """The additive face-BSR kernel must reproduce the established CSR path."""
+    space = DGSpace(rectangle_mesh(1, 1), order, basis_type="dub_orth")
+
+    raw_csr = _assemble(
+        space,
+        "raw-cuda",
+        raw_matrix_format="csr",
+        trace_basis=trace_basis,
+    )
+    raw_bsr = _assemble(
+        space,
+        "raw-cuda",
+        raw_matrix_format="bsr",
+        trace_basis=trace_basis,
+    )
+
+    assert raw_bsr.matrix_format == "bsr"
+    assert raw_bsr.data.ndim == 3
+    assert raw_bsr.data.shape[1:] == (order + 1, order + 1)
+    _assert_trace_system_close(
+        raw_csr,
+        raw_bsr,
+        f"p={order} {trace_basis} raw bsr vs csr",
+    )
 
 
 @GPU_RUNTIME_MARK

@@ -1,0 +1,132 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb}
+\newcommand{\uh}{u_h}
+\newcommand{\qh}{\boldsymbol q_h}
+\newcommand{\bh}{\boldsymbol\beta_h}
+\newcommand{\wideh}{\widehat u_h}
+\begin{document}
+\title{Stationary Advection--Diffusion--Reaction HDG}
+\maketitle
+
+We solve
+\[
+ \nabla\!\cdot(\bh\uh+\qh)+r_h\uh=f_h,
+ \qquad \qh=-\kappa\nabla\uh,
+ \qquad \wideh=g_D\quad\hbox{on }\partial\Omega .
+\]
+Normals are outward from each element.  The total numerical normal flux is
+\[
+ \widehat{\boldsymbol F}_h\!\cdot\boldsymbol n
+ =\qh\!\cdot\boldsymbol n+(\bh\!\cdot\boldsymbol n)\wideh
+  +(\tau_{\rm adv}+\tau_{\rm diff})(\uh-\wideh).
+\]
+Set $\tau=\tau_{\rm adv}+\tau_{\rm diff}$ and
+$\gamma=\tau-\bh\!\cdot\boldsymbol n$.  With scalar test $w$, flux test
+$\boldsymbol v$, and trace test $\mu$, the element equations are
+\begin{align*}
+ (\kappa^{-1}\qh,\boldsymbol v)_K-(\uh,\nabla\!\cdot\boldsymbol v)_K
+       +\langle\wideh,\boldsymbol v\!\cdot\boldsymbol n\rangle_{\partial K}&=0,\\
+ -(\bh\uh+\qh,\nabla w)_K+(r_h\uh,w)_K
+       +\langle\widehat{\boldsymbol F}_h\!\cdot\boldsymbol n,w\rangle_{\partial K}
+       &=(f_h,w)_K.
+\end{align*}
+Thus the scalar--scalar local block contains reaction, negative volume
+advection, and the boundary mass weighted by $\tau$.  The trace-to-scalar
+local right-hand block is weighted by $\gamma$; the trace-to-flux blocks are
+the outward-normal face moments.  If $x_K=(u_K,q_{x,K},q_{y,K})$ and $\lambda_K$
+contains the three oriented element traces, this has the form
+\[
+ A_Kx_K=f_K+B_K\lambda_K,
+ \qquad x_K=A_K^{-1}(f_K+B_K\lambda_K).
+\]
+
+The transmission condition on every interior edge $F$ is
+\[
+ \sum_{K:\,F\subset\partial K}
+ \left\langle
+   \qh\!\cdot\boldsymbol n+\tau\uh-\gamma\wideh,\mu
+ \right\rangle_F=0.
+\]
+Consequently each element incidence contributes its own Schur block and its
+own negative $\gamma_{K,F}$ trace-mass block.  These blocks must be emitted in
+the element/local-face loop.  In particular, two sides of one global edge are
+not replaced by an averaged stabilization and are not represented by a
+hard-coded factor of two.  This is required for element- and face-dependent
+stabilization.
+
+The default advective stabilization is upwind,
+$\tau_{\rm adv}=|\bh\!\cdot\boldsymbol n|$.  For positive constant scalar
+diffusion the production default is
+\[
+ \tau_{{\rm diff},K,F}=\gamma_d\frac{\kappa}{L_\Omega},
+ \qquad L_\Omega=\frac{2|\Omega|}{|\partial\Omega|},\qquad \gamma_d=1.
+\]
+A positive user-supplied physical $L_\Omega$ takes precedence over the
+automatic geometry value.  Explicit positive values may be supplied per
+element side.  Source, reaction,
+and velocity are sampled at the quadrature needed by the solve space; their DG
+spaces need only share the mesh and need not equal the unknown space.
+
+The legacy $C_\tau(p+1)^2\kappa/h_{K,F}$ rule remains an explicit comparison
+mode.  It is not assumed in the postprocessing estimate.  Both recoveries
+below reproduce the expected $O(h^{p+1})$ total-flux and $O(h^{p+2})$ primal
+rates in the smooth manufactured test with the positive $h$-independent
+default.  With the inverse-$h$ scaling, the same test instead exhibits
+approximately $O(h^p)$ total-flux and $O(h^{p+1})$ primal behavior.
+
+After trace solution and local reconstruction, we first reconstruct a
+conservative total flux $\boldsymbol q_h^{T,*}$.  The default method seeks it
+in $[P_{p+1}(K)]^2$, matches normal moments of
+$\widehat{\boldsymbol F}_h\!\cdot\boldsymbol n$ against $P_{p+1}(F)$ and
+component moments of $\qh+\bh\uh$ against $[P_{p-1}(K)]^2$, and minimizes the
+remaining elementwise $L^2$ distance to $\qh+\bh\uh$.
+
+An experimental alternative seeks the same total flux in the Raviart--Thomas
+space
+\[
+ RT_p(K)=[P_p(K)]^2+\boldsymbol x P_p(K).
+\]
+The implementation uses $[P_p(K)]^2$ plus the nonredundant
+$\boldsymbol x\widetilde P_p(K)$ homogeneous-degree-$p$ complement.  Its
+$3(p+1)$ normal moments against $P_p(F)$ and $p(p+1)$ component moments
+against $[P_{p-1}(K)]^2$ give exactly
+$(p+1)(p+3)=\dim RT_p(K)$ equations, so this reconstruction is unisolvent and
+has no $L^2$ minimization.  The interior targets are evaluated directly from
+$\qh+\bh\uh$ on the postprocessing quadrature, rather than from a preliminary
+degree-$p$ projection.  Both alternatives are stored componentwise in the
+existing degree-$p+1$ DG space.
+
+The primal reconstruction is not the diffusion-only recovery.
+Instead, with $k^*=p+1$, it finds
+$(u_h^*,\boldsymbol q_h^*,\phi_h^*)$ in
+$P_{k^*}(K)\times[P_{k^*}(K)]^2\times P_{k^*}(\partial K)$ such that
+\begin{align*}
+ (\kappa^{-1}\boldsymbol q_h^*,\boldsymbol v)_K
+ -(u_h^*,\nabla\!\cdot\boldsymbol v)_K
+ +\langle\phi_h^*,\boldsymbol v\!\cdot\boldsymbol n\rangle_{\partial K}&=0,\\
+ -(\boldsymbol q_h^*+\bh u_h^*,\nabla w)_K
+ +\langle\widehat F_h^*,w\rangle_{\partial K}
+ &=(\nabla\!\cdot\boldsymbol q_h^{T,*},w)_K,\\
+ \langle\widehat F_h^*,\mu\rangle_{\partial K}
+ &=\langle\boldsymbol q_h^{T,*}\!\cdot\boldsymbol n,\mu\rangle_{\partial K},\\
+ (u_h^*,1)_K&=(\uh,1)_K,
+\end{align*}
+where
+\[
+ \widehat F_h^*=\boldsymbol q_h^*\!\cdot\boldsymbol n
+ +(\bh\!\cdot\boldsymbol n)\phi_h^*
+ +\tau(u_h^*-\phi_h^*).
+\]
+The implementation evaluates the divergence right-hand side by integration by
+parts from $\boldsymbol q_h^{T,*}$ and adds one scalar Neumann multiplier for
+the mean constraint.  Thus ADR primal postprocessing always performs the total
+flux reconstruction first.  The available output modes remain
+\texttt{none}, \texttt{primal}, \texttt{flux}, and \texttt{both}; in
+\texttt{primal} mode the prerequisite total flux is internal.
+
+The NumPy implementation is the dense local reference.  The multithreaded
+Numba implementation fuses element construction, local elimination, and COO
+emission with \texttt{prange}.  The raw-CUDA implementation repeats the same
+incidence algebra on the device, converts device COO to CSR, solves through
+AMGX, and reconstructs element unknowns on the device.
+\end{document}

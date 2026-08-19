@@ -1,4 +1,4 @@
-"""Reusable error diagnostics for scalar DG fields."""
+"""Reusable error diagnostics for scalar and vector DG fields."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Callable, Literal
 import numpy as np
 
 from .core.quadrature import ReferenceElementData
-from .core.space import DGField
+from .core.space import DGField, VectorDGField
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,40 @@ class ScalarErrorReport:
 
     metrics: ScalarErrorMetrics
     samples: ScalarComparisonSamples | None = None
+
+
+@dataclass(frozen=True)
+class VectorErrorMetrics:
+    """Vector DG L2 and sampled maximum-error information."""
+
+    l2: float
+    linf: float
+    component_linf: tuple[float, ...]
+    mean_element_linf: float
+    max_element: int
+
+
+@dataclass(frozen=True)
+class VectorComparisonSamples:
+    """Host samples used to compare numerical and exact vector fields."""
+
+    reference_points: np.ndarray
+    numerical_values: np.ndarray
+    exact_values: np.ndarray
+
+    @property
+    def error_magnitude(self) -> np.ndarray:
+        """Return Euclidean pointwise error magnitudes with shape (K,q)."""
+        difference = self.numerical_values - self.exact_values
+        return np.sqrt(np.sum(difference * difference, axis=0))
+
+
+@dataclass(frozen=True)
+class VectorErrorReport:
+    """Vector metrics with optional samples suitable for plotting."""
+
+    metrics: VectorErrorMetrics
+    samples: VectorComparisonSamples | None = None
 
 
 def relative_drift(value: float, baseline: float) -> float:
@@ -266,6 +300,125 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
     return ScalarErrorReport(metrics, samples)
 
 
+def _exact_vector_values(
+        exact: Callable,
+        x: np.ndarray,
+        y: np.ndarray,
+        *,
+        dim: int,
+) -> np.ndarray:
+    """Evaluate and broadcast an exact vector formula to shape (d,K,q)."""
+    target = x.shape
+    raw = exact(x, y)
+    if isinstance(raw, (tuple, list)):
+        if len(raw) != dim:
+            raise ValueError(f"exact vector must have {dim} components; got {len(raw)}")
+        components = raw
+    else:
+        array = np.asarray(raw, dtype=np.float64)
+        if array.shape[:1] != (dim,):
+            raise ValueError(
+                f"exact vector must return {dim} components or an array "
+                f"with leading dimension {dim}"
+            )
+        components = array
+    normalized = []
+    for component in components:
+        values = np.asarray(component, dtype=np.float64)
+        if values.ndim == 0:
+            values = np.full(target, float(values), dtype=np.float64)
+        else:
+            try:
+                values = np.broadcast_to(values, target)
+            except ValueError as exc:
+                raise ValueError(
+                    f"exact vector component must broadcast to {target}; got {values.shape}"
+                ) from exc
+        normalized.append(values)
+    return np.ascontiguousarray(np.stack(normalized, axis=0), dtype=np.float64)
+
+
+def evaluate_vector_error(
+        field: VectorDGField,
+        exact: Callable,
+        *,
+        volume_quad_1d: int | None = None,
+        sample_resolution: int | None = None,
+        include_samples: bool = False,
+) -> VectorErrorReport:
+    """Evaluate vector L2 error and a sampled Euclidean maximum on the host."""
+    if not isinstance(field, VectorDGField):
+        raise TypeError("evaluate_vector_error expects a VectorDGField")
+    space = field.components[0].space
+    for component in field.components[1:]:
+        space.assert_same_mesh(component.space)
+        if component.space is not space:
+            raise ValueError("vector components must share one DGSpace object")
+
+    error_points, weights, basis = _error_quadrature(field.components[0], volume_quad_1d)
+    mapped = space.mesh.map_reference_points(error_points)
+    exact_values = _exact_vector_values(
+        exact,
+        mapped[:, :, 0],
+        mapped[:, :, 1],
+        dim=field.dim,
+    )
+    coefficients = field.as_component_first()
+    numerical_values = np.einsum("dKi,iq->dKq", coefficients, basis, optimize=True)
+    difference = numerical_values - exact_values
+    l2 = float(
+        np.sqrt(
+            np.einsum(
+                "K,dKq,q->",
+                space.mesh.aff_jacs,
+                difference * difference,
+                weights,
+                optimize=True,
+            )
+        )
+    )
+
+    if sample_resolution is None:
+        reference_points = error_points
+        sampled_numerical = numerical_values
+        sampled_exact = exact_values
+    else:
+        reference_points = _sample_reference_points(sample_resolution)
+        mapped = space.mesh.map_reference_points(reference_points)
+        sampled_exact = _exact_vector_values(
+            exact,
+            mapped[:, :, 0],
+            mapped[:, :, 1],
+            dim=field.dim,
+        )
+        sampled_numerical = np.einsum(
+            "dKi,qi->dKq",
+            coefficients,
+            space.basis_at(reference_points),
+            optimize=True,
+        )
+    sampled_difference = sampled_numerical - sampled_exact
+    sampled_magnitude = np.sqrt(np.sum(sampled_difference * sampled_difference, axis=0))
+    element_maximum = np.max(sampled_magnitude, axis=1)
+    component_linf = tuple(
+        float(value)
+        for value in np.max(np.abs(sampled_difference), axis=(1, 2))
+    )
+    metrics = VectorErrorMetrics(
+        l2=l2,
+        linf=float(np.max(element_maximum)),
+        component_linf=component_linf,
+        mean_element_linf=float(np.mean(element_maximum)),
+        max_element=int(np.argmax(element_maximum)),
+    )
+    samples = None if not include_samples else VectorComparisonSamples(
+        np.ascontiguousarray(reference_points, dtype=np.float64),
+        np.ascontiguousarray(sampled_numerical, dtype=np.float64),
+        np.ascontiguousarray(sampled_exact, dtype=np.float64),
+    )
+    return VectorErrorReport(metrics, samples)
+
+
 def evaluate_scalar_error(
         field: DGField,
         exact: Callable,
@@ -298,8 +451,12 @@ __all__ = [
     "ScalarComparisonSamples",
     "ScalarErrorMetrics",
     "ScalarErrorReport",
+    "VectorComparisonSamples",
+    "VectorErrorMetrics",
+    "VectorErrorReport",
     "azimuthal_mode_diagnostics",
     "evaluate_scalar_error",
+    "evaluate_vector_error",
     "relative_drift",
     "result_transfer_time",
     "solver_result_metrics",

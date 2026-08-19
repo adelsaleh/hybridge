@@ -11,6 +11,10 @@ Application code should import these symbols from `hdgfem`:
 
 ```python
 from hdgfem import (
+    AdvectionDiffusionReactionHDGOptions,
+    AdvectionDiffusionReactionHDGSolver,
+    AdvectionDiffusionReactionResult,
+    AdvectionDiffusionReactionTimings,
     AdvectionReactionHDGOptions,
     AdvectionReactionHDGSolver,
     AdvectionReactionResult,
@@ -25,16 +29,44 @@ from hdgfem import (
     SolveResult,
     SolveStatus,
     solve_global_system,
+    solve_advection_diffusion_reaction_hdg,
     solve_advection_reaction_hdg,
     solve_diffusion_reaction_hdg,
 )
 ```
 
 The HDG objects are also available from `hdgfem.solvers`. Module-oriented code
-should use `hdgfem.solvers.advection_reaction` or
-`hdgfem.solvers.diffusion_reaction`. The reusable solver classes are the primary
-API for repeated and unsteady solves. The two `solve_*_hdg` functions remain
-supported for one-shot calls and compatibility. The linear-solve result, status,
+should use `hdgfem.solvers.advection_reaction`,
+`hdgfem.solvers.diffusion_reaction`, or
+`hdgfem.solvers.advection_diffusion_reaction`. The reusable solver classes are
+the primary API for repeated solves. The three `solve_*_hdg` functions remain
+supported for one-shot calls and compatibility. Pure diffusion-reaction flux
+postprocessing uses the same canonical
+`flux_postprocess_space="l2_closest"|"RT_projection"` selector.
+The default `l2_closest` path retains the full
+`[P_{p+1}]^2` constrained minimum-distance recovery;
+`RT_projection` reconstructs the unique member of
+`[P_p]^2 + x P_p` from numerical `P_p(F)` normal moments
+and raw `[P_{p-1}]^2` interior moments. The RT solve supports
+`postprocessing_backend="numba"|"cupy"`; scalar primal recovery
+and the full-space flux recovery remain host Numba. The compatibility spellings
+`full-p-plus-1` and `rt-p` remain accepted.
+
+Stationary combined ADR
+currently supports full-boundary Dirichlet elimination; its default
+stabilizations are `abs(beta.n)` for upwind advection and
+`kappa/L_Omega` for positive constant scalar diffusion. The old
+`(p+1)^2*kappa/h_F` rule is an explicit legacy comparison mode. ADR assembly and reconstruction
+are independently selectable across the available host paths; Raw CUDA assembly
+currently requires Raw CUDA reconstruction. The default total-flux postprocessor is selected by
+`flux_postprocess_space="l2_closest"` and uses the host-Numba full
+`[P_{p+1}]^2` constrained minimum-distance method.
+`flux_postprocess_space="RT_projection"` selects the Raviart--Thomas moment
+reconstruction, with `postprocessing_backend="numba"|"cupy"`; coupled primal
+recovery remains host Numba, and current Raw CUDA orchestration materializes
+host reconstruction data before optional CuPy re-upload. Legacy
+`full-p-plus-1` and `rt-p` spellings remain compatibility aliases. The ADR
+host default is nonsymmetric `pypardiso`. The linear-solve result, status,
 exceptions, and dispatcher are also available from `hdgfem.linalg`.
 
 The optional host direct backend is selected through the same dispatcher:
@@ -113,6 +145,9 @@ should consume the result object instead of depending on tuple position.
 `DiffusionReactionAssemblyResult`. Advection's current
 `assemble_trace_system()` diagnostic returns `AdvectionReactionResult` with no
 global solve; no separate advection assembly-result type is promised yet.
+Combined ADR returns `AdvectionDiffusionReactionResult`; its `field`, diffusive
+`flux`, `total_flux`, trace, stabilization samples, timings, and optional
+`postprocessed_field`/`postprocessed_flux` are the supported result view.
 
 ## Failure Contract
 

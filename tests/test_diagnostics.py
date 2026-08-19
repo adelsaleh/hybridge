@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from hdgfem import DGSpace, evaluate_scalar_error, rectangle_mesh
+from hdgfem import DGSpace, evaluate_scalar_error, evaluate_vector_error, rectangle_mesh
 from hdgfem.core.field_ops import (
     coefficient_field,
     field_linear_combination,
@@ -30,6 +30,55 @@ def test_scalar_error_report_reuses_field_quadrature_and_returns_plot_samples() 
     assert report.samples.reference_points.ndim == 2
     assert report.samples.numerical_values.shape == report.samples.exact_values.shape
     np.testing.assert_allclose(report.samples.absolute_error, 0.0, atol=1.0e-12)
+
+
+def test_vector_error_report_uses_euclidean_sampled_maximum() -> None:
+    """Report vector L2, Euclidean sampled Linf, and component maxima."""
+    space = _space(1)
+    vector = (space * space).field(
+        (space.constant(3.0), space.constant(-4.0)),
+        name="constant_vector",
+    )
+    report = evaluate_vector_error(
+        vector,
+        lambda x, y: (0.0 * x, 0.0 * y),
+        volume_quad_1d=7,
+        sample_resolution=8,
+        include_samples=True,
+    )
+    domain_measure = float(
+        np.sum(space.mesh.aff_jacs) * np.sum(space.quad_data.Krf_w)
+    )
+    np.testing.assert_allclose(
+        report.metrics.l2,
+        5.0 * np.sqrt(domain_measure),
+        rtol=1.0e-13,
+        atol=1.0e-13,
+    )
+    np.testing.assert_allclose(report.metrics.linf, 5.0, rtol=0.0, atol=3.0e-15)
+    np.testing.assert_allclose(
+        report.metrics.component_linf,
+        (3.0, 4.0),
+        rtol=0.0,
+        atol=3.0e-15,
+    )
+    assert report.samples is not None
+    np.testing.assert_allclose(report.samples.error_magnitude, 5.0)
+
+
+def test_vector_error_report_is_exact_for_linear_vector() -> None:
+    """Resolve exactly represented vector formulas on the independent sample grid."""
+    space = _space(1)
+    exact = lambda x, y: (1.0 + x - 0.5 * y, -0.25 + 2.0 * y)
+    vector = (space * space).field(
+        (
+            space.project_callable(lambda x, y: exact(x, y)[0]).coeffs,
+            space.project_callable(lambda x, y: exact(x, y)[1]).coeffs,
+        )
+    )
+    report = evaluate_vector_error(vector, exact, sample_resolution=9)
+    assert report.metrics.l2 < 1.0e-12
+    assert report.metrics.linf < 1.0e-12
 
 
 def test_field_and_vector_operations_use_one_shared_api() -> None:

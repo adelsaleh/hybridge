@@ -204,6 +204,99 @@ def _assert_hdiv_flux_constraints(result, space: DGSpace, tau_value: float, trac
         )
 
 
+def _assert_rt_flux_constraints(
+        result,
+        space: DGSpace,
+        tau_value: float,
+        trace_basis: str = "legacy-lagrange",
+) -> None:
+    """Check the P_p(F) and [P_{p-1}]^2 Raviart--Thomas moments."""
+    from hdgfem.solvers.diffusion_reaction import (
+        _edge_lagrange_basis,
+        _trace_basis_at,
+    )
+
+    flux_star = result.postprocessed_flux
+    assert flux_star is not None
+    post_space = flux_star.components[0].space
+    qpost = post_space.quad_data
+    nqf = qpost.weights_JGL.size
+    face_points = qpost.pts_fc.reshape(-1, 2)
+    base_face = space.basis_at(face_points).reshape(
+        nqf, 3, space.el_dof
+    ).transpose(1, 2, 0)
+    post_face = qpost.bas_of_bd_quads
+    trace_space = space.trace_space(trace_basis)
+    trace_values = trace_space.element_coefficients(result.trace).reshape(
+        space.mesh.num_tri, 3, trace_space.edg_dof
+    )
+    trace_at_quads = _trace_basis_at(trace_space, qpost.quads_JGL)
+    face_test = _edge_lagrange_basis(space.order, qpost.quads_JGL)
+    unknowns = result.local_unknowns.reshape(
+        space.mesh.num_tri, 3, space.el_dof
+    )
+    qx_star, qy_star = flux_star.as_component_first()
+
+    for element in range(space.mesh.num_tri):
+        for face in range(3):
+            nx, ny = space.mesh.normals[element, face]
+            q_star_n = (
+                nx * (qx_star[element] @ post_face[face])
+                + ny * (qy_star[element] @ post_face[face])
+            )
+            numerical_n = (
+                nx * (unknowns[element, 1] @ base_face[face])
+                + ny * (unknowns[element, 2] @ base_face[face])
+                + tau_value
+                * (
+                    unknowns[element, 0] @ base_face[face]
+                    - trace_values[element, face] @ trace_at_quads
+                )
+            )
+            lhs = np.einsum(
+                "q,iq,q->i",
+                qpost.weights_JGL,
+                face_test,
+                q_star_n,
+                optimize=True,
+            )
+            rhs = np.einsum(
+                "q,iq,q->i",
+                qpost.weights_JGL,
+                face_test,
+                numerical_n,
+                optimize=True,
+            )
+            np.testing.assert_allclose(lhs, rhs, rtol=1e-10, atol=1e-10)
+
+    if space.order == 0:
+        return
+    low_space = DGSpace(
+        space.mesh,
+        space.order - 1,
+        basis_type=space.reference.basis_type,
+    )
+    low_basis = low_space.basis_at(qpost.Krf_quads)
+    base_volume = space.basis_at(qpost.Krf_quads)
+    post_volume = qpost.phi
+    for component, post_coeffs in enumerate((qx_star, qy_star), start=1):
+        lhs = np.einsum(
+            "q,qi,Kq->Ki",
+            qpost.Krf_w,
+            low_basis,
+            post_coeffs @ post_volume.T,
+            optimize=True,
+        )
+        rhs = np.einsum(
+            "q,qi,Kq->Ki",
+            qpost.Krf_w,
+            low_basis,
+            unknowns[:, component] @ base_volume.T,
+            optimize=True,
+        )
+        np.testing.assert_allclose(lhs, rhs, rtol=1e-10, atol=1e-10)
+
+
 def _vector_l2_error(vector_field, exact_flux) -> float:
     space = vector_field.components[0].space
     points = space.mapped_quads()
@@ -533,6 +626,122 @@ def test_diffusion_reaction_modal_postprocess_satisfies_flux_constraints(assembl
     assert result.postprocessed_flux is not None
     assert result.postprocessed_field.l2_error(exact) < 1.0e-10
     _assert_hdiv_flux_constraints(result, space, 1.0, trace_basis="legendre-modal")
+
+
+@pytest.mark.parametrize("assembly_backend", ("numpy", "numba"))
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+def test_diffusion_rt_projection_satisfies_unisolvent_moments(
+        assembly_backend: str,
+        trace_basis: str,
+) -> None:
+    """Exercise pure-diffusion RT_p recovery for both host assembly paths."""
+    pytest.importorskip("numba")
+    space = _space(order=2)
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+    if assembly_backend == "numba":
+        source = space.project_callable(source, name="source_h")
+        reaction = space.zeros(name="reaction_h")
+    tau = 0.8
+    result = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        diffusion=diffusion,
+        stabilization=tau,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend=assembly_backend,
+        trace_basis=trace_basis,
+        hdg_postprocess="both",
+        flux_postprocess_space="rt-p",
+        postprocessing_backend="numba",
+        verbose=False,
+    )
+
+    assert result.postprocessed_field is not None
+    assert result.postprocessed_flux is not None
+    assert result.flux_postprocess_space == "RT_projection"
+    assert result.postprocessing_backend == "numba"
+    _assert_rt_flux_constraints(result, space, tau, trace_basis)
+
+
+def test_diffusion_flux_postprocess_aliases_and_backend_preflight() -> None:
+    """Keep compatibility aliases and reject unsupported CuPy full-space work."""
+    from hdgfem.solvers.diffusion_reaction import (
+        _normalize_flux_postprocess_space,
+    )
+
+    assert _normalize_flux_postprocess_space("full-p-plus-1") == "l2_closest"
+    assert _normalize_flux_postprocess_space("rt-p") == "RT_projection"
+    with pytest.raises(ValueError, match="flux_postprocess_space"):
+        _normalize_flux_postprocess_space("unknown")
+    with pytest.raises(NotImplementedError, match="supports only"):
+        solve_diffusion_reaction_hdg(
+            *_callable_problem(),
+            _space(order=1),
+            stabilization=1.0,
+            solver="direct",
+            preconditioner=None,
+            boundary_mode="eliminate",
+            hdg_postprocess="flux",
+            flux_postprocess_space="l2_closest",
+            postprocessing_backend="cupy",
+            verbose=False,
+        )
+
+
+def _cupy_runtime_available() -> bool:
+    try:
+        import cupy as cp
+
+        return cp.cuda.runtime.getDeviceCount() > 0
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy runtime unavailable")
+def test_diffusion_rt_cupy_matches_numba() -> None:
+    """Match batched CuPy RT moment solves against the host Numba kernel."""
+    pytest.importorskip("numba")
+    space = _space(order=2)
+    diffusion, reaction, source, exact = quadratic_poisson_case()
+    common = dict(
+        diffusion=diffusion,
+        stabilization=0.8,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numpy",
+        hdg_postprocess="flux",
+        flux_postprocess_space="RT_projection",
+        verbose=False,
+    )
+    host = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        postprocessing_backend="numba",
+        **common,
+    )
+    device = solve_diffusion_reaction_hdg(
+        source,
+        reaction,
+        exact,
+        space,
+        postprocessing_backend="cupy",
+        **common,
+    )
+    assert device.flux_postprocess_space == "RT_projection"
+    assert device.postprocessing_backend == "cupy"
+    np.testing.assert_allclose(
+        device.postprocessed_flux.as_component_first(),
+        host.postprocessed_flux.as_component_first(),
+        rtol=5e-11,
+        atol=5e-11,
+    )
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:
