@@ -76,6 +76,12 @@ distribution-specific installation. Install those stacks in matched
 environments and use `docs/reference/backend_capabilities.md` to select a supported
 solver combination.
 
+All HDG commits after `v0.1.0a1` require the forked AMGX/PyAMGX development
+stack when qualifying the checkout. Do not substitute the upstream `main`
+branches. The required branches, exact tested commits, build commands, and
+PyAMGX reinstall procedure are in
+[`forked_amgx_stack.md`](forked_amgx_stack.md).
+
 `python -m pip install -e '.[pardiso]'` installs the optional `pypardiso`
 adapter and oneMKL runtime. The upstream package currently targets x86-64 Linux
 and Windows. Select `solver="pypardiso"` or its `"pardiso"` alias for general

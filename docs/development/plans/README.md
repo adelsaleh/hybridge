@@ -6,6 +6,12 @@ algorithm, API, backend, or release contracts.
 
 ## Plans
 
+- [`face_block_hp_multigrid.md`](face_block_hp_multigrid.md): direct face-BSR,
+  nested Legendre p-coarsening to a scalar face operator, classical h-AMG, and
+  a symmetric PCG production path for repeated HDG Poisson solves.
+- [`diffusion_stabilization_global_scales.md`](diffusion_stabilization_global_scales.md):
+  mesh- and degree-independent global-length and Steklov-calibrated diffusion
+  stabilization for diffusion-reaction and ADR.
 - [`unrelated_mesh_transfer.md`](unrelated_mesh_transfer.md): conservative
   host/device DG and HDG-trace transfer between unrelated meshes, including
   geometric mismatch handling, validation, and implementation phases.

@@ -8,6 +8,7 @@ release checklists, or application-specific research notes.
 
 | Topic | Contents |
 |---|---|
+| [`advection_diffusion_reaction/`](advection_diffusion_reaction/) | Combined conservative flux, static condensation, incidence-wise transmission assembly, and postprocessing. |
 | [`advection_reaction/`](advection_reaction/) | Upwind HDG fluxes, upwind-SCC ordering, and block Gauss-Seidel preconditioning. |
 | [`diffusion_reaction/`](diffusion_reaction/) | Mixed HDG formulation, static condensation, assembly, and postprocessing. |
 | [`quadrature/`](quadrature/) | Symmetric triangle quadrature and exactness requirements. |

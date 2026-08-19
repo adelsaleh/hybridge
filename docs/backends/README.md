@@ -9,6 +9,16 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 
 - [`cuda_execution.md`](cuda_execution.md): CUDA runner entry points, matrix
   formats, sparse-solve handoff, and direct-CSR timing anchor.
+- [`amgx_classical_bsr.md`](amgx_classical_bsr.md): hybrid classical-AMG
+  hierarchy with a BSR fine operator, scalar setup expansion, and the
+  pure-BSR successor contract.
+- [`bsr_amgx_dependency_map.md`](bsr_amgx_dependency_map.md): authoritative
+  ownership and dependency map for direct BSR assembly, AMGX hybrid/pure-BSR
+  hierarchies, HDGFEM face-block p/h multigrid, cuSPARSE, and remaining custom
+  kernels.
+- [`face_dense_gpu.md`](face_dense_gpu.md): experimental fixed-slot face-block
+  GMRES path with block-Jacobi/ASM and polynomial preconditioning, including
+  its precise CuPy/cuBLAS ownership and independence from AMGX.
 - [`raw_cuda.md`](raw_cuda.md): raw-CUDA kernel ownership, launch policy,
   discontinuous-advection audit, and diffusion setup ownership.
 

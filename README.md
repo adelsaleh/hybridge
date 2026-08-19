@@ -5,11 +5,12 @@ research codebase.  The package provides mesh, reference-element, DG field,
 assembly, linear algebra, solver, plotting, and optional GPU backend modules for
 HDG experiments.
 
-The main package workflows are advection-reaction, diffusion-reaction, and
-fixed-mesh guiding-center HDG solves.  Current performance work focuses on
-raw-CUDA trace assembly, direct device CSR handoff to AMGX, reusable solver
-classes for unsteady runs, tangent zero-boundary-flux transport, and
-high-order guiding-center/diocotron benchmarks.
+The main package workflows are advection-reaction, diffusion-reaction,
+stationary advection-diffusion-reaction, and fixed-mesh guiding-center HDG
+solves. Current performance work focuses on raw-CUDA CSR/BSR trace assembly,
+face-block Poisson preconditioners, mesh-independent diffusion stabilization,
+reusable solvers for unsteady runs, and high-order guiding-center/diocotron
+benchmarks.
 
 A separate interested-reader part of the repository studies diocotron-like
 equilibria of the guiding-center model through the semilinear elliptic equation
@@ -22,6 +23,18 @@ defined in `docs/reference/solver_api_alpha.md`. Reusable solver classes are the
 interface; the canonical functional solvers remain supported for one-shot use.
 Supported assembly, sparse-solve, reconstruction, and host/device residency
 combinations are defined in `docs/reference/backend_capabilities.md`.
+
+> **Post-release dependency requirement:** every HDG commit after the
+> `v0.1.0a1` release tag is developed and qualified with
+> [`adelsaleh/AMGX@quality-of-life`](https://github.com/adelsaleh/AMGX/tree/quality-of-life)
+> and
+> [`adelsaleh/pyamgx@quality-of-life`](https://github.com/adelsaleh/pyamgx/tree/quality-of-life),
+> not the corresponding upstream `main` branches. The exact revisions qualified
+> with this checkout are AMGX `6699fa4` and PyAMGX `6b26b12`. Host-only paths
+> keep their lazy optional imports, but the supported post-release development
+> stack uses these forks. See the
+> [forked AMGX stack guide](docs/getting_started/forked_amgx_stack.md) for clone,
+> build, install, runtime-library, and verification commands.
 
 ## Quick Start
 
@@ -98,6 +111,46 @@ again use the package-root exports or `hdgfem.solvers.diffusion_reaction`;
 python -m scripts.diffusion_reaction.run_cases quadratic_poisson
 ```
 
+Use `--flux-postprocess-space l2_closest|RT_projection` to choose the
+pure-diffusion flux recovery and
+`--postprocessing-backend auto|numba|cupy` to select the supported
+execution path. The full-space minimum-distance recovery is host Numba; the RT
+moment projection is available through host Numba and batched CuPy.
+
+Stationary combined advection-diffusion-reaction is available through
+`AdvectionDiffusionReactionHDGSolver` and
+`solve_advection_diffusion_reaction_hdg`. NumPy is the dense reference, Numba is
+the default multithreaded host assembly, and raw CUDA provides device assembly,
+AMGX solve, and device reconstruction for positive constant scalar diffusion.
+Whole-boundary Dirichlet elimination, upwind advection stabilization, the
+mesh-independent default `tau_d=kappa/L_Omega`, and total-flux-first
+degree-`p+1` ADR primal/flux postprocessing are included. See the
+[maintained derivation](docs/algorithms/advection_diffusion_reaction/README.md)
+and [implementation report](docs/research/solver_studies/stationary_adr_hdg_2026_08.md).
+
+Run the steady constant-diffusivity disk manufactured case at the mildly
+advection-dominated default `Pe=10` with its degree-`p+1` comparison plot:
+
+```bash
+python -m scripts.advection_diffusion_reaction.manufactured_disk --plot
+```
+
+The runner defaults to multithreaded Numba assembly/reconstruction, host Numba
+postprocessing, and nonsymmetric oneMKL PARDISO. Use `--no-plot` for a
+diagnostics-only run; `-v 0|1|2` selects summary-only, phase, or detailed
+logging. `--assembly-backend`, `--reconstruction-backend`, and
+`--postprocessing-backend` expose the currently supported stage paths. Use
+`--flux-postprocess-space rt-p` to test the experimental
+`RT_p=[P_p]^2+x P_p` total-flux reconstruction; it supports host Numba and
+batched CuPy moment solves, while the coupled primal recovery remains host
+Numba. Diffusion stabilization defaults to
+`GlobalLengthDiffusion(gamma_d=1, domain_length=1)` for this known unit disk,
+namely `tau_d=kappa`. Generic solvers use the mesh-derived
+`L_Omega=2*area/boundary_length` fallback when no physical length is supplied.
+Use
+`--diffusion-stabilization-mode inverse-h` only for legacy comparisons, or
+`--diffusion-stabilization VALUE` for an explicit constant.
+
 The current Cupyx/upwind-GS advection performance path is:
 
 ```bash
@@ -125,7 +178,9 @@ raw-CUDA CSR emission, Cupyx solver experiments, and AMGX solves through
 PyAMGX. The diffusion GPU runner is a thin `DiffusionReactionHDGSolver` front
 end for CuPy or raw-CUDA assembly with AMGX; the solver class owns assembly,
 scaling, device CSR handoff, reconstruction, diagnostics, and optional CuPy
-primal postprocessing. Raw-CUDA diffusion uses direct CSR and currently omits
+primal postprocessing. It defaults to `tau_d=kappa/L_Omega`; use
+`--tau VALUE` for an explicit constant. Raw-CUDA diffusion uses direct CSR
+and currently omits
 solver-call HDG postprocessing. Public raw-CUDA solver and runner defaults use
 the equation- and
 order-aware `raw_block_size="auto"` policy documented in
@@ -134,6 +189,28 @@ remain available for benchmark reproduction. See
 [CUDA execution paths](docs/backends/cuda_execution.md) and
 [the AMGX configuration guide](configs/amgx/README.md) for operational details
 and current presets.
+
+Three experimental block-structured Poisson paths are retained for research
+and matched benchmarking. Direct raw-CUDA BSR assembly can feed the modified
+local AMGX classical hierarchy in either coefficient-exact hybrid
+fine-BSR/scalar-hierarchy mode or pure block-graph mode. The independent
+`FB-HP-MG-PCG` prototype transforms traces to normalized Legendre modes,
+p-coarsens dense face blocks to the constant mode, and uses scalar AMGX only
+for the reduced p=0 correction; ordinary BSR SpMV is cuSPARSE-backed. Finally,
+the face-dense CuPy solver applies restarted GMRES with block-Jacobi or
+element-patch ASM and optional polynomial preconditioning without calling
+AMGX. These are benchmark paths, not supported backend-matrix rows. See the
+[AMGX/BSR ownership map](docs/backends/bsr_amgx_dependency_map.md),
+[face-block hp-MG plan](docs/development/plans/face_block_hp_multigrid.md), and
+[face-dense GPU guide](docs/backends/face_dense_gpu.md). Reproduction entry
+points are:
+
+```bash
+python -m scripts.diffusion_reaction.compare_cuda_bsr_csr --help
+python -m scripts.diffusion_reaction.face_block_hp_mg_prototype --help
+python -m scripts.diffusion_reaction.validate_face_dense_gpu_solver --help
+python -m scripts.diffusion_reaction.benchmark_face_dense_primitives --help
+```
 
 Fixed-mesh guiding-center cases live under `scripts/guiding_center/`:
 
@@ -160,20 +237,24 @@ in `MANUAL.md` and the Strategy A notes under `docs/research/strategy_a_band_par
 - `hdgfem/core/`: meshes, mesh caching, bases, quadrature, DG spaces/fields,
   reusable field/trace operations, trace transfer, and adaptivity helpers.
 - `hdgfem/assembly/`: NumPy HDG local matrices, trace assembly helpers,
-  projection helpers, face-dense diffusion assembly, and Gram operators.
+  projection helpers, conservative stationary ADR blocks, face-dense diffusion
+  assembly, and Gram operators.
 - `hdgfem/backends/`: optional Numba, CuPy, Cupyx, raw-CUDA, PyAMGX, and fused
   benchmark adapters.  This includes table-driven Numba assembly, CuPy device
-  mirrors, raw-CUDA advection/diffusion kernels, direct CSR-to-AMGX handoff,
-  shared PyAMGX resource management, and device reconstruction/postprocessing
-  helpers. Optional dependencies are imported lazily. The role map and naming
-  migration policy are in [docs/backends/README.md](docs/backends/README.md).
+  mirrors, raw-CUDA advection/diffusion/ADR kernels, direct CSR/BSR assembly and
+  AMGX handoff, Legendre face-BSR operators, shared PyAMGX resource management,
+  and device reconstruction/postprocessing helpers. Optional dependencies are
+  imported lazily. The role map and naming migration policy are in
+  [docs/backends/README.md](docs/backends/README.md).
 - `hdgfem/kernels/`: low-level Numba kernels used by backend wrappers.
-- `hdgfem/linalg/`: sparse trace-system assembly/solves, boundary dof
-  reduction, row scaling, upwind-SCC ordering, upwind block-GS preconditioners,
-  and CuPy export of compact preconditioner data.
-- `hdgfem/solvers/`: advection-reaction and diffusion-reaction solver APIs,
-  including reusable stateful solver classes in descriptive full-name
-  implementation modules and temporary abbreviated compatibility shims.
+- `hdgfem/linalg/`: sparse and face-block trace operators/solves, boundary dof
+  reduction, row scaling, upwind-SCC ordering, block-GS, block-Jacobi and ASM
+  preconditioners, polynomial/restarted-GMRES references, and the experimental
+  face-block hp-multigrid V-cycle.
+- `hdgfem/solvers/`: advection-reaction, diffusion-reaction, and stationary ADR
+  solver APIs, including reusable stateful solver classes in descriptive
+  full-name implementation modules and temporary abbreviated compatibility
+  shims.
 - `hdgfem/io/`: shared AMGX configuration, plotting/comparison, timing, and
   console-output helpers.
 - `hdgfem/diagnostics.py`: scalar error reports and reusable solver/application
@@ -334,6 +415,7 @@ Useful supporting notes include:
 - [docs/reference/solver_api_alpha.md](docs/reference/solver_api_alpha.md): bounded early-alpha public solver API and compatibility contract.
 - [docs/reference/solver_convergence_contract.md](docs/reference/solver_convergence_contract.md): normalized status, residual acceptance, retry, and cleanup contract.
 - [docs/getting_started/installation.md](docs/getting_started/installation.md): package dependency groups, wheel scope, install smoke, and CI qualification.
+- [docs/getting_started/forked_amgx_stack.md](docs/getting_started/forked_amgx_stack.md): required post-release AMGX/PyAMGX forks, exact qualified revisions, and build/install instructions.
 - [docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md): authoritative early-alpha backend and residency matrix.
 - [docs/development/plans/](docs/development/plans/): indexed active implementation and qualification plans; task priority remains in `TODO.md`.
 - [docs/development/alpha_test_matrix.md](docs/development/alpha_test_matrix.md): executable host, CPU parity, GPU smoke, and scheduled validation matrix.

@@ -21,6 +21,10 @@ DOCUMENTATION_AREAS = (
     "releases",
 )
 ALGORITHM_CONTENTS = {
+    "advection_diffusion_reaction": {
+        "README.md",
+        "assembly.tex",
+    },
     "advection_reaction": {
         "README.md",
         "upwind_block_gauss_seidel.tex",
@@ -38,6 +42,8 @@ ALGORITHM_CONTENTS = {
 }
 DEVELOPMENT_PLAN_CONTENTS = {
     "README.md",
+    "face_block_hp_multigrid.md",
+    "diffusion_stabilization_global_scales.md",
     "unrelated_mesh_transfer.md",
     "unsteady_solver_validation.md",
 }

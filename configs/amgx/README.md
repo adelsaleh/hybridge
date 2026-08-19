@@ -1,5 +1,11 @@
 # AMGX Configs
 
+> **Required post-release stack:** these configurations are qualified with
+> `adelsaleh/AMGX@quality-of-life` at `6699fa4` and
+> `adelsaleh/pyamgx@quality-of-life` at `6b26b12`, not the upstream `main`
+> branches. Follow the [fork build/install guide](../../docs/getting_started/forked_amgx_stack.md)
+> before reproducing AMGX-backed results.
+
 These JSON files are readable, reusable PyAMGX configurations for the CUDA HDG runners. The Python scripts keep embedded fallback copies, but load these files by default when present. Use `--amgx-config` to run an edited copy without changing source code.
 
 The JSON basenames retain their original `adv_rea_gpu4_hdg_*` and

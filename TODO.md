@@ -16,13 +16,18 @@
 - When a detailed plan exists, every checklist item covered by that plan must link to it directly. `docs/development/plans/README.md` owns the active-plan index; this file remains the source of truth for task priority and status.
 - A release-quality checklist item may be checked only when its commands, tested scope, warnings/skips, known gaps, and follow-up ownership are documented.
 
+### Post-Release Dependency Policy
+
+- [x] Treat every HDG commit after the `v0.1.0a1` release tag as part of a three-repository development stack requiring `adelsaleh/AMGX@quality-of-life` and `adelsaleh/pyamgx@quality-of-life`. The exact revisions qualified with the current HDG work are AMGX `6699fa4` and PyAMGX `6b26b12`; upstream `main` branches are not equivalent because they do not contain the required diagnostics, device error/memory bindings, direct-BSR upload/solve support, block-aware classical AMG, or CUDA-13 callback compatibility changes. Host-only paths retain lazy optional imports, but post-release validation and performance claims must use the pinned fork stack. Clone, build, reinstall, library-path, and verification commands are maintained in [`docs/getting_started/forked_amgx_stack.md`](docs/getting_started/forked_amgx_stack.md).
+- [ ] Prepare focused upstreamable AMGX and PyAMGX pull requests after the block algorithms and public binding surface stabilize. Keep HDG pinned to the fork branches until equivalent commits are merged upstream and the full CUDA parity/performance matrix is rerun.
+
 ### Current Validation Focus
 
-1. Reusable solver classes under unsteady coefficient, source, boundary, and initial-guess updates.
-2. Same-mesh cross-`DGSpace` coefficient semantics and backend parity.
-3. Tangent zero-flux advection across the supported Numba and raw-CUDA paths; NumPy/CuPy support remains open.
-4. Guiding-center temporal/spatial convergence and recovery from the observed high-mode AMGX transport failure.
-5. Device diffusion flux postprocessing and cooperative direct-CSR release qualification.
+1. Stationary ADR zero-advection/zero-diffusion reductions, variable/tensor diffusion, and device-resident postprocessing.
+2. One incidence-aware stabilization/coefficient adapter, including global Steklov calibration and cross-space backend parity.
+3. Face-block hp-multigrid setup reduction, identical-runner promotion tests, and BSR-first Poisson support for p=7,8,9.
+4. A fair nonsymmetric ADR comparison of face-dense GMRES/ASM/polynomial preconditioning against the best AMGX candidate.
+5. Guiding-center temporal/spatial convergence and recovery from the observed high-mode AMGX transport failure.
 
 ## Early Alpha Production
 
@@ -71,6 +76,26 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Centralize raw-CUDA element-kernel launch selection behind `raw_block_size="auto"`, keyed by equation family and polynomial order. Resolve to an integer at solver/runner boundaries, preserve explicit `1|32|64|128` overrides for reproducible diagnostics, use `32` for supported advection through p=6 with row-fit growth above that, and use conservative `32|64|128` diffusion degree tiers. Focused policy and solver-class tests cover resolution and override behavior.
 - [ ] Qualify and tune the automatic launch table with warmed device sweeps for Poisson/diffusion and advection at every supported order, both production trace bases, representative small/large meshes, fused/precomputed modes where applicable, assembly/RHS-only/reconstruction phases, occupancy/shared-memory data, numerical parity, and repeated-run variance. Keep explicit benchmark scripts pinned to a launch size and change defaults only from recorded evidence.
 
+## Advection-Diffusion-Reaction
+
+- [x] Add stationary conservative HDG for `div(beta*u + q) + r*u = f`, `q=-kappa*grad(u)`, with whole-boundary Dirichlet elimination. The NumPy reference, fused multithreaded Numba assembly/reconstruction, and raw-CUDA device COO-to-CSR/AMGX/reconstruction paths use the combined advective-diffusive numerical flux. Every element incidence emits its own `(tau_adv + tau_diff - beta.n)` trace-mass block inside the element/local-face loop, including unequal per-element/per-face stabilization. Defaults are upwind `tau_adv=abs(beta.n)` and mesh-independent `tau_diff=kappa/L_Omega`; the inverse-`h` rule remains an explicit comparison mode; coefficient sampling permits source, reaction, and beta in different DG spaces on the same mesh. Degree-`p+1` postprocessing first reconstructs the conservative total flux, then uses its divergence and face-normal moments in the coupled local ADR Neumann recovery for the primal variable. See [`docs/algorithms/advection_diffusion_reaction/`](docs/algorithms/advection_diffusion_reaction/) and the [2026-08 implementation report](docs/research/solver_studies/stationary_adr_hdg_2026_08.md).
+- [x] Add the steady constant-diffusivity unit-disk manufactured runner at `scripts/advection_diffusion_reaction/manufactured_disk.py`. It uses `AdvectionDiffusionReactionHDGSolver`, defaults to `Pe=10`, multithreaded Numba assembly/reconstruction, host Numba degree-`p+1` postprocessing, and nonsymmetric oneMKL PARDISO; exposes supported assembly/reconstruction/postprocessing stage selectors, verbosity levels `0|1|2`, a structured solve summary, and diffusion-runner-style raw/postprocessed/exact/error plotting.
+- [x] Add an experimental selectable `RT_p=[P_p]^2+x P_p` total-flux reconstruction using its unisolvent `P_p(F)` normal and `[P_{p-1}(K)]^2` interior moments, with the interior target sampled directly from `q_h+beta*u_h`. Host Numba and batched CuPy implementations agree within floating-point tolerance, including Raw CUDA/AMGX orchestration after current host materialization. A nested smooth `p=3` regression with constant `tau_diff=0.1` verifies approximately fourth-order total flux and fifth-order primal convergence for both RT and full-space reconstructions, as expected. Its error constant is slightly larger than the default full-`[P_{p+1}]^2` minimum-distance reconstruction on the disk, so retain the latter as default.
+- [ ] Make stationary ADR with identically zero diffusion reduce exactly to the pure advection-reaction discretization and implementation path. Avoid allocating or solving unused mixed diffusive-flux blocks, preserve the public ADR result contract where practical, and require matrix/RHS/trace/reconstruction parity with `AdvectionReactionHDGSolver` across host and device backends.
+- [ ] Make stationary ADR with identically zero advection reduce exactly to the pure diffusion-reaction discretization and implementation path. Avoid advective sampling and stabilization work, preserve the public ADR result contract where practical, and require matrix/RHS/trace/reconstruction/postprocessing parity with `DiffusionReactionHDGSolver` across host and device backends.
+- [x] Standardize the public flux-postprocessing choice for both pure diffusion and ADR as `l2_closest` or `RT_projection`. Map the existing full-space constrained minimum-`L2` recovery to `l2_closest` and the Raviart--Thomas moment reconstruction to `RT_projection`; provide a documented compatibility transition for existing option and CLI spellings.
+  - [x] Complete the ADR half: the solver and manufactured/stabilization-study runners expose `l2_closest` and `RT_projection` as the canonical choices while retaining aliases for the former full-space and `rt-p` spellings.
+  - [x] Complete the pure diffusion-reaction half: solver-class and functional APIs plus the maintained runner expose the same canonical choices and aliases. The existing full-space recovery remains the default; host Numba and batched CuPy RT moment solves satisfy the numerical face-normal and raw interior-moment constraints and agree within floating-point tolerance.
+- [ ] Implement and qualify the mesh- and degree-independent diffusion-stabilization roadmap for pure diffusion-reaction and ADR: `global_length` as the production default, `global_steklov` as the optional cached geometry calibration, tensor normal diffusivity, explicit fallback/reporting, and host/device parity. Follow the [detailed implementation and validation checklist](docs/development/plans/diffusion_stabilization_global_scales.md).
+  - [x] Land and promote the bounded constant-isotropic `global_length` foundation: shared `GlobalLengthDiffusion`, exact affine-mesh area/boundary measures, automatic or explicit physical length, gamma scaling, solver-boundary lowering to existing scalar host/device inputs, ADR and diffusion host/device runner defaults/reporting, public exports, and h/p-invariance plus explicit-scalar parity tests. Preserve fixed-`tau` benchmark presets and ADR inverse-`h` as explicit compatibility choices.
+- [x] Replace the supported constant-isotropic ADR and diffusion-reaction defaults by `tau_diff=kappa/ell`, with positive user-provided `ell` taking precedence and `ell=2*area/boundary_length` as the automatic mesh-geometry fallback. Scalar, symmetric-component isotropic, and isotropic-matrix diffusion inputs are covered; heterogeneous and anisotropic normal-diffusivity policies remain tracked below. See the [global stabilization plan](docs/development/plans/diffusion_stabilization_global_scales.md).
+- [ ] Redo the postprocessing convergence study in `L-infinity` as well as `L2`, comparing `tau_diff=kappa/ell` against `(p+1)^2*kappa/h_F` for raw and postprocessed primal and total-flux errors, both `l2_closest` and `RT_projection`, multiple orders, and nested/distorted meshes. Record whether the inverse-`h` stabilization has an `L-infinity` advantage despite its slower observed `L2` postprocessing rates, and distinguish quadrature-sampled maxima from any certified norm bound. See the [global stabilization plan](docs/development/plans/diffusion_stabilization_global_scales.md).
+  - [x] Add the reusable stationary-disk qualification harness at `scripts/advection_diffusion_reaction/study_diffusion_stabilization.py`: it sweeps actual mesh `h`, order, `gamma_d`, `global-length` versus legacy `inverse-h`, and both flux recoveries; records raw/postprocessed primal and total-flux `L2` plus explicitly sampled Euclidean `L-infinity` diagnostics, residuals, iterations, timings, and bounded exact dense conditioning; and writes CSV, JSON, Markdown, and optional convergence plots. Focused tests and a two-mesh host smoke sweep pass. The full nested/distorted production study and dated conclusions remain open.
+- [ ] Continue qualifying the promoted `tau_diff=kappa/ell` ADR default separately from the flux-reconstruction choice. Current evidence shows that the inverse-`h` rule reduces the observed postprocessed rates by about one order, while positive mesh-independent stabilization restores the theoretical `p+1` total-flux and `p+2` primal rates. Test stability across Peclet number, polynomial order, distorted meshes, coefficient jumps, and boundary layers, retaining `(p+1)^2*kappa/h_F` as an explicit comparison option. See the [global stabilization plan](docs/development/plans/diffusion_stabilization_global_scales.md).
+- [ ] Extend fused Numba and raw CUDA ADR from positive constant scalar diffusion to scalar-variable and tensor diffusion, including a documented normal-diffusivity stabilization rule and manufactured convergence tests.
+- [ ] Replace the readable one-thread-per-element raw-CUDA ADR baseline with a cooperative element kernel and direct CSR emission; benchmark both trace bases by order before changing defaults.
+- [ ] Keep the raw-CUDA degree-`p+1` primal and total-flux postprocessors device-resident and make host materialization genuinely optional.
+
 ## Diffusion-Reaction
 
 ### AMGX Solvers And Scaling
@@ -89,6 +114,103 @@ Research studies in later sections inform future solver choices but do not block
 - [ ] Repeat lower-DenseLU-threshold Chebyshev/L1 checks before promoting any AMGX config change: `dense_lu_num_rows=128` fixed the modal p6/ms0.18 setup failure and lowered nodal p6/ms0.04 setup in one sample, but it did not fix modal fine-grid PCGF iterations.
 - [x] Add focused generated sweep variants for non-Chebyshev AMGX candidates found in local sources and test them at p6 on coarse and fine modal diffusion meshes with and without symmetric scaling. Finding: BICGSTAB aggregation/direct DILU/GS variants are cheap on coarse meshes, but none beats the existing fine-mesh modal `BICGSTAB + classical AMG` fallback; PCGF MULTIPASS/GS reduces iterations but is slower in wall time. See `docs/research/solver_studies/diffusion_amgx_2026_07.md`.
 - [x] Recheck modal `BICGSTAB + classical AMG` at practical tolerances such as `1e-9` and `1e-10`, since it is much faster than modal PCGF on the heavy p6 case but does not hit a strict `1e-12` residual there. Bounded p6, `ms=0.04` raw-CUDA CSR samples on 2026-08-07 both reached the 2,000-iteration cap; physical residuals were 6.564e-9 and 1.470e-9, respectively, so no config or default change is justified. See [`docs/research/solver_studies/diffusion_amgx_tolerance_2026_08.md`](docs/research/solver_studies/diffusion_amgx_tolerance_2026_08.md).
+
+### Face-Block hp-Multigrid Poisson Solver
+
+- [ ] Implement and qualify `FB-HP-MG-PCG` following the detailed [face-block
+  hp-multigrid plan](docs/development/plans/face_block_hp_multigrid.md): direct
+  Legendre face BSR, normalized nested modal p-coarsening to p=0, reusable
+  scalar AMGX only at p=0, face-block polynomial smoothing, a fixed symmetric
+  V-cycle, and FP64 PCG with independently checked true residuals. Keep scalar
+  CSR and the coefficient-exact hybrid fine-BSR/scalar-hierarchy path as
+  baselines and fallbacks until the complete warm solve wins.
+  - [x] Land the standalone Phase 2 numerical prototype with normalized
+    Legendre coordinates, nested principal-block Galerkin levels, halving and
+    direct-to-zero schedules, configurable fixed Chebyshev smoothing, reusable
+    scalar AMGX at p=0, V-cycle adjointness/positive-action diagnostics, and an
+    FP64 true-residual PCG gate. The bounded radius-5 p=6 smoke case passes; the
+    full production-size ablation remains below.
+  - [x] Add an AMGX-matching FP64 PCGF diagnostic outer solver and a dedicated
+    scalar p=0 AMGX preset (`CLASSICAL/PMIS/D2`, `JACOBI_L1` 1+1, no aggressive
+    level, fixed one-cycle work). On the 150,209-triangle radius-5 p=6 disk,
+    both modal schedules pass the symmetry gate at about 3e-18 and ordinary PCG
+    converges in 20 iterations/0.958 s for `6->3->1->0` and 22 iterations/0.615 s
+    for `6->0`, at true residuals below 4.5e-9. PCGF matches the 20-iteration
+    symmetric result; the inherited nodal-derived coarse cycle has a 9.61e-5
+    defect and needs 30 iterations/1.477 s, so keep it as an explicit ablation.
+  - [x] Complete the focused Phase 2 p=4--6 comparison of order-2/order-3
+    Chebyshev, symmetric `1+1` versus diagnostic `0+3`, direct-to-zero versus
+    halving schedules, and full face-block Jacobi. The 150,209-triangle screen
+    selects direct `p->0`, Cheb-2, symmetric `1+1`, and PCG: extra p-levels and
+    asymmetric smoothing reduce iterations but lose decisively in time.
+    Block-L1 is deferred because block Jacobi remains SPD and within the
+    iteration gate. See the recorded timings in the detailed plan.
+  - [x] Add the cuSPARSE-first Legendre face-BSR SpMV operator with matrix-owned
+    generic-BSR descriptors, preprocessing state, and workspace, plus a
+    row-owned raw-CUDA fallback. Focused parity covers block sizes 1 through 10;
+    CUDA generic BSR is used for 2 through 10 and its unsupported 1x1 case is
+    routed to the scalar coarse solver/raw fallback.
+  - [x] Add and sweep the warp-owned fused dense-BSR Chebyshev stage. Each face
+    row loads every neighboring trace block once, reuses it across the dense
+    block with warp shuffles, and fuses SpMV, residual, the full dense
+    diagonal-block inverse, and the update without global intermediate vectors.
+    GPU parity covers block sizes 2, 5, 7, and 10; end-to-end tests retain both
+    `cupy` and `fused-raw-cuda`. Across 72 successful radius-5 disk runs
+    (99,896/124,831/150,209 triangles, p=1..6, two repeats), fusion reduces
+    V-cycle time by 1.36--2.50x and hot-solve time by 1.32--2.36x versus CuPy with
+    identical iterations/residuals. It beats historical scalar CSR consistently
+    at p=5,6; on the largest p=6 case it takes 0.2797 s versus 0.3806 s CSR and
+    0.2739 s hybrid. These are preconditioner-inclusive hot Krylov times but
+    exclude one-time hierarchy setup. Setup-plus-hot measurements still favor
+    hybrid in all 18 cases, leaving setup optimization and an identical-runner
+    warm win over hybrid as acceptance targets.
+  - [x] Exploit the zero correction at V-cycle entry with a warp-owned
+    `omega*D_face^{-1}*rhs` first stage that skips the dense-BSR traversal and
+    `A*0`, while avoiding the initial zero-fill. Focused block-size and complete
+    PCG tests pass. On the 150,209-triangle p=4,5,6 cases with the selected
+    Cheb-2 policy, V-cycle medians improve by 23%, 13%, and 14%, and hot solves
+    take 0.1582, 0.1847, and 0.2007 s with unchanged iterations/residuals. These
+    are 19--27% faster than historical hybrid hot medians; the interleaved
+    identical-runner acceptance comparison remains open.
+  - [x] Add persistent per-level correction, scratch, residual, and coarse-RHS
+    buffers; compute the residual in place; restrict into retained low-mode
+    storage; and inject the coarse correction without a full prolongation
+    vector. The serial prototype rejects reentrant application and reports its
+    workspace footprint. On 150,209 triangles at p=4,5,6 (1.12M--1.57M trace
+    DOFs, 1,122,504 BSR blocks, 28.1M--55.0M scalar nonzeros), hot medians improve
+    another 1.0--1.5% to 0.1562, 0.1828, and 0.1977 s with unchanged numerical
+    results. This is necessary groundwork for subsequent kernel fusion and
+    graph capture rather than a large standalone win.
+  - [x] Prototype and reject a directly restricted modal residual kernel. A
+    corrected multi-face subwarp mapping read only retained block rows, but on
+    150,209 triangles at p=4,5,6 (1.12M--1.57M trace DOFs, 1,122,504 BSR blocks,
+    28.1M--55.0M scalar nonzeros) its V-cycle changes versus cached generic
+    cuSPARSE were -4.2%, +3.3%, and +1.5%, with no reliable hot-solve win. Remove
+    the custom kernel and selector rather than carry a slower duplicate; retain
+    cuSPARSE for all ordinary/residual BSR SpMV. The detailed plan records the
+    negative timing result.
+  - [ ] Complete the standalone and fused primitive sweep for block sizes 2
+    through 10, keeping generic cuSPARSE for ordinary SpMV and comparing it with
+    the row-owned fallback separately from the complete V-cycle. The first
+    production b=7 standalone sample is 0.962 ms for generic cuSPARSE versus
+    1.019 ms for raw CUDA with 2.19e-16 relative parity; fused stage parity is
+    established at b=2,5,7,10, while the intervening timing sweep is open.
+  - [ ] Promote the prototype only after p>=4 needs at most 1.25 times the
+    hybrid iterations, satisfies the common true-residual contract, and beats
+    scalar CSR by at least 10% in an amortized warm solve; final production
+    selection must beat the hybrid path under identical conditions.
+
+### Face-Dense Polynomial/ASM Solver Comparison
+
+- [x] Selectively port the validated face-dense diffusion implementation from historical commit `ea5ad26` into the current module layout without merging its obsolete solver stack. The current tree retains NumPy reference GMRES, block-Jacobi, element-patch ASM and polynomial construction; CuPy/raw operator variants, restarted GMRES, batched inverses, profiling and reusable solver state; canonical validation/benchmark runners; and the dated Poisson-versus-AMGX evidence. Focused CPU/GPU tests pass (117 tests) together with the documentation gate (9 tests). See [`docs/backends/face_dense_gpu.md`](docs/backends/face_dense_gpu.md); AMGX is a comparison backend only and is not called by this solver.
+- [ ] Run a fair solver comparison between face-dense GMRES with polynomial preconditioning plus additive Schwarz and the best AMGX candidate on a representative, moderately difficult stationary ADR problem rather than pure Poisson. Use nonzero advection, diffusion, and reaction (with a moderate Peclet number and a genuinely nonsymmetric trace operator), select the AMGX candidate through a recorded configuration sweep, and then hold the mesh, polynomial order, trace basis/ordering/scaling, initial guess, precision, stopping criteria, independently checked physical residual, hardware, and warmup policy fixed. Report assembly, setup, hot-solve and repeated-solve amortized timings; iterations and operator/preconditioner applications; peak memory; and PDE error. Treat the previously selected Poisson AMGX configuration as the quasi-optimal pure-diffusion baseline, not as evidence that it remains optimal for the harder ADR operator.
+- [ ] Optimize the experimental face-dense polynomial/additive-Schwarz GPU solver against the matched AMGX diffusion baseline, while keeping setup and hot-solve timings separate. The current p=6 hot-solve baseline is about `1.03 s` for the best tested face-dense configuration (polynomial degree 8) versus `0.094 s` for AMGX, with polynomial applications accounting for about 95% of the face-dense solve. The local operations are tiny batched matrix-vector products, not compute-bound GEMMs: at p=6 the face operator reads about 95 MB of coefficients per application and reaches about 192 GB/s, while the element ASM inverse reads about 114.5 MB and reaches about 277 GB/s. A degree-18 preconditioner application alone traverses about 3.9 GB of coefficient data. Preserve the recorded p=1..6 evidence in `docs/research/solver_studies/amgx_vs_face_dense_2026_08.md` and `docs/research/solver_studies/face_dense_primitives_2026_08.md`.
+  - First implement order-specialized cooperative kernels: use a warp/subwarp per face to load the fixed five-neighbor input once and reuse it across all output rows, and a warp/block per element to load the `3*(p+1)` restricted vector once and cooperatively apply the ASM inverse. Specialize and unroll p=1..6 to remove repeated index decoding and inner-loop division. Expected primitive gains are about `1.15-1.4x` for the face operator and `1.2-1.6x` for ASM.
+  - Prototype a fused `ASM(A*q)` path that produces operator values directly in element-occurrence layout, applies the local inverse, and performs race-free prolongation without materializing and rereading the global operator temporary or running a separate restriction. Benchmark the duplicated shared-face work against the removed global traffic and launches. Target about `1.25-1.6x` for a polynomial application from this fusion.
+  - Evaluate CUDA Graph capture after kernel fusion to reduce the many launches in one polynomial application. Expect only about `1.02-1.10x` at p=6, where bandwidth dominates, but potentially more at low order. Do not prioritize persistent grid-synchronized polynomial kernels until the simpler paths are measured.
+  - Treat `1.5-2.2x` as the plausible combined FP64 hot-solve target for low-level kernel work, with `2.5x` an ambitious ceiling because the optimizations remove overlapping traffic. Require at least `1.4x` end-to-end from the first cooperative-kernel stage; if the combined FP64 work cannot reach about `1.5x`, stop microkernel tuning and prioritize the preconditioner algorithm.
+  - Test an explicitly inexact mixed-precision preconditioner that stores/applies face blocks and ASM inverse data in FP32 while retaining the outer flexible GMRES state and independently checked physical residual in FP64. Target about `2-3x` cumulatively with the kernel work; require solution/error/convergence parity and document any iteration increase before recommending it.
+  - Reduce coefficient traversals algorithmically through per-order polynomial-degree tuning, improved spectral intervals/root ordering, and especially a two-level additive-Schwarz coarse face correction. Target another `2-4x` from the algorithmic stage and at least `5x` overall; a combined `4-8x` improvement is the credible route toward the current AMGX result. Report matched iteration counts, preconditioner applications, coefficient bytes, hot solve, setup, peak memory, true residual, and PDE error. Do not expect cuBLAS alone to close the gap for single-RHS `(p+1) x (5*(p+1))` and `3*(p+1)` square GEMVs; revisit batched GEMM only when multiple right-hand sides can reuse each matrix.
 
 ### Raw-CUDA Assembly And Global Solve
 
@@ -109,6 +231,13 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Establish identity diffusion and scalar zero-reaction parity with `scripts/gpu/run_diffusion_reaction_cuda.py` for the supported raw-CUDA scope.
 - [x] Extend the device assembly plan to tensor diffusion once the scalar path remains correct under the automated validation suite. See `docs/backends/cuda_execution.md`.
 - [x] Benchmark raw-CUDA diffusion assembly phase timings separately from AMGX setup/solve/reconstruction so improvements are not hidden by already acceptable global solve performance.
+- [ ] Extend raw-CUDA Poisson assembly and reconstruction to p=7,8,9 with a
+  BSR-first priority (face block sizes 8, 9, and 10). Preserve normalized/modal
+  orientation, per-face additive mass assembly, boundary elimination, cached
+  RHS and reconstruction parity, and record shared-memory/occupancy limits for
+  element sizes 36, 45, and 55. Keep COO/expanded CSR as secondary validation
+  paths rather than the production optimization target. See the [face-block
+  hp-multigrid plan](docs/development/plans/face_block_hp_multigrid.md#long-term-degree-extension).
 
 ### Device Postprocessing
 
@@ -220,8 +349,18 @@ This remains the highest-priority new shared-API design project after the unstea
 - [ ] Add acceptance tests over mixed diffusion, scalar advection, both production trace bases, representative orders, tagged boundaries, custom numerical fluxes, complete transmission overrides, host/device synchronization, transfer accounting, and cache invalidation when coefficients, geometry-dependent data, or form structure changes.
 - [ ] Document the form lifecycle, supported integrands, sign conventions, coefficient sampling, facet orientation, numerical-flux construction, transmission overrides, cache invalidation, backend capabilities, and deferred nonlinear-form and multiple-trace-field extensions.
 
+### Stabilization Formalism
+
+- [ ] Introduce one typed, backend-neutral stabilization formalism shared by advection-reaction, diffusion-reaction, and ADR. Represent built-in policies explicitly—at minimum `Upwind`, `GlobalLengthDiffusion`, and `GlobalSteklovDiffusion`—alongside scalar, `DGField`, and incidence-aware callable policies. Pass each PDE coefficient only once: in particular, `Upwind` must consume the solver-owned velocity and derive sidewise `abs(beta.n)` from a common face context rather than asking users to repeat `beta` inside `tau`. Keep `tau_adv` and `tau_diff` as separate prepared components and sum them only in numerical-flux algebra. Lower every policy through one adapter to direct NumPy/CuPy evaluation, cached DG projection, or internal face tables for Numba/raw CUDA; users must not normally construct quadrature data. Define cache invalidation and diagnostics for coefficient/time/geometry changes, preserve per-element/per-face incidence values, provide compatibility adapters for current `None`/scalar/callable/`DGField` inputs, and require cross-backend matrix/RHS/solution/reconstruction parity plus synchronized API/reference/runner documentation before changing defaults.
+
 ### Coefficient Inputs
 
+- [ ] Define and implement one coefficient-input contract across every advection-reaction, diffusion-reaction, and ADR functional/reusable solver. NumPy and CuPy assembly paths must accept vectorized analytic callables as well as same-mesh `DGField`/`VectorDGField` inputs for every PDE coefficient they support: source, reaction, velocity, scalar/tensor diffusion, boundary data, and time-dependent coefficients where applicable. Preserve direct quadrature sampling for analytic callables instead of silently projecting them. Require NumPy/CuPy parity for the same input representation and callable-versus-DG equality only for exactly representable cases; otherwise test the documented projection error rather than pretending the two mathematical inputs are identical.
+- [ ] Keep Numba and raw-CUDA compiled kernel interfaces callable-free across all solver families without exposing that restriction as a quadrature-table burden on users. PDE coefficients supplied to those public paths must still follow their projected `DGField`/`VectorDGField` contract, after which backend normalization may lower fields to compact descriptors or volume/face tables. Stabilization formulas are the explicit adapter-managed exception at the public boundary: evaluate or project them before compiled dispatch, and never execute a raw Python callback inside Numba or CUDA kernels. Advanced users may preproject/cache fields, but ordinary users must not need to construct quadrature tables.
+- [ ] Complete the raw-CUDA internally prepared coefficient-table paths for all three equation families. Advection-reaction must consume adapter-generated per-element/per-face advection-stabilization tables; diffusion-reaction must consume normalized source, reaction, scalar/tensor diffusion, and diffusive-stabilization data; ADR must consume the union while keeping `tau_adv` and `tau_diff` separate through preparation and combining them only in the numerical-flux algebra. These tables are backend implementation data, not normal user inputs. Require NumPy/CuPy/Numba/raw-CUDA parity for prepared data, reduced matrix/RHS, trace solution, reconstruction, and independently checked physical residual.
+- [ ] Implement one shared stabilization-formula adapter across all solvers and assembly backends. The public API accepts a scalar, `DGField`, or callable formula and never normally asks for quadrature evaluations. For NumPy/CuPy, pass a compatible callable directly to vectorized face evaluation, keeping CuPy evaluation on-device. For Numba/raw CUDA, evaluate the formula once at the required face quadrature or project it to a declared DG space, cache the resulting field/table, and pass only normalized data to compiled kernels. Make the selected lowering (`direct`, `face_table`, or `DG_projection`), projection degree/quadrature, cache key/invalidation, preprocessing time, and any host-device upload visible in diagnostics. Keep explicit tables only as an expert/debug escape hatch.
+- [ ] Standardize an incidence-aware callable stabilization protocol across all solvers. The preferred vectorized signature is `tau(x, y, *, element, local_face, normal, t=None)`: `x`/`y` carry the element-face-quadrature shape `(num_elements, num_local_faces, num_face_quads)`, `element` broadcasts from `(num_elements, 1, 1)`, `local_face` broadcasts from `(1, num_local_faces, 1)`, and `normal` broadcasts from `(num_elements, num_local_faces, 1, dim)`; `t` is scalar or broadcast-compatible. The output is scalar or broadcastable to `(num_elements, num_local_faces, num_face_quads)`. Retain adapters for geometry-only `tau(x, y)` and legacy `tau(x, y, K, e)`, but always provide the full incidence context to the canonical form. Preserve distinct `(K, e, q)` values through the element/local-face loop and never average neighboring incidences implicitly; any single-valued interior-face policy must be an explicit adapter operation such as a documented two-sided maximum. A callable incompatible with the selected NumPy/CuPy array namespace must trigger a clear error or an explicitly reported host-evaluate-and-upload policy, never a silent device-to-host fallback.
+- [ ] Publish callable-performance guidance and enforce it in examples/tests: use array expressions, boolean masks, and `numpy.where`/`cupy.where` for spatially piecewise stabilization; do not use data-dependent Python `if` statements, pointwise Python loops, `float(array)`, `numpy.asarray(cupy_array)`, `.get()`, or other hidden synchronization/transfers. Scalar configuration branches may occur outside array evaluation. For material/tag-dependent laws, prefer broadcast element/face tag tables and masked expressions, or precompute one table per tag during normalization. Cache prepared stabilization tables and report their evaluation/projection time separately from assembly.
 - [ ] Finish same-mesh cross-`DGSpace` PDE/source coefficient support in diffusion-reaction and advection-reaction solvers. Generic host sampling is partial; strict Numba/raw-CUDA paths still need prepared target-quadrature tables for `source`, `reaction`, diffusion tensor components, and advection `beta`.
 - [ ] Preserve cross-space coefficient semantics by evaluating the supplied DG field on the output solution space quadrature/face quadrature; do not silently L2-project it into the solution space. Different-mesh coefficient fields must raise a clear error.
 - [ ] Extend backend normalization for cross-space coefficients consistently: NumPy/CuPy should evaluate directly where possible, while Numba/raw-CUDA table kernels should consume prepared values/moments/descriptors without changing the represented coefficient. Keep stabilization out of this patch.
@@ -328,6 +467,7 @@ This remains the highest-priority new shared-API design project after the unstea
 
 ### Documentation And Release Notes
 
+- [ ] Publish a per-solver/per-backend coefficient and stabilization input matrix covering NumPy, CuPy, Numba, and raw CUDA. The current alpha matrix is published in [`docs/reference/coefficient_stabilization_matrix.md`](docs/reference/coefficient_stabilization_matrix.md); keep this item open for the common incidence-callable adapter and complete adapter-selected lowering diagnostics. For every PDE parameter and `tau_adv`/`tau_diff`, document the user-facing callable/DGField forms separately from internal descriptor/table lowering, the required element/local-face/quadrature axes and normal orientation, direct evaluation versus projection semantics, projection degree/quadrature, cache invalidation, preprocessing cost, residency/transfers, vectorization requirements, piecewise-branch guidance, and rejection behavior. State prominently that users normally provide formulas or DG fields—not quadrature tables—and show the adapter-selected lowering in solver/runner diagnostics. Include examples where two incidences of one interior face intentionally receive different values and verify that assembly preserves both contributions. Keep the reference, backend capability table, help, examples, and contract tests synchronized so users can determine the supported path before a solve starts.
 - [x] Document the current backend support matrix in `README.md` and `MANUAL.md`, including NumPy, Numba, CuPy, raw-CUDA, Cupyx, and PyAMGX responsibilities.
 - [x] Document raw-CUDA diffusion operator/RHS caching, RHS-only source kernels, direct CSR emission, and shared PyAMGX resource management.
 - [x] Make documentation part of release-task acceptance: `README.md`, `MANUAL.md`, and `TODO.md` now point to the executable alpha matrix and living release evidence; `docs/development/alpha_test_matrix.md` is drift-checked against the runner manifest, and the project policy requires behavior, support, validation, and performance claims to update documentation in the same change.

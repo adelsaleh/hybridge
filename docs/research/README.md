@@ -3,8 +3,8 @@
 Research outputs are retained for reproducibility but do not define supported
 package behavior.
 
-- [`solver_studies/`](solver_studies/): dated advection-reaction and diffusion
-  solver/preconditioner investigations.
+- [`solver_studies/`](solver_studies/): dated advection-reaction, diffusion,
+  combined ADR, and solver/preconditioner investigations.
 - [`torsion_initialized_equilibrium/`](torsion_initialized_equilibrium/):
   residual accounting and closed-loop/reduced-space optimization derivations.
 - [`strategy_a_band_parameter_study/`](strategy_a_band_parameter_study/):

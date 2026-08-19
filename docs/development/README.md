@@ -4,6 +4,8 @@
 
 - [`plans/`](plans/README.md): indexed implementation and qualification plans
   that elaborate on the prioritized work in `TODO.md`.
+- [`plans/diffusion_stabilization_global_scales.md`](plans/diffusion_stabilization_global_scales.md):
+  global physical-length and Steklov-calibrated diffusion stabilization.
 - [`plans/unrelated_mesh_transfer.md`](plans/unrelated_mesh_transfer.md):
   conservative host/device DG and HDG-trace transfer between unrelated meshes.
 - [`plans/unsteady_solver_validation.md`](plans/unsteady_solver_validation.md):
