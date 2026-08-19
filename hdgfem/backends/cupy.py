@@ -421,6 +421,41 @@ def require_cupy():
     return cp
 
 
+def require_cupy_device():
+    """Return CuPy after verifying that a CUDA device is available."""
+    cupy = require_cupy()
+    try:
+        device_count = int(cupy.cuda.runtime.getDeviceCount())
+    except Exception as error:  # pragma: no cover - CUDA-runtime dependent.
+        raise RuntimeError(
+            "CuPy is installed, but the CUDA runtime or driver is unavailable"
+        ) from error
+    if device_count < 1:  # pragma: no cover - hardware dependent.
+        raise RuntimeError("CuPy is installed, but no CUDA device is available")
+    return cupy
+
+
+def device_arrays_overlap(first: Any, second: Any) -> bool:
+    """Return whether two contiguous device arrays overlap in memory."""
+    if int(first.device.id) != int(second.device.id):
+        return False
+    first_bytes = int(first.nbytes)
+    second_bytes = int(second.nbytes)
+    if first_bytes == 0 or second_bytes == 0:
+        return False
+    first_begin = int(first.data.ptr)
+    second_begin = int(second.data.ptr)
+    return (
+        first_begin < second_begin + second_bytes
+        and second_begin < first_begin + first_bytes
+    )
+
+
+def solve_batched_vectors(array_module: Any, matrices: Any, vectors: Any) -> Any:
+    """Solve batched square systems with one vector RHS per matrix."""
+    return array_module.linalg.solve(matrices, vectors[..., None])[..., 0]
+
+
 def require_cupyx_sparse():
     """Return ``cupyx.scipy.sparse`` or raise a clear dependency error."""
     if cupyx_sparse is None:
@@ -1852,7 +1887,9 @@ __all__ = [
     "initialize_pyamgx_once",
     "default_pyamgx_config",
     "diagonal_scale_cupy_csr_rows_in_place",
+    "device_arrays_overlap",
     "require_cupy",
+    "require_cupy_device",
     "require_cupyx_sparse",
     "require_cupyx_sparse_linalg",
     "require_pyamgx",
@@ -1860,6 +1897,7 @@ __all__ = [
     "build_cupyx_exported_host_ilu_preconditioner",
     "scipy_coo_to_cupy_csr",
     "scipy_csr_to_cupy",
+    "solve_batched_vectors",
     "solve_cupyx_csr",
     "solve_pyamgx_csr",
     "symmetric_scale_cupy_csr_in_place",

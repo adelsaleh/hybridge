@@ -19,10 +19,18 @@ from ..assembly.face_dense import (
     assemble_global_face_blocks,
     build_face_topology,
     eliminate_dirichlet_faces,
+    expand_eliminated_solution,
+    face_dense_relative_residual,
     make_penalty_system,
+    materialize_face_dense_matrix,
 )
-from ..core.space import DGSpace
-from .diffusion_reaction import diffusion_trace_lift
+from ..core.space import DGField, DGSpace, VectorDGField
+from .diffusion_reaction import (
+    diffusion_element_boundary_mats,
+    diffusion_trace_lift,
+    local_solvers,
+    split_diffusion_unknowns,
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +45,28 @@ class DiffusionFaceDenseAssembly:
     boundary_trace: np.ndarray
     penalty_system: FaceDenseSystem
     eliminated_system: FaceDenseSystem
+
+
+@dataclass(frozen=True)
+class DiffusionFaceDenseDirectResult:
+    """End-to-end reference solution obtained from the face-dense path.
+
+    This result is for correctness and convergence validation only.  It
+    materializes the small face-dense matrix and calls ``numpy.linalg.solve``;
+    it is not a scalable production solver.
+    """
+
+    field: DGField
+    flux: VectorDGField
+    trace: np.ndarray
+    local_unknowns: np.ndarray
+    system_solution: np.ndarray
+    relative_residual: float
+    assembly: DiffusionFaceDenseAssembly
+    system: FaceDenseSystem
+    local_solver: np.ndarray
+    element_boundary_mats: np.ndarray
+    source_rhs: np.ndarray
 
 
 def _normalize_stabilization(stabilization, space: DGSpace) -> np.ndarray:
@@ -208,9 +238,100 @@ def assemble_diffusion_face_dense_components(
     )
 
 
+def solve_diffusion_face_dense_direct(
+    source,
+    reaction,
+    boundary_condition: Callable,
+    space: DGSpace,
+    *,
+    diffusion=1.0,
+    stabilization=1.0,
+    boundary_mode: str = "eliminate",
+    boundary_penalty: float = 1.0e20,
+) -> DiffusionFaceDenseDirectResult:
+    """Solve a small diffusion problem entirely through face-dense assembly.
+
+    The function is an independent end-to-end validation path:
+
+    1. build the local mixed inverses and elemental boundary matrices;
+    2. assemble the complete elemental and global face-dense blocks;
+    3. choose penalty rows or direct Dirichlet elimination;
+    4. materialize the small scalar matrix and solve it directly;
+    5. reconstruct the volume field and conservative flux.
+
+    It intentionally does not call the existing COO trace assembler.  The
+    scalar dense materialization makes it suitable only for tests and modest
+    diagnostic meshes.
+    """
+
+    if boundary_mode not in {"penalty", "eliminate"}:
+        raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
+
+    local_solver = local_solvers(
+        reaction,
+        stabilization,
+        space,
+        backend="numpy",
+        diffusion=diffusion,
+    )
+    element_boundary_mats = diffusion_element_boundary_mats(stabilization, space)
+    source_rhs = hdg_assembly.block_source_moments(
+        source,
+        space,
+        num_blocks=3,
+        source_block=0,
+    )
+    assembly = assemble_diffusion_face_dense_components(
+        local_solver,
+        element_boundary_mats,
+        source_rhs,
+        boundary_condition,
+        stabilization,
+        space,
+        boundary_penalty=boundary_penalty,
+    )
+    system = (
+        assembly.penalty_system
+        if boundary_mode == "penalty"
+        else assembly.eliminated_system
+    )
+
+    matrix = materialize_face_dense_matrix(system.blocks, system.neighbors)
+    system_solution = np.linalg.solve(matrix, system.rhs.reshape(-1))
+    relative_residual = face_dense_relative_residual(system, system_solution)
+    trace = (
+        system_solution
+        if boundary_mode == "penalty"
+        else expand_eliminated_solution(system_solution, system)
+    )
+    local_unknowns = hdg_assembly.reconstruct_local_unknowns(
+        trace,
+        source_rhs,
+        local_solver,
+        element_boundary_mats,
+        space,
+    )
+    field, flux = split_diffusion_unknowns(local_unknowns, space)
+
+    return DiffusionFaceDenseDirectResult(
+        field=field,
+        flux=flux,
+        trace=np.ascontiguousarray(trace),
+        local_unknowns=np.ascontiguousarray(local_unknowns),
+        system_solution=np.ascontiguousarray(system_solution),
+        relative_residual=relative_residual,
+        assembly=assembly,
+        system=system,
+        local_solver=np.ascontiguousarray(local_solver),
+        element_boundary_mats=np.ascontiguousarray(element_boundary_mats),
+        source_rhs=np.ascontiguousarray(source_rhs),
+    )
+
 __all__ = [
     "DiffusionFaceDenseAssembly",
+    "DiffusionFaceDenseDirectResult",
     "assemble_diffusion_face_dense_components",
     "build_complete_diffusion_element_blocks",
     "build_diffusion_interior_rhs",
+    "solve_diffusion_face_dense_direct",
 ]
