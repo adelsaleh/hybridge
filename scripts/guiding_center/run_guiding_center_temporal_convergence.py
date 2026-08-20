@@ -94,7 +94,7 @@ def _print_table(rows: list[dict[str, Any]]) -> None:
 
 
 def plot_convergence(rows: list[dict[str, Any]], output: Path, *, show: bool = False) -> Path:
-    """Write four log-log error panels; matplotlib is imported only on request."""
+    """Write four mpi2.log-mpi2.log error panels; matplotlib is imported only on request."""
     import matplotlib.pyplot as plt
 
     labels = {

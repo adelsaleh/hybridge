@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import sys
 import time
@@ -40,7 +41,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx import fem
+from dolfinx import fem, plot as dolfinx_plot
 from dolfinx.fem import petsc as fem_petsc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,10 +66,394 @@ from dolfinx_torsion_initialized_window_fit_newton import (  # noqa: E402
     window_numpy,
     window_ufl,
 )
-from dolfinx_torsion_initialized_closed_loop_refit import InPlacePyVistaTorsionPlotter  # noqa: E402
+from dolfinx_torsion_initialized_closed_loop_refit import (  # noqa: E402
+    InPlacePyVistaTorsionPlotter as _LocalPyVistaTorsionPlotter,
+)
 
 
-DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_initialized_window_reduced_optimization"
+DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "tmp" / "torsion_reduced_optimization_homotopy"
+
+INITIALIZATION_CSV_FIELDS = [
+    "record", "runTag", "method", "eval_id", "c1", "c2", "width", "eps",
+    "psiHminus1", "residualHminus1", "Lrel", "Mrel", "activityAreaRel",
+    "gradPsi1", "gradPsi2", "feasibleGeometry", "acceptedThresholdStep",
+    "lambdaOld", "lambdaTrial", "dlambda", "tangentH1", "predictedResidual",
+    "correctedResidual", "newtonIterations", "damping", "backtracks",
+    "accepted", "elapsed",
+]
+
+
+class InPlacePyVistaTorsionPlotter(_LocalPyVistaTorsionPlotter):
+    """Render complete distributed fields in one rank-zero PyVista window.
+
+    DOLFINx partitions both cells and degrees of freedom under MPI.  The base
+    plotter renders only rank zero's local partition because its ``active``
+    property excludes every other rank.  This specialization enters plotting
+    collectively, gathers owned-cell topology once, merges interface degrees
+    of freedom by coordinate, and then gathers only point values on later
+    frames.  Interactive and saved plots therefore show the complete domain.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._global_grid = None
+        self._global_point_maps: list[np.ndarray] | None = None
+        self._global_layout_ready = False
+        self._global_space_signature: tuple[int, int, int] | None = None
+        self._mpi_live_key: tuple[int, int, int] | None = None
+        self._mpi_live_actors: list | None = None
+        self._mpi_live_text_actors: list = []
+
+    @property
+    def active(self) -> bool:
+        """Make plotting collective while retaining the base CLI semantics."""
+        return bool(self.args.plot or self.args.save_frames)
+
+    @staticmethod
+    def _space_signature(function_space) -> tuple[int, int, int]:
+        index_map = function_space.dofmap.index_map
+        return (
+            int(index_map.size_global),
+            int(function_space.dofmap.index_map_bs),
+            int(function_space.mesh.topology.index_map(function_space.mesh.topology.dim).size_global),
+        )
+
+    def _initialize_global_layout(self, function_space) -> None:
+        """Gather owned cells and build a duplicate-free global VTK grid."""
+        signature = self._space_signature(function_space)
+        if self._global_layout_ready:
+            if signature != self._global_space_signature:
+                raise ValueError("MPI plot fields changed function-space layout during the run")
+            return
+
+        domain = function_space.mesh
+        tdim = domain.topology.dim
+        owned_cells = np.arange(domain.topology.index_map(tdim).size_local, dtype=np.int32)
+        topology, cell_types, geometry = dolfinx_plot.vtk_mesh(
+            function_space,
+            entities=owned_cells,
+        )
+        index_map = function_space.dofmap.index_map
+        if int(function_space.dofmap.index_map_bs) != 1:
+            raise ValueError("MPI plotting currently supports scalar finite-element fields only")
+        local_dofs = np.arange(index_map.size_local + index_map.num_ghosts, dtype=np.int32)
+        global_dofs = np.asarray(index_map.local_to_global(local_dofs), dtype=np.int64)
+        local_payload = (
+            np.asarray(topology, dtype=np.int64),
+            np.asarray(cell_types, dtype=np.uint8),
+            np.asarray(geometry, dtype=np.float64),
+            int(function_space.dofmap.dof_layout.num_dofs),
+            global_dofs,
+        )
+        gathered = self.comm.gather(local_payload, root=0)
+
+        if self.comm.rank == 0:
+            import pyvista as pv
+
+            remapped_topologies: list[np.ndarray] = []
+            type_parts: list[np.ndarray] = []
+            point_maps: list[np.ndarray] = []
+            global_geometry = np.full(
+                (int(function_space.dofmap.index_map.size_global), gathered[0][2].shape[1]),
+                np.nan,
+                dtype=np.float64,
+            )
+            for rank_topology, rank_types, rank_geometry, nodes_per_cell, rank_global_dofs in gathered:
+                point_maps.append(rank_global_dofs)
+                global_geometry[rank_global_dofs, :] = rank_geometry
+                if rank_types.size == 0:
+                    continue
+                rows = rank_topology.reshape(rank_types.size, nodes_per_cell + 1).copy()
+                rows[:, 1:] = rank_global_dofs[rows[:, 1:]]
+                remapped_topologies.append(rows.reshape(-1))
+                type_parts.append(rank_types)
+
+            if not remapped_topologies:
+                raise RuntimeError("cannot plot an MPI mesh with no owned cells")
+            if not np.all(np.isfinite(global_geometry)):
+                raise RuntimeError("MPI plot gather did not receive coordinates for every global degree of freedom")
+            global_topology = np.ascontiguousarray(np.concatenate(remapped_topologies)).astype(
+                np.int64,
+                copy=False,
+            )
+            global_types = np.ascontiguousarray(np.concatenate(type_parts))
+            self._global_grid = pv.UnstructuredGrid(
+                global_topology,
+                global_types,
+                global_geometry,
+            )
+            self._global_point_maps = point_maps
+            if self.comm.size > 1 and int(self.args.verbosity) >= 1:
+                root_print(
+                    self.comm,
+                    f"PLOT_MPI_GRID ranks={self.comm.size} cells={self._global_grid.n_cells} "
+                    f"points={self._global_grid.n_points}",
+                )
+
+        self._global_layout_ready = True
+        self._global_space_signature = signature
+
+    def _gather_global_field_grid(self, fields: list[fem.Function]):
+        """Gather scalar point values and update the cached global grid."""
+        if not fields:
+            return None
+        function_space = fields[0].function_space
+        signature = self._space_signature(function_space)
+        if any(self._space_signature(field.function_space) != signature for field in fields):
+            raise ValueError("all MPI plot panels must use the same scalar function-space layout")
+        self._initialize_global_layout(function_space)
+
+        local_point_count = int(function_space.tabulate_dof_coordinates().shape[0])
+        local_values = np.empty((len(fields), local_point_count), dtype=np.float64)
+        for index, field in enumerate(fields):
+            values = np.asarray(field.x.array, dtype=np.float64)
+            if values.size != local_point_count:
+                raise ValueError(
+                    f"MPI plotting requires scalar fields; got {values.size} values for "
+                    f"{local_point_count} plot points"
+                )
+            local_values[index, :] = values
+        gathered_values = self.comm.gather(local_values, root=0)
+
+        if self.comm.rank != 0:
+            return None
+        if self._global_grid is None or self._global_point_maps is None:
+            raise RuntimeError("rank zero did not initialize the global MPI plot layout")
+        global_count = int(self._global_grid.n_points)
+        for field_index in range(len(fields)):
+            global_values = np.empty(global_count, dtype=np.float64)
+            for rank_values, point_map in zip(gathered_values, self._global_point_maps, strict=True):
+                global_values[point_map] = rank_values[field_index]
+            self._global_grid.point_data[f"panel_{field_index}"] = global_values
+        return self._global_grid
+
+    @staticmethod
+    def _configure_panel(plotter, grid, scalar_name: str, title: str, nt: int, ndof: int):
+        values = grid.point_data[scalar_name]
+        actor = plotter.add_mesh(
+            grid,
+            scalars=scalar_name,
+            cmap="viridis",
+            clim=InPlacePyVistaTorsionPlotter._safe_clim(values),
+            show_edges=False,
+            scalar_bar_args={
+                "vertical": False,
+                "width": 0.55,
+                "height": 0.08,
+                "position_x": 0.225,
+                "position_y": 0.02,
+            },
+        )
+        plotter.add_mesh(
+            grid.extract_all_edges(),
+            color="black",
+            line_width=1.0,
+            opacity=0.45,
+        )
+        text_actor = plotter.add_text(
+            f"{title}\nnt={nt} ndof={ndof}",
+            position="upper_edge",
+            font_size=11,
+            shadow=False,
+        )
+        plotter.enable_parallel_projection()
+        plotter.view_xy()
+        plotter.show_grid(color=(100, 100, 100, 0.15))
+        return actor, text_actor
+
+    def _render_once(
+            self,
+            grid,
+            titles: list[str],
+            *,
+            save_path: Path | None,
+            show: bool,
+            window_size: tuple[int, int],
+            nt: int,
+            ndof: int,
+    ) -> None:
+        import pyvista as pv
+
+        plotter = pv.Plotter(
+            shape=(1, len(titles)),
+            window_size=list(window_size),
+            off_screen=save_path is not None or self.args.plot_off_screen,
+        )
+        for index, title in enumerate(titles):
+            plotter.subplot(0, index)
+            self._configure_panel(plotter, grid, f"panel_{index}", title, nt, ndof)
+        if len(titles) > 1:
+            plotter.link_views()
+        if save_path is not None:
+            plotter.screenshot(str(save_path))
+        if show and not self.args.plot_off_screen:
+            self._close_live_plotter()
+            plotter.show(interactive_update=True, auto_close=False)
+            self._wait_for_enter(plotter)
+        plotter.close()
+
+    def _reset_mpi_live_plotter(self) -> None:
+        self._close_live_plotter()
+        self._mpi_live_key = None
+        self._mpi_live_actors = None
+        self._mpi_live_text_actors = []
+
+    def _update_mpi_live_plotter(
+            self,
+            grid,
+            titles: list[str],
+            *,
+            window_size: tuple[int, int],
+            nt: int,
+            ndof: int,
+    ) -> None:
+        import pyvista as pv
+
+        key = (int(grid.n_points), int(grid.n_cells), len(titles))
+        if (
+                self._live_plotter is None
+                or self._mpi_live_actors is None
+                or self._mpi_live_key != key
+        ):
+            self._reset_mpi_live_plotter()
+            plotter = pv.Plotter(
+                shape=(1, len(titles)),
+                window_size=list(window_size),
+                off_screen=False,
+            )
+            self._mpi_live_actors = []
+            self._mpi_live_text_actors = []
+            for index, title in enumerate(titles):
+                plotter.subplot(0, index)
+                actor, text_actor = self._configure_panel(
+                    plotter,
+                    grid,
+                    f"panel_{index}",
+                    title,
+                    nt,
+                    ndof,
+                )
+                self._mpi_live_actors.append(actor)
+                self._mpi_live_text_actors.append(text_actor)
+            if len(titles) > 1:
+                plotter.link_views()
+            plotter.show(interactive_update=True, auto_close=False)
+            self._live_plotter = plotter
+            self._mpi_live_key = key
+            return
+
+        plotter = self._live_plotter
+        grid.Modified()
+        for index, title in enumerate(titles):
+            plotter.subplot(0, index)
+            actor = self._mpi_live_actors[index]
+            values = grid.point_data[f"panel_{index}"]
+            clim = self._safe_clim(values)
+            try:
+                actor.mapper.scalar_range = clim
+            except Exception:
+                actor.mapper.SetScalarRange(*clim)
+            try:
+                plotter.remove_actor(self._mpi_live_text_actors[index])
+            except Exception:
+                pass
+            self._mpi_live_text_actors[index] = plotter.add_text(
+                f"{title}\nnt={nt} ndof={ndof}",
+                position="upper_edge",
+                font_size=11,
+                shadow=False,
+            )
+        plotter.update()
+
+    def emit(
+            self,
+            fields: list[fem.Function],
+            titles: list[str],
+            *,
+            stage: str,
+            ieps,
+            k,
+            eps_phi: float,
+            residual: float,
+            metrics: dict[str, float],
+            token: str,
+            save: bool,
+            show: bool,
+            nt: int,
+            ndof: int,
+    ) -> None:
+        """Collect distributed fields once, then save and/or display on rank zero."""
+        if not self.active:
+            return
+        save_frame = bool(self.args.save_frames and save)
+        show_plot = bool(self.args.plot and show and not self.args.plot_off_screen)
+        if not save_frame and not show_plot:
+            return
+
+        grid = self._gather_global_field_grid(fields)
+        save_path = self.frame_dir / f"{self.run_tag}_frame_{self.frame_counter:04d}_{token}.png"
+        try:
+            if self.comm.rank == 0:
+                if save_frame:
+                    self._render_once(
+                        grid,
+                        titles,
+                        save_path=save_path,
+                        show=False,
+                        window_size=(self.args.frame_window_width, self.args.frame_window_height),
+                        nt=nt,
+                        ndof=ndof,
+                    )
+                    if self.frame_writer is not None:
+                        self.frame_writer.writerow({
+                            "frame": self.frame_counter,
+                            "runTag": self.run_tag,
+                            "stage": stage,
+                            "ieps": ieps,
+                            "k": k,
+                            "nt": nt,
+                            "ndof": ndof,
+                            "epsPhi": eps_phi,
+                            "resEuclid": residual,
+                            "massRho": metrics.get("massRho", ""),
+                            "maxRho": metrics.get("maxRho", ""),
+                            "activeArea": metrics.get("activeArea", ""),
+                            "plateauArea": metrics.get("plateauArea", ""),
+                            "relRhoDesign": metrics.get("relRhoDesign", ""),
+                            "filename": save_path,
+                        })
+                if show_plot:
+                    if getattr(self.args, "plot_mode", "blocking") == "nonblocking":
+                        self._update_mpi_live_plotter(
+                            grid,
+                            titles,
+                            window_size=(self.args.plot_window_width, self.args.plot_window_height),
+                            nt=nt,
+                            ndof=ndof,
+                        )
+                    else:
+                        self._reset_mpi_live_plotter()
+                        self._render_once(
+                            grid,
+                            titles,
+                            save_path=None,
+                            show=True,
+                            window_size=(self.args.plot_window_width, self.args.plot_window_height),
+                            nt=nt,
+                            ndof=ndof,
+                        )
+        except Exception as exc:
+            if self.comm.rank == 0:
+                self._reset_mpi_live_plotter()
+                print(
+                    f"PLOT_SKIP stage={titles[0] if titles else 'unknown'} "
+                    f"error={type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+        finally:
+            if save_frame:
+                self.frame_counter += 1
+            self.comm.barrier()
 
 
 @dataclass
@@ -76,18 +461,19 @@ class TorsionParameters:
     """Fixed parameters defining the torsion-designed target band.
 
     These values are not optimized by this reduced-space runner.  They define
-    the reference torsion solve, the torsion threshold band, and the smoothed
-    density used to build ``rho_design`` and ``phi_target``.  The outer
+    the reference torsion solve and the sharp target density
+    ``rho_amp * 1_{a1<T<a2}`` used to build ``phi_target``.  The outer
     optimization changes only the semilinear potential thresholds
     ``(c1_phi, c2_phi)``.
 
     Attributes:
         alpha_t1: Lower torsion threshold as a fraction of ``max(T)``.
         alpha_t2: Upper torsion threshold as a fraction of ``max(T)``.
-        eps_t_ratio: Logistic smoothing width for the torsion window, scaled
-            by ``c2_t - c1_t``.
-        rho_amp: Density amplitude multiplying the logistic activity window in
-            the PDE right-hand side.
+        eps_t_ratio: Logistic smoothing ratio retained solely for the legacy
+            initializer.  Homotopy mode constructs its target from the sharp
+            torsion indicator and never uses this value.
+        rho_amp: Density amplitude multiplying both the torsion target and the
+            semilinear logistic activity window.
         active_threshold: Relative density cutoff used only for diagnostic
             active-set metrics.
         plateau_threshold: Relative density cutoff used only for diagnostic
@@ -136,6 +522,67 @@ class NewtonResult:
     alpha: float
     backtracks: int
     solve_time: float
+
+
+@dataclass
+class HomotopyResult:
+    """Outcome of the torsion-to-semilinear initialization continuation.
+
+    The homotopy keeps ``(c1,c2)`` fixed and continues the source from the
+    sharp torsion target at ``lambda=0`` to the nonlinear logistic source at
+    ``lambda=1``.  A first-order tangent predictor is followed by damped
+    Newton correction at each accepted continuation value.
+
+    Attributes:
+        status: Human-readable continuation termination reason.
+        converged: True exactly when ``lambda=1`` was reached with a
+            residual-converged Newton correction.
+        lambda_final: Last accepted continuation parameter.
+        stages: Number of accepted positive continuation steps.
+        rejected_steps: Number of failed trial continuation steps.
+        total_newton_iterations: Sum of Newton iterations over accepted and
+            rejected continuation trials.
+        tangent_solve_time: Accumulated time in branch-tangent linear solves.
+        newton_solve_time: Accumulated time in Newton linear solves.
+        elapsed: Total wall time for the continuation.
+        last_newton: Newton result at the last attempted/accepted stage.
+    """
+
+    status: str
+    converged: bool
+    lambda_final: float
+    stages: int
+    rejected_steps: int
+    total_newton_iterations: int
+    tangent_solve_time: float
+    newton_solve_time: float
+    elapsed: float
+    last_newton: NewtonResult
+
+
+@dataclass
+class FrozenThresholdEvaluation:
+    """Frozen-state threshold objective and geometric guardrails.
+
+    ``psi`` is assembled as ``0.5*r.T*K^{-1}*r`` at the fixed sharp-target
+    potential.  The two gradient entries are exact total derivatives,
+    including the epsilon-width chain rule in relative-epsilon mode.
+    """
+
+    c1: float
+    c2: float
+    eps_phi: float
+    psi: float
+    residual_dual: float
+    leakage: float
+    missing: float
+    leakage_rel: float
+    missing_rel: float
+    activity_area: float
+    activity_area_rel: float
+    grad_psi: np.ndarray
+    projected_grad_norm: float | None = None
+    evaluation_time: float | None = None
 
 
 @dataclass
@@ -308,6 +755,8 @@ class ProjectedInitialCandidate:
         score: Projected initializer score.  Lower is better.
         state: Copy of the projected finite-element state coefficients.
         density: Copy of the projected window-density coefficients.
+        homotopy: Continuation diagnostics when the homotopy initializer is
+            used; ``None`` for the legacy direct-Newton path.
     """
 
     base: InitialWindowCandidate
@@ -317,6 +766,7 @@ class ProjectedInitialCandidate:
     score: float
     state: np.ndarray
     density: np.ndarray
+    homotopy: HomotopyResult | None = None
 
 
 def make_run_dir(args: argparse.Namespace) -> Path:
@@ -350,14 +800,61 @@ def make_run_dir(args: argparse.Namespace) -> Path:
     return candidate
 
 
+def write_equilibrium_checkpoint(
+        path: Path,
+        *,
+        phi: fem.Function,
+        rho: fem.Function,
+        metadata: dict,
+) -> None:
+    """Write a rank-count-independent scalar Lagrange equilibrium checkpoint.
+
+    PETSc global degree-of-freedom numbering changes when the same mesh is
+    repartitioned with a different MPI size.  Saving owned nodal coordinates
+    alongside the field values makes the checkpoint portable across those
+    partitions while retaining the finite-element nodal state exactly.
+    """
+    V = phi.function_space
+    comm = V.mesh.comm
+    if rho.function_space is not V:
+        raise ValueError("equilibrium checkpoint fields must share one function space")
+    if V.dofmap.index_map_bs != 1:
+        raise ValueError("equilibrium checkpoint currently supports scalar spaces only")
+    owned = int(V.dofmap.index_map.size_local)
+    coordinates = np.asarray(V.tabulate_dof_coordinates()[:owned], dtype=np.float64)
+    local_payload = (
+        coordinates,
+        np.asarray(np.real(phi.x.array[:owned]), dtype=np.float64).copy(),
+        np.asarray(np.real(rho.x.array[:owned]), dtype=np.float64).copy(),
+    )
+    gathered = comm.gather(local_payload, root=0)
+    if comm.rank == 0:
+        all_coordinates = np.concatenate([part[0] for part in gathered], axis=0)
+        all_phi = np.concatenate([part[1] for part in gathered])
+        all_rho = np.concatenate([part[2] for part in gathered])
+        rounded = np.round(all_coordinates, decimals=13)
+        if np.unique(rounded, axis=0).shape[0] != rounded.shape[0]:
+            raise RuntimeError("duplicate nodal coordinates in equilibrium checkpoint")
+        keys = tuple(all_coordinates[:, axis] for axis in range(all_coordinates.shape[1] - 1, -1, -1))
+        order = np.lexsort(keys)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            path,
+            coordinates=all_coordinates[order],
+            phi=all_phi[order],
+            rho=all_rho[order],
+            metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
+        )
+    comm.barrier()
+
+
 def params_from_args(args: argparse.Namespace) -> TorsionParameters:
     """Build validated torsion-target parameters from command-line overrides.
 
     The dataclass carries the defaults used in the torsion-initialized Newton
     parameter studies.  This function applies optional CLI overrides and
-    validates the mathematical preconditions for the torsion band: the upper
-    fractional threshold must exceed the lower one, and the torsion smoothing
-    ratio must be positive.
+    validates the mathematical precondition for the torsion band: the upper
+    fractional threshold must exceed the lower one.
 
     Args:
         args: Parsed command-line namespace.
@@ -366,8 +863,7 @@ def params_from_args(args: argparse.Namespace) -> TorsionParameters:
         ``TorsionParameters`` with user overrides applied.
 
     Raises:
-        ValueError: If the torsion thresholds are not ordered or the torsion
-            smoothing ratio is nonpositive.
+        ValueError: If the torsion thresholds are not ordered.
     """
     params = TorsionParameters()
     if args.alpha_t1 is not None:
@@ -380,8 +876,8 @@ def params_from_args(args: argparse.Namespace) -> TorsionParameters:
         params.rho_amp = float(args.rho_amp)
     if not params.alpha_t2 > params.alpha_t1:
         raise ValueError("require alphaT2 > alphaT1")
-    if params.eps_t_ratio <= 0.0:
-        raise ValueError("require positive --eps-t-ratio")
+    if args.init_mode == "legacy" and params.eps_t_ratio <= 0.0:
+        raise ValueError("require positive --eps-t-ratio in legacy initialization mode")
     return params
 
 
@@ -698,12 +1194,26 @@ def global_weighted_quantile(
         Weighted quantile value, broadcast to every rank.  Returns ``nan`` if
         no positive-weight samples exist.
     """
-    q = min(max(float(quantile), 0.0), 1.0)
+    return float(global_weighted_quantiles(comm, values, weights, [quantile])[0])
+
+
+def global_weighted_quantiles(
+        comm: MPI.Comm,
+        values: np.ndarray,
+        weights: np.ndarray,
+        quantiles,
+) -> np.ndarray:
+    """Compute several distributed weighted quantiles with one gather/sort.
+
+    Initializer quantiles all use the same samples.  Gathering and sorting
+    once avoids repeating the dominant work for every requested probability.
+    """
+    requested = np.clip(np.atleast_1d(np.asarray(quantiles, dtype=np.float64)), 0.0, 1.0)
     local_values = np.asarray(values, dtype=np.float64)
     local_weights = np.asarray(weights, dtype=np.float64)
     mask = np.isfinite(local_values) & np.isfinite(local_weights) & (local_weights > 0.0)
     gathered = comm.gather((local_values[mask], local_weights[mask]), root=0)
-    result = math.nan
+    result = np.full(requested.shape, math.nan, dtype=np.float64)
     if comm.rank == 0:
         value_parts = [part_values for part_values, part_weights in gathered if part_values.size and part_weights.size]
         weight_parts = [part_weights for part_values, part_weights in gathered if part_values.size and part_weights.size]
@@ -716,11 +1226,11 @@ def global_weighted_quantile(
             cumulative = np.cumsum(sorted_weights)
             total = float(cumulative[-1])
             if total > 0.0:
-                target = q * total
-                index = int(np.searchsorted(cumulative, target, side="left"))
-                index = min(max(index, 0), sorted_values.size - 1)
-                result = float(sorted_values[index])
-    return float(comm.bcast(result, root=0))
+                indices = np.searchsorted(cumulative, requested * total, side="left")
+                np.clip(indices, 0, sorted_values.size - 1, out=indices)
+                result[:] = sorted_values[indices]
+    comm.Bcast(result, root=0)
+    return result
 
 
 def initial_candidate_from_thresholds(
@@ -743,10 +1253,9 @@ def initial_candidate_from_thresholds(
     """Project, evaluate, and score one initializer threshold pair.
 
     Candidate metrics are sampled on ``phi_target`` before the nonlinear state
-    solve.  The target indicator is the smoothed torsion design
-    ``rho_design/rho_amp`` clipped to ``[0,1]``; this is deliberate because the
-    initializer should be robust to the same smoothing used to create the
-    Poisson target.
+    solve.  ``rho_design`` is now an interpolated visualization/diagnostic
+    representation of the sharp target ``rho_amp*1_{B_T}``; the Poisson design
+    potential itself is assembled directly from the sharp UFL indicator.
 
     Args:
         comm: MPI communicator.
@@ -902,7 +1411,8 @@ def build_initial_window_candidates(
 
     Args:
         phi_target: Poisson target potential ``-Delta^{-1} rho_design``.
-        rho_design: Smoothed torsion-designed density.
+        rho_design: Interpolated diagnostic representation of the sharp
+            torsion-designed density.
         fit_candidate: Optional ``(name,c1,c2)`` from the existing L2 fit.
         rho_design_l2: Global L2 norm of ``rho_design``.
         rho_amp: Density amplitude.
@@ -922,12 +1432,24 @@ def build_initial_window_candidates(
         rho_design,
         quadrature_degree=int(quadrature_degree),
     )
+    # Candidate construction is lightweight compared with the nonlinear
+    # projections, and these arrays were already small enough for the former
+    # quantile gather.  Gather once so quantiles, area matching, and all
+    # candidate scores run on rank zero without dozens of synchronized scalar
+    # reductions.  The resulting dataclasses are then broadcast to every rank.
+    gathered = comm.gather((phi_values, rho_values, weights), root=0)
+    if comm.rank != 0:
+        return comm.bcast(None, root=0)
+    phi_values = np.ascontiguousarray(np.concatenate([part[0] for part in gathered if part[0].size]))
+    rho_values = np.ascontiguousarray(np.concatenate([part[1] for part in gathered if part[1].size]))
+    weights = np.ascontiguousarray(np.concatenate([part[2] for part in gathered if part[2].size]))
+    candidate_comm = MPI.COMM_SELF
     candidates: list[InitialWindowCandidate] = []
 
     def append_candidate(name: str, c1: float, c2: float) -> None:
         """Add one projected/scored candidate if it is finite."""
         candidate = initial_candidate_from_thresholds(
-            comm=comm,
+            comm=candidate_comm,
             name=name,
             c1=c1,
             c2=c2,
@@ -954,18 +1476,19 @@ def build_initial_window_candidates(
         0.0,
         1.0,
     )
-    q05 = global_weighted_quantile(comm, phi_values, target_weights, 0.05)
-    q10 = global_weighted_quantile(comm, phi_values, target_weights, 0.10)
-    q50 = global_weighted_quantile(comm, phi_values, target_weights, 0.50)
-    q90 = global_weighted_quantile(comm, phi_values, target_weights, 0.90)
-    q95 = global_weighted_quantile(comm, phi_values, target_weights, 0.95)
+    q05, q10, q50, q90, q95 = global_weighted_quantiles(
+        candidate_comm,
+        phi_values,
+        target_weights,
+        [0.05, 0.10, 0.50, 0.90, 0.95],
+    )
     if math.isfinite(q05) and math.isfinite(q95) and q95 > q05:
         append_candidate("target_quantile_05_95", q05, q95)
     if math.isfinite(q10) and math.isfinite(q90) and q90 > q10:
         append_candidate("target_quantile_10_90", q10, q90)
     if math.isfinite(q50):
         c1_area, c2_area = area_matched_initial_thresholds(
-            comm=comm,
+            comm=candidate_comm,
             center=q50,
             phi_values=phi_values,
             weights=weights,
@@ -976,7 +1499,7 @@ def build_initial_window_candidates(
             args=args,
         )
         append_candidate("target_median_area", c1_area, c2_area)
-    return candidates
+    return comm.bcast(candidates, root=0)
 
 
 def projected_initial_candidate_score(
@@ -1083,6 +1606,591 @@ def assemble_matrix_form(bilinear_form, bcs: list) -> PETSc.Mat:
     mat = fem_petsc.assemble_matrix(fem.form(bilinear_form), bcs=bcs)
     mat.assemble()
     return mat
+
+
+def zero_vector(vec: PETSc.Vec) -> None:
+    """Zero owned and ghost entries of a DOLFINx PETSc vector in place."""
+    with vec.localForm() as local:
+        local.set(0.0)
+
+
+class FixedStiffnessSolver:
+    """Run-scoped stiffness matrix, factorization/preconditioner, and vectors.
+
+    The stiffness operator is invariant throughout the run.  Besides the two
+    Poisson solves, it defines the discrete dual residual norm and Newton-step
+    H1 seminorm, so retaining it removes a matrix assembly and KSP setup from
+    every residual and line-search evaluation.
+    """
+
+    def __init__(
+            self,
+            stiffness_form,
+            V,
+            bcs: list,
+            *,
+            prefix: str,
+            solver: str,
+            ksp_type: str | None,
+            rtol: float,
+            atol: float,
+            max_it: int | None,
+    ) -> None:
+        setup_start = time.perf_counter()
+        self.form = fem.form(stiffness_form)
+        self.bcs = bcs
+        self.matrix = fem_petsc.assemble_matrix(self.form, bcs=bcs)
+        self.matrix.assemble()
+        self.rhs = fem_petsc.create_vector(V)
+        self.solution = self.rhs.duplicate()
+        self.matvec = self.rhs.duplicate()
+        self.ksp = PETSc.KSP().create(V.mesh.comm)
+        self.ksp.setOptionsPrefix(prefix)
+        opts = PETSc.Options()
+        for key, value in solver_options(solver, ksp_type=ksp_type).items():
+            opts[f"{prefix}{key}"] = value
+        if solver not in {"mumps", "lu"}:
+            opts[f"{prefix}ksp_rtol"] = rtol
+            opts[f"{prefix}ksp_atol"] = atol
+            if max_it is not None:
+                opts[f"{prefix}ksp_max_it"] = max_it
+        self.ksp.setFromOptions()
+        self.ksp.setOperators(self.matrix)
+        self.setup_time = time.perf_counter() - setup_start
+        self._report_setup = True
+        self._closed = False
+
+    def _assemble_rhs(self, linear_form, *, lifting: bool) -> None:
+        zero_vector(self.rhs)
+        fem_petsc.assemble_vector(self.rhs, linear_form)
+        if lifting:
+            fem_petsc.apply_lifting(self.rhs, [self.form], [self.bcs])
+        self.rhs.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        fem_petsc.set_bc(self.rhs, self.bcs)
+
+    def solve_form(self, rhs_form, target: fem.Function) -> tuple[int, float, float]:
+        """Solve the fixed stiffness system for a variational RHS."""
+        start = time.perf_counter()
+        self._assemble_rhs(fem.form(rhs_form), lifting=True)
+        self.ksp.solve(self.rhs, target.x.petsc_vec)
+        target.x.scatter_forward()
+        reason = self.ksp.getConvergedReason()
+        elapsed = time.perf_counter() - start
+        if self._report_setup:
+            elapsed += self.setup_time
+            self._report_setup = False
+        if reason < 0:
+            raise RuntimeError(f"fixed stiffness solve failed with PETSc reason {reason}")
+        return int(self.ksp.getIterationNumber()), float(self.ksp.getResidualNorm()), elapsed
+
+    def residual_norm(self, residual_form, mode: str) -> float:
+        """Evaluate a compiled residual form in Euclidean or dual norm."""
+        self._assemble_rhs(residual_form, lifting=False)
+        if mode == "euclidean":
+            return float(self.rhs.norm())
+        zero_vector(self.solution)
+        self.ksp.solve(self.rhs, self.solution)
+        reason = self.ksp.getConvergedReason()
+        if reason < 0:
+            raise RuntimeError(f"dual residual solve failed with PETSc reason {reason}")
+        return math.sqrt(max(float(self.rhs.dot(self.solution)), 0.0))
+
+    def solve_residual_form(
+            self,
+            residual_form,
+            target: fem.Function,
+    ) -> tuple[float, int, float, float]:
+        """Assemble ``r``, solve ``K target=r``, and return ``r.T*K^-1*r``.
+
+        The stiffness matrix and KSP are the run-scoped objects owned by this
+        class.  Consequently frozen-threshold evaluations assemble only their
+        changing residual vector and reuse the existing factorization or
+        preconditioner hierarchy.
+        """
+        start = time.perf_counter()
+        self._assemble_rhs(residual_form, lifting=False)
+        target.x.petsc_vec.set(0.0)
+        self.ksp.solve(self.rhs, target.x.petsc_vec)
+        target.x.scatter_forward()
+        reason = self.ksp.getConvergedReason()
+        if reason < 0:
+            raise RuntimeError(f"frozen H^-1 solve failed with PETSc reason {reason}")
+        dual_sq = max(float(self.rhs.dot(target.x.petsc_vec)), 0.0)
+        return (
+            dual_sq,
+            int(self.ksp.getIterationNumber()),
+            float(self.ksp.getResidualNorm()),
+            time.perf_counter() - start,
+        )
+
+    def h1_seminorm(self, function: fem.Function) -> float:
+        """Compute ``sqrt(x.T K x)`` without assembling a scalar form."""
+        self.matrix.mult(function.x.petsc_vec, self.matvec)
+        return math.sqrt(max(float(function.x.petsc_vec.dot(self.matvec)), 0.0))
+
+    @property
+    def residual_vector(self) -> PETSc.Vec:
+        """Most recently assembled residual vector (borrowed, not owned)."""
+        return self.rhs
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self.ksp.destroy()
+        self.matrix.destroy()
+        self.rhs.destroy()
+        self.solution.destroy()
+        self.matvec.destroy()
+        self._closed = True
+
+
+class FrozenThresholdObjective:
+    """Compiled frozen-state forms backed by the shared stiffness solver."""
+
+    def __init__(
+            self,
+            *,
+            phi_target: fem.Function,
+            riesz: fem.Function,
+            tau_mask,
+            test,
+            dx,
+            bc,
+            stiffness_solver: FixedStiffnessSolver,
+            c1_const: fem.Constant,
+            c2_const: fem.Constant,
+            eps_const: fem.Constant,
+            rho_amp: float,
+            target_area: float,
+            c_min: float,
+            c_max: float,
+            min_width: float,
+            args: argparse.Namespace,
+    ) -> None:
+        self.comm = phi_target.function_space.mesh.comm
+        self.stiffness_solver = stiffness_solver
+        self.riesz = riesz
+        self.c1_const = c1_const
+        self.c2_const = c2_const
+        self.eps_const = eps_const
+        self.rho_amp = float(rho_amp)
+        self.target_area = float(target_area)
+        self.c_min = float(c_min)
+        self.c_max = float(c_max)
+        self.min_width = float(min_width)
+        self.args = args
+
+        activity = window_activity_const_ufl(phi_target, c1_const, c2_const, eps_const)
+        d1w, d2w = window_c_derivatives_activity_ufl(
+            phi_target,
+            c1_const,
+            c2_const,
+            eps_const,
+            eps_mode=args.eps_mode,
+            eps_ratio=args.eps_ratio,
+        )
+        self.residual_form = fem.form(
+            (
+                ufl.inner(ufl.grad(phi_target), ufl.grad(test))
+                - self.rho_amp * activity * test
+            ) * dx
+        )
+        self.gradient_forms = (
+            fem.form(-self.rho_amp * d1w * riesz * dx),
+            fem.form(-self.rho_amp * d2w * riesz * dx),
+        )
+        self.leakage_form = fem.form((1.0 - tau_mask) * activity * dx)
+        self.missing_form = fem.form(tau_mask * (1.0 - activity) * dx)
+        self.records: list[tuple[int, str, FrozenThresholdEvaluation]] = []
+        self._cache: dict[tuple[str, str], FrozenThresholdEvaluation] = {}
+        self._evaluation_ids: dict[int, int] = {}
+
+    def _assemble_scalar(self, form) -> float:
+        local = float(fem.assemble_scalar(form))
+        return float(self.comm.allreduce(local, op=MPI.SUM))
+
+    def evaluation_id(self, evaluation: FrozenThresholdEvaluation) -> int:
+        return self._evaluation_ids[id(evaluation)]
+
+    def evaluate(
+            self,
+            c1: float,
+            c2: float,
+            *,
+            method: str,
+    ) -> FrozenThresholdEvaluation:
+        """Evaluate the exact assembled frozen H^-1 objective and gradient."""
+        c1, c2 = project_thresholds(
+            c1,
+            c2,
+            c_min=self.c_min,
+            c_max=self.c_max,
+            min_width=self.min_width,
+        )
+        key = (float(c1).hex(), float(c2).hex())
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        start = time.perf_counter()
+        eps_phi = epsilon_from_thresholds(self.args, c1, c2)
+        self.c1_const.value = PETSc.ScalarType(c1)
+        self.c2_const.value = PETSc.ScalarType(c2)
+        self.eps_const.value = PETSc.ScalarType(eps_phi)
+
+        dual_sq, _, _, _ = self.stiffness_solver.solve_residual_form(
+            self.residual_form,
+            self.riesz,
+        )
+        psi = 0.5 * dual_sq
+        grad_psi = np.array(
+            [self._assemble_scalar(form) for form in self.gradient_forms],
+            dtype=np.float64,
+        )
+        leakage = self._assemble_scalar(self.leakage_form)
+        missing = self._assemble_scalar(self.missing_form)
+        activity_area = self.target_area + leakage - missing
+        target_scale = max(self.target_area, 1.0e-30)
+
+        projected = project_thresholds(
+            c1 - float(grad_psi[0]),
+            c2 - float(grad_psi[1]),
+            c_min=self.c_min,
+            c_max=self.c_max,
+            min_width=self.min_width,
+        )
+        projected_grad_norm = float(
+            np.linalg.norm(np.array([c1 - projected[0], c2 - projected[1]], dtype=np.float64))
+        )
+        evaluation = FrozenThresholdEvaluation(
+            c1=c1,
+            c2=c2,
+            eps_phi=eps_phi,
+            psi=psi,
+            residual_dual=math.sqrt(max(dual_sq, 0.0)),
+            leakage=leakage,
+            missing=missing,
+            leakage_rel=leakage / target_scale,
+            missing_rel=missing / target_scale,
+            activity_area=activity_area,
+            activity_area_rel=activity_area / target_scale,
+            grad_psi=grad_psi,
+            projected_grad_norm=projected_grad_norm,
+            evaluation_time=time.perf_counter() - start,
+        )
+        eval_id = len(self.records) + 1
+        self.records.append((eval_id, method, evaluation))
+        self._evaluation_ids[id(evaluation)] = eval_id
+        self._cache[key] = evaluation
+        return evaluation
+
+
+def evaluate_frozen_threshold_objective(
+        objective: FrozenThresholdObjective,
+        c1: float,
+        c2: float,
+        *,
+        method: str = "frozen",
+) -> FrozenThresholdEvaluation:
+    """Evaluate ``Psi_T(c)`` using a precompiled, matrix-reusing workspace."""
+    return objective.evaluate(c1, c2, method=method)
+
+
+def frozen_center_width_grid(
+        *,
+        center_min: float,
+        center_max: float,
+        width_min: float,
+        width_max: float,
+        center_points: int,
+        width_points: int,
+        c_min: float,
+        c_max: float,
+) -> np.ndarray:
+    """Generate all admissible center/width grid pairs without nested loops."""
+    centers = np.linspace(float(center_min), float(center_max), int(center_points))
+    widths = np.linspace(float(width_min), float(width_max), int(width_points))
+    center_grid, width_grid = np.meshgrid(centers, widths, indexing="ij")
+    c1 = center_grid.ravel() - 0.5 * width_grid.ravel()
+    c2 = center_grid.ravel() + 0.5 * width_grid.ravel()
+    tolerance = 64.0 * np.finfo(np.float64).eps * max(abs(c_min), abs(c_max), 1.0)
+    valid = (c1 >= float(c_min) - tolerance) & (c2 <= float(c_max) + tolerance)
+    return np.column_stack((c1[valid], c2[valid]))
+
+
+def optimize_frozen_hminus1_thresholds(
+        objective: FrozenThresholdObjective,
+        *,
+        args: argparse.Namespace,
+) -> tuple[FrozenThresholdEvaluation, float, float]:
+    """Minimize the assembled frozen H^-1 objective under geometric caps.
+
+    A coarse center/width scan identifies a geometrically meaningful region.
+    If necessary, the leakage and missing caps are relaxed lexicographically,
+    without mixing them into the objective.  Small local grids then refine the
+    lowest-Psi feasible point.
+    """
+    comm = objective.comm
+    grid_size = int(args.init_hminus1_grid)
+    half_min_width = 0.5 * objective.min_width
+    coarse_pairs = frozen_center_width_grid(
+        center_min=objective.c_min + half_min_width,
+        center_max=objective.c_max - half_min_width,
+        width_min=objective.min_width,
+        width_max=objective.c_max - objective.c_min,
+        center_points=grid_size,
+        width_points=grid_size,
+        c_min=objective.c_min,
+        c_max=objective.c_max,
+    )
+    coarse = [
+        evaluate_frozen_threshold_objective(objective, pair[0], pair[1], method="coarse")
+        for pair in coarse_pairs
+    ]
+    if not coarse:
+        raise RuntimeError("frozen H^-1 coarse grid contains no admissible threshold pair")
+
+    leakage_cap = max(float(args.eta_out), float(args.init_leakage_cap))
+    missing_cap = max(float(args.tol_area), float(args.init_missing_cap))
+
+    def feasible(evaluation: FrozenThresholdEvaluation) -> bool:
+        return (
+            evaluation.leakage_rel <= leakage_cap + 1.0e-14
+            and evaluation.missing_rel <= missing_cap + 1.0e-14
+        )
+
+    feasible_coarse = [evaluation for evaluation in coarse if feasible(evaluation)]
+    while not feasible_coarse and (leakage_cap < 1.0 or missing_cap < 1.0):
+        leakage_cap = min(1.0, leakage_cap * float(args.init_geom_relax_factor))
+        missing_cap = min(1.0, missing_cap * float(args.init_geom_relax_factor))
+        feasible_coarse = [evaluation for evaluation in coarse if feasible(evaluation)]
+    if not feasible_coarse:
+        raise RuntimeError(
+            "no frozen H^-1 coarse point satisfies geometric caps even after relaxation to "
+            f"Lrel<={leakage_cap:.3e}, Mrel<={missing_cap:.3e}"
+        )
+
+    best = min(feasible_coarse, key=lambda evaluation: evaluation.psi)
+    c_range = objective.c_max - objective.c_min
+    center_span = c_range / max(grid_size - 1, 1)
+    width_span = max(c_range - objective.min_width, center_span) / max(grid_size - 1, 1)
+    refine_size = int(args.init_hminus1_refine_grid)
+    refine_passes = min(int(args.init_hminus1_refine_passes), int(args.init_hminus1_max_it))
+    if args.verbosity >= 1:
+        root_print(
+            comm,
+            f"HMINUS1_SCAN pass=coarse points={len(coarse)} feasible={len(feasible_coarse)} "
+            f"Lcap={leakage_cap:.3e} Mcap={missing_cap:.3e} bestPsi={best.psi:.6e}",
+        )
+
+    for refinement in range(refine_passes):
+        center = 0.5 * (best.c1 + best.c2)
+        width = best.c2 - best.c1
+        pairs = frozen_center_width_grid(
+            center_min=max(objective.c_min + half_min_width, center - center_span),
+            center_max=min(objective.c_max - half_min_width, center + center_span),
+            width_min=max(objective.min_width, width - width_span),
+            width_max=min(c_range, width + width_span),
+            center_points=refine_size,
+            width_points=refine_size,
+            c_min=objective.c_min,
+            c_max=objective.c_max,
+        )
+        refined = [
+            evaluate_frozen_threshold_objective(
+                objective,
+                pair[0],
+                pair[1],
+                method=f"refine_{refinement + 1}",
+            )
+            for pair in pairs
+        ]
+        feasible_refined = [evaluation for evaluation in refined if feasible(evaluation)]
+        if feasible_refined:
+            best = min([best, *feasible_refined], key=lambda evaluation: evaluation.psi)
+        if args.verbosity >= 1:
+            root_print(
+                comm,
+                f"HMINUS1_SCAN pass=refine_{refinement + 1} points={len(refined)} "
+                f"feasible={len(feasible_refined)} bestPsi={best.psi:.6e}",
+            )
+        center_span *= 2.0 / max(refine_size - 1, 1)
+        width_span *= 2.0 / max(refine_size - 1, 1)
+
+    return best, leakage_cap, missing_cap
+
+
+def verify_frozen_hminus1_gradient(
+        objective: FrozenThresholdObjective,
+        evaluation: FrozenThresholdEvaluation,
+) -> None:
+    """Compare both exact frozen gradients with centered finite differences."""
+    c_range = objective.c_max - objective.c_min
+    base = np.array([evaluation.c1, evaluation.c2], dtype=np.float64)
+    width_margin = evaluation.c2 - evaluation.c1 - objective.min_width
+    margins = (
+        (evaluation.c1 - objective.c_min, width_margin),
+        (width_margin, objective.c_max - evaluation.c2),
+    )
+    for component, (minus_margin, plus_margin) in enumerate(margins):
+        h = min(1.0e-5 * c_range, 0.25 * minus_margin, 0.25 * plus_margin)
+        if h <= 1.0e-12 * max(c_range, 1.0):
+            root_print(
+                objective.comm,
+                f"HMINUS1_GRAD_CHECK i={component + 1} skipped=active_threshold_constraint",
+            )
+            continue
+        c_minus = base.copy()
+        c_plus = base.copy()
+        c_minus[component] -= h
+        c_plus[component] += h
+        minus = evaluate_frozen_threshold_objective(
+            objective,
+            c_minus[0],
+            c_minus[1],
+            method=f"gradient_check_minus_{component + 1}",
+        )
+        plus = evaluate_frozen_threshold_objective(
+            objective,
+            c_plus[0],
+            c_plus[1],
+            method=f"gradient_check_plus_{component + 1}",
+        )
+        finite_difference = (plus.psi - minus.psi) / (2.0 * h)
+        exact = float(evaluation.grad_psi[component])
+        relative_error = abs(finite_difference - exact) / max(abs(finite_difference), abs(exact), 1.0e-30)
+        root_print(
+            objective.comm,
+            f"HMINUS1_GRAD_CHECK i={component + 1} h={h:.6e} exact={exact:.12e} "
+            f"finiteDifference={finite_difference:.12e} relativeError={relative_error:.6e}",
+        )
+
+
+def write_frozen_initialization_records(
+        writer: csv.DictWriter | None,
+        *,
+        run_tag: str,
+        objective: FrozenThresholdObjective,
+        selected: FrozenThresholdEvaluation,
+        leakage_cap: float,
+        missing_cap: float,
+) -> None:
+    """Write every unique frozen objective solve to ``initialization.csv``."""
+    if writer is None:
+        return
+    selected_id = objective.evaluation_id(selected)
+    for eval_id, method, evaluation in objective.records:
+        writer.writerow({
+            "record": "frozen_threshold",
+            "runTag": run_tag,
+            "method": method,
+            "eval_id": eval_id,
+            "c1": evaluation.c1,
+            "c2": evaluation.c2,
+            "width": evaluation.c2 - evaluation.c1,
+            "eps": evaluation.eps_phi,
+            "psiHminus1": evaluation.psi,
+            "residualHminus1": evaluation.residual_dual,
+            "Lrel": evaluation.leakage_rel,
+            "Mrel": evaluation.missing_rel,
+            "activityAreaRel": evaluation.activity_area_rel,
+            "gradPsi1": evaluation.grad_psi[0],
+            "gradPsi2": evaluation.grad_psi[1],
+            "feasibleGeometry": int(
+                evaluation.leakage_rel <= leakage_cap + 1.0e-14
+                and evaluation.missing_rel <= missing_cap + 1.0e-14
+            ),
+            "acceptedThresholdStep": int(eval_id == selected_id),
+            "elapsed": evaluation.evaluation_time,
+        })
+
+
+class ReusableLinearSolver:
+    """Reassemble a changing matrix into fixed PETSc storage and reuse KSP."""
+
+    def __init__(
+            self,
+            bilinear_form,
+            V,
+            bcs: list,
+            *,
+            prefix: str,
+            solver: str,
+            ksp_type: str | None,
+            rtol: float,
+            atol: float,
+            max_it: int | None,
+            verbosity: int,
+    ) -> None:
+        self.form = fem.form(bilinear_form)
+        self.bcs = bcs
+        self.matrix = fem_petsc.create_matrix(self.form)
+        self.rhs = fem_petsc.create_vector(V)
+        self.ksp = PETSc.KSP().create(V.mesh.comm)
+        self.ksp.setOptionsPrefix(prefix)
+        opts = PETSc.Options()
+        for key, value in solver_options(solver, ksp_type=ksp_type).items():
+            opts[f"{prefix}{key}"] = value
+        if solver not in {"mumps", "lu"}:
+            opts[f"{prefix}ksp_rtol"] = rtol
+            opts[f"{prefix}ksp_atol"] = atol
+            if max_it is not None:
+                opts[f"{prefix}ksp_max_it"] = max_it
+        self.ksp.setFromOptions()
+        self._closed = False
+
+    def _assemble_matrix(self) -> None:
+        self.matrix.zeroEntries()
+        fem_petsc.assemble_matrix(self.matrix, self.form, bcs=self.bcs)
+        self.matrix.assemble()
+        self.ksp.setOperators(self.matrix)
+
+    def _solve(self, target: fem.Function, start: float) -> tuple[int, float, float]:
+        self.ksp.solve(self.rhs, target.x.petsc_vec)
+        target.x.scatter_forward()
+        reason = self.ksp.getConvergedReason()
+        if reason < 0:
+            raise RuntimeError(f"reusable linear solve failed with PETSc reason {reason}")
+        return (
+            int(self.ksp.getIterationNumber()),
+            float(self.ksp.getResidualNorm()),
+            time.perf_counter() - start,
+        )
+
+    def solve_form(self, rhs_form, target: fem.Function) -> tuple[int, float, float]:
+        """Reassemble the matrix and a variational RHS, then solve."""
+        start = time.perf_counter()
+        self._assemble_matrix()
+        zero_vector(self.rhs)
+        fem_petsc.assemble_vector(self.rhs, rhs_form)
+        fem_petsc.apply_lifting(self.rhs, [self.form], [self.bcs])
+        self.rhs.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        fem_petsc.set_bc(self.rhs, self.bcs)
+        return self._solve(target, start)
+
+    def solve_vector(
+            self,
+            source: PETSc.Vec,
+            target: fem.Function,
+            *,
+            scale: float = 1.0,
+    ) -> tuple[int, float, float]:
+        """Reassemble the matrix and solve from an existing assembled RHS."""
+        start = time.perf_counter()
+        self._assemble_matrix()
+        source.copy(self.rhs)
+        if scale != 1.0:
+            self.rhs.scale(scale)
+        fem_petsc.set_bc(self.rhs, self.bcs)
+        return self._solve(target, start)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self.ksp.destroy()
+        self.matrix.destroy()
+        self.rhs.destroy()
+        self._closed = True
 
 
 def solve_vector_from_vector(
@@ -1271,6 +2379,7 @@ def residual_norm(
         atol: float,
         max_it: int | None,
         prefix: str,
+        stiffness_solver: FixedStiffnessSolver | None = None,
 ) -> float:
     """Compute the nonlinear residual norm requested by the CLI.
 
@@ -1294,6 +2403,8 @@ def residual_norm(
     Returns:
         Scalar residual norm.
     """
+    if stiffness_solver is not None:
+        return stiffness_solver.residual_norm(residual_form, mode)
     vec = assemble_residual_vector(residual_form, bc)
     if mode == "euclidean":
         norm = float(vec.norm())
@@ -1335,6 +2446,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-tag", default=None)
     parser.add_argument("--run-dir", type=Path, default=None)
+    parser.add_argument(
+        "--equilibrium-output",
+        type=Path,
+        default=None,
+        help="portable final phi/rho checkpoint; defaults to RUN_DIR/out/equilibrium.npz",
+    )
     parser.add_argument("--mesh", type=Path, default=None)
     parser.add_argument("--mesh-size", type=float, default=0.18)
     parser.add_argument("--star-n", type=int, default=140)
@@ -1347,13 +2464,54 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--quad-degree", type=int, default=None)
     parser.add_argument("--alphaT1", dest="alpha_t1", type=float, default=None)
     parser.add_argument("--alphaT2", dest="alpha_t2", type=float, default=None)
-    parser.add_argument("--eps-t-ratio", dest="eps_t_ratio", type=float, default=None)
+    parser.add_argument(
+        "--eps-t-ratio",
+        dest="eps_t_ratio",
+        type=float,
+        default=None,
+        help="torsion-window smoothing ratio used only by --init-mode legacy",
+    )
     parser.add_argument("--rho-amp", type=float, default=None)
     parser.add_argument("--eps-mode", choices=("relative", "fixed"), default="relative")
     parser.add_argument("--eps-ratio", "--eps-phi-ratio", dest="eps_ratio", type=float, default=0.08)
     parser.add_argument("--eps-phi", type=float, default=None)
     parser.add_argument("--c1-phi", dest="c1_phi", type=float, default=None)
     parser.add_argument("--c2-phi", dest="c2_phi", type=float, default=None)
+    parser.add_argument(
+        "--init-mode",
+        choices=("homotopy", "legacy"),
+        default="homotopy",
+        help=(
+            "'homotopy' minimizes the frozen H^-1 residual and continues the sharp torsion source "
+            "at fixed thresholds; 'legacy' preserves candidate generation/direct projection/ranking"
+        ),
+    )
+    parser.add_argument("--init-hminus1-grid", type=int, default=20)
+    parser.add_argument("--init-hminus1-refine-grid", type=int, default=11)
+    parser.add_argument("--init-hminus1-refine-passes", type=int, default=2)
+    parser.add_argument(
+        "--init-hminus1-max-it",
+        type=int,
+        default=20,
+        help="upper bound on local frozen-H^-1 refinement passes",
+    )
+    parser.add_argument("--init-leakage-cap", type=float, default=0.05)
+    parser.add_argument("--init-missing-cap", type=float, default=0.10)
+    parser.add_argument("--init-geom-relax-factor", type=float, default=1.5)
+    parser.add_argument(
+        "--verify-homotopy-init",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="run finite-difference frozen-gradient and predictor-order checks",
+    )
+    parser.add_argument("--homotopy-initial-step", type=float, default=0.20)
+    parser.add_argument("--homotopy-min-step", type=float, default=1.0e-3)
+    parser.add_argument("--homotopy-max-step", type=float, default=0.50)
+    parser.add_argument("--homotopy-step-grow", type=float, default=1.5)
+    parser.add_argument("--homotopy-step-shrink", type=float, default=0.5)
+    parser.add_argument("--homotopy-max-stages", type=int, default=64)
+    parser.add_argument("--homotopy-tol-res", type=float, default=None)
+    parser.add_argument("--homotopy-predictor", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--include-fit-init", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--fit-window-grid", type=int, default=64)
     parser.add_argument("--fit-window-refine-grid", type=int, default=25)
@@ -1410,8 +2568,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="0=essential output, 1=iteration summaries, 2=algorithm step/timing detail",
     )
     parser.add_argument("--fail-on-nonconvergence", action="store_true")
-    parser.add_argument("--plot", action="store_true")
-    parser.add_argument("--plot-mode", choices=("blocking", "nonblocking"), default="blocking")
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="show full-domain PyVista plots on rank zero; MPI partitions are gathered collectively",
+    )
+    parser.add_argument(
+        "--plot-mode",
+        choices=("blocking", "nonblocking"),
+        default="blocking",
+        help="blocking waits on rank zero while other MPI ranks synchronize; nonblocking updates one live window",
+    )
     parser.add_argument("--plot-off-screen", action="store_true")
     parser.add_argument("--plot-window-width", type=int, default=1800)
     parser.add_argument("--plot-window-height", type=int, default=700)
@@ -1450,6 +2617,26 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("require positive --eps-ratio")
     if args.eps_mode == "fixed" and (args.eps_phi is None or args.eps_phi <= 0.0):
         raise ValueError("require positive --eps-phi when --eps-mode fixed")
+    if args.homotopy_initial_step <= 0.0 or args.homotopy_min_step <= 0.0 or args.homotopy_max_step <= 0.0:
+        raise ValueError("require positive homotopy step sizes")
+    if args.homotopy_min_step > args.homotopy_max_step:
+        raise ValueError("require homotopy-min-step <= homotopy-max-step")
+    if not (0.0 < args.homotopy_step_shrink < 1.0):
+        raise ValueError("require 0 < --homotopy-step-shrink < 1")
+    if args.homotopy_step_grow <= 1.0:
+        raise ValueError("require --homotopy-step-grow > 1")
+    if args.homotopy_max_stages < 1:
+        raise ValueError("require positive --homotopy-max-stages")
+    if args.homotopy_tol_res is not None and args.homotopy_tol_res <= 0.0:
+        raise ValueError("require positive --homotopy-tol-res")
+    if args.init_hminus1_grid < 2 or args.init_hminus1_refine_grid < 2:
+        raise ValueError("require --init-hminus1-grid and --init-hminus1-refine-grid >= 2")
+    if args.init_hminus1_refine_passes < 0 or args.init_hminus1_max_it < 1:
+        raise ValueError("require nonnegative refinement passes and positive --init-hminus1-max-it")
+    if args.init_leakage_cap < 0.0 or args.init_missing_cap < 0.0:
+        raise ValueError("require nonnegative frozen geometric caps")
+    if args.init_geom_relax_factor <= 1.0:
+        raise ValueError("require --init-geom-relax-factor > 1")
     if args.cmax_factor <= 0.0:
         raise ValueError("require positive --cmax-factor")
     if float(args.star_r0) <= abs(float(args.star_amp)):
@@ -1593,6 +2780,90 @@ def certified_subband_success(
     return ok, certified_leakage_rel, certified_area_rel
 
 
+class HomotopySolveWorkspace:
+    """Compiled forms and reusable nonlinear solver for one continuation."""
+
+    def __init__(
+            self,
+            *,
+            u: fem.Function,
+            trial,
+            test,
+            dx,
+            bc,
+            target_density,
+            c1_const: fem.Constant,
+            c2_const: fem.Constant,
+            eps_const: fem.Constant,
+            rho_amp: float,
+            args: argparse.Namespace,
+    ) -> None:
+        domain = u.function_space.mesh
+        self.lambda_const = fem.Constant(domain, PETSc.ScalarType(0.0))
+        self.c1_const = c1_const
+        self.c2_const = c2_const
+        self.eps_const = eps_const
+        self.nonlinear_density = window_density_const_ufl(
+            u,
+            c1_const,
+            c2_const,
+            eps_const,
+            rho_amp,
+        )
+        self.source_density = (
+            (1.0 - self.lambda_const) * target_density
+            + self.lambda_const * self.nonlinear_density
+        )
+        self.residual_expr = (
+            ufl.inner(ufl.grad(u), ufl.grad(test)) - self.source_density * test
+        ) * dx
+        self.residual_form = fem.form(self.residual_expr)
+        ws = window_s_derivative_activity_ufl(u, c1_const, c2_const, eps_const)
+        self.jac_expr = (
+            ufl.inner(ufl.grad(trial), ufl.grad(test))
+            - self.lambda_const * float(rho_amp) * ws * trial * test
+        ) * dx
+        self.tangent_rhs_form = fem.form((self.nonlinear_density - target_density) * test * dx)
+        interpolation_points = u.function_space.element.interpolation_points
+        if callable(interpolation_points):
+            interpolation_points = interpolation_points()
+        self.density_expression = fem.Expression(self.source_density, interpolation_points)
+        self.nonlinear_density_expression = fem.Expression(
+            self.nonlinear_density,
+            interpolation_points,
+        )
+        self.linear_solver = ReusableLinearSolver(
+            self.jac_expr,
+            u.function_space,
+            [bc],
+            prefix="init_homotopy_shared_",
+            solver=args.linear_solver,
+            ksp_type=args.ksp_type,
+            rtol=args.linear_rtol,
+            atol=args.linear_atol,
+            max_it=args.linear_max_it,
+            verbosity=args.verbosity,
+        )
+
+    def set_parameters(self, *, lam: float, c1: float, c2: float, eps_phi: float) -> None:
+        self.lambda_const.value = PETSc.ScalarType(lam)
+        self.c1_const.value = PETSc.ScalarType(c1)
+        self.c2_const.value = PETSc.ScalarType(c2)
+        self.eps_const.value = PETSc.ScalarType(eps_phi)
+
+    def update_density(self, rho: fem.Function) -> None:
+        rho.interpolate(self.density_expression)
+        rho.x.scatter_forward()
+
+    def update_nonlinear_density(self, rho: fem.Function) -> None:
+        """Interpolate the ordinary lambda=1 density for candidate scoring."""
+        rho.interpolate(self.nonlinear_density_expression)
+        rho.x.scatter_forward()
+
+    def close(self) -> None:
+        self.linear_solver.close()
+
+
 def solve_equilibrium(
         *,
         u: fem.Function,
@@ -1613,16 +2884,25 @@ def solve_equilibrium(
         tol_res: float,
         args: argparse.Namespace,
         prefix: str,
+        homotopy_lambda: float = 1.0,
+        homotopy_target_density=None,
+        stiffness_solver: FixedStiffnessSolver | None = None,
+        homotopy_workspace: HomotopySolveWorkspace | None = None,
+        sync_density_on_return: bool = True,
+        initial_residual: float | None = None,
         plot_callback: Callable[[str, int, float, float, int, float, float, float], None] | None = None,
 ) -> NewtonResult:
     """Project the current state onto the fixed-threshold semilinear branch.
 
     For fixed ``(c1,c2,eps)``, this solves the nonlinear finite-element
-    residual
+    residual.  In the standard case ``homotopy_lambda=1`` the source is
+    ``rho_amp*W(u;c1,c2,eps)``.  During initialization continuation the source
+    is
 
-        int grad(u).grad(v) dx - int rho_amp*W(u;c1,c2,eps)*v dx = 0
+        (1-lambda)*rho_target + lambda*rho_amp*W(u;c1,c2,eps),
 
-    with damped Newton.  The Jacobian is the exact derivative of this residual
+    where ``rho_target = rho_amp*1_{B_T}``.  The Jacobian is the exact
+    derivative of this residual
     with respect to the finite-element state.  The line search uses residual
     decrease as a merit condition.  A small Newton step is treated as
     stagnation unless the residual tolerance has already been reached; this is
@@ -1650,6 +2930,19 @@ def solve_equilibrium(
             solver tolerances.
         prefix: PETSc options prefix stem for all linear solves and residual
             norm solves from this projection.
+        homotopy_lambda: Source-continuation parameter in ``[0,1]``.  The
+            default ``1`` recovers the original semilinear state equation.
+        homotopy_target_density: UFL expression for the sharp target density.
+            Required when ``homotopy_lambda < 1``.
+        stiffness_solver: Optional run-scoped stiffness operator used for
+            residual and H1 norms.
+        homotopy_workspace: Optional compiled continuation forms and reusable
+            Jacobian solver.
+        sync_density_on_return: Whether to interpolate ``rho`` before
+            returning.  Homotopy stages defer this until candidate scoring.
+        initial_residual: Optional norm of an already assembled residual at
+            the current state.  The homotopy predictor uses this to avoid
+            assembling the same residual again before its Newton corrector.
         plot_callback: Optional hook called after each accepted Newton update.
             The callback receives ``(prefix, newton_iteration, residual,
             alpha, backtracks, c1, c2, eps_phi)``.  It is used only for severe
@@ -1660,17 +2953,57 @@ def solve_equilibrium(
         time.
     """
     comm = u.function_space.mesh.comm
-    c1_const.value = PETSc.ScalarType(c1)
-    c2_const.value = PETSc.ScalarType(c2)
-    eps_const.value = PETSc.ScalarType(eps_phi)
-    residual_expr = (
-        ufl.inner(ufl.grad(u), ufl.grad(test))
-        - window_density_const_ufl(u, c1_const, c2_const, eps_const, rho_amp) * test
-    ) * dx
-    jac_expr = (
-        ufl.inner(ufl.grad(trial), ufl.grad(test))
-        - float(rho_amp) * window_s_derivative_activity_ufl(u, c1_const, c2_const, eps_const) * trial * test
-    ) * dx
+    lam = float(homotopy_lambda)
+    if not (0.0 <= lam <= 1.0):
+        raise ValueError(f"homotopy_lambda must lie in [0,1], got {lam}")
+    if lam < 1.0 and homotopy_target_density is None:
+        raise ValueError("homotopy_target_density is required when homotopy_lambda < 1")
+    if homotopy_workspace is not None:
+        if stiffness_solver is None:
+            raise ValueError("homotopy workspace requires the shared stiffness solver")
+        homotopy_workspace.set_parameters(lam=lam, c1=c1, c2=c2, eps_phi=eps_phi)
+        source_density = homotopy_workspace.source_density
+        residual_expr = homotopy_workspace.residual_expr
+        residual_form = homotopy_workspace.residual_form
+        jac_expr = homotopy_workspace.jac_expr
+
+        def sync_density() -> None:
+            homotopy_workspace.update_density(rho)
+
+    else:
+        c1_const.value = PETSc.ScalarType(c1)
+        c2_const.value = PETSc.ScalarType(c2)
+        eps_const.value = PETSc.ScalarType(eps_phi)
+        nonlinear_density = window_density_const_ufl(u, c1_const, c2_const, eps_const, rho_amp)
+        source_density = (
+            nonlinear_density
+            if lam == 1.0
+            else (1.0 - lam) * homotopy_target_density + lam * nonlinear_density
+        )
+        residual_expr = (
+            ufl.inner(ufl.grad(u), ufl.grad(test)) - source_density * test
+        ) * dx
+        residual_form = fem.form(residual_expr)
+        jac_expr = (
+            ufl.inner(ufl.grad(trial), ufl.grad(test))
+            - lam * float(rho_amp)
+            * window_s_derivative_activity_ufl(u, c1_const, c2_const, eps_const)
+            * trial * test
+        ) * dx
+        interpolation_points = rho.function_space.element.interpolation_points
+        if callable(interpolation_points):
+            interpolation_points = interpolation_points()
+        density_expression = fem.Expression(source_density, interpolation_points)
+
+        def sync_density() -> None:
+            rho.interpolate(density_expression)
+            rho.x.scatter_forward()
+
+    def finish(result: NewtonResult) -> NewtonResult:
+        if sync_density_on_return:
+            sync_density()
+        return result
+
     status = "MAX_NEWTON"
     converged = False
     last_step_h1 = math.inf
@@ -1679,10 +3012,11 @@ def solve_equilibrium(
     solve_time_total = 0.0
     final_residual = math.inf
 
-    for k in range(int(args.max_newton_it)):
-        update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, rho_amp))
-        residual_old = residual_norm(
-            residual_expr,
+    residual_old = (
+        float(initial_residual)
+        if initial_residual is not None
+        else residual_norm(
+            residual_form,
             bc,
             comm=comm,
             mode=args.residual_norm,
@@ -1692,44 +3026,59 @@ def solve_equilibrium(
             rtol=args.linear_rtol,
             atol=args.linear_atol,
             max_it=args.linear_max_it,
-            prefix=f"{prefix}_resnorm_{k}_",
+            prefix=f"{prefix}_resnorm_0_",
+            stiffness_solver=stiffness_solver,
         )
-        final_residual = residual_old
-        if residual_old <= float(tol_res):
-            status = "CONVERGED_RESIDUAL"
-            converged = True
-            return NewtonResult(status, converged, k, residual_old, last_step_h1, last_alpha, last_bt, solve_time_total)
+    )
+    final_residual = residual_old
+    if residual_old <= float(tol_res):
+        return finish(NewtonResult(
+            "CONVERGED_RESIDUAL", True, 0, residual_old,
+            last_step_h1, last_alpha, last_bt, solve_time_total,
+        ))
 
-        its, lin_res, solve_time = solve_linear_form(
-            jac_expr,
-            -residual_expr,
-            du,
-            [bc],
-            prefix=f"{prefix}_newton_{k}_",
-            solver=args.linear_solver,
-            ksp_type=args.ksp_type,
-            rtol=args.linear_rtol,
-            atol=args.linear_atol,
-            max_it=args.linear_max_it,
-            verbosity=args.verbosity,
-        )
+    for k in range(int(args.max_newton_it)):
+        if homotopy_workspace is None:
+            its, lin_res, solve_time = solve_linear_form(
+                jac_expr,
+                -residual_expr,
+                du,
+                [bc],
+                prefix=f"{prefix}_newton_{k}_",
+                solver=args.linear_solver,
+                ksp_type=args.ksp_type,
+                rtol=args.linear_rtol,
+                atol=args.linear_atol,
+                max_it=args.linear_max_it,
+                verbosity=args.verbosity,
+            )
+        else:
+            its, lin_res, solve_time = homotopy_workspace.linear_solver.solve_vector(
+                stiffness_solver.residual_vector,
+                du,
+                scale=-1.0,
+            )
         solve_time_total += solve_time
-        step_h1 = math.sqrt(max(assemble_scalar(comm, ufl.inner(ufl.grad(du), ufl.grad(du)) * dx), 0.0))
+        step_h1 = (
+            stiffness_solver.h1_seminorm(du)
+            if stiffness_solver is not None
+            else math.sqrt(max(assemble_scalar(comm, ufl.inner(ufl.grad(du), ufl.grad(du)) * dx), 0.0))
+        )
         last_step_h1 = step_h1
         if step_h1 < float(args.tol_step):
             status = "FAIL_STEP_STAGNATION"
-            return NewtonResult(status, False, k, residual_old, step_h1, 0.0, 0, solve_time_total)
+            return finish(NewtonResult(status, False, k, residual_old, step_h1, 0.0, 0, solve_time_total))
 
         old_u = u.x.array.copy()
         alpha = 1.0
         accepted = False
         bt = 0
         while alpha >= float(args.alpha_min) and bt <= int(args.max_backtrack):
-            u.x.array[:] = old_u + alpha * du.x.array
+            np.multiply(du.x.array, alpha, out=u.x.array)
+            np.add(u.x.array, old_u, out=u.x.array)
             u.x.scatter_forward()
-            update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, rho_amp))
             residual_trial = residual_norm(
-                residual_expr,
+                residual_form,
                 bc,
                 comm=comm,
                 mode=args.residual_norm,
@@ -1740,6 +3089,7 @@ def solve_equilibrium(
                 atol=args.linear_atol,
                 max_it=args.linear_max_it,
                 prefix=f"{prefix}_ls_resnorm_{k}_{bt}_",
+                stiffness_solver=stiffness_solver,
             )
             if math.isfinite(residual_trial) and residual_trial <= (1.0 - float(args.armijo_c) * alpha) * residual_old:
                 accepted = True
@@ -1751,12 +3101,14 @@ def solve_equilibrium(
         if not accepted:
             u.x.array[:] = old_u
             u.x.scatter_forward()
-            update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, rho_amp))
-            return NewtonResult("FAIL_LS", False, k, residual_old, step_h1, alpha, bt, solve_time_total)
+            return finish(NewtonResult(
+                "FAIL_LS", False, k, residual_old, step_h1, alpha, bt, solve_time_total,
+            ))
 
         last_alpha = alpha
         last_bt = bt
         if plot_callback is not None:
+            sync_density()
             plot_callback(prefix, k, final_residual, alpha, bt, c1, c2, eps_phi)
         if args.verbosity >= 2:
             root_print(
@@ -1765,7 +3117,7 @@ def solve_equilibrium(
                 f"alpha={alpha:.3e} bt={bt} stepH1={step_h1:.6e} linIts={its} linRes={lin_res:.3e}",
             )
         if final_residual <= float(tol_res):
-            return NewtonResult(
+            return finish(NewtonResult(
                 "CONVERGED_RESIDUAL",
                 True,
                 k + 1,
@@ -1774,9 +3126,389 @@ def solve_equilibrium(
                 last_alpha,
                 last_bt,
                 solve_time_total,
+            ))
+        # The accepted line-search residual and its assembled vector are the
+        # residual at the next Newton iterate; do not assemble/solve it again.
+        residual_old = final_residual
+
+    return finish(NewtonResult(
+        status,
+        converged,
+        int(args.max_newton_it),
+        final_residual,
+        last_step_h1,
+        last_alpha,
+        last_bt,
+        solve_time_total,
+    ))
+
+
+def homotopy_tolerance(args: argparse.Namespace) -> float:
+    """Return the nonlinear residual tolerance used during initialization continuation."""
+    if args.homotopy_tol_res is not None:
+        return float(args.homotopy_tol_res)
+    return float(args.tol_res)
+
+
+def solve_homotopy_initialization(
+        *,
+        u: fem.Function,
+        du: fem.Function,
+        tangent: fem.Function,
+        rho: fem.Function,
+        trial,
+        test,
+        dx,
+        bc,
+        stiffness_form,
+        stiffness_solver: FixedStiffnessSolver,
+        homotopy_workspace: HomotopySolveWorkspace,
+        target_density,
+        c1_const: fem.Constant,
+        c2_const: fem.Constant,
+        eps_const: fem.Constant,
+        c1: float,
+        c2: float,
+        eps_phi: float,
+        rho_amp: float,
+        args: argparse.Namespace,
+        prefix: str,
+        initialization_writer: csv.DictWriter | None = None,
+        initialization_handle=None,
+        run_tag: str = "",
+        frozen_residual_dual: float | None = None,
+) -> HomotopyResult:
+    """Continue the sharp torsion source to the semilinear source.
+
+    The thresholds remain fixed throughout the continuation.  At an accepted
+    continuation state ``(u, lambda)``, the branch tangent ``s = du/dlambda``
+    solves
+
+        J_lambda s = rho_amp * (W(u;c1,c2,eps) - 1_{B_T}),
+
+    with ``J_lambda = K - lambda*rho_amp*W_s``.  A first-order predictor
+    ``u + dlambda*s`` is then Newton-corrected at the trial lambda.  Failed
+    corrector steps are rolled back and retried with a smaller continuation
+    step.  Reaching ``lambda=1`` leaves ``u`` on the ordinary semilinear
+    equilibrium used by the reduced optimizer.
+    """
+    comm = u.function_space.mesh.comm
+    start = time.perf_counter()
+    tol = homotopy_tolerance(args)
+    lam = 0.0
+    step = min(
+        max(float(args.homotopy_initial_step), float(args.homotopy_min_step)),
+        float(args.homotopy_max_step),
+    )
+    accepted_stages = 0
+    rejected_steps = 0
+    total_newton_iterations = 0
+    tangent_solve_time = 0.0
+    newton_solve_time = 0.0
+    last_newton = NewtonResult(
+        status="EXACT_LAMBDA0",
+        converged=True,
+        iterations=0,
+        residual=0.0,
+        step_h1=0.0,
+        alpha=1.0,
+        backtracks=0,
+        solve_time=0.0,
+    )
+
+    c1_const.value = PETSc.ScalarType(c1)
+    c2_const.value = PETSc.ScalarType(c2)
+    eps_const.value = PETSc.ScalarType(eps_phi)
+    homotopy_workspace.set_parameters(lam=0.0, c1=c1, c2=c2, eps_phi=eps_phi)
+    lambda0_residual = residual_norm(
+        homotopy_workspace.residual_form,
+        bc,
+        comm=comm,
+        mode=args.residual_norm,
+        metric_form=stiffness_form,
+        solver=args.linear_solver,
+        ksp_type=args.ksp_type,
+        rtol=args.linear_rtol,
+        atol=args.linear_atol,
+        max_it=args.linear_max_it,
+        prefix=f"{prefix}_lambda0_check_",
+        stiffness_solver=stiffness_solver,
+    )
+    root_print(
+        comm,
+        f"HOMOTOPY_CHECK lambda=0 residual={lambda0_residual:.12e} "
+        f"norm={args.residual_norm}",
+    )
+
+    for stage in range(int(args.homotopy_max_stages)):
+        if lam >= 1.0 - 1.0e-14:
+            return HomotopyResult(
+                status="CONVERGED_LAMBDA1",
+                converged=True,
+                lambda_final=1.0,
+                stages=accepted_stages,
+                rejected_steps=rejected_steps,
+                total_newton_iterations=total_newton_iterations,
+                tangent_solve_time=tangent_solve_time,
+                newton_solve_time=newton_solve_time,
+                elapsed=time.perf_counter() - start,
+                last_newton=last_newton,
             )
 
-    return NewtonResult(status, converged, int(args.max_newton_it), final_residual, last_step_h1, last_alpha, last_bt, solve_time_total)
+        dlambda = min(step, 1.0 - lam)
+        old_u = u.x.array.copy()
+        stage_start = time.perf_counter()
+        tangent_h1 = 0.0
+
+        if bool(args.homotopy_predictor):
+            homotopy_workspace.set_parameters(lam=lam, c1=c1, c2=c2, eps_phi=eps_phi)
+            tangent_start = time.perf_counter()
+            try:
+                _, _, tangent_time = homotopy_workspace.linear_solver.solve_form(
+                    homotopy_workspace.tangent_rhs_form,
+                    tangent,
+                )
+            except RuntimeError:
+                u.x.array[:] = old_u
+                u.x.scatter_forward()
+                return HomotopyResult(
+                    status="FAIL_TANGENT_SOLVE",
+                    converged=False,
+                    lambda_final=lam,
+                    stages=accepted_stages,
+                    rejected_steps=rejected_steps,
+                    total_newton_iterations=total_newton_iterations,
+                    tangent_solve_time=tangent_solve_time + (time.perf_counter() - tangent_start),
+                    newton_solve_time=newton_solve_time,
+                    elapsed=time.perf_counter() - start,
+                    last_newton=last_newton,
+                )
+            tangent_solve_time += tangent_time
+            tangent_h1 = stiffness_solver.h1_seminorm(tangent)
+            if lam <= 1.0e-14 and frozen_residual_dual is not None:
+                relative_difference = abs(tangent_h1 - float(frozen_residual_dual)) / max(
+                    tangent_h1,
+                    float(frozen_residual_dual),
+                    1.0e-30,
+                )
+                root_print(
+                    comm,
+                    f"HOMOTOPY_CHECK lambda=0 tangentH1={tangent_h1:.12e} "
+                    f"frozenResidualHminus1={float(frozen_residual_dual):.12e} "
+                    f"relativeDifference={relative_difference:.6e}",
+                )
+        else:
+            tangent.x.array[:] = 0.0
+            tangent.x.scatter_forward()
+
+        trial_lambda = lam + dlambda
+        predictor_half_residual = math.nan
+        predictor_check_residual = math.nan
+        predictor_check_step = math.nan
+        if bool(args.homotopy_predictor) and bool(args.verify_homotopy_init) and lam <= 1.0e-14:
+            index_map = tangent.function_space.dofmap.index_map
+            owned_size = index_map.size_local * tangent.function_space.dofmap.index_map_bs
+            local_tangent_max = float(np.max(np.abs(tangent.x.array[:owned_size]))) if owned_size else 0.0
+            tangent_max = float(comm.allreduce(local_tangent_max, op=MPI.MAX))
+            predictor_check_step = min(
+                dlambda,
+                max(1.0e-8, 0.25 * eps_phi / max(tangent_max, 1.0e-30)),
+            )
+            np.multiply(tangent.x.array, 0.5 * predictor_check_step, out=u.x.array)
+            np.add(u.x.array, old_u, out=u.x.array)
+            u.x.scatter_forward()
+            homotopy_workspace.set_parameters(
+                lam=lam + 0.5 * predictor_check_step,
+                c1=c1,
+                c2=c2,
+                eps_phi=eps_phi,
+            )
+            predictor_half_residual = residual_norm(
+                homotopy_workspace.residual_form,
+                bc,
+                comm=comm,
+                mode=args.residual_norm,
+                metric_form=stiffness_form,
+                solver=args.linear_solver,
+                ksp_type=args.ksp_type,
+                rtol=args.linear_rtol,
+                atol=args.linear_atol,
+                max_it=args.linear_max_it,
+                prefix=f"{prefix}_predictor_half_",
+                stiffness_solver=stiffness_solver,
+            )
+            np.multiply(tangent.x.array, predictor_check_step, out=u.x.array)
+            np.add(u.x.array, old_u, out=u.x.array)
+            u.x.scatter_forward()
+            homotopy_workspace.set_parameters(
+                lam=lam + predictor_check_step,
+                c1=c1,
+                c2=c2,
+                eps_phi=eps_phi,
+            )
+            predictor_check_residual = residual_norm(
+                homotopy_workspace.residual_form,
+                bc,
+                comm=comm,
+                mode=args.residual_norm,
+                metric_form=stiffness_form,
+                solver=args.linear_solver,
+                ksp_type=args.ksp_type,
+                rtol=args.linear_rtol,
+                atol=args.linear_atol,
+                max_it=args.linear_max_it,
+                prefix=f"{prefix}_predictor_check_",
+                stiffness_solver=stiffness_solver,
+            )
+        np.multiply(tangent.x.array, dlambda, out=u.x.array)
+        np.add(u.x.array, old_u, out=u.x.array)
+        u.x.scatter_forward()
+        homotopy_workspace.set_parameters(lam=trial_lambda, c1=c1, c2=c2, eps_phi=eps_phi)
+        predicted_residual = residual_norm(
+            homotopy_workspace.residual_form,
+            bc,
+            comm=comm,
+            mode=args.residual_norm,
+            metric_form=stiffness_form,
+            solver=args.linear_solver,
+            ksp_type=args.ksp_type,
+            rtol=args.linear_rtol,
+            atol=args.linear_atol,
+            max_it=args.linear_max_it,
+            prefix=f"{prefix}_predictor_{stage}_",
+            stiffness_solver=stiffness_solver,
+        )
+        if math.isfinite(predictor_half_residual):
+            observed_order = math.log(
+                max(predictor_check_residual, 1.0e-300) / max(predictor_half_residual, 1.0e-300),
+                2.0,
+            )
+            root_print(
+                comm,
+                f"HOMOTOPY_PREDICTOR_ORDER dlambda={predictor_check_step:.6e} "
+                f"residualFull={predictor_check_residual:.12e} "
+                f"residualHalf={predictor_half_residual:.12e} observedOrder={observed_order:.6f}",
+            )
+        trial_newton = solve_equilibrium(
+            u=u,
+            du=du,
+            rho=rho,
+            trial=trial,
+            test=test,
+            dx=dx,
+            bc=bc,
+            stiffness_form=stiffness_form,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            c1=c1,
+            c2=c2,
+            eps_phi=eps_phi,
+            rho_amp=rho_amp,
+            tol_res=tol,
+            args=args,
+            prefix=f"{prefix}_lambda_{stage}_{trial_lambda:.6f}".replace(".", "p"),
+            homotopy_lambda=trial_lambda,
+            homotopy_target_density=target_density,
+            stiffness_solver=stiffness_solver,
+            homotopy_workspace=homotopy_workspace,
+            sync_density_on_return=False,
+            initial_residual=predicted_residual,
+        )
+        total_newton_iterations += int(trial_newton.iterations)
+        newton_solve_time += float(trial_newton.solve_time)
+        last_newton = trial_newton
+
+        if initialization_writer is not None:
+            initialization_writer.writerow({
+                "record": "homotopy_stage",
+                "runTag": run_tag,
+                "method": "source_homotopy",
+                "c1": c1,
+                "c2": c2,
+                "width": c2 - c1,
+                "eps": eps_phi,
+                "lambdaOld": lam,
+                "lambdaTrial": trial_lambda,
+                "dlambda": dlambda,
+                "tangentH1": tangent_h1,
+                "predictedResidual": predicted_residual,
+                "correctedResidual": trial_newton.residual,
+                "newtonIterations": trial_newton.iterations,
+                "damping": trial_newton.alpha,
+                "backtracks": trial_newton.backtracks,
+                "accepted": int(trial_newton.converged),
+                "elapsed": time.perf_counter() - stage_start,
+            })
+            if initialization_handle is not None:
+                initialization_handle.flush()
+
+        if trial_newton.converged:
+            lam = trial_lambda
+            accepted_stages += 1
+            if args.verbosity >= 1:
+                root_print(
+                    comm,
+                    f"HOMOTOPY_STAGE prefix={prefix} stage={stage} accepted=1 "
+                    f"lambda={lam:.6e} dlambda={dlambda:.6e} newtonIts={trial_newton.iterations} "
+                    f"residual={trial_newton.residual:.6e} alpha={trial_newton.alpha:.3e} "
+                    f"backtracks={trial_newton.backtracks}",
+                )
+            if lam >= 1.0 - 1.0e-14:
+                return HomotopyResult(
+                    status="CONVERGED_LAMBDA1",
+                    converged=True,
+                    lambda_final=1.0,
+                    stages=accepted_stages,
+                    rejected_steps=rejected_steps,
+                    total_newton_iterations=total_newton_iterations,
+                    tangent_solve_time=tangent_solve_time,
+                    newton_solve_time=newton_solve_time,
+                    elapsed=time.perf_counter() - start,
+                    last_newton=last_newton,
+                )
+            if trial_newton.iterations <= 2 and trial_newton.backtracks == 0:
+                step = min(float(args.homotopy_max_step), step * float(args.homotopy_step_grow))
+            continue
+
+        rejected_steps += 1
+        u.x.array[:] = old_u
+        u.x.scatter_forward()
+        step *= float(args.homotopy_step_shrink)
+        if args.verbosity >= 1:
+            root_print(
+                comm,
+                f"HOMOTOPY_STAGE prefix={prefix} stage={stage} accepted=0 "
+                f"lambda={lam:.6e} trialLambda={trial_lambda:.6e} dlambda={dlambda:.6e} "
+                f"newtonStatus={trial_newton.status} residual={trial_newton.residual:.6e} "
+                f"nextStep={step:.6e}",
+            )
+        if step < float(args.homotopy_min_step) * (1.0 - 1.0e-12):
+            return HomotopyResult(
+                status="FAIL_MIN_STEP",
+                converged=False,
+                lambda_final=lam,
+                stages=accepted_stages,
+                rejected_steps=rejected_steps,
+                total_newton_iterations=total_newton_iterations,
+                tangent_solve_time=tangent_solve_time,
+                newton_solve_time=newton_solve_time,
+                elapsed=time.perf_counter() - start,
+                last_newton=last_newton,
+            )
+
+    return HomotopyResult(
+        status="FAIL_MAX_STAGES",
+        converged=False,
+        lambda_final=lam,
+        stages=accepted_stages,
+        rejected_steps=rejected_steps,
+        total_newton_iterations=total_newton_iterations,
+        tangent_solve_time=tangent_solve_time,
+        newton_solve_time=newton_solve_time,
+        elapsed=time.perf_counter() - start,
+        last_newton=last_newton,
+    )
 
 
 def evaluate_band_metrics(
@@ -1847,6 +3579,125 @@ def evaluate_band_metrics(
         certified_leakage=certified_leakage,
         certified_missing=certified_missing,
     )
+
+
+class InitializationDiagnostics:
+    """Compiled, batched diagnostics used to rank projected initial states.
+
+    Only fields consumed by the initializer score are evaluated.  All local
+    integrals are reduced together, replacing the many scalar collectives and
+    the unused residual/energy diagnostics in the general ``compute_metrics``
+    helper.
+    """
+
+    def __init__(
+            self,
+            *,
+            u: fem.Function,
+            rho: fem.Function,
+            rho_design: fem.Function,
+            rho_design_l2: float,
+            tau_mask,
+            dx,
+            c1_const: fem.Constant,
+            c2_const: fem.Constant,
+            eps_const: fem.Constant,
+            kappa: float,
+            active_threshold: float,
+            rho_amp: float,
+            target_area: float,
+    ) -> None:
+        self.comm = u.function_space.mesh.comm
+        self.rho_design_l2 = float(rho_design_l2)
+        self.target_area = float(target_area)
+        self.c1_const = c1_const
+        self.c2_const = c2_const
+        self.eps_const = eps_const
+        activity = window_activity_const_ufl(u, c1_const, c2_const, eps_const)
+        outside = 1.0 - tau_mask
+        certified = ufl.conditional(
+            ufl.gt(u, c1_const + float(kappa) * eps_const),
+            ufl.conditional(
+                ufl.lt(u, c2_const - float(kappa) * eps_const),
+                1.0,
+                0.0,
+            ),
+            0.0,
+        )
+        active_design = ufl.conditional(
+            ufl.gt(rho_design, float(active_threshold) * float(rho_amp)), 1.0, 0.0,
+        )
+        active_final = ufl.conditional(
+            ufl.gt(rho, float(active_threshold) * float(rho_amp)), 1.0, 0.0,
+        )
+        self.active_design_area = assemble_scalar(self.comm, active_design * dx)
+        integrands = (
+            outside * activity,
+            tau_mask * (1.0 - activity),
+            activity,
+            certified,
+            outside * certified,
+            tau_mask * (1.0 - certified),
+            active_final,
+            active_design * active_final,
+            (rho - rho_design) ** 2,
+        )
+        self.forms = tuple(fem.form(integrand * dx) for integrand in integrands)
+
+    def evaluate(
+            self,
+            *,
+            c1: float,
+            c2: float,
+            eps_phi: float,
+    ) -> tuple[BandMetrics, dict[str, float]]:
+        """Assemble all candidate metrics with one MPI all-reduction."""
+        self.c1_const.value = PETSc.ScalarType(c1)
+        self.c2_const.value = PETSc.ScalarType(c2)
+        self.eps_const.value = PETSc.ScalarType(eps_phi)
+        local = np.fromiter(
+            (float(fem.assemble_scalar(form)) for form in self.forms),
+            dtype=np.float64,
+            count=len(self.forms),
+        )
+        reduced = np.empty_like(local)
+        self.comm.Allreduce(local, reduced, op=MPI.SUM)
+        (
+            leakage,
+            missing,
+            activity_area,
+            certified_area,
+            certified_leakage,
+            certified_missing,
+            active_area,
+            active_overlap,
+            rho_diff_sq,
+        ) = map(float, reduced)
+        area_scale = max(self.target_area, 1.0e-30)
+        metrics = BandMetrics(
+            leakage=leakage,
+            missing=missing,
+            leakage_rel=leakage / area_scale,
+            missing_rel=missing / area_scale,
+            target_area=self.target_area,
+            activity_area=activity_area,
+            certified_area=certified_area,
+            certified_leakage=certified_leakage,
+            certified_missing=certified_missing,
+        )
+        active_union = max(self.active_design_area + active_area - active_overlap, 1.0e-30)
+        diagnostics = {
+            "activeArea": active_area,
+            "activeDesignArea": self.active_design_area,
+            "activeOverlapArea": active_overlap,
+            "activeJaccard": active_overlap / active_union,
+            "rhoDesignDiffL2": math.sqrt(max(rho_diff_sq, 0.0)),
+            "relRhoDesign": (
+                math.sqrt(max(rho_diff_sq, 0.0))
+                / max(self.rho_design_l2, 1.0e-30)
+            ),
+        }
+        return metrics, diagnostics
 
 
 def compute_reduced_gradient(
@@ -2277,16 +4128,19 @@ def run_strategy(args: argparse.Namespace) -> int:
 
     The function owns the end-to-end run:
 
-    1. Validate arguments and create run-mpi2.log directories.
+    1. Validate arguments and create dated run directories under ``tmp``.
     2. Generate or load the star-shaped mesh.
     3. Build the finite-element space and homogeneous Dirichlet boundary
        condition.
     4. Solve the torsion problem and construct the crisp torsion band.
-    5. Build the smoothed torsion-designed density and Poisson target
-       potential.
-    6. Initialize potential thresholds by generating density-fit,
-       target-quantile, and area-matched candidates, Newton-projecting each
-       candidate, and selecting the best projected branch.
+    5. Build the sharp torsion-designed density ``rho_amp*1_{B_T}`` and solve
+       its Poisson design potential without projecting the source into the
+       conforming space.
+    6. In homotopy mode, minimize the frozen assembled H^-1 residual subject
+       to geometric caps, then continue the single selected pair through an
+       adaptive source homotopy ``lambda:0->1``.  ``--init-mode legacy``
+       retains candidate generation, direct Newton projection, and projected
+       score selection.
     7. Iterate the reduced algorithm: adaptive Newton projection, soft
        discrepancy evaluation, sensitivity solves, reduced-gradient formation,
        two-variable trust-region update, sensitivity prediction, Newton
@@ -2330,7 +4184,21 @@ def run_strategy(args: argparse.Namespace) -> int:
 
     opt_csv = log_dir / "optimization.csv"
     frame_csv = log_dir / "frames.csv"
+    initialization_csv = log_dir / "initialization.csv"
     summary_path = out_dir / "summary.txt"
+    equilibrium_path = (
+        Path(args.equilibrium_output).expanduser().resolve()
+        if args.equilibrium_output is not None
+        else out_dir / "equilibrium.npz"
+    )
+    initialization_handle = initialization_csv.open("w", newline="", encoding="utf-8") if comm.rank == 0 else None
+    initialization_writer = (
+        csv.DictWriter(initialization_handle, fieldnames=INITIALIZATION_CSV_FIELDS)
+        if initialization_handle is not None
+        else None
+    )
+    if initialization_writer is not None:
+        initialization_writer.writeheader()
     total_start = time.perf_counter()
 
     root_print(comm, "========== START STRATEGY A DOLFINX WINDOW REDUCED OPTIMIZATION ==========")
@@ -2338,6 +4206,8 @@ def run_strategy(args: argparse.Namespace) -> int:
     root_print(comm, f"RUN_DIR {run_dir}")
     root_print(comm, f"OPT_CSV {opt_csv}")
     root_print(comm, f"FRAME_CSV {frame_csv}")
+    root_print(comm, f"INITIALIZATION_CSV {initialization_csv}")
+    root_print(comm, f"EQUILIBRIUM_CHECKPOINT {equilibrium_path}")
     root_print(comm, f"SUMMARY {summary_path}")
     root_print(
         comm,
@@ -2348,6 +4218,9 @@ def run_strategy(args: argparse.Namespace) -> int:
         f"tolRes={args.tol_res:.6e} finalNewtonTolRes={final_tol_res:.6e} "
         f"innerNewtonTol={args.inner_newton_tol} innerTolMax={args.inner_tol_max:.6e} "
         f"innerTolGamma={args.inner_tol_gamma:.6e} "
+        f"initMode={args.init_mode} homotopyInitialStep={args.homotopy_initial_step:.3e} "
+        f"homotopyMinStep={args.homotopy_min_step:.3e} homotopyMaxStep={args.homotopy_max_step:.3e} "
+        f"homotopyTol={homotopy_tolerance(args):.3e} predictor={int(args.homotopy_predictor)} "
         f"minCertifiedAreaFraction={args.min_certified_area_fraction:.6e} "
         f"plotSevere={int(args.plot_severe)}",
     )
@@ -2380,6 +4253,8 @@ def run_strategy(args: argparse.Namespace) -> int:
     rho = fem.Function(V, name="rho")
     s1 = fem.Function(V, name="sensitivityC1")
     s2 = fem.Function(V, name="sensitivityC2")
+    frozen_riesz = fem.Function(V, name="frozenRiesz")
+    homotopy_tangent = fem.Function(V, name="homotopyTangent")
     phi_diff = fem.Function(V, name="phiMinusPhiT")
     activity_ref = fem.Function(V, name="activityRef")
 
@@ -2411,24 +4286,24 @@ def run_strategy(args: argparse.Namespace) -> int:
             ndof=ndof,
         )
 
-    its, rel, solve_time = solve_linear_form(
+    stiffness_solver = FixedStiffnessSolver(
         stiffness_form,
-        1.0 * test * dx,
-        T,
+        V,
         [bc],
-        prefix="torsion_",
+        prefix="shared_stiffness_",
         solver=args.linear_solver,
         ksp_type=args.ksp_type,
         rtol=args.linear_rtol,
         atol=args.linear_atol,
         max_it=args.linear_max_it,
-        verbosity=args.verbosity,
     )
+    its, rel, solve_time = stiffness_solver.solve_form(1.0 * test * dx, T)
     _, tmax = global_minmax(comm, T)
     c1_t = params.alpha_t1 * tmax
     c2_t = params.alpha_t2 * tmax
     eps_t = params.eps_t_ratio * (c2_t - c1_t)
     tau_mask = ufl.conditional(ufl.gt(T, c1_t), ufl.conditional(ufl.lt(T, c2_t), 1.0, 0.0), 0.0)
+    target_density = float(params.rho_amp) * tau_mask
     update_interpolated(tau_band, tau_mask)
     target_area = assemble_scalar(comm, tau_mask * dx)
     root_print(comm, f"SOLVER_OK problem=torsion iters={its} rel={rel:.3e} time={solve_time:.3f}")
@@ -2440,24 +4315,26 @@ def run_strategy(args: argparse.Namespace) -> int:
     if target_area <= 0.0:
         raise RuntimeError("torsion target band has zero area")
 
-    update_interpolated(rho_design, window_ufl(T, c1_t, c2_t, eps_t, params.rho_amp))
+    if args.init_mode == "homotopy":
+        # In homotopy mode this interpolation is strictly diagnostic.  The
+        # Poisson RHS below is the original discontinuous UFL indicator.
+        update_interpolated(rho_design, target_density)
+        phi_target_rhs = target_density * test * dx
+        target_source_name = "sharp_indicator"
+    else:
+        # Preserve the legacy target construction exactly: its smoothed
+        # torsion density is interpolated before entering the Poisson RHS.
+        update_interpolated(
+            rho_design,
+            window_ufl(T, c1_t, c2_t, eps_t, params.rho_amp),
+        )
+        phi_target_rhs = rho_design * test * dx
+        target_source_name = "legacy_smoothed_interpolant"
     rho_design_l2 = math.sqrt(max(assemble_scalar(comm, rho_design * rho_design * dx), 0.0))
     rho_design_mass = assemble_scalar(comm, rho_design * dx)
     _, rho_design_max = global_minmax(comm, rho_design)
 
-    its, rel, solve_time = solve_linear_form(
-        stiffness_form,
-        rho_design * test * dx,
-        phi_target,
-        [bc],
-        prefix="phi_target_",
-        solver=args.linear_solver,
-        ksp_type=args.ksp_type,
-        rtol=args.linear_rtol,
-        atol=args.linear_atol,
-        max_it=args.linear_max_it,
-        verbosity=args.verbosity,
-    )
+    its, rel, solve_time = stiffness_solver.solve_form(phi_target_rhs, phi_target)
     _, phi_target_max = global_minmax(comm, phi_target)
     phi_target_l2 = math.sqrt(max(assemble_scalar(comm, phi_target * phi_target * dx), 0.0))
     c_search_max = max(float(args.cmax_factor) * phi_target_max, 1.0e-12)
@@ -2475,7 +4352,8 @@ def run_strategy(args: argparse.Namespace) -> int:
     root_print(
         comm,
         f"PHI_TARGET max={phi_target_max:.6e} l2={phi_target_l2:.6e} "
-        f"rhoDesignMass={rho_design_mass:.6e} rhoDesignMax={rho_design_max:.6e}",
+        f"rhoDesignMass={rho_design_mass:.6e} rhoDesignMax={rho_design_max:.6e} "
+        f"targetSource={target_source_name}",
     )
     root_print(comm, f"SEARCH_DOMAIN cMin={c_min:.6e} cMax={c_upper:.6e} minWidth={min_width:.6e}")
 
@@ -2486,7 +4364,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         c1_phi = float(args.c1_phi)
         c2_phi = float(args.c2_phi)
         fit_result = None
-    elif args.include_fit_init:
+    elif args.init_mode == "legacy" and args.include_fit_init:
         fit_quad_degree = args.fit_window_quad_degree if args.fit_window_quad_degree is not None else qdeg
         fit_result = fit_phi_window_to_torsion_design(
             phi_target,
@@ -2541,12 +4419,21 @@ def run_strategy(args: argparse.Namespace) -> int:
             f"INIT_PRESELECT name={selected_init.name} c1={c1_phi:.6e} c2={c2_phi:.6e} "
             f"score={selected_init.score:.6e}",
         )
-    else:
+    elif args.init_mode == "legacy":
         center = c_min + 0.65 * c_scale
         width = max(0.15 * c_scale, min_width)
         c1_phi = center - 0.5 * width
         c2_phi = center + 0.5 * width
         init_candidate_name = "fallback_center_width"
+    else:
+        # Constants need finite initial values before the compiled frozen
+        # forms are built; this placeholder is immediately replaced by the
+        # H^-1 minimizer below and is never continued through homotopy.
+        center = c_min + 0.5 * c_scale
+        width = max(0.25 * c_scale, min_width)
+        c1_phi = center - 0.5 * width
+        c2_phi = center + 0.5 * width
+        init_candidate_name = "pending_hminus1"
 
     c1_phi, c2_phi = project_thresholds(c1_phi, c2_phi, c_min=c_min, c_max=c_upper, min_width=min_width)
     eps_phi = epsilon_from_thresholds(args, c1_phi, c2_phi)
@@ -2556,20 +4443,121 @@ def run_strategy(args: argparse.Namespace) -> int:
     c1_const = fem.Constant(domain, PETSc.ScalarType(c1_phi))
     c2_const = fem.Constant(domain, PETSc.ScalarType(c2_phi))
     eps_const = fem.Constant(domain, PETSc.ScalarType(eps_phi))
+    selected_frozen_evaluation: FrozenThresholdEvaluation | None = None
+    if args.init_mode == "homotopy":
+        frozen_objective = FrozenThresholdObjective(
+            phi_target=phi_target,
+            riesz=frozen_riesz,
+            tau_mask=tau_mask,
+            test=test,
+            dx=dx,
+            bc=bc,
+            stiffness_solver=stiffness_solver,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            rho_amp=params.rho_amp,
+            target_area=target_area,
+            c_min=c_min,
+            c_max=c_upper,
+            min_width=min_width,
+            args=args,
+        )
+        if args.c1_phi is not None:
+            leakage_cap = max(float(args.eta_out), float(args.init_leakage_cap))
+            missing_cap = max(float(args.tol_area), float(args.init_missing_cap))
+            selected_frozen_evaluation = evaluate_frozen_threshold_objective(
+                frozen_objective,
+                c1_phi,
+                c2_phi,
+                method="manual",
+            )
+            init_candidate_name = "manual"
+        else:
+            selected_frozen_evaluation, leakage_cap, missing_cap = optimize_frozen_hminus1_thresholds(
+                frozen_objective,
+                args=args,
+            )
+            init_candidate_name = "hminus1_grid_refined"
+        if args.verify_homotopy_init:
+            verify_frozen_hminus1_gradient(frozen_objective, selected_frozen_evaluation)
+        c1_phi = selected_frozen_evaluation.c1
+        c2_phi = selected_frozen_evaluation.c2
+        eps_phi = selected_frozen_evaluation.eps_phi
+        init_candidate_score = selected_frozen_evaluation.psi
+        c1_const.value = PETSc.ScalarType(c1_phi)
+        c2_const.value = PETSc.ScalarType(c2_phi)
+        eps_const.value = PETSc.ScalarType(eps_phi)
+        write_frozen_initialization_records(
+            initialization_writer,
+            run_tag=run_tag,
+            objective=frozen_objective,
+            selected=selected_frozen_evaluation,
+            leakage_cap=leakage_cap,
+            missing_cap=missing_cap,
+        )
+        if initialization_handle is not None:
+            initialization_handle.flush()
+        root_print(
+            comm,
+            f"HMINUS1_INIT c1={c1_phi:.6e} c2={c2_phi:.6e} "
+            f"width={c2_phi - c1_phi:.6e} eps={eps_phi:.6e} "
+            f"dualResidual={selected_frozen_evaluation.residual_dual:.6e} "
+            f"Psi={selected_frozen_evaluation.psi:.6e} "
+            f"frozenLrel={selected_frozen_evaluation.leakage_rel:.6e} "
+            f"frozenMrel={selected_frozen_evaluation.missing_rel:.6e} "
+            f"activityAreaRel={selected_frozen_evaluation.activity_area_rel:.6e} "
+            f"projectedGradNorm={selected_frozen_evaluation.projected_grad_norm:.6e} "
+            f"numberObjectiveEvaluations={len(frozen_objective.records)} "
+            f"Lcap={leakage_cap:.6e} Mcap={missing_cap:.6e}",
+        )
     update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
+    homotopy_workspace = (
+        HomotopySolveWorkspace(
+            u=u,
+            trial=trial,
+            test=test,
+            dx=dx,
+            bc=bc,
+            target_density=target_density,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            rho_amp=params.rho_amp,
+            args=args,
+        )
+        if args.init_mode == "homotopy"
+        else None
+    )
+    initialization_diagnostics = (
+        InitializationDiagnostics(
+            u=u,
+            rho=rho,
+            rho_design=rho_design,
+            rho_design_l2=rho_design_l2,
+            tau_mask=tau_mask,
+            dx=dx,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            kappa=args.kappa,
+            active_threshold=params.active_threshold,
+            rho_amp=params.rho_amp,
+            target_area=target_area,
+        )
+        if init_candidates
+        else None
+    )
+
+    selected_homotopy_result: HomotopyResult | None = None
 
     def project_initial_candidate(
             candidate: InitialWindowCandidate,
             index: int,
     ) -> ProjectedInitialCandidate:
-        """Newton-project and score one automatic initial-window candidate.
-
-        Each candidate is projected from the same target potential ``phi_target``
-        so the comparison reflects the branch induced by its thresholds rather
-        than any previous candidate's terminal state.  The returned state arrays
-        are copies because later candidate projections reuse the same work
-        functions.
-        """
+        """Run the unchanged legacy direct-Newton candidate projection."""
+        if args.init_mode != "legacy":
+            raise RuntimeError("legacy candidate projection entered outside legacy mode")
         c1_candidate, c2_candidate = project_thresholds(
             candidate.c1,
             candidate.c2,
@@ -2580,8 +4568,10 @@ def run_strategy(args: argparse.Namespace) -> int:
         eps_candidate = epsilon_from_thresholds(args, c1_candidate, c2_candidate)
         u.x.array[:] = phi_target.x.array
         u.x.scatter_forward()
-        projection_tol = inner_tolerance(args, candidate.leakage_rel + candidate.missing_rel)
+        rho.x.array[:] = rho_design.x.array
+        rho.x.scatter_forward()
         projection_start = time.perf_counter()
+        projection_tol = inner_tolerance(args, candidate.leakage_rel + candidate.missing_rel)
         newton = solve_equilibrium(
             u=u,
             du=du,
@@ -2601,56 +4591,38 @@ def run_strategy(args: argparse.Namespace) -> int:
             tol_res=projection_tol,
             args=args,
             prefix=f"init_{index}_{slug_for_path(candidate.name)}",
+            stiffness_solver=stiffness_solver,
         )
+        projection_converged = newton.converged
+
         projection_time = time.perf_counter() - projection_start
-        metrics = evaluate_band_metrics(
-            comm=comm,
-            u=u,
-            tau_mask=tau_mask,
-            dx=dx,
-            c1_const=c1_const,
-            c2_const=c2_const,
-            eps_const=eps_const,
+        if initialization_diagnostics is None:
+            raise RuntimeError("automatic candidate diagnostics were not initialized")
+        metrics, diagnostics = initialization_diagnostics.evaluate(
             c1=c1_candidate,
             c2=c2_candidate,
             eps_phi=eps_candidate,
-            kappa=args.kappa,
-            target_area=target_area,
-        )
-        residual_form_for_projection = (
-            ufl.inner(ufl.grad(u), ufl.grad(test))
-            - window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp) * test
-        ) * dx
-        update_interpolated(rho, window_density_const_ufl(u, c1_const, c2_const, eps_const, params.rho_amp))
-        diagnostics = compute_metrics(
-            u=u,
-            rho=rho,
-            rho_design=rho_design,
-            rho_design_l2=rho_design_l2,
-            residual_form=residual_form_for_projection,
-            bc=bc,
-            dx=dx,
-            c2_phi=c2_candidate,
-            active_threshold=params.active_threshold,
-            plateau_threshold=params.plateau_threshold,
-            rho_amp=params.rho_amp,
         )
         projected_score = projected_initial_candidate_score(
             metrics=metrics,
             diagnostics=diagnostics,
             target_area=target_area,
-            converged=newton.converged,
+            converged=projection_converged,
         )
         area_rel = metrics.activity_area / max(target_area, 1.0e-30)
+        projection_detail = (
+            f"mode=legacy tol={projection_tol:.3e} status={newton.status} "
+            f"converged={int(newton.converged)} iters={newton.iterations} "
+            f"residual={newton.residual:.6e}"
+        )
         root_print(
             comm,
             f"INIT_PROJECT name={candidate.name} c1={c1_candidate:.6e} c2={c2_candidate:.6e} "
             f"width={c2_candidate - c1_candidate:.6e} epsPhi={eps_candidate:.6e} "
-            f"tol={projection_tol:.3e} status={newton.status} converged={int(newton.converged)} "
-            f"iters={newton.iterations} residual={newton.residual:.6e} time={projection_time:.3f} "
-            f"score={projected_score:.6e} Lrel={metrics.leakage_rel:.6e} "
-            f"Mrel={metrics.missing_rel:.6e} areaRel={area_rel:.6e} "
-            f"activeJ={diagnostics['activeJaccard']:.6e} rhoRel={diagnostics['relRhoDesign']:.6e}",
+            f"{projection_detail} time={projection_time:.3f} score={projected_score:.6e} "
+            f"Lrel={metrics.leakage_rel:.6e} Mrel={metrics.missing_rel:.6e} "
+            f"areaRel={area_rel:.6e} activeJ={diagnostics['activeJaccard']:.6e} "
+            f"rhoRel={diagnostics['relRhoDesign']:.6e}",
         )
         return ProjectedInitialCandidate(
             base=candidate,
@@ -2667,6 +4639,9 @@ def run_strategy(args: argparse.Namespace) -> int:
             project_initial_candidate(candidate, index)
             for index, candidate in enumerate(init_candidates)
         ]
+        # Preserve the legacy selection rule exactly: failed direct Newton
+        # projections retain the old finite score penalty and remain
+        # reportable when all candidates fail.
         selected_projected = min(projected_candidates, key=lambda candidate: candidate.score)
         c1_phi = selected_projected.base.c1
         c2_phi = selected_projected.base.c2
@@ -2681,17 +4656,75 @@ def run_strategy(args: argparse.Namespace) -> int:
         rho.x.scatter_forward()
         init_candidate_name = selected_projected.base.name
         init_candidate_score = selected_projected.score
+        selected_homotopy_result = selected_projected.homotopy
         root_print(
             comm,
-            f"INIT_PROJECT_SELECT name={init_candidate_name} c1={c1_phi:.6e} c2={c2_phi:.6e} "
-            f"score={init_candidate_score:.6e} residual={selected_projected.newton.residual:.6e}",
+            f"INIT_PROJECT_SELECT mode={args.init_mode} name={init_candidate_name} "
+            f"c1={c1_phi:.6e} c2={c2_phi:.6e} score={init_candidate_score:.6e} "
+            f"residual={selected_projected.newton.residual:.6e}",
         )
+    elif args.init_mode == "homotopy":
+        # The manual pair or the single frozen-H^-1 minimizer is continued
+        # exactly once before the reduced optimization begins.
+        u.x.array[:] = phi_target.x.array
+        u.x.scatter_forward()
+        rho.x.array[:] = rho_design.x.array
+        rho.x.scatter_forward()
+        selected_homotopy_result = solve_homotopy_initialization(
+            u=u,
+            du=du,
+            tangent=homotopy_tangent,
+            rho=rho,
+            trial=trial,
+            test=test,
+            dx=dx,
+            bc=bc,
+            stiffness_form=stiffness_form,
+            stiffness_solver=stiffness_solver,
+            homotopy_workspace=homotopy_workspace,
+            target_density=target_density,
+            c1_const=c1_const,
+            c2_const=c2_const,
+            eps_const=eps_const,
+            c1=c1_phi,
+            c2=c2_phi,
+            eps_phi=eps_phi,
+            rho_amp=params.rho_amp,
+            args=args,
+            prefix=f"init_homotopy_{slug_for_path(init_candidate_name)}",
+            initialization_writer=initialization_writer,
+            initialization_handle=initialization_handle,
+            run_tag=run_tag,
+            frozen_residual_dual=(
+                selected_frozen_evaluation.residual_dual
+                if selected_frozen_evaluation is not None
+                else None
+            ),
+        )
+        homotopy_workspace.update_nonlinear_density(rho)
+        if not selected_homotopy_result.converged:
+            raise RuntimeError(
+                f"homotopy initialization failed at lambda={selected_homotopy_result.lambda_final:.6e} "
+                f"with status {selected_homotopy_result.status}; use --init-mode legacy to recover the old path"
+            )
+        root_print(
+            comm,
+            f"INIT_HOMOTOPY_SELECT name={init_candidate_name} c1={c1_phi:.6e} c2={c2_phi:.6e} "
+            f"stages={selected_homotopy_result.stages} rejected={selected_homotopy_result.rejected_steps} "
+            f"newtonIts={selected_homotopy_result.total_newton_iterations} "
+            f"residual={selected_homotopy_result.last_newton.residual:.6e}",
+        )
+
+    if homotopy_workspace is not None:
+        homotopy_workspace.close()
+    if initialization_handle is not None:
+        initialization_handle.close()
 
     root_print(
         comm,
         f"WINDOW_INIT c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} "
         f"width={c2_phi - c1_phi:.6e} epsPhi={eps_phi:.6e} "
-        f"init={init_candidate_name} initScore={init_candidate_score:.6e}",
+        f"initMode={args.init_mode} init={init_candidate_name} initScore={init_candidate_score:.6e}",
     )
 
     if args.plot_design:
@@ -2854,6 +4887,7 @@ def run_strategy(args: argparse.Namespace) -> int:
                 tol_res=inner_tol,
                 args=args,
                 prefix=f"outer_{k}",
+                stiffness_solver=stiffness_solver,
                 plot_callback=make_newton_plot_callback(outer_k=k, stage="NEWTON_OUTER"),
             )
             inner_time = time.perf_counter() - inner_start
@@ -3142,6 +5176,7 @@ def run_strategy(args: argparse.Namespace) -> int:
                             tol_res=trial_inner_tol,
                             args=args,
                             prefix=f"outer_{k}_trial",
+                            stiffness_solver=stiffness_solver,
                             plot_callback=make_newton_plot_callback(outer_k=k, stage="NEWTON_TRIAL"),
                         )
                         correction_time = time.perf_counter() - correction_start
@@ -3462,6 +5497,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         tol_res=final_tol_res,
         args=final_newton_args,
         prefix="final_exact",
+        stiffness_solver=stiffness_solver,
         plot_callback=make_newton_plot_callback(outer_k=-1, stage="NEWTON_FINAL"),
     )
     final_exact_time = time.perf_counter() - final_exact_start
@@ -3509,6 +5545,25 @@ def run_strategy(args: argparse.Namespace) -> int:
         active_threshold=params.active_threshold,
         plateau_threshold=params.plateau_threshold,
         rho_amp=params.rho_amp,
+    )
+    write_equilibrium_checkpoint(
+        equilibrium_path,
+        phi=u,
+        rho=rho,
+        metadata={
+            "format": "hdgfem_equilibrium_v1",
+            "run_tag": run_tag,
+            "mesh_path": str(Path(mesh_path).resolve()),
+            "order": int(args.order),
+            "quadrature_degree": int(qdeg),
+            "rho_amp": float(params.rho_amp),
+            "c1_phi": float(c1_phi),
+            "c2_phi": float(c2_phi),
+            "eps_phi": float(eps_phi),
+            "final_residual": float(final_newton.residual),
+            "num_cells": int(nt),
+            "num_dofs": int(ndof),
+        },
     )
     final_geometry_ok = (
         final_metrics.leakage_rel <= float(args.eta_out)
@@ -3585,6 +5640,8 @@ def run_strategy(args: argparse.Namespace) -> int:
         with summary_path.open("w", encoding="utf-8") as handle:
             handle.write(f"runTag {run_tag}\n")
             handle.write(f"runDir {run_dir}\n")
+            handle.write(f"initializationCsv {initialization_csv}\n")
+            handle.write(f"equilibriumCheckpoint {equilibrium_path}\n")
             handle.write(f"meshFile {mesh_path}\n")
             handle.write(f"geometryMode {geometry_mode}\n")
             handle.write(f"nt {nt}\n")
@@ -3595,6 +5652,7 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"alphaT2 {params.alpha_t2}\n")
             handle.write(f"c1T {c1_t}\n")
             handle.write(f"c2T {c2_t}\n")
+            handle.write(f"targetSource {target_source_name}\n")
             handle.write(f"epsTRatio {params.eps_t_ratio}\n")
             handle.write(f"epsT {eps_t}\n")
             handle.write(f"targetArea {target_area}\n")
@@ -3617,8 +5675,31 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"searchCMin {c_min}\n")
             handle.write(f"searchCMax {c_upper}\n")
             handle.write(f"minWidth {min_width}\n")
+            handle.write(f"initMode {args.init_mode}\n")
             handle.write(f"initCandidate {init_candidate_name}\n")
             handle.write(f"initCandidateScore {init_candidate_score}\n")
+            if selected_frozen_evaluation is not None:
+                handle.write(f"initPsiHminus1 {selected_frozen_evaluation.psi}\n")
+                handle.write(f"initResidualHminus1 {selected_frozen_evaluation.residual_dual}\n")
+                handle.write(f"initFrozenLeakageRel {selected_frozen_evaluation.leakage_rel}\n")
+                handle.write(f"initFrozenMissingRel {selected_frozen_evaluation.missing_rel}\n")
+                handle.write(f"initFrozenActivityAreaRel {selected_frozen_evaluation.activity_area_rel}\n")
+                handle.write(f"initFrozenGradPsi1 {selected_frozen_evaluation.grad_psi[0]}\n")
+                handle.write(f"initFrozenGradPsi2 {selected_frozen_evaluation.grad_psi[1]}\n")
+            handle.write(f"homotopyTolRes {homotopy_tolerance(args)}\n")
+            handle.write(f"homotopyInitialStep {args.homotopy_initial_step}\n")
+            handle.write(f"homotopyMinStep {args.homotopy_min_step}\n")
+            handle.write(f"homotopyMaxStep {args.homotopy_max_step}\n")
+            handle.write(f"homotopyPredictor {int(args.homotopy_predictor)}\n")
+            if selected_homotopy_result is not None:
+                handle.write(f"homotopyStatus {selected_homotopy_result.status}\n")
+                handle.write(f"homotopyConverged {int(selected_homotopy_result.converged)}\n")
+                handle.write(f"homotopyLambdaFinal {selected_homotopy_result.lambda_final}\n")
+                handle.write(f"homotopyStages {selected_homotopy_result.stages}\n")
+                handle.write(f"homotopyRejectedSteps {selected_homotopy_result.rejected_steps}\n")
+                handle.write(f"homotopyNewtonIterations {selected_homotopy_result.total_newton_iterations}\n")
+                handle.write(f"homotopyTangentSolveTime {selected_homotopy_result.tangent_solve_time}\n")
+                handle.write(f"homotopyNewtonSolveTime {selected_homotopy_result.newton_solve_time}\n")
             handle.write(f"bestC1Phi {c1_phi}\n")
             handle.write(f"bestC2Phi {c2_phi}\n")
             handle.write(f"bestEpsPhi {eps_phi}\n")
@@ -3645,6 +5726,7 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"finalStatus {final_status}\n")
             handle.write(f"timeTotal {elapsed}\n")
 
+    stiffness_solver.close()
     if not final_newton.converged:
         return 3
     successful_statuses = {"CONVERGED", "CONVERGED_CERTIFIED_SUBBAND"}

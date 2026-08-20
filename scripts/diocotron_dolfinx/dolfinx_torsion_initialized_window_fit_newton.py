@@ -172,7 +172,12 @@ def assemble_scalar(comm: MPI.Comm, form) -> float:
     return allreduce_scalar(comm, fem.assemble_scalar(fem.form(form)), op=MPI.SUM)
 
 
-def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
+def read_mesh_with_meshio(
+        path: Path,
+        comm: MPI.Comm,
+        *,
+        ghost_mode: mesh.GhostMode = mesh.GhostMode.none,
+):
     """Read a triangular Gmsh mesh without h5py-backed XDMF conversion."""
     if comm.rank == 0:
         msh = meshio.read(path)
@@ -189,13 +194,26 @@ def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
         triangles = np.empty((0, 3), dtype=np.int64)
 
     coordinate_element = basix.ufl.element("Lagrange", "triangle", 1, shape=(2,))
-    domain = mesh.create_mesh(comm, triangles, coordinate_element, points)
+    partitioner = (
+        mesh.create_cell_partitioner(ghost_mode, 2)
+        if comm.size > 1
+        else None
+    )
+    domain = mesh.create_mesh(
+        comm, triangles, coordinate_element, points, partitioner=partitioner
+    )
     domain.topology.create_connectivity(domain.topology.dim - 1, domain.topology.dim)
     domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim - 1)
     return domain
 
 
-def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Comm):
+def load_or_generate_mesh(
+        args: argparse.Namespace,
+        run_dir: Path,
+        comm: MPI.Comm,
+        *,
+        ghost_mode: mesh.GhostMode = mesh.GhostMode.none,
+):
     """Load a fixed mesh, or generate the smooth-star mesh on rank zero.
 
     Mesh generation is intentionally delegated to a short subprocess.  The
@@ -205,7 +223,7 @@ def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Com
     """
     if args.mesh is not None:
         mesh_path = args.mesh.resolve()
-        domain = read_mesh_with_meshio(mesh_path, comm)
+        domain = read_mesh_with_meshio(mesh_path, comm, ghost_mode=ghost_mode)
         return domain, mesh_path, "file"
 
     mesh_path = run_dir / "initial_mesh.msh"
@@ -241,7 +259,7 @@ def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Com
             env=env,
         )
     comm.barrier()
-    domain = read_mesh_with_meshio(mesh_path, comm)
+    domain = read_mesh_with_meshio(mesh_path, comm, ghost_mode=ghost_mode)
     return domain, mesh_path, "smooth_star"
 
 
