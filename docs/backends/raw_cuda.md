@@ -168,9 +168,52 @@ Prepared outside the hot kernel:
 | CSR pattern and block positions | Raw-CUDA pattern kernels and device prefix operations |
 | Mesh/reference mirrors | One-time host-to-device construction for the CuPy space |
 
+For a fixed Schur-Cholesky Poisson operator, source updates take a compact
+RHS-only path. Same-space DG source moments are formed exactly as coefficient
+tables times the reference mass matrix, without a coefficient-to-quadrature
+round trip. Setup retains the scalar Cholesky factor and scalar trace response
+``S_e^-1 B_e`` but releases the redundant dense mixed coupling, element-boundary,
+and trace-flux tensors. One warp per element then fuses the source triangular
+solve, flux recovery, and reduced-face atomic scatter; a second compact kernel
+reconstructs ``(u,q_x,q_y)`` from the persistent source solution and trace
+response. Homogeneous Dirichlet trace data is reused without a host zero test.
+The cached BSR values, face graph, local factors, and multigrid hierarchy are not
+rebuilt or uploaded. Timing details expose `raw.assembly.rhs_only`,
+`cached_rhs.source_moments`, `cached_rhs.fused_solve_flux_scatter`, and
+`cupy.reconstruction.compact`. On the 157,280-triangle p=6 case, warm RHS and
+reconstruction medians fell from about 0.121/0.134 s to 0.0293/0.0070 s.
+
 The remaining optimization direction is to cache all order-dependent reference
 tables, keep compact boundary storage, generalize table-driven coefficients,
 and eliminate COO-only host map construction where measurements justify it.
+
+## Tangent Advection And Diffusion Flux Postprocessing
+
+`AdvectionReactionHDGSolver.assemble_tangent_boundary_raw_cuda_bsr()` is the
+assembly-only entry point for fused zero-normal-flux face BSR. It excludes
+boundary trace unknowns and retains both element-side contributions on interior
+faces. Distinct off-diagonal face blocks have one element owner and are stored
+directly. Diagonal Schur values are staged in dead coefficient-cache storage
+and combined with the same element's tangent trace mass before one atomic
+addition; the two elements adjacent to an interior edge remain the only
+diagonal writers. Normal device solves resolve `raw_matrix_format="auto"` to
+BSR; explicit CSR/COO selections remain available, and assembly diagnostics
+use COO.
+
+The p=6 Dubiner reference contraction remains dense. Two compressed variants
+passed matrix, RHS, reconstruction, and conservation parity, but the more
+regular paired-direction variant increased the 157,280-triangle kernel median
+from 234.358 ms to 259.794 ms. Reusing dead local-LU shared storage for trace
+lifts also regressed the measured p=6 kernel, so the cache-efficient per-thread
+lift array remains active.
+
+The diffusion `RT_projection` flux recovery has a dedicated raw-CUDA kernel in
+`hdgfem.backends.diffusion_rt_postprocess_raw_cuda`. One block per element
+assembles the `RT_p` face-normal and interior moment equations, solves the
+pivoted dense system in shared memory, and projects the recovered field into
+the degree-p+1 DG representation. It runs only when flux postprocessing is
+explicitly requested; the ordinary repeated Poisson path does not materialize
+postprocessing inputs.
 
 ## Failure And Validation Policy
 

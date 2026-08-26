@@ -19,6 +19,9 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 - [`face_dense_gpu.md`](face_dense_gpu.md): experimental fixed-slot face-block
   GMRES path with block-Jacobi/ASM and polynomial preconditioning, including
   its precise CuPy/cuBLAS ownership and independence from AMGX.
+- [`face_hp_mg_pcg.md`](face_hp_mg_pcg.md): supported p=4--6 native
+  face-BSR Poisson hierarchy, cache/fallback contract, guiding-center policy,
+  and periodic raw-CUDA `RT_p` electric-field postprocessing.
 - [`raw_cuda.md`](raw_cuda.md): raw-CUDA kernel ownership, launch policy,
   discontinuous-advection audit, and diffusion setup ownership.
 
@@ -44,6 +47,7 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 | `hdgfem.backends.advection_raw_cuda` | Raw-CUDA advection assembly and reconstruction kernels. |
 | `hdgfem.backends.diffusion_cupy` | CuPy diffusion assembly and postprocessing helpers. |
 | `hdgfem.backends.diffusion_raw_cuda` | Raw-CUDA diffusion assembly, cached operator/RHS, reconstruction, and postprocessing kernels. |
+| `hdgfem.backends.diffusion_rt_postprocess_raw_cuda` | Raw-CUDA per-element `RT_p` diffusion-flux moment reconstruction. |
 
 The former `cupy_*_gpu4` and abbreviated equation backend modules were
 internal prototype names and were removed before the first alpha. The

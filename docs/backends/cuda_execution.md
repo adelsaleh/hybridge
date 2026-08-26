@@ -46,16 +46,18 @@ drivers.
 | CuPy | Vectorized device arrays followed by CuPy COO/CSR construction | Direct device Cupyx for compatible preconditioners; explicit host staging for host solvers/preconditioners | Device reference and parity path |
 | Raw-CUDA COO | Reduced COO triplets and RHS emitted by raw kernels | CuPy COO-to-CSR, then Cupyx or PyAMGX | Inspectable correctness path |
 | Raw-CUDA CSR | Values emitted directly into a known reduced CSR pattern | Direct device CSR view | Preferred large-run path |
+| Raw-CUDA face BSR | Dense trace-face interaction blocks emitted directly into a block pattern | Native FB-HP-MG-PCG or direct PyAMGX BSR upload | Default eligible device format; CSR/COO remain explicit comparison/diagnostic paths |
 | Direct CSR-to-AMGX | Existing device `indptr`, `indices`, and values | PyAMGX device upload/view | Avoids host staging and COO conversion |
 
-Raw-CUDA CSR pattern construction and block-position maps remain on device.
-The direct path avoids both global COO-to-CSR reconstruction and large
+Raw-CUDA CSR/BSR pattern construction and block-position maps remain on device.
+The direct paths avoid both global COO-to-CSR reconstruction and large
 per-element condensed tensor materialization.
 
-The experimental direct-BSR path and its classical-AMG hierarchy lifecycle are
+The hybrid direct-BSR path and its classical-AMG hierarchy lifecycle are
 documented in [`amgx_classical_bsr.md`](amgx_classical_bsr.md). Its retained
-fine operator is BSR, while the currently validated transfer and coarse
-operators remain scalar CSR.
+fine operator is BSR, while transfer and coarse operators remain scalar CSR.
+For supported p=4--6 Legendre-modal Poisson systems, the default repeated-solve
+path is instead HDGFEM's native [`FB-HP-MG-PCG`](face_hp_mg_pcg.md).
 
 ## Advection-Reaction Modes
 

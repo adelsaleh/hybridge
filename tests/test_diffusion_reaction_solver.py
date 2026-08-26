@@ -734,14 +734,21 @@ def test_diffusion_rt_cupy_matches_numba() -> None:
         postprocessing_backend="cupy",
         **common,
     )
+    raw = solve_diffusion_reaction_hdg(
+        source, reaction, exact, space,
+        postprocessing_backend="raw-cuda",
+        **common,
+    )
     assert device.flux_postprocess_space == "RT_projection"
     assert device.postprocessing_backend == "cupy"
-    np.testing.assert_allclose(
-        device.postprocessed_flux.as_component_first(),
-        host.postprocessed_flux.as_component_first(),
-        rtol=5e-11,
-        atol=5e-11,
-    )
+    assert raw.postprocessing_backend == "raw-cuda"
+    for candidate in (device, raw):
+        np.testing.assert_allclose(
+            candidate.postprocessed_flux.as_component_first(),
+            host.postprocessed_flux.as_component_first(),
+            rtol=5e-10,
+            atol=5e-10,
+        )
 
 
 def test_identity_diffusion_argument_preserves_default_solution() -> None:

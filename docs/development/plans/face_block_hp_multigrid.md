@@ -1,9 +1,11 @@
 # Face-Block hp-Multigrid For HDG Poisson
 
-Status: active numerical and GPU implementation plan. This document is not a
-supported solver contract. The production baseline remains the validated AMGX
-classical CSR or fine-BSR/scalar-hierarchy path until the acceptance gates below
-are met.
+Status: implemented for the supported p=4--6 raw-CUDA Legendre-modal
+Poisson scope. The maintained solver/cache/fallback contract is documented in
+[`../../backends/face_hp_mg_pcg.md`](../../backends/face_hp_mg_pcg.md); this file
+retains numerical decisions, measurements, and broader qualification work. The
+fine-BSR/scalar-AMGX hierarchy remains the automatic runtime fallback and the
+p=1--3/unsupported-configuration default.
 
 The precise ownership boundary between HDGFEM, direct cuSPARSE, PyAMGX, the
 modified AMGX hybrid/pure-BSR paths, and the remaining custom smoother kernels

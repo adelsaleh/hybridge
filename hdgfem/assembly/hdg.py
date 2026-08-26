@@ -190,6 +190,7 @@ def normalize_boundary_condition(boundary_condition, *, require_none: bool = Fal
             """Return the normalized constant boundary value."""
             return value
 
+        constant_boundary_condition._hdgfem_constant_value = value
         return constant_boundary_condition
     raise TypeError(
         "boundary_condition must be a callable or real scalar constant; "

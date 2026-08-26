@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -76,3 +77,14 @@ def test_load_amgx_config_uses_an_independent_embedded_default(tmp_path) -> None
 def test_load_amgx_config_rejects_an_explicit_missing_path(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         load_amgx_config(tmp_path / "missing.json", default_config={"solver": {}})
+
+
+def test_diffusion_relative_amgx_config_uses_aggregate_block_l2_norm() -> None:
+    config, _ = load_amgx_config(
+        Path("configs/amgx/diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json")
+    )
+
+    solver = config["solver"]
+    assert solver["convergence"] == "RELATIVE_INI"
+    assert solver["norm"] == "L2"
+    assert solver["use_scalar_norm"] == 1

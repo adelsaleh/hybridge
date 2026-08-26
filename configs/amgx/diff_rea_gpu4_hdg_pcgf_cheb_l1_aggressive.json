@@ -38,6 +38,7 @@
     "max_iters": 500,
     "convergence": "RELATIVE_INI",
     "norm": "L2",
+    "use_scalar_norm": 1,
     "print_solve_stats": 0,
     "monitor_residual": 1,
     "store_res_history": 0,

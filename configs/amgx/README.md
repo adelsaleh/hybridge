@@ -175,7 +175,7 @@ For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR convers
 
 Working configs:
 
-- `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`: current relative-convergence default for nodal trace standalone diffusion runs.
+- `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`: current relative-convergence default for nodal trace standalone diffusion runs. It sets `use_scalar_norm=1`, so face-BSR solves stop on the aggregate scalar L2 residual instead of independently over-solving every block component; scalar CSR behavior is unchanged.
 - `diff_rea_gpu4_hdg_fgmres_cheb_l1_block_graph_identity_bsr.json`: validated opt-in pure-BSR classical hierarchy using a Frobenius block graph, D2 scalar weights, identity-lifted BSR transfers, weighted BSR Galerkin, and FGMRES; requires the accompanying patched AMGX source.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_identity_bsr.json`: validated PCGF path for the identity-lifted pure-BSR hierarchy. After fixing the multilevel correction overrun, all radius-5 disk cases at 99,896, 124,831, and 150,209 triangles for p=1..6 converge; its high iteration count reflects weak interpolation, not PCGF incompatibility.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_dense_bsr.json`: validated one-step/additive PCGF/Chebyshev baseline for fixed-support dense block interpolation, exact block transpose, and dense BSR Galerkin. It requires the patched AMGX source and sets `aggressive_levels=0`: aggressive D2 can leave fine block rows without interpolation support, whereas the dense mode enforces `sum_c P_ic = I_b` on every row.

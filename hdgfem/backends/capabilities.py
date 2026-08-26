@@ -15,7 +15,7 @@ from typing import Literal
 Equation = Literal["advection-reaction", "advection-diffusion-reaction", "diffusion-reaction"]
 Operation = Literal["assemble", "solve"]
 AssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda"]
-SolverBackend = Literal["scipy", "pypardiso", "petsc", "cupyx", "amgx"]
+SolverBackend = Literal["scipy", "pypardiso", "petsc", "cupyx", "amgx", "fb-hp-mg-pcg"]
 
 _ASSEMBLY_BACKENDS = ("numpy", "numba", "cupy", "raw-cuda")
 _SCIPY_ITERATIVE_SOLVERS = {
@@ -337,10 +337,23 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         solver_backend="amgx",
         assembly_residency="device",
         solve_residency="device",
-        reconstruction_residency="device",
+        reconstruction_residency="device (flux postprocessing materializes only on request)",
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes="Requires CSR, identity diffusion, scalar stabilization, and no HDG postprocessing.",
+        notes=("Requires CSR or face BSR, identity diffusion, and scalar stabilization; "
+               "RT_p flux postprocessing is explicit and may materialize reconstruction data."),
+    ),
+    BackendCapability(
+        equation="diffusion-reaction",
+        operation="solve",
+        assembly_backend="raw-cuda",
+        solver_backend="fb-hp-mg-pcg",
+        assembly_residency="device",
+        solve_residency="device",
+        reconstruction_residency="device (flux postprocessing materializes only on request)",
+        boundary_modes=("eliminate",),
+        trace_bases=("legendre-modal",),
+        notes="Native face-BSR PCG with direct p-to-zero modal multigrid for p=4..6 and one reusable scalar-AMGX coarse hierarchy.",
     ),
 )
 
@@ -387,6 +400,8 @@ def normalize_solver_backend(solver: str | None, *, cupyx_solver: str = "bicgsta
         return "petsc"
     if normalized in {"amgx", "pyamgx"}:
         return "amgx"
+    if normalized.replace("_", "-") == "fb-hp-mg-pcg":
+        return "fb-hp-mg-pcg"
     if normalized == "cupyx" or normalized.startswith(("cupyx_", "cupyx-")):
         method = cupyx_solver if normalized == "cupyx" else str(solver)[6:]
         method = str(method).lower().replace("-", "_")
@@ -397,7 +412,7 @@ def normalize_solver_backend(solver: str | None, *, cupyx_solver: str = "bicgsta
         return "scipy"
     valid = ", ".join(sorted(_SCIPY_ITERATIVE_SOLVERS))
     raise ValueError(
-        f"unknown global solver {solver!r}; use 'direct', PyPardiso, PETSc, Cupyx, AMGX, "
+        f"unknown global solver {solver!r}; use 'direct', PyPardiso, PETSc, Cupyx, AMGX, FB-HP-MG-PCG, "
         f"or one of the SciPy Krylov methods: {valid}"
     )
 
@@ -618,8 +633,8 @@ def validate_diffusion_backend_configuration(
         raise ValueError("boundary_mode must be 'penalty' or 'eliminate'")
     if local_solver_backend not in {"numpy", "numba"}:
         raise ValueError("local_solver_backend must be 'numpy' or 'numba'")
-    if raw_matrix_format not in {"coo", "csr", "bsr"}:
-        raise ValueError("raw_matrix_format must be 'coo', 'csr', or 'bsr'")
+    if raw_matrix_format not in {"auto", "coo", "csr", "bsr"}:
+        raise ValueError("raw_matrix_format must be 'auto', 'coo', 'csr', or 'bsr'")
     if postprocess_mode not in {"none", "primal", "flux", "both"}:
         raise ValueError("hdg_postprocess must be 'none', 'primal', 'flux', or 'both'")
     solver_backend = None if operation == "assemble" else normalize_solver_backend(solver, cupyx_solver=cupyx_solver)
@@ -673,7 +688,7 @@ def validate_diffusion_backend_configuration(
             "device assembly supports scalar stabilization only",
         )
     if operation == "solve" and backend == "raw-cuda":
-        if raw_matrix_format not in {"csr", "bsr"}:
+        if raw_matrix_format not in {"auto", "csr", "bsr"}:
             _unsupported(
                 "diffusion-reaction",
                 operation,
@@ -681,13 +696,13 @@ def validate_diffusion_backend_configuration(
                 solver_backend,
                 "raw-CUDA diffusion solves require raw_matrix_format='csr' or 'bsr'",
             )
-        if postprocess_mode != "none":
+        if postprocess_mode not in {"none", "flux"}:
             _unsupported(
                 "diffusion-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw-CUDA diffusion solves require hdg_postprocess='none'",
+                "raw-CUDA diffusion solves support hdg_postprocess='none' or 'flux'",
             )
     return capability
 

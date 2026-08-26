@@ -124,6 +124,15 @@ Research studies in later sections inform future solver choices but do not block
   V-cycle, and FP64 PCG with independently checked true residuals. Keep scalar
   CSR and the coefficient-exact hybrid fine-BSR/scalar-hierarchy path as
   baselines and fallbacks until the complete warm solve wins.
+  - [x] Integrate a reusable stateful production backend for the bounded p=4--6
+    raw-CUDA Legendre-modal scope: direct face BSR, one-time orthonormal
+    transformation, direct `p->0` hierarchy, symmetric Cheb-2 `1+1` smoothing,
+    fused block updates, cached cuSPARSE descriptors, persistent PCG/V-cycle
+    workspaces, warm assembly-basis trace guesses, FP64 true-residual checks,
+    normal HDG reconstruction, and a one-time cached hybrid-AMGX fallback after
+    any runtime/symmetry/curvature/convergence gate failure. Repeated-RHS GPU
+    tests cover p=4,5,6 and preserve operator, local-factor, level-operator,
+    workspace, and coarse-hierarchy identities.
   - [x] Land the standalone Phase 2 numerical prototype with normalized
     Legendre coordinates, nested principal-block Galerkin levels, halving and
     direct-to-zero schedules, configurable fixed Chebyshev smoothing, reusable
@@ -277,11 +286,11 @@ Research studies in later sections inform future solver choices but do not block
 
 - [x] Add a host-backed `--plot-postprocess-primal` option to `scripts/gpu/run_diffusion_reaction_cuda.py` so GPU solves can visualize `u_h`, `u_h^*`, the independently sampled exact solution, and the postprocessed primal error on Matplotlib/PyVista plot paths.
 - [x] Port the existing host-side diffusion-reaction primal HDG postprocessor solve phase to device backends: CuPy builds/solves the degree `p+1` local systems with batched device linear algebra, raw-CUDA reconstructs full mixed local unknowns and applies a per-element shared-memory postprocess kernel, and `scripts/gpu/run_diffusion_reaction_cuda.py` selects `--postprocess-backend auto|host|cupy|raw-cuda`. Host references remain `hdgfem/solvers/diffusion_reaction.py::_postprocess_diffusion_solution` and `scripts/diffusion_reaction/run_cases.py`.
-- [ ] Implement the host-equivalent diffusion flux-variable postprocessor and flux-error diagnostics on CuPy/raw-CUDA. Acceptance requires device-vs-host flux coefficient and L2-error parity over both supported trace bases, multiple orders, and at least one nontrivial manufactured case. Host references: `hdgfem/solvers/diffusion_reaction.py::_postprocess_diffusion_solution` and `scripts/diffusion_reaction/run_cases.py::_vector_l2_error`.
+- [x] Implement the host-equivalent diffusion `RT_p` flux-variable postprocessor on CuPy and raw CUDA. The raw kernel assembles face-normal and interior moments per element, performs a pivoted shared-memory solve, and projects to degree p+1; coefficient parity against the host Numba reference and repeated-RHS native-solver integration cover both production trace bases and p=4--6. Broader runner-level flux-error/convergence reporting remains tracked below.
 
 ### Modal Trace Postprocessing And Validation
 
-- [x] Audit the current diffusion-reaction support matrix for `legendre-modal` traces: NumPy/CuPy/Numba/raw-CUDA reduced assembly are covered; NumPy/Numba host reconstruction and postprocessing are covered; raw-CUDA runner reconstruction covers the primal field and can now emit full mixed local unknowns for device primal postprocessing; device-resident GPU flux postprocessing remains separate work.
+- [x] Audit the current diffusion-reaction support matrix for `legendre-modal` traces: NumPy/CuPy/Numba/raw-CUDA reduced assembly are covered; NumPy/Numba host reconstruction and postprocessing are covered; raw-CUDA runner reconstruction can emit full mixed local unknowns; and CuPy/raw-CUDA `RT_p` flux postprocessing is available explicitly. Keeping the complete flux path device-resident without host materialization remains separate work.
 - [x] Validate `legendre-modal` diffusion-reaction reduced assembly and reconstruction before postprocessing work: NumPy is the reference; CuPy, Numba, raw-CUDA COO, and raw-CUDA CSR now match matrix/RHS within machine-level tolerances, with Numba/raw-CUDA reconstruction parity checks.
 - [x] Add/extend tests for diffusion-reaction `legendre-modal` trace assembly and reconstruction over small meshes, multiple polynomial degrees, public solver class helpers, and runner-facing raw-CUDA reconstruction. Covered by `tests/test_diffusion_reaction_assembly_parity.py` and `tests/test_diffusion_reaction_solver.py`.
 - [x] Keep `scripts/diffusion_reaction/run_cases.py` and `scripts/gpu/run_diffusion_reaction_cuda.py` smoke-tested for `legacy-lagrange` and `legendre-modal` after each modal trace patch. Latest smoke checks covered CPU `quadratic_poisson --hdg-postprocess both` for legacy/modal and GPU modal CuPy/raw-CUDA CSR plus legacy raw-CUDA CSR.

@@ -105,6 +105,57 @@ def test_scalar_p0_amgx_config_is_independent_of_nodal_preset() -> None:
     assert solver["error_scaling"] == 0
 
 
+def test_native_pcg_level_three_log_separates_custom_bsr_and_coarse_amgx() -> None:
+    """Native outer residuals must remain distinct from the quiet p=0 AMGX cycle."""
+    from hdgfem.linalg.face_hp_multigrid import (
+        FacePmgLevelDiagnostics,
+        _format_fb_hp_mg_pcg_stats,
+    )
+
+    diagnostics = (
+        FacePmgLevelDiagnostics(
+            degree=6,
+            block_size=7,
+            lambda_max=2.0,
+            lambda_low=0.2,
+            spmv_backend="cusparse-generic",
+            spmv_fallback_reason=None,
+            smoother_backend="fused-raw-cuda",
+        ),
+        FacePmgLevelDiagnostics(
+            degree=0,
+            block_size=1,
+            lambda_max=None,
+            lambda_low=None,
+            spmv_backend="cusparse-generic",
+            spmv_fallback_reason=None,
+            smoother_backend="coarse",
+        ),
+    )
+    output = _format_fb_hp_mg_pcg_stats(
+        degree=6,
+        diagnostics=diagnostics,
+        history=(4.0, 1.0, 0.2, 0.03),
+        iterations=3,
+        residual_norm=0.025,
+        rhs_norm=5.0,
+        target=0.05,
+        true_residual_every=2,
+        workspace_bytes=2 * 1024**3,
+        coarse_apply_count=3,
+        coarse_apply_seconds=0.01234,
+    )
+
+    assert "FB-HP-MG-PCG convergence (native outer solver)" in output
+    assert "cusparse-generic face BSR, block=7" in output
+    assert "p=6 -> p=0; smoother=fused-raw-cuda" in output
+    assert "scalar AMGX p=0, one fixed V-cycle/application" in output
+    assert "   1    1.000000e+00" in output
+    assert "   2    2.000000e-01" in output and "true" in output
+    assert "   3    2.500000e-02" in output
+    assert "Coarse AMGX: applications=3 elapsed=0.01234s" in output
+
+
 def test_host_diagonal_block_position_search() -> None:
     """Compressed diagonal search must locate one block per face row."""
     indptr = np.array([0, 2, 5, 7], dtype=np.int32)
@@ -174,6 +225,12 @@ def test_synthetic_p_multigrid_is_symmetric_positive_and_pcg_compatible(
         assert result.converged
         assert result.iterations <= 3
         assert result.relative_residual <= 1.0e-11
+        warm = solve_pcg_prototype(
+            preconditioner.fine_operator, rhs, preconditioner,
+            initial_guess=result.solution, rtol=1.0e-11, maxiter=10,
+        )
+        assert warm.converged
+        assert warm.iterations == 0
         flexible = solve_pcgf_prototype(
             preconditioner.fine_operator, rhs, preconditioner,
             rtol=1.0e-11, maxiter=10, true_residual_every=3,

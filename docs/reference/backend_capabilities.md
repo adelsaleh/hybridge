@@ -23,7 +23,6 @@ The Python source of truth is
 is checked by `tests/test_backend_capabilities.py`.
 
 <!-- BEGIN GENERATED CAPABILITY MATRIX -->
-
 | Equation | Operation | Assembly | Sparse solve | Assembly residency | Solve residency | Reconstruction | Boundary modes | Trace bases | Notes |
 |---|---|---|---|---|---|---|---|---|---|
 | advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | - |
@@ -76,8 +75,8 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | cupy | amgx | device | device | device (optional host copy) | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host. |
-| diffusion-reaction | solve | raw-cuda | amgx | device | device | device | eliminate | legacy-lagrange, legendre-modal | Requires CSR, identity diffusion, scalar stabilization, and no HDG postprocessing. |
-
+| diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Requires CSR or face BSR, identity diffusion, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data. |
+| diffusion-reaction | solve | raw-cuda | fb-hp-mg-pcg | device | device | device (flux postprocessing materializes only on request) | eliminate | legendre-modal | Native face-BSR PCG with direct p-to-zero modal multigrid for p=4..6 and one reusable scalar-AMGX coarse hierarchy. |
 <!-- END GENERATED CAPABILITY MATRIX -->
 
 ## Enforcement

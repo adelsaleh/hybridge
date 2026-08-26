@@ -54,7 +54,7 @@ AssemblyBackend = Literal["numpy", "numba", "auto"]
 TraceAssemblyBackend = Literal["numpy", "numba", "cupy", "raw-cuda", "auto"]
 HDGPostprocessMode = Literal["none", "primal", "flux", "both"]
 FluxPostprocessSpace = Literal["l2_closest", "RT_projection"]
-PostprocessingBackend = Literal["auto", "numba", "cupy"]
+PostprocessingBackend = Literal["auto", "numba", "cupy", "raw-cuda"]
 LocalFactorCachePolicy = Literal["none", "schur-lu", "schur-cholesky"]
 ReturnKey = Literal[
     "result",
@@ -221,7 +221,7 @@ class DiffusionReactionHDGOptions:
     local_solver_backend: LocalSolverBackend = "numpy"
     assembly_backend: TraceAssemblyBackend = "numpy"
     trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
-    raw_matrix_format: Literal["coo", "csr", "bsr"] = "coo"
+    raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto"
     raw_block_size: RawCudaBlockSize = "auto"
     boundary_penalty: float = 1e20
     boundary_mode: Literal["penalty", "eliminate"] = "penalty"
@@ -272,7 +272,7 @@ def _validate_local_factor_cache_configuration(options, backend: str, *, statefu
         raise ValueError(f"cache_local_factors='{policy}' requires cache_device_matrix=True")
     if options.boundary_mode != "eliminate":
         raise ValueError(f"cache_local_factors='{policy}' requires boundary_mode='eliminate'")
-    if backend == "raw-cuda" and str(options.raw_matrix_format).lower() not in {"csr", "bsr"}:
+    if backend == "raw-cuda" and str(options.raw_matrix_format).lower() not in {"auto", "csr", "bsr"}:
         raise ValueError(f"cache_local_factors='{policy}' requires raw_matrix_format='csr' or 'bsr'")
     if policy == "schur-cholesky" and (not np.isscalar(options.stabilization) or float(options.stabilization) <= 0.0):
         raise ValueError("cache_local_factors='schur-cholesky' requires strictly positive scalar stabilization")
@@ -295,9 +295,15 @@ def _verbosity_level(verbose: bool | int) -> int:
     return max(0, int(verbose))
 
 
+def _detailed_logging(verbose: bool | int) -> bool:
+    """Return whether verbose backend micro-timings should be printed."""
+    level = _verbosity_level(verbose)
+    return level == 2 or level >= 4
+
+
 def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, multiline: bool = False):
     """Run ``function`` and optionally print one-line timing output."""
-    should_print = _verbosity_level(verbosity) >= level
+    should_print = (_verbosity_level(verbosity) >= level) if level <= 1 else _detailed_logging(verbosity)
     if should_print:
         indent = "  " * (level - 1)
         label = f"{indent}{label}"
@@ -310,9 +316,9 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
     elapsed = time.perf_counter() - start
     if should_print:
         if multiline:
-            print(f"{label} ... done in {_format_seconds(elapsed)}")
+            print(f"{indent}done in {_format_seconds(elapsed)}", flush=True)
         else:
-            print(f"done in {_format_seconds(elapsed)}")
+            print(f"done in {_format_seconds(elapsed)}", flush=True)
     return result, elapsed
 
 
@@ -1090,20 +1096,22 @@ def _resolve_diffusion_postprocessing_backend(
         return "none"
     if backend == "auto":
         backend = (
-            "cupy"
+            assembly_backend
             if assembly_backend in {"cupy", "raw-cuda"}
             and want_flux
             and flux_space == "RT_projection"
             else "numba"
         )
-    if backend not in {"numba", "cupy"}:
+    if backend not in {"numba", "cupy", "raw-cuda"}:
         raise ValueError(
-            "postprocessing_backend must be 'auto', 'numba', or 'cupy'"
+            "postprocessing_backend must be 'auto', 'numba', 'cupy', or 'raw-cuda'"
         )
-    if backend == "cupy" and (not want_flux or flux_space != "RT_projection"):
+    if backend in {"cupy", "raw-cuda"} and (
+        not want_flux or flux_space != "RT_projection"
+    ):
         raise NotImplementedError(
-            "postprocessing_backend='cupy' currently supports only "
-            "flux postprocessing with flux_postprocess_space='RT_projection'"
+            f"postprocessing_backend={backend!r} supports only flux "
+            "postprocessing with flux_postprocess_space='RT_projection'"
         )
     return backend
 
@@ -1127,7 +1135,10 @@ def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     if num_points == 2:
         return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
     poly = np.polynomial.legendre.Legendre.basis(num_points - 1)
-    interior = np.sort(poly.deriv().roots())
+    roots = np.real_if_close(poly.deriv().roots(), tol=1000)
+    if np.iscomplexobj(roots):
+        raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
+    interior = np.sort(np.asarray(roots, dtype=np.float64))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)
@@ -1465,6 +1476,12 @@ def _postprocess_rt_flux_from_samples(
         )
 
         coeffs = solve_adr_rt_total_flux_postprocess_cupy(*rt_inputs)
+    elif backend == "raw-cuda":
+        from ..backends.diffusion_rt_postprocess_raw_cuda import (
+            solve_diffusion_rt_flux_postprocess_raw_cuda,
+        )
+
+        coeffs = solve_diffusion_rt_flux_postprocess_raw_cuda(*rt_inputs)
     elif backend == "numba":
         if njit is None:
             raise RuntimeError("Numba RT flux postprocessing requires numba")
@@ -1473,7 +1490,9 @@ def _postprocess_rt_flux_from_samples(
         )
         solve_adr_rt_total_flux_postprocess_kernel(coeffs, *rt_inputs)
     else:
-        raise ValueError("RT flux postprocessing backend must be 'numba' or 'cupy'")
+        raise ValueError(
+            "RT flux postprocessing backend must be 'numba', 'cupy', or 'raw-cuda'"
+        )
     return (post_space * post_space).field(
         (coeffs[0], coeffs[1]),
         name=name,
@@ -1578,9 +1597,9 @@ def _postprocess_diffusion_solution(
     flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
     if mode == "none":
         return None, None, cache
-    if postprocessing_backend not in {"numba", "cupy"}:
+    if postprocessing_backend not in {"numba", "cupy", "raw-cuda"}:
         raise ValueError(
-            "postprocessing_backend must resolve to 'numba' or 'cupy'"
+            "postprocessing_backend must resolve to 'numba', 'cupy', or 'raw-cuda'"
         )
 
     local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=np.float64))
@@ -2000,6 +2019,15 @@ class DiffusionReactionHDGSolver:
 
     def clear_cache(self) -> "DiffusionReactionHDGSolver":
         """Clear assembled matrices, local solvers, and latest solution."""
+        native_solver = getattr(self, "_raw_cuda_fb_hp_mg_solver", None)
+        if native_solver is not None:
+            close = getattr(native_solver, "close", None)
+            if close is not None:
+                close()
+        self._raw_cuda_fb_hp_mg_solver = None
+        self._raw_cuda_fb_hp_mg_solver_key = None
+        self._raw_cuda_fb_hp_mg_failed_key = None
+        self._raw_cuda_fb_hp_mg_failure_reason = None
         raw_amgx_solver = getattr(self, "_raw_cuda_amgx_solver", None)
         if raw_amgx_solver is not None:
             close = getattr(raw_amgx_solver, "close", None)
@@ -2137,7 +2165,11 @@ class DiffusionReactionHDGSolver:
         reduction = None
         indptr = None
         indices = None
-        matrix_format = "coo"
+        matrix_format = (
+            "coo"
+            if backend != "raw-cuda" or str(options.raw_matrix_format).lower() == "auto"
+            else str(options.raw_matrix_format).lower()
+        )
         timings: dict[str, float] = {}
 
         if backend == "numba":
@@ -2222,7 +2254,7 @@ class DiffusionReactionHDGSolver:
                     float(options.stabilization),
                     self.space,
                     trace_basis=trace_basis,
-                    matrix_format=options.raw_matrix_format,
+                    matrix_format=matrix_format,
                     block_size=raw_block_size,
                 )
             rows = _host_array(gpu.rows, dtype=np.int64)
@@ -2282,6 +2314,7 @@ class DiffusionReactionHDGSolver:
             reaction: Any = _UNSET,
             boundary_condition: Callable | object = _UNSET,
             initial_guess: Any = _UNSET,
+            postprocess_overrides: dict[str, Any] | None = None,
             **option_overrides,
     ) -> DiffusionReactionResult:
         """Assemble, solve, reconstruct, cache, and return the HDG result."""
@@ -2297,14 +2330,20 @@ class DiffusionReactionHDGSolver:
 
         if option_overrides:
             self.with_options(**option_overrides)
+        per_call_overrides = dict(postprocess_overrides or {})
+        allowed_per_call = {
+            "hdg_postprocess", "flux_postprocess_space", "postprocessing_backend"
+        }
+        unknown_per_call = set(per_call_overrides) - allowed_per_call
+        if unknown_per_call:
+            names = ", ".join(sorted(unknown_per_call))
+            raise ValueError(f"unknown per-call postprocessing options: {names}")
 
         self._require_problem()
         stored_options = self.options
-        active_options = (
-            stored_options
-            if initial_guess is _UNSET
-            else stored_options.with_overrides(initial_guess=initial_guess)
-        )
+        active_options = stored_options.with_overrides(**per_call_overrides)
+        if initial_guess is not _UNSET:
+            active_options = active_options.with_overrides(initial_guess=initial_guess)
         self.options = active_options
         self.options = self._resolved_options()
         try:
@@ -2369,22 +2408,41 @@ class DiffusionReactionHDGSolver:
             equation="diffusion-reaction",
             order=self.space.order,
         )
-        normalized_solver = "" if options.solver is None else str(options.solver).lower()
-        if normalized_solver not in {"amgx", "pyamgx"}:
-            raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx' for direct device solves")
-        if str(options.raw_matrix_format).lower() not in {"csr", "bsr"}:
+        normalized_solver = (
+            "" if options.solver is None
+            else str(options.solver).replace("_", "-").lower()
+        )
+        if normalized_solver not in {"amgx", "pyamgx", "fb-hp-mg-pcg"}:
+            raise ValueError(
+                "assembly_backend='raw-cuda' requires solver='amgx' or "
+                "solver='fb-hp-mg-pcg' for direct device solves"
+            )
+        matrix_format = str(options.raw_matrix_format).lower()
+        if matrix_format == "auto":
+            matrix_format = "bsr"
+        if matrix_format not in {"csr", "bsr"}:
             raise ValueError(
                 "assembly_backend='raw-cuda' with DiffusionReactionHDGSolver.solve "
-                "requires raw_matrix_format='csr' or 'bsr'"
+                "requires raw_matrix_format='auto', 'csr', or 'bsr'"
             )
+        native_requested = normalized_solver == "fb-hp-mg-pcg"
+        if native_requested and matrix_format != "bsr":
+            raise ValueError("solver='fb-hp-mg-pcg' requires raw_matrix_format='auto' or 'bsr'")
+        if native_requested and str(options.trace_basis).replace("_", "-").lower() != "legendre-modal":
+            raise ValueError("solver='fb-hp-mg-pcg' requires trace_basis='legendre-modal'")
+        if native_requested and options.scale_system not in {False, "none", "off", "false"}:
+            raise ValueError("solver='fb-hp-mg-pcg' requires scale_system=False")
         if options.boundary_mode != "eliminate":
             raise ValueError("assembly_backend='raw-cuda' requires boundary_mode='eliminate'")
         if not _diffusion_is_identity(options.diffusion):
             raise NotImplementedError("raw-CUDA diffusion solve currently supports identity diffusion only")
         if not np.isscalar(options.stabilization):
             raise NotImplementedError("raw-CUDA diffusion solve currently supports scalar stabilization only")
-        if _normalize_hdg_postprocess_mode(options.hdg_postprocess) != "none":
-            raise NotImplementedError("raw-CUDA diffusion device AMGX solve requires hdg_postprocess='none'")
+        postprocess_mode = _normalize_hdg_postprocess_mode(options.hdg_postprocess)
+        if postprocess_mode not in {"none", "flux"}:
+            raise NotImplementedError(
+                "raw-CUDA diffusion device solves support hdg_postprocess='none' or 'flux'"
+            )
 
         from ..backends.cupy import field_from_cupy_coefficients, require_cupy
         from ..backends.advection_cuda import (
@@ -2399,6 +2457,7 @@ class DiffusionReactionHDGSolver:
             assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
             attach_schur_cholesky_cache_cupy,
             build_trace_reference,
+            reconstruct_compact_diffusion_field_cupy,
             solve_mixed_from_scalar_cholesky_cupy,
         )
         from ..backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
@@ -2426,7 +2485,7 @@ class DiffusionReactionHDGSolver:
         operator_key = (
             id(self.space),
             trace_basis,
-            str(options.raw_matrix_format).lower(),
+            matrix_format,
             int(raw_block_size),
             float(options.stabilization),
             id(self.reaction),
@@ -2510,16 +2569,16 @@ class DiffusionReactionHDGSolver:
                 ),
                 verbosity,
                 assemble_raw_rhs,
-                multiline=verbosity >= 2,
+                multiline=_detailed_logging(verbosity),
             )
             self._raw_cuda_assembly_cache = assembly_result
             self._raw_cuda_rhs_valid = True
         else:
             assembly_result, trace_assembly = _timed_call(
-                f"assembling reduced global trace system (raw-cuda {options.raw_matrix_format})",
+                f"assembling reduced global trace system (raw-cuda {matrix_format})",
                 verbosity,
                 assemble_raw_full,
-                multiline=verbosity >= 2,
+                multiline=_detailed_logging(verbosity),
             )
             if options.cache_device_matrix:
                 self._raw_cuda_assembly_cache = assembly_result
@@ -2532,7 +2591,7 @@ class DiffusionReactionHDGSolver:
                 0.0, float(trace_assembly) - float(assembly_result.timings.get('total', 0.0))
             )
 
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             raw_cache = assembly_result.raw_assembly
             cholesky_cache = assembly_result.schur_cholesky_cache
             if use_hybrid_cholesky and cholesky_cache is not None:
@@ -2555,8 +2614,8 @@ class DiffusionReactionHDGSolver:
             else:
                 print("  local Schur factor cache: disabled", flush=True)
             assembly_timings = assembly_result.timings or {}
-            compressed_format = str(options.raw_matrix_format).upper()
-            compressed_key = str(options.raw_matrix_format).lower()
+            compressed_format = matrix_format.upper()
+            compressed_key = matrix_format
             timing_rows = (
                 ("source moments", "wrapper.source_moments"),
                 ("boundary trace", "wrapper.boundary_trace"),
@@ -2610,73 +2669,164 @@ class DiffusionReactionHDGSolver:
                 f"got {guess_cp.size}"
             )
 
-        effective_scale_system = False if normalized_solver == "petsc" else options.scale_system
+        effective_scale_system = options.scale_system
         scale_mode = (
             "left" if effective_scale_system is True
             else "none" if effective_scale_system is False
             else str(effective_scale_system).lower()
         )
-        reusable_solver = None
-        amgx_hierarchy_reused = False
-        if options.cache_device_matrix and scale_mode in {"none", "off", "false"}:
-            solver_key = (
-                id(self.space),
-                trace_basis,
-                str(options.raw_matrix_format).lower(),
-                int(raw_block_size),
-                float(options.stabilization),
-                int(assembly_result.rhs.size),
-                id(options.amgx_config),
-                float(options.solver_rtol),
-                None if options.maxiter is None else int(options.maxiter),
-            )
-            amgx_hierarchy_reused = (
-                self._raw_cuda_amgx_solver is not None
-                and self._raw_cuda_amgx_solver_key == solver_key
-                and not getattr(self._raw_cuda_amgx_solver, "closed", False)
-            )
-            if (
-                self._raw_cuda_amgx_solver is None
-                or self._raw_cuda_amgx_solver_key != solver_key
-                or getattr(self._raw_cuda_amgx_solver, "closed", False)
-            ):
-                if self._raw_cuda_amgx_solver is not None:
-                    self._raw_cuda_amgx_solver.close()
-                self._raw_cuda_amgx_solver = PyAMGXCsrDeviceSolver(
-                    config=options.amgx_config,
-                    tolerance=options.solver_rtol,
-                    maxiter=options.maxiter,
-                    verbose=verbosity,
-                    reusable=True,
-                )
-                self._raw_cuda_amgx_solver_key = solver_key
-            reusable_solver = self._raw_cuda_amgx_solver
-        if verbosity >= 2:
-            print(
-                "  AMGX hierarchy/setup: " + ("reused" if amgx_hierarchy_reused else "created on this solve"),
-                flush=True,
-            )
-
         solve_initial_guess = reduced_initial_guess()
-        (global_solve_result, trace_reduced_cp), solve_time = _timed_call(
-            "solving global system (raw-cuda device AMGX)",
-            verbosity,
-            lambda: solve_reduced_system_amgx_device(
-                assembly_result,
-                config=options.amgx_config,
-                tolerance=options.solver_rtol,
-                check_rtol=options.solver_rtol,
-                atol=options.solver_atol,
-                maxiter=options.maxiter,
-                initial_guess=solve_initial_guess,
-                reusable_solver=reusable_solver,
-                scale_system=effective_scale_system,
-                raise_on_nonconvergence=True,
-                materialize_host_solution=False,
-                verbose=verbosity,
-            ),
-            multiline=verbosity >= 1,
-        )
+        native_hierarchy_reused = False
+        native_setup_wall = 0.0
+        native_fallback_reason = None
+        native_result = None
+        native_key = (operator_key, int(assembly_result.rhs.size))
+        if native_requested and self._raw_cuda_fb_hp_mg_failed_key != native_key:
+            try:
+                from ..backends.legendre_face_bsr import diagonal_block_positions
+                from ..linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+
+                native_hierarchy_reused = (
+                    self._raw_cuda_fb_hp_mg_solver is not None
+                    and self._raw_cuda_fb_hp_mg_solver_key == native_key
+                )
+                if not native_hierarchy_reused:
+                    setup_started = time.perf_counter()
+                    if self._raw_cuda_fb_hp_mg_solver is not None:
+                        self._raw_cuda_fb_hp_mg_solver.close()
+                    raw = assembly_result.raw_assembly
+                    if raw is None or raw.csr_pattern is None:
+                        raise RuntimeError("face-BSR assembly did not retain diagonal metadata")
+                    diagonal_positions = diagonal_block_positions(
+                        assembly_result.indptr, assembly_result.indices,
+                        raw.csr_pattern.mass_csr_block_pos,
+                    )
+                    self._raw_cuda_fb_hp_mg_solver = FaceBlockHpMgPcgSolver(
+                        indptr=assembly_result.indptr,
+                        indices=assembly_result.indices,
+                        data=assembly_result.data,
+                        degree=self.space.order,
+                        diagonal_positions=diagonal_positions,
+                        verbose=verbosity,
+                    )
+                    cp.cuda.get_current_stream().synchronize()
+                    native_setup_wall = time.perf_counter() - setup_started
+                    self._raw_cuda_fb_hp_mg_solver_key = native_key
+                native_result = self._raw_cuda_fb_hp_mg_solver.solve(
+                    assembly_result.rhs,
+                    initial_guess=solve_initial_guess,
+                    rtol=options.solver_rtol,
+                    atol=options.solver_atol,
+                    maxiter=500 if options.maxiter is None else options.maxiter,
+                )
+                if not native_result.converged:
+                    raise RuntimeError(
+                        "FB-HP-MG-PCG failed the true-residual convergence gate: "
+                        f"{native_result.relative_residual:.3e}"
+                    )
+                if verbosity:
+                    print(
+                        "  FB-HP-MG-PCG: "
+                        f"hierarchy={'reused' if native_hierarchy_reused else 'created'} "
+                        f"setup={native_setup_wall:.5f}s "
+                        f"solve={native_result.elapsed_seconds:.5f}s "
+                        f"iterations={native_result.iterations} "
+                        f"true_rel={native_result.relative_residual:.3e}",
+                        flush=True,
+                    )
+            except Exception as exc:
+                native_fallback_reason = f"{type(exc).__name__}: {exc}"
+                self._raw_cuda_fb_hp_mg_failed_key = native_key
+                self._raw_cuda_fb_hp_mg_failure_reason = native_fallback_reason
+                if self._raw_cuda_fb_hp_mg_solver is not None:
+                    self._raw_cuda_fb_hp_mg_solver.close()
+                self._raw_cuda_fb_hp_mg_solver = None
+                self._raw_cuda_fb_hp_mg_solver_key = None
+                if verbosity:
+                    print(
+                        "  FB-HP-MG-PCG gate failed; using cached hybrid AMGX "
+                        f"fallback: {native_fallback_reason}",
+                        flush=True,
+                    )
+        elif native_requested:
+            native_fallback_reason = self._raw_cuda_fb_hp_mg_failure_reason
+
+        amgx_hierarchy_reused = False
+        if native_result is not None:
+            from ..linalg.system import SolveResult
+
+            trace_reduced_cp = native_result.solution
+            solve_time = native_setup_wall + native_result.elapsed_seconds
+            global_solve_result = SolveResult(
+                x=None, x_device=trace_reduced_cp,
+                residual_norm=native_result.residual_norm, info=0,
+                total_elapsed_seconds=solve_time,
+                solve_elapsed_seconds=native_result.elapsed_seconds,
+                iteration_count=native_result.iterations,
+                initial_residual_norm=(
+                    native_result.history[0] if native_result.history else None
+                ),
+                rhs_norm=native_result.rhs_norm,
+                relative_residual_norm=native_result.relative_residual,
+                residual_target=native_result.target,
+                solver_residual_norm=native_result.residual_norm,
+                solver_rhs_norm=native_result.rhs_norm,
+                solver_relative_residual_norm=native_result.relative_residual,
+                solver_residual_target=native_result.target,
+                physical_residual_norm=native_result.residual_norm,
+                physical_rhs_norm=native_result.rhs_norm,
+                physical_relative_residual_norm=native_result.relative_residual,
+                physical_residual_target=native_result.target,
+                rtol=options.solver_rtol, atol=options.solver_atol,
+                backend="fb-hp-mg-pcg", backend_info=0, status="converged",
+                converged=True, solution_is_finite=True,
+                solver_residual_is_finite=True, physical_residual_is_finite=True,
+                solver_residual_target_met=True, physical_residual_target_met=True,
+                residual_history=native_result.history,
+            )
+            global_solve_result.cupyx_solver = "fb-hp-mg-pcg-device"
+        else:
+            reusable_solver = None
+            if options.cache_device_matrix and scale_mode in {"none", "off", "false"}:
+                solver_key = (
+                    id(self.space), trace_basis, matrix_format, int(raw_block_size),
+                    float(options.stabilization), int(assembly_result.rhs.size),
+                    id(options.amgx_config), float(options.solver_rtol),
+                    None if options.maxiter is None else int(options.maxiter),
+                )
+                amgx_hierarchy_reused = (
+                    self._raw_cuda_amgx_solver is not None
+                    and self._raw_cuda_amgx_solver_key == solver_key
+                    and not getattr(self._raw_cuda_amgx_solver, "closed", False)
+                )
+                if not amgx_hierarchy_reused:
+                    if self._raw_cuda_amgx_solver is not None:
+                        self._raw_cuda_amgx_solver.close()
+                    self._raw_cuda_amgx_solver = PyAMGXCsrDeviceSolver(
+                        config=options.amgx_config, tolerance=options.solver_rtol,
+                        maxiter=options.maxiter, verbose=verbosity, reusable=True,
+                    )
+                    self._raw_cuda_amgx_solver_key = solver_key
+                reusable_solver = self._raw_cuda_amgx_solver
+            if _detailed_logging(verbosity):
+                print(
+                    "  AMGX hierarchy/setup: "
+                    + ("reused" if amgx_hierarchy_reused else "created on this solve"),
+                    flush=True,
+                )
+            (global_solve_result, trace_reduced_cp), solve_time = _timed_call(
+                "solving global system (raw-cuda device hybrid AMGX)",
+                verbosity,
+                lambda: solve_reduced_system_amgx_device(
+                    assembly_result, config=options.amgx_config,
+                    tolerance=options.solver_rtol, check_rtol=options.solver_rtol,
+                    atol=options.solver_atol, maxiter=options.maxiter,
+                    initial_guess=solve_initial_guess, reusable_solver=reusable_solver,
+                    scale_system=effective_scale_system, raise_on_nonconvergence=True,
+                    materialize_host_solution=False, verbose=verbosity,
+                ),
+                multiline=verbosity >= 1,
+            )
 
         self._raw_cuda_last_trace_reduced = trace_reduced_cp
 
@@ -2685,20 +2835,27 @@ class DiffusionReactionHDGSolver:
             trace_cp = reconstruct_trace_cupy(trace_reduced_cp, assembly_result.boundary_trace, cspace)
             if use_hybrid_cholesky:
                 cache = assembly_result.schur_cholesky_cache
-                element_boundary = assembly_result.element_boundary_mats
-                source_rhs = assembly_result.source_rhs
-                if cache is None or element_boundary is None or source_rhs is None:
+                if cache is None:
                     raise RuntimeError("hybrid CuPy reconstruction cache is incomplete")
-                trace_by_edge = trace_cp.reshape((cspace.mesh.num_edg, cspace.edg_dof))
-                element_traces = trace_by_edge[cspace.mesh.loc2glob_edge].reshape(
-                    (cspace.mesh.num_tri, 3 * cspace.edg_dof),
-                )
-                rhs = source_rhs[..., None] + element_boundary @ element_traces[..., None]
-                local_unknowns_cp = solve_mixed_from_scalar_cholesky_cupy(cache, rhs).squeeze(-1)
-                local_unknowns_cp = cp.ascontiguousarray(
-                    local_unknowns_cp.reshape((cspace.mesh.num_tri, 3 * cspace.el_dof))
-                )
-                uh_cp = cp.ascontiguousarray(local_unknowns_cp[:, : cspace.el_dof])
+                if cache.compact:
+                    uh_cp, local_unknowns_cp, _kernel_elapsed = (
+                        reconstruct_compact_diffusion_field_cupy(trace_cp, cache, cspace)
+                    )
+                else:
+                    element_boundary = assembly_result.element_boundary_mats
+                    source_rhs = assembly_result.source_rhs
+                    if element_boundary is None or source_rhs is None:
+                        raise RuntimeError("hybrid CuPy reconstruction cache is incomplete")
+                    trace_by_edge = trace_cp.reshape((cspace.mesh.num_edg, cspace.edg_dof))
+                    element_traces = trace_by_edge[cspace.mesh.loc2glob_edge].reshape(
+                        (cspace.mesh.num_tri, 3 * cspace.edg_dof),
+                    )
+                    rhs = source_rhs[..., None] + element_boundary @ element_traces[..., None]
+                    local_unknowns_cp = solve_mixed_from_scalar_cholesky_cupy(cache, rhs).squeeze(-1)
+                    local_unknowns_cp = cp.ascontiguousarray(
+                        local_unknowns_cp.reshape((cspace.mesh.num_tri, 3 * cspace.el_dof))
+                    )
+                    uh_cp = cp.ascontiguousarray(local_unknowns_cp[:, : cspace.el_dof])
             else:
                 raw = assembly_result.raw_assembly
                 if raw is None:
@@ -2733,9 +2890,9 @@ class DiffusionReactionHDGSolver:
                 name="q_h_y",
             )
             flux = VectorDGField((qx, qy), name="q_h")
-            return field, flux
+            return field, flux, trace_cp, local_unknowns_cp
 
-        (field, flux), reconstruction = _timed_call(
+        (field, flux, trace_cp, local_unknowns_cp), reconstruction = _timed_call(
             (
                 "reconstructing local fields (cupy/cuBLAS Cholesky)"
                 if use_hybrid_cholesky
@@ -2750,20 +2907,50 @@ class DiffusionReactionHDGSolver:
             for key, value in (assembly_result.timings or {}).items()
             if isinstance(value, (int, float))
         }
+        details["raw.assembly.operator_reused"] = float(operator_cache_valid)
+        details["raw.assembly.rhs_only"] = float(operator_cache_valid and trace_assembly > 0.0)
+        details["raw.assembly.operator_and_rhs_reused"] = float(
+            operator_cache_valid and trace_assembly == 0.0
+        )
         details["raw.reconstruction.local_factors.reused"] = float(cache_local_factors)
         if use_hybrid_cholesky:
             cache = assembly_result.schur_cholesky_cache
             details["cupy.local_factors.bytes"] = float(cache.local_factor_bytes)
             details["cupy.local_factors.symmetry_error"] = float(cache.symmetry_error)
             details["cupy.local_factors.coupling_adjoint_error"] = float(cache.coupling_adjoint_error)
+            details["cupy.local_factors.compact"] = float(cache.compact)
+            details["cupy.local_factors.trace_response_bytes"] = float(
+                cache.trace_response.nbytes if cache.trace_response is not None else 0
+            )
+            details["cupy.reconstruction.compact"] = float(cache.compact)
             details["cupy.reconstruction.local_factors.reused"] = 1.0
         details["solve.amgx.hierarchy_reused"] = float(amgx_hierarchy_reused)
+        details["solve.fb_hp_mg.hierarchy_reused"] = float(native_hierarchy_reused)
+        details["solve.fb_hp_mg.fallback"] = float(native_requested and native_result is None)
+        if self._raw_cuda_fb_hp_mg_solver is not None:
+            native_solver = self._raw_cuda_fb_hp_mg_solver
+            details["solve.fb_hp_mg.setup"] = (
+                0.0 if native_hierarchy_reused else float(native_solver.setup_seconds)
+            )
+            details["solve.fb_hp_mg.setup_outer"] = float(native_setup_wall)
+            details["solve.fb_hp_mg.setup_outer_overhead"] = max(
+                0.0, float(native_setup_wall)
+                - (0.0 if native_hierarchy_reused else float(native_solver.setup_seconds))
+            )
+            details["solve.fb_hp_mg.krylov"] = (
+                0.0 if native_result is None else float(native_result.elapsed_seconds)
+            )
+            details["solve.fb_hp_mg.workspace_bytes"] = float(native_solver.workspace_bytes)
+            details["solve.fb_hp_mg.symmetry_defect"] = float(native_solver.symmetry_defect)
+            details["solve.fb_hp_mg.positive_curvature"] = float(native_solver.positive_curvature)
         if global_solve_result is not None:
             for detail_key, attr in (
                 ("solve.amgx.csr", "amgx_csr_elapsed_seconds"),
                 ("solve.amgx.matrix_unscale", "amgx_matrix_unscale_elapsed_seconds"),
                 ("solve.scale", "scale_elapsed_seconds"),
                 ("solve.amgx.setup", "amgx_setup_elapsed_seconds"),
+                ("solve.amgx.matrix_upload", "amgx_matrix_upload_elapsed_seconds"),
+                ("solve.amgx.solver_setup", "amgx_solver_setup_elapsed_seconds"),
                 ("solve.amgx.solve", "amgx_solve_elapsed_seconds"),
                 ("solve.amgx.total", "amgx_call_elapsed_seconds"),
                 ("solve.validation.total", "solve_validation_elapsed_seconds"),
@@ -2788,13 +2975,17 @@ class DiffusionReactionHDGSolver:
             total=time.perf_counter() - total_start,
             details=dict(details),
         )
+        host_trace = cp.asnumpy(trace_cp) if postprocess_mode == "flux" else None
+        host_local_unknowns = (
+            cp.asnumpy(local_unknowns_cp) if postprocess_mode == "flux" else None
+        )
         result = DiffusionReactionResult(
             field=field,
             flux=flux,
-            trace=None,
+            trace=host_trace,
             timings=timings,
             trace_reduced_device=trace_reduced_cp,
-            local_unknowns=None,
+            local_unknowns=host_local_unknowns,
             matrix_rows=None,
             matrix_cols=None,
             matrix_data=None,
@@ -2998,7 +3189,7 @@ class DiffusionReactionHDGSolver:
             "assembling reduced RHS (numpy cached operator)",
             verbosity,
             assemble_rhs,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         self.solve_rhs = solve_rhs
         self.boundary_trace = boundary_trace
@@ -3154,7 +3345,7 @@ class DiffusionReactionHDGSolver:
         self.boundary_trace = boundary_trace
         self.reduction = reduction
         self._host_cached_rhs_valid = True
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             print(
                 "  numba cached RHS timings: "
                 f"prep={rhs_timings.get('preparation', 0.0):.5f}s, "
@@ -3489,7 +3680,7 @@ def solve_diffusion_reaction_hdg(
         "preparing source and stabilization",
         verbosity,
         prepare_data,
-        multiline=verbosity >= 2,
+        multiline=_detailed_logging(verbosity),
     )
     effective_local_solver_backend = "numba" if projected_numba_diffusion else local_solver_backend
 
@@ -3549,7 +3740,7 @@ def solve_diffusion_reaction_hdg(
             "building local mixed solvers",
             verbosity,
             build_local_solver,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         element_boundary_mats, boundary_time = _timed_call(
             "assembling element boundary coupling",
@@ -3619,14 +3810,14 @@ def solve_diffusion_reaction_hdg(
         trace_assembly_label,
         verbosity,
         assemble_trace,
-        multiline=verbosity >= 2,
+        multiline=_detailed_logging(verbosity),
     )
     if effective_backend == "numba":
         numba_trace = trace_out
         trace_system = numba_trace.trace_system
         reduction = numba_trace.reduction
         boundary_elimination = 0.0
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             timings = numba_trace.timings
             print(
                 "  numba diffusion trace assembly timings: "

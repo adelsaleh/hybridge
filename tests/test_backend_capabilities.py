@@ -51,6 +51,7 @@ def test_every_published_capability_passes_preflight(capability) -> None:
         "petsc": "petsc",
         "cupyx": "cupyx_bicgstab",
         "amgx": "amgx",
+        "fb-hp-mg-pcg": "fb-hp-mg-pcg",
     }
     common = {
         "operation": capability.operation,
@@ -86,7 +87,11 @@ def test_every_published_capability_passes_preflight(capability) -> None:
         actual = validate_diffusion_backend_configuration(
             **common,
             local_solver_backend="numpy",
-            raw_matrix_format="csr" if capability.assembly_backend == "raw-cuda" else "coo",
+            raw_matrix_format=(
+                "bsr" if capability.solver_backend == "fb-hp-mg-pcg"
+                else "csr" if capability.assembly_backend == "raw-cuda"
+                else "coo"
+            ),
             postprocess_mode="none",
             identity_diffusion=True,
             scalar_stabilization=True,
@@ -108,6 +113,7 @@ def test_every_published_solve_capability_constructs_through_reusable_api(capabi
         "petsc": "petsc",
         "cupyx": "cupyx_bicgstab",
         "amgx": "amgx",
+        "fb-hp-mg-pcg": "fb-hp-mg-pcg",
     }
     options = {
         "assembly_backend": capability.assembly_backend,
@@ -302,7 +308,7 @@ def _diffusion_preflight(**overrides):
         ({"assembly_backend": "numba", "boundary_mode": "penalty"}, "boundary_mode='penalty'"),
         (
             {"assembly_backend": "raw-cuda", "solver": "amgx", "raw_matrix_format": "coo"},
-            "raw_matrix_format='csr'",
+            "raw-CUDA diffusion solves require",
         ),
         (
             {

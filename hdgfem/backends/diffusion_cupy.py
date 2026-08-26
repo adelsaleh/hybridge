@@ -77,7 +77,276 @@ class CupyDiffusionSchurCholeskyCache:
     coupling_adjoint_error: float
     local_factor_bytes: int
     timings: dict[str, float]
+    rhs_scatter_kernel: Any
+    edge_to_solve_edge: Any
     factor_kind: str = "schur-cholesky"
+    trace_response: Any | None = None
+    source_solution: Any | None = None
+    mass_inverse_d0_reference: Any | None = None
+    mass_inverse_d1_reference: Any | None = None
+    face_element_trace: Any | None = None
+    compact_rhs_kernel: Any | None = None
+    compact_reconstruct_kernel: Any | None = None
+    compact: bool = False
+    stabilization: float = 0.0
+
+
+_COMPACT_DIFFUSION_KERNEL_TEMPLATE = r"""
+__device__ __forceinline__ double compact_warp_sum(double value)
+{
+    const unsigned mask = 0xffffffffu;
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        value += __shfl_down_sync(mask, value, offset);
+    }
+    return value;
+}
+
+extern "C" __global__ void compact_diffusion_rhs(
+        const double* __restrict__ factor,
+        const double* __restrict__ source_moments,
+        double* __restrict__ source_solution,
+        double* __restrict__ rhs,
+        const double* __restrict__ mass_inverse_d0,
+        const double* __restrict__ mass_inverse_d1,
+        const double* __restrict__ face_element_trace,
+        const double* __restrict__ aff_mats,
+        const double* __restrict__ aff_jacs,
+        const double* __restrict__ jacs_el_fc,
+        const double* __restrict__ normals,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ loc2oriented_face_coupling,
+        const long long* __restrict__ edge_to_solve_edge,
+        const double tau,
+        const long long num_elements)
+{
+    const long long element = blockIdx.x;
+    if (element >= num_elements) return;
+    const int lane = threadIdx.x;
+    __shared__ double local_factor[NEL * NEL];
+    __shared__ double u[NEL];
+    __shared__ double qx[NEL];
+    __shared__ double qy[NEL];
+
+    for (int index = lane; index < NEL * NEL; index += 32) {
+        local_factor[index] = factor[element * (long long)(NEL * NEL) + index];
+    }
+    if (lane < NEL) {
+        u[lane] = source_moments[element * (long long)NEL + lane];
+    }
+    __syncwarp();
+
+    // Solve L y = f followed by L^T u = y.  The factor is the validated FP64
+    // Cholesky factor used by the reference cuBLAS path.
+    for (int i = 0; i < NEL; ++i) {
+        double partial = 0.0;
+        for (int j = lane; j < i; j += 32) {
+            partial += local_factor[i * NEL + j] * u[j];
+        }
+        partial = compact_warp_sum(partial);
+        if (lane == 0) {
+            u[i] = (u[i] - partial) / local_factor[i * NEL + i];
+        }
+        __syncwarp();
+    }
+    for (int i = NEL - 1; i >= 0; --i) {
+        double partial = 0.0;
+        for (int j = i + 1 + lane; j < NEL; j += 32) {
+            partial += local_factor[j * NEL + i] * u[j];
+        }
+        partial = compact_warp_sum(partial);
+        if (lane == 0) {
+            u[i] = (u[i] - partial) / local_factor[i * NEL + i];
+        }
+        __syncwarp();
+    }
+
+    const double aff00 = aff_mats[(element * 2 + 0) * 2 + 0];
+    const double aff01 = aff_mats[(element * 2 + 0) * 2 + 1];
+    const double aff10 = aff_mats[(element * 2 + 1) * 2 + 0];
+    const double aff11 = aff_mats[(element * 2 + 1) * 2 + 1];
+    const double jac_inv = 1.0 / aff_jacs[element];
+    if (lane < NEL) {
+        double value_x = 0.0;
+        double value_y = 0.0;
+        for (int j = 0; j < NEL; ++j) {
+            value_x += (
+                aff11 * mass_inverse_d0[lane * NEL + j]
+                - aff10 * mass_inverse_d1[lane * NEL + j]
+            ) * u[j];
+            value_y += (
+                -aff01 * mass_inverse_d0[lane * NEL + j]
+                + aff00 * mass_inverse_d1[lane * NEL + j]
+            ) * u[j];
+        }
+        qx[lane] = jac_inv * value_x;
+        qy[lane] = jac_inv * value_y;
+        source_solution[element * (long long)NEL + lane] = u[lane];
+    }
+    __syncwarp();
+
+    const int task = lane;
+    if (task < 3 * NTR) {
+        const int face = task / NTR;
+        const int row_dof = task - face * NTR;
+        const long long edge = loc2glob_edge[element * 3 + face];
+        const long long solve_edge = edge_to_solve_edge[edge];
+        if (solve_edge >= 0) {
+            const long long oriented_face =
+                loc2oriented_face_coupling[element * 3 + face];
+            const double scale = jacs_el_fc[element * 3 + face];
+            const double nx = normals[(element * 3 + face) * 2 + 0];
+            const double ny = normals[(element * 3 + face) * 2 + 1];
+            double value = 0.0;
+            for (int i = 0; i < NEL; ++i) {
+                const double lift = scale * face_element_trace[
+                    (oriented_face * NTR + row_dof) * NEL + i
+                ];
+                value += lift * (tau * u[i] + nx * qx[i] + ny * qy[i]);
+            }
+            atomicAdd(rhs + solve_edge * NTR + row_dof, value);
+        }
+    }
+}
+
+extern "C" __global__ void compact_diffusion_reconstruct(
+        const double* __restrict__ trace,
+        const double* __restrict__ trace_response,
+        const double* __restrict__ source_solution,
+        double* __restrict__ uh,
+        double* __restrict__ local_unknowns,
+        const double* __restrict__ mass_inverse,
+        const double* __restrict__ mass_inverse_d0,
+        const double* __restrict__ mass_inverse_d1,
+        const double* __restrict__ face_element_trace,
+        const double* __restrict__ aff_mats,
+        const double* __restrict__ aff_jacs,
+        const double* __restrict__ jacs_el_fc,
+        const double* __restrict__ normals,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ loc2oriented_face_coupling,
+        const long long num_elements)
+{
+    const long long element = blockIdx.x;
+    if (element >= num_elements) return;
+    const int lane = threadIdx.x;
+    __shared__ double u[NEL];
+    __shared__ double boundary_x[NEL];
+    __shared__ double boundary_y[NEL];
+
+    if (lane < NEL) {
+        double u_value = source_solution[element * (long long)NEL + lane];
+        double rhs_x = 0.0;
+        double rhs_y = 0.0;
+        const long long response_base =
+            (element * (long long)NEL + lane) * (3 * NTR);
+        for (int face = 0; face < 3; ++face) {
+            const long long edge = loc2glob_edge[element * 3 + face];
+            const long long oriented_face =
+                loc2oriented_face_coupling[element * 3 + face];
+            const double scale = jacs_el_fc[element * 3 + face];
+            const double nx = normals[(element * 3 + face) * 2 + 0];
+            const double ny = normals[(element * 3 + face) * 2 + 1];
+            for (int dof = 0; dof < NTR; ++dof) {
+                const int column = face * NTR + dof;
+                const double trace_value = trace[edge * NTR + dof];
+                u_value += trace_response[response_base + column] * trace_value;
+                const double coupling = scale * face_element_trace[
+                    (oriented_face * NTR + dof) * NEL + lane
+                ] * trace_value;
+                rhs_x += nx * coupling;
+                rhs_y += ny * coupling;
+            }
+        }
+        u[lane] = u_value;
+        boundary_x[lane] = rhs_x;
+        boundary_y[lane] = rhs_y;
+    }
+    __syncwarp();
+
+    if (lane < NEL) {
+        const double aff00 = aff_mats[(element * 2 + 0) * 2 + 0];
+        const double aff01 = aff_mats[(element * 2 + 0) * 2 + 1];
+        const double aff10 = aff_mats[(element * 2 + 1) * 2 + 0];
+        const double aff11 = aff_mats[(element * 2 + 1) * 2 + 1];
+        const double jac_inv = 1.0 / aff_jacs[element];
+        double value_x = 0.0;
+        double value_y = 0.0;
+        double lifted_x = 0.0;
+        double lifted_y = 0.0;
+        for (int j = 0; j < NEL; ++j) {
+            value_x += (
+                aff11 * mass_inverse_d0[lane * NEL + j]
+                - aff10 * mass_inverse_d1[lane * NEL + j]
+            ) * u[j];
+            value_y += (
+                -aff01 * mass_inverse_d0[lane * NEL + j]
+                + aff00 * mass_inverse_d1[lane * NEL + j]
+            ) * u[j];
+            lifted_x += mass_inverse[lane * NEL + j] * boundary_x[j];
+            lifted_y += mass_inverse[lane * NEL + j] * boundary_y[j];
+        }
+        const double qx = jac_inv * (value_x - lifted_x);
+        const double qy = jac_inv * (value_y - lifted_y);
+        const long long base = element * (long long)(3 * NEL);
+        uh[element * (long long)NEL + lane] = u[lane];
+        local_unknowns[base + lane] = u[lane];
+        local_unknowns[base + NEL + lane] = qx;
+        local_unknowns[base + 2 * NEL + lane] = qy;
+    }
+}
+"""
+
+
+def _compile_compact_diffusion_kernels(cupy, *, nel: int, ntr: int):
+    """Compile the fixed-order compact RHS and reconstruction kernels."""
+    source = f"#define NEL {int(nel)}\n#define NTR {int(ntr)}\n" + _COMPACT_DIFFUSION_KERNEL_TEMPLATE
+    module = cupy.RawModule(
+        code=source,
+        options=("--std=c++11",),
+        name_expressions=("compact_diffusion_rhs", "compact_diffusion_reconstruct"),
+    )
+    module.compile()
+    return (
+        module.get_function("compact_diffusion_rhs"),
+        module.get_function("compact_diffusion_reconstruct"),
+    )
+
+
+_REDUCED_RHS_SCATTER_SOURCE = r"""
+extern "C" __global__ void scatter_reduced_diffusion_rhs(
+        const double* __restrict__ faces,
+        const long long* __restrict__ interior_elements,
+        const long long* __restrict__ interior_faces,
+        const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_to_solve_edge,
+        double* __restrict__ rhs,
+        const long long num_sides,
+        const int edge_dof)
+{
+    const long long index = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    const long long count = num_sides * (long long)edge_dof;
+    if (index >= count) return;
+    const long long side = index / edge_dof;
+    const int dof = (int)(index - side * edge_dof);
+    const long long element = interior_elements[side];
+    const long long face = interior_faces[side];
+    const long long edge = loc2glob_edge[element * 3 + face];
+    const long long solve_edge = edge_to_solve_edge[edge];
+    atomicAdd(rhs + solve_edge * edge_dof + dof,
+              faces[(element * 3 + face) * edge_dof + dof]);
+}
+"""
+
+
+def _compile_reduced_rhs_scatter_kernel(cupy):
+    """Compile the persistent one-thread-per-side/dof RHS gather kernel."""
+    kernel = cupy.RawKernel(
+        _REDUCED_RHS_SCATTER_SOURCE,
+        "scatter_reduced_diffusion_rhs",
+        options=("--std=c++11",),
+    )
+    kernel.compile()
+    return kernel
 
 
 def _as_scalar_or_none(value) -> float | None:
@@ -148,7 +417,10 @@ def legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     if num_points == 2:
         return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
     poly = np.polynomial.legendre.Legendre.basis(num_points - 1)
-    interior = np.sort(poly.deriv().roots())
+    roots = np.real_if_close(poly.deriv().roots(), tol=1000)
+    if np.iscomplexobj(roots):
+        raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
+    interior = np.sort(np.asarray(roots, dtype=np.float64))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)
@@ -459,7 +731,11 @@ def source_moments_cupy(source: Callable, cspace):
             rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
             return cupy.ascontiguousarray(rhs)
         coeffs = as_cupy_coefficients(source, cspace)
-        values = coeffs @ q.bas_of_quads
+        # For a coefficient field in this same DG space, quadrature followed
+        # by moment assembly is exactly multiplication by the reference mass
+        # matrix. Avoid materializing the much wider (K, nquad) value table.
+        rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
+        return cupy.ascontiguousarray(rhs)
     else:
         points = mapped_quads_cupy(cspace)
         values = cupy.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cupy.float64)
@@ -479,7 +755,13 @@ def solve_local_mats(local_lhs, rhs):
     return cupy.ascontiguousarray(cupy.linalg.solve(local_lhs, rhs))
 
 
-def _batched_cublas_cholesky_solve(cache: CupyDiffusionSchurCholeskyCache, rhs, *, chunk_size: int = 32768):
+def _batched_cublas_cholesky_solve(
+        cache: CupyDiffusionSchurCholeskyCache,
+        rhs,
+        *,
+        chunk_size: int = 32768,
+        batch_offset: int = 0,
+):
     """Solve batched SPD systems from cached Cholesky factors through cuBLAS TRSM."""
     cupy = require_cupy()
     from cupy.cuda import cublas
@@ -492,7 +774,14 @@ def _batched_cublas_cholesky_solve(cache: CupyDiffusionSchurCholeskyCache, rhs, 
         raise ValueError("batched Cholesky RHS must have shape (K, N) or (K, N, NRHS)")
     factor = cache.factor
     batch_count, n, n_rhs = map(int, rhs_array.shape)
-    if tuple(factor.shape) != (batch_count, n, n):
+    batch_offset = int(batch_offset)
+    if batch_offset < 0 or batch_offset + batch_count > int(factor.shape[0]):
+        raise ValueError(
+            "batched Cholesky factor/RHS range mismatch: "
+            f"factor={tuple(factor.shape)}, rhs={tuple(rhs_array.shape)}, "
+            f"batch_offset={batch_offset}"
+        )
+    if tuple(factor.shape[1:]) != (n, n):
         raise ValueError(
             f"batched Cholesky factor/RHS shape mismatch: factor={tuple(factor.shape)}, "
             f"rhs={tuple(rhs_array.shape)}"
@@ -507,7 +796,9 @@ def _batched_cublas_cholesky_solve(cache: CupyDiffusionSchurCholeskyCache, rhs, 
     chunk_size = max(1, int(chunk_size))
     for begin in range(0, batch_count, chunk_size):
         count = min(chunk_size, batch_count - begin)
-        factor_ptrs = cache.factor_ptrs[begin : begin + count]
+        factor_ptrs = cache.factor_ptrs[
+            batch_offset + begin : batch_offset + begin + count
+        ]
         rhs_ptrs = cupy.ascontiguousarray(
             work.data.ptr + cupy.arange(begin, begin + count, dtype=cupy.uintp) * rhs_stride
         )
@@ -523,6 +814,225 @@ def _batched_cublas_cholesky_solve(cache: CupyDiffusionSchurCholeskyCache, rhs, 
         )
     solution = cupy.ascontiguousarray(work.transpose(0, 2, 1))
     return solution[..., 0] if squeeze else solution
+
+
+def _build_compact_trace_response_cupy(
+        cache: CupyDiffusionSchurCholeskyCache,
+        cspace,
+        trace_ref,
+        tau: float,
+        *,
+        chunk_size: int = 8192,
+):
+    """Build only the scalar response ``S_e^-1 B_e`` in bounded chunks."""
+    cupy = require_cupy()
+    if cache.coupling_x is None or cache.coupling_y is None:
+        raise ValueError("compact trace-response construction requires coupling matrices")
+    mesh = cspace.mesh
+    num_elements = int(mesh.num_tri)
+    nel = int(cspace.el_dof)
+    ntr = int(cspace.edg_dof)
+    ncols = 3 * ntr
+    response = cupy.empty((num_elements, nel, ncols), dtype=cupy.float64)
+    chunk_size = max(1, int(chunk_size))
+    oriented_table = trace_ref.face_trace_test_element_trial_oriented
+    for begin in range(0, num_elements, chunk_size):
+        end = min(num_elements, begin + chunk_size)
+        count = end - begin
+        oriented = oriented_table[
+            mesh.loc2oriented_face_coupling[begin:end]
+        ]
+        # (K, face, trace-test, element-trial) -> (K, element, face, trace)
+        coupling = oriented.transpose(0, 3, 1, 2)
+        scaled = (
+            mesh.jacs_el_fc[begin:end, None, :, None] * coupling
+        )
+        boundary_u = cupy.ascontiguousarray(
+            float(tau) * scaled.reshape(count, nel, ncols)
+        )
+        boundary_x = cupy.ascontiguousarray(
+            (
+                mesh.normals[begin:end, None, :, 0, None] * scaled
+            ).reshape(count, nel, ncols)
+        )
+        boundary_y = cupy.ascontiguousarray(
+            (
+                mesh.normals[begin:end, None, :, 1, None] * scaled
+            ).reshape(count, nel, ncols)
+        )
+        minv_x = cache.mass_inverse[None, ...] @ boundary_x
+        minv_y = cache.mass_inverse[None, ...] @ boundary_y
+        condensed = cupy.ascontiguousarray(
+            boundary_u
+            + cache.jac_inverse[begin:end, None, None]
+            * (
+                cache.coupling_x[begin:end] @ minv_x
+                + cache.coupling_y[begin:end] @ minv_y
+            )
+        )
+        response[begin:end] = _batched_cublas_cholesky_solve(
+            cache,
+            condensed,
+            batch_offset=begin,
+            chunk_size=chunk_size,
+        )
+    return cupy.ascontiguousarray(response)
+
+
+def compact_schur_cholesky_cache_cupy(
+        cache: CupyDiffusionSchurCholeskyCache,
+        cspace,
+        trace_ref,
+        tau: float,
+) -> CupyDiffusionSchurCholeskyCache:
+    """Replace redundant dense local matrices with a scalar trace response."""
+    cupy = require_cupy()
+    stream = cupy.cuda.get_current_stream()
+    timings = dict(cache.timings)
+    start = time.perf_counter()
+    phase_start = start
+    trace_response = _build_compact_trace_response_cupy(
+        cache, cspace, trace_ref, float(tau)
+    )
+    stream.synchronize()
+    timings["cupy.local_cache.compact_trace_response"] = time.perf_counter() - phase_start
+
+    phase_start = time.perf_counter()
+    d0_reference, d1_reference = reference_derivative_mats(cspace)
+    mass_inverse_d0 = cupy.ascontiguousarray(cache.mass_inverse @ d0_reference)
+    mass_inverse_d1 = cupy.ascontiguousarray(cache.mass_inverse @ d1_reference)
+    face_element_trace = cupy.ascontiguousarray(
+        trace_ref.face_trace_test_element_trial_oriented
+    )
+    source_solution = cupy.empty(
+        (int(cspace.mesh.num_tri), int(cspace.el_dof)), dtype=cupy.float64
+    )
+    rhs_kernel, reconstruct_kernel = _compile_compact_diffusion_kernels(
+        cupy, nel=int(cspace.el_dof), ntr=int(cspace.edg_dof)
+    )
+    stream.synchronize()
+    timings["cupy.local_cache.compact_kernel_jit"] = time.perf_counter() - phase_start
+    local_factor_bytes = int(
+        cache.factor.nbytes
+        + cache.factor_ptrs.nbytes
+        + trace_response.nbytes
+        + source_solution.nbytes
+        + mass_inverse_d0.nbytes
+        + mass_inverse_d1.nbytes
+        + face_element_trace.nbytes
+    )
+    timings["cupy.local_cache.compact_total"] = time.perf_counter() - start
+    timings["cupy.local_cache.compact_bytes"] = float(local_factor_bytes)
+    return replace(
+        cache,
+        coupling_x=None,
+        coupling_y=None,
+        local_factor_bytes=local_factor_bytes,
+        timings=timings,
+        trace_response=trace_response,
+        source_solution=source_solution,
+        mass_inverse_d0_reference=mass_inverse_d0,
+        mass_inverse_d1_reference=mass_inverse_d1,
+        face_element_trace=face_element_trace,
+        compact_rhs_kernel=rhs_kernel,
+        compact_reconstruct_kernel=reconstruct_kernel,
+        compact=True,
+    )
+
+
+def assemble_compact_diffusion_rhs_cupy(
+        cache: CupyDiffusionSchurCholeskyCache,
+        source_rhs,
+        cspace,
+        tau: float,
+):
+    """Fuse cached Cholesky solve, flux recovery, and reduced-RHS scatter."""
+    cupy = require_cupy()
+    if not cache.compact or cache.compact_rhs_kernel is None:
+        raise ValueError("compact diffusion RHS assembly requires a compact Cholesky cache")
+    nel = int(cspace.el_dof)
+    source_array = cupy.asarray(source_rhs, dtype=cupy.float64)
+    if source_array.ndim != 2 or int(source_array.shape[0]) != int(cspace.mesh.num_tri):
+        raise ValueError("diffusion source moments must have shape (num_elements, NEL or 3*NEL)")
+    if int(source_array.shape[1]) == 3 * nel:
+        source_moments = cupy.ascontiguousarray(source_array[:, :nel])
+    elif int(source_array.shape[1]) == nel:
+        source_moments = cupy.ascontiguousarray(source_array)
+    else:
+        raise ValueError("diffusion source moments must have NEL or 3*NEL columns")
+    rhs = cupy.zeros(
+        int(cspace.mesh.int_edges_inds.size) * int(cspace.edg_dof),
+        dtype=cupy.float64,
+    )
+    cache.compact_rhs_kernel(
+        (int(cspace.mesh.num_tri),),
+        (32,),
+        (
+            cache.factor,
+            source_moments,
+            cache.source_solution,
+            rhs,
+            cache.mass_inverse_d0_reference,
+            cache.mass_inverse_d1_reference,
+            cache.face_element_trace,
+            cspace.mesh.aff_mats,
+            cspace.mesh.aff_jacs,
+            cspace.mesh.jacs_el_fc,
+            cspace.mesh.normals,
+            cspace.mesh.loc2glob_edge,
+            cspace.mesh.loc2oriented_face_coupling,
+            cache.edge_to_solve_edge,
+            np.float64(tau),
+            np.int64(cspace.mesh.num_tri),
+        ),
+    )
+    return rhs
+
+
+def reconstruct_compact_diffusion_field_cupy(
+        trace,
+        cache: CupyDiffusionSchurCholeskyCache,
+        cspace,
+):
+    """Recover ``(u,q_x,q_y)`` from cached scalar source/trace responses."""
+    cupy = require_cupy()
+    if not cache.compact or cache.compact_reconstruct_kernel is None:
+        raise ValueError("compact diffusion reconstruction requires a compact Cholesky cache")
+    nel = int(cspace.el_dof)
+    uh = cupy.empty((int(cspace.mesh.num_tri), nel), dtype=cupy.float64)
+    local_unknowns = cupy.empty(
+        (int(cspace.mesh.num_tri), 3 * nel), dtype=cupy.float64
+    )
+    stream = cupy.cuda.get_current_stream()
+    begin = cupy.cuda.Event()
+    end = cupy.cuda.Event()
+    begin.record(stream)
+    cache.compact_reconstruct_kernel(
+        (int(cspace.mesh.num_tri),),
+        (32,),
+        (
+            cupy.ascontiguousarray(trace, dtype=cupy.float64),
+            cache.trace_response,
+            cache.source_solution,
+            uh,
+            local_unknowns,
+            cache.mass_inverse,
+            cache.mass_inverse_d0_reference,
+            cache.mass_inverse_d1_reference,
+            cache.face_element_trace,
+            cspace.mesh.aff_mats,
+            cspace.mesh.aff_jacs,
+            cspace.mesh.jacs_el_fc,
+            cspace.mesh.normals,
+            cspace.mesh.loc2glob_edge,
+            cspace.mesh.loc2oriented_face_coupling,
+            np.int64(cspace.mesh.num_tri),
+        ),
+    )
+    end.record(stream)
+    end.synchronize()
+    elapsed = cupy.cuda.get_elapsed_time(begin, end) / 1000.0
+    return cupy.ascontiguousarray(uh), cupy.ascontiguousarray(local_unknowns), elapsed
 
 
 def build_scalar_schur_cholesky_cache_cupy(
@@ -634,6 +1144,11 @@ def build_scalar_schur_cholesky_cache_cupy(
     factor_ptrs = cupy.ascontiguousarray(
         factor.data.ptr + cupy.arange(int(mesh.num_tri), dtype=cupy.uintp) * factor_stride
     )
+    rhs_scatter_kernel = _compile_reduced_rhs_scatter_kernel(cupy)
+    edge_to_solve_edge = cupy.full(mesh.num_edg, -1, dtype=cupy.int64)
+    edge_to_solve_edge[mesh.int_edges_inds] = cupy.arange(
+        int(mesh.int_edges_inds.size), dtype=cupy.int64
+    )
     local_factor_bytes = int(
         factor.nbytes + coupling_x.nbytes + coupling_y.nbytes + factor_ptrs.nbytes
     )
@@ -651,6 +1166,9 @@ def build_scalar_schur_cholesky_cache_cupy(
         coupling_adjoint_error=coupling_adjoint_error,
         local_factor_bytes=local_factor_bytes,
         timings=timings,
+        rhs_scatter_kernel=rhs_scatter_kernel,
+        edge_to_solve_edge=edge_to_solve_edge,
+        stabilization=float(tau),
     )
 
 
@@ -953,6 +1471,75 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
         trace_flux_mats=b_el_fc,
     )
 
+def _assemble_projected_diffusion_trace_rhs_compact_cupy(
+        source,
+        boundary_condition: Callable,
+        cspace,
+        trace_ref,
+        cached: CupyDiffusionTraceAssembly,
+) -> CupyDiffusionTraceAssembly:
+    """Refresh a zero-boundary RHS through the fused compact CUDA kernel."""
+    cupy = require_cupy()
+    cache = cached.schur_cholesky_cache
+    if cache is None or not cache.compact:
+        raise ValueError("compact cached RHS assembly requires a compact Cholesky cache")
+    start = time.perf_counter()
+    stream = cupy.cuda.get_current_stream()
+    events = [cupy.cuda.Event() for _ in range(4)]
+    events[0].record(stream)
+    constant_boundary = getattr(boundary_condition, "_hdgfem_constant_value", None)
+    if constant_boundary == 0.0:
+        boundary_trace = cached.boundary_trace
+        boundary_reused = True
+    else:
+        boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+        if boundary_trace.size and not bool(cupy.all(boundary_trace == 0.0).get()):
+            raise ValueError("cached CuPy RHS assembly currently requires zero Dirichlet trace data")
+        boundary_reused = False
+    events[1].record(stream)
+    source_rhs = source_moments_cupy(source, cspace)
+    events[2].record(stream)
+    rhs = assemble_compact_diffusion_rhs_cupy(
+        cache, source_rhs, cspace, tau=cache.stabilization
+    )
+    events[3].record(stream)
+    stream.synchronize()
+    boundary_seconds = cupy.cuda.get_elapsed_time(events[0], events[1]) / 1000.0
+    source_seconds = cupy.cuda.get_elapsed_time(events[1], events[2]) / 1000.0
+    fused_seconds = cupy.cuda.get_elapsed_time(events[2], events[3]) / 1000.0
+    timings = {
+        "cached_rhs.boundary": boundary_seconds,
+        "cached_rhs.source_moments": source_seconds,
+        "cached_rhs.fused_solve_flux_scatter": fused_seconds,
+        # Keep the historical keys for timing consumers while explicitly
+        # identifying that the three phases now share one kernel.
+        "cached_rhs.local_solve": fused_seconds,
+        "cached_rhs.face_flux": 0.0,
+        "cached_rhs.scatter": 0.0,
+        "cached_rhs.boundary_reused": float(boundary_reused),
+        "cached_rhs.scatter_raw_cuda": 1.0,
+        "cached_rhs.compact": 1.0,
+        "cached_rhs.total": time.perf_counter() - start,
+    }
+    return CupyDiffusionTraceAssembly(
+        rows=cached.rows,
+        cols=cached.cols,
+        data=cached.data,
+        rhs=rhs,
+        boundary_trace=boundary_trace,
+        timings=timings,
+        matrix_format=cached.matrix_format,
+        indptr=cached.indptr,
+        indices=cached.indices,
+        local_lhs=None,
+        element_boundary_mats=None,
+        source_rhs=source_rhs,
+        raw_assembly=cached.raw_assembly,
+        schur_cholesky_cache=cache,
+        trace_flux_mats=None,
+    )
+
+
 def assemble_projected_diffusion_trace_rhs_cached_cupy(
         source,
         boundary_condition: Callable,
@@ -963,32 +1550,69 @@ def assemble_projected_diffusion_trace_rhs_cached_cupy(
     """Rebuild only a zero-Dirichlet reduced RHS from cached CuPy Schur data."""
     cupy = require_cupy()
     cache = cached.schur_cholesky_cache
+    if cache is not None and cache.compact:
+        return _assemble_projected_diffusion_trace_rhs_compact_cupy(
+            source, boundary_condition, cspace, trace_ref, cached
+        )
     b_el_fc = cached.trace_flux_mats
     if cache is None or b_el_fc is None:
         raise ValueError("cached CuPy RHS assembly requires Schur-Cholesky and trace-flux caches")
     start = time.perf_counter()
-    boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
-    if boundary_trace.size and not bool(cupy.all(boundary_trace == 0.0).get()):
-        raise ValueError("cached CuPy RHS assembly currently requires zero Dirichlet trace data")
+    stream = cupy.cuda.get_current_stream()
+    events = [cupy.cuda.Event() for _ in range(6)]
+    events[0].record(stream)
+    constant_boundary = getattr(boundary_condition, "_hdgfem_constant_value", None)
+    if constant_boundary == 0.0:
+        boundary_trace = cached.boundary_trace
+        boundary_reused = True
+    else:
+        boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+        if boundary_trace.size and not bool(cupy.all(boundary_trace == 0.0).get()):
+            raise ValueError("cached CuPy RHS assembly currently requires zero Dirichlet trace data")
+        boundary_reused = False
+    events[1].record(stream)
     source_rhs = source_moments_cupy(source, cspace)
+    events[2].record(stream)
     solved_src = solve_mixed_from_scalar_cholesky_cupy(cache, source_rhs)
+    events[3].record(stream)
     faces = face_rhs_cupy(b_el_fc, solved_src, cspace)
-    rhs_full = cupy.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=cupy.float64)
-    rhs_full_r = rhs_full.reshape((cspace.mesh.num_edg, cspace.edg_dof))
-    cupy.add.at(
-        rhs_full_r,
-        cspace.mesh.loc2glob_edge[cspace.mesh.interior_elements, cspace.mesh.interior_faces],
-        faces[cspace.mesh.interior_elements, cspace.mesh.interior_faces],
+    events[4].record(stream)
+    num_sides = int(cspace.mesh.interior_elements.size)
+    edge_dof = int(cspace.edg_dof)
+    rhs = cupy.zeros(int(cspace.mesh.int_edges_inds.size) * edge_dof, dtype=cupy.float64)
+    threads = 256
+    count = num_sides * edge_dof
+    cache.rhs_scatter_kernel(
+        ((count + threads - 1) // threads,),
+        (threads,),
+        (
+            faces,
+            cspace.mesh.interior_elements,
+            cspace.mesh.interior_faces,
+            cspace.mesh.loc2glob_edge,
+            cache.edge_to_solve_edge,
+            rhs,
+            np.int64(num_sides),
+            np.int32(edge_dof),
+        ),
     )
-    rhs = cupy.ascontiguousarray(rhs_full_r[cspace.mesh.int_edges_inds].ravel())
-    cupy.cuda.get_current_stream().synchronize()
+    events[5].record(stream)
+    stream.synchronize()
+    phase_names = ("boundary", "source_moments", "local_solve", "face_flux", "scatter")
+    timings = {
+        f"cached_rhs.{name}": cupy.cuda.get_elapsed_time(left, right) / 1000.0
+        for name, left, right in zip(phase_names, events[:-1], events[1:], strict=True)
+    }
+    timings["cached_rhs.boundary_reused"] = float(boundary_reused)
+    timings["cached_rhs.scatter_raw_cuda"] = 1.0
+    timings["cached_rhs.total"] = time.perf_counter() - start
     return CupyDiffusionTraceAssembly(
         rows=cached.rows,
         cols=cached.cols,
         data=cached.data,
         rhs=rhs,
         boundary_trace=boundary_trace,
-        timings={"cached_rhs.total": time.perf_counter() - start},
+        timings=timings,
         matrix_format=cached.matrix_format,
         indptr=cached.indptr,
         indices=cached.indices,
@@ -1019,10 +1643,18 @@ def attach_schur_cholesky_cache_cupy(
     cache = build_scalar_schur_cholesky_cache_cupy(
         reaction, cspace, trace_ref, float(stabilization)
     )
-    element_boundary = element_boundary_mats_cupy(
-        cspace, trace_ref, float(stabilization)
+    cache = compact_schur_cholesky_cache_cupy(
+        cache, cspace, trace_ref, float(stabilization)
     )
-    trace_flux = b_trace_mats_cupy(cspace, trace_ref, float(stabilization))
+    if assembled.source_rhs is None:
+        raise ValueError("raw CUDA diffusion assembly did not retain source moments")
+    # Populate the persistent scalar source solution needed by the first local
+    # reconstruction. The raw assembly already supplied the exact initial
+    # reduced RHS, including boundary-column elimination, so this setup RHS is
+    # intentionally discarded.
+    assemble_compact_diffusion_rhs_cupy(
+        cache, assembled.source_rhs, cspace, cache.stabilization
+    )
     cupy.cuda.get_current_stream().synchronize()
     timings = dict(assembled.timings or {})
     timings.update(cache.timings)
@@ -1031,9 +1663,9 @@ def attach_schur_cholesky_cache_cupy(
         assembled,
         timings=timings,
         local_lhs=None,
-        element_boundary_mats=element_boundary,
+        element_boundary_mats=None,
         schur_cholesky_cache=cache,
-        trace_flux_mats=trace_flux,
+        trace_flux_mats=None,
     )
 
 
@@ -1358,6 +1990,9 @@ __all__ = [
     "build_dof_maps",
     "build_trace_reference",
     "compact_boundary_trace_to_full",
+    "compact_schur_cholesky_cache_cupy",
+    "assemble_compact_diffusion_rhs_cupy",
+    "reconstruct_compact_diffusion_field_cupy",
     "element_boundary_mats_cupy",
     "face_element_mass",
     "reference_derivative_mats",

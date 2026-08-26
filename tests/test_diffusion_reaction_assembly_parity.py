@@ -8,7 +8,14 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem import DGMesh, DGSpace, DiffusionReactionHDGSolver, rectangle_mesh, solve_diffusion_reaction_hdg
+from hdgfem import (
+    DGMesh,
+    DGSpace,
+    DiffusionReactionHDGSolver,
+    rectangle_mesh,
+    solve_diffusion_reaction_hdg,
+    solver_result_metrics,
+)
 from hdgfem.linalg import expand_known_dofs
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
@@ -288,6 +295,171 @@ def test_diffusion_raw_cuda_schur_lu_cache_reuses_factors_rhs_reconstruction_and
 
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
+@pytest.mark.parametrize("degree", (4, 5, 6))
+def test_fb_hp_mg_reuses_all_fixed_poisson_state_and_supports_periodic_rt_flux(
+        degree: int,
+) -> None:
+    """A changed RHS must not rebuild/upload any native Poisson hierarchy state."""
+    mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(
+        mesh, degree, basis_type="dub_orth", volume_quad_1d=2 * degree + 2
+    )
+    common = dict(
+        diffusion=1.0,
+        stabilization=1.3,
+        assembly_backend="raw-cuda",
+        preconditioner=None,
+        solver_rtol=1.0e-9,
+        maxiter=200,
+        scale_system=False,
+        trace_basis="legendre-modal",
+        raw_matrix_format="bsr",
+        cache_local_factors="schur-cholesky",
+        boundary_mode="eliminate",
+        hdg_postprocess="none",
+        verbose=False,
+    )
+    solver = DiffusionReactionHDGSolver(
+        space,
+        source=space.project_callable(_source, name="source_h"),
+        reaction=space.zeros(name="reaction_h"),
+        boundary_condition=0.0,
+        solver="fb-hp-mg-pcg",
+        **common,
+    )
+
+    first = solver.solve()
+    assembly = solver._raw_cuda_assembly_cache
+    raw = assembly.raw_assembly
+    factors = assembly.schur_cholesky_cache
+    native = solver._raw_cuda_fb_hp_mg_solver
+    operators = tuple(level.operator for level in native.preconditioner.levels)
+    coarse = native.preconditioner.coarse_solver
+
+    solver.set_source(
+        space.project_callable(
+            lambda x, y: 0.7 + 0.2 * x - 0.15 * y,
+            name="updated_source_h",
+        )
+    )
+    second = solver.solve(
+        initial_guess=first.trace_reduced_device,
+        postprocess_overrides={
+            "hdg_postprocess": "flux",
+            "flux_postprocess_space": "RT_projection",
+            "postprocessing_backend": "raw-cuda",
+        },
+    )
+
+    assert solver._raw_cuda_assembly_cache.raw_assembly is raw
+    assert solver._raw_cuda_assembly_cache.schur_cholesky_cache is factors
+    assert solver._raw_cuda_fb_hp_mg_solver is native
+    assert all(
+        level.operator is expected
+        for level, expected in zip(native.preconditioner.levels, operators, strict=True)
+    )
+    assert native.preconditioner.coarse_solver is coarse
+    assert native.setup_count == 1
+    assert first.timings.details["raw.assembly.operator_reused"] == pytest.approx(0.0)
+    assert first.timings.details["raw.assembly.rhs_only"] == pytest.approx(0.0)
+    assert first.timings.details["solve.fb_hp_mg.setup_outer"] > 0.0
+    assert first.timings.solve >= first.global_solve_result.solve_elapsed_seconds
+    assert second.timings.details["raw.assembly.operator_reused"] == pytest.approx(1.0)
+    assert second.timings.details["raw.assembly.rhs_only"] == pytest.approx(1.0)
+    assert second.timings.details["solve.fb_hp_mg.hierarchy_reused"] == pytest.approx(1.0)
+    assert second.timings.details["solve.fb_hp_mg.setup_outer"] == pytest.approx(0.0)
+    assert second.timings.details["solve.fb_hp_mg.fallback"] == pytest.approx(0.0)
+    second_metrics = solver_result_metrics("poisson", second)
+    assert second_metrics["poisson_time_operator_assembly"] == pytest.approx(0.0)
+    assert second_metrics["poisson_time_rhs_assembly"] == pytest.approx(second.timings.assembly)
+    assert second.timings.details.get("solve.amgx.matrix_upload", 0.0) == pytest.approx(0.0)
+    assert second.global_solve_result.backend == "fb-hp-mg-pcg"
+    assert second.global_solve_result.physical_residual_target_met
+    assert second.postprocessed_flux is not None
+    assert second.postprocessing_backend == "raw-cuda"
+    assert solver.options.hdg_postprocess == "none"
+
+    amgx_config = json.loads(
+        Path("configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json").read_text()
+    )
+    reference = DiffusionReactionHDGSolver(
+        space,
+        source=solver.source,
+        reaction=space.zeros(name="reference_reaction_h"),
+        boundary_condition=0.0,
+        solver="amgx",
+        amgx_config=amgx_config,
+        **common,
+    ).solve()
+    np.testing.assert_allclose(
+        second.field.coeffs, reference.field.coeffs, rtol=2.0e-8, atol=2.0e-9
+    )
+    np.testing.assert_allclose(
+        second.flux.as_component_first(), reference.flux.as_component_first(),
+        rtol=2.0e-8, atol=2.0e-9,
+    )
+    solver.clear_cache()
+
+
+@pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
+def test_fb_hp_mg_runtime_gate_falls_back_once_and_reuses_hybrid_amgx(monkeypatch) -> None:
+    from hdgfem.linalg import face_hp_multigrid
+
+    class RejectedNativeSolver:
+        attempts = 0
+
+        def __init__(self, **kwargs):
+            type(self).attempts += 1
+            raise RuntimeError("injected symmetry gate failure")
+
+    monkeypatch.setattr(
+        face_hp_multigrid, "FaceBlockHpMgPcgSolver", RejectedNativeSolver
+    )
+    space = DGSpace(
+        rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0)),
+        4,
+        basis_type="dub_orth",
+        volume_quad_1d=10,
+    )
+    amgx_config = json.loads(
+        Path("configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json").read_text()
+    )
+    solver = DiffusionReactionHDGSolver(
+        space,
+        source=space.project_callable(_source),
+        reaction=space.zeros(),
+        boundary_condition=0.0,
+        diffusion=1.0,
+        stabilization=1.3,
+        assembly_backend="raw-cuda",
+        solver="fb-hp-mg-pcg",
+        amgx_config=amgx_config,
+        solver_rtol=1.0e-9,
+        maxiter=200,
+        scale_system=False,
+        trace_basis="legendre-modal",
+        raw_matrix_format="bsr",
+        cache_local_factors="schur-cholesky",
+        boundary_mode="eliminate",
+        verbose=False,
+    )
+
+    first = solver.solve()
+    fallback = solver._raw_cuda_amgx_solver
+    solver.set_source(space.project_callable(lambda x, y: 1.0 + 0.1 * x))
+    second = solver.solve(initial_guess=first.trace_reduced_device)
+
+    assert RejectedNativeSolver.attempts == 1
+    assert solver._raw_cuda_amgx_solver is fallback
+    assert first.timings.details["solve.fb_hp_mg.fallback"] == pytest.approx(1.0)
+    assert second.timings.details["solve.fb_hp_mg.fallback"] == pytest.approx(1.0)
+    assert second.timings.details["solve.amgx.hierarchy_reused"] == pytest.approx(1.0)
+    assert second.global_solve_result.converged
+    assert "injected symmetry gate failure" in solver._raw_cuda_fb_hp_mg_failure_reason
+    solver.clear_cache()
+
+
+@pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -> None:
     from hdgfem.backends.cupy import require_cupy
 
@@ -327,8 +499,15 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
     assert raw.schur_pivots is None
     assert raw.local_factor_bytes == 0
     assert assembled.matrix_format == "csr"
-    assert assembled.element_boundary_mats is not None
-    assert assembled.trace_flux_mats is not None
+    assert assembled.element_boundary_mats is None
+    assert assembled.trace_flux_mats is None
+    assert cache.compact
+    assert cache.coupling_x is None
+    assert cache.coupling_y is None
+    assert cache.trace_response.shape == (
+        mesh.num_tri, space.el_dof, 3 * (space.order + 1)
+    )
+    assert cache.source_solution.shape == (mesh.num_tri, space.el_dof)
     for key in (
         "raw.assembly.raw.kernel.prepare",
         "raw.assembly.raw.kernel.jit",
@@ -349,6 +528,11 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
     assert cache.factor.shape == (mesh.num_tri, space.el_dof, space.el_dof)
     assert cache.factor.dtype == cp.float64
     factor_ptr = cache.factor.data.ptr
+    trace_response_ptr = cache.trace_response.data.ptr
+    source_solution_ptr = cache.source_solution.data.ptr
+    rhs_kernel = cache.compact_rhs_kernel
+    reconstruct_kernel = cache.compact_reconstruct_kernel
+    source_solution_before = cache.source_solution.copy()
 
     updated_source = space.project_callable(
         lambda x, y: 0.7 + 0.2 * x - 0.15 * y,
@@ -357,10 +541,28 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
     solver.set_source(updated_source)
     second = solver.solve()
     reused = solver._raw_cuda_assembly_cache
-    assert reused.schur_cholesky_cache.factor.data.ptr == factor_ptr
+    reused_cache = reused.schur_cholesky_cache
+    assert reused_cache is cache
+    assert reused_cache.factor.data.ptr == factor_ptr
+    assert reused_cache.trace_response.data.ptr == trace_response_ptr
+    assert reused_cache.source_solution.data.ptr == source_solution_ptr
+    assert reused_cache.compact_rhs_kernel is rhs_kernel
+    assert reused_cache.compact_reconstruct_kernel is reconstruct_kernel
+    assert not bool(cp.all(reused_cache.source_solution == source_solution_before).get())
     assert reused.raw_assembly is raw
     assert second.assembly_backend == "raw-cuda"
     assert second.timings.details["raw.assembly.cached_rhs.total"] > 0.0
+    assert second.timings.details["raw.assembly.cached_rhs.boundary_reused"] == pytest.approx(1.0)
+    assert second.timings.details["raw.assembly.cached_rhs.scatter_raw_cuda"] == pytest.approx(1.0)
+    assert second.timings.details["raw.assembly.cached_rhs.compact"] == pytest.approx(1.0)
+    assert second.timings.details["raw.assembly.cached_rhs.source_moments"] >= 0.0
+    assert second.timings.details["raw.assembly.cached_rhs.local_solve"] >= 0.0
+    assert second.timings.details["raw.assembly.cached_rhs.face_flux"] >= 0.0
+    assert second.timings.details["raw.assembly.cached_rhs.scatter"] >= 0.0
+    assert second.timings.details["raw.assembly.operator_reused"] == pytest.approx(1.0)
+    assert second.timings.details["raw.assembly.rhs_only"] == pytest.approx(1.0)
+    assert second.timings.details["cupy.local_factors.compact"] == pytest.approx(1.0)
+    assert second.timings.details["cupy.reconstruction.compact"] == pytest.approx(1.0)
     assert second.timings.details["cupy.reconstruction.local_factors.reused"] == pytest.approx(1.0)
     assert second.timings.details["raw.reconstruction.local_factors.reused"] == pytest.approx(0.0)
     assert second.timings.details["solve.amgx.hierarchy_reused"] == pytest.approx(1.0)
@@ -602,6 +804,69 @@ def test_diffusion_modal_numba_solve_reconstruction_matches_numpy(mesh_name, mes
         atol=1.0e-11,
         err_msg=f"{mesh_name} p={order} flux",
     )
+
+
+@GPU_RUNTIME_MARK
+@pytest.mark.parametrize("order", (2, 6))
+def test_diffusion_compact_schur_rhs_and_reconstruction_match_cublas(order: int) -> None:
+    """The fused compact kernels preserve the mixed HDG signs and face orientation."""
+    import cupy as cp
+
+    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.backends.diffusion_cupy import (
+        assemble_compact_diffusion_rhs_cupy,
+        assemble_projected_diffusion_trace_system_eliminated_cupy,
+        build_trace_reference,
+        compact_schur_cholesky_cache_cupy,
+        reconstruct_compact_diffusion_field_cupy,
+        solve_mixed_from_scalar_cholesky_cupy,
+    )
+
+    space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
+    source_h = space.project_callable(_source, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
+    cspace = as_cupy_space(space)
+    trace_ref = build_trace_reference(cspace, "legendre-modal")
+    assembled = assemble_projected_diffusion_trace_system_eliminated_cupy(
+        source_h,
+        reaction_h,
+        lambda x, y: 0.0 * x,
+        1.3,
+        space,
+        trace_basis="legendre-modal",
+        trace_ref=trace_ref,
+        use_schur_cholesky=True,
+    )
+    reference_cache = assembled.schur_cholesky_cache
+    compact_cache = compact_schur_cholesky_cache_cupy(
+        reference_cache, cspace, trace_ref, 1.3
+    )
+
+    compact_rhs = assemble_compact_diffusion_rhs_cupy(
+        compact_cache, assembled.source_rhs, cspace, 1.3
+    )
+    cp.testing.assert_allclose(compact_rhs, assembled.rhs, rtol=2.0e-11, atol=2.0e-12)
+
+    trace = cp.linspace(
+        -0.2, 0.3, int(cspace.mesh.num_edg) * int(cspace.edg_dof), dtype=cp.float64
+    )
+    trace_by_edge = trace.reshape((cspace.mesh.num_edg, cspace.edg_dof))
+    element_traces = trace_by_edge[cspace.mesh.loc2glob_edge].reshape(
+        (cspace.mesh.num_tri, 3 * cspace.edg_dof)
+    )
+    mixed_rhs = (
+        assembled.source_rhs[..., None]
+        + assembled.element_boundary_mats @ element_traces[..., None]
+    )
+    expected = solve_mixed_from_scalar_cholesky_cupy(
+        reference_cache, mixed_rhs
+    ).squeeze(-1)
+    actual_u, actual, _ = reconstruct_compact_diffusion_field_cupy(
+        trace, compact_cache, cspace
+    )
+
+    cp.testing.assert_allclose(actual, expected, rtol=5.0e-11, atol=5.0e-12)
+    cp.testing.assert_allclose(actual_u, expected[:, : space.el_dof], rtol=5.0e-11, atol=5.0e-12)
 
 
 @GPU_RUNTIME_MARK
