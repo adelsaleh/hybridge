@@ -16,7 +16,7 @@ def test_solver_options_default_to_automatic_launch_selection():
 
 @pytest.mark.parametrize(
     ("order", "expected"),
-    ((0, 1), (1, 3), (2, 6), (6, 28), (8, 45)),
+    ((0, 1), (1, 3), (2, 6), (6, 28), (8, 45), (9, 55)),
 )
 def test_triangle_element_dof(order, expected):
     assert triangle_element_dof(order) == expected
@@ -24,7 +24,7 @@ def test_triangle_element_dof(order, expected):
 
 @pytest.mark.parametrize(
     ("order", "expected"),
-    ((0, 32), (2, 32), (6, 32), (7, 64), (8, 64), (10, 128)),
+    ((0, 32), (2, 32), (6, 32), (7, 64), (8, 128), (9, 128), (10, 128)),
 )
 def test_advection_recommendation_covers_local_rows(order, expected):
     assert recommended_raw_cuda_block_size("advection-reaction", order) == expected

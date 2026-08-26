@@ -1,0 +1,16 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "BICGSTAB",
+    "bsr_spmv_backend": "cusparse_generic",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_INI_CORE",
+    "tolerance": 1e-14,
+    "max_iters": 1500,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2"
+  }
+}

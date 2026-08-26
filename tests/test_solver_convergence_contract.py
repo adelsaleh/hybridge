@@ -334,6 +334,76 @@ def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
     assert result.amgx_retry_matrix_backup_bytes == 0
     assert result.amgx_retry_wrapper_elapsed_seconds >= 0.0
 
+
+def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficients(
+    monkeypatch,
+) -> None:
+    import hdgfem.backends.advection_cuda as raw_amgx
+
+    created = []
+    calls = []
+
+    class FakeReusableSolver:
+        def __init__(self, **_kwargs):
+            self.closed = False
+            self.is_setup = False
+            created.append(self)
+
+    def fake_attempt(_assembly, **kwargs):
+        reusable = kwargs.get("reusable_solver")
+        replace_coefficients = kwargs.get("replace_reusable_coefficients", False)
+        calls.append((reusable, replace_coefficients))
+        if reusable is None:
+            result = _diagnostic_result(
+                solver_residual=1.0, solver_target=1.0e-6,
+                physical_residual=1.0, physical_target=1.0e-6,
+            )
+            finalize_solve_result(
+                result, backend="pyamgx-device", backend_success=True
+            )
+        else:
+            result = _diagnostic_result(
+                solver_residual=1.0e-8, solver_target=1.0e-6,
+                physical_residual=1.0e-8, physical_target=1.0e-6,
+            )
+            finalize_solve_result(
+                result, backend="pyamgx-device", backend_success=True
+            )
+            result.amgx_preconditioner_reused = replace_coefficients
+            result.amgx_bsr_scalarized = True
+            reusable.is_setup = True
+        return result, np.ones(2)
+
+    monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
+    monkeypatch.setattr(raw_amgx, "PyAMGXCsrDeviceSolver", FakeReusableSolver)
+    monkeypatch.setattr(
+        raw_amgx, "_solve_reduced_system_amgx_device_once", fake_attempt
+    )
+    cache = {}
+    retry = ({
+        "label": "robust-scaled",
+        "config": {"solver": {"solver": "FGMRES"}},
+        "scalarize_bsr": True,
+        "reuse_preconditioner": True,
+        "solver_cache_key": "fgmres-dilu",
+    },)
+
+    first, _ = raw_amgx.solve_reduced_system_amgx_device(
+        _FakeAmgxAssembly(), retry_attempts=retry, retry_solver_cache=cache
+    )
+    second, _ = raw_amgx.solve_reduced_system_amgx_device(
+        _FakeAmgxAssembly(), retry_attempts=retry, retry_solver_cache=cache
+    )
+
+    assert first.converged and second.converged
+    assert len(created) == 1
+    assert cache["fgmres-dilu"] is created[0]
+    assert calls[1] == (created[0], False)
+    assert calls[3] == (created[0], True)
+    assert first.amgx_attempts[-1]["preconditioner_reused"] is False
+    assert second.amgx_attempts[-1]["preconditioner_reused"] is True
+
+
 def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) -> None:
     import hdgfem.backends.advection_cuda as raw_amgx
 
@@ -469,8 +539,38 @@ def test_raw_amgx_config_enables_residual_history_without_mutating_input() -> No
     config = {"solver": {"solver": "FGMRES", "store_res_history": 0}}
     normalized = _amgx_config_for_solve(config=config)
 
+    assert normalized["solver"]["monitor_residual"] == 1
     assert normalized["solver"]["store_res_history"] == 1
     assert config["solver"]["store_res_history"] == 0
+
+
+def test_raw_amgx_config_reserves_native_iteration_table_for_level_three() -> None:
+    from hdgfem.backends.advection_cuda import _amgx_config_for_solve
+
+    config = {"solver": {"solver": "BICGSTAB", "print_solve_stats": 0}}
+
+    detailed = _amgx_config_for_solve(config=config, verbose=2)
+    fully_verbose = _amgx_config_for_solve(config=config, verbose=3)
+
+    assert detailed["solver"]["obtain_timings"] == 1
+    assert detailed["solver"]["print_solve_stats"] == 0
+    assert fully_verbose["solver"]["print_solve_stats"] == 1
+    assert fully_verbose["solver"]["print_solve_stats_interval"] == 1
+    assert "obtain_timings" not in fully_verbose["solver"]
+
+
+def test_raw_amgx_scaled_solver_validation_uses_configured_relative_tolerance() -> None:
+    from hdgfem.backends.advection_cuda import _amgx_relative_residual_check_rtol
+
+    relative = {
+        "solver": {"convergence": "RELATIVE_INI_CORE", "tolerance": 1.0e-8}
+    }
+    absolute = {
+        "solver": {"convergence": "ABSOLUTE", "tolerance": 5.0e-9}
+    }
+
+    assert _amgx_relative_residual_check_rtol(relative, 1.0e-11) == 1.0e-8
+    assert _amgx_relative_residual_check_rtol(absolute, 1.0e-11) == 1.0e-11
 
 
 def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) -> None:

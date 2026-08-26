@@ -1179,8 +1179,17 @@ def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
 
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
-@pytest.mark.parametrize("trace_basis,raw_lu_mode", [("legacy-lagrange", "safe"), ("legacy-lagrange", "coop"), ("legendre-modal", "safe"), ("legendre-modal", "coop")])
-def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
+@pytest.mark.parametrize(
+    "trace_basis,raw_lu_mode,order",
+    [
+        ("legacy-lagrange", "safe", 2),
+        ("legacy-lagrange", "coop", 2),
+        ("legendre-modal", "safe", 2),
+        ("legendre-modal", "coop", 2),
+        ("legacy-lagrange", "coop", 6),
+    ],
+)
+def test_raw_fused_csr_and_bsr_assembly_match_coo(trace_basis, raw_lu_mode, order):
     from hdgfem.backends.cupy import as_cupy_space, require_cupy, require_cupyx_sparse
     from hdgfem.backends.advection_cuda import (
         assemble_reduced_system_cuda,
@@ -1190,8 +1199,9 @@ def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
 
     cp = require_cupy()
     sparse = require_cupyx_sparse()
-    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
-    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    mesh_cells = 2 if order == 6 else 1
+    mesh = rectangle_mesh(mesh_cells, mesh_cells, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, order, basis_type="dub_orth", volume_quad_1d=2 * order + 2)
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(space.trace_space(trace_basis), device=cspace.device_id)
     beta = (
@@ -1233,6 +1243,19 @@ def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
         raw_block_size=32,
         raw_matrix_format="csr",
     )
+    bsr = assemble_reduced_system_cuda(
+        source_h,
+        reaction_h,
+        boundary,
+        beta_coeffs,
+        cspace,
+        trace_ref,
+        backend="raw-cuda",
+        raw_local_assembly="fused",
+        raw_lu_mode=raw_lu_mode,
+        raw_block_size=32,
+        raw_matrix_format="bsr",
+    )
 
     shape = (coo.rhs.size, coo.rhs.size)
     coo_matrix = sparse.coo_matrix(
@@ -1241,12 +1264,29 @@ def test_raw_fused_csr_assembly_matches_coo(trace_basis, raw_lu_mode):
     ).tocsr()
     coo_matrix.sum_duplicates()
     csr_matrix = sparse.csr_matrix((csr.data, csr.indices, csr.indptr), shape=shape)
+    bsr_matrix = scipy.sparse.bsr_matrix(
+        (
+            cp.asnumpy(bsr.data),
+            cp.asnumpy(bsr.indices),
+            cp.asnumpy(bsr.indptr),
+        ),
+        shape=shape,
+    ).tocsr()
 
     assert csr.matrix_format == "csr"
+    assert bsr.matrix_format == "bsr"
+    assert bsr.data.shape[1:] == (space.quad_data.edg_dof,) * 2
     assert bool(cp.all(coo_matrix.indptr == csr_matrix.indptr).get())
     assert bool(cp.all(coo_matrix.indices == csr_matrix.indices).get())
     assert float(cp.max(cp.abs(coo_matrix.data - csr_matrix.data)).get()) < 1.0e-11
+    np.testing.assert_allclose(
+        cp.asnumpy(csr_matrix.toarray()),
+        bsr_matrix.toarray(),
+        rtol=1.0e-11,
+        atol=1.0e-12,
+    )
     assert float(cp.max(cp.abs(coo.rhs - csr.rhs)).get()) < 1.0e-11
+    assert float(cp.max(cp.abs(csr.rhs - bsr.rhs)).get()) < 1.0e-11
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
@@ -1345,6 +1385,7 @@ def test_raw_fused_zero_flux_csr_assembly_matches_coo():
     )
     coo = assemble_reduced_system_cuda(raw_matrix_format="coo", **common)
     csr = assemble_reduced_system_cuda(raw_matrix_format="csr", **common)
+    bsr = assemble_reduced_system_cuda(raw_matrix_format="bsr", **common)
 
     shape = (coo.rhs.size, coo.rhs.size)
     coo_matrix = sparse.coo_matrix(
@@ -1353,12 +1394,28 @@ def test_raw_fused_zero_flux_csr_assembly_matches_coo():
     ).tocsr()
     coo_matrix.sum_duplicates()
     csr_matrix = sparse.csr_matrix((csr.data, csr.indices, csr.indptr), shape=shape)
+    bsr_matrix = scipy.sparse.bsr_matrix(
+        (
+            cp.asnumpy(bsr.data),
+            cp.asnumpy(bsr.indices),
+            cp.asnumpy(bsr.indptr),
+        ),
+        shape=shape,
+    ).tocsr()
 
     assert csr.matrix_format == "csr"
+    assert bsr.matrix_format == "bsr"
     assert bool(cp.all(coo_matrix.indptr == csr_matrix.indptr).get())
     assert bool(cp.all(coo_matrix.indices == csr_matrix.indices).get())
     assert float(cp.max(cp.abs(coo_matrix.data - csr_matrix.data)).get()) < 1.0e-11
+    np.testing.assert_allclose(
+        cp.asnumpy(csr_matrix.toarray()),
+        bsr_matrix.toarray(),
+        rtol=1.0e-11,
+        atol=1.0e-12,
+    )
     assert float(cp.max(cp.abs(coo.rhs - csr.rhs)).get()) < 1.0e-11
+    assert float(cp.max(cp.abs(csr.rhs - bsr.rhs)).get()) < 1.0e-11
     assert float(cp.max(cp.abs(csr.boundary_trace)).get()) == 0.0
 
 
@@ -1493,6 +1550,68 @@ def test_cuda_row_scaling_restore_round_trip():
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_cuda_bsr_left_scaling_matches_scalar_csr_and_restores_values():
+    import cupyx.scipy.sparse as sparse
+
+    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.backends.advection_cuda import (
+        _DeviceBsrMatrixView,
+        _diagonal_scale_bsr_rows_in_place,
+        _diagonal_scale_csr_rows_in_place,
+        _restore_left_scaled_bsr_rows_in_place,
+    )
+
+    cp = require_cupy()
+    matrix_host = np.asarray(
+        [
+            [4.0, -1.0, 0.5, 0.25],
+            [-2.0, 5.0, 0.0, 0.75],
+            [1.0, 0.0, 8.0, -3.0],
+            [0.5, 2.0, -1.0, 10.0],
+        ],
+        dtype=np.float64,
+    )
+    rhs_host = np.asarray([2.0, -5.0, 4.0, 20.0], dtype=np.float64)
+    bsr = _DeviceBsrMatrixView(
+        data=cp.asarray(
+            [
+                matrix_host[:2, :2],
+                matrix_host[:2, 2:],
+                matrix_host[2:, :2],
+                matrix_host[2:, 2:],
+            ]
+        ),
+        indices=cp.asarray([0, 1, 0, 1], dtype=cp.int32),
+        indptr=cp.asarray([0, 2, 4], dtype=cp.int32),
+        shape=matrix_host.shape,
+        block_size=2,
+    )
+    bsr_rhs = cp.asarray(rhs_host)
+    csr = sparse.csr_matrix(cp.asarray(matrix_host))
+    csr_rhs = cp.asarray(rhs_host)
+
+    bsr_diagonal = _diagonal_scale_bsr_rows_in_place(bsr, bsr_rhs)
+    csr_diagonal = _diagonal_scale_csr_rows_in_place(csr, csr_rhs)
+    cp.cuda.get_current_stream().synchronize()
+
+    bsr_scaled = scipy.sparse.bsr_matrix(
+        (cp.asnumpy(bsr.data), cp.asnumpy(bsr.indices), cp.asnumpy(bsr.indptr)),
+        shape=bsr.shape,
+    ).toarray()
+    np.testing.assert_allclose(cp.asnumpy(bsr_diagonal), cp.asnumpy(csr_diagonal))
+    np.testing.assert_allclose(cp.asnumpy(bsr_rhs), cp.asnumpy(csr_rhs))
+    np.testing.assert_allclose(bsr_scaled, csr.get().toarray())
+
+    _restore_left_scaled_bsr_rows_in_place(bsr, bsr_diagonal)
+    cp.cuda.get_current_stream().synchronize()
+    restored = scipy.sparse.bsr_matrix(
+        (cp.asnumpy(bsr.data), cp.asnumpy(bsr.indices), cp.asnumpy(bsr.indptr)),
+        shape=bsr.shape,
+    ).toarray()
+    np.testing.assert_allclose(restored, matrix_host, rtol=2.0e-15, atol=2.0e-15)
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materialization():
     from hdgfem.backends.cupy import as_cupy_space, require_cupy
     from hdgfem.backends.diffusion_cupy import source_moments_cupy
@@ -1529,8 +1648,152 @@ def test_coefficient_field_projects_callable_through_package_api():
     np.testing.assert_allclose(source_input.coeffs, expected.coeffs, rtol=1.0e-13, atol=1.0e-13)
 
 
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy runtime is unavailable")
+def test_reusable_advection_solver_assembles_tangent_boundary_raw_cuda_bsr() -> None:
+    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    source_h = space.project_callable(lambda x, y: 1.0 + x - y)
+    reaction_h = space.constant(1.0)
+    beta_h = VectorDGField(
+        (lambda x, y: 1.0 - x * x, lambda x, y: 1.0 - y * y),
+        space,
+        name="beta_tangent_h",
+    )
+    solver = AdvectionReactionHDGSolver(
+        space,
+        source=source_h,
+        beta=beta_h,
+        reaction=reaction_h,
+        boundary_mode="zero-flux",
+        assembly_backend="raw-cuda",
+        solver="amgx",
+        raw_local_assembly="fused",
+        raw_lu_mode="safe",
+        raw_block_size=32,
+        raw_matrix_format="bsr",
+        materialize_host_system=False,
+        materialize_host_solution=False,
+        verbose=False,
+    )
+
+    assembly = solver.assemble_tangent_boundary_raw_cuda_bsr()
+
+    assert assembly is solver._tangent_boundary_bsr_assembly
+    assert assembly.matrix_format == "bsr"
+    assert assembly.indptr is not None
+    assert assembly.indices is not None
+    assert tuple(assembly.data.shape[1:]) == (space.order + 1, space.order + 1)
+    assert float(abs(assembly.boundary_trace).max().get()) == 0.0
+
+
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
-def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch, capsys):
+def test_p6_face_bsr_fgmres_dilu_fallback_scalarizes_only_on_device() -> None:
+    import cupy as cp
+    import cupyx.scipy.sparse as sparse
+
+    from hdgfem.backends.advection_cuda import (
+        _assembly_device_csr_matrix,
+        _device_compressed_matvec,
+        _scalarize_device_bsr_matrix,
+        _solve_reduced_system_amgx_device_once,
+        PyAMGXCsrDeviceSolver,
+    )
+    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+
+    mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 6, basis_type="dub_orth", volume_quad_1d=14)
+    solver = AdvectionReactionHDGSolver(
+        space,
+        source=space.project_callable(lambda x, y: 1.0 + 0.1 * x - 0.05 * y),
+        reaction=space.constant(10.0),
+        beta=VectorDGField((lambda x, y: -y, lambda x, y: x), space),
+        boundary_mode="zero-flux",
+        assembly_backend="raw-cuda",
+        solver="amgx",
+        trace_basis="legacy-lagrange",
+        raw_local_assembly="fused",
+        raw_lu_mode="coop",
+        raw_block_size="auto",
+        raw_matrix_format="bsr",
+        materialize_host_system=False,
+        materialize_host_solution=False,
+        verbose=0,
+    )
+    assembly = solver.assemble_tangent_boundary_raw_cuda_bsr()
+    block_matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+    scalar_matrix = _scalarize_device_bsr_matrix(block_matrix, sparse, cp)
+    probe = cp.linspace(-0.5, 0.75, assembly.rhs.size, dtype=cp.float64)
+    cp.testing.assert_allclose(
+        scalar_matrix @ probe,
+        _device_compressed_matvec(block_matrix, probe, sparse, cp),
+        rtol=2.0e-14,
+        atol=2.0e-14,
+    )
+
+    config = json.loads(
+        Path("configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json").read_text()
+    )
+    amgx_solver = PyAMGXCsrDeviceSolver(
+        config=config, maxiter=500, verbose=0, reusable=True
+    )
+    try:
+        first, first_trace = _solve_reduced_system_amgx_device_once(
+            assembly,
+            config=config,
+            tolerance=1.0e-10,
+            check_rtol=1.0e-10,
+            atol=1.0e-12,
+            maxiter=500,
+            reusable_solver=amgx_solver,
+            scale_system=True,
+            scalarize_bsr=True,
+            replace_reusable_coefficients=True,
+            materialize_host_solution=False,
+            verbose=0,
+        )
+        solver.set_problem(
+            space.project_callable(lambda x, y: 0.9 - 0.05 * x + 0.08 * y),
+            solver.beta,
+            space.constant(11.0),
+            None,
+        )
+        updated_assembly = solver.assemble_tangent_boundary_raw_cuda_bsr()
+        second, _ = _solve_reduced_system_amgx_device_once(
+            updated_assembly,
+            config=config,
+            tolerance=1.0e-10,
+            check_rtol=1.0e-10,
+            atol=1.0e-12,
+            maxiter=500,
+            initial_guess=first_trace,
+            reusable_solver=amgx_solver,
+            scale_system=True,
+            scalarize_bsr=True,
+            replace_reusable_coefficients=True,
+            materialize_host_solution=False,
+            verbose=0,
+        )
+
+        assert first.converged
+        assert first.physical_residual_target_met
+        assert first.amgx_bsr_scalarized is True
+        assert first.amgx_preconditioner_reused is False
+        assert second.converged
+        assert second.physical_residual_target_met
+        assert second.amgx_bsr_scalarized is True
+        assert second.amgx_preconditioner_reused is True
+        assert amgx_solver.setup_count == 1
+        assert amgx_solver.coefficients_replace_count == 1
+    finally:
+        amgx_solver.close(suppress_errors=True)
+        solver.close()
+
+
+@pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
+@pytest.mark.parametrize("raw_matrix_format", ("csr", "bsr"))
+def test_advection_reaction_raw_cuda_amgx_solver_smoke(raw_matrix_format, monkeypatch, capsys):
     from hdgfem.backends.cupy import require_cupy
 
     cp = require_cupy()
@@ -1574,7 +1837,7 @@ def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch, capsys):
         raw_local_assembly="fused",
         raw_lu_mode="safe",
         raw_block_size=32,
-        raw_matrix_format="csr",
+        raw_matrix_format=raw_matrix_format,
         materialize_host_solution=False,
         verbose=2,
     )
@@ -1602,4 +1865,4 @@ def test_advection_reaction_raw_cuda_csr_amgx_solver_smoke(monkeypatch, capsys):
     assert full_array_downloads == 0
     assert "raw.host_system_materialization" not in result.timings.details
     assert "raw.host_solution_materialization" not in result.timings.details
-    assert "raw.assembly.raw.csr_kernel" in result.timings.details
+    assert f"raw.assembly.raw.{raw_matrix_format}_kernel" in result.timings.details

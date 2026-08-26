@@ -32,6 +32,8 @@ or PyAMGX.
   diffusion-reaction paths.
 - `scripts/gpu/sweep_cuda_hdg.py` runs controlled basis, trace, quadrature,
   and matrix-format comparisons.
+- `scripts/gpu/benchmark_advection_tsle_bsr.py` compares fused and three-stage
+  face-BSR assembly without including AMGX solve time.
 
 The standalone runners are diagnostic and benchmarking entry points. Normal
 application workflows should use the public solver classes or maintained case
@@ -62,6 +64,16 @@ performs local factorization and solves, eliminates known boundary columns, and
 emits the reduced operator. The `precomputed` local-assembly path and serial
 `safe` LU mode remain compatibility and debugging references while the
 cooperative path is qualified.
+
+The explicit `raw_local_assembly="split3"` selector chooses TSLE-BSR, which
+separates build, cooperative LU/solve, and Schur/BSR scatter so each stage can
+autotune its launch shape. It preserves the same HDG algebra, requires BSR and
+cooperative pivoted LU, and retains persistent intermediate workspaces. The
+measured `p <= 6` gate keeps fused as the production default; p=7 is the
+current TSLE promotion candidate, while p=8--9 is a spill-free but
+memory-intensive experimental scope. See [`raw_cuda.md`](raw_cuda.md) for
+timings and the
+full support/reuse contract.
 
 Discontinuous advection must retain both element-side face contributions. The
 mathematical contract is documented in

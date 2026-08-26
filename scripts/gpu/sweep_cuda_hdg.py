@@ -7,7 +7,7 @@ advection-reaction runner, but ``--runner scripts/gpu/run_diffusion_reaction_cud
 now selects diffusion-reaction compatible arguments. Launch this with the
 project venv, for example:
 
-    LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
+    LD_LIBRARY_PATH=/tmp/AMGX-build-cuda13.0.1:/tmp/AMGX-install-cuda13.0.1/lib:/tmp/cuda-13.0.1/targets/x86_64-linux/lib \
       .venv/bin/python -m scripts.gpu.sweep_cuda_hdg --quick
 """
 
@@ -30,7 +30,11 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNNER = ROOT / "scripts" / "gpu" / "run_advection_reaction_cuda.py"
 DEFAULT_LOG_DIR = ROOT / "run_logs"
-AMGX_LIBRARY_PATHS = ("/tmp/AMGX-build", "/tmp/AMGX-install/lib")
+AMGX_LIBRARY_PATHS = (
+    "/tmp/AMGX-build-cuda13.0.1",
+    "/tmp/AMGX-install-cuda13.0.1/lib",
+    "/tmp/cuda-13.0.1/targets/x86_64-linux/lib",
+)
 DEFAULT_CASES = {"adv-rea": "test2_legacy_gpu3", "diff-rea": "trigonometric-poisson"}
 ADV_MESH_TYPES = {"rectangle", "structured-rectangle"}
 
@@ -572,10 +576,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--check-rtol", type=float, default=None, help="advection runner residual check tolerance")
     parser.add_argument("--amgx-maxiter", type=int, default=None, help="override runner AMGX max iterations")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="raw-cuda")
-    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused"), default="precomputed")
+    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3"), default="precomputed")
     parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
-    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr"), default="auto")
-    parser.add_argument("--raw-block-size", type=int, choices=(1, 32, 64, 128), default=32)
+    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
+    parser.add_argument(
+        "--raw-block-size",
+        choices=("auto", "1", "32", "64", "128"),
+        default="32",
+    )
     parser.add_argument("--verbosity", type=int, choices=(0, 1, 2), default=0)
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--max-runs", type=int, default=None)

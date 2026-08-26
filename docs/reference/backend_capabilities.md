@@ -118,8 +118,10 @@ runtime.
 - Raw-CUDA advection with non-AMGX sparse solvers downloads the reduced system;
   Cupyx then uploads it again. This is supported mixed residency, not a direct
   device pipeline.
-- Raw-CUDA advection with `boundary_mode="zero-flux"` requires
-  `raw_local_assembly="fused"`.
+- Raw-CUDA advection with `boundary_mode="zero-flux"` requires eliminated-local
+  assembly: `raw_local_assembly="fused"` or the opt-in TSLE-BSR alias
+  `"split3"`. TSLE-BSR additionally requires cooperative LU and face BSR;
+  p=1--7 is qualified and p=8--9 is experimental.
 - Raw-CUDA diffusion full solves are exposed through
   `DiffusionReactionHDGSolver`, require direct CSR-to-AMGX, and do not support
   HDG postprocessing in the solver call.

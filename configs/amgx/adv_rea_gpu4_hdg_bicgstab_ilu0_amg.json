@@ -4,6 +4,7 @@
   "exception_handling": 1,
   "solver": {
     "solver": "BICGSTAB",
+    "bsr_spmv_backend": "cusparse_generic",
     "monitor_residual": 1,
     "convergence": "RELATIVE_INI_CORE",
     "tolerance": 1e-14,

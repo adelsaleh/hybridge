@@ -29,6 +29,12 @@ def recommended_raw_cuda_block_size(equation: RawCudaEquation, order: int) -> in
     """
     nel = triangle_element_dof(order)
     if equation == "advection-reaction":
+        # The spill-free p=8--9 fused BSR qualification on SM75 measured 128
+        # threads as the best legal launch.  These orders already consume one
+        # shared-memory-resident CTA per SM, so additional row coverage improves
+        # throughput without reducing resident-block occupancy.
+        if 8 <= order <= 9:
+            return 128
         if nel <= 32:
             return 32
         if nel <= 64:

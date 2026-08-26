@@ -490,27 +490,37 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "raw-CUDA does not support trace_ordering; set trace_ordering='none'",
             )
-        if raw_local_assembly not in {"precomputed", "fused"}:
-            raise ValueError("raw_local_assembly must be 'precomputed' or 'fused'")
+        if raw_local_assembly not in {"precomputed", "fused", "split3"}:
+            raise ValueError(
+                "raw_local_assembly must be 'precomputed', 'fused', or 'split3'"
+            )
         if raw_lu_mode not in {"safe", "coop"}:
             raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
-        if raw_lu_mode == "coop" and raw_local_assembly != "fused":
+        if raw_lu_mode == "coop" and raw_local_assembly not in {"fused", "split3"}:
             _unsupported(
                 "advection-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw_lu_mode='coop' requires raw_local_assembly='fused'",
+                "raw_lu_mode='coop' requires raw_local_assembly='fused' or 'split3'",
             )
-        if raw_matrix_format not in {"auto", "coo", "csr"}:
-            raise ValueError("raw_matrix_format must be 'auto', 'coo', or 'csr'")
-        if boundary_mode == "zero-flux" and raw_local_assembly != "fused":
+        if raw_local_assembly == "split3" and raw_lu_mode != "coop":
             _unsupported(
                 "advection-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "zero-flux raw-CUDA assembly requires raw_local_assembly='fused'",
+                "raw_local_assembly='split3' requires raw_lu_mode='coop'",
+            )
+        if raw_matrix_format not in {"auto", "coo", "csr", "bsr"}:
+            raise ValueError("raw_matrix_format must be 'auto', 'coo', 'csr', or 'bsr'")
+        if boundary_mode == "zero-flux" and raw_local_assembly not in {"fused", "split3"}:
+            _unsupported(
+                "advection-reaction",
+                operation,
+                backend,
+                solver_backend,
+                "zero-flux raw-CUDA assembly requires raw_local_assembly='fused' or 'split3'",
             )
         if not advection_stabilization_is_default:
             _unsupported(
@@ -520,9 +530,17 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "raw-CUDA supports only advection_stabilization=None",
             )
-        if raw_matrix_format == "csr" and not (
+        if raw_local_assembly == "split3" and raw_matrix_format in {"coo", "csr"}:
+            _unsupported(
+                "advection-reaction",
+                operation,
+                backend,
+                solver_backend,
+                "TSLE-BSR supports only raw_matrix_format='auto' or 'bsr'",
+            )
+        if raw_matrix_format in {"csr", "bsr"} and not (
             operation == "solve"
-            and raw_local_assembly == "fused"
+            and raw_local_assembly in {"fused", "split3"}
             and solver_backend == "amgx"
             and not requires_host_system
         ):
@@ -531,7 +549,8 @@ def validate_advection_backend_configuration(
                 operation,
                 backend,
                 solver_backend,
-                "raw_matrix_format='csr' requires fused device AMGX and no host-system diagnostics; "
+                f"raw_matrix_format={raw_matrix_format!r} requires eliminated-local device AMGX "
+                "and no host-system diagnostics; "
                 "use raw_matrix_format='auto' or 'coo'",
             )
     return capability

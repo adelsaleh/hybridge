@@ -214,6 +214,40 @@ Research studies in later sections inform future solver choices but do not block
 
 ### Raw-CUDA Assembly And Global Solve
 
+- [x] Add the advection **Tri-Stage Local Elimination BSR** implementation
+  (`TSLE-BSR`, option alias `raw_local_assembly="split3"`). It splits local
+  operator construction, cooperative pivoted LU/all-column solve, and fused
+  Schur-plus-mass BSR scatter into independently tuned kernels with persistent
+  workspace. Direct BSR, both production trace bases, p=1--7, experimental
+  p=8--9, matrix/RHS/reconstruction-response parity, workspace identity reuse,
+  and the tangent-boundary assembly-only API are covered. The 157,280-triangle
+  CUDA-13 sweep in `scripts/gpu/benchmark_advection_tsle_bsr.py` keeps fused as
+  the `p <= 6` default and records TSLE gains of 12.7%/16.0% at p=7,
+  47.1%/46.9% at p=8, and 9.2%/12.1% at p=9 (legacy/modal). High-order fused
+  Schur lifts use block-shared storage; fused and all TSLE stages report zero
+  compiler local-memory bytes. The explicit p=9/256-thread TSLE path is clean
+  under CUDA-13 memcheck and racecheck.
+- [ ] Move both fused and TSLE-BSR assembly beneath the single raw-CUDA
+  advection backend path, making their selection an internal backend policy and
+  automatic-optimization decision rather than a normal Python solver, preset,
+  or CLI choice. The Python API should request raw-CUDA device trace assembly
+  and any solver-required sparse output format, while cached backend autotuning
+  chooses the execution schedule from polynomial order, trace basis, device
+  resources, mesh/reuse regime, and an explicit workspace-memory budget. Retain
+  only a narrowly scoped benchmark/debug override while qualifying the policy,
+  then compatibly deprecate the public `raw_local_assembly="fused"`/`"split3"`
+  selector. Require numerical and reconstruction parity, deterministic
+  memory-budget fallback, cached tuning reuse, and no unexpected full-mesh
+  tuning cost in a one-shot solve before removing the front-end choice.
+- [ ] Extend TSLE assembly beyond its current direct face-BSR-only emission to
+  direct device CSR and diagnostic COO output under the same raw-CUDA backend,
+  without host materialization or intermediate BSR-to-CSR/COO conversion. Every
+  TSLE emission mode must also return a reusable reconstruction cache containing
+  the solved per-element trace/source response columns and metadata needed to
+  reconstruct the DG solution after accepting the global trace. Define cache
+  identity, device residency, reuse, and invalidation contracts, and require
+  matrix/RHS/trace/reconstructed-field parity across BSR, CSR, and COO,
+  including face orientation and boundary-elimination tests.
 - [x] Audit the current `hdgfem/backends/diffusion_raw_cuda.py` path against the NumPy/Numba diffusion assembly pipeline and record which setup arrays are still built outside the hot kernel. See `docs/backends/raw_cuda.md`.
 - [x] Replace the current one-thread-per-element raw CUDA diffusion local solve with a cooperative element kernel modeled on the advection-reaction raw-CUDA cooperative LU path.
 - [x] Build the fused diffusion raw-CUDA assembly so each element constructs local mixed diffusion-reaction blocks on the fly, performs local LU/solves cooperatively, applies boundary elimination, and emits the reduced trace operator without materializing large local dense tensors. Validated scope is identity diffusion, scalar zero reaction, `legacy-lagrange` and `legendre-modal` traces, and `p <= 6`; Bernstein and general coefficient tables remain open.
@@ -280,6 +314,7 @@ Research studies in later sections inform future solver choices but do not block
 
 ### Solver And Boundary APIs
 
+- [ ] Allow pure `AdvectionReactionHDGSolver` source, reaction, and vector advection `DGField` inputs to live in different polynomial/basis spaces on the same mesh. Evaluate each coefficient with its own reference basis at the assembly quadrature points, preserve discontinuous element-side `beta.n` values and zero-flux boundary semantics, and keep CuPy/raw-CUDA inputs device-resident without an implicit host projection. Require NumPy/Numba/CuPy/raw-CUDA COO/CSR/BSR matrix, RHS, reconstruction, and tangent-boundary parity, including degree-`p+1` RT Poisson flux used as the guiding-center velocity.
 - [x] Allow NumPy/CuPy advection-reaction assembly paths to accept explicit stabilization, including callables `tau(x, y)` and `tau(x, y, K, e)`, where `K` is the element id and `e` is the local face number. Both paths now accept scalars, callables, `DGField` objects, compatible coefficient arrays, per-face constants, and evaluated face-quadrature tables. DG fields use coefficient contractions with reference tables from their own `DGSpace`; the CuPy path reuses device coefficients without host materialization. `tests/test_cupy_backend.py` covers NumPy/CuPy parity for both boundary modes, both production trace bases, and seven input forms; full reconstruction with a callable and projected problem data; a device-backed cross-space `DGField`; and all six cases in `scripts/advection_reaction/cases.py`.
 - [x] Add a device-resident CuPy advection-reaction pipeline. CuPy hands global trace COO/RHS directly to compatible Cupyx solves without a host copy, consumes the device trace in reconstruction, expands eliminated boundary values and applies nodal/modal orientation on-device, rebuilds local operators, and uses a batched CuPy solve. Host solvers/preconditioners and explicit host-system requests remain intentional transfer boundaries. Dense local inverses and element-boundary matrices are not retained unless explicitly cached. `tests/test_cupy_backend.py` covers zero-download device residency and end-to-end NumPy parity for both boundary modes and both production trace bases; the detailed contract is in [Advection boundary and stabilization](docs/reference/advection_boundary_stabilization.md).
 - [x] Keep Numba advection-reaction assembly kernels table-driven for stabilization: callers must pass `None`, scalars, or projected `DGField` inputs instead of Python callables.

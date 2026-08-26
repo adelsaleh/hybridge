@@ -43,30 +43,75 @@ LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
 Solver summary:
 
 - Outer solver: `BICGSTAB`
-- Preconditioner: classical AMG
-- Selector: `PMIS`
-- Cycle: `W`
-- Smoother: `ILU0`
+- Active preconditioner: none; AMGX's plain `BICGSTAB` class does not instantiate
+  the nested `preconditioner` object retained in this historical JSON.
+- BSR SpMV backend: `cusparse_generic` in the outer solver scope. With the local
+  CUDA-13 AMGX patch this controls BiCGStab's fine-operator `A*p` and `A*s`
+  products and overrides the old 3x3/4x4 AMGX specializations.
 - Default tolerance override from CLI: `--amgx-tolerance 1e-14`
 - Default iteration override from CLI: `--amgx-maxiter 1500`
 
-Focused AMGX sweeps on 2026-07-20 did not find a safer faster replacement for this default. Keep `BICGSTAB + classical AMG/ILU0 W-cycle` as the production advection-reaction config. The closest alternative is `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`, retained only as experimental: it was about 1% faster in AMGX solve on the p6/ms0.005 stress case, but with a larger post-solve residual and about 2x larger L2 error. Details are in `run_logs/adv_rea_amgx_config_findings_20260720.md`.
+Correction recorded on 2026-08-24: earlier documentation described this route as
+`BICGSTAB + classical AMG/ILU0 W-cycle`. Source inspection and AMGX runtime
+telemetry show that it is unpreconditioned BiCGStab. The BICGSTAB JSON variants
+with different nested AMG objects therefore did not compare active
+preconditioners; their small timing/error differences must be treated as run
+variation rather than preconditioner evidence. `PBICGSTAB` is the separate AMGX
+solver that constructs and applies a configured preconditioner.
+
+For raw-CUDA BSR input, all advection BICGSTAB/PBICGSTAB configs explicitly
+request CUDA-13 generic BSR SpMV. Scalar CSR input is unchanged: the backend
+setting does not convert storage and the scalar SpMV route remains active. The
+generic path requires the matching local AMGX source patch and CUDA 13.0 Update
+1 or newer; older or unsupported partial/distributed views fall back to legacy
+cuSPARSE BSR.
+
+Warmed matched p=1..6 measurements on nx=64, 128, and 256 structured meshes
+show that BSR gains grow with problem size. At nx=256, BSR reduced AMGX solve
+time by 14%, 25%, 18%, and 24% for p=1, 3, 5, and 6 respectively; p=4 was
+neutral and p=2 remained 3% slower. Nsight confirmed that p=2 used CUDA-13
+generic 3x3 BSR rather than AMGX's historical custom kernel. The BSR SpMV GPU
+work was about 1.42x faster than CSR, but block-vector reductions and repeated
+descriptor/workspace handling erased its complete-solve gain. See
+[`advection_bsr_benchmark_20260824.md`](../../docs/backends/advection_bsr_benchmark_20260824.md).
+
+The unstructured-square legacy `test2` follow-up in that document screened
+PBICGSTAB preconditioners that remain available for all face-block dimensions
+p=1..6. The best compatible choice was unscaled scalar-row `JACOBI_L1` with
+one iteration, unit relaxation, and
+`jacobi_l1_scalar_rows_for_blocks=1`. It was about twice as fast as direct
+block Jacobi at p=6, `ms=0.02`, but generally did not beat plain scaled
+BICGSTAB on the fine `ms=0.01` mesh. Keep BICGSTAB as the default; use
+PBICGSTAB+L1 as the block-size-safe preconditioned comparison. Aggregation AMG
+and `MULTICOLOR_DILU` are not valid pure-BSR p=6 choices in the current build.
+
+For pure BSR at p=1..3, the stronger measured option is
+`adv_rea_gpu4_hdg_pbicgstab_dilu_bsr_p1_p3.json`: direct PBICGSTAB with one
+unscaled `MULTICOLOR_DILU` application, parallel-greedy level-1 coloring, and
+relaxation 0.7. On the 92,552-triangle `test2` mesh it reduced median
+end-to-end wall time relative to PBICGSTAB+L1 by 5%, 20%, and 8% at p=1,2,3.
+Do not use this preset as an all-order default. It was 14% slower at p=4, and
+experimental 6x6/7x7 dispatches for p=5/6 did not converge and were not
+retained. Run it with `--raw-matrix-format bsr --no-scale-system`; keep plain
+scaled BICGSTAB as the overall default and L1 as the p=4..6 PBICGSTAB fallback.
 
 Additional raw-CSR preconditioner checks on 2026-07-21 used `p=6`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, `raw-cuda`, fused local assembly, cooperative LU, and `--amgx-tolerance 1e-10`. `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json` converged with 452 iterations and a 1.212 s global solve phase, compared with 454 iterations and 1.238 s for the default in that sample. Treat it as experimental: the gain is small enough to require repeated runs. `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json` converged but did not improve iteration count or solve phase. `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json`, `adv_rea_gpu4_hdg_fgmres_amg_d2.json`, and `adv_rea_gpu4_hdg_gmres_amg_d2.json` are failed stronger-preconditioner experiments for this case; they either did not reduce the physical residual enough or were much slower.
 
 Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation (`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
 
-Guiding-center transport presets currently use `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`.  Its AMGX residual history may show flat BiCGSTAB phases followed by a sharp drop, but it remains cheaper than the FGMRES aggregation/DILU variant on the long p=6 diocotron run.  Do not promote `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json` for that case without a longer multi-step benchmark; one-step smoke timings are misleading.
+Guiding-center device presets use `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`, whose JSON contains no inactive nested preconditioner. HDGFEM applies left row scaling and supplies the accepted density trace as the initial guess. The k100/k50 stress family uses an AMGX stopping tolerance of `1e-8` while independently retaining its `1e-11`/`5e-9` physical residual contract; a rejected primary enters scaled FGMRES with direct `MULTICOLOR_DILU`. Because AMGX DILU is not enabled for the p=6 face block size, only that fallback expands face BSR to scalar CSR with a raw-CUDA device kernel. The stateful solver keeps the first DILU factors as a fixed FGMRES preconditioner, replaces matrix coefficients in place on later steps, and never materializes the matrix on host. On the 157,280-triangle p=6 case, the accepted primary reduced warm transport from 32 to 23 iterations and from about 0.366 s to 0.340 s; the fallback did not occur.
 
 Experimental advection-reaction configs retained for comparison:
 
 Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_advection_disk_tangent_cuda.py` with `p=4`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, fused raw-CUDA CSR, cooperative LU, and `--amgx-tolerance 1e-10`. The default BICGSTAB/classical-ILU0 AMG route needed about 2200 iterations. `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json` reduced this to 73 iterations using `PBICGSTAB + aggregation AMG + MULTICOLOR_DILU` with `presweeps=0`, `postsweeps=2`. This is a stronger diagnostic config, not yet the global default: each preconditioner application is much heavier, so the wall-clock solve was slightly slower on that screen. Use it with `--no-scale-system`; external row scaling made the PBICGSTAB aggregation-DILU variants fail, and AMGX internal `BINORMALIZATION` terminated before the runner summary with device-pool leak diagnostics.
 
 - `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json`: strong zero-flux disk-tangent diagnostic; requires `--no-scale-system`.
-- `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: L1 smoother baseline candidate.
-- `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: Chebyshev/L1 smoother candidate.
-- `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json`: heavier ILU0 W-cycle candidate.
-- `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`: BICGSTAB with aggregation AMG/DILU.
+- `adv_rea_gpu4_hdg_pbicgstab_dilu_bsr_p1_p3.json`: direct block-DILU comparison for unscaled p=1..3 BSR only.
+- `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested L1 configuration is inactive.
+- `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested Chebyshev/L1 configuration is inactive.
+- `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json`: historical unpreconditioned BICGSTAB variant; nested ILU0 sweep count is inactive.
+- `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`: explicit guiding-center unpreconditioned BICGSTAB primary; left scaling is applied by HDGFEM.
+- `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`: historical unpreconditioned BICGSTAB comparison; nested aggregation/DILU configuration is inactive.
 - `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json`: failed p6/ms0.01 FGMRES+DILU experiment.
 - `adv_rea_gpu4_hdg_fgmres_amg_d2.json`: failed p6/ms0.01 FGMRES+D2 experiment.
 - `adv_rea_gpu4_hdg_gmres_amg_d2.json`: failed GMRES+D2 experiment.

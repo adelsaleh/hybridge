@@ -62,9 +62,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
+    parser.add_argument("--raw-local-assembly", choices=("fused", "split3"), default="fused")
     parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="coop")
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"), default="auto")
-    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr"), default="auto")
+    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
     parser.add_argument("--solver", choices=("amgx", "direct", "bicgstab"), default="amgx")
     parser.add_argument("--tolerance", type=float, default=1.0e-11)
     parser.add_argument("--maxiter", type=int, default=1000)
@@ -88,7 +89,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gmsh-verbosity", type=int, default=0)
     parser.add_argument("--gmsh-algorithm", type=int, default=None)
     parser.add_argument("--gmsh-num-threads", type=int, default=None)
-    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2), default=1)
+    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2, 3, 4), default=1)
     parser.add_argument("--show-cupy-config", action="store_true")
     return parser
 
@@ -105,11 +106,12 @@ def _maybe(value, default="n/a"):
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    args.raw_block_size = resolve_raw_cuda_block_size(
-        args.raw_block_size,
-        equation="advection-reaction",
-        order=args.order,
-    )
+    if args.raw_local_assembly != "split3":
+        args.raw_block_size = resolve_raw_cuda_block_size(
+            args.raw_block_size,
+            equation="advection-reaction",
+            order=args.order,
+        )
     cp = require_cupy()
     require_cupyx_sparse()
     if args.solver == "amgx":
@@ -205,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         trace_ordering="none",
         assembly_backend="raw-cuda",
         trace_basis=args.trace_basis,
-        raw_local_assembly="fused",
+        raw_local_assembly=args.raw_local_assembly,
         raw_lu_mode=args.raw_lu_mode,
         raw_block_size=args.raw_block_size,
         raw_matrix_format=args.raw_matrix_format,
@@ -252,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     global_dof = mesh.int_edges_inds.size * trace_space.edg_dof
     matrix_format = args.raw_matrix_format
     if matrix_format == "auto":
-        matrix_format = "csr" if args.solver == "amgx" and not args.materialize_host_system else "coo"
+        matrix_format = "bsr" if args.solver == "amgx" and not args.materialize_host_system else "coo"
 
     detail = result.timings.details
     setup_time = mesh_time + space_time + projection_time
@@ -266,8 +268,9 @@ def main(argv: list[str] | None = None) -> int:
                 ("basis", args.basis, "s"),
                 ("trace basis", args.trace_basis, "s"),
                 ("boundary mode", "zero-flux", "s"),
+                ("raw local", args.raw_local_assembly, "s"),
                 ("raw LU", args.raw_lu_mode, "s"),
-                ("raw block", args.raw_block_size, ",d"),
+                ("raw block", str(args.raw_block_size), "s"),
                 ("matrix", matrix_format, "s"),
             ],
         ),
@@ -311,7 +314,10 @@ def main(argv: list[str] | None = None) -> int:
                 ("space", space_time, ".3f"),
                 ("projection", projection_time, ".3f"),
                 ("assembly", result.timings.assembly, ".3f"),
-                ("raw kernel", detail.get("raw.assembly.raw.kernel", detail.get("raw.assembly.raw.csr_kernel", np.nan)), ".3f"),
+                ("raw kernel", detail.get("raw.assembly.raw.bsr_kernel", detail.get("raw.assembly.raw.kernel", detail.get("raw.assembly.raw.csr_kernel", np.nan))), ".3f"),
+                ("TSLE build", detail.get("raw.assembly.raw.tsle.build", np.nan), ".3f"),
+                ("TSLE LU/solve", detail.get("raw.assembly.raw.tsle.solve", np.nan), ".3f"),
+                ("TSLE Schur/scatter", detail.get("raw.assembly.raw.tsle.scatter", np.nan), ".3f"),
                 ("global solve", result.timings.solve, ".3f"),
                 ("reconstruct", result.timings.reconstruction, ".3f"),
                 ("error", error_time, ".3f"),

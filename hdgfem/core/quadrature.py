@@ -275,7 +275,10 @@ def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     if num_points == 2:
         return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
     poly = np.polynomial.legendre.Legendre.basis(num_points - 1)
-    interior = np.sort(poly.deriv().roots())
+    roots = np.real_if_close(poly.deriv().roots(), tol=1000)
+    if np.iscomplexobj(roots):
+        raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
+    interior = np.sort(np.asarray(roots, dtype=np.float64))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)

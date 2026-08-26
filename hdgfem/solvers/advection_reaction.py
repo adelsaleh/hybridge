@@ -24,6 +24,7 @@ from ..backends.capabilities import (
     validate_advection_backend_configuration,
 )
 from ..backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from ..backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
 from ..assembly import matrices_numpy as hdg_mats
 from ..linalg.system import (
     KnownDofReduction,
@@ -85,6 +86,7 @@ class AdvectionReactionResult:
     field_device: Any = None
     trace_device: Any = None
     trace_reduced_device: Any = None
+    local_response_device: Any = None
     matrix_rows: np.ndarray | None = None
     matrix_cols: np.ndarray | None = None
     matrix_data: np.ndarray | None = None
@@ -147,10 +149,10 @@ class AdvectionReactionHDGOptions:
     matrix_pattern_only: bool = False
     assembly_backend: AssemblyBackend = "numpy"
     trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
-    raw_local_assembly: Literal["precomputed", "fused"] = "precomputed"
+    raw_local_assembly: Literal["precomputed", "fused", "split3"] = "precomputed"
     raw_lu_mode: Literal["safe", "coop"] = "safe"
     raw_block_size: RawCudaBlockSize = "auto"
-    raw_matrix_format: Literal["auto", "coo", "csr"] = "auto"
+    raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto"
     materialize_host_system: bool = False
     materialize_host_solution: bool | None = None
     advection_stabilization: Any = None
@@ -193,9 +195,15 @@ def _verbosity_level(verbose: bool | int) -> int:
     return max(0, int(verbose))
 
 
+def _detailed_logging(verbose: bool | int) -> bool:
+    """Return whether verbose backend micro-timings should be printed."""
+    level = _verbosity_level(verbose)
+    return level == 2 or level >= 4
+
+
 def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, multiline: bool = False):
     """Run ``function`` with legacy-style one-line timing output."""
-    should_print = _verbosity_level(verbosity) >= level
+    should_print = (_verbosity_level(verbosity) >= level) if level <= 1 else _detailed_logging(verbosity)
     if should_print:
         indent = "  " * (level - 1)
         label = f"{indent}{label}"
@@ -480,6 +488,9 @@ class AdvectionReactionHDGSolver:
         self.reaction = None
         self.boundary_condition = None
         self._problem_is_set = False
+        self._raw_cuda_response_workspace = None
+        self._raw_cuda_tsle_workspace = RawAdvectionTsleWorkspace()
+        self._raw_cuda_amgx_retry_solver_cache: dict[Any, Any] = {}
 
         self.clear_cache()
 
@@ -548,6 +559,8 @@ class AdvectionReactionHDGSolver:
         """
         self.space = space
         self._raw_cuda_last_trace_reduced = None
+        self._raw_cuda_response_workspace = None
+        self._raw_cuda_tsle_workspace.clear()
         if not keep_problem:
             self.clear_problem()
         self.clear_cache()
@@ -609,7 +622,7 @@ class AdvectionReactionHDGSolver:
             require_none=self.options.boundary_mode == "zero-flux",
         )
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache()
+        self.clear_cache(preserve_retry_preconditioners=True)
         return self
 
     def set_discrete_problem(
@@ -635,7 +648,7 @@ class AdvectionReactionHDGSolver:
         self._require_problem_or_partial_update()
         self.source = source
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache()
+        self.clear_cache(preserve_retry_preconditioners=True)
         return self
 
     def set_beta(self, beta) -> "AdvectionReactionHDGSolver":
@@ -643,7 +656,7 @@ class AdvectionReactionHDGSolver:
         self._require_problem_or_partial_update()
         self.beta = beta
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache()
+        self.clear_cache(preserve_retry_preconditioners=True)
         return self
 
     def set_reaction(self, reaction) -> "AdvectionReactionHDGSolver":
@@ -651,7 +664,7 @@ class AdvectionReactionHDGSolver:
         self._require_problem_or_partial_update()
         self.reaction = reaction
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache()
+        self.clear_cache(preserve_retry_preconditioners=True)
         return self
 
     def set_boundary_condition(self, boundary_condition: Callable | float | None) -> "AdvectionReactionHDGSolver":
@@ -662,10 +675,32 @@ class AdvectionReactionHDGSolver:
             require_none=self.options.boundary_mode == "zero-flux",
         )
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache()
+        self.clear_cache(preserve_retry_preconditioners=True)
         return self
 
-    def clear_cache(self) -> "AdvectionReactionHDGSolver":
+    def _close_raw_cuda_amgx_retry_solvers(self) -> None:
+        """Release stateful AMGX fallback solvers owned by this instance."""
+        solvers = getattr(self, "_raw_cuda_amgx_retry_solver_cache", {})
+        for solver in set(solvers.values()):
+            solver.close(suppress_errors=True)
+        solvers.clear()
+
+    def close(self) -> None:
+        """Release persistent device solver state owned by this instance."""
+        self._close_raw_cuda_amgx_retry_solvers()
+        self._raw_cuda_tsle_workspace.clear()
+        self.clear_cache()
+
+    def __del__(self):
+        """Best-effort release of persistent AMGX retry state."""
+        try:
+            self._close_raw_cuda_amgx_retry_solvers()
+        except Exception:
+            pass
+
+    def clear_cache(
+            self, *, preserve_retry_preconditioners: bool = False,
+    ) -> "AdvectionReactionHDGSolver":
         """Clear assembled matrices, factorization/preconditioner, and solution.
 
         Problem inputs and solver options are preserved.  This method is useful
@@ -674,6 +709,9 @@ class AdvectionReactionHDGSolver:
         """
         if not hasattr(self, "_raw_cuda_last_trace_reduced"):
             self._raw_cuda_last_trace_reduced = None
+        if not preserve_retry_preconditioners:
+            self._close_raw_cuda_amgx_retry_solvers()
+        self._tangent_boundary_bsr_assembly = None
         self.result: AdvectionReactionResult | None = None
         self.field: DGField | None = None
         self.trace: np.ndarray | None = None
@@ -730,6 +768,76 @@ class AdvectionReactionHDGSolver:
         finally:
             self.options = previous_options
 
+    def assemble_tangent_boundary_raw_cuda_bsr(self):
+        """Assemble the zero-normal-flux transport trace operator as face BSR.
+
+        This class-level assembler is the no-solve counterpart of the fused
+        raw-CUDA device path. It is intended for tangent guiding-center
+        velocities, for which boundary trace unknowns are excluded and the
+        numerical normal flux is set to zero on boundary faces.
+        """
+        self._require_problem()
+        options = self.options
+        if normalize_assembly_backend(options.assembly_backend) != "raw-cuda":
+            raise ValueError(
+                "tangent-boundary BSR assembly requires assembly_backend='raw-cuda'"
+            )
+        if options.boundary_mode != "zero-flux":
+            raise ValueError(
+                "tangent-boundary BSR assembly requires boundary_mode='zero-flux'"
+            )
+        if options.raw_local_assembly not in {"fused", "split3"}:
+            raise ValueError(
+                "tangent-boundary BSR assembly requires raw_local_assembly='fused' or 'split3'"
+            )
+        from ..backends.advection_cuda import (
+            as_cupy_trace_space,
+            assemble_reduced_system_cuda,
+        )
+        from ..backends.cupy import (
+            as_cupy_space,
+            as_cupy_vector_coefficients,
+        )
+
+        cspace = as_cupy_space(self.space)
+        trace_space = self.space.trace_space(
+            normalize_trace_basis(options.trace_basis)
+        )
+        trace_ref = as_cupy_trace_space(trace_space, device=cspace.device_id)
+        beta = _require_beta_field_for_backend(
+            self.beta, self.space, backend="raw-cuda"
+        )
+        beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
+        block_size = (
+            options.raw_block_size
+            if options.raw_local_assembly == "split3"
+            else resolve_raw_cuda_block_size(
+                options.raw_block_size,
+                equation="advection-reaction",
+                order=self.space.order,
+            )
+        )
+        assembly = assemble_reduced_system_cuda(
+            self.source,
+            self.reaction,
+            None,
+            beta_coeffs,
+            cspace,
+            trace_ref,
+            backend="raw-cuda",
+            raw_block_size=block_size,
+            raw_local_assembly=options.raw_local_assembly,
+            raw_lu_mode=options.raw_lu_mode,
+            raw_matrix_format="bsr",
+            zero_boundary_flux=True,
+            raw_tsle_workspace=self._raw_cuda_tsle_workspace,
+            raw_cache_local_response=False,
+        )
+        if assembly.matrix_format != "bsr":
+            raise RuntimeError("raw-CUDA tangent-boundary assembly did not return BSR")
+        self._tangent_boundary_bsr_assembly = assembly
+        return assembly
+
     def solve(
             self,
             *,
@@ -782,6 +890,9 @@ class AdvectionReactionHDGSolver:
             self.boundary_condition,
             self.space,
             return_=("result",),
+            _raw_response_workspace=self._raw_cuda_response_workspace,
+            _raw_tsle_workspace=self._raw_cuda_tsle_workspace,
+            _raw_amgx_retry_solver_cache=self._raw_cuda_amgx_retry_solver_cache,
             **solve_kwargs,
         )
         self._store_result(result)
@@ -835,6 +946,9 @@ class AdvectionReactionHDGSolver:
         trace_reduced_device = getattr(result, "trace_reduced_device", None)
         if trace_reduced_device is not None:
             self._raw_cuda_last_trace_reduced = trace_reduced_device
+        local_response_device = getattr(result, "local_response_device", None)
+        if local_response_device is not None:
+            self._raw_cuda_response_workspace = local_response_device
 
 
 def solve_advection_reaction_hdg(
@@ -875,10 +989,10 @@ def solve_advection_reaction_hdg(
         matrix_pattern_only: bool = False,
         assembly_backend: AssemblyBackend = "numpy",
         trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
-        raw_local_assembly: Literal["precomputed", "fused"] = "precomputed",
+        raw_local_assembly: Literal["precomputed", "fused", "split3"] = "precomputed",
         raw_lu_mode: Literal["safe", "coop"] = "safe",
         raw_block_size: RawCudaBlockSize = "auto",
-        raw_matrix_format: Literal["auto", "coo", "csr"] = "auto",
+        raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto",
         materialize_host_system: bool = False,
         materialize_host_solution: bool | None = None,
         advection_stabilization=None,
@@ -886,6 +1000,9 @@ def solve_advection_reaction_hdg(
         initial_guess=None,
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
+        _raw_response_workspace=None,
+        _raw_tsle_workspace=None,
+        _raw_amgx_retry_solver_cache=None,
 ):
     r"""Solve :math:`\beta\cdot\nabla u + r u = f` with an HDG trace system.
 
@@ -989,8 +1106,10 @@ def solve_advection_reaction_hdg(
         ``return_=("trace", ...)`` also forces host trace materialization.
     raw_matrix_format
         Raw CUDA matrix output format. ``"auto"`` uses direct CSR only for fused
-        raw CUDA with device AMGX and no host-system diagnostics; otherwise it
-        keeps the COO fallback.
+        raw CUDA with device AMGX and no host-system diagnostics; ``"bsr"``
+        explicitly assembles one dense block per interacting trace-face pair and
+        uploads those device buffers directly to AMGX. Other configurations keep
+        the COO fallback.
     advection_stabilization
         Optional HDG advection stabilization :math:`\tau` on element faces.
         ``None`` selects the upwind value ``abs(beta_h . n)``.  NumPy and CuPy
@@ -1069,7 +1188,7 @@ def solve_advection_reaction_hdg(
     verbosity = _verbosity_level(verbose)
     if verbosity:
         print("\n----- DG FEM Advection-Reaction HDG Solve -----")
-    if effective_backend == "raw-cuda":
+    if effective_backend == "raw-cuda" and raw_local_assembly != "split3":
         raw_block_size = resolve_raw_cuda_block_size(
             raw_block_size,
             equation="advection-reaction",
@@ -1244,12 +1363,12 @@ def solve_advection_reaction_hdg(
             "computing upwind SCC trace ordering",
             verbosity,
             build_trace_ordering,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         preordered_trace_permutation = ordering_result.dof_permutation
         plot_permutation = ordering_result.dof_permutation
         numba_edge_order = ordering_result.edge_order
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             print_trace_ordering_diagnostics(ordering_result)
 
     reduction = None
@@ -1297,7 +1416,7 @@ def solve_advection_reaction_hdg(
                 *trace_assembly_args,
                 **trace_assembly_kwargs,
             ),
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         trace_system = numba_trace.trace_system
         rows = trace_system.rows
@@ -1312,7 +1431,7 @@ def solve_advection_reaction_hdg(
         boundary_assembly = 0.0
         local_solver = None
         element_boundary_mats = None
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             timings = numba_trace.timings
             timing_parts = [
                 f"coefficients={timings.get('coefficient_validation', 0.0):.5f}s",
@@ -1346,7 +1465,7 @@ def solve_advection_reaction_hdg(
                     zero_boundary_flux=boundary_mode == "zero-flux",
                     trace_space=trace_space_host,
                 ),
-                multiline=verbosity >= 2,
+                multiline=_detailed_logging(verbosity),
             )
             local_solver, local_inverse = _timed_call(
                 "inverting cached local element matrices",
@@ -1380,7 +1499,7 @@ def solve_advection_reaction_hdg(
         cuda_beta_coeffs = as_cupy_vector_coefficients(beta_h, cspace)
         cp.cuda.get_current_stream().synchronize()
         detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
-        raw_fused = raw_local_assembly == "fused"
+        raw_eliminated = raw_local_assembly in {"fused", "split3"}
         normalized_solver = "" if solver is None else str(solver).lower()
         raw_cuda_device_amgx = (
             normalized_solver in {"amgx", "pyamgx"}
@@ -1390,14 +1509,17 @@ def solve_advection_reaction_hdg(
         wants_host_system = requires_host_system
         effective_raw_matrix_format = str(raw_matrix_format).lower()
         if effective_raw_matrix_format == "auto":
-            effective_raw_matrix_format = "csr" if raw_fused and raw_cuda_device_amgx and not wants_host_system else "coo"
-        if effective_raw_matrix_format == "csr" and not (raw_fused and raw_cuda_device_amgx and not wants_host_system):
+            effective_raw_matrix_format = "bsr" if raw_eliminated and raw_cuda_device_amgx and not wants_host_system else "coo"
+        if effective_raw_matrix_format in {"csr", "bsr"} and not (
+            raw_eliminated and raw_cuda_device_amgx and not wants_host_system
+        ):
             raise ValueError(
-                "raw_matrix_format='csr' requires fused raw-cuda assembly, device AMGX solve, "
+                f"raw_matrix_format={effective_raw_matrix_format!r} requires eliminated-local "
+                "raw-cuda assembly, device AMGX solve, "
                 "and no host-system materialization or matrix diagnostics"
             )
         beta_dot_normal_cp = None
-        if not raw_fused:
+        if not raw_eliminated:
             setup_start = time.perf_counter()
             beta_dot_normal_cp = beta_dot_normal_from_coeffs(cuda_beta_coeffs, cspace, trace_ref)
             cp.cuda.get_current_stream().synchronize()
@@ -1414,13 +1536,16 @@ def solve_advection_reaction_hdg(
                 trace_ref,
                 backend="raw-cuda",
                 beta_dot_normal=beta_dot_normal_cp,
-                raw_block_size=int(raw_block_size),
+                raw_block_size=raw_block_size,
                 raw_local_assembly=raw_local_assembly,
                 raw_lu_mode=raw_lu_mode,
                 raw_matrix_format=effective_raw_matrix_format,
                 zero_boundary_flux=boundary_mode == "zero-flux",
+                raw_response_workspace=_raw_response_workspace,
+                raw_tsle_workspace=_raw_tsle_workspace,
+                raw_cache_local_response=not matrix_pattern_only,
             ),
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         cuda_assembly.timings['solver.headline.wall'] = float(trace_assembly)
         cuda_assembly.timings['solver.headline.unaccounted'] = max(
@@ -1451,8 +1576,31 @@ def solve_advection_reaction_hdg(
         for key, value in cuda_assembly.timings.items():
             if isinstance(value, (int, float)):
                 detail_timings[f"raw.assembly.{key}"] = float(value)
-        if verbosity >= 2:
-            timings = cuda_assembly.timings
+        timings = cuda_assembly.timings
+        if raw_local_assembly == "split3" and verbosity >= 3:
+            tune_state = (
+                "reused"
+                if timings.get("raw.tsle.autotune.reused", 0.0) != 0.0
+                else f"{_format_seconds(timings.get('raw.tsle.autotune.wall', 0.0))} cold"
+            )
+            workspace_gib = timings.get("raw.tsle.workspace.bytes", 0.0) / (1024.0 ** 3)
+            print(
+                "  TSLE-BSR split3: "
+                f"build={_format_seconds(timings.get('raw.tsle.build', 0.0))}"
+                f"/b{int(timings.get('raw.tsle.build.block_size', 0.0))} | "
+                f"LU+solve={_format_seconds(timings.get('raw.tsle.solve', 0.0))}"
+                f"/b{int(timings.get('raw.tsle.solve.block_size', 0.0))} | "
+                f"Schur+scatter={_format_seconds(timings.get('raw.tsle.scatter', 0.0))}"
+                f"/b{int(timings.get('raw.tsle.scatter.block_size', 0.0))}",
+                flush=True,
+            )
+            print(
+                "    "
+                f"device={_format_seconds(timings.get('raw.tsle.device', 0.0))} | "
+                f"workspace={workspace_gib:.3f} GiB | autotune={tune_state}",
+                flush=True,
+            )
+        if _detailed_logging(verbosity):
             raw_parts = [
                 (key, value)
                 for key, value in sorted(timings.items())
@@ -1461,7 +1609,13 @@ def solve_advection_reaction_hdg(
             if raw_parts:
                 print("  raw-cuda assembly timings:", flush=True)
                 for key, value in raw_parts:
-                    print(f"    {key}: {value:.5f}s", flush=True)
+                    if key.endswith(".bytes"):
+                        formatted = f"{value / (1024.0 ** 3):.3f} GiB"
+                    elif key.endswith(".reused"):
+                        formatted = "yes" if value else "no"
+                    else:
+                        formatted = f"{value:.5f}s"
+                    print(f"    {key}: {formatted}", flush=True)
     elif effective_backend == "cupy":
         from ..backends.cupy import (
             assemble_advection_reaction_trace_system_cupy,
@@ -1503,7 +1657,7 @@ def solve_advection_reaction_hdg(
                 advection_stabilization=advection_stabilization,
                 **cupy_kwargs,
             ),
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         trace_system = cupy_trace.trace_system
         if trace_system is None:
@@ -1527,7 +1681,7 @@ def solve_advection_reaction_hdg(
             cupy_trace.timings.get("trace_assembly", 0.0)
             + cupy_trace.timings.get("host_transfer", 0.0)
         )
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             timings = cupy_trace.timings
             print(
                 "  cupy trace assembly timings: "
@@ -1584,7 +1738,7 @@ def solve_advection_reaction_hdg(
             "assembling local element matrices",
             verbosity,
             assemble_local_mats,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         element_boundary_mats, boundary_assembly = _timed_call(
             "assembling element boundary coupling",
@@ -1671,7 +1825,7 @@ def solve_advection_reaction_hdg(
             "assembling global trace system",
             verbosity,
             assemble_global_trace_system,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
 
     if raw_cuda_device_amgx:
@@ -1729,7 +1883,7 @@ def solve_advection_reaction_hdg(
             "computing upwind SCC trace ordering",
             verbosity,
             build_trace_ordering,
-            multiline=verbosity >= 2,
+            multiline=_detailed_logging(verbosity),
         )
         trace_permutation = ordering_result.dof_permutation
         if trace_permutation.shape != (solve_size,):
@@ -1740,7 +1894,7 @@ def solve_advection_reaction_hdg(
         plot_permutation = ordering_result.dof_permutation
         if trace_ordering != "upwind-scc":
             trace_permutation = None
-        if verbosity >= 2:
+        if _detailed_logging(verbosity):
             print_trace_ordering_diagnostics(ordering_result)
 
     matrix_pattern_plots = None
@@ -1949,6 +2103,7 @@ def solve_advection_reaction_hdg(
                 cuda_assembly,
                 config=amgx_config,
                 retry_attempts=amgx_retry_attempts,
+                retry_solver_cache=_raw_amgx_retry_solver_cache,
                 tolerance=solver_rtol,
                 check_rtol=solver_rtol,
                 atol=solver_atol,
@@ -2182,8 +2337,12 @@ def solve_advection_reaction_hdg(
             ("solve.preconditioner_or_setup", "preconditioner_elapsed_seconds"),
             ("solve.iteration", "solve_elapsed_seconds"),
             ("solve.amgx.csr", "amgx_csr_elapsed_seconds"),
+            ("solve.amgx.bsr_scalarized", "amgx_bsr_scalarized"),
+            ("solve.amgx.preconditioner_reused", "amgx_preconditioner_reused"),
             ("solve.amgx.matrix_unscale", "amgx_matrix_unscale_elapsed_seconds"),
             ("solve.amgx.setup", "amgx_setup_elapsed_seconds"),
+            ("solve.amgx.matrix_upload", "amgx_matrix_upload_elapsed_seconds"),
+            ("solve.amgx.solver_setup", "amgx_solver_setup_elapsed_seconds"),
             ("solve.amgx.solve", "amgx_solve_elapsed_seconds"),
             ("solve.amgx.total", "amgx_call_elapsed_seconds"),
             ("solve.amgx.overhead", "amgx_overhead_elapsed_seconds"),
@@ -2221,6 +2380,12 @@ def solve_advection_reaction_hdg(
         field_device=field_device,
         trace_device=trace_device,
         trace_reduced_device=trace_reduced_cp,
+        local_response_device=(
+            cuda_assembly.raw.local_response
+            if effective_backend == "raw-cuda"
+            and cuda_assembly.raw is not None
+            else None
+        ),
         matrix_rows=rows,
         matrix_cols=cols,
         matrix_data=data,

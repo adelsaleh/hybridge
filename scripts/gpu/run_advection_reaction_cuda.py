@@ -68,10 +68,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="raw-cuda")
-    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused"), default="precomputed")
+    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3"), default="precomputed")
     parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"), default="auto")
-    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr"), default="auto")
+    parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
     parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots after the summary")
     parser.add_argument("--plot-resolution", "-pr", type=int, default=20, help="plot sampling resolution; coarse meshes use a polynomial-degree minimum")
     parser.add_argument(
@@ -92,11 +92,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--amgx-tolerance", type=float, default=1.0e-14)
     parser.add_argument("--check-rtol", type=float, default=1.0e-10, help="package post-solve residual check tolerance")
     parser.add_argument("--amgx-maxiter", type=int, default=1500)
+    parser.add_argument("--scale-system", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--materialize-host-system", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--materialize-host-solution", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--evaluate-errors", action="store_true", default=True, help="materialize the host DGField and compute CPU-side error norms; always enabled")
     parser.add_argument("--show-cupy-config", action="store_true")
-    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2), default=1)
+    parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2, 3, 4), default=1)
     return parser
 
 
@@ -204,7 +205,7 @@ def _print_timing_rows(title: str, rows: list[tuple[str, float]], denominator: f
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    if args.assembly_backend == "raw-cuda":
+    if args.assembly_backend == "raw-cuda" and args.raw_local_assembly != "split3":
         args.raw_block_size = resolve_raw_cuda_block_size(
             args.raw_block_size,
             equation="advection-reaction",
@@ -282,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
         maxiter=args.amgx_maxiter,
         cupyx_solver=args.cupyx_solver,
         amgx_config=amgx_config,
-        scale_system=True,
+        scale_system=args.scale_system,
         boundary_mode="eliminate",
         trace_ordering=args.trace_ordering,
         trace_ordering_flux_tolerance=args.trace_ordering_flux_tolerance,
@@ -348,9 +349,9 @@ def main(argv: list[str] | None = None) -> int:
     if effective_matrix_format == "auto":
         direct_device_amgx = args.solver in {"amgx", "pyamgx"}
         effective_matrix_format = (
-            "csr"
+            "bsr"
             if args.assembly_backend == "raw-cuda"
-            and args.raw_local_assembly == "fused"
+            and args.raw_local_assembly in {"fused", "split3"}
             and direct_device_amgx
             and not args.materialize_host_system
             else "coo"
@@ -377,10 +378,17 @@ def main(argv: list[str] | None = None) -> int:
         ("raw.assembly.raw.csr_pattern.cumsum", "CSR cumsum (s)"),
         ("raw.assembly.raw.csr_pattern.expand", "CSR expand (s)"),
         ("raw.assembly.raw.csr_zero", "CSR zero (s)"),
+        ("raw.assembly.raw.bsr_pattern.finalize", "BSR finalize (s)"),
+        ("raw.assembly.raw.bsr_zero", "BSR zero (s)"),
         ("raw.assembly.raw.kernel", "raw kernel (s)"),
         ("raw.assembly.raw.csr_kernel", "raw CSR kernel (s)"),
+        ("raw.assembly.raw.bsr_kernel", "raw BSR kernel (s)"),
+        ("raw.assembly.raw.tsle.build", "TSLE build (s)"),
+        ("raw.assembly.raw.tsle.solve", "TSLE LU/solve (s)"),
+        ("raw.assembly.raw.tsle.scatter", "TSLE Schur/scatter (s)"),
+        ("raw.assembly.raw.tsle.device", "TSLE device total (s)"),
         ("raw.assembly.total", "backend assembly total (s)"),
-        ("solve.amgx.csr", "AMGX CSR build (s)"),
+        ("solve.amgx.csr", "AMGX matrix view (s)"),
         ("solve.scale", "row scaling (s)"),
         ("solve.amgx.setup", "AMGX setup (s)"),
         ("solve.amgx.solve", "AMGX iterate (s)"),
@@ -409,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         ("global solver", args.solver, "s"),
         ("raw local", args.raw_local_assembly, "s"),
         ("raw LU", args.raw_lu_mode, "s"),
-        ("raw block", args.raw_block_size, ",d"),
+        ("raw block", str(args.raw_block_size), "s"),
         ("matrix", effective_matrix_format, "s"),
         ("host system", "yes" if result.solve_rhs is not None else "no", "s"),
         ("host solution", host_solution_state, "s"),

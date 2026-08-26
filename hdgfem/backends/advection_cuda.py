@@ -43,6 +43,11 @@ from .advection_raw_cuda import (
     assemble_projected_advection_trace_system_eliminated_raw_cuda_fused,
     reconstruct_projected_advection_field_raw_cuda,
     reconstruct_projected_advection_field_raw_cuda_fused,
+    reconstruct_projected_advection_field_from_response_raw_cuda,
+)
+from .advection_tsle_bsr import (
+    RawAdvectionTsleWorkspace,
+    assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
 
 
@@ -53,7 +58,7 @@ def _flush_c_stdio() -> None:
     except Exception:
         pass
 
-RawLocalAssembly = Literal["precomputed", "fused"]
+RawLocalAssembly = Literal["precomputed", "fused", "split3"]
 RawLuMode = Literal["safe", "coop"]
 CudaAdvectionAssemblyBackend = Literal["cupy", "raw-cuda"]
 
@@ -245,16 +250,107 @@ def _require_raw_dg_field(value, cspace: CupyDGSpace, label: str) -> DGField:
     )
 
 
+def _reference_advection_tensor_host(cspace: CupyDGSpace) -> np.ndarray:
+    """Return the cached dense host reference tensor used by all CUDA variants."""
+    q = cspace.host.quad_data
+    cached = getattr(q, "_hdgfem_reference_advection_tensor", None)
+    if cached is None:
+        cached = np.ascontiguousarray(
+            np.einsum(
+                "q,qk,qj,qiD->Dkij",
+                q.Krf_w,
+                q.phi,
+                q.phi,
+                q.gphi,
+                optimize=True,
+            ),
+            dtype=np.float64,
+        )
+        object.__setattr__(q, "_hdgfem_reference_advection_tensor", cached)
+    return cached
+
+
 def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Build the reference advection contraction tensor on the device."""
+    """Build or reuse the dense reference advection contraction tensor on device."""
     cp = require_cupy()
     start = time.perf_counter()
-    q = cspace.host.quad_data
-    tensor = np.einsum("q,qk,qj,qiD->Dkij", q.Krf_w, q.phi, q.phi, q.gphi, optimize=True)
-    result = cp.asarray(np.ascontiguousarray(tensor, dtype=np.float64))
+    result = cp.asarray(_reference_advection_tensor_host(cspace))
     if timings is not None:
         timings["reference_advection_tensor"] = timings.get("reference_advection_tensor", 0.0) + sync_elapsed(start)
     return result
+
+
+
+def reference_advection_sparse_cupy(
+        cspace: CupyDGSpace,
+        timings: dict[str, float] | None = None,
+):
+    """Return a CSR-by-matrix-entry Dubiner advection contraction."""
+    cp = require_cupy()
+    start = time.perf_counter()
+    q = cspace.host.quad_data
+    sparse_candidate = str(q.basis_type) == "dub_orth"
+    cached = getattr(q, "_hdgfem_sparse_advection_tensor", None)
+    if sparse_candidate and cached is None:
+        dense = _reference_advection_tensor_host(cspace)
+        nel = int(q.el_dof)
+        by_entry = np.ascontiguousarray(dense.transpose(0, 2, 3, 1))
+        scale = max(float(np.max(np.abs(by_entry))), 1.0)
+        zero_tolerance = 128.0 * np.finfo(np.float64).eps * scale
+        mask = np.any(np.abs(by_entry) > zero_tolerance, axis=0)
+        counts = np.count_nonzero(mask, axis=1).reshape(-1)
+        offsets = np.empty(nel * nel + 1, dtype=np.int32)
+        offsets[0] = 0
+        cumulative = np.cumsum(counts, dtype=np.int64)
+        if cumulative.size and int(cumulative[-1]) > np.iinfo(np.int32).max:
+            raise OverflowError("sparse advection contraction exceeds int32 indexing")
+        offsets[1:] = cumulative
+        modes = np.broadcast_to(
+            np.arange(nel, dtype=np.int32), (nel, nel, nel)
+        )[mask]
+        values0 = np.ascontiguousarray(by_entry[0][mask], dtype=np.float64)
+        values1 = np.ascontiguousarray(by_entry[1][mask], dtype=np.float64)
+        cached = (offsets, np.ascontiguousarray(modes), values0, values1)
+        object.__setattr__(q, "_hdgfem_sparse_advection_tensor", cached)
+    # Indirect sparse loads only beat the dense compile-time contraction when
+    # enough k entries vanish.  The p=6 Dubiner tensor retains about 57% of its
+    # entries and was 18 ms slower on the 157k-element production mesh, so keep
+    # that case on the dense path.  Retain sparse support for genuinely sparse
+    # lower-order tensors rather than imposing the regression globally.
+    sparse_density = (
+        float(cached[2].size) / float(int(q.el_dof) ** 3)
+        if sparse_candidate and cached is not None else 1.0
+    )
+    enabled = bool(sparse_candidate and sparse_density <= 0.40)
+    device_cache = getattr(q, "_hdgfem_sparse_advection_tensor_cupy", None)
+    if device_cache is None:
+        device_cache = {}
+        object.__setattr__(q, "_hdgfem_sparse_advection_tensor_cupy", device_cache)
+    key = int(cspace.device_id)
+    if enabled and key not in device_cache:
+        device_cache[key] = tuple(cp.asarray(array) for array in cached)
+    if enabled:
+        offsets, modes, values0, values1 = device_cache[key]
+    else:
+        offsets = cp.zeros(1, dtype=cp.int32)
+        modes = cp.zeros(1, dtype=cp.int32)
+        values0 = cp.zeros(1, dtype=cp.float64)
+        values1 = cp.zeros(1, dtype=cp.float64)
+    mass = np.asarray(q.MKrf, dtype=np.float64)
+    diagonal = np.diag(np.diag(mass))
+    mass_is_diagonal = bool(
+        np.max(np.abs(mass - diagonal))
+        <= 128.0 * np.finfo(np.float64).eps * max(float(np.max(np.abs(mass))), 1.0)
+    )
+    if timings is not None:
+        timings["reference_advection_sparse"] = (
+            timings.get("reference_advection_sparse", 0.0) + sync_elapsed(start)
+        )
+        timings["reference_advection_sparse.enabled"] = float(enabled)
+        timings["reference_advection_sparse.density"] = float(sparse_density)
+        if sparse_candidate and cached is not None:
+            timings["reference_advection_sparse.nnz"] = float(cached[2].size)
+    return offsets, modes, values0, values1, enabled, mass_is_diagonal
 
 
 def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
@@ -602,6 +698,9 @@ def assemble_reduced_system_cuda(
     raw_lu_mode: RawLuMode = "safe",
     raw_matrix_format: str = "coo",
     zero_boundary_flux: bool = False,
+    raw_response_workspace=None,
+    raw_tsle_workspace: RawAdvectionTsleWorkspace | None = None,
+    raw_cache_local_response: bool = True,
 ) -> CudaAdvectionAssembly:
     """Assemble the boundary-eliminated advection trace system on device."""
     if zero_boundary_flux and boundary_condition is not None:
@@ -614,26 +713,49 @@ def assemble_reduced_system_cuda(
     if backend == "raw-cuda":
         source = _require_raw_dg_field(source, cspace, "source")
         reaction = _require_raw_dg_field(reaction, cspace, "reaction")
-        if raw_local_assembly not in {"precomputed", "fused"}:
-            raise ValueError("raw_local_assembly must be 'precomputed' or 'fused'")
+        if raw_local_assembly not in {"precomputed", "fused", "split3"}:
+            raise ValueError("raw_local_assembly must be 'precomputed', 'fused', or 'split3'")
         if raw_lu_mode not in {"safe", "coop"}:
             raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
         zero_boundary_flux = bool(zero_boundary_flux)
-        if zero_boundary_flux and raw_local_assembly != "fused":
-            raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
-        if raw_lu_mode != "safe" and raw_local_assembly != "fused":
-            raise ValueError("raw_lu_mode='coop' is only supported with raw_local_assembly='fused'")
-        if raw_local_assembly == "fused":
+        eliminated_local_assembly = raw_local_assembly in {"fused", "split3"}
+        if zero_boundary_flux and not eliminated_local_assembly:
+            raise NotImplementedError(
+                "raw-CUDA zero-flux assembly requires raw_local_assembly='fused' or 'split3'"
+            )
+        if raw_lu_mode != "safe" and not eliminated_local_assembly:
+            raise ValueError(
+                "raw_lu_mode='coop' is supported only with raw_local_assembly='fused' or 'split3'"
+            )
+        if raw_local_assembly == "split3" and raw_lu_mode != "coop":
+            raise ValueError("raw_local_assembly='split3' requires raw_lu_mode='coop'")
+        if raw_local_assembly == "split3":
+            normalized_matrix_format = str(raw_matrix_format).lower()
+            if normalized_matrix_format == "auto":
+                raw_matrix_format = "bsr"
+            elif normalized_matrix_format != "bsr":
+                raise ValueError(
+                    "raw_local_assembly='split3' requires raw_matrix_format='bsr'"
+                )
+        if eliminated_local_assembly:
             source_coeffs = source_coefficients_cupy(source, cspace, timings)
             reaction_coeffs, reaction_scalar, reaction_is_scalar = reaction_coefficients_cupy(reaction, cspace, timings)
             advection_tensor = reference_advection_tensor_cupy(cspace, timings)
+            (
+                advection_sparse_offsets,
+                advection_sparse_modes,
+                advection_sparse_values0,
+                advection_sparse_values1,
+                use_sparse_advection,
+                mass_is_diagonal,
+            ) = reference_advection_sparse_cupy(cspace, timings)
             if zero_boundary_flux:
                 boundary_trace = cp.zeros((cspace.mesh.bnd_edges_inds.size, cspace.edg_dof), dtype=cp.float64)
             else:
                 if boundary_condition is None:
                     raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
                 boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
-            raw = assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
+            common_raw_options = dict(
                 source_coeffs=source_coeffs,
                 beta_coeffs=beta_coeffs,
                 reaction_coeffs=reaction_coeffs,
@@ -643,11 +765,28 @@ def assemble_reduced_system_cuda(
                 cspace=cspace,
                 trace_ref=trace_ref,
                 advection_tensor=advection_tensor,
+                advection_sparse_offsets=advection_sparse_offsets,
+                advection_sparse_modes=advection_sparse_modes,
+                advection_sparse_values0=advection_sparse_values0,
+                advection_sparse_values1=advection_sparse_values1,
+                use_sparse_advection=use_sparse_advection,
+                mass_is_diagonal=mass_is_diagonal,
                 block_size=raw_block_size,
-                lu_mode=raw_lu_mode,
                 matrix_format=raw_matrix_format,
                 zero_boundary_flux=zero_boundary_flux,
+                cache_local_response=raw_cache_local_response,
             )
+            if raw_local_assembly == "split3":
+                raw = assemble_projected_advection_trace_system_eliminated_tsle_bsr(
+                    **common_raw_options,
+                    workspace=raw_tsle_workspace,
+                )
+            else:
+                raw = assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
+                    **common_raw_options,
+                    lu_mode=raw_lu_mode,
+                    local_response=raw_response_workspace,
+                )
         else:
             if zero_boundary_flux:
                 raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
@@ -756,7 +895,16 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
     trace_ref = assembly.trace_ref
     raw = assembly.raw
     if raw is not None:
-        if raw.local_mats is None:
+        if raw.local_response is not None:
+            block_size = int(raw.timings.get("raw.block_size", 32.0))
+            uh, kernel_elapsed = reconstruct_projected_advection_field_from_response_raw_cuda(
+                trace=trace,
+                local_response=raw.local_response,
+                cspace=cspace,
+                trace_ref=trace_ref,
+                block_size=block_size,
+            )
+        elif raw.local_mats is None:
             block_size = int(raw.timings.get("raw.block_size", 32.0))
             uh, kernel_elapsed = reconstruct_projected_advection_field_raw_cuda_fused(
                 trace=trace,
@@ -768,6 +916,12 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
                 cspace=cspace,
                 trace_ref=trace_ref,
                 advection_tensor=raw.advection_tensor,
+                advection_sparse_offsets=raw.advection_sparse_offsets,
+                advection_sparse_modes=raw.advection_sparse_modes,
+                advection_sparse_values0=raw.advection_sparse_values0,
+                advection_sparse_values1=raw.advection_sparse_values1,
+                use_sparse_advection=raw.use_sparse_advection,
+                mass_is_diagonal=raw.mass_is_diagonal,
                 block_size=block_size,
                 lu_mode=raw.lu_mode,
                 zero_boundary_flux=raw.zero_boundary_flux,
@@ -866,6 +1020,7 @@ extern "C" __global__ void device_bsr_matvec(
     y[scalar_row] = value;
 }
 """
+_DEVICE_BSR_MATVEC_KERNELS: dict[int, Any] = {}
 
 
 def _as_cupyx_csr_matrix(matrix, sparse, cp):
@@ -879,6 +1034,89 @@ def _as_cupyx_csr_matrix(matrix, sparse, cp):
     return matrix
 
 
+_DEVICE_BSR_TO_SCALAR_CSR_SOURCE = r"""
+extern "C" __global__ void device_bsr_to_scalar_csr(
+        const int* __restrict__ block_indptr,
+        const int* __restrict__ block_indices,
+        const double* __restrict__ block_data,
+        int* __restrict__ scalar_indptr,
+        int* __restrict__ scalar_indices,
+        double* __restrict__ scalar_data,
+        const int num_block_rows,
+        const int block_size)
+{
+    const int scalar_row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int num_scalar_rows = num_block_rows * block_size;
+    if (scalar_row > num_scalar_rows) {
+        return;
+    }
+    if (scalar_row == num_scalar_rows) {
+        scalar_indptr[scalar_row] =
+            block_indptr[num_block_rows] * block_size * block_size;
+        return;
+    }
+    const int block_row = scalar_row / block_size;
+    const int row_dof = scalar_row - block_row * block_size;
+    const int block_begin = block_indptr[block_row];
+    const int block_end = block_indptr[block_row + 1];
+    const int blocks_in_row = block_end - block_begin;
+    const int scalar_begin =
+        block_begin * block_size * block_size
+        + row_dof * blocks_in_row * block_size;
+    scalar_indptr[scalar_row] = scalar_begin;
+    int output = scalar_begin;
+    for (int block = block_begin; block < block_end; ++block) {
+        const int scalar_column = block_indices[block] * block_size;
+        const long long data_begin =
+            ((long long)block * block_size + row_dof) * block_size;
+        for (int column_dof = 0; column_dof < block_size; ++column_dof) {
+            scalar_indices[output] = scalar_column + column_dof;
+            scalar_data[output] = block_data[data_begin + column_dof];
+            ++output;
+        }
+    }
+}
+"""
+_DEVICE_BSR_TO_SCALAR_CSR_KERNELS: dict[int, Any] = {}
+
+
+def _scalarize_device_bsr_matrix(matrix: _DeviceBsrMatrixView, sparse, cp):
+    """Expand a face-BSR view to scalar CUDA CSR without host staging."""
+    block_size = int(matrix.block_size)
+    num_block_rows = int(matrix.shape[0] // block_size)
+    scalar_indptr = cp.empty(matrix.shape[0] + 1, dtype=cp.int32)
+    scalar_indices = cp.empty(int(matrix.data.size), dtype=cp.int32)
+    scalar_data = cp.empty(int(matrix.data.size), dtype=cp.float64)
+    device_id = int(cp.cuda.runtime.getDevice())
+    kernel = _DEVICE_BSR_TO_SCALAR_CSR_KERNELS.get(device_id)
+    if kernel is None:
+        kernel = cp.RawKernel(
+            _DEVICE_BSR_TO_SCALAR_CSR_SOURCE, "device_bsr_to_scalar_csr"
+        )
+        _DEVICE_BSR_TO_SCALAR_CSR_KERNELS[device_id] = kernel
+    threads = 256
+    rows_with_terminal = int(matrix.shape[0]) + 1
+    kernel(
+        ((rows_with_terminal + threads - 1) // threads,),
+        (threads,),
+        (
+            matrix.indptr,
+            matrix.indices,
+            matrix.data,
+            scalar_indptr,
+            scalar_indices,
+            scalar_data,
+            np.int32(num_block_rows),
+            np.int32(block_size),
+        ),
+    )
+    return sparse.csr_matrix(
+        (scalar_data, scalar_indices, scalar_indptr),
+        shape=matrix.shape,
+        dtype=cp.float64,
+    )
+
+
 def _device_compressed_matvec(matrix, vector, sparse, cp):
     """Apply a device CSR or face-BSR matrix without host materialization."""
     if not isinstance(matrix, _DeviceBsrMatrixView):
@@ -886,7 +1124,11 @@ def _device_compressed_matvec(matrix, vector, sparse, cp):
     output = cp.empty(matrix.shape[0], dtype=cp.float64)
     threads = 256
     blocks = (matrix.shape[0] + threads - 1) // threads
-    kernel = cp.RawKernel(_DEVICE_BSR_MATVEC_SOURCE, "device_bsr_matvec")
+    device_id = int(cp.cuda.runtime.getDevice())
+    kernel = _DEVICE_BSR_MATVEC_KERNELS.get(device_id)
+    if kernel is None:
+        kernel = cp.RawKernel(_DEVICE_BSR_MATVEC_SOURCE, "device_bsr_matvec")
+        _DEVICE_BSR_MATVEC_KERNELS[device_id] = kernel
     kernel(
         (blocks,),
         (threads,),
@@ -1093,6 +1335,155 @@ def _restore_scaled_csr_rows_in_place(
         )
 
 
+_BSR_ROW_SCALE_SOURCE = r"""
+extern "C" __global__ void diagonal_scale_bsr_rows(
+        const int* __restrict__ indptr,
+        const int* __restrict__ indices,
+        double* __restrict__ data,
+        double* __restrict__ rhs,
+        double* __restrict__ row_diagonal,
+        const int num_block_rows,
+        const int block_size)
+{
+    const int row = blockIdx.x;
+    const int nrows = num_block_rows * block_size;
+    if (row >= nrows) {
+        return;
+    }
+    const int block_row = row / block_size;
+    const int row_dof = row - block_row * block_size;
+    const int start = indptr[block_row];
+    const int end = indptr[block_row + 1];
+    __shared__ double row_scale;
+    if (threadIdx.x == 0) {
+        double diagonal = 0.0;
+        double row_max = 0.0;
+        for (int block = start; block < end; ++block) {
+            const long long base = ((long long)block * block_size + row_dof) * block_size;
+            for (int col_dof = 0; col_dof < block_size; ++col_dof) {
+                const double entry = data[base + col_dof];
+                row_max = fmax(row_max, fabs(entry));
+                if (indices[block] == block_row && col_dof == row_dof) {
+                    diagonal += entry;
+                }
+            }
+        }
+        double value = diagonal;
+        if (!isfinite(value) || fabs(value) <= 1.0e-10 * row_max) {
+            value = row_max;
+        }
+        if (!isfinite(value) || value == 0.0) {
+            value = 1.0;
+        }
+        row_scale = value;
+        row_diagonal[row] = value;
+        rhs[row] /= value;
+    }
+    __syncthreads();
+    const int row_entries = (end - start) * block_size;
+    const double inverse = 1.0 / row_scale;
+    for (int entry = threadIdx.x; entry < row_entries; entry += blockDim.x) {
+        const int block_offset = entry / block_size;
+        const int col_dof = entry - block_offset * block_size;
+        const long long offset = (
+            ((long long)(start + block_offset) * block_size + row_dof) * block_size
+            + col_dof
+        );
+        data[offset] *= inverse;
+    }
+}
+
+extern "C" __global__ void restore_left_scaled_bsr_rows(
+        const int* __restrict__ indptr,
+        double* __restrict__ data,
+        const double* __restrict__ row_diagonal,
+        const int num_block_rows,
+        const int block_size)
+{
+    const int row = blockIdx.x;
+    const int nrows = num_block_rows * block_size;
+    if (row >= nrows) {
+        return;
+    }
+    const int block_row = row / block_size;
+    const int row_dof = row - block_row * block_size;
+    const int start = indptr[block_row];
+    const int end = indptr[block_row + 1];
+    const int row_entries = (end - start) * block_size;
+    const double row_scale = row_diagonal[row];
+    for (int entry = threadIdx.x; entry < row_entries; entry += blockDim.x) {
+        const int block_offset = entry / block_size;
+        const int col_dof = entry - block_offset * block_size;
+        const long long offset = (
+            ((long long)(start + block_offset) * block_size + row_dof) * block_size
+            + col_dof
+        );
+        data[offset] *= row_scale;
+    }
+}
+"""
+_BSR_ROW_SCALE_KERNELS: dict[int, tuple[Any, Any]] = {}
+
+
+def _bsr_row_scale_kernels():
+    """Return cached scalar-row scale/restore kernels for face-BSR matrices."""
+    cp = require_cupy()
+    device_id = int(cp.cuda.runtime.getDevice())
+    kernels = _BSR_ROW_SCALE_KERNELS.get(device_id)
+    if kernels is None:
+        kernels = (
+            cp.RawKernel(_BSR_ROW_SCALE_SOURCE, "diagonal_scale_bsr_rows"),
+            cp.RawKernel(_BSR_ROW_SCALE_SOURCE, "restore_left_scaled_bsr_rows"),
+        )
+        _BSR_ROW_SCALE_KERNELS[device_id] = kernels
+    return kernels
+
+
+def _diagonal_scale_bsr_rows_in_place(matrix: _DeviceBsrMatrixView, rhs):
+    """Apply the scalar CSR left-scaling rule directly to face-BSR values."""
+    cp = require_cupy()
+    nrows = int(rhs.size)
+    diagonal = cp.empty(nrows, dtype=cp.float64)
+    if nrows:
+        scale_kernel, _ = _bsr_row_scale_kernels()
+        scale_kernel(
+            (nrows,),
+            (128,),
+            (
+                matrix.indptr,
+                matrix.indices,
+                matrix.data,
+                rhs,
+                diagonal,
+                np.int32(nrows // matrix.block_size),
+                np.int32(matrix.block_size),
+            ),
+        )
+    return diagonal
+
+
+def _restore_left_scaled_bsr_rows_in_place(
+    matrix: _DeviceBsrMatrixView,
+    row_diagonal,
+) -> None:
+    """Restore face-BSR values after scalar-row left scaling."""
+    nrows = int(matrix.shape[0])
+    if not nrows:
+        return
+    _, restore_kernel = _bsr_row_scale_kernels()
+    restore_kernel(
+        (nrows,),
+        (128,),
+        (
+            matrix.indptr,
+            matrix.data,
+            row_diagonal,
+            np.int32(nrows // matrix.block_size),
+            np.int32(matrix.block_size),
+        ),
+    )
+
+
 _AMGX_REUSABLE_SOLVERS = []
 
 
@@ -1162,14 +1553,31 @@ def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: in
 
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
     solver_config = amgx_config.setdefault("solver", {})
+    solver_config["monitor_residual"] = 1
     solver_config["store_res_history"] = 1
-    if verbose_level >= 2:
-        solver_config["print_solve_stats"] = 1
+    if verbose_level == 2 or verbose_level >= 4:
         solver_config["obtain_timings"] = 1
+    if verbose_level >= 3:
+        solver_config["print_solve_stats"] = 1
+        # Keep the runner contract consistent with load_amgx_config(): level
+        # three prints every outer Krylov iteration, irrespective of a JSON
+        # preset's compact logging cadence.
+        solver_config["print_solve_stats_interval"] = 1
     return amgx_config
 
 
 _AMGX_NO_MEMORY_CODE = 7
+
+
+def _amgx_relative_residual_check_rtol(config, fallback: float) -> float:
+    """Return the configured relative solver-system validation tolerance."""
+    solver = {} if config is None else config.get("solver", {})
+    convergence = str(solver.get("convergence", "")).upper()
+    if convergence.startswith("RELATIVE"):
+        value = float(solver.get("tolerance", fallback))
+        if np.isfinite(value) and value >= 0.0:
+            return value
+    return float(fallback)
 
 
 def _is_amgx_capacity_error(exc: BaseException) -> bool:
@@ -1282,6 +1690,11 @@ class PyAMGXCsrDeviceSolver:
         self.size = None
         self.block_rows = None
         self.block_dim = 1
+        self.last_matrix_upload_elapsed_seconds = 0.0
+        self.last_solver_setup_elapsed_seconds = 0.0
+        self.last_coefficients_replace_elapsed_seconds = 0.0
+        self.setup_count = 0
+        self.coefficients_replace_count = 0
         self.is_setup = False
         self.closed = False
         self.reusable = bool(reusable)
@@ -1313,6 +1726,8 @@ class PyAMGXCsrDeviceSolver:
         if self.closed:
             raise RuntimeError("cannot set up a closed PyAMGXCsrDeviceSolver")
         setup_start = time.perf_counter()
+        self.last_matrix_upload_elapsed_seconds = 0.0
+        self.last_solver_setup_elapsed_seconds = 0.0
         failure_phase = "matrix upload"
         try:
             block_dim = int(getattr(matrix, "block_size", 1))
@@ -1324,6 +1739,7 @@ class PyAMGXCsrDeviceSolver:
                 int(matrix.shape[0] // block_dim),
                 int(matrix.shape[1] // block_dim),
             )
+            matrix_upload_start = time.perf_counter()
             self.mat.upload(
                 matrix.indptr,
                 matrix.indices,
@@ -1331,15 +1747,20 @@ class PyAMGXCsrDeviceSolver:
                 block_dims=[block_dim, block_dim],
                 shape=block_shape,
             )
+            self.cp.cuda.get_current_stream().synchronize()
+            self.last_matrix_upload_elapsed_seconds = time.perf_counter() - matrix_upload_start
             failure_phase = "solver setup"
+            solver_setup_start = time.perf_counter()
             self.solver.setup(self.mat)
             failure_phase = "setup synchronization"
             self.cp.cuda.get_current_stream().synchronize()
+            self.last_solver_setup_elapsed_seconds = time.perf_counter() - solver_setup_start
             self.shape = tuple(matrix.shape)
             self.size = int(matrix.shape[0])
             self.block_rows = int(block_shape[0])
             self.block_dim = block_dim
             self.is_setup = True
+            self.setup_count += 1
         except Exception as exc:
             capacity_error = _as_amgx_capacity_error(
                 exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
@@ -1349,6 +1770,32 @@ class PyAMGXCsrDeviceSolver:
                 raise capacity_error from exc
             raise
         return time.perf_counter() - setup_start
+
+    def replace_coefficients(self, matrix) -> float:
+        """Replace fixed-pattern coefficients while retaining solver setup state."""
+        if self.closed or not self.is_setup:
+            raise RuntimeError(
+                "PyAMGXCsrDeviceSolver must be set up before coefficient replacement"
+            )
+        block_dim = int(getattr(matrix, "block_size", 1))
+        if tuple(matrix.shape) != self.shape or block_dim != self.block_dim:
+            raise ValueError(
+                "replacement matrix shape/block size does not match the cached AMGX matrix"
+            )
+        expected_values = int(self.mat.get_nnz()) * block_dim * block_dim
+        if int(matrix.data.size) != expected_values:
+            raise ValueError(
+                "replacement matrix nonzero count does not match the cached AMGX pattern"
+            )
+        started = time.perf_counter()
+        self.mat.replace_coefficients(matrix.data)
+        self.cp.cuda.get_current_stream().synchronize()
+        elapsed = time.perf_counter() - started
+        self.last_coefficients_replace_elapsed_seconds = elapsed
+        self.last_matrix_upload_elapsed_seconds = elapsed
+        self.last_solver_setup_elapsed_seconds = 0.0
+        self.coefficients_replace_count += 1
+        return elapsed
 
     def solve(self, rhs, *, initial_guess=None):
         """Solve the configured AMGX system for one device RHS."""
@@ -1365,7 +1812,7 @@ class PyAMGXCsrDeviceSolver:
                 raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
             zero_initial_guess = False
         info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
-        if self.verbose_level >= 2:
+        if self.verbose_level == 2 or self.verbose_level >= 4:
             print(format_amgx_configuration(self.config_dict), flush=True)
         solve_start = time.perf_counter()
         failure_phase = "vector upload"
@@ -1463,6 +1910,8 @@ def _pyamgx_solve_csr_device(
     finally:
         solver.close()
     info["amgx_setup_elapsed_seconds"] = setup_elapsed
+    info["amgx_matrix_upload_elapsed_seconds"] = solver.last_matrix_upload_elapsed_seconds
+    info["amgx_solver_setup_elapsed_seconds"] = solver.last_solver_setup_elapsed_seconds
     return x, info
 
 
@@ -1484,11 +1933,14 @@ def _solve_reduced_system_amgx_device_once(
     config=None,
     tolerance: float = 1e-13,
     check_rtol: float | None = None,
+    solver_check_rtol: float | None = None,
     atol: float = 0.0,
     maxiter: int | None = None,
     initial_guess=None,
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
     scale_system: bool | str = True,
+    scalarize_bsr: bool = False,
+    replace_reusable_coefficients: bool = False,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
@@ -1500,10 +1952,20 @@ def _solve_reduced_system_amgx_device_once(
     system_size = int(assembly.rhs.size)
     solve_tolerance = float(tolerance)
     result_check_rtol = solve_tolerance if check_rtol is None else float(check_rtol)
+    solver_result_check_rtol = (
+        result_check_rtol
+        if solver_check_rtol is None
+        else float(solver_check_rtol)
+    )
     if not np.isfinite(solve_tolerance) or solve_tolerance < 0.0:
         raise ValueError(f"tolerance must be finite and non-negative, got {tolerance}")
     if not np.isfinite(result_check_rtol) or result_check_rtol < 0.0:
         raise ValueError(f"check_rtol must be finite and non-negative, got {check_rtol}")
+    if not np.isfinite(solver_result_check_rtol) or solver_result_check_rtol < 0.0:
+        raise ValueError(
+            "solver_check_rtol must be finite and non-negative, got "
+            f"{solver_check_rtol}"
+        )
     if not np.isfinite(atol) or float(atol) < 0.0:
         raise ValueError(f"atol must be finite and non-negative, got {atol}")
     if maxiter is not None and int(maxiter) <= 0:
@@ -1562,15 +2024,18 @@ def _solve_reduced_system_amgx_device_once(
                 shape=matrix.shape,
                 dtype=cp.float64,
             )
+    bsr_scalarized = bool(scalarize_bsr and isinstance(matrix, _DeviceBsrMatrixView))
+    if bsr_scalarized:
+        matrix = _scalarize_device_bsr_matrix(matrix, sparse, cp)
     cp.cuda.get_current_stream().synchronize()
     matrix_elapsed = time.perf_counter() - matrix_start
 
     physical_rhs = assembly.rhs
     scale_mode = _normalize_device_scale_mode(scale_system)
-    if isinstance(matrix, _DeviceBsrMatrixView) and scale_mode != "none":
+    if isinstance(matrix, _DeviceBsrMatrixView) and scale_mode == "symmetric":
         raise ValueError(
-            "device BSR solves currently require scale_system=False; "
-            "block-aware row scaling has not yet been implemented"
+            "device BSR solves do not support symmetric scaling; "
+            "use scale_system='left' or False"
         )
     row_diagonal = None
     inverse_sqrt_diagonal = None
@@ -1578,7 +2043,10 @@ def _solve_reduced_system_amgx_device_once(
     if scale_mode == "left":
         solve_matrix = matrix
         solve_rhs = physical_rhs.copy()
-        row_diagonal = _diagonal_scale_csr_rows_in_place(solve_matrix, solve_rhs)
+        if isinstance(solve_matrix, _DeviceBsrMatrixView):
+            row_diagonal = _diagonal_scale_bsr_rows_in_place(solve_matrix, solve_rhs)
+        else:
+            row_diagonal = _diagonal_scale_csr_rows_in_place(solve_matrix, solve_rhs)
         solve_initial_guess = initial_guess
     elif scale_mode == "symmetric":
         solve_matrix = matrix
@@ -1601,11 +2069,14 @@ def _solve_reduced_system_amgx_device_once(
         if not matrix_is_scaled:
             return 0.0
         restore_start = time.perf_counter()
-        _restore_scaled_csr_rows_in_place(
-            solve_matrix,
-            row_diagonal=row_diagonal,
-            inverse_sqrt_diagonal=inverse_sqrt_diagonal,
-        )
+        if isinstance(solve_matrix, _DeviceBsrMatrixView):
+            _restore_left_scaled_bsr_rows_in_place(solve_matrix, row_diagonal)
+        else:
+            _restore_scaled_csr_rows_in_place(
+                solve_matrix,
+                row_diagonal=row_diagonal,
+                inverse_sqrt_diagonal=inverse_sqrt_diagonal,
+            )
         cp.cuda.get_current_stream().synchronize()
         matrix_is_scaled = False
         return time.perf_counter() - restore_start
@@ -1624,10 +2095,21 @@ def _solve_reduced_system_amgx_device_once(
             )
         else:
             setup_elapsed = 0.0
+            matrix_upload_elapsed = 0.0
+            solver_setup_elapsed = 0.0
+            preconditioner_reused = False
             if not reusable_solver.is_setup:
                 setup_elapsed = reusable_solver.setup(solve_matrix)
+                matrix_upload_elapsed = reusable_solver.last_matrix_upload_elapsed_seconds
+                solver_setup_elapsed = reusable_solver.last_solver_setup_elapsed_seconds
+            elif replace_reusable_coefficients:
+                matrix_upload_elapsed = reusable_solver.replace_coefficients(solve_matrix)
+                preconditioner_reused = True
             x_cp, amgx_info = reusable_solver.solve(solve_rhs, initial_guess=solve_initial_guess)
             amgx_info["amgx_setup_elapsed_seconds"] = setup_elapsed
+            amgx_info["amgx_matrix_upload_elapsed_seconds"] = matrix_upload_elapsed
+            amgx_info["amgx_solver_setup_elapsed_seconds"] = solver_setup_elapsed
+            amgx_info["amgx_preconditioner_reused"] = preconditioner_reused
         solver_x_cp = x_cp
         if inverse_sqrt_diagonal is not None:
             x_cp = inverse_sqrt_diagonal * solver_x_cp
@@ -1649,7 +2131,7 @@ def _solve_reduced_system_amgx_device_once(
         solver_residual_norm, solver_rhs_norm, solver_relative, solver_target = _residual_stats_cp(
             solver_residual,
             solve_rhs,
-            rtol=result_check_rtol,
+            rtol=solver_result_check_rtol,
             atol=atol,
         )
         solver_residual_elapsed = time.perf_counter() - solver_residual_start
@@ -1687,19 +2169,24 @@ def _solve_reduced_system_amgx_device_once(
     )
     total_elapsed = time.perf_counter() - total_start
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
-    if verbose_level >= 2:
+    if verbose_level == 2 or verbose_level >= 4:
         print("  PyAMGX device solve timings:", flush=True)
-        print(f"    csr build: {matrix_elapsed:.5f}s", flush=True)
+        print(f"    matrix view: {matrix_elapsed:.5f}s", flush=True)
         print(f"    row scaling: {scale_elapsed:.5f}s", flush=True)
         print(f"    matrix unscale: {unscale_elapsed:.5f}s", flush=True)
         print(f"    setup: {amgx_info['amgx_setup_elapsed_seconds']:.5f}s", flush=True)
+        print(
+            f"      matrix upload: {amgx_info['amgx_matrix_upload_elapsed_seconds']:.5f}s",
+            flush=True,
+        )
+        print(f"      solver setup: {amgx_info['amgx_solver_setup_elapsed_seconds']:.5f}s", flush=True)
         print(f"    iterate: {amgx_info['amgx_solve_elapsed_seconds']:.5f}s", flush=True)
         print(f"    amgx call total: {amgx_call_elapsed:.5f}s", flush=True)
         print(f"    validation: {validation_elapsed:.5f}s", flush=True)
         print(f"    solver relative residual: {solver_relative:.3e}", flush=True)
     elif verbose_level:
         print(
-            f"  PyAMGX: csr={matrix_elapsed:.5f}s scale={scale_elapsed:.5f}s "
+            f"  PyAMGX: matrix={matrix_elapsed:.5f}s scale={scale_elapsed:.5f}s "
             f"setup={amgx_info['amgx_setup_elapsed_seconds']:.5f}s "
             f"solve={amgx_info['amgx_solve_elapsed_seconds']:.5f}s rel={solver_relative:.3e}",
             flush=True,
@@ -1731,8 +2218,14 @@ def _solve_reduced_system_amgx_device_once(
     result.cupyx_solver = "pyamgx-device"
     result.device_scale_mode = scale_mode
     result.amgx_csr_elapsed_seconds = matrix_elapsed
+    result.amgx_bsr_scalarized = bsr_scalarized
+    result.amgx_preconditioner_reused = bool(
+        amgx_info.get("amgx_preconditioner_reused", False)
+    )
     result.amgx_matrix_unscale_elapsed_seconds = unscale_elapsed
     result.amgx_setup_elapsed_seconds = amgx_info["amgx_setup_elapsed_seconds"]
+    result.amgx_matrix_upload_elapsed_seconds = amgx_info["amgx_matrix_upload_elapsed_seconds"]
+    result.amgx_solver_setup_elapsed_seconds = amgx_info["amgx_solver_setup_elapsed_seconds"]
     result.amgx_solve_elapsed_seconds = amgx_info["amgx_solve_elapsed_seconds"]
     result.amgx_call_elapsed_seconds = amgx_call_elapsed
     result.amgx_overhead_elapsed_seconds = max(
@@ -1771,6 +2264,7 @@ def solve_reduced_system_amgx_device(
     maxiter: int | None = None,
     initial_guess=None,
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
+    retry_solver_cache: dict[Any, PyAMGXCsrDeviceSolver] | None = None,
     scale_system: bool | str = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
@@ -1790,6 +2284,9 @@ def solve_reduced_system_amgx_device(
             "reusable_solver": reusable_solver,
             "use_best_solution": False,
             "residual_correction": False,
+            "scalarize_bsr": False,
+            "reuse_preconditioner": False,
+            "solver_cache_key": None,
         }
     ]
     for index, retry in enumerate(configured_retries, start=1):
@@ -1803,6 +2300,11 @@ def solve_reduced_system_amgx_device(
                 "reusable_solver": None,
                 "use_best_solution": bool(retry.get("use_best_solution", False)),
                 "residual_correction": bool(retry.get("residual_correction", False)),
+                "scalarize_bsr": bool(retry.get("scalarize_bsr", False)),
+                "reuse_preconditioner": bool(
+                    retry.get("reuse_preconditioner", False)
+                ),
+                "solver_cache_key": retry.get("solver_cache_key"),
             }
         )
 
@@ -1812,6 +2314,9 @@ def solve_reduced_system_amgx_device(
             config=config,
             tolerance=tolerance,
             check_rtol=check_rtol,
+            solver_check_rtol=_amgx_relative_residual_check_rtol(
+                config, tolerance if check_rtol is None else check_rtol
+            ),
             atol=atol,
             maxiter=maxiter,
             initial_guess=initial_guess,
@@ -1853,16 +2358,43 @@ def solve_reduced_system_amgx_device(
                     base_solution = best_solution
                     attempt_initial_guess = None
 
+                attempt_solver = attempt["reusable_solver"]
+                replace_coefficients = False
+                if (
+                    attempt["reuse_preconditioner"]
+                    and retry_solver_cache is not None
+                ):
+                    cache_key = attempt["solver_cache_key"]
+                    if cache_key is None:
+                        cache_key = attempt["label"]
+                    attempt_solver = retry_solver_cache.get(cache_key)
+                    if attempt_solver is None or attempt_solver.closed:
+                        attempt_solver = PyAMGXCsrDeviceSolver(
+                            config=attempt["config"],
+                            tolerance=tolerance,
+                            maxiter=maxiter,
+                            verbose=verbose,
+                            reusable=True,
+                        )
+                        retry_solver_cache[cache_key] = attempt_solver
+                    replace_coefficients = bool(attempt_solver.is_setup)
+
                 result, solution = _solve_reduced_system_amgx_device_once(
                     solve_assembly,
                     config=attempt["config"],
                     tolerance=tolerance,
                     check_rtol=check_rtol,
+                    solver_check_rtol=_amgx_relative_residual_check_rtol(
+                        attempt["config"],
+                        tolerance if check_rtol is None else check_rtol,
+                    ),
                     atol=atol,
                     maxiter=maxiter,
                     initial_guess=attempt_initial_guess,
-                    reusable_solver=attempt["reusable_solver"],
+                    reusable_solver=attempt_solver,
                     scale_system=attempt["scale_system"],
+                    scalarize_bsr=attempt["scalarize_bsr"],
+                    replace_reusable_coefficients=replace_coefficients,
                     raise_on_nonconvergence=False,
                     materialize_host_solution=materialize_host_solution,
                     verbose=verbose,
@@ -1927,6 +2459,12 @@ def solve_reduced_system_amgx_device(
                             attempt["use_best_solution"] and attempt_initial_guess is not None
                         ),
                         "residual_correction": base_solution is not None,
+                        "scalarized_bsr": bool(
+                            getattr(result, "amgx_bsr_scalarized", False)
+                        ),
+                        "preconditioner_reused": bool(
+                            getattr(result, "amgx_preconditioner_reused", False)
+                        ),
                         "status": result.status,
                         "failure_reason": result.failure_reason,
                         "relative_residual": result.solver_relative_residual_norm,
@@ -1994,7 +2532,7 @@ def solve_reduced_system_amgx_device(
             timed_result.amgx_retry_outer_overhead_elapsed_seconds = max(
                 0.0, retry_wrapper_elapsed - attempt_elapsed
             )
-        if verbose_level >= 2:
+        if verbose_level == 2 or verbose_level >= 4:
             print("  AMGX retry-wrapper timings:", flush=True)
             print("    matrix backup to host: disabled", flush=True)
             print(f"    wrapper total: {retry_wrapper_elapsed:.5f}s", flush=True)

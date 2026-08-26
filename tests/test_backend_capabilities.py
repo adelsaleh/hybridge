@@ -226,6 +226,56 @@ def test_unsupported_advection_combinations_use_stable_actionable_error(override
     assert "docs/reference/backend_capabilities.md" in message
 
 
+def test_advection_raw_cuda_bsr_is_accepted_for_fused_device_amgx() -> None:
+    capability = _advection_preflight(
+        assembly_backend="raw-cuda",
+        solver="amgx",
+        raw_matrix_format="bsr",
+        materialize_host_solution=False,
+    )
+
+    assert capability.assembly_backend == "raw-cuda"
+    assert capability.solver_backend == "amgx"
+
+
+def test_advection_raw_cuda_split3_bsr_is_accepted_for_device_amgx() -> None:
+    capability = _advection_preflight(
+        assembly_backend="raw-cuda",
+        solver="amgx",
+        raw_local_assembly="split3",
+        raw_lu_mode="coop",
+        raw_matrix_format="bsr",
+        materialize_host_solution=False,
+    )
+
+    assert capability.assembly_backend == "raw-cuda"
+    assert capability.solver_backend == "amgx"
+
+
+@pytest.mark.parametrize(
+    "overrides,reason",
+    (
+        (
+            {"raw_lu_mode": "safe", "raw_matrix_format": "bsr"},
+            "requires raw_lu_mode='coop'",
+        ),
+        (
+            {"raw_lu_mode": "coop", "raw_matrix_format": "csr"},
+            "supports only raw_matrix_format='auto' or 'bsr'",
+        ),
+    ),
+)
+def test_advection_raw_cuda_split3_rejects_non_bsr_policy(overrides, reason: str) -> None:
+    with pytest.raises(UnsupportedBackendConfigurationError, match=reason):
+        _advection_preflight(
+            assembly_backend="raw-cuda",
+            solver="amgx",
+            raw_local_assembly="split3",
+            materialize_host_solution=False,
+            **overrides,
+        )
+
+
 def _diffusion_preflight(**overrides):
     values = {
         "operation": "solve",

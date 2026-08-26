@@ -26,8 +26,8 @@ experimental ``lu_mode="coop"`` path uses a shared-memory pivot reduction and
 parallel multiplier/trailing-update work while deliberately keeping row swaps on
 thread 0; earlier fully parallel row-swap variants reproduced illegal-address
 failures in the fused kernel.  The fused kernels are validated for legacy-lagrange and legendre-modal
-trace bases through p <= 8, while the precomputed raw path keeps its original
-p <= 6 guard.
+trace bases through p <= 7, with p=8--9 available for explicit experimental
+qualification, while the precomputed raw path keeps its original p <= 6 guard.
 """
 
 from __future__ import annotations
@@ -92,6 +92,13 @@ class RawAdvectionAssemblyResult:
     reaction_scalar: float = 0.0
     reaction_is_scalar: bool = False
     advection_tensor: Any | None = None
+    advection_sparse_offsets: Any | None = None
+    advection_sparse_modes: Any | None = None
+    advection_sparse_values0: Any | None = None
+    advection_sparse_values1: Any | None = None
+    use_sparse_advection: bool = False
+    mass_is_diagonal: bool = False
+    local_response: Any | None = None
     lu_mode: str = "safe"
     zero_boundary_flux: bool = False
 
@@ -1016,6 +1023,12 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const int* __restrict__ advection_sparse_offsets,
+        const int* __restrict__ advection_sparse_modes,
+        const double* __restrict__ advection_sparse_values0,
+        const double* __restrict__ advection_sparse_values1,
+        const int use_sparse_advection,
+        const int mass_is_diagonal,
         const double* __restrict__ face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
@@ -1119,8 +1132,12 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     const int source_col = 3 * NTR;
     for (int i = tid; i < NEL; i += blockDim.x) {
         double source_value = 0.0;
-        for (int k = 0; k < NEL; ++k) {
-            source_value += source_cache[k] * mass_matrix[k * NEL + i];
+        if (mass_is_diagonal) {
+            source_value = source_cache[i] * mass_matrix[i * NEL + i];
+        } else {
+            for (int k = 0; k < NEL; ++k) {
+                source_value += source_cache[k] * mass_matrix[k * NEL + i];
+            }
         }
         local_rhs[i * NCOLS + source_col] = jac * source_value;
     }
@@ -1133,7 +1150,8 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const int j = idx - i * NEL;
         double value;
         if (reaction_is_scalar) {
-            value = reaction_scalar * jac * mass_matrix[i * NEL + j];
+            value = (mass_is_diagonal && i != j)
+                ? 0.0 : reaction_scalar * jac * mass_matrix[i * NEL + j];
         } else {
             double reaction_value = 0.0;
             for (int k = 0; k < NEL; ++k) {
@@ -1143,10 +1161,21 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         }
 
         double advection_value = 0.0;
-        for (int k = 0; k < NEL; ++k) {
-            const double adv0 = advection_tensor[((0 * NEL + k) * NEL + i) * NEL + j];
-            const double adv1 = advection_tensor[((1 * NEL + k) * NEL + i) * NEL + j];
-            advection_value += beta_ref0_cache[k] * adv0 + beta_ref1_cache[k] * adv1;
+        if (use_sparse_advection) {
+            const int entry = i * NEL + j;
+            for (int pos = advection_sparse_offsets[entry];
+                    pos < advection_sparse_offsets[entry + 1]; ++pos) {
+                const int k = advection_sparse_modes[pos];
+                advection_value +=
+                    beta_ref0_cache[k] * advection_sparse_values0[pos]
+                    + beta_ref1_cache[k] * advection_sparse_values1[pos];
+            }
+        } else {
+            for (int k = 0; k < NEL; ++k) {
+                const double adv0 = advection_tensor[((0 * NEL + k) * NEL + i) * NEL + j];
+                const double adv1 = advection_tensor[((1 * NEL + k) * NEL + i) * NEL + j];
+                advection_value += beta_ref0_cache[k] * adv0 + beta_ref1_cache[k] * adv1;
+            }
         }
         local_lu[idx] = value - jac * advection_value;
     }
@@ -1443,12 +1472,8 @@ __device__ __forceinline__ void factor_local_lu_coop_pivot_scale_raw(
         }
 
         if (tid == 0) {
-            pivots[k] = pivot_rows[0];
-        }
-        __syncthreads();
-
-        const int pivot = pivots[k];
-        if (tid == 0) {
+            const int pivot = pivot_rows[0];
+            pivots[k] = pivot;
             // Keep row swaps serialized.  Parallel row swaps, including a staged
             // scratch variant, reproduced the historical illegal-address failure
             // in the fully fused kernel.  The surrounding cooperative pivot
@@ -1468,6 +1493,8 @@ __device__ __forceinline__ void factor_local_lu_coop_pivot_scale_raw(
                 local_lu[k * NEL + k] = diagonal;
             }
         }
+        // Publish the stored pivot for the later triangular solve and the
+        // completed row swap/diagonal clamp for the multiplier update.
         __syncthreads();
 
         const double diagonal = local_lu[k * NEL + k];
@@ -1575,6 +1602,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
         long long* __restrict__ cols,
         double* __restrict__ data,
         double* __restrict__ rhs,
+        double* __restrict__ local_response,
         const long long* __restrict__ loc2glob_edge,
         const bool* __restrict__ orientations,
         const long long* __restrict__ loc2oriented_face_coupling,
@@ -1590,6 +1618,12 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const int* __restrict__ advection_sparse_offsets,
+        const int* __restrict__ advection_sparse_modes,
+        const double* __restrict__ advection_sparse_values0,
+        const double* __restrict__ advection_sparse_values1,
+        const int use_sparse_advection,
+        const int mass_is_diagonal,
         const double* __restrict__ face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
@@ -1601,6 +1635,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const double* __restrict__ boundary_trace,
         const double reaction_scalar,
         const int reaction_is_scalar,
+        const int store_local_response,
         const int zero_boundary_flux,
         const long long num_elements,
         const long long num_int_edges,
@@ -1618,12 +1653,18 @@ extern "C" __global__ void assemble_advection_raw_fused(
     double* beta_ref0_cache = beta_y_cache + NEL;      // NEL beta coefficients transformed by inv_aff_mats_t column 0
     double* beta_ref1_cache = beta_ref0_cache + NEL;   // NEL beta coefficients transformed by inv_aff_mats_t column 1
     double* reaction_cache = beta_ref1_cache + NEL;    // NEL projected reaction coefficients when reaction is nonscalar
+    double* schur_lift_rows = reaction_cache + NEL;    // p>=8: 3*NTR x NEL spill-free Schur lifts
+#if NEL >= 45
+    double* post_lift_workspace = schur_lift_rows + (3 * NTR * NEL);
+#else
+    double* post_lift_workspace = schur_lift_rows;
+#endif
 #if RAW_LU_MODE_COOP
-    double* lu_pivot_abs = reaction_cache + NEL;       // block scratch for cooperative pivot reduction
+    double* lu_pivot_abs = post_lift_workspace;        // block scratch for cooperative pivot reduction
     int* pivots = reinterpret_cast<int*>(lu_pivot_abs + RAW_LU_SCRATCH_THREADS);
     int* lu_pivot_rows = pivots + NEL;                 // block scratch for cooperative pivot row reduction
 #else
-    int* pivots = reinterpret_cast<int*>(reaction_cache + NEL);
+    int* pivots = reinterpret_cast<int*>(post_lift_workspace);
 #endif
 
     const int tid = threadIdx.x;
@@ -1636,6 +1677,9 @@ extern "C" __global__ void assemble_advection_raw_fused(
             beta_ref0_cache, beta_ref1_cache, reaction_cache,
             aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
             mass_matrix, reaction_triples, advection_tensor,
+            advection_sparse_offsets, advection_sparse_modes,
+            advection_sparse_values0, advection_sparse_values1,
+            use_sparse_advection, mass_is_diagonal,
             face_basis, face_weights, trace_basis,
             source_coeffs, beta_coeffs, reaction_coeffs,
             reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
@@ -1646,6 +1690,13 @@ extern "C" __global__ void assemble_advection_raw_fused(
         factor_local_lu_coop_safe_raw(local_lu, pivots);
 #endif
         solve_all_columns_raw(local_lu, pivots, local_rhs);
+
+        if (store_local_response) {
+            for (int entry = tid; entry < NEL * NCOLS; entry += blockDim.x) {
+                local_response[element * (NEL * NCOLS) + entry] = local_rhs[entry];
+            }
+        }
+        __syncthreads();
 
         // Emit one row task per local trace test function.  Row-side orientation
         // is encoded by loc2oriented_face_coupling and oriented_lifts; column-side
@@ -1669,7 +1720,9 @@ extern "C" __global__ void assemble_advection_raw_fused(
             // This thread owns one Schur row for this element side.  Build the
             // tau-weighted global-orientation lift on the fly from face
             // quadrature values, matching the NumPy/CUDA precomputed lift.
+#if NEL < 45
             double lift_values[NEL];
+#endif
             double rhs_value = 0.0;
             for (int i = 0; i < NEL; ++i) {
                 double lift = 0.0;
@@ -1678,7 +1731,11 @@ extern "C" __global__ void assemble_advection_raw_fused(
                     const double phi_i = face_basis[(row_face * NEL + i) * NQF + qf];
                     lift += lift_scale * tau_face[row_face * NQF + qf] * face_weights[qf] * mu * phi_i;
                 }
+#if NEL >= 45
+                schur_lift_rows[task * NEL + i] = lift;
+#else
                 lift_values[i] = lift;
+#endif
                 rhs_value += lift * local_rhs[i * NCOLS + (NCOLS - 1)];
             }
 
@@ -1692,7 +1749,12 @@ extern "C" __global__ void assemble_advection_raw_fused(
                     const double trace_sign = raw_trace_orientation_sign(positive, col_dof);
                     double schur_value = 0.0;
                     for (int i = 0; i < NEL; ++i) {
+#if NEL >= 45
+                        schur_value += schur_lift_rows[task * NEL + i]
+                            * local_rhs[i * NCOLS + column];
+#else
                         schur_value += lift_values[i] * local_rhs[i * NCOLS + column];
+#endif
                     }
                     schur_value *= trace_sign;
                     if (col_solve_edge >= 0) {
@@ -1746,6 +1808,12 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const int* __restrict__ advection_sparse_offsets,
+        const int* __restrict__ advection_sparse_modes,
+        const double* __restrict__ advection_sparse_values0,
+        const double* __restrict__ advection_sparse_values1,
+        const int use_sparse_advection,
+        const int mass_is_diagonal,
         const double* __restrict__ face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
@@ -1789,6 +1857,9 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         beta_ref0_cache, beta_ref1_cache, reaction_cache,
         aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
         mass_matrix, reaction_triples, advection_tensor,
+            advection_sparse_offsets, advection_sparse_modes,
+            advection_sparse_values0, advection_sparse_values1,
+            use_sparse_advection, mass_is_diagonal,
         face_basis, face_weights, trace_basis,
         source_coeffs, beta_coeffs, reaction_coeffs,
         reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
@@ -1822,6 +1893,37 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
 
     for (int i = tid; i < NEL; i += blockDim.x) {
         uh[element * NEL + i] = local_rhs[i * NCOLS];
+    }
+}
+"""
+
+
+_RAW_RESPONSE_RECONSTRUCT_TEMPLATE = r"""
+extern "C" __global__ void reconstruct_advection_from_response_raw(
+        double* __restrict__ uh,
+        const double* __restrict__ local_response,
+        const double* __restrict__ trace,
+        const long long* __restrict__ loc2glob_edge,
+        const bool* __restrict__ orientations,
+        const long long num_elements)
+{
+    const long long element = blockIdx.x;
+    if (element >= num_elements) return;
+    const int tid = threadIdx.x;
+    const long long response_base = element * (long long)(NEL * NCOLS);
+    for (int i = tid; i < NEL; i += blockDim.x) {
+        double value = local_response[response_base + i * NCOLS + (NCOLS - 1)];
+        for (int face = 0; face < 3; ++face) {
+            const long long edge = loc2glob_edge[element * 3 + face];
+            const bool positive = orientations[element * 3 + face];
+            for (int dof = 0; dof < NTR; ++dof) {
+                const int column = raw_trace_column_index(face, positive, dof);
+                const double trace_value = raw_oriented_trace_value(
+                    positive, dof, trace[edge * NTR + dof]);
+                value += local_response[response_base + i * NCOLS + column] * trace_value;
+            }
+        }
+        uh[element * NEL + i] = value;
     }
 }
 """
@@ -1981,6 +2083,7 @@ def _kernel_source(
         raise ValueError("trace_orientation must be 'nodal' or 'modal'")
     prefix = (
         f"#define RAW_LU_MODE_COOP {1 if normalized_lu_mode == 'coop' else 0}\n"
+
         f"#define RAW_LU_SCRATCH_THREADS {_RAW_LU_SCRATCH_THREADS}\n"
         f"#define RAW_TRACE_ORIENTATION_MODAL {1 if trace_orientation == 'modal' else 0}\n"
         f"#define RAW_NTR {int(ntr)}\n"
@@ -2029,15 +2132,27 @@ def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') 
     # cache is reserved even for scalar reaction so the CUDA shared-memory
     # layout is compile-time fixed.
     # The experimental cooperative LU mode adds fixed block-sized scratch arrays
-    # for pivot absolute values and pivot row indices.  p=8 with legacy-lagrange
-    # trace remains below common opt-in shared-memory limits.
-    doubles = nel * nel + nel * ncols + 6 * nqf + 6 * nel
+    # for pivot absolute values and pivot row indices.  p=8--9 with the supported trace bases remain below the target
+    # device opt-in shared-memory limit.
+    base_doubles = nel * nel + nel * ncols + 6 * nqf + 6 * nel
+    assembly_doubles = base_doubles
+    # At p>=8 the fused Schur loop would otherwise materialize one NEL-entry
+    # lift vector in every participating thread.  NVRTC lowers that
+    # dynamically-indexed array to thread-local memory (global DRAM).  The LU
+    # and solved columns already limit these high-order kernels to one CTA per
+    # SM, so stage all 3*NTR lift rows in additional block-shared storage
+    # without reducing their resident-block occupancy.
+    if nel >= 45:
+        assembly_doubles += 3 * ntr * nel
+    reconstruct_doubles = base_doubles
     ints = nel
     if normalized_lu_mode == 'coop':
-        doubles += _RAW_LU_SCRATCH_THREADS
+        assembly_doubles += _RAW_LU_SCRATCH_THREADS
+        reconstruct_doubles += _RAW_LU_SCRATCH_THREADS
         ints += _RAW_LU_SCRATCH_THREADS
-    bytes_ = doubles * 8 + ints * 4 + 256
-    return bytes_, bytes_
+    assembly_bytes = assembly_doubles * 8 + ints * 4 + 256
+    reconstruct_bytes = reconstruct_doubles * 8 + ints * 4 + 256
+    return assembly_bytes, reconstruct_bytes
 
 
 def _compile_kernel(cupy, source: str, name: str, shared_bytes: int) -> str:
@@ -2108,6 +2223,57 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     return source[:start] + kernel + source[end:]
+
+
+def _raw_fused_bsr_template() -> str:
+    """Return the fused raw template with the assembly entry point writing face BSR."""
+    source = _raw_fused_csr_template()
+    replacements = (
+        (
+            "assemble_advection_raw_fused_csr",
+            "assemble_advection_raw_fused_bsr",
+        ),
+        (
+            "const long long out = (long long)csr_indptr[row] + "
+            "((long long)block_pos * NTR + col_dof);",
+            "const long long out = (((long long)csr_indptr[row_solve_edge] + "
+            "block_pos) * NTR + row_dof) * NTR + col_dof;",
+        ),
+        (
+            "const long long out = (long long)csr_indptr[row] + "
+            "((long long)mass_block_pos * NTR + col_dof);",
+            "const long long out = (((long long)csr_indptr[row_solve_edge] + "
+            "mass_block_pos) * NTR + row_dof) * NTR + col_dof;",
+        ),
+    )
+    for scalar_fragment, bsr_fragment in replacements:
+        if source.count(scalar_fragment) != 1:
+            raise RuntimeError("failed to specialize fused advection assembly for BSR")
+        source = source.replace(scalar_fragment, bsr_fragment, 1)
+
+    # Distinct off-diagonal face blocks are owned by exactly one triangle, so
+    # assign them directly. The diagonal is shared by the two adjacent elements.
+    # Stage each element's diagonal Schur row in the now-dead coefficient cache,
+    # then combine it with tangent mass in the original uniform mass loop.
+    schur_write = "                        atomicAdd(&data[out], -schur_value);"
+    staged_bsr_write = r"""                        if (col_solve_edge == row_solve_edge) {
+                            source_cache[task * NTR + col_dof] = schur_value;
+                        } else {
+                            data[out] = -schur_value;
+                        }"""
+    if source.count(schur_write) != 1:
+        raise RuntimeError("failed to stage diagonal advection BSR writes")
+    source = source.replace(schur_write, staged_bsr_write, 1)
+
+    mass_write = "                    atomicAdd(&data[out], mass_value);"
+    combined_diagonal_write = (
+        "                    atomicAdd(&data[out], "
+        "-source_cache[task * NTR + col_dof] + mass_value);"
+    )
+    if source.count(mass_write) != 1:
+        raise RuntimeError("failed to fuse diagonal advection Schur and mass writes")
+    source = source.replace(mass_write, combined_diagonal_write, 1)
+    return source
 
 
 def _edge_to_solve_edge(mesh) -> np.ndarray:
@@ -2283,10 +2449,18 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         cspace,
         trace_ref,
         advection_tensor,
+        advection_sparse_offsets,
+        advection_sparse_modes,
+        advection_sparse_values0,
+        advection_sparse_values1,
+        use_sparse_advection: bool,
+        mass_is_diagonal: bool,
         block_size: RawCudaBlockSize = "auto",
         lu_mode: str = 'safe',
         matrix_format: str = 'coo',
         zero_boundary_flux: bool = False,
+        local_response=None,
+        cache_local_response: bool = True,
 ) -> RawAdvectionAssemblyResult:
     """Assemble the reduced advection trace system with fused projected local assembly."""
     cupy = require_cupy()
@@ -2294,8 +2468,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     validate_raw_cuda_supported(
         cspace,
         trace_ref,
-        max_el_dof=45,
-        max_order=8,
+        max_el_dof=55,
+        max_order=9,
         label='fused raw CUDA advection assembly',
     )
     timings: dict[str, float] = {}
@@ -2319,11 +2493,31 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     else:
         reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=cupy.float64)
     advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
-
+    advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
+    advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
+    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=cupy.float64)
+    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=cupy.float64)
+    use_sparse_advection = bool(use_sparse_advection)
+    mass_is_diagonal = bool(mass_is_diagonal)
     matrix_format = str(matrix_format).lower()
-    if matrix_format not in {'coo', 'csr'}:
-        raise ValueError("matrix_format must be 'coo' or 'csr'")
+    if matrix_format not in {'coo', 'csr', 'bsr'}:
+        raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
     zero_boundary_flux = bool(zero_boundary_flux)
+    cache_local_response = bool(cache_local_response)
+    response_shape = (int(cspace.mesh.num_tri), nel, ncols)
+    if cache_local_response:
+        if local_response is None:
+            local_response = cupy.empty(response_shape, dtype=cupy.float64)
+        else:
+            if tuple(local_response.shape) != response_shape:
+                raise ValueError(
+                    "local_response workspace must have shape "
+                    f"{response_shape}; got {tuple(local_response.shape)}"
+                )
+            if local_response.dtype != cupy.float64 or not local_response.flags.c_contiguous:
+                raise ValueError("local_response workspace must be C-contiguous float64")
+    else:
+        local_response = cupy.empty(1, dtype=cupy.float64)
     if zero_boundary_flux:
         boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=cupy.float64)
     else:
@@ -2333,9 +2527,13 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
 
     csr_pattern = None
     indptr = indices = None
-    if matrix_format == 'csr':
+    if matrix_format in {'csr', 'bsr'}:
         start = time.perf_counter()
-        csr_pattern = build_reduced_csr_pattern_raw(cspace, timings)
+        csr_pattern = build_reduced_csr_pattern_raw(
+            cspace,
+            timings,
+            matrix_format=matrix_format,
+        )
         edge_to_solve = csr_pattern.edge_to_solve_edge
         side_index = csr_pattern.interior_side_index
         indptr = csr_pattern.indptr
@@ -2345,13 +2543,17 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         timings['raw.csr_pattern.wrapper'] = time.perf_counter() - start
         rows = cols = None
         zero_start = time.perf_counter()
-        data = cupy.zeros(indices.size, dtype=cupy.float64)
+        data = (
+            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=cupy.float64)
+            if matrix_format == 'bsr'
+            else cupy.zeros(indices.size, dtype=cupy.float64)
+        )
         rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
         boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
         cupy.cuda.get_current_stream().synchronize()
-        timings['raw.csr_zero'] = time.perf_counter() - zero_start
+        timings[f'raw.{matrix_format}_zero'] = time.perf_counter() - zero_start
     else:
         start = time.perf_counter()
         edge_to_solve_h = _edge_to_solve_edge(mesh_h)
@@ -2374,17 +2576,23 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
     start = time.perf_counter()
-    if matrix_format == 'csr':
+    if matrix_format in {'csr', 'bsr'}:
+        kernel_name = f'assemble_advection_raw_fused_{matrix_format}'
+        template = (
+            _raw_fused_bsr_template()
+            if matrix_format == 'bsr'
+            else _raw_fused_csr_template()
+        )
         source = _kernel_source(
-            _raw_fused_csr_template(), nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
+            template, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
         )
         source = _apply_fused_assembly_launch_bounds(
-            source, kernel_name='assemble_advection_raw_fused_csr', nel=nel, block_size=block_size
+            source, kernel_name=kernel_name, nel=nel, block_size=block_size
         )
         compile_start = time.perf_counter()
         kernel, kernel_jit = _compile_kernel_timed(
-            cupy, source, 'assemble_advection_raw_fused_csr', assembly_shared
+            cupy, source, kernel_name, assembly_shared
         )
         timings['raw.kernel.prepare'] = compile_start - start
         timings['raw.kernel.jit'] = kernel_jit
@@ -2401,6 +2609,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 indptr,
                 data,
                 rhs,
+                local_response,
                 cspace.mesh.loc2glob_edge,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
@@ -2417,6 +2626,12 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 cspace.quad_data.MKrf,
                 cspace.quad_data.weighted_triple_phi_flat,
                 advection_tensor,
+                advection_sparse_offsets,
+                advection_sparse_modes,
+                advection_sparse_values0,
+                advection_sparse_values1,
+                np.int32(1 if use_sparse_advection else 0),
+                np.int32(1 if mass_is_diagonal else 0),
                 trace_ref.bas_of_bd_quads,
                 trace_ref.weights,
                 trace_ref.bas1d_of_ref_edg_qds,
@@ -2428,6 +2643,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 boundary_trace_full.reshape(-1),
                 np.float64(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
+                np.int32(1 if cache_local_response else 0),
                 np.int32(1 if zero_boundary_flux else 0),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
@@ -2462,6 +2678,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 cols,
                 data,
                 rhs,
+                local_response,
                 cspace.mesh.loc2glob_edge,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
@@ -2477,6 +2694,12 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 cspace.quad_data.MKrf,
                 cspace.quad_data.weighted_triple_phi_flat,
                 advection_tensor,
+                advection_sparse_offsets,
+                advection_sparse_modes,
+                advection_sparse_values0,
+                advection_sparse_values1,
+                np.int32(1 if use_sparse_advection else 0),
+                np.int32(1 if mass_is_diagonal else 0),
                 trace_ref.bas_of_bd_quads,
                 trace_ref.weights,
                 trace_ref.bas1d_of_ref_edg_qds,
@@ -2488,6 +2711,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 boundary_trace_full.reshape(-1),
                 np.float64(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
+                np.int32(1 if cache_local_response else 0),
                 np.int32(1 if zero_boundary_flux else 0),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
@@ -2501,13 +2725,15 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     launch_wall_seconds = time.perf_counter() - launch_wall_start
     timings['raw.kernel.device'] = device_seconds
     timings['raw.kernel.wall'] = launch_wall_seconds
-    timings['raw.kernel' if matrix_format == 'coo' else 'raw.csr_kernel'] = device_seconds
+    timings[
+        'raw.kernel' if matrix_format == 'coo' else f'raw.{matrix_format}_kernel'
+    ] = device_seconds
     timings['raw.block_size'] = float(block_size)
     map_wall = timings.get('raw.csr_pattern.wrapper', timings.get('raw.map_setup', 0.0))
     timings['raw.total'] = (
         timings.get('raw.input_prepare', 0.0)
         + map_wall
-        + timings.get('raw.csr_zero', 0.0)
+        + timings.get(f'raw.{matrix_format}_zero', 0.0)
         + timings.get('raw.kernel.prepare', 0.0)
         + timings.get('raw.kernel.jit', 0.0)
         + timings.get('raw.kernel.wall', 0.0)
@@ -2533,6 +2759,13 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         reaction_scalar=float(reaction_scalar),
         reaction_is_scalar=bool(reaction_is_scalar),
         advection_tensor=advection_tensor,
+        advection_sparse_offsets=advection_sparse_offsets,
+        advection_sparse_modes=advection_sparse_modes,
+        advection_sparse_values0=advection_sparse_values0,
+        advection_sparse_values1=advection_sparse_values1,
+        use_sparse_advection=use_sparse_advection,
+        mass_is_diagonal=mass_is_diagonal,
+        local_response=local_response if cache_local_response else None,
         lu_mode=lu_mode,
         zero_boundary_flux=zero_boundary_flux,
     )
@@ -2590,6 +2823,12 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         cspace,
         trace_ref,
         advection_tensor,
+        advection_sparse_offsets,
+        advection_sparse_modes,
+        advection_sparse_values0,
+        advection_sparse_values1,
+        use_sparse_advection: bool,
+        mass_is_diagonal: bool,
         block_size: RawCudaBlockSize = "auto",
         lu_mode: str = 'safe',
         zero_boundary_flux: bool = False,
@@ -2600,8 +2839,8 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     validate_raw_cuda_supported(
         cspace,
         trace_ref,
-        max_el_dof=45,
-        max_order=8,
+        max_el_dof=55,
+        max_order=9,
         label='fused raw CUDA advection reconstruction',
     )
     nel = int(cspace.el_dof)
@@ -2621,6 +2860,12 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=cupy.float64)
     beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=cupy.float64)
     advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
+    advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
+    advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
+    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=cupy.float64)
+    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=cupy.float64)
+    use_sparse_advection = bool(use_sparse_advection)
+    mass_is_diagonal = bool(mass_is_diagonal)
     zero_boundary_flux = bool(zero_boundary_flux)
     edge_to_solve_edge = _edge_to_solve_edge_device(cspace) if zero_boundary_flux else cupy.empty(1, dtype=cupy.int64)
     uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
@@ -2646,6 +2891,12 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             cspace.quad_data.MKrf,
             cspace.quad_data.weighted_triple_phi_flat,
             advection_tensor,
+            advection_sparse_offsets,
+            advection_sparse_modes,
+            advection_sparse_values0,
+            advection_sparse_values1,
+            np.int32(1 if use_sparse_advection else 0),
+            np.int32(1 if mass_is_diagonal else 0),
             trace_ref.bas_of_bd_quads,
             trace_ref.weights,
             trace_ref.bas1d_of_ref_edg_qds,
@@ -2663,6 +2914,63 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     return cupy.ascontiguousarray(uh), time.perf_counter() - start
 
 
+
+def reconstruct_projected_advection_field_from_response_raw_cuda(
+        *, trace, local_response, cspace, trace_ref,
+        block_size: RawCudaBlockSize = "auto",
+):
+    """Recover coefficients from cached ``A_e^-1 [B_e, f_e]`` columns."""
+    cupy = require_cupy()
+    validate_raw_cuda_supported(
+        cspace,
+        trace_ref,
+        max_el_dof=55,
+        max_order=9,
+        label="raw CUDA advection response reconstruction",
+    )
+    nel = int(cspace.el_dof)
+    ntr = int(cspace.edg_dof)
+    ncols = 3 * ntr + 1
+    expected = (int(cspace.mesh.num_tri), nel, ncols)
+    if tuple(local_response.shape) != expected:
+        raise ValueError(
+            f"local_response must have shape {expected}; got {tuple(local_response.shape)}"
+        )
+    block_size = resolve_raw_cuda_block_size(
+        block_size, equation="advection-reaction", order=cspace.order
+    )
+    source = _kernel_source(
+        _RAW_RESPONSE_RECONSTRUCT_TEMPLATE,
+        nel=nel,
+        ntr=ntr,
+        ncols=ncols,
+        trace_orientation=_raw_trace_orientation_mode(trace_ref),
+    )
+    kernel = _compile_kernel(
+        cupy, source, "reconstruct_advection_from_response_raw", 0
+    )
+    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    stream = cupy.cuda.get_current_stream()
+    begin = cupy.cuda.Event()
+    end = cupy.cuda.Event()
+    begin.record(stream)
+    kernel(
+        (int(cspace.mesh.num_tri),),
+        (int(block_size),),
+        (
+            uh,
+            local_response,
+            trace.reshape(-1),
+            cspace.mesh.loc2glob_edge,
+            cspace.mesh.orientations,
+            np.int64(cspace.mesh.num_tri),
+        ),
+    )
+    end.record(stream)
+    end.synchronize()
+    return cupy.ascontiguousarray(uh), cupy.cuda.get_elapsed_time(begin, end) / 1000.0
+
+
 __all__ = [
     'ReducedTraceCsrPattern',
     'RawAdvectionAssemblyResult',
@@ -2673,6 +2981,7 @@ __all__ = [
     'assemble_projected_advection_trace_system_eliminated_raw_cuda_fused',
     'reconstruct_projected_advection_field_raw_cuda',
     'reconstruct_projected_advection_field_raw_cuda_fused',
+    'reconstruct_projected_advection_field_from_response_raw_cuda',
     '_raw_trace_orientation_mode',
     'validate_raw_cuda_supported',
 ]
