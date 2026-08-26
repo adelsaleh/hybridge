@@ -26,11 +26,11 @@ combinations are defined in `docs/reference/backend_capabilities.md`.
 
 > **Post-release dependency requirement:** every HDG commit after the
 > `v0.1.0a1` release tag is developed and qualified with
-> [`adelsaleh/AMGX@quality-of-life`](https://github.com/adelsaleh/AMGX/tree/quality-of-life)
+> [`adelsaleh/AMGX@hdg-cuda13-integration`](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration)
 > and
 > [`adelsaleh/pyamgx@quality-of-life`](https://github.com/adelsaleh/pyamgx/tree/quality-of-life),
 > not the corresponding upstream `main` branches. The exact revisions qualified
-> with this checkout are AMGX `6699fa4` and PyAMGX `6b26b12`. Host-only paths
+> with this checkout are AMGX `583084b` and PyAMGX `81efd1e`. Host-only paths
 > keep their lazy optional imports, but the supported post-release development
 > stack uses these forks. See the
 > [forked AMGX stack guide](docs/getting_started/forked_amgx_stack.md) for clone,

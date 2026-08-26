@@ -659,7 +659,11 @@ def run_variant(variant: Variant, args: argparse.Namespace, env: dict[str, str])
 
 def env_with_amgx(args: argparse.Namespace) -> dict[str, str]:
     env = os.environ.copy()
-    paths = ["/tmp/AMGX-build", "/tmp/AMGX-install/lib"]
+    paths = [
+        "/tmp/AMGX-build-cuda13.0.1",
+        "/tmp/AMGX-install-cuda13.0.1/lib",
+        "/tmp/cuda-13.0.1/targets/x86_64-linux/lib",
+    ]
     existing = env.get("LD_LIBRARY_PATH")
     if existing:
         paths.append(existing)

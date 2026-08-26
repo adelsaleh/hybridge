@@ -4,8 +4,8 @@ This is the maintained ownership map for HDG Poisson BSR solver paths. It
 separates matrix assembly/storage, sparse matrix-vector products (SpMV),
 multigrid hierarchy construction, and the outer Krylov solve. Calling a path
 "BSR" does not by itself mean that it uses AMGX. AMGX-backed rows in this
-map require `adelsaleh/AMGX@quality-of-life` at `6699fa4` and
-`adelsaleh/pyamgx@quality-of-life` at `6b26b12`; see the
+map require `adelsaleh/AMGX@hdg-cuda13-integration` at `583084b` and
+`adelsaleh/pyamgx@quality-of-life` at `81efd1e`; see the
 [fork build/install guide](../getting_started/forked_amgx_stack.md).
 
 ## Component Boundaries

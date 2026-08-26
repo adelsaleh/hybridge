@@ -9,13 +9,17 @@ matrix.
 
 ## Environment
 
-CUDA and AMGX are optional dependencies. When AMGX is not visible through the
-system loader, expose the directory containing its shared library:
+CUDA and AMGX are optional dependencies. On the qualified CUDA-13 workspace,
+use the checked launcher so compiler, AMGX, runtime, and math-library paths are
+set together:
 
 ```bash
-LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  .venv/bin/python scripts/gpu/run_advection_reaction_cuda.py --help
+scripts/gpu/run_cuda13.sh .venv/bin/python \
+  scripts/gpu/run_advection_reaction_cuda.py --help
 ```
+
+The canonical `/tmp` aliases and advanced root overrides are documented in
+[`../getting_started/forked_amgx_stack.md`](../getting_started/forked_amgx_stack.md).
 
 Package imports remain lazy: importing `hdgfem` does not require CuPy, CUDA,
 or PyAMGX.

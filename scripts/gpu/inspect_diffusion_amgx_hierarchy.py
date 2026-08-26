@@ -155,7 +155,11 @@ def runner_command(case: RunCase, config_path: Path, args: argparse.Namespace) -
 
 def env_with_amgx(args: argparse.Namespace) -> dict[str, str]:
     env = os.environ.copy()
-    paths = ["/tmp/AMGX-build", "/tmp/AMGX-install/lib"]
+    paths = [
+        "/tmp/AMGX-build-cuda13.0.1",
+        "/tmp/AMGX-install-cuda13.0.1/lib",
+        "/tmp/cuda-13.0.1/targets/x86_64-linux/lib",
+    ]
     if existing := env.get("LD_LIBRARY_PATH"):
         paths.append(existing)
     env["LD_LIBRARY_PATH"] = ":".join(paths)

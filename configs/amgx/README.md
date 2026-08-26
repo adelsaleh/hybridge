@@ -1,8 +1,8 @@
 # AMGX Configs
 
 > **Required post-release stack:** these configurations are qualified with
-> `adelsaleh/AMGX@quality-of-life` at `6699fa4` and
-> `adelsaleh/pyamgx@quality-of-life` at `6b26b12`, not the upstream `main`
+> `adelsaleh/AMGX@hdg-cuda13-integration` at `583084b` and
+> `adelsaleh/pyamgx@quality-of-life` at `81efd1e`, not the upstream `main`
 > branches. Follow the [fork build/install guide](../../docs/getting_started/forked_amgx_stack.md)
 > before reproducing AMGX-backed results.
 
@@ -165,7 +165,8 @@ disabled for BSR until block-aware scaling is implemented.
 Strict true-residual diagnostic:
 
 - `diff_rea_gpu4_hdg_gmres_cheb_l1_classical_reliable.json` requires the
-  `quality-of-life` branches of AMGX and pyamgx. It enables explicit residual
+  `hdg-cuda13-integration` branch of AMGX and the `quality-of-life` branch of
+  PyAMGX. It enables explicit residual
   verification and DGKS reorthogonalization without changing AMGX's global
   `Epsilon_conv`. It is not a production preset: on the 113,894-triangle
   Gaussian-annulus k=3 screen, restart 50 reached only a (1.158\times10^{-11})
