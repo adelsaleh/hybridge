@@ -41,8 +41,12 @@ def load_amgx_config(
         solver_config["max_iters"] = int(maxiter)
     if verbose is not None:
         level = int(verbose)
-        solver_config["print_solve_stats"] = 1 if level >= 2 else 0
-        solver_config["obtain_timings"] = 1 if level >= 2 else 0
+        solver_config["print_solve_stats"] = 1 if level >= 3 else 0
+        if level >= 3:
+            # Level three is the full convergence view. Override a preset's
+            # compact cadence so every outer Krylov iteration is visible.
+            solver_config["print_solve_stats_interval"] = 1
+        solver_config["obtain_timings"] = 1 if level == 2 or level >= 4 else 0
     return config, resolved_path
 
 

@@ -29,7 +29,13 @@ def test_load_amgx_config_applies_standard_overrides(tmp_path) -> None:
     assert describe_amgx_solver(config) == "BICGSTAB"
     assert config["solver"]["tolerance"] == 1.0e-9
     assert config["solver"]["max_iters"] == 75
-    assert config["solver"]["print_solve_stats"] == 1
+    assert config["solver"]["print_solve_stats"] == 0
+    assert config["solver"]["obtain_timings"] == 1
+
+    fully_verbose, _ = load_amgx_config(path, verbose=3)
+    assert fully_verbose["solver"]["print_solve_stats"] == 1
+    assert fully_verbose["solver"]["print_solve_stats_interval"] == 1
+    assert fully_verbose["solver"]["obtain_timings"] == 0
     assert describe_amgx_preconditioner(config) == "AMG / CLASSICAL / PMIS"
 
 

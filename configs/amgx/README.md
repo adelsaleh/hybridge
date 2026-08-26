@@ -8,6 +8,14 @@
 
 These JSON files are readable, reusable PyAMGX configurations for the CUDA HDG runners. The Python scripts keep embedded fallback copies, but load these files by default when present. Use `--amgx-config` to run an edited copy without changing source code.
 
+At guiding-center runner verbosity `-v 3`, HDGFEM enables AMGX solve
+statistics with `print_solve_stats_interval=1`. The local AMGX formatter shows
+one aggregate block-L2 residual column, relative-to-initial and
+relative-to-previous ratios, and used/held device memory. This aggregation is
+presentation-only: block-component convergence checks and stored residual
+history are unchanged. Direct solver verbosity `2` or `>=4` retains the Python
+backend micro-timing/configuration diagnostics.
+
 The JSON basenames retain their original `adv_rea_gpu4_hdg_*` and
 `diff_rea_gpu4_hdg_*` benchmark identifiers because archived run logs cite
 them verbatim. This historical artifact exception does not apply to Python
