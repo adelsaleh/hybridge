@@ -26,6 +26,8 @@ class GuidingCenterRunPreset:
     gmsh_algorithm: int | None = None
     basis: str = "dub_orth"
     trace_basis: str = "legacy-lagrange"
+    poisson_trace_basis: str | None = None
+    transport_trace_basis: str | None = None
     order: int = 2
     volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
@@ -57,6 +59,9 @@ class GuidingCenterRunPreset:
     poisson_raw_block_size: int | str = "auto"
     poisson_cache_local_factors: str = "none"
     poisson_hdg_postprocess: str = "none"
+    poisson_flux_postprocess_every: int = 0
+    poisson_flux_postprocess_space: str = "RT_projection"
+    poisson_postprocessing_backend: str = "auto"
     transport_assembly_backend: str = "numpy"
     transport_solver: str | None = "direct"
     transport_preconditioner: str | None = None
@@ -71,6 +76,7 @@ class GuidingCenterRunPreset:
     transport_petsc_monitor: bool = False
     transport_cupyx_solver: str = "bicgstab"
     transport_amgx_config_path: str | None = None
+    transport_amgx_tolerance: float | None = None
     transport_ilu_drop_tol: float | None = None
     transport_ilu_fill_factor: float | None = None
     transport_ilu_failure: str = "raise"
@@ -230,7 +236,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=1.0e-12,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
         transport_boundary_mode="zero-flux",
         transport_raw_local_assembly="fused",
         transport_raw_matrix_format="csr",
@@ -262,7 +268,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=1.0e-12,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
         transport_boundary_mode="zero-flux",
         transport_raw_local_assembly="fused",
         transport_raw_lu_mode="coop",
@@ -299,7 +305,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=1.0e-12,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
         transport_boundary_mode="zero-flux",
         transport_raw_local_assembly="fused",
         transport_raw_lu_mode="coop",
@@ -336,7 +342,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=1.0e-12,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
         transport_boundary_mode="zero-flux",
         transport_raw_local_assembly="fused",
         transport_raw_lu_mode="coop",
@@ -373,7 +379,8 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=5.0e-9,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
+        transport_amgx_tolerance=1.0e-8,
         transport_boundary_mode="zero-flux",
         transport_raw_local_assembly="fused",
         transport_raw_lu_mode="coop",
@@ -429,7 +436,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         transport_solver_rtol=1.0e-11,
         transport_solver_atol=1.0e-12,
         transport_scale_system=True,
-        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json"),
+        transport_amgx_config_path=_amgx("adv_rea_gpu4_hdg_bicgstab_scaled_none.json"),
         transport_boundary_mode="eliminate",
         transport_raw_local_assembly="fused",
         transport_raw_matrix_format="csr",
@@ -437,6 +444,110 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         diagnostics_prefix="rho_helm_wave_raw_cuda_amgx_accuracy",
     ),
 }
+
+_FB_HP_MG_PRODUCTION_KEYS = (
+    "diocotron_k3_raw_cuda_amgx",
+    "diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k10_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx",
+)
+PRESETS.update(
+    {
+        key: replace(
+            PRESETS[key],
+            description=(
+                f"{PRESETS[key].description} Poisson uses reusable native "
+                "FB-HP-MG-PCG face BSR; transport uses scaled tangent-boundary "
+                "BSR BICGSTAB with the accepted density trace as its guess."
+            ),
+            poisson_assembly_backend="raw-cuda",
+            poisson_solver="fb-hp-mg-pcg",
+            poisson_scale_system=False,
+            poisson_trace_basis="legendre-modal",
+            poisson_raw_matrix_format="bsr",
+            poisson_cache_local_factors="schur-cholesky",
+            transport_trace_basis="legacy-lagrange",
+            transport_raw_matrix_format="bsr",
+            transport_initial_guess="initial-density-trace",
+            transport_materialize_host_system=False,
+            transport_materialize_host_solution=False,
+        )
+        for key in _FB_HP_MG_PRODUCTION_KEYS
+    }
+)
+
+_native_benchmark = PRESETS[
+    "diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx"
+]
+PRESETS["diocotron_gaussian_annulus_k3_p6_150k_fb_hp_mg_6step"] = replace(
+    _native_benchmark,
+    description=(
+        "Six-step 150k+ triangle Gaussian-annulus k=3 interleaved benchmark "
+        "using native reusable FB-HP-MG-PCG Poisson and tangent BSR transport."
+    ),
+    mesh_size=0.0068,
+    minimum_triangles=150_000,
+    num_steps=6,
+    time_scheme="si-euler",
+    plot_every=0,
+    diagnostics_every=1,
+    diagnostics_prefix="gaussian_annulus_k3_p6_150k_fb_hp_mg_6step",
+)
+PRESETS["diocotron_gaussian_annulus_k3_p6_150k_hybrid_amgx_6step"] = replace(
+    _native_benchmark,
+    description=(
+        "Six-step 150k+ triangle matched Gaussian-annulus k=3 benchmark using "
+        "the historical fine-BSR/scalar-AMGX Poisson hierarchy."
+    ),
+    mesh_size=0.0068,
+    minimum_triangles=150_000,
+    num_steps=6,
+    time_scheme="si-euler",
+    poisson_solver="amgx",
+    plot_every=0,
+    diagnostics_every=1,
+    diagnostics_prefix="gaussian_annulus_k3_p6_150k_hybrid_amgx_6step",
+)
+
+PRESETS["diocotron_k50_p6_150k_raw_cuda_bsr_plot30"] = replace(
+    PRESETS["diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx"],
+    description=(
+        "T=50, 150k+ triangle super-Gaussian annular diocotron k=50 run "
+        "using native FB-HP-MG face-BSR Poisson, tangent face-BSR transport, "
+        "a narrow band centered at r=0.45, a 20% angular perturbation, "
+        "and a plot update every 30 time steps."
+    ),
+    case_params={"k": 50, "eps": 0.2, "s_bar": 0.45, "s_d": 0.016, "p": 6},
+    mesh_size=0.0068,
+    minimum_triangles=150_000,
+    plot_every=30,
+    diagnostics_every=30,
+    diagnostics_prefix="diocotron_k50_p6_150k_raw_cuda_bsr_plot30",
+)
+
+_AMGX_TRANSPORT_CSR_PRESET_KEYS = (
+    "diocotron_k3_raw_cuda_amgx",
+    "diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k10_p6_dt01_t50_full_raw_cuda_amgx",
+    "diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx",
+    "rho_helm_wave_raw_cuda_amgx_accuracy",
+)
+PRESETS.update(
+    {
+        f"{key}_bsr": replace(
+            PRESETS[key],
+            description=(
+                f"{PRESETS[key].description} The transport trace matrix is assembled and "
+                "uploaded as native face BSR using the same AMGX solver configuration."
+            ),
+            transport_raw_matrix_format="bsr",
+            diagnostics_prefix=f"{PRESETS[key].diagnostics_prefix}_bsr",
+        )
+        for key in _AMGX_TRANSPORT_CSR_PRESET_KEYS
+    }
+)
 
 _PYPARDISO_LU_BASE = PRESETS[
     "diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_lu_upwind"

@@ -222,10 +222,20 @@ The runner couples diffusion-reaction Poisson solves with advection-reaction
 transport and supports `--time-scheme si-euler|predictor-corrector`. It accepts
 independent Poisson/transport backend and solver choices, writes CSV/JSONL
 diagnostics, updates PyVista scalar arrays in place, and plots density only by
-default. Add `--plot-both` to show density and potential. Raw-CUDA stages pass
-projected/current trace guesses directly on device; `--transport-retry-policy
+default. Add `--plot-both` to show density and potential. When `DISPLAY` is
+unavailable, plotting automatically uses render-only EGL/off-screen updates and
+writes frames below `<diagnostics-dir>/<diagnostics-prefix>_frames/`; this avoids
+polling an X interactor from a headless render window. Runner level `-v 3` prints
+a compact native AMGX residual/memory table plus balanced transport and Poisson
+stage summaries. Backend micro-timing dumps remain available to direct solver
+calls at `verbose=2` or `verbose>=4`. Raw-CUDA stages pass projected/current
+trace guesses directly on device;
+`--transport-retry-policy
 amgx-robust` retries a failed assembled transport system without host CSR
-materialization. Compare both temporal schemes with
+materialization. The primary BICGSTAB solve and robust FGMRES/DILU retries all
+use the configured transport row scaling, retain device trace guesses, and are
+accepted only after checking the original unscaled physical residual. Compare
+both temporal schemes with
 `scripts/guiding_center/run_guiding_center_temporal_convergence.py`.
 
 Optional semilinear diocotron-equilibrium scripts live under

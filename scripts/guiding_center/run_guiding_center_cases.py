@@ -8,8 +8,11 @@ import csv
 import json
 import shlex
 import math
+import os
 import sys
+import threading
 import time
+import traceback
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -30,7 +33,8 @@ from hdgfem.core.field_ops import (
     vector_field_linear_combination,
 )
 from hdgfem.diagnostics import (
-    azimuthal_mode_diagnostics,
+    evaluate_scalar_error,
+    guiding_center_field_diagnostics,
     relative_drift,
     result_transfer_time,
     solver_result_metrics,
@@ -64,6 +68,7 @@ class GuidingCenterRunResult:
     jsonl_path: Path
     timings_csv_path: Path
     timings_jsonl_path: Path
+    terminal_log_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +98,143 @@ class GuidingCenterArgumentParser(ArgumentParser):
         if not stripped or stripped.startswith("#"):
             return []
         return shlex.split(stripped, comments=True)
+
+
+def _write_all_fd(fd: int, data: bytes) -> None:
+    """Write a complete byte buffer to a file descriptor."""
+    remaining = memoryview(data)
+    while remaining:
+        try:
+            written = os.write(fd, remaining)
+        except InterruptedError:
+            continue
+        if written <= 0:
+            raise OSError("file-descriptor write made no progress")
+        remaining = remaining[written:]
+
+
+def _flush_terminal_streams() -> None:
+    """Flush Python and C stdio before redirecting or restoring descriptors."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except (AttributeError, OSError, ValueError):
+            pass
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL(None)
+        fflush = libc.fflush
+        fflush.argtypes = [ctypes.c_void_p]
+        fflush.restype = ctypes.c_int
+        fflush(None)
+    except (AttributeError, OSError):
+        pass
+
+
+class _TerminalLogTee:
+    """Mirror process stdout/stderr to their original descriptors and one log."""
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self._log_fd: int | None = None
+        self._saved_fds: dict[int, int] = {}
+        self._threads: list[threading.Thread] = []
+        self._log_lock = threading.Lock()
+        self._log_error: OSError | None = None
+
+    def __enter__(self):
+        _flush_terminal_streams()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._log_fd = os.open(
+            self.path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o644,
+        )
+        try:
+            for target_fd in (1, 2):
+                saved_fd = os.dup(target_fd)
+                read_fd, write_fd = os.pipe()
+                self._saved_fds[target_fd] = saved_fd
+                thread = threading.Thread(
+                    target=self._pump,
+                    args=(read_fd, saved_fd),
+                    name=f"guiding-center-log-fd{target_fd}",
+                    daemon=True,
+                )
+                thread.start()
+                self._threads.append(thread)
+                try:
+                    os.dup2(write_fd, target_fd)
+                finally:
+                    os.close(write_fd)
+        except BaseException:
+            self._restore_descriptors()
+            self._join_and_close()
+            raise
+        return self
+
+    def _pump(self, read_fd: int, mirror_fd: int) -> None:
+        try:
+            while True:
+                try:
+                    chunk = os.read(read_fd, 64 * 1024)
+                except InterruptedError:
+                    continue
+                if not chunk:
+                    break
+                with self._log_lock:
+                    if self._log_error is None and self._log_fd is not None:
+                        try:
+                            _write_all_fd(self._log_fd, chunk)
+                        except OSError as error:
+                            self._log_error = error
+                try:
+                    _write_all_fd(mirror_fd, chunk)
+                except OSError:
+                    # A detached terminal must not stop draining the pipe or
+                    # deadlock a long-running native solver.
+                    pass
+        finally:
+            os.close(read_fd)
+
+    def _restore_descriptors(self) -> None:
+        for target_fd, saved_fd in self._saved_fds.items():
+            try:
+                os.dup2(saved_fd, target_fd)
+            except OSError:
+                pass
+
+    def _join_and_close(self) -> None:
+        for thread in self._threads:
+            thread.join()
+        for saved_fd in self._saved_fds.values():
+            try:
+                os.close(saved_fd)
+            except OSError:
+                pass
+        if self._log_fd is not None:
+            try:
+                os.close(self._log_fd)
+            finally:
+                self._log_fd = None
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        _flush_terminal_streams()
+        self._restore_descriptors()
+        self._join_and_close()
+        if self._log_error is not None and exc_type is None:
+            raise RuntimeError(f"failed to write terminal log {self.path}") from self._log_error
+        return False
+
+
+def _terminal_log_path(
+        config: GuidingCenterRunPreset,
+        preset_key: str,
+) -> Path:
+    """Return the terminal-log path matching the diagnostics output stem."""
+    output_stem = str(config.diagnostics_prefix or preset_key).strip() or "guiding_center"
+    return Path(config.diagnostics_dir) / f"{output_stem}.log"
 
 
 class DiagnosticsRecorder:
@@ -174,6 +316,15 @@ class GuidingCenterPyVistaPanels:
         window_size = [int(round(2.5 * extent)) for extent in base_window_size]
         self.plotter = self.pv.Plotter(shape=shape, window_size=window_size, off_screen=off_screen)
         self.off_screen = bool(off_screen)
+        render_window = getattr(self.plotter, "render_window", None)
+        render_window_name = (
+            ""
+            if render_window is None or not hasattr(render_window, "GetClassName")
+            else str(render_window.GetClassName())
+        )
+        self._render_only = self.off_screen or any(
+            marker in render_window_name for marker in ("EGL", "OSOpenGL", "Offscreen")
+        )
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
         if self.screenshot_dir is not None:
             self.screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -251,13 +402,25 @@ class GuidingCenterPyVistaPanels:
             phi_values = self._update_mesh_values(self.phi_mesh, self.phi_name, potential_field)
             self._update_actor_clim(self.phi_actor, phi_values)
         if not self._shown:
-            self.plotter.show(auto_close=False, interactive_update=True)
+            self.plotter.show(
+                auto_close=False,
+                interactive_update=not self._render_only,
+            )
             self._shown = True
+        elif self._render_only:
+            # EGL/OSMesa windows have no X event queue. Calling Plotter.update()
+            # would invoke an X interactor and raise MismatchedInteractorError.
+            self.plotter.render()
         else:
             self.plotter.update()
         if self.screenshot_dir is not None:
             path = self.screenshot_dir / f"{self.screenshot_prefix}_step{int(step):05d}_t{float(time_value):.6f}.png"
             self.plotter.screenshot(str(path))
+
+    def close(self) -> None:
+        """Release the VTK render window and interactor resources."""
+        self.plotter.close()
+
 
 def _json_safe(value):
     if isinstance(value, np.generic):
@@ -296,7 +459,9 @@ def _verbosity_level(config: GuidingCenterRunPreset) -> int:
 
 
 def _solver_verbosity(config: GuidingCenterRunPreset) -> int:
-    return max(0, _verbosity_level(config) - 1)
+    """Map runner verbosity to compact solver logging levels."""
+    level = _verbosity_level(config)
+    return 3 if level >= 3 else max(0, level - 1)
 
 
 def _phase_verbosity(config: GuidingCenterRunPreset) -> int:
@@ -323,6 +488,75 @@ def _first_metric(row: dict[str, Any], *keys: str) -> Any:
         if key in row and row[key] is not None:
             return row[key]
     return None
+
+
+def _print_linear_step_summary(config: GuidingCenterRunPreset, row: dict[str, Any]) -> None:
+    """Print one balanced, machine-readable summary for the accepted linear stages."""
+    if _verbosity_level(config) < 3 or str(row.get("phase", "step")) != "step":
+        return
+
+    step = int(row.get("step", 0))
+    step_label = f"{step:05d}/{int(config.num_steps):05d}"
+    coupled_wall = _format_metric(row.get("linear_step_wall_time"), ".4f")
+    beta_wall = _format_metric(row.get("beta_build_time"), ".4f")
+    trace_wall = _format_metric(row.get("potential_trace_update_time"), ".4f")
+    lines = [
+        "",
+        (
+            f"[gc:linear] step {step_label} | t={_format_metric(row.get('time'), '.6f')} "
+            f"| coupled wall={coupled_wall}s | beta={beta_wall}s | trace={trace_wall}s"
+        ),
+    ]
+
+    for prefix, label in (("transport", "transport"), ("poisson", "poisson")):
+        wall = _format_metric(row.get(f"{prefix}_step_wall_time"), ".4f")
+        hdg_total = _format_metric(row.get(f"{prefix}_time"), ".4f")
+        assembly = row.get(f"{prefix}_step_time_assembly")
+        phase_label = "asm"
+        if prefix == "poisson" and float(row.get("poisson_time_rhs_assembly", 0.0) or 0.0) > 0.0:
+            phase_label = "rhs"
+        solve = _format_metric(row.get(f"{prefix}_step_time_solve"), ".4f")
+        reconstruction = _format_metric(row.get(f"{prefix}_step_time_reconstruction"), ".4f")
+        iterations = _first_metric(
+            row,
+            f"{prefix}_step_iterations",
+            f"{prefix}_solver_iterations",
+        )
+        iteration_text = "n/a" if iterations is None or int(iterations) < 0 else str(int(iterations))
+        relative = _first_metric(
+            row,
+            f"{prefix}_physical_rel_residual",
+            f"{prefix}_solver_rel_residual",
+        )
+        parts = [
+            f"  {label:<9} HDG={hdg_total}s",
+            f"stage wall={wall}s",
+            f"{phase_label}={_format_metric(assembly, '.4f')}s",
+            f"solve={solve}s",
+            f"recon={reconstruction}s",
+            f"it={iteration_text}",
+            f"true_rel={_format_metric(relative)}",
+        ]
+        stage_count = int(row.get(f"{prefix}_stage_count", 1) or 1)
+        if stage_count > 1:
+            parts.append(f"stages={stage_count}")
+        attempts = row.get(f"{prefix}_amgx_attempt_count")
+        if attempts is not None and int(attempts) > 1:
+            parts.append(f"attempts={int(attempts)}")
+        if prefix == "poisson":
+            reuse = []
+            if bool(row.get("poisson_detail_raw_assembly_operator_reused", 0.0)):
+                reuse.append("operator")
+            hierarchy_reused = bool(
+                row.get("poisson_detail_solve_fb_hp_mg_hierarchy_reused", 0.0)
+            ) or bool(row.get("poisson_detail_solve_amgx_hierarchy_reused", 0.0))
+            if hierarchy_reused:
+                reuse.append("hierarchy")
+            if reuse:
+                parts.append("reuse=" + "+".join(reuse))
+        lines.append(" | ".join(parts))
+
+    print("\n".join(lines), flush=True)
 
 
 def _print_step_summary(config: GuidingCenterRunPreset, row: dict[str, Any]) -> None:
@@ -401,6 +635,11 @@ def _print_diagnostics_block(
         f"  relative energy drift                 {_format_metric(row.get('energy_relative_drift'))}",
         f"  electric-field norm ||q|| L2          {_format_metric(row.get('q_l2'), '.10e')}",
     ]
+    if row.get("q_l2_postprocessed") is not None:
+        lines.append(
+            "  postprocessed RT_p field norm L2      "
+            f"{_format_metric(row.get('q_l2_postprocessed'), '.10e')}"
+        )
 
     if row.get("diocotron_phi_eq_l2") is not None:
         lines.extend(
@@ -471,14 +710,30 @@ def _print_diagnostics_block(
 
     lines.extend(["", "Phase timings"])
     timing_rows = [
+        ("complete coupled linear step", row.get("linear_step_wall_time") if phase != "initial" else None),
+        ("complete transport stage wall", row.get("transport_step_wall_time") if phase != "initial" else None),
+        ("complete Poisson stage wall", row.get("poisson_step_wall_time") if phase != "initial" else None),
         ("beta construction", row.get("beta_build_time") if phase != "initial" else None),
         ("transport HDG solve", _first_metric(row, "transport_time_total", "transport_time") if phase != "initial" else None),
         ("Poisson HDG solve", _first_metric(row, "poisson_time_total", "poisson_time")),
+    ]
+    if phase == "initial":
+        timing_rows.extend([
+            ("first Poisson wall", row.get("first_poisson_wall_time")),
+            ("first Poisson operator assembly", row.get("first_poisson_time_operator_assembly")),
+            ("first Poisson native hierarchy", row.get("first_poisson_detail_solve_fb_hp_mg_setup_outer")),
+            ("first Poisson Krylov", row.get("first_poisson_krylov_time")),
+            ("first Poisson reconstruction", row.get("first_poisson_time_reconstruction")),
+            ("reused initial-state Poisson wall", row.get("initial_poisson_wall_time")),
+        ])
+    elif row.get("poisson_time_rhs_assembly"):
+        timing_rows.append(("Poisson cached RHS-only assembly", row.get("poisson_time_rhs_assembly")))
+    timing_rows.extend([
         ("accepted potential trace", row.get("potential_trace_update_time")),
         ("plot update", row.get("plot_time") if row.get("plot_time") else None),
         ("accepted-state diagnostics", row.get("diagnostics_time")),
         ("post-Poisson application work", row.get("post_poisson_application_time")),
-    ]
+    ])
     for label, value in timing_rows:
         if value is not None:
             lines.append(f"  {label:<38} {_format_metric(value, '.5f')} s")
@@ -550,21 +805,26 @@ def _backend_profile_updates(profile: str) -> dict[str, Any]:
         }
     if profile == "device":
         return {
-            "poisson_assembly_backend": "numba",
-            "poisson_solver": "amgx",
+            "poisson_assembly_backend": "raw-cuda",
+            "poisson_solver": "fb-hp-mg-pcg",
             "poisson_preconditioner": None,
             "poisson_solver_rtol": _AMGX_DEFAULT_RTOL,
             "poisson_solver_atol": _AMGX_DEFAULT_ATOL,
             "poisson_scale_system": False,
+            "poisson_trace_basis": "legendre-modal",
+            "poisson_raw_matrix_format": "bsr",
+            "poisson_cache_local_factors": "schur-cholesky",
             "transport_assembly_backend": "raw-cuda",
             "transport_solver": "amgx",
             "transport_preconditioner": None,
             "transport_solver_rtol": _AMGX_DEFAULT_RTOL,
             "transport_solver_atol": _AMGX_DEFAULT_ATOL,
             "transport_scale_system": True,
+            "transport_trace_basis": "legacy-lagrange",
             "transport_raw_local_assembly": "fused",
-            "transport_raw_matrix_format": "csr",
-            "transport_materialize_host_solution": True,
+            "transport_raw_matrix_format": "bsr",
+            "transport_initial_guess": "initial-density-trace",
+            "transport_materialize_host_solution": False,
         }
     raise ValueError(f"unknown backend profile {profile!r}")
 
@@ -603,6 +863,37 @@ def _is_amgx_solver(solver: str | None) -> bool:
     return str(solver).lower() in {"amgx", "pyamgx"}
 
 
+def _poisson_trace_basis(config: GuidingCenterRunPreset) -> str:
+    """Return the Poisson trace basis with legacy shared-setting fallback."""
+    return config.poisson_trace_basis or config.trace_basis
+
+
+def _transport_trace_basis(config: GuidingCenterRunPreset) -> str:
+    """Return the transport trace basis with legacy shared-setting fallback."""
+    return config.transport_trace_basis or config.trace_basis
+
+
+def _electric_flux(poisson_result):
+    """Return the accepted higher-order electric field when available."""
+    return poisson_result.postprocessed_flux or poisson_result.flux
+
+
+def _poisson_postprocess_overrides(
+        config: GuidingCenterRunPreset, step: int,
+) -> dict[str, Any]:
+    """Return per-call accepted-state flux postprocessing controls."""
+    cadence = int(config.poisson_flux_postprocess_every)
+    if cadence <= 0 or int(step) <= 0 or int(step) % cadence:
+        return {}
+    return {
+        "postprocess_overrides": {
+            "hdg_postprocess": "flux",
+            "flux_postprocess_space": config.poisson_flux_postprocess_space,
+            "postprocessing_backend": config.poisson_postprocessing_backend,
+        }
+    }
+
+
 def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPreset:
     updates: dict[str, Any] = {}
     if args.backend_profile is not None:
@@ -618,6 +909,8 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "gmsh_algorithm": args.gmsh_algorithm,
         "basis": args.basis,
         "trace_basis": args.trace_basis,
+        "poisson_trace_basis": args.poisson_trace_basis,
+        "transport_trace_basis": args.transport_trace_basis,
         "order": args.order,
         "volume_quadrature": args.volume_quadrature,
         "volume_quad_1d": args.volume_quad_1d,
@@ -644,6 +937,9 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_raw_block_size": args.poisson_raw_block_size,
         "poisson_cache_local_factors": args.poisson_cache_local_factors,
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
+        "poisson_flux_postprocess_every": args.poisson_flux_postprocess_every,
+        "poisson_flux_postprocess_space": args.poisson_flux_postprocess_space,
+        "poisson_postprocessing_backend": args.poisson_postprocessing_backend,
         "transport_assembly_backend": args.transport_assembly_backend,
         "transport_solver": args.transport_solver,
         "transport_preconditioner": args.transport_preconditioner,
@@ -654,6 +950,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "transport_petsc_levels": args.transport_petsc_levels,
         "transport_cupyx_solver": args.transport_cupyx_solver,
         "transport_amgx_config_path": None if args.transport_amgx_config is None else str(args.transport_amgx_config),
+        "transport_amgx_tolerance": args.transport_amgx_tolerance,
         "transport_ilu_drop_tol": args.transport_ilu_drop_tol,
         "transport_ilu_fill_factor": args.transport_ilu_fill_factor,
         "transport_boundary_mode": args.transport_boundary_mode,
@@ -709,6 +1006,12 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
     if args.quiet:
         updates["verbosity"] = 0
     runtime = replace(config, **updates) if updates else config
+    if (
+        args.backend_profile == "device"
+        and not 4 <= int(runtime.order) <= 6
+        and str(runtime.poisson_solver).replace("_", "-").lower() == "fb-hp-mg-pcg"
+    ):
+        runtime = replace(runtime, poisson_solver="amgx")
     if _is_amgx_solver(runtime.poisson_solver) and args.poisson_solver_rtol is None and runtime.poisson_solver_rtol < _AMGX_DEFAULT_RTOL:
         runtime = replace(runtime, poisson_solver_rtol=_AMGX_DEFAULT_RTOL)
     if _is_amgx_solver(runtime.poisson_solver) and args.poisson_solver_atol is None and runtime.poisson_solver_atol < _AMGX_DEFAULT_ATOL:
@@ -769,8 +1072,18 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("time_scheme must be 'si-euler' or 'predictor-corrector'")
     if config.diagnostics_every < 1:
         raise ValueError("diagnostics_every must be positive")
+    if config.poisson_flux_postprocess_every < 0:
+        raise ValueError("poisson_flux_postprocess_every must be nonnegative")
     if config.transport_retry_policy not in {"none", "amgx-robust"}:
         raise ValueError("transport_retry_policy must be 'none' or 'amgx-robust'")
+    if (
+        config.transport_amgx_tolerance is not None
+        and (
+            not math.isfinite(float(config.transport_amgx_tolerance))
+            or float(config.transport_amgx_tolerance) < 0.0
+        )
+    ):
+        raise ValueError("transport_amgx_tolerance must be finite and nonnegative")
     if config.transport_reuse_first_preconditioner and config.transport_trace_ordering != "none":
         raise ValueError(
             "transport_reuse_first_preconditioner requires trace_ordering='none' so the "
@@ -786,12 +1099,25 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         if config.poisson_hdg_postprocess != "none":
             raise ValueError("CuPy guiding-center Poisson currently requires poisson_hdg_postprocess='none'")
     if config.poisson_assembly_backend == "raw-cuda":
-        if not _is_amgx_solver(config.poisson_solver):
-            raise ValueError("poisson_assembly_backend='raw-cuda' requires poisson_solver='amgx'")
-        if str(config.poisson_raw_matrix_format).lower() != "csr":
-            raise ValueError("poisson_assembly_backend='raw-cuda' requires poisson_raw_matrix_format='csr'")
+        native = str(config.poisson_solver).replace("_", "-").lower() == "fb-hp-mg-pcg"
+        if not (_is_amgx_solver(config.poisson_solver) or native):
+            raise ValueError(
+                "poisson_assembly_backend='raw-cuda' requires poisson_solver='amgx' "
+                "or 'fb-hp-mg-pcg'"
+            )
+        matrix_format = str(config.poisson_raw_matrix_format).lower()
+        if matrix_format not in {"auto", "csr", "bsr"}:
+            raise ValueError(
+                "raw-CUDA guiding-center Poisson requires raw matrix format auto, csr, or bsr"
+            )
+        if native and matrix_format not in {"auto", "bsr"}:
+            raise ValueError("FB-HP-MG Poisson requires raw matrix format auto or bsr")
+        if native and _poisson_trace_basis(config) != "legendre-modal":
+            raise ValueError("FB-HP-MG Poisson requires poisson_trace_basis='legendre-modal'")
         if config.poisson_hdg_postprocess != "none":
-            raise ValueError("raw-CUDA guiding-center Poisson currently requires poisson_hdg_postprocess='none'")
+            raise ValueError(
+                "set poisson_flux_postprocess_every for periodic raw-CUDA flux postprocessing"
+            )
 
 
 def _fixed_operator_trace_predictor(current, previous=None, older=None):
@@ -835,8 +1161,8 @@ def _compute_diagnostics(
         poisson_result,
         step: int,
         time_value: float,
-        baseline_mass: float,
-        baseline_q_l2: float,
+        baseline_mass: float | None,
+        baseline_q_l2: float | None,
         equilibrium_potential=None,
         equilibrium_density=None,
         equilibrium_potential_l2: float | None = None,
@@ -846,75 +1172,107 @@ def _compute_diagnostics(
     start = time.perf_counter()
     core_start = time.perf_counter()
     phi_field = poisson_result.field
-    q_l2 = poisson_result.flux.l2_norm()
-    mass = rho_field.integral()
-    rho_min, rho_max = rho_field.min_max()
-    phi_min, phi_max = phi_field.min_max()
+    field_metrics = guiding_center_field_diagnostics(
+        rho_field,
+        phi_field,
+        poisson_result.flux,
+        postprocessed_flux=poisson_result.postprocessed_flux,
+        equilibrium_potential=equilibrium_potential,
+        equilibrium_density=equilibrium_density,
+        mode=int(case.parameters.get("k", 0)),
+        backend="auto",
+    )
+    standard_q_l2 = float(field_metrics["q_l2_standard"])
+    postprocessed_q_l2 = field_metrics.get("q_l2_postprocessed")
+    if postprocessed_q_l2 is not None:
+        postprocessed_q_l2 = float(postprocessed_q_l2)
+    q_l2 = standard_q_l2
+    mass = float(field_metrics["mass"])
+    effective_baseline_mass = mass if baseline_mass is None else float(baseline_mass)
+    effective_baseline_q_l2 = q_l2 if baseline_q_l2 is None else float(baseline_q_l2)
     exact_density = case.exact_density_at(time_value)
     exact_potential = case.exact_potential_at(time_value)
-    rho_l2_error = None if exact_density is None else rho_field.space.l2_diff(rho_field, exact_density)
-    rho_linf_error = None if exact_density is None else rho_field.space.linf_diff(rho_field, exact_density)
-    phi_l2_error = None if exact_potential is None else phi_field.space.l2_diff(phi_field, exact_potential)
-    phi_linf_error = None if exact_potential is None else phi_field.space.linf_diff(phi_field, exact_potential)
+    rho_report = (
+        None
+        if exact_density is None
+        else evaluate_scalar_error(rho_field, exact_density, backend="auto")
+    )
+    phi_report = (
+        None
+        if exact_potential is None
+        else evaluate_scalar_error(phi_field, exact_potential, backend="auto")
+    )
+    rho_l2_error = None if rho_report is None else rho_report.metrics.l2
+    rho_linf_error = None if rho_report is None else rho_report.metrics.linf
+    phi_l2_error = None if phi_report is None else phi_report.metrics.l2
+    phi_linf_error = None if phi_report is None else phi_report.metrics.linf
     core_time = time.perf_counter() - core_start
+    diagnostic_backend = str(field_metrics["diagnostics_backend"])
     row: dict[str, Any] = {
         "step": int(step),
         "time": float(time_value),
         "mass": mass,
-        "mass_drift": mass - baseline_mass,
-        "mass_relative_drift": relative_drift(mass, baseline_mass),
+        "mass_drift": mass - effective_baseline_mass,
+        "mass_relative_drift": relative_drift(mass, effective_baseline_mass),
         "q_l2": q_l2,
-        "q_l2_drift": q_l2 - baseline_q_l2,
-        "q_l2_relative_drift": relative_drift(q_l2, baseline_q_l2),
+        "q_l2_standard": standard_q_l2,
+        "q_l2_postprocessed": postprocessed_q_l2,
+        "electric_flux_postprocessed": poisson_result.postprocessed_flux is not None,
+        "q_l2_drift": q_l2 - effective_baseline_q_l2,
+        "q_l2_relative_drift": relative_drift(q_l2, effective_baseline_q_l2),
         "energy_from_q_l2": 0.5 * q_l2 * q_l2,
-        "energy_drift": 0.5 * (q_l2 * q_l2 - baseline_q_l2 * baseline_q_l2),
+        "energy_drift": 0.5 * (q_l2 * q_l2 - effective_baseline_q_l2 * effective_baseline_q_l2),
         "energy_relative_drift": relative_drift(
             0.5 * q_l2 * q_l2,
-            0.5 * baseline_q_l2 * baseline_q_l2,
+            0.5 * effective_baseline_q_l2 * effective_baseline_q_l2,
         ),
-        "rho_min": rho_min,
-        "rho_max": rho_max,
-        "phi_min": phi_min,
-        "phi_max": phi_max,
+        "rho_min": float(field_metrics["rho_min"]),
+        "rho_max": float(field_metrics["rho_max"]),
+        "phi_min": float(field_metrics["phi_min"]),
+        "phi_max": float(field_metrics["phi_max"]),
         "rho_l2_error": rho_l2_error,
         "rho_linf_error": rho_linf_error,
         "phi_l2_error": phi_l2_error,
         "phi_linf_error": phi_linf_error,
+        "diagnostics_backend": diagnostic_backend,
         "diagnostics_core_time": core_time,
+        "diagnostics_device_reduction_time": core_time if diagnostic_backend == "cuda" else 0.0,
         "diagnostics_equilibrium_potential_time": 0.0,
         "diagnostics_equilibrium_density_time": 0.0,
         "diagnostics_azimuthal_mode_time": 0.0,
     }
     if equilibrium_potential is not None:
-        phase_start = time.perf_counter()
-        phi_eq_l2 = phi_field.space.l2_diff(phi_field, equilibrium_potential)
+        phi_eq_l2 = float(field_metrics["diocotron_phi_eq_l2"])
         eq_norm = max(
-            equilibrium_potential.l2_norm()
+            float(field_metrics["diocotron_phi_eq_reference_l2"])
             if equilibrium_potential_l2 is None
             else float(equilibrium_potential_l2),
             1.0e-300,
         )
         row["diocotron_phi_eq_l2"] = phi_eq_l2
         row["diocotron_phi_eq_relative_l2"] = phi_eq_l2 / eq_norm
-        row["diocotron_phi_eq_linf"] = phi_field.space.linf_diff(phi_field, equilibrium_potential)
-        row["diagnostics_equilibrium_potential_time"] = time.perf_counter() - phase_start
+        row["diocotron_phi_eq_linf"] = float(field_metrics["diocotron_phi_eq_linf"])
+        row["diocotron_phi_eq_reference_l2"] = eq_norm
     if equilibrium_density is not None:
-        phase_start = time.perf_counter()
-        rho_eq_l2 = rho_field.space.l2_diff(rho_field, equilibrium_density)
+        rho_eq_l2 = float(field_metrics["diocotron_rho_eq_l2"])
         eq_norm = max(
-            equilibrium_density.l2_norm()
+            float(field_metrics["diocotron_rho_eq_reference_l2"])
             if equilibrium_density_l2 is None
             else float(equilibrium_density_l2),
             1.0e-300,
         )
         row["diocotron_rho_eq_l2"] = rho_eq_l2
         row["diocotron_rho_eq_relative_l2"] = rho_eq_l2 / eq_norm
-        row["diagnostics_equilibrium_density_time"] = time.perf_counter() - phase_start
-        phase_start = time.perf_counter()
-        row.update(
-            azimuthal_mode_diagnostics(rho_field, equilibrium_density, int(case.parameters.get("k", 0)))
-        )
-        row["diagnostics_azimuthal_mode_time"] = time.perf_counter() - phase_start
+        row["diocotron_rho_eq_reference_l2"] = eq_norm
+        for key in (
+            "diocotron_mode_base",
+            "diocotron_mode_1k_amplitude",
+            "diocotron_mode_2k_amplitude",
+            "diocotron_mode_3k_amplitude",
+            "diocotron_harmonic_ratio",
+        ):
+            if key in field_metrics:
+                row[key] = float(field_metrics[key])
     if extra:
         row.update(extra)
     row["diagnostics_time"] = time.perf_counter() - start
@@ -950,12 +1308,14 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
         ilu_permc_spec=config.poisson_ilu_permc_spec,
         local_solver_backend=config.poisson_local_backend,
         assembly_backend=config.poisson_assembly_backend,
-        trace_basis=config.trace_basis,
+        trace_basis=_poisson_trace_basis(config),
         raw_matrix_format=config.poisson_raw_matrix_format,
         raw_block_size=config.poisson_raw_block_size,
         cache_local_factors=config.poisson_cache_local_factors,
         boundary_mode="eliminate",
         hdg_postprocess=config.poisson_hdg_postprocess,
+        flux_postprocess_space=config.poisson_flux_postprocess_space,
+        postprocessing_backend=config.poisson_postprocessing_backend,
         verbose=_solver_verbosity(config),
     )
 
@@ -964,6 +1324,11 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
     from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
 
     retry_attempts = None
+    primary_amgx_tolerance = (
+        config.transport_solver_rtol
+        if config.transport_amgx_tolerance is None
+        else float(config.transport_amgx_tolerance)
+    )
     if config.transport_retry_policy == "amgx-robust":
         fallback_path = config.transport_retry_amgx_config_path
         if fallback_path is None:
@@ -980,7 +1345,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
         )
         primary_config = _load_amgx_config(
             config.transport_amgx_config_path,
-            tolerance=config.transport_solver_rtol,
+            tolerance=primary_amgx_tolerance,
         )
         retry_attempts = (
             {
@@ -990,26 +1355,35 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
                 "scale_system": config.transport_scale_system,
             },
             {
-                "label": "robust-zero-unscaled",
+                "label": "robust-zero-scaled",
                 "config": fallback_config,
+                "scalarize_bsr": True,
+                "reuse_preconditioner": True,
+                "solver_cache_key": "transport-fgmres-dilu",
                 "use_initial_guess": False,
-                "scale_system": False,
+                "scale_system": config.transport_scale_system,
             },
             {
                 "label": "robust-correction-1",
                 "config": fallback_config,
+                "scalarize_bsr": True,
+                "reuse_preconditioner": True,
+                "solver_cache_key": "transport-fgmres-dilu",
                 "use_initial_guess": False,
                 "use_best_solution": True,
                 "residual_correction": True,
-                "scale_system": False,
+                "scale_system": config.transport_scale_system,
             },
             {
                 "label": "robust-correction-2",
                 "config": fallback_config,
+                "scalarize_bsr": True,
+                "reuse_preconditioner": True,
+                "solver_cache_key": "transport-fgmres-dilu",
                 "use_initial_guess": False,
                 "use_best_solution": True,
                 "residual_correction": True,
-                "scale_system": False,
+                "scale_system": config.transport_scale_system,
             },
         )
 
@@ -1025,7 +1399,9 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
         petsc_divtol=config.transport_petsc_divtol,
         petsc_monitor=config.transport_petsc_monitor,
         cupyx_solver=config.transport_cupyx_solver,
-        amgx_config=_load_amgx_config(config.transport_amgx_config_path, tolerance=config.transport_solver_rtol),
+        amgx_config=_load_amgx_config(
+            config.transport_amgx_config_path, tolerance=primary_amgx_tolerance
+        ),
         amgx_retry_attempts=retry_attempts,
         ilu_drop_tol=config.transport_ilu_drop_tol,
         ilu_fill_factor=config.transport_ilu_fill_factor,
@@ -1036,7 +1412,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
         trace_ordering_flux_tolerance=config.transport_trace_ordering_flux_tolerance,
         ilu_permc_spec=config.transport_ilu_permc_spec,
         assembly_backend=config.transport_assembly_backend,
-        trace_basis=config.trace_basis,
+        trace_basis=_transport_trace_basis(config),
         raw_local_assembly=config.transport_raw_local_assembly,
         raw_lu_mode=config.transport_raw_lu_mode,
         raw_block_size=config.transport_raw_block_size,
@@ -1090,6 +1466,14 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
         final_rows.append(("rho L2 error", final["rho_l2_error"], ".4e"))
     if final.get("phi_l2_error") is not None:
         final_rows.append(("phi L2 error", final["phi_l2_error"], ".4e"))
+    output_rows = [
+        ("Diagnostics CSV", str(result.csv_path), "s"),
+        ("Diagnostics JSONL", str(result.jsonl_path), "s"),
+        ("Every-step timings CSV", str(result.timings_csv_path), "s"),
+        ("Every-step timings JSONL", str(result.timings_jsonl_path), "s"),
+    ]
+    if result.terminal_log_path is not None:
+        output_rows.append(("Terminal log", str(result.terminal_log_path), "s"))
     pretty_print_sections(
         [
             (
@@ -1102,12 +1486,7 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
             ),
             (
                 "Outputs",
-                [
-                    ("Diagnostics CSV", str(result.csv_path), "s"),
-                    ("Diagnostics JSONL", str(result.jsonl_path), "s"),
-                    ("Every-step timings CSV", str(result.timings_csv_path), "s"),
-                    ("Every-step timings JSONL", str(result.timings_jsonl_path), "s"),
-                ],
+                output_rows,
             ),
         ],
         title="Guiding-Center Run Summary",
@@ -1120,6 +1499,7 @@ def run_guiding_center_case(
         *,
         preset_key: str = "custom",
         step_observer: Callable[[GuidingCenterStepSnapshot], None] | None = None,
+        terminal_log_path: str | Path | None = None,
 ) -> GuidingCenterRunResult:
     """Run a fixed-mesh guiding-center case with the selected time scheme."""
     _validate_config(config)
@@ -1188,16 +1568,13 @@ def run_guiding_center_case(
     equilibrium_density_l2 = None
     poisson_solver = None
     poisson_initial_guess = None
+    first_poisson_result = None
+    first_poisson_wall_time = 0.0
     if case.equilibrium_density is not None:
         equilibrium_density, _ = timed_call(
             "[gc:init] projecting equilibrium density",
             _detail_verbosity(config),
             lambda: space.project_callable(case.equilibrium_density, name="rho_eq_h"),
-        )
-        equilibrium_density_l2, _ = timed_call(
-            "[gc:init] computing equilibrium-density norm",
-            _detail_verbosity(config),
-            equilibrium_density.l2_norm,
         )
         equilibrium_solver, _ = timed_call(
             "[gc:init] constructing equilibrium Poisson solver",
@@ -1216,9 +1593,14 @@ def run_guiding_center_case(
                 f"done in {time.perf_counter() - post_mesh_start:.5f}s",
                 flush=True,
             )
-        equilibrium_result = equilibrium_solver.solve()
+        (equilibrium_result, first_poisson_wall_time) = timed_call(
+            "[gc:init] solving first diffusion/Poisson system (equilibrium)",
+            _phase_verbosity(config),
+            equilibrium_solver.solve,
+        )
+        first_poisson_result = equilibrium_result
         equilibrium_potential = equilibrium_result.field
-        equilibrium_potential_l2 = equilibrium_potential.l2_norm()
+        equilibrium_potential_l2 = None
         # The guiding-center Poisson operator is fixed for the complete run.
         # Retain the equilibrium solver unconditionally so the perturbed initial
         # state and every accepted step reuse its trace operator, local factors,
@@ -1257,7 +1639,22 @@ def run_guiding_center_case(
                 f"done in {time.perf_counter() - post_mesh_start:.5f}s",
                 flush=True,
             )
-    poisson_result = poisson_solver.solve(initial_guess=poisson_initial_guess)
+    initial_solve_label = (
+        "[gc:init] solving first diffusion/Poisson system"
+        if first_poisson_result is None
+        else "[gc:init] solving initial-state diffusion/Poisson system (reused operator)"
+    )
+    (poisson_result, initial_poisson_wall_time) = timed_call(
+        initial_solve_label,
+        _phase_verbosity(config),
+        lambda: poisson_solver.solve(initial_guess=poisson_initial_guess),
+    )
+    if first_poisson_result is None:
+        first_poisson_result = poisson_result
+        first_poisson_wall_time = initial_poisson_wall_time
+    initialization_poisson_wall_time = initial_poisson_wall_time
+    if first_poisson_result is not poisson_result:
+        initialization_poisson_wall_time += first_poisson_wall_time
     transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
     transport_preconditioner_reused = False
 
@@ -1265,7 +1662,7 @@ def run_guiding_center_case(
     density_trace = project_callable_to_trace(
         space,
         case.initial_density_at(),
-        trace_basis=config.trace_basis,
+        trace_basis=_transport_trace_basis(config),
         reduced=True,
         backend="device" if prefer_device_trace else "host",
     )
@@ -1273,23 +1670,49 @@ def run_guiding_center_case(
     previous_potential_trace = None
     older_potential_trace = None
 
-    baseline_mass = rho_field.integral()
-    baseline_q_l2 = poisson_result.flux.l2_norm()
+    baseline_mass = None
+    baseline_q_l2 = None
     output_stem = config.diagnostics_prefix or preset_key
+    headless_plot = config.plot_every > 0 and not bool(os.environ.get("DISPLAY"))
+    effective_plot_off_screen = bool(config.plot_off_screen or headless_plot)
+    effective_screenshot_dir = config.screenshot_dir
+    if headless_plot and effective_screenshot_dir is None:
+        effective_screenshot_dir = str(
+            Path(config.diagnostics_dir) / f"{output_stem}_frames"
+        )
+    if headless_plot and _phase_verbosity(config):
+        print(
+            "[gc:init] DISPLAY is unavailable; using PyVista EGL/off-screen "
+            f"rendering and saving frames to {effective_screenshot_dir}",
+            flush=True,
+        )
     recorder = DiagnosticsRecorder(config.diagnostics_dir, output_stem)
     timing_recorder = DiagnosticsRecorder(config.diagnostics_dir, f"{output_stem}_timings")
     plotter = None
     try:
         initial_extra = solver_result_metrics("poisson", poisson_result)
+        initial_extra.update(solver_result_metrics("first_poisson", first_poisson_result))
         initial_extra.update(
             {
                 "phase": "initial",
                 "time_scheme": config.time_scheme,
                 "beta_build_time": 0.0,
-                "poisson_time": poisson_result.timings.total,
+                "poisson_time": initialization_poisson_wall_time,
+                "poisson_time_total": initialization_poisson_wall_time,
+                "first_poisson_wall_time": first_poisson_wall_time,
+                "initial_poisson_wall_time": initial_poisson_wall_time,
+                "equilibrium_poisson_wall_time": (
+                    first_poisson_wall_time
+                    if first_poisson_result is not poisson_result
+                    else 0.0
+                ),
+                "poisson_flux_postprocessed": False,
                 "transport_time": 0.0,
                 "transport_time_total": 0.0,
                 "plot_time": 0.0,
+                "plot_headless": headless_plot,
+                "plot_off_screen_effective": effective_plot_off_screen,
+                "plot_screenshot_dir_effective": effective_screenshot_dir,
             }
         )
         timing_recorder.record({"step": 0, "time": 0.0, **initial_extra})
@@ -1307,6 +1730,10 @@ def run_guiding_center_case(
             equilibrium_density_l2=equilibrium_density_l2,
             extra=initial_extra,
         )
+        baseline_mass = float(row["mass"])
+        baseline_q_l2 = float(row["q_l2"])
+        equilibrium_potential_l2 = row.get("diocotron_phi_eq_reference_l2")
+        equilibrium_density_l2 = row.get("diocotron_rho_eq_reference_l2")
         if config.plot_every > 0:
             plot_start = time.perf_counter()
             plotter = GuidingCenterPyVistaPanels(
@@ -1315,8 +1742,8 @@ def run_guiding_center_case(
                 resolution=config.plot_resolution,
                 title=f"{preset_key}: {case.key}",
                 show_mesh=config.plot_show_mesh,
-                off_screen=config.plot_off_screen,
-                screenshot_dir=config.screenshot_dir,
+                off_screen=effective_plot_off_screen,
+                screenshot_dir=effective_screenshot_dir,
                 screenshot_prefix=config.diagnostics_prefix or preset_key,
                 include_potential=config.plot_potential,
             )
@@ -1327,6 +1754,12 @@ def run_guiding_center_case(
 
         current_time = 0.0
         for step in range(1, config.num_steps + 1):
+            linear_step_start = time.perf_counter()
+            linear_step_end = linear_step_start
+            transport_step_wall_time = 0.0
+            poisson_step_wall_time = 0.0
+            transport_stage_results = []
+            poisson_stage_results = []
             next_time = current_time + config.dt
             endpoint_density_boundary = (
                 None if transport_boundary_mode == "zero-flux" else case.density_boundary_at(next_time)
@@ -1344,9 +1777,12 @@ def run_guiding_center_case(
             post_poisson_start = None
 
             beta_start = time.perf_counter()
-            predictor_beta = perpendicular_vector_field(poisson_result.flux, config.dt, space)
+            predictor_beta = perpendicular_vector_field(
+                poisson_result.flux, config.dt, space
+            )
             beta_build_time = time.perf_counter() - beta_start
 
+            transport_stage_start = time.perf_counter()
             transport_solver.set_problem(
                 rho_field,
                 predictor_beta,
@@ -1374,20 +1810,29 @@ def run_guiding_center_case(
                 space,
                 reduced=True,
             )
+            transport_step_wall_time += time.perf_counter() - transport_stage_start
+            transport_stage_results.append(predictor_transport_result)
 
             if config.time_scheme == "si-euler":
                 rho_field = predictor_density
                 density_trace = predictor_density_trace
                 transport_result = predictor_transport_result
+                poisson_stage_start = time.perf_counter()
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
-                poisson_result = poisson_solver.solve(initial_guess=step_poisson_initial_guess)
+                poisson_result = poisson_solver.solve(
+                    initial_guess=step_poisson_initial_guess,
+                    **_poisson_postprocess_overrides(config, step),
+                )
                 post_poisson_start = time.perf_counter()
                 potential_trace, potential_trace_time = timed_call(
                     "[gc] updating accepted potential trace",
                     _detail_verbosity(config),
                     lambda: solution_trace(poisson_result, space, reduced=False),
                 )
+                poisson_step_wall_time += time.perf_counter() - poisson_stage_start
+                poisson_stage_results.append(poisson_result)
+                linear_step_end = time.perf_counter()
                 stage_extra: dict[str, Any] = {}
                 poisson_time = poisson_result.timings.total
                 transport_time = transport_result.timings.total
@@ -1410,6 +1855,7 @@ def run_guiding_center_case(
                         )
                     )
             else:
+                poisson_stage_start = time.perf_counter()
                 poisson_solver.set_source(predictor_density)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
                 predictor_poisson_result = poisson_solver.solve(initial_guess=step_poisson_initial_guess)
@@ -1418,6 +1864,8 @@ def run_guiding_center_case(
                     space,
                     reduced=False,
                 )
+                poisson_step_wall_time += time.perf_counter() - poisson_stage_start
+                poisson_stage_results.append(predictor_poisson_result)
 
                 midpoint_beta_start = time.perf_counter()
                 midpoint_beta = _build_beta_from_flux_pair(
@@ -1438,6 +1886,7 @@ def run_guiding_center_case(
                 midpoint_trace_guess = trace_linear_combination(
                     [(0.5, density_trace), (0.5, predictor_density_trace)]
                 )
+                transport_stage_start = time.perf_counter()
                 transport_solver.set_problem(
                     rho_field,
                     midpoint_beta,
@@ -1461,16 +1910,25 @@ def run_guiding_center_case(
                 density_trace = trace_linear_combination(
                     [(2.0, midpoint_density_trace), (-1.0, density_trace)]
                 )
+                transport_step_wall_time += time.perf_counter() - transport_stage_start
+                transport_stage_results.append(transport_result)
 
+                poisson_stage_start = time.perf_counter()
                 poisson_solver.set_source(rho_field)
                 poisson_solver.set_boundary_condition(case.potential_boundary_at(next_time))
-                poisson_result = poisson_solver.solve(initial_guess=predictor_potential_trace)
+                poisson_result = poisson_solver.solve(
+                    initial_guess=predictor_potential_trace,
+                    **_poisson_postprocess_overrides(config, step),
+                )
                 post_poisson_start = time.perf_counter()
                 potential_trace, potential_trace_time = timed_call(
                     "[gc] updating accepted potential trace",
                     _detail_verbosity(config),
                     lambda: solution_trace(poisson_result, space, reduced=False),
                 )
+                poisson_step_wall_time += time.perf_counter() - poisson_stage_start
+                poisson_stage_results.append(poisson_result)
+                linear_step_end = time.perf_counter()
                 poisson_time = predictor_poisson_result.timings.total + poisson_result.timings.total
                 transport_time = predictor_transport_result.timings.total + transport_result.timings.total
                 stage_extra = solver_result_metrics("predictor_transport", predictor_transport_result)
@@ -1478,10 +1936,30 @@ def run_guiding_center_case(
                 stage_extra.update(solver_result_metrics("corrector_transport", transport_result))
                 stage_extra.update(solver_result_metrics("final_poisson", poisson_result))
 
+            linear_step_wall_time = linear_step_end - linear_step_start
             stage_extra["poisson_predictor_order"] = poisson_predictor_order
             timing_row = solver_result_metrics("poisson", poisson_result)
             timing_row.update(solver_result_metrics("transport", transport_result))
             timing_row.update(stage_extra)
+            for prefix, stage_results in (
+                ("transport", transport_stage_results),
+                ("poisson", poisson_stage_results),
+            ):
+                timing_row[f"{prefix}_stage_count"] = len(stage_results)
+                timing_row[f"{prefix}_step_time_assembly"] = sum(
+                    result.timings.assembly for result in stage_results
+                )
+                timing_row[f"{prefix}_step_time_solve"] = sum(
+                    result.timings.solve for result in stage_results
+                )
+                timing_row[f"{prefix}_step_time_reconstruction"] = sum(
+                    result.timings.reconstruction for result in stage_results
+                )
+                timing_row[f"{prefix}_step_iterations"] = sum(
+                    int(result.global_solve_result.iteration_count or 0)
+                    for result in stage_results
+                    if result.global_solve_result is not None
+                )
             timing_row.update(
                 {
                     "step": step,
@@ -1489,12 +1967,18 @@ def run_guiding_center_case(
                     "phase": "step",
                     "time_scheme": config.time_scheme,
                     "beta_build_time": beta_build_time,
+                    "linear_step_wall_time": linear_step_wall_time,
+                    "transport_step_wall_time": transport_step_wall_time,
+                    "poisson_step_wall_time": poisson_step_wall_time,
                     "poisson_time": poisson_time,
+                    "poisson_flux_postprocessed": poisson_result.postprocessed_flux is not None,
+                    "poisson_flux_postprocess_time": poisson_result.timings.postprocessing,
                     "transport_time": transport_time,
                     "potential_trace_update_time": potential_trace_time,
                 }
             )
             timing_recorder.record(timing_row)
+            _print_linear_step_summary(config, timing_row)
             older_potential_trace = previous_potential_trace
             previous_potential_trace = accepted_potential_trace
 
@@ -1513,8 +1997,8 @@ def run_guiding_center_case(
                         resolution=config.plot_resolution,
                         title=f"{preset_key}: {case.key}",
                         show_mesh=config.plot_show_mesh,
-                        off_screen=config.plot_off_screen,
-                        screenshot_dir=config.screenshot_dir,
+                        off_screen=effective_plot_off_screen,
+                        screenshot_dir=effective_screenshot_dir,
                         screenshot_prefix=config.diagnostics_prefix or preset_key,
                         include_potential=config.plot_potential,
                     )
@@ -1527,6 +2011,7 @@ def run_guiding_center_case(
                 extra = solver_result_metrics("poisson", poisson_result)
                 extra.update(solver_result_metrics("transport", transport_result))
                 extra.update(stage_extra)
+                extra.update(timing_row)
                 extra.update(
                     {
                         "phase": "step",
@@ -1579,9 +2064,13 @@ def run_guiding_center_case(
                 _print_step_summary(config, row)
     finally:
         try:
-            recorder.close()
+            if plotter is not None:
+                plotter.close()
         finally:
-            timing_recorder.close()
+            try:
+                recorder.close()
+            finally:
+                timing_recorder.close()
 
     result = GuidingCenterRunResult(
         config=config,
@@ -1591,12 +2080,15 @@ def run_guiding_center_case(
         space=space,
         final_density=rho_field,
         final_potential=poisson_result.field,
-        final_flux=poisson_result.flux,
+        final_flux=_electric_flux(poisson_result),
         diagnostics=recorder.rows,
         csv_path=recorder.csv_path,
         jsonl_path=recorder.jsonl_path,
         timings_csv_path=timing_recorder.csv_path,
         timings_jsonl_path=timing_recorder.jsonl_path,
+        terminal_log_path=(
+            None if terminal_log_path is None else Path(terminal_log_path)
+        ),
     )
     _print_run_summary(result)
     return result
@@ -1622,7 +2114,9 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
         choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"),
         default=None,
     )
-    parser.add_argument("--poisson-raw-matrix-format", choices=("coo", "csr"), default=None)
+    parser.add_argument(
+        "--poisson-raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default=None
+    )
     parser.add_argument("--poisson-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument(
         "--poisson-cache-local-factors",
@@ -1630,6 +2124,15 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
         default=None,
     )
     parser.add_argument("--poisson-hdg-postprocess", choices=("none", "primal", "flux", "both"), default=None)
+    parser.add_argument("--poisson-flux-postprocess-every", type=int, default=None)
+    parser.add_argument(
+        "--poisson-flux-postprocess-space",
+        choices=("l2_closest", "RT_projection"),
+        default=None,
+    )
+    parser.add_argument(
+        "--poisson-postprocessing-backend", choices=("auto", "numba", "cupy", "raw-cuda"), default=None
+    )
 
     parser.add_argument("--transport-assembly-backend", choices=("numpy", "numba", "cupy", "raw-cuda", "auto"), default=None)
     parser.add_argument("--transport-solver", default=None)
@@ -1642,16 +2145,25 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--transport-petsc-levels", type=int, default=None)
     parser.add_argument("--transport-cupyx-solver", default=None)
     parser.add_argument("--transport-amgx-config", type=Path, default=None)
+    parser.add_argument(
+        "--transport-amgx-tolerance",
+        type=float,
+        default=None,
+        help=(
+            "primary AMGX stopping tolerance; physical acceptance still uses "
+            "--transport-solver-rtol/atol"
+        ),
+    )
     parser.add_argument("--transport-ilu-drop-tol", type=float, default=None)
     parser.add_argument("--transport-ilu-fill-factor", type=float, default=None)
     parser.add_argument("--transport-boundary-mode", choices=("auto", "eliminate", "zero-flux", "penalty"), default=None)
     parser.add_argument("--transport-trace-ordering", choices=("none", "upwind-scc"), default=None)
     parser.add_argument("--transport-trace-ordering-flux-tolerance", type=float, default=None)
     parser.add_argument("--transport-ilu-permc-spec", choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"), default=None)
-    parser.add_argument("--transport-raw-local-assembly", choices=("precomputed", "fused"), default=None)
+    parser.add_argument("--transport-raw-local-assembly", choices=("precomputed", "fused", "split3"), default=None)
     parser.add_argument("--transport-raw-lu-mode", choices=("safe", "coop"), default=None)
     parser.add_argument("--transport-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
-    parser.add_argument("--transport-raw-matrix-format", choices=("auto", "coo", "csr"), default=None)
+    parser.add_argument("--transport-raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default=None)
     parser.add_argument("--transport-initial-guess", choices=("solver-default", "initial-density-trace"), default=None)
     parser.add_argument(
         "--transport-reuse-first-preconditioner",
@@ -1664,6 +2176,38 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--transport-materialize-host-system", action="store_true")
     parser.add_argument("--no-transport-materialize-host-system", action="store_true")
     parser.add_argument("--transport-materialize-host-solution", choices=("auto", "on", "off"), default=None)
+
+
+def _run_cli_case_with_terminal_log(
+        config: GuidingCenterRunPreset,
+        *,
+        preset_key: str,
+) -> GuidingCenterRunResult:
+    """Run one CLI case while capturing Python and native terminal output."""
+    log_path = _terminal_log_path(config, preset_key)
+    result: GuidingCenterRunResult | None = None
+    failure: BaseException | None = None
+    with _TerminalLogTee(log_path):
+        if _verbosity_level(config) >= 1:
+            print(f"[gc] full terminal log: {log_path}", flush=True)
+        try:
+            result = run_guiding_center_case(
+                config,
+                preset_key=preset_key,
+                terminal_log_path=log_path,
+            )
+        except BaseException as error:
+            traceback.print_exc()
+            failure = error
+    if failure is not None:
+        if isinstance(failure, SystemExit):
+            raise failure
+        if isinstance(failure, KeyboardInterrupt):
+            raise SystemExit(130) from None
+        raise SystemExit(1) from None
+    if result is None:
+        raise RuntimeError("guiding-center run completed without a result")
+    return result
 
 
 def _main() -> None:
@@ -1694,6 +2238,8 @@ def _main() -> None:
     parser.add_argument("--gmsh-algorithm", type=int, default=None)
     parser.add_argument("--basis", choices=("dub_orth", "hier_C0", "bernstein"), default=None)
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default=None)
+    parser.add_argument("--poisson-trace-basis", choices=("legacy-lagrange", "legendre-modal"), default=None)
+    parser.add_argument("--transport-trace-basis", choices=("legacy-lagrange", "legendre-modal"), default=None)
     parser.add_argument("--order", "-p", type=int, default=None)
     parser.add_argument("--volume-quadrature", choices=("auto", "symmetric", "duffy"), default=None)
     parser.add_argument("--volume-quad-1d", type=int, default=None)
@@ -1709,7 +2255,7 @@ def _main() -> None:
         type=int,
         choices=(0, 1, 2, 3),
         default=None,
-        help="logging level: 0 quiet, 1 per-step summaries, 2 solver phase logs, 3 detailed backend/AMGX diagnostics",
+        help="logging level: 0 quiet, 1 per-step summaries, 2 solver phase logs, 3 detailed backend timings plus compact native/AMGX iteration tables",
     )
     parser.add_argument("--quiet", action="store_true", help="same as --verbosity 0")
     parser.add_argument("--plot", action="store_true", help="enable PyVista plotting every frame unless --plot-every is set")
@@ -1733,7 +2279,7 @@ def _main() -> None:
     if args.print_preset or args.dry_run:
         print_preset_details(preset_key, config)
         return
-    run_guiding_center_case(config, preset_key=preset_key)
+    _run_cli_case_with_terminal_log(config, preset_key=preset_key)
 
 
 if __name__ == "__main__":

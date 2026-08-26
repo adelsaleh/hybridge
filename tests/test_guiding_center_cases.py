@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-
 import json
 import math
 import subprocess
@@ -22,11 +21,54 @@ from scripts.guiding_center.guiding_center_cases import (
 from scripts.guiding_center.guiding_center_presets import preset_by_key
 from hdgfem.core.field_ops import project_callable_to_trace
 from scripts.guiding_center.run_guiding_center_cases import (
+    GuidingCenterPyVistaPanels,
     _fixed_operator_trace_predictor,
+    _make_transport_options,
+    _poisson_postprocess_overrides,
+    _print_linear_step_summary,
     _print_step_summary,
+    _solver_verbosity,
     _validate_config,
     run_guiding_center_case,
 )
+
+
+def test_terminal_log_tee_captures_python_and_native_streams(
+        tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "guiding_center.log"
+    code = "\n".join(
+        [
+            "import os",
+            "import sys",
+            "from scripts.guiding_center.run_guiding_center_cases import _TerminalLogTee",
+            "with _TerminalLogTee(sys.argv[1]):",
+            "    print('python stdout', flush=True)",
+            "    print('python stderr', file=sys.stderr, flush=True)",
+            "    os.write(1, b'native stdout\\n')",
+            "    os.write(2, b'native stderr\\n')",
+        ]
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code, str(log_path)],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "python stdout" in completed.stdout
+    assert "native stdout" in completed.stdout
+    assert "python stderr" in completed.stderr
+    assert "native stderr" in completed.stderr
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "python stdout" in log_text
+    assert "native stdout" in log_text
+    assert "python stderr" in log_text
+    assert "native stderr" in log_text
 
 
 def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
@@ -61,12 +103,18 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
     jsonl_path = tmp_path / "diocotron_gaussian_smoke_test.jsonl"
     timings_csv_path = tmp_path / "diocotron_gaussian_smoke_test_timings.csv"
     timings_jsonl_path = tmp_path / "diocotron_gaussian_smoke_test_timings.jsonl"
+    terminal_log_path = tmp_path / "diocotron_gaussian_smoke_test.log"
     assert csv_path.exists()
     assert jsonl_path.exists()
     assert timings_csv_path.exists()
     assert timings_jsonl_path.exists()
+    assert terminal_log_path.exists()
     timing_rows = [json.loads(line) for line in timings_jsonl_path.read_text().splitlines()]
     assert [row["step"] for row in timing_rows] == [0, 1]
+    assert timing_rows[0]["phase"] == "initial"
+    assert timing_rows[0]["first_poisson_wall_time"] > 0.0
+    assert timing_rows[0]["initial_poisson_wall_time"] > 0.0
+    assert timing_rows[0]["poisson_time_total"] >= timing_rows[0]["initial_poisson_wall_time"]
     assert "poisson_time_total" in timing_rows[-1]
     assert "transport_time_total" in timing_rows[-1]
 
@@ -76,6 +124,51 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
         assert math.isfinite(final[key])
     assert abs(final["mass_relative_drift"]) < 1.0e-3
     assert final["transport_solver_residual"] < 1.0e-4
+
+
+def test_pyvista_panel_uses_render_not_x_events_for_headless_updates() -> None:
+    class DummyPlotter:
+        def __init__(self):
+            self.show_calls = []
+            self.render_calls = 0
+            self.update_calls = 0
+            self.close_calls = 0
+
+        def show(self, **kwargs):
+            self.show_calls.append(kwargs)
+
+        def render(self):
+            self.render_calls += 1
+
+        def update(self):
+            self.update_calls += 1
+
+        def close(self):
+            self.close_calls += 1
+
+    panel = GuidingCenterPyVistaPanels.__new__(GuidingCenterPyVistaPanels)
+    panel.plotter = DummyPlotter()
+    panel._shown = False
+    panel._render_only = True
+    panel.include_potential = False
+    panel.rho_mesh = object()
+    panel.rho_name = "density"
+    panel.rho_actor = object()
+    panel.screenshot_dir = None
+    panel._update_mesh_values = lambda *_args: np.asarray([1.0])
+    panel._update_actor_clim = lambda *_args: None
+
+    panel.update(object(), object(), step=0, time_value=0.0)
+    panel.update(object(), object(), step=30, time_value=3.0)
+    panel.close()
+
+    assert panel.plotter.show_calls == [{
+        "auto_close": False,
+        "interactive_update": False,
+    }]
+    assert panel.plotter.render_calls == 1
+    assert panel.plotter.update_calls == 0
+    assert panel.plotter.close_calls == 1
 
 
 def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
@@ -350,14 +443,31 @@ def test_diocotron_full_raw_cuda_t50_preset_is_device_csr_long_run() -> None:
     assert config.dt == pytest.approx(0.1)
     assert config.num_steps * config.dt == pytest.approx(50.0)
     assert config.poisson_assembly_backend == "raw-cuda"
-    assert config.poisson_solver == "amgx"
-    assert config.poisson_raw_matrix_format == "csr"
+    assert config.poisson_solver == "fb-hp-mg-pcg"
+    assert config.poisson_trace_basis == "legendre-modal"
+    assert config.poisson_raw_matrix_format == "bsr"
     assert config.poisson_cache_local_factors == "schur-cholesky"
     assert config.transport_assembly_backend == "raw-cuda"
     assert config.transport_solver == "amgx"
-    assert config.transport_raw_matrix_format == "csr"
+    assert config.transport_trace_basis == "legacy-lagrange"
+    assert config.transport_raw_matrix_format == "bsr"
+    assert config.transport_initial_guess == "initial-density-trace"
     assert config.transport_materialize_host_system is False
     assert config.transport_materialize_host_solution is False
+
+
+def test_guiding_center_bsr_preset_preserves_current_amgx_configuration() -> None:
+    csr = preset_by_key("diocotron_k3_raw_cuda_amgx")
+    bsr = preset_by_key("diocotron_k3_raw_cuda_amgx_bsr")
+    amgx_config = json.loads(Path(bsr.transport_amgx_config_path).read_text())
+
+    assert bsr.transport_raw_matrix_format == "bsr"
+    assert bsr.transport_amgx_config_path == csr.transport_amgx_config_path
+    assert bsr.transport_solver == csr.transport_solver == "amgx"
+    assert bsr.transport_scale_system == csr.transport_scale_system
+    assert bsr.diagnostics_prefix == f"{csr.diagnostics_prefix}_bsr"
+    assert amgx_config["solver"]["solver"] == "BICGSTAB"
+    assert amgx_config["solver"]["bsr_spmv_backend"] == "cusparse_generic"
 
 def test_diocotron_k100_stress_preset_uses_resolved_single_mode_band() -> None:
     config = preset_by_key("diocotron_k100_p6_dt01_t50_full_raw_cuda_amgx")
@@ -376,9 +486,10 @@ def test_diocotron_k100_stress_preset_uses_resolved_single_mode_band() -> None:
     assert config.transport_assembly_backend == "raw-cuda"
     assert config.transport_solver_rtol == pytest.approx(1.0e-11)
     assert config.transport_initial_guess == "initial-density-trace"
-    assert config.poisson_raw_matrix_format == "csr"
+    assert config.poisson_solver == "fb-hp-mg-pcg"
+    assert config.poisson_raw_matrix_format == "bsr"
     assert config.poisson_cache_local_factors == "schur-cholesky"
-    assert config.transport_raw_matrix_format == "csr"
+    assert config.transport_raw_matrix_format == "bsr"
 
 
 def test_guiding_center_accepts_cupy_schur_cholesky_poisson_configuration() -> None:
@@ -386,6 +497,7 @@ def test_guiding_center_accepts_cupy_schur_cholesky_poisson_configuration() -> N
     config = replace(
         base,
         poisson_assembly_backend="cupy",
+        poisson_solver="amgx",
         poisson_cache_local_factors="schur-cholesky",
         poisson_hdg_postprocess="none",
     )
@@ -526,6 +638,8 @@ def test_guiding_center_verbose_logging_reports_post_poisson_work(
     assert "relative energy drift" in output
     assert "Linear-solver checks" in output
     assert "Phase timings" in output
+    assert "first Poisson wall" in output
+    assert "first Poisson operator assembly" in output
     assert "accepted-state diagnostics" in output
     assert "post-Poisson application work" in output
     assert final["energy_relative_drift"] == pytest.approx(
@@ -639,3 +753,153 @@ def test_guiding_center_runner_uses_only_public_solver_classes_for_gpu_paths() -
     assert "_device_coefficients_for" not in source
     assert "DiffusionReactionHDGSolver" in source
     assert "AdvectionReactionHDGSolver" in source
+
+
+def test_fb_hp_mg_benchmark_presets_are_matched_six_step_runs() -> None:
+    native = preset_by_key(
+        "diocotron_gaussian_annulus_k3_p6_150k_fb_hp_mg_6step"
+    )
+    hybrid = preset_by_key(
+        "diocotron_gaussian_annulus_k3_p6_150k_hybrid_amgx_6step"
+    )
+
+    assert native.mesh_size == hybrid.mesh_size == pytest.approx(0.0068)
+    assert native.minimum_triangles == hybrid.minimum_triangles == 150_000
+    assert native.num_steps == hybrid.num_steps == 6
+    assert native.time_scheme == hybrid.time_scheme == "si-euler"
+    assert native.plot_every == hybrid.plot_every == 0
+    assert native.poisson_solver == "fb-hp-mg-pcg"
+    assert hybrid.poisson_solver == "amgx"
+    assert native.poisson_trace_basis == hybrid.poisson_trace_basis == "legendre-modal"
+    assert native.poisson_raw_matrix_format == hybrid.poisson_raw_matrix_format == "bsr"
+
+
+def test_diocotron_k50_150k_plot30_preset_uses_bsr_for_both_systems() -> None:
+    config = preset_by_key("diocotron_k50_p6_150k_raw_cuda_bsr_plot30")
+
+    assert config.case == "diocotron_k"
+    assert config.case_params["k"] == 50
+    assert config.case_params["eps"] == pytest.approx(0.2)
+    assert config.case_params["s_bar"] == pytest.approx(0.45)
+    assert config.case_params["s_d"] == pytest.approx(0.016)
+    assert config.order == 6
+    assert config.mesh_size == pytest.approx(0.0068)
+    assert config.minimum_triangles == 150_000
+    assert config.num_steps == 500
+    assert config.plot_every == 30
+    assert config.diagnostics_every == 30
+    assert config.poisson_assembly_backend == "raw-cuda"
+    assert config.poisson_solver == "fb-hp-mg-pcg"
+    assert config.poisson_trace_basis == "legendre-modal"
+    assert config.poisson_raw_matrix_format == "bsr"
+    assert config.transport_assembly_backend == "raw-cuda"
+    assert config.transport_solver == "amgx"
+    assert config.transport_trace_basis == "legacy-lagrange"
+    assert config.transport_raw_matrix_format == "bsr"
+    assert config.transport_initial_guess == "initial-density-trace"
+
+
+def test_level_three_uses_compact_native_solver_logging() -> None:
+    config = replace(
+        preset_by_key("diocotron_k50_p6_150k_raw_cuda_bsr_plot30"),
+        verbosity=3,
+    )
+    assert _solver_verbosity(config) == 3
+    assert _solver_verbosity(replace(config, verbosity=2)) == 1
+
+
+def test_linear_step_summary_is_balanced_and_compact(capsys) -> None:
+    config = replace(
+        preset_by_key("diocotron_k50_p6_150k_raw_cuda_bsr_plot30"),
+        verbosity=3,
+        num_steps=12,
+    )
+    row = {
+        "phase": "step",
+        "step": 3,
+        "time": 0.125,
+        "linear_step_wall_time": 0.8123,
+        "beta_build_time": 0.0012,
+        "potential_trace_update_time": 0.0001,
+        "transport_time": 0.3642,
+        "transport_step_wall_time": 0.3654,
+        "transport_step_time_assembly": 0.2408,
+        "transport_step_time_solve": 0.1237,
+        "transport_step_time_reconstruction": 0.0009,
+        "transport_solver_iterations": 32,
+        "transport_physical_rel_residual": 3.264e-13,
+        "poisson_time": 0.4438,
+        "poisson_step_wall_time": 0.4457,
+        "poisson_step_time_assembly": 0.1212,
+        "poisson_time_rhs_assembly": 0.1212,
+        "poisson_step_time_solve": 0.1908,
+        "poisson_step_time_reconstruction": 0.1337,
+        "poisson_solver_iterations": 9,
+        "poisson_physical_rel_residual": 1.392e-10,
+        "poisson_detail_raw_assembly_operator_reused": 1.0,
+        "poisson_detail_solve_fb_hp_mg_hierarchy_reused": 1.0,
+    }
+
+    _print_linear_step_summary(config, row)
+    output = capsys.readouterr().out
+
+    assert "[gc:linear] step 00003/00012" in output
+    assert "coupled wall=0.8123s" in output
+    assert "transport HDG=0.3642s | stage wall=0.3654s | asm=0.2408s" in output
+    assert "it=32 | true_rel=3.264e-13" in output
+    assert "poisson   HDG=0.4438s | stage wall=0.4457s | rhs=0.1212s" in output
+    assert "it=9 | true_rel=1.392e-10" in output
+    assert "reuse=operator+hierarchy" in output
+    assert len(output.rstrip().splitlines()) == 4
+
+
+def test_robust_transport_fgmres_retries_remain_scaled() -> None:
+    config = preset_by_key("diocotron_k50_p6_150k_raw_cuda_bsr_plot30")
+    options = _make_transport_options(config, boundary_mode="zero-flux")
+
+    assert options.scale_system is True
+    assert options.solver_rtol == pytest.approx(1.0e-11)
+    assert options.solver_atol == pytest.approx(5.0e-9)
+    assert options.amgx_config["solver"]["solver"] == "BICGSTAB"
+    assert options.amgx_config["solver"]["tolerance"] == pytest.approx(1.0e-8)
+    assert "preconditioner" not in options.amgx_config["solver"]
+    assert options.amgx_retry_attempts is not None
+    assert all(
+        attempt["scale_system"] is True
+        for attempt in options.amgx_retry_attempts
+    )
+    assert options.amgx_retry_attempts[0]["config"]["solver"]["tolerance"] == pytest.approx(
+        1.0e-8
+    )
+    assert options.amgx_retry_attempts[1]["label"] == "robust-zero-scaled"
+    for attempt in options.amgx_retry_attempts[1:]:
+        solver = attempt["config"]["solver"]
+        assert attempt["scalarize_bsr"] is True
+        assert attempt["reuse_preconditioner"] is True
+        assert attempt["solver_cache_key"] == "transport-fgmres-dilu"
+        assert solver["solver"] == "FGMRES"
+        assert solver["preconditioner"]["solver"] == "MULTICOLOR_DILU"
+
+
+def test_poisson_flux_postprocess_cadence_defaults_to_disabled() -> None:
+    config = preset_by_key("diocotron_gaussian_annulus_host_smoke")
+    assert config.poisson_flux_postprocess_every == 0
+    assert config.poisson_flux_postprocess_space == "RT_projection"
+
+
+def test_poisson_flux_postprocess_cadence_targets_only_accepted_steps() -> None:
+    config = replace(
+        preset_by_key("diocotron_gaussian_annulus_host_smoke"),
+        poisson_flux_postprocess_every=3,
+        poisson_postprocessing_backend="raw-cuda",
+    )
+
+    assert _poisson_postprocess_overrides(config, 0) == {}
+    assert _poisson_postprocess_overrides(config, 2) == {}
+    assert _poisson_postprocess_overrides(config, 3) == {
+        "postprocess_overrides": {
+            "hdg_postprocess": "flux",
+            "flux_postprocess_space": "RT_projection",
+            "postprocessing_backend": "raw-cuda",
+        }
+    }

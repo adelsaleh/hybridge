@@ -125,15 +125,15 @@ def test_robust_transport_policy_builds_defect_correction_retries() -> None:
     assert retries is not None
     assert [retry["label"] for retry in retries] == [
         "primary-zero",
-        "robust-zero-unscaled",
+        "robust-zero-scaled",
         "robust-correction-1",
         "robust-correction-2",
     ]
-    assert retries[1]["scale_system"] is False
+    assert retries[1]["scale_system"] is config.transport_scale_system
     assert retries[1]["use_initial_guess"] is False
     assert retries[1]["config"]["solver"]["convergence"] == "ABSOLUTE"
     assert retries[1]["config"]["solver"]["tolerance"] == config.transport_solver_atol
-    assert retries[2]["scale_system"] is False
+    assert retries[2]["scale_system"] is config.transport_scale_system
     assert retries[2]["use_initial_guess"] is False
     assert retries[2]["use_best_solution"] is True
     assert retries[2]["residual_correction"] is True

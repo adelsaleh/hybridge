@@ -44,6 +44,7 @@ class GuidingCenterCase:
     density_boundary: TimeScalarCallable | None
     density_transport_boundary_mode: str
     default_domain: str
+    potential_boundary_constant: float | None = None
     equilibrium_density: ScalarCallable | None = None
     exact_density: TimeScalarCallable | None = None
     exact_potential: TimeScalarCallable | None = None
@@ -63,7 +64,10 @@ class GuidingCenterCase:
     def potential_boundary_at(self, time: float) -> ScalarCallable:
         """Return a two-argument potential Dirichlet boundary callable at ``time``."""
         t = float(time)
-        return lambda x, y: self.potential_boundary(x, y, t)
+        boundary = lambda x, y: self.potential_boundary(x, y, t)
+        if self.potential_boundary_constant is not None:
+            boundary._hdgfem_constant_value = float(self.potential_boundary_constant)
+        return boundary
 
     def density_boundary_at(self, time: float) -> ScalarCallable | None:
         """Return a two-argument density boundary callable at ``time`` when prescribed."""
@@ -148,6 +152,7 @@ def diocotron_gaussian_annulus(
         density_boundary=None,
         density_transport_boundary_mode="zero-flux",
         default_domain="disc",
+        potential_boundary_constant=0.0,
         equilibrium_density=equilibrium,
         parameters={"k": mode, "eps": amplitude, "r0": radius0, "sigma": width, "theta_shift": shift},
     )
@@ -270,6 +275,7 @@ def diocotron_k(
         density_boundary=None,
         density_transport_boundary_mode="zero-flux",
         default_domain="disc",
+        potential_boundary_constant=0.0,
         equilibrium_density=equilibrium,
         parameters={
             "k": mode,

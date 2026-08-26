@@ -1632,6 +1632,64 @@ def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materi
     assert not device_source.coefficients_materialized
 
 
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_guiding_center_field_diagnostics_stays_on_device_and_matches_host():
+    from hdgfem.backends.cupy import as_cupy_space, require_cupy
+    from hdgfem.diagnostics import guiding_center_field_diagnostics
+
+    cp = require_cupy()
+    mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    equilibrium_density = space.project_callable(
+        lambda x, y: 1.0 + 0.1 * x, name="rho_eq_h"
+    )
+    density = space.project_callable(
+        lambda x, y: 1.0 + 0.1 * x + 0.03 * (x * x - y * y), name="rho_h"
+    )
+    equilibrium_potential = space.project_callable(
+        lambda x, y: 0.2 + x - 0.5 * y, name="phi_eq_h"
+    )
+    potential = space.project_callable(
+        lambda x, y: 0.2 + x - 0.5 * y + 0.02 * x * y, name="phi_h"
+    )
+    qx = space.project_callable(lambda x, y: 1.0 + x, name="qx_h")
+    qy = space.project_callable(lambda x, y: -0.5 + y, name="qy_h")
+    flux = space.vector_field((qx, qy), name="q_h")
+    host = guiding_center_field_diagnostics(
+        density, potential, flux,
+        equilibrium_potential=equilibrium_potential,
+        equilibrium_density=equilibrium_density,
+        mode=2, backend="host",
+    )
+
+    cspace = as_cupy_space(space)
+    to_device = lambda field: cspace.field(
+        cp.asarray(field.coeffs), name=f"{field.name}_device"
+    )
+    density_d = to_device(density)
+    potential_d = to_device(potential)
+    equilibrium_density_d = to_device(equilibrium_density)
+    equilibrium_potential_d = to_device(equilibrium_potential)
+    flux_d = space.vector_field((to_device(qx), to_device(qy)), name="q_d")
+    device = guiding_center_field_diagnostics(
+        density_d, potential_d, flux_d,
+        equilibrium_potential=equilibrium_potential_d,
+        equilibrium_density=equilibrium_density_d,
+        mode=2, backend="auto",
+    )
+
+    assert device["diagnostics_backend"] == "cuda"
+    for key, expected in host.items():
+        if key == "diagnostics_backend":
+            continue
+        assert device[key] == pytest.approx(expected, rel=2.0e-12, abs=2.0e-12)
+    for field in (
+        density_d, potential_d, equilibrium_density_d, equilibrium_potential_d,
+        *flux_d.components,
+    ):
+        assert not field.coefficients_materialized
+
+
 def test_coefficient_field_projects_callable_through_package_api():
     from hdgfem.core.field_ops import coefficient_field
 

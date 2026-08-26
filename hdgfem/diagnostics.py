@@ -109,7 +109,14 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
     for attribute in ("trace_ordering", "postprocessing"):
         if hasattr(timings, attribute):
             row[f"{prefix}_time_{attribute}"] = getattr(timings, attribute)
-    for key, value in (getattr(timings, "details", None) or {}).items():
+    timing_details = getattr(timings, "details", None) or {}
+    rhs_only = bool(timing_details.get("raw.assembly.rhs_only", 0.0))
+    operator_reused = bool(timing_details.get("raw.assembly.operator_reused", 0.0))
+    row[f"{prefix}_time_rhs_assembly"] = timings.assembly if rhs_only else 0.0
+    row[f"{prefix}_time_operator_assembly"] = (
+        0.0 if operator_reused else timings.assembly
+    )
+    for key, value in timing_details.items():
         if isinstance(value, (int, float)):
             safe_key = "".join(ch if ch.isalnum() else "_" for ch in str(key)).strip("_")
             row[f"{prefix}_detail_{safe_key}"] = float(value)
@@ -200,6 +207,199 @@ def azimuthal_mode_diagnostics(field: DGField, equilibrium: DGField, mode: int) 
         "diocotron_harmonic_ratio": amplitudes[1] / max(amplitudes[0], np.finfo(np.float64).tiny),
     }
 
+
+def guiding_center_field_diagnostics(
+        density: DGField,
+        potential: DGField,
+        flux: VectorDGField,
+        *,
+        postprocessed_flux: VectorDGField | None = None,
+        equilibrium_potential: DGField | None = None,
+        equilibrium_density: DGField | None = None,
+        mode: int = 0,
+        backend: Literal["auto", "host", "device"] = "auto",
+) -> dict[str, float | str]:
+    """Reduce guiding-center field diagnostics on host or resident CUDA data.
+
+    The device path works from DG coefficients, evaluates only the two fields
+    needed for sampled extrema, computes all norms and integrals in coefficient
+    space, and downloads one compact scalar vector.  It therefore avoids
+    materializing full field/quadrature tables on the host.
+    """
+    if not isinstance(density, DGField) or not isinstance(potential, DGField):
+        raise TypeError("density and potential must be DGField instances")
+    if not isinstance(flux, VectorDGField):
+        raise TypeError("flux must be a VectorDGField")
+    normalized = str(backend).lower()
+    if normalized not in {"auto", "host", "device"}:
+        raise ValueError("backend must be 'auto', 'host', or 'device'")
+    fields = [density, potential, *flux.components]
+    if postprocessed_flux is not None:
+        fields.extend(postprocessed_flux.components)
+    if equilibrium_potential is not None:
+        fields.append(equilibrium_potential)
+    if equilibrium_density is not None:
+        fields.append(equilibrium_density)
+    use_device = normalized == "device" or (
+        normalized == "auto"
+        and any(field.device_coefficients_materialized() for field in fields)
+    )
+    if not use_device:
+        standard_q_l2 = flux.l2_norm()
+        rho_min, rho_max = density.min_max()
+        phi_min, phi_max = potential.min_max()
+        result: dict[str, float | str] = {
+            "mass": density.integral(),
+            "rho_min": rho_min,
+            "rho_max": rho_max,
+            "phi_min": phi_min,
+            "phi_max": phi_max,
+            "q_l2_standard": standard_q_l2,
+            "diagnostics_backend": "host",
+        }
+        if postprocessed_flux is not None:
+            result["q_l2_postprocessed"] = postprocessed_flux.l2_norm()
+        if equilibrium_potential is not None:
+            result.update({
+                "diocotron_phi_eq_l2": potential.space.l2_diff(
+                    potential, equilibrium_potential
+                ),
+                "diocotron_phi_eq_linf": potential.space.linf_diff(
+                    potential, equilibrium_potential
+                ),
+                "diocotron_phi_eq_reference_l2": equilibrium_potential.l2_norm(),
+            })
+        if equilibrium_density is not None:
+            result.update({
+                "diocotron_rho_eq_l2": density.space.l2_diff(
+                    density, equilibrium_density
+                ),
+                "diocotron_rho_eq_reference_l2": equilibrium_density.l2_norm(),
+            })
+            result.update(azimuthal_mode_diagnostics(density, equilibrium_density, mode))
+        return result
+
+    from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+
+    cp = require_cupy()
+    base_space = density.space
+    base_space.assert_same_mesh(potential.space)
+    if potential.space is not base_space:
+        raise ValueError("device guiding-center diagnostics require one scalar DGSpace")
+    cspace = as_cupy_space(base_space)
+    jacobians = cspace.mesh.aff_jacs
+    reference_moments = cp.sum(cspace.quad_data.weighted_phi, axis=0)
+    density_coeffs = as_cupy_coefficients(density, cspace)
+    potential_coeffs = as_cupy_coefficients(potential, cspace)
+
+    pending: dict[str, object] = {}
+
+    def l2_squared(coefficients, local_cspace):
+        """Reduce the physical squared L2 norm of resident coefficients."""
+        weighted = coefficients @ local_cspace.quad_data.MKrf
+        return cp.sum(
+            local_cspace.mesh.aff_jacs
+            * cp.sum(coefficients * weighted, axis=1)
+        )
+
+    density_integral = cp.sum(
+        jacobians * (density_coeffs @ reference_moments)
+    )
+    density_values = density_coeffs @ cspace.quad_data.bas_of_quads
+    potential_values = potential_coeffs @ cspace.quad_data.bas_of_quads
+    pending["mass"] = density_integral
+    pending["rho_min"] = cp.min(density_values)
+    pending["rho_max"] = cp.max(density_values)
+    pending["phi_min"] = cp.min(potential_values)
+    pending["phi_max"] = cp.max(potential_values)
+    del density_values, potential_values
+
+    flux_l2_squared = cp.asarray(0.0, dtype=cp.float64)
+    for component in flux.components:
+        if component.space is not base_space:
+            raise ValueError("device guiding-center flux components must use the scalar DGSpace")
+        flux_l2_squared = flux_l2_squared + l2_squared(
+            as_cupy_coefficients(component, cspace), cspace
+        )
+    pending["q_l2_standard"] = cp.sqrt(cp.maximum(flux_l2_squared, 0.0))
+
+    if postprocessed_flux is not None:
+        post_l2_squared = cp.asarray(0.0, dtype=cp.float64)
+        for component in postprocessed_flux.components:
+            component_cspace = as_cupy_space(component.space)
+            post_l2_squared = post_l2_squared + l2_squared(
+                as_cupy_coefficients(component, component_cspace), component_cspace
+            )
+        pending["q_l2_postprocessed"] = cp.sqrt(cp.maximum(post_l2_squared, 0.0))
+
+    if equilibrium_potential is not None:
+        if equilibrium_potential.space is not base_space:
+            raise ValueError("device equilibrium potential must use the scalar DGSpace")
+        equilibrium_phi_coeffs = as_cupy_coefficients(equilibrium_potential, cspace)
+        phi_difference = potential_coeffs - equilibrium_phi_coeffs
+        pending["diocotron_phi_eq_l2"] = cp.sqrt(
+            cp.maximum(l2_squared(phi_difference, cspace), 0.0)
+        )
+        phi_difference_values = phi_difference @ cspace.quad_data.bas_of_quads
+        pending["diocotron_phi_eq_linf"] = cp.max(cp.abs(phi_difference_values))
+        pending["diocotron_phi_eq_reference_l2"] = cp.sqrt(
+            cp.maximum(l2_squared(equilibrium_phi_coeffs, cspace), 0.0)
+        )
+        del phi_difference_values
+
+    if equilibrium_density is not None:
+        if equilibrium_density.space is not base_space:
+            raise ValueError("device equilibrium density must use the scalar DGSpace")
+        equilibrium_rho_coeffs = as_cupy_coefficients(equilibrium_density, cspace)
+        rho_difference = density_coeffs - equilibrium_rho_coeffs
+        pending["diocotron_rho_eq_l2"] = cp.sqrt(
+            cp.maximum(l2_squared(rho_difference, cspace), 0.0)
+        )
+        equilibrium_integral = cp.sum(
+            jacobians * (equilibrium_rho_coeffs @ reference_moments)
+        )
+        pending["diocotron_rho_eq_reference_l2"] = cp.sqrt(
+            cp.maximum(l2_squared(equilibrium_rho_coeffs, cspace), 0.0)
+        )
+        if int(mode) > 0:
+            reference_points = cspace.quad_data.Krf_quads
+            x = (
+                cspace.mesh.aff_mats[:, 0, 0, None] * reference_points[None, :, 0]
+                + cspace.mesh.aff_mats[:, 0, 1, None] * reference_points[None, :, 1]
+                + cspace.mesh.aff_vecs[:, 0, None]
+            )
+            y = (
+                cspace.mesh.aff_mats[:, 1, 0, None] * reference_points[None, :, 0]
+                + cspace.mesh.aff_mats[:, 1, 1, None] * reference_points[None, :, 1]
+                + cspace.mesh.aff_vecs[:, 1, None]
+            )
+            theta = cp.arctan2(y, x)
+            del x, y
+            perturbation = rho_difference @ cspace.quad_data.bas_of_quads
+            weights = jacobians[:, None] * cspace.quad_data.Krf_w[None, :]
+            normalization = cp.maximum(
+                cp.abs(equilibrium_integral), cp.finfo(cp.float64).tiny
+            )
+            amplitudes = []
+            for harmonic in (1, 2, 3):
+                angle = float(harmonic * int(mode)) * theta
+                cosine = cp.sum(perturbation * cp.cos(angle) * weights)
+                sine = cp.sum(perturbation * cp.sin(angle) * weights)
+                amplitudes.append(2.0 * cp.hypot(cosine, sine) / normalization)
+            pending["diocotron_mode_base"] = cp.asarray(float(mode), dtype=cp.float64)
+            pending["diocotron_mode_1k_amplitude"] = amplitudes[0]
+            pending["diocotron_mode_2k_amplitude"] = amplitudes[1]
+            pending["diocotron_mode_3k_amplitude"] = amplitudes[2]
+            pending["diocotron_harmonic_ratio"] = amplitudes[1] / cp.maximum(
+                amplitudes[0], cp.finfo(cp.float64).tiny
+            )
+
+    keys = tuple(pending)
+    packed = cp.stack([pending[key] for key in keys])
+    values = cp.asnumpy(packed)
+    result = {key: float(value) for key, value in zip(keys, values, strict=True)}
+    result["diagnostics_backend"] = "cuda"
+    return result
 
 def _error_quadrature(field: DGField, volume_quad_1d: int | None):
     """Return reference points, weights, and basis values for error integration."""
@@ -455,6 +655,7 @@ __all__ = [
     "VectorErrorMetrics",
     "VectorErrorReport",
     "azimuthal_mode_diagnostics",
+    "guiding_center_field_diagnostics",
     "evaluate_scalar_error",
     "evaluate_vector_error",
     "relative_drift",
