@@ -1,0 +1,914 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs}
+% Number displayed equations and floats within each main section.
+\numberwithin{equation}{section}
+\numberwithin{figure}{section}
+\numberwithin{table}{section}
+% Keep the contents compact; subsections remain numbered in the text.
+\setcounter{tocdepth}{1}
+\setcounter{secnumdepth}{2}
+\usepackage[hidelinks]{hyperref}
+\setlength{\emergencystretch}{3em}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\title{Face-Block hp--AMG Solvers for HDG Trace Systems:\\Polynomial, Geometric, and Algebraic Hierarchies}
+\author{HDGFEM algorithm notes}
+\date{}
+\begin{document}
+\maketitle
+
+The hp--AMG family combines polynomial reduction, geometric or agglomerated
+h-coarsening, and algebraic multigrid on the condensed HDG trace system.
+These variants share equations, modal coordinates, block storage, and a
+multigrid correction framework. Their coarse spaces, transfers, smoothers,
+and outer iterations differ. The family name is not a new solver selector;
+not every variant requires a geometric mesh hierarchy.
+
+The implemented native variant uses p-multigrid on a fixed face graph and
+scalar classical AMG at degree zero. The historical names hp-BSR and
+FB-HP-MG-PCG refer to this path; \code{fb-hp-mg-pcg} remains its selector
+and flexible PCGF its current outer iteration. It requires an SPD reduced
+trace operator and an appropriate SPD preconditioner. BSR denotes storage,
+not a symmetry property or a guarantee of convergence.
+
+Section~\ref{sec:shared} establishes the shared HDG and multigrid formalism.
+Section~\ref{sec:spd} describes the implemented SPD solver and baseline policies.
+Section~\ref{sec:nonsymmetric} proposes independent algebraic transfers,
+nonsymmetric relaxation, and flexible GMRES.
+Section~\ref{sec:hpchoices} develops the Poisson h/p alternatives: harmonic
+agglomeration, energy-minimizing AMG, and auxiliary coarse spaces.
+The latter two sections are designs, not implemented solver selectors or
+expansions of backend support. The production backend and capability
+reference remain authoritative. The companion
+\href{hierarchies.md}{hierarchy choices and literature review} compares the
+Poisson candidates and records the limits of the cited results.
+
+\tableofcontents
+
+\section{Shared HDG formalism}\label{sec:shared}
+\subsection{Condensed trace system}\label{sec:condensation}
+For element $K$, $\underline{u}^K$ contains the degrees of freedom of
+$u_h|_K$, $\underline{q}^K$ contains those of the discrete flux on $K$
+(all spatial components), and $\underline{f}^K$ is the element source load.
+For one globally numbered face $\Gamma$, $\underline{\widehat{u}}^\Gamma$
+contains the trace degrees of freedom on that face in its global orientation.
+The element-boundary vector $\underline{\widehat{u}}^K$ stacks the local
+face vectors $\underline{\widehat{u}}^{K,e}$ over $e\subset\partial K$.
+If local face $(K,e)$ corresponds to global face $\Gamma=\Gamma(K,e)$,
+its orientation/basis map $O_{K,e}$ gives
+\[
+ \underline{\widehat{u}}^{K,e}
+ =O_{K,e}\underline{\widehat{u}}^{\Gamma(K,e)}.
+\]
+Thus $K$, $(K,e)$, and $\Gamma$ identify one element, one local face,
+and one global face, respectively.
+
+Vectors assembled over the mesh carry no spatial superscript. In particular,
+let $\mathcal F_{\mathrm{free}}$ be the set of global faces with free trace
+unknowns, and stack their coefficients in the solver's face order:
+\[
+ \underline{\widehat{u}}
+ =\operatorname{col}_{\Gamma\in\mathcal F_{\mathrm{free}}}
+   \bigl(\underline{\widehat{u}}^\Gamma\bigr).
+\]
+Here $\underline{\widehat{u}}$ is the assembled free trace vector,
+whereas $\underline{\widehat{u}}^\Gamma$ is a single face block.
+Prescribed trace coefficients are kept in the boundary data below.
+The assembled load $\underline{b}$ and trace corrections likewise carry no
+spatial superscript; subscripts may still label coordinates, levels, or
+iterations.
+
+Write the mixed element equations and their transmission contribution as
+\[
+ L_K
+ \begin{bmatrix}\underline{q}^K\\\underline{u}^K\end{bmatrix}
+ +B_K\underline{\widehat{u}}^K
+ =\begin{bmatrix}0\\\underline{f}^K\end{bmatrix},\qquad
+ C_K\begin{bmatrix}\underline{q}^K\\\underline{u}^K\end{bmatrix}
+ +D_K\underline{\widehat{u}}^K=\underline{g}^K.
+\]
+Here $\underline{f}^K$ is the tested source load, and
+$\underline{g}^K$ denotes prescribed transmission or boundary loads.
+The second equation denotes the local contribution to the assembled transmission
+equations; it is not an independently imposed element boundary equation.
+Eliminating the flux and primal degrees of freedom gives
+\[
+ H_K=D_K-C_K L_K^{-1}B_K,\qquad
+ \underline{h}^K=\underline{g}^K-C_K L_K^{-1}
+ \begin{bmatrix}0\\\underline{f}^K\end{bmatrix}.
+\]
+Let $E_K$ gather free global trace coefficients with the required face
+orientation, and let $\underline{\widehat{u}}_D^K$ contain prescribed boundary
+data. Thus
+\[
+ \underline{\widehat{u}}^K
+ =E_K\underline{\widehat{u}}+\underline{\widehat{u}}_D^K.
+\]
+The assembled condensed system is
+\[
+ A=\sum_K E_K^T H_K E_K,\qquad
+ \underline{b}=\sum_K E_K^T
+ (\underline{h}^K-H_K\underline{\widehat{u}}_D^K),\qquad
+ A\underline{\widehat{u}}=\underline{b}.
+\]
+The condensed load $\underline{b}$ includes source and boundary
+contributions and is distinct from the element source $\underline{f}^K$.
+After the trace solve, reconstruct the HDG fields elementwise through
+\[
+ \begin{bmatrix}\underline{q}^K\\\underline{u}^K\end{bmatrix}
+ =L_K^{-1}\left(
+ \begin{bmatrix}0\\\underline{f}^K\end{bmatrix}
+ -B_K\underline{\widehat{u}}^K\right).
+\]
+These are abstract elimination symbols; signs follow the chosen HDG flux
+convention. Static condensation requires invertible local $L_K$, but neither
+$L_K$ nor $A$ needs to be symmetric for these identities. The native solver
+in Section~\ref{sec:spd} additionally takes the resulting SPD convention for $A$.
+See the diffusion-reaction formulation for the actual element matrices.
+A known global nullspace requires compatible loads and explicit constraint or
+projection treatment before either nonsingular solver framework applies.
+Pure Neumann Poisson, for example, has a constant nullspace unless such a
+treatment removes it.
+
+For a scalar trace at uniform degree $p$ on two-dimensional mesh edges,
+each face has $p+1$ trace modes. Face-major storage gives dense $(p+1)\times(p+1)$ blocks $A_{fg}$
+in BSR. Full row storage is retained; upper-triangle-only storage is not used.
+For several trace components, retain all components of each modal group;
+at degree zero this leaves a component block, not a scalar.
+Triangular faces in three dimensions have $(p+1)(p+2)/2$ scalar modes.
+These are mathematical extensions, not claims of current backend support.
+
+\subsection{Modal coordinates and congruence}\label{sec:coordinates}
+On the reference edge $\xi\in[-1,1]$, Legendre polynomials satisfy
+\[
+ \int_{-1}^1 P_iP_j\,d\xi=\frac{2}{2j+1}\delta_{ij},\qquad
+ \psi_j=s_jP_j,\quad s_j=\sqrt{\frac{2j+1}{2}}.
+\]
+This is reference-edge orthonormality. It does not include a face-length
+normalization; physical geometry remains in the assembled coefficients.
+Use $\underline{\widehat{u}}$ for the assembled trace coefficients in $P_j$
+and $\underline{\widehat{u}}_{\mathrm{m}}$ for the same assembled trace in
+$\psi_j$. With $N_f=|\mathcal F_{\mathrm{free}}|$, define
+$S=I_{N_f}\otimes\operatorname{diag}(s_0,\ldots,s_p)$. Then
+\[
+ \underline{\widehat{u}}=S\underline{\widehat{u}}_{\mathrm{m}},
+ \qquad \mathcal A=SAS,\qquad
+ \underline{b}_{\mathrm{m}}=S\underline{b},\qquad
+ \mathcal A\underline{\widehat{u}}_{\mathrm{m}}
+ =\underline{b}_{\mathrm{m}}.
+\]
+For SPD $A$, this congruence preserves symmetry and positive definiteness since
+$v^T\mathcal A v=(Sv)^TA(Sv)>0$ for every nonzero test vector $v$.
+The coordinate change itself is also valid for nonsymmetric $A$.
+A warm assembly-basis trace guess maps by $S^{-1}$ into modal coordinates;
+the returned modal trace maps back by $S$ before reconstructing
+$\underline{u}^K$ and $\underline{q}^K$.
+Reversing an edge acts diagonally by $(-1)^j$;
+canonical orientation must be consistent before forming the hierarchy.
+
+More generally, if $T$ maps normalized modal coefficients to assembly
+coefficients, use
+\[
+ A_0=T^TAT,\quad \underline{b}_0=T^T\underline{b},
+ \quad\underline{\widehat{u}}
+       =T\underline{\widehat{u}}_0.
+\]
+This is an invertible change of trial and test coordinates for nonsymmetric
+matrices too. Positive diagonal equilibration may be added with consistent
+coordinate and load maps.
+Arbitrary dense face changes can mix low and high modes; after such a change,
+transform the polynomial embeddings instead of blindly truncating coordinates.
+
+For the native Legendre normalization above, $T=S$ and $A_0=\mathcal A$.
+The generalization in Section~\ref{sec:nonsymmetric} uses this same coordinate
+interface, including when a full face-basis transform is required.
+
+\subsection{Trace correction spaces and transfers}\label{sec:hierarchy}
+Let $A_\ell$ act on $n_\ell$ trace correction coefficients at level $\ell$.
+The grouping may describe modes on original faces, traces on macro-faces,
+or algebraic aggregate candidates. Define
+\[
+ P_\ell:\mathbb R^{n_{\ell+1}}\longrightarrow\mathbb R^{n_\ell},\qquad
+ R_\ell:\mathbb R^{n_\ell}\longrightarrow\mathbb R^{n_{\ell+1}},\qquad
+ A_{\ell+1}=R_\ell A_\ell P_\ell.
+\]
+After smoothing a trace correction $e_\ell$, form
+$r_c=R_\ell(r_\ell-A_\ell e_\ell)$ and update
+$e_\ell\leftarrow e_\ell+P_\ell B_{\ell+1}r_c$.
+The recurrence permits p-, h-, and algebraic coarsening at different levels.
+Polynomial truncation changes modes on a fixed face graph; geometric
+agglomeration changes the skeleton; algebraic coarsening need not correspond
+to a literal coarse mesh. Fixed-block BSR remains appropriate where each
+level has uniform block dimensions, which may differ between levels.
+
+For SPD Galerkin variants, take $R_\ell=P_\ell^T$ in assembled coefficient
+coordinates. Independent $R_\ell$ and $P_\ell$ give a Petrov--Galerkin variant;
+transpose restriction is not assumed in Section~\ref{sec:nonsymmetric}.
+Residual restriction acts on a dual load vector. In compatible nested
+function spaces, field projection instead has coefficient representation
+\[
+ Q_{L^2}=M_c^{-1}P^TM_f,\qquad M_c=P^TM_fP,
+\]
+where $M_f,M_c$ are the physical mass matrices. On a straight edge of length
+$L_f$, the reference-normalized modal mass is $(L_f/2)I$.
+The SPD energy projection is $(P^TAP)^{-1}P^TA$.
+Do not replace $P^T$ on dual residuals with a mass-weighted field projection
+without reformulating the operator and load coordinates consistently.
+
+All variants retain the original assembled equation for final acceptance.
+The outer iteration must match the complete operator/preconditioner pair;
+a common block layout does not transfer SPD theory to a nonsymmetric cycle.
+
+\section{Implemented SPD pMG--AMG variant}\label{sec:spd}
+\subsection{Polynomial hierarchy and multigrid cycle}
+Let $p_0=p>p_1>\cdots>p_L=0$. At adjacent levels define the facewise injection
+\[
+ J_\ell=\begin{bmatrix}I_{p_{\ell+1}+1}\\0\end{bmatrix},\qquad
+ P_\ell=I_{N_f}\otimes J_\ell,\qquad R_\ell=P_\ell^T.
+\]
+Prolongation fills higher modes with zeros; restriction truncates them.
+With $A_0=\mathcal A$, the Galerkin operator is
+\[
+ A_{\ell+1}=P_\ell^T A_\ell P_\ell.
+\]
+Every coarse face block is therefore the leading principal subblock of its
+fine block. The implementation extracts these subblocks directly from the
+finest normalized BSR data, which is equivalent to recursive nested extraction.
+The face graph stays fixed throughout p-coarsening. This is a restricted
+high-order trace operator, not a newly assembled and condensed lower-order HDG
+problem. Full-column-rank injection preserves SPD on every p-level.
+At $p_L=0$ there is one scalar unknown per face; AMG then coarsens algebraically.
+
+On each nonterminal level use $M_\ell=\operatorname{blockdiag}((A_\ell)_{ff})$.
+For SPD $A_\ell$, each principal face block is SPD. The code symmetrizes stored
+diagonal blocks and their computed inverses to reduce roundoff asymmetry;
+this does not repair a nonsymmetric global operator.
+Let $\underline{\delta\widehat{u}}_\ell$ denote the assembled modal trace
+correction on level $\ell$, and let $r$ be its residual right-hand side.
+A smoothing stage is
+\[
+ \underline{\delta\widehat{u}}_\ell
+ \leftarrow\underline{\delta\widehat{u}}_\ell
+ +\omega_j M_\ell^{-1}
+ (r-A_\ell\underline{\delta\widehat{u}}_\ell).
+\]
+For polynomial order $m$ and interval $[a_\ell,b_\ell]$, the weights are
+\[
+ \omega_j=\left[\frac{b_\ell+a_\ell}{2}
+ -\frac{b_\ell-a_\ell}{2}\cos\frac{(2j+1)\pi}{2m}\right]^{-1},
+ \qquad j=0,\ldots,m-1.
+\]
+One sweep comprises all $m$ stages. The corresponding error polynomial is
+$q_m(t)=\prod_j(1-\omega_jt)$. Setup estimates the largest eigenvalue of
+$M_\ell^{-1}A_\ell$ using power iteration and the generalized Rayleigh quotient
+$v^TA_\ell v/(v^TM_\ell v)$. Current defaults use 12 iterations,
+$b_\ell=1.2\widehat\lambda_{\max}$, and $a_\ell=0.1b_\ell$.
+These are estimates, not certified spectral bounds. The low endpoint selects
+the smoothing band; it is not an assertion that all eigenvalues exceed it.
+Weights are retained and fixed during repeated applications.
+
+Denote the level-$\ell$ correction operator by $B_\ell$. Its recursive action
+on $r$ is:
+\begin{enumerate}
+\item If $\ell=L$, return one zero-initialized, fixed-work scalar AMG cycle.
+\item Set $\underline{\delta\widehat{u}}_\ell=0$ and apply the configured pre-smoothing sweeps in forward
+Chebyshev stage order.
+\item Form $r_c=P_\ell^T(r-A_\ell\underline{\delta\widehat{u}}_\ell)$.
+\item Recursively compute
+$\underline{\delta\widehat{u}}_{\ell+1}=B_{\ell+1}r_c$ and set
+$\underline{\delta\widehat{u}}_\ell\leftarrow
+\underline{\delta\widehat{u}}_\ell+
+P_\ell\underline{\delta\widehat{u}}_{\ell+1}$.
+\item Apply the matching post-smoothing sweeps in reversed stage order and
+return $\underline{\delta\widehat{u}}_\ell$.
+\end{enumerate}
+Zero initialization is per preconditioner application; it is independent of
+any warm guess for the outer solve. Fixed work avoids a tolerance-dependent
+inner solve. The hierarchy and workspaces are reused while the operator is
+unchanged.
+
+At degree zero the baseline AMGX configuration uses classical AMG, PMIS
+selection, AHAT strength with threshold $0.40$, D2 interpolation, L1-Jacobi
+smoothing, and a dense LU terminal solve. It disables aggressive levels and
+error scaling, and uses dense-LU row thresholds 128/256. The dense factorization
+algorithm being LU does not itself imply a nonsymmetric input operator.
+AMGX owns the scalar algebraic hierarchy; native code owns the p-levels.
+
+\subsection{Symmetry, outer iteration, and convergence}
+Let $H$ be the correction operator of the complete pre-smoothing sequence on
+one level. Reversing symmetric elementary correction stages gives the adjoint
+post-smoothing correction $H^T$. Writing $C=PB_cP^T$, the resulting cycle is
+\[
+ B=H+H^T-H^TAH+(I-H^TA)C(I-AH).
+\]
+Thus $B$ is symmetric if $A$ and $B_c$ are symmetric. If $B_c$ is positive
+semidefinite, the last term is positive semidefinite. With $E=I-HA$,
+\[
+ A(H+H^T-H^TAH)A=A-E^TAE.
+\]
+Strict contraction of $E$ in the $A$-energy norm is a sufficient condition for
+positive definiteness of the smoothing contribution and hence of $B$.
+Suitable Chebyshev spectral bounds support this condition; inaccurate bounds
+can invalidate it. Balanced sweeps alone are not a proof of SPD, and a fixed
+AMG cycle alone is not a proof of self-adjointness of its complete action.
+
+Production setup samples preconditioner adjointness through
+\[
+ \delta_B=\frac{|u^TBv-v^TBu|}
+ {\|u\|_2\|Bv\|_2+\|v\|_2\|Bu\|_2}
+\]
+and positive action through $u^TBu/(\|u\|_2\|Bu\|_2)$, using deterministic
+vectors and a tiny denominator floor. Nonfinite or unacceptable results reject
+the native attempt. Iteration also checks positive preconditioned residual
+and operator curvature. These samples can detect failures but cannot certify
+symmetry or positive definiteness for all vectors.
+
+The flexible CG update below does not remove the SPD operator requirement.
+Section~\ref{sec:nonsymmetric} develops a proposed nonsymmetric extension by
+changing the outer iteration, smoothing, and coarse transfers. That design
+requires separate qualification; it does not change the current support of
+this SPD implementation.
+
+All recurrence vectors below use normalized modal coordinates. The iterate
+$\underline{\widehat{u}}_{\mathrm{m},k}$ is the assembled HDG trace vector;
+$r_k$, $z_k$, and $d_k$ are algebraic residual, preconditioned residual, and
+trace search-direction vectors. Set
+$r_0=\underline{b}_{\mathrm{m}}
+-A_0\underline{\widehat{u}}_{\mathrm{m},0}$, $z_0=B_0r_0$, $d_0=z_0$, and $\rho_0=r_0^Tz_0$.
+For each iteration, before any true-residual replacement,
+\begin{align*}
+ t_k&=A_0d_k,& \alpha_k&=\frac{\rho_k}{d_k^Tt_k},\\
+ \underline{\widehat{u}}_{\mathrm{m},k+1}
+ &=\underline{\widehat{u}}_{\mathrm{m},k}+\alpha_kd_k,&
+ r_{k+1}&=r_k-\alpha_kt_k,\\
+ z_{k+1}&=B_0r_{k+1},& \rho_{k+1}&=r_{k+1}^Tz_{k+1},\\
+ \beta_k&=\frac{z_{k+1}^T(r_{k+1}-r_k)}{\rho_k},&
+ d_{k+1}&=z_{k+1}+\beta_kd_k.
+\end{align*}
+Here $t_k$ is an operator-action work vector; the physical flux degrees of
+freedom remain $\underline{q}^K$ and are reconstructed after the trace solve.
+The beta formula is the implemented flexible Polak--Ribiere-style PCGF update;
+it is not the ordinary $\rho_{k+1}/\rho_k$ update. Nonfinite or nonpositive
+$\rho_k$ or $d_k^TA_0d_k$ causes breakdown. A residual-gap restart instead sets
+$d_{k+1}=z_{k+1}$.
+
+The acceptance contract is measured in the original assembly coefficients:
+\begin{equation}\label{eq:acceptance}
+ \|\underline{b}-A\underline{\widehat{u}}\|_2
+ \leq\max(\mathrm{atol},\mathrm{rtol}\|\underline{b}\|_2).
+\end{equation}
+Since $r=S(\underline{b}-A\underline{\widehat{u}})$, a recursive modal residual must be measured as
+$\|S^{-1}r\|_2$, not $\|r\|_2$. This Euclidean coefficient norm is also distinct
+from a physical finite-element $L^2$ norm.
+In the diffusion integration, true checks explicitly compute $\underline{b}-A(S\underline{\widehat{u}}_{\mathrm{m}})$ using
+the original assembled action, measure its norm, and map it back with $S$.
+This avoids acceptance based only on roundoff in the separately stored
+congruence. Standalone callers may supply \code{assembly_matvec}; without it,
+the check uses the stored normalized operator and the inverse scaling.
+
+The default refresh period is ten iterations, with additional checks at
+apparent convergence and exit. A true/recursive residual gap exceeding 10\%
+of the true norm restarts the search direction. The solver retains one best
+true-residual checkpoint and stops a stalled attempt after six true checks
+without 1\% improvement. Returning that checkpoint does not relax the target.
+The diffusion integration performs an independent final check. If the native
+attempt fails its runtime, symmetry, curvature, or convergence gates, the
+integration can construct and reuse its established hybrid AMGX fallback.
+That recovery policy does not establish nonsymmetric support for this method.
+
+\subsection{Baseline policies and implementation}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Setting & Standard & Robust\\
+\midrule
+p-schedule & $p\to0$ & $p\to\lfloor p/2\rfloor\to\cdots\to0$\\
+Chebyshev order & 2 & 4\\
+p-level pre/post sweeps & $1+1$ & $2+2$\\
+Scalar AMG pre/post sweeps & $1+1$ & $2+2$\\
+AMGX coarsest sweeps & 2 & 4\\
+Scalar AMG cycles per application & one V-cycle & one V-cycle\\
+\bottomrule
+\end{tabular}
+\end{center}
+For example, the robust degree-six schedule is $6\to3\to1\to0$.
+Policy overrides can change the polynomial order, balanced sweep counts, and
+scalar V/W cycle selection while retaining fixed work. These are baseline
+configuration values, not mathematical requirements or universal optima.
+
+Paths are relative to the repository root.
+\begin{itemize}
+\item \code{hdgfem/linalg/face_hp_multigrid.py}:
+\code{FaceBlockPmgPrototype} constructs and applies the production p-hierarchy
+(despite its historical class name); \code{AmgxScalarVcycle} wraps the scalar
+cycle; \code{FaceBlockHpMgPcgSolver} owns coordinate transforms, PCGF, checks,
+and persistent workspaces; \code{_pcgf_beta} defines the recurrence.
+\item \code{hdgfem/linalg/face_hp_policy.py}: baseline and override policies.
+\item \code{hdgfem/backends/legendre_face_bsr.py}:
+\code{LegendreFaceBsrOperator}, \code{principal_modal_bsr_data}, and
+\code{modal_degree_schedule} implement BSR actions and nested extraction.
+\item \code{hdgfem/solvers/diffusion_reaction.py}: assembled action,
+operator reuse, field reconstruction, and native fallback integration.
+\end{itemize}
+The production note is \code{docs/backends/face_hp_mg_pcg.md}.
+Historical measurements and design alternatives are in
+\code{docs/development/plans/face_block_hp_multigrid.md}.
+The HDG element derivation is
+\code{docs/algorithms/diffusion_reaction/assembly.tex}.
+
+\section{Proposed nonsymmetric hp--AMG variant}\label{sec:nonsymmetric}
+Use right-preconditioned flexible GMRES (FGMRES), with a face-block
+Petrov--Galerkin p-multigrid cycle and a nonsymmetric algebraic multigrid
+hierarchy below the polynomial levels. Construct transfer operators from
+local matrix couplings, using approximate ideal restriction/interpolation;
+use nonsymmetric block or patch solves for relaxation. AIR denotes
+\emph{approximate ideal restriction}. This is an algebraic alternative to
+combining separate transport and diffusion preconditioners.
+
+This section generalizes the hierarchy of Section~\ref{sec:spd}, using the condensed
+system and coordinates of Section~\ref{sec:shared}. It specifies a design, not an
+implemented solver selector; the existing \code{fb-hp-mg-pcg} path remains
+SPD-oriented.
+The proposal needs the condensed matrix, face grouping, polynomial degree,
+and optional element-to-face connectivity. It does not need velocity,
+diffusion tensors, a Peclet number, or a classification of the PDE.
+``General'' means no SPD or particular PDE-regime assumption; it does not
+mean uniform convergence for every nonsingular matrix. Local/coarse
+solvability, coarse-space quality, and memory growth still matter.
+
+There are two separable changes. FGMRES and nonsymmetric local solves remove
+the SPD restriction. Algebraic Petrov--Galerkin transfers address a second
+problem: polynomial truncation alone can lose essential couplings, or even
+produce a singular coarse matrix from an invertible fine matrix.
+
+Consider two trace modes ordered as retained $C$, eliminated $H$:
+\[
+ A=\begin{bmatrix}0&1\\-1&2\end{bmatrix},\qquad
+ \det A=1,\qquad
+ P_0=\begin{bmatrix}1\\0\end{bmatrix}.
+\]
+Despite invertibility, $P_0^TAP_0=0$. Also $(A+A^T)/2$ is singular.
+An outer GMRES iteration does not fix either preconditioner setup failure.
+Eliminating the high mode instead gives the nonsingular Schur complement
+$0-1(2^{-1})(-1)=1/2$.
+
+Even when truncation works, nonsymmetry removes the SPD justification for
+the current Chebyshev spectral estimates and convergence argument.
+Symmetrizing diagonal blocks removes information and can create singular
+blocks. Replace those
+steps, the positive-curvature CG recurrence, and the SPD-specific scalar
+coarse policy. BSR products, modal transforms, workspaces, and residual
+accounting remain useful.
+
+\subsection{Block elimination and local transfers}
+At one p-level retain all modes through $p_c$ on each face ($C$) and denote
+the remaining modes by $H$. This is a split of \emph{trace modes}; the
+interior $\underline{u}^K$ and $\underline{q}^K$ are already condensed.
+For the derivation only, permute $H$ before $C$:
+\[
+ A_\ell=\begin{bmatrix}A_{HH}&A_{HC}\\A_{CH}&A_{CC}\end{bmatrix}.
+\]
+Assuming $A_{HH}$ is invertible, define
+\begin{align*}
+ P_*&=\begin{bmatrix}-A_{HH}^{-1}A_{HC}\\I\end{bmatrix},&
+ R_*&=\begin{bmatrix}-A_{CH}A_{HH}^{-1}&I\end{bmatrix},\\
+ \mathcal S_\ell&=A_{CC}-A_{CH}A_{HH}^{-1}A_{HC}.&&
+\end{align*}
+Then
+\[
+ A_\ell P_*=\begin{bmatrix}0\\\mathcal S_\ell\end{bmatrix},\qquad
+ R_*A_\ell=\begin{bmatrix}0&\mathcal S_\ell\end{bmatrix},\qquad
+ R_*A_\ell P_*=\mathcal S_\ell.
+\]
+Here $\mathcal S_\ell$ is the high-mode Schur complement, distinct from the
+modal scaling matrix $S$ in Section~\ref{sec:coordinates}.
+In general $R_*\ne P_*^T$. With $Q_H=[I\;0]^T$,
+\begin{equation}\label{eq:exact}
+ A_\ell^{-1}=Q_HA_{HH}^{-1}Q_H^T+P_*\mathcal S_\ell^{-1}R_*.
+\end{equation}
+This is the exact block-elimination limit of the proposed cycle and requires
+no positivity. It provides a useful diagnostic oracle; exact global
+$A_{HH}^{-1}$ is not the proposed computational method.
+
+The retained unknowns remain the low modal coordinates. Their prolongation
+now includes algebraically determined high-mode responses, potentially on
+nearby faces. Thus this is a p-selected algebraic coarse space, rather than
+the pure polynomial subspace of the current truncation hierarchy. Each next
+level must be computed recursively from its actual parent matrix.
+
+Choose a candidate sequence, for example $p=6\to3\to1\to0$.
+It is a setup preference, not an obligation to accept a bad split.
+For each coarse face group $c$, choose a bounded neighborhood $\mathcal N_c$
+of high-mode face groups. A simple starting pattern is the face itself plus
+neighbors in the union of the incoming and outgoing block graphs.
+For an implementable first prototype, solve the small dense systems
+\begin{align}
+ A_{HH}[\mathcal N_c,\mathcal N_c] W[\mathcal N_c,c]
+   &=-A_{HC}[\mathcal N_c,c],\label{eq:localp}\\
+ Z[c,\mathcal N_c] A_{HH}[\mathcal N_c,\mathcal N_c]
+   &=-A_{CH}[c,\mathcal N_c].\label{eq:localr}
+\end{align}
+Use pivoted LU and transposed solves, reusing a patch factor when the
+neighborhoods agree. Store zero weights outside the selected pattern, set
+\[
+ P_\ell=\begin{bmatrix}W\\I\end{bmatrix},\qquad
+ R_\ell=\begin{bmatrix}Z&I\end{bmatrix},\qquad
+ A_{\ell+1}=R_\ell A_\ell P_\ell.
+\]
+Block sparsity decisions retain whole mode/component groups. Restriction
+rows and interpolation columns may ultimately use different directed
+neighborhoods. All products use the full nonsymmetric matrix.
+
+Local restriction of this kind is motivated by $\ell$AIR
+\cite{lair}; combining it with a polynomial-selected $C/H$ split here is
+the proposed HDGFEM adaptation. Its effectiveness is not established by
+the existing SPD pMG implementation.
+
+Compute the actual product $R_\ell A_\ell P_\ell$. For example, choosing
+$W=-FA_{HC}$ and $Z=-A_{CH}F$ with an approximate inverse $F$ yields
+\[
+ RAP=A_{CC}-2A_{CH}FA_{HC}+A_{CH}FA_{HH}FA_{HC}.
+\]
+It is generally \emph{not} $A_{CC}-A_{CH}FA_{HC}$. The latter defines a
+different approximate block-factorization preconditioner unless additional
+identities hold. The local construction need not have a single common $F$.
+
+Unlike principal truncation, these products can add face-graph edges.
+Measure transfer storage, stored block entries at all levels, setup work,
+and cycle cost. Start with undropped $RAP$ so the projection identity is
+testable. Any subsequent dropping needs its own accuracy and complexity
+assessment. Detect singular or badly conditioned patch factors and coarse
+operators; possible responses are enlarging a patch, retaining more modes,
+or stopping p-coarsening and handing the current block matrix to AMG.
+For instance $\left[\begin{smallmatrix}1&1\\1&0\end{smallmatrix}\right]$
+is invertible but its second-mode $A_{HH}$ is zero. There is no valid exact
+elimination for that prescribed split. Do not force degree zero or hide this
+failure with an unexplained diagonal shift. These remedies can also fail;
+report setup failure if no acceptable hierarchy fits the resource budget.
+
+\subsection{Relaxation and algebraic coarse levels}
+At a p-level relax the $H$ equations with $C$ fixed. The least expensive
+choice solves each face's high-mode diagonal block without symmetrization.
+A stronger option groups high modes from several connected faces.
+If $G_s$ gathers a high-mode patch, factor
+$A_s=G_sA_{HH}G_s^T$ and apply
+\[
+ B_Hr_H=\sum_s G_s^TD_s A_s^{-1}G_sr_H,\qquad
+ \sum_s G_s^TD_sG_s=I.
+\]
+Diagonal overlap weights $D_s$ give weighted additive Schwarz; assigning
+each degree of freedom to one owner gives restricted additive Schwarz.
+No Cholesky factorization or positive quadratic form is required.
+Larger patches may use block ILU with monitored pivots and fill.
+Existing element-face and BSR patch-gather helpers can supply patch data.
+
+Plain block Jacobi/Richardson is a cheap comparator, but need not contract
+on a nonsymmetric matrix. A general starting smoother is two right-
+preconditioned GMRES steps on $A_{HH}$ using $B_H$, starting at zero,
+followed by a correction of the high-mode trace. This minimizes the
+high-equation residual over the local Krylov search space; it guarantees
+neither reduction of the full-level residual nor multigrid convergence.
+It also makes the cycle nonlinear in its right-hand side, even with a
+fixed number of steps, which is a reason to use outer FGMRES.
+Full-face patch smoothing can be added if high-mode-only smoothing leaves
+poorly represented error, with its cost recorded separately.
+
+One p-level cycle on load $r_\ell$ is:
+\begin{enumerate}
+ \item Set $\underline{\delta\widehat{u}}_\ell=0$.
+ \item Correct its high modes using the chosen smoother on
+ $Q_H^T(r_\ell-A_\ell\underline{\delta\widehat{u}}_\ell)$.
+ \item Recompute the full residual and restrict it with $R_\ell$.
+ \item Apply the next-level cycle to this restricted load.
+ \item Add its prolongation with $P_\ell$ to the trace correction.
+ \item Recompute the residual and post-relax its high equations.
+\end{enumerate}
+For fixed linear high-mode correction operators $H_{\rm pre}$ and
+$H_{\rm post}$, the error propagator is
+\[
+ E_\ell=(I-H_{\rm post}A_\ell)
+ (I-P_\ell B_{\ell+1}R_\ell A_\ell)
+ (I-H_{\rm pre}A_\ell).
+\]
+With exact high solves, ideal transfers, and an exact Schur solve, this
+vanishes by \eqref{eq:exact}. Approximate components have no such automatic
+guarantee. Also, $\rho(E)<1$ alone does not describe transient residual
+growth for a nonnormal matrix.
+
+The polynomial terminal matrix is the input to AMG, not necessarily the
+smallest system. At this point coarsen \emph{faces}, treating all remaining
+modes/components on a face as a node, and construct independent sparse
+$R$ and $P$ with $A_c=RAP$. When p-coarsening reaches zero for a scalar
+trace, this becomes scalar nonsymmetric AMG. Use a pivoted direct solve
+only on the eventual small bottom matrix.
+
+Block $\ell$AIR is the first reference candidate. Its local restriction
+construction and block treatment have published nonsymmetric DG evidence
+\cite{lair}; AIR also has direct HDG trace-system evidence in space-time
+advection--diffusion \cite{hdgair}. These results support the direction,
+not the claim that this particular p hierarchy is already qualified.
+
+For a broader AMG endpoint, constrained $\ell$AIR is especially relevant:
+it augments local ideal-transfer approximations with mode constraints to
+improve performance and complexity across advective and diffusive cases
+\cite{clair}. In a proposed block adaptation, right and left candidate
+vectors should be treated separately, conceptually seeking
+$PV_c\approx V$ and $R^TY_c\approx Y$. They can come from inexpensive
+algebraic relaxation on $A$ and $A^T$; known near-nullspace information is
+optional. The constant scalar trace, if used, occupies the degree-zero
+modal coefficient on each face, not every modal entry. These algebraic
+constraints do not require selecting a transport or diffusion branch.
+Candidate generation, constraints, block coarsening, and complexity control
+need validation together; adding a constant vector alone is not a general
+convergence guarantee. This note does not claim that the local systems
+\eqref{eq:localp}--\eqref{eq:localr} implement constrained $\ell$AIR.
+
+PyAMG documents a scalar \code{air_solver} and hypre exposes AIR restriction
+options \cite{pyamg,hypre}. Neither implies that this repository has a
+native GPU block AIR endpoint. Current AMGX coarse configuration and any
+new AIR backend must be assessed separately; changing the coarse outer
+solver to FGMRES alone does not construct nonsymmetric transfer operators.
+
+\subsection{Flexible outer iteration and convergence}
+Run right-preconditioned FGMRES on the original assembled equation. A modal
+cycle $\mathcal B_j$ supplies the assembly-coordinate action
+\[
+ z_j=T\mathcal B_j(T^Tv_j),\qquad w_j=Az_j.
+\]
+Arnoldi orthogonalizes $w_j$ against the residual basis $V_j$. Store the
+actual correction vectors $Z_m=[z_1,\ldots,z_m]$. With
+$\beta=\|\underline{b}-A\underline{\widehat{u}}_0\|_2$ at the
+start of the restart cycle, solve the small least squares problem and update
+\[
+ y_m=\arg\min_y\|\beta e_1-\overline H_my\|_2,\qquad
+ \underline{\widehat{u}}_{m}
+ =\underline{\widehat{u}}_{0}+Z_my_m.
+\]
+This accommodates changes and inner Krylov iterations in the preconditioner
+\cite{fgmres}. Do not reuse a left-preconditioned GMRES implementation as
+though it were flexible right-preconditioned GMRES. In particular the
+existing \code{cupy_gmres.py} interface and workspace need extension to
+store $Z_m$ as well as $V_m$.
+
+Apply the same original-system acceptance contract \eqref{eq:acceptance}
+before declaring convergence, as well as at restarts and when Arnoldi
+estimates become suspect. This residual uses the original load, operator,
+and assembly coordinates. A small preconditioned or equilibrated residual
+does not suffice. Preserve the best verified iterate and report numerical
+breakdown, stagnation, nonfinite values, or memory limits explicitly.
+
+\subsection{Assembly reuse and qualification}
+The useful assembly interface is the oriented face-BSR graph, dense local
+couplings, and reusable local factorizations. Factor $L_K$ once, apply it
+to multiple trace/source columns, and optionally retain factors or recovery
+maps for reconstructing $\underline{q}^K$ and $\underline{u}^K$ after solving
+for $\underline{\widehat{u}}$. Reuse requires an unchanged local
+operator, including coefficients, stabilization, geometry, and time-step
+terms. Weigh retained memory against recomputation.
+
+An assembly kernel may insert the modal trace transform directly in local
+couplings before scattering to precomputed BSR slots. Element-face incidence
+maps can also provide initial patch neighborhoods. These changes save setup
+or recovery work without needing a PDE-regime detector.
+
+Invertible changes confined to the eliminated interior variables leave the
+exact Schur complement unchanged. For example, with $y=X\widetilde y$ and
+test transform $Y$, the transformed interior data are $YL_KX$, $YB_K$,
+and $C_KX$, so
+\[
+ D_K-C_KX(YL_KX)^{-1}YB_K=D_K-C_KL_K^{-1}B_K.
+\]
+Local equilibration can therefore improve finite-precision factorization,
+but does not itself improve the exact trace spectrum. Stabilization changes
+the discretization and should not be an implicit preconditioning adjustment.
+
+Keep the current SPD path available. A separate nonsymmetric hierarchy can
+reuse modal/BSR primitives and patch extraction, while adding independent
+transfer storage, block sparse triple products, nonsymmetric local factors,
+a nonsymmetric AMG endpoint, and flexible right-preconditioned Arnoldi.
+The symmetric-part adapter in \code{face_hp_krylov.py} is a useful comparator,
+not this algorithm.
+
+The accompanying small-matrix diagnostic verifies the ideal identities,
+the singular-truncation counterexample, rejection of a singular high-mode
+split, and fixed-cycle right-preconditioned solves on four synthetic block
+matrices. It uses dense exact terminal solves and fixed block-Jacobi high
+relaxation. Thus it verifies algebra only: it tests neither AIR below the
+p levels, the proposed inner-GMRES smoother, GPU performance, nor HDG
+mesh/degree robustness. Results and commands are preserved in
+\code{docs/research/solver_studies/nonsymmetric_pmg_design_2026_09_22.md}.
+
+Production qualification must separately measure original-system residuals,
+setup and solve time, iteration growth under h/p refinement, coarse/transfer
+storage, and peak memory. Include nonsymmetric systems with difficult
+symmetric parts, unequal couplings, cyclic graphs, face orientation changes,
+and coefficient scaling. Use one algebraic policy across cases before
+claiming generality. If polynomial coarsening repeatedly fails these checks,
+starting block AMG earlier is preferable to assuming every problem must
+reach a scalar p=0 stage.
+
+\section{Poisson h/p hierarchy alternatives}\label{sec:hpchoices}
+The geometric candidate retains linear traces after p-coarsening and then
+coarsens the skeleton by cell agglomeration. The algebraic candidate retains
+these same degree-one traces before face aggregation and interpolation
+optimization. Both use the HDG operator and coordinates from
+Section~\ref{sec:shared}. They extend the hierarchy choices, not the supported
+API of Section~\ref{sec:spd}. No new HDG convergence or performance measurements
+are claimed for these candidates.
+
+The closest direct HDG template is Wildey, Muralikrishnan, and Bui-Thanh
+\cite{wildey}: p-to-one reduction, agglomeration, DtN-based transfers and
+local interior correction. The initial HDGFEM comparison should use
+$p\to1$ against a staged schedule such as $6\to3\to1$. Same-mesh p-transfer
+can reuse the Galerkin injection from Section~\ref{sec:spd}, terminating at
+one. Each matrix inherits the original condensed operator and stabilization;
+this does not rediscretize a lower-order HDG problem.
+
+\subsection{Harmonic coarsening and macro-edge spaces}\label{sec:harmonic}
+At one h step, split trace coefficients into interior faces $I$ of the next
+macro-elements and their retained boundary faces $B$. Let $J_\ell$ map
+coarse macro-boundary coefficients to the retained fine boundary. For SPD
+$A_\ell$, set
+\[
+ A_\ell=\begin{bmatrix}A_{II}&A_{IB}\\A_{BI}&A_{BB}\end{bmatrix},\qquad
+ P_\ell=\begin{bmatrix}-A_{II}^{-1}A_{IB}J_\ell\\J_\ell\end{bmatrix},
+ \qquad R_\ell=P_\ell^T.
+\]
+Then
+\[
+ A_{\ell+1}=J_\ell^T
+ (A_{BB}-A_{BI}A_{II}^{-1}A_{IB})J_\ell,\qquad
+ C_{\ell,I}=\begin{bmatrix}A_{II}^{-1}&0\\0&0\end{bmatrix}.
+\]
+These are the SPD assembled-matrix specialization of the DtN construction
+\cite{wildey}. The extension satisfies $(A_\ell P_\ell)_I=0$ and minimizes
+fine energy for prescribed retained-boundary values. The Galerkin energy
+identity follows: $(P_\ell v)^TA_\ell(P_\ell v)=v^TA_{\ell+1}v$.
+The interior block is local to each aggregate when the inherited trace
+coupling follows cell-local assembly. Verify that locality at every level;
+it is not guaranteed for an unrelated AMG coarse matrix.
+
+The local correction is essential to the proposed starting cycle. Harmonic
+prolongation alone does not recover arbitrary interior error, and some
+block-Jacobi configurations fail without the correction in \cite{wildey}.
+A symmetric h-level application starts from zero, pre-smooths, applies
+$C_{\ell,I}$ to the residual, applies the recursive coarse correction,
+applies $C_{\ell,I}$ again, and post-smooths with the adjoint sequence.
+With exact factors, $P_\ell^TA_\ell C_{\ell,I}=0$; the two placements of the
+interior correction do not double its exact action. Inexact local solves
+require rechecking the symmetry and positivity of the complete cycle.
+Use the existing p-level cycle without this interior correction on p-only
+transitions.
+
+For a first 2D construction, group connected cells into aggregates of about
+four current cells, keeping diameter and interface complexity controlled.
+This is a proposed starting policy, not an optimized published prescription.
+Split disconnected or branched interfaces and respect holes and boundary
+tags. Represent each macro-edge $E$ by two reference-normalized modes in a
+fixed arclength parameter. On child edge $f$, set
+\[
+ J_f=M_f^{-1}C_{fE},\qquad
+ (C_{fE})_{ij}=\int_f\psi_i^f\psi_j^E\,ds.
+\]
+Linear arclength traces restrict exactly to linear functions on straight
+child segments. Include physical length factors and the sign of odd modes
+under coordinate reversal.
+
+Two arclength modes on a bent macro-edge cannot generally represent both
+physical $x$ and $y$ traces. Prefer splitting strongly bent interfaces;
+enrichment by independent traces of $\{1,x,y\}$ is another option but can
+produce nonuniform block ranks. Lu, Rupp, and Kanschat \cite{luinjection}
+provide useful stability and conforming-linear-trace reproduction criteria,
+as well as interpolation and local-reconstruction injections on refined
+meshes. Their h-convergence analysis does not establish these properties for
+arbitrary agglomerates or prove p-uniform convergence of this proposal.
+
+\subsection{Smoothing, storage, and implementation choices}
+For the existing GPU setting, the proposed first smoother combines full
+face-block diagonal solves with degree-two Chebyshev acceleration and
+balanced $1+1$ sweeps. Compare higher degree or stronger patches by complete
+cycle cost. This combination is an HDGFEM adaptation; it is not asserted to
+be the optimum from \cite{wildey}. The spectral cautions in
+Section~\ref{sec:spd} still apply. Vertex-patch and harmonic-transfer ideas
+also appear in the divergence-conforming HDG work of Fu and Kuang
+\cite{fuhp}, but its flow spaces and kernel argument differ from Poisson.
+
+The direct degree-six schedule has block dimensions $7\to2\to2\to\cdots$;
+a staged schedule has $7\to4\to2\to2\to\cdots$. Only the h steps reduce
+face count. Choose the number of levels from actual coarse dimensions and
+factorization cost; four-cell aggregation does not ensure a fourfold trace
+reduction. An initial terminal-size comparison is 128--512 scalar unknowns
+with a cached direct factorization. This is a tuning range, not a theorem.
+
+Polynomial transfers can remain implicit mode copies. Harmonic h transfers
+are globally rectangular, even with uniform $2\times2$ blocks. Their
+application may store $P_\ell$ or use $J_\ell$, $A_{IB}$ and aggregate factors;
+restriction must use the corresponding transpose action. The current native
+p-cycle assumes a fixed face count, so this requires a generalized level
+interface. Schur elimination creates boundary coupling within aggregates:
+count scalar storage, transfer fill, local factors and temporary workspaces,
+not only block entries. Variable degree and 3D macro-faces require separate
+choices.
+
+\subsection{Alternative coarse spaces and comparison criteria}
+The algebraic alternative uses $p\to1$ followed by whole-face aggregation
+and constrained energy-minimizing interpolation. Dobrev et al.
+\cite{dobrev} motivate AMG on hybridized systems; Olson and Schroder
+\cite{olson} provide block-relaxation and interpolation-optimization
+precedent for volume DG Poisson. Their results do not qualify this particular
+HDG trace adaptation.
+
+In the reference-normalized coordinates, the physical constant trace has
+coefficients $(\sqrt{2},0,\ldots)$ on each face, up to global normalization.
+It is not the all-ones modal vector. Dirichlet elimination means it is an
+interior smooth-error candidate rather than an exact global null vector.
+Respect homogeneous error boundary data. Rank-test aggregate restrictions of
+candidate vectors, form tentative interpolation, and minimize column energy
+on a bounded sparsity pattern subject to $PN_c=N_f$. Physical coordinate
+traces or independently relaxed errors are possible additional candidates.
+Use $R=P^T$ and Galerkin operators for the SPD proposal. Algebraic coarse
+blocks count independent candidates, not necessarily polynomial modes;
+variable candidate ranks need grouped or variable-block storage.
+
+A further candidate uses the trace of a conforming P1 auxiliary space,
+with its Galerkin matrix $P^TA_1P$ and scalar AMG. Hybridized mixed multigrid
+\cite{gopal} is relevant precedent; substituting a separately assembled
+P1 stiffness requires an equivalence argument. Fu and Kuang's HDG-P0/CR
+result \cite{fupzero} gives a different valid lowest-order construction.
+The high-order operator's principal constant-mode block is not automatically
+that special quadrature-based HDG-P0 operator. Enriched multilevel trace
+spaces \cite{muralilevel} provide another direction when small coarse spaces
+miss significant error.
+
+The literature review and retained-study links are in
+\code{docs/algorithms/hp_amg/hierarchies.md}. Current scalar-AMG repacking
+and wider finest-patch studies motivate inspecting coarse-space quality
+before adding storage or smoothing cost. They do not reject every block
+hierarchy or patch construction.
+
+A later comparison must hold the fine operator, boundary conditions,
+stabilization, load, initial guess and true-residual target fixed. Measure
+setup, repeated solve time, iterations under h/p refinement, and hierarchy
+memory. Small assembled HDG systems must check orientation, transfer rank,
+constant and applicable affine reproduction, Galerkin identities, complete
+cycle symmetry/positivity, and nullspaces. Pure Neumann or periodic Poisson
+needs compatible loads and a consistent gauge or quotient-space treatment.
+No new implementation, HDG benchmark, build, or compilation is part of this
+documentation unification.
+
+\begin{thebibliography}{99}
+\bibitem{lair} B.~S. Southworth, T.~A. Manteuffel, and J. Ruge,
+\emph{Nonsymmetric Algebraic Multigrid Based on Local Approximate Ideal
+Restriction}, SIAM J. Sci. Comput. 40 (2018), A4105--A4130.
+\url{https://arxiv.org/abs/1708.06065}.
+\bibitem{hdgair} A.~A. Sivas, B.~S. Southworth, and S. Rhebergen,
+\emph{AIR algebraic multigrid for a space-time hybridizable discontinuous
+Galerkin discretization of advection(-diffusion)}.
+\url{https://arxiv.org/abs/2010.11130}.
+\bibitem{clair} A. Ali et al.,
+\emph{Constrained Local Approximate Ideal Restriction for Advection-Diffusion
+Problems}, SIAM J. Sci. Comput. (2024).
+\url{https://arxiv.org/abs/2307.00229}.
+\bibitem{fgmres} PETSc, \emph{KSPFGMRES} documentation.
+\url{https://petsc.org/release/manualpages/KSP/KSPFGMRES/}.
+\bibitem{pyamg} PyAMG, \emph{Classical AMG: air\_solver} documentation.
+\url{https://pyamg.readthedocs.io/en/latest/generated/pyamg.classical.html}.
+\bibitem{hypre} hypre, \emph{ParCSR Solvers:
+HYPRE\_BoomerAMGSetRestriction} API documentation.
+\url{https://hypre.readthedocs.io/en/latest/api-sol-parcsr.html}.
+\bibitem{wildey} T. Wildey, S. Muralikrishnan, and T. Bui-Thanh,
+\emph{Unified Geometric Multigrid Algorithm for Hybridized High-Order
+Finite Element Methods}, SIAM J. Sci. Comput. 41 (2019), S172--S195.
+\url{https://arxiv.org/html/1811.09909}.
+\bibitem{luinjection} P. Lu, A. Rupp, and G. Kanschat,
+\emph{Analysis of Injection Operators in Geometric Multigrid Solvers for
+HDG Methods}, SIAM J. Numer. Anal. 60 (2022), 2293--2317.
+\url{https://arxiv.org/pdf/2104.00118}.
+\bibitem{gopal} J. Gopalakrishnan and S. Tan,
+\emph{A Convergent Multigrid Cycle for the Hybridized Mixed Method},
+Numer. Linear Algebra Appl. 16 (2009), 689--714.
+\url{https://web.pdx.edu/~gjay/pub/hmg.pdf}.
+\bibitem{fupzero} G. Fu and W. Kuang,
+\emph{Optimal Geometric Multigrid Preconditioners for HDG-P0 Schemes
+for the Reaction-Diffusion Equation and the Generalized Stokes Equations},
+ESAIM M2AN 57 (2023), 1553--1587.
+\url{https://arxiv.org/abs/2208.14418}.
+\bibitem{fuhp} G. Fu and W. Kuang,
+\emph{hp-Multigrid Preconditioner for a Divergence-Conforming HDG Scheme
+for the Incompressible Flow Problems}, J. Sci. Comput. (2024).
+\url{https://doi.org/10.1007/s10915-024-02568-4}.
+\bibitem{dobrev} V. Dobrev, T. Kolev, C. S. Lee, V. Tomov, and P. S. Vassilevski,
+\emph{Algebraic Hybridization and Static Condensation with Application
+to Scalable H(div) Preconditioning}, SIAM J. Sci. Comput. (2019).
+\url{https://arxiv.org/html/1801.08914}.
+\bibitem{olson} L. N. Olson and J. B. Schroder,
+\emph{Smoothed Aggregation Multigrid Solvers for High-Order Discontinuous
+Galerkin Methods for Elliptic Problems}, J. Comput. Phys. 230 (2011), 6959--6976.
+\url{https://lukeo.cs.illinois.edu/files/2011_OlSc_hodg.pdf}.
+\bibitem{muralilevel} S. Muralikrishnan, T. Bui-Thanh, and J. N. Shadid,
+\emph{A Multilevel Approach for Trace System in HDG Discretizations},
+J. Comput. Phys. 407 (2020), 109240.
+\url{https://arxiv.org/abs/1903.11045}.
+\end{thebibliography}
+\end{document}

@@ -1,0 +1,7 @@
+# Five-lobed smooth star r=1+0.35*cos(5*theta), with a radius-0.30 island.
+# 360 signed vortices, sigma=0.008/0.016/0.032/0.064, seed=17.
+# h=0.008, p=6, SI-BDF2 dt=0.05 to T=50; one SI-Euler startup step.
+# Poisson tau=1000; native FB-HP-MG Poisson, raw-CUDA AMGX BSR transport.
+# Holoviz plotting and diagnostics every 10 steps. Both walls have phi=0.
+# Override after @file, e.g. --dt 0.02 --num-steps 2500 for the same T=50.
+--preset euler_star_hole_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr

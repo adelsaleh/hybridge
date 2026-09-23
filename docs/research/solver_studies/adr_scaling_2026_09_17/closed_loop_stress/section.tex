@@ -1,0 +1,131 @@
+% Shared by main.tex and main_synthesis.tex; campaign audited 22 September 2026.
+% Figure generation: scripts/reports/make_closed_loop_stress_figures.py.
+\subsection{Closed-loop and cross-directional stress tests: preliminary results}
+\label{sec:adr-closed-loop-stress}
+
+This extension tests three distinct transport/diffusion arrangements on a
+more tightly pinched annulus. The completed strong-preset campaign of
+22 September 2026 is reported separately from the preceding solver rankings:
+eight of 60 comparisons passed, all on the orthogonal control. The figures
+below show analytic input data and a saved campaign mesh, not a computed
+HDG solution.
+
+\paragraph{Common geometry and exact solution.}
+For the main severity level, let
+\begin{equation}
+ \begin{gathered}
+ R(\phi)=1+0.35\cos(9\phi),\qquad
+ \Omega=\{(r,\phi):0.63<r<R(\phi)\},\\
+ \rho=\frac{r-0.63}{R(\phi)-0.63},\qquad
+ \chi=\rho+0.05\sin(5\phi)\sin(2\pi\rho),\\
+ u_\star=\sin(2\pi\chi)
+ +\tfrac14\bigl[\sin(6\pi x)\sin(5\pi y)
+ +0.35\sin(11\pi x)\sin(9\pi y)\bigr].
+ \end{gathered}
+ \label{eq:adr-closed-loop-exact}
+\end{equation}
+There are nine nominal necks of width $0.02$, compared with $0.07$ in the
+earlier five-lobed geometry. All variants solve
+\begin{equation}
+ \begin{gathered}
+ -\nabla\!\cdot(K\nabla u)+\nabla\!\cdot(\boldsymbol\beta u)+c u=f,
+ \qquad u|_{\partial\Omega}=u_\star,\\
+ \epsilon=10^{-6},\quad U=50,\quad c=10^{-3}.
+ \end{gathered}
+ \label{eq:adr-closed-loop-pde}
+\end{equation}
+The divergence-free velocities give the manufactured source
+$f=-K:\nabla^2u_\star-(\nabla\!\cdot K)\cdot\nabla u_\star
++\boldsymbol\beta\cdot\nabla u_\star+c u_\star$;
+the derivative-of-$K$ term is retained for the curved tensors.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/closed_loop_stress/geometry_fields.pdf}
+ \caption{Main-level stress geometry, common to all three variants:
+ (a) the nine-lobed annulus, (b) a magnified minimum-width neck, and
+ (c) the same neck in the saved $98\,699$-triangle campaign mesh.
+ The first two panels show ideal smooth walls, not a computational mesh;
+ the third preserves the actual affine triangles, with nonuniform sizes
+ and shapes, at equal axis scale. No artificial deformation or remeshing
+ is applied; a mesh close-up alone does not establish spatial resolution.}
+ \label{fig:adr-closed-loop-fields}
+\end{figure}
+
+\paragraph{Three transport arrangements.}
+For \emph{trapping} and \emph{crossing}, define
+$b=\nabla^\perp\chi/|\nabla\chi|$,
+$K=\epsilon I+(1-\epsilon)bb^T$ and
+$\boldsymbol\beta=(U/C_\psi)\nabla^\perp\psi$, where
+$\nabla^\perp=(\partial_y,-\partial_x)$ and $C_\psi$ is a
+mesh-independent, empirically converged estimate of
+$\|\nabla\psi\|_{L^\infty(\Omega)}$, frozen across the mesh/order sweep.
+The streamfunctions are
+\begin{align}
+ \psi_{\rm trap}&=-\frac{\cos(8\pi\chi)}{8\pi},\label{eq:adr-closed-loop-trap}\\
+ \psi_{\rm cross}&=16\rho^2(1-\rho)^2\left[
+ \frac{\sin(13\pi x)\sin(11\pi y)}{13\pi}
+ +0.35\frac{\sin(17\pi x)\sin(19\pi y)}{19\pi}\right].
+ \label{eq:adr-closed-loop-cross}
+\end{align}
+Trapping follows the closed diffusion paths; crossing circulation generally
+cuts across them. The \emph{orthogonal} control instead fixes
+$e_d=(\cos(\pi/7),\sin(\pi/7))^T$ and
+$e_t=(-\sin(\pi/7),\cos(\pi/7))^T$, with
+\begin{equation}
+ K_\perp=e_de_d^T+\epsilon e_te_t^T,\qquad
+ \boldsymbol\beta_\perp=
+ \frac{U}{1.8}\bigl[1+0.8\sin(13\pi e_d\cdot(x,y))\bigr]e_t.
+ \label{eq:adr-closed-loop-orthogonal}
+\end{equation}
+This is nonvanishing through-flow exactly perpendicular to strong diffusion,
+not a recirculating case. Exact Dirichlet data are imposed on both polygonal
+walls in every variant; analytic wall tangency in the first two does not
+imply exact impermeability of their affine boundary approximations.
+
+\paragraph{Distinguishing the three operators.}
+The manufactured $u_\star$ is identical in all three cases, so plotting it
+three times cannot distinguish the tests. Instead,
+Figure~\ref{fig:adr-closed-loop-operator-terms} shows the signed PDE
+contributions on that common field,
+\[
+ A_\star=\boldsymbol\beta\cdot\nabla u_\star,\qquad
+ D_\star=-K:\nabla^2u_\star-(\nabla\cdot K)\cdot\nabla u_\star.
+\]
+The divergence-free velocities make $A_\star=\nabla\cdot(\boldsymbol\beta u_\star)$.
+The tensor-derivative term is retained in $D_\star$.
+Arrows follow the trapping loops, the crossing circulation, or the
+orthogonal through-flow; headless segments identify the strong-diffusion
+axis. Trapping and crossing share $K$ and therefore the same $D_\star$,
+whereas the orthogonal control has a fixed diffusion axis.
+These views explain the operator differences that the solver comparison
+tests; local term amplitudes alone are not condition-number estimates.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/closed_loop_stress/operator_terms.pdf}
+ \caption{Analytic operator contributions on the common exact solution:
+ columns are trapping, crossing and orthogonal; the top row shows advection
+ $A_\star$ and the bottom row diffusion $D_\star$. Colors are signed, with
+ one shared symmetric-log scale per row (linear for $|A_\star|,|D_\star|\leq1$);
+ the two rows have different color limits. Equal-length arrows show only
+ advection direction, not speed; headless segments show the strong-diffusion
+ direction, not diffusive flux. Frozen campaign velocity normalizations
+ are used. The matching trapping/crossing diffusion panels are intentional.
+ These are analytic input diagnostics, not computed solutions or residuals.}
+ \label{fig:adr-closed-loop-operator-terms}
+\end{figure}
+
+\paragraph{Why these are demanding.}
+The tensor has anisotropy ratio $10^6$, reaction is weak, and the narrow
+necks compress geometric and coefficient scales. In the trapping case,
+both strong diffusion and advection annihilate functions $g(\chi)$ supported
+away from the walls, leaving
+$\mathcal{L}g(\chi)=-\epsilon\Delta g(\chi)+c\,g(\chi)$:
+cross-loop modes are only weakly controlled. Crossing cells and perpendicular
+through-flow instead test nonsymmetric couplings that a diffusion-based
+correction may not capture; neither a difficulty ordering nor a solver
+failure follows in advance, and oscillatory forcing alone does not alter
+matrix conditioning.
+
+\input{\ADRResultsPath/closed_loop_stress/results.tex}

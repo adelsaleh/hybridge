@@ -21,6 +21,8 @@ assembly kernels simple.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 from dataclasses import dataclass, field
 from itertools import permutations
 
@@ -126,11 +128,11 @@ def _symmetric_triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
         orbit_weights = []
         for bary, weight in zip(barycentric, base_weights):
             orbit = sorted(set(permutations(map(float, bary))))
-            orbit = np.asarray(orbit, dtype=np.float64)
+            orbit = np.asarray(orbit, dtype=REAL_DTYPE)
             orbit_points.append(
                 np.column_stack((-1.0 + 2.0 * orbit[:, 1], -1.0 + 2.0 * orbit[:, 2]))
             )
-            orbit_weights.append(np.full(len(orbit), weight / len(orbit), dtype=np.float64))
+            orbit_weights.append(np.full(len(orbit), weight / len(orbit), dtype=REAL_DTYPE))
         return (
             np.ascontiguousarray(np.vstack(orbit_points)),
             np.ascontiguousarray(np.concatenate(orbit_weights)),
@@ -142,9 +144,9 @@ def _symmetric_triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
         orbit = sorted(set(permutations(map(float, bary))))
         barycentric.extend(orbit)
         weights.extend([2.0 * weight] * len(orbit))
-    barycentric = np.asarray(barycentric, dtype=np.float64)
+    barycentric = np.asarray(barycentric, dtype=REAL_DTYPE)
     points = np.column_stack((-1.0 + 2.0 * barycentric[:, 1], -1.0 + 2.0 * barycentric[:, 2]))
-    return np.ascontiguousarray(points), np.ascontiguousarray(weights, dtype=np.float64)
+    return np.ascontiguousarray(points), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def _automatic_triangle_quadrature(order: int) -> tuple[str, np.ndarray, np.ndarray]:
@@ -225,7 +227,7 @@ def _triangle_quadrature(order: int, num_1d: int | None = None) -> tuple[np.ndar
     y = -1.0 + 2.0 * u * v
     weights = (ws[None, :] * wt[:, None] * u).ravel()
     points = np.stack((x.ravel(), y.ravel()), axis=1)
-    return np.ascontiguousarray(points), np.ascontiguousarray(weights)
+    return np.ascontiguousarray(points, dtype=REAL_DTYPE), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def _edge_quadrature(order: int, num_1d: int | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -237,7 +239,7 @@ def _edge_quadrature(order: int, num_1d: int | None = None) -> tuple[np.ndarray,
     """
     num_1d = _quadrature_point_count(order, num_1d)
     points, weights = np.polynomial.legendre.leggauss(num_1d)
-    return np.ascontiguousarray(points), np.ascontiguousarray(weights)
+    return np.ascontiguousarray(points, dtype=REAL_DTYPE), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def _edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
@@ -278,18 +280,18 @@ def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     roots = np.real_if_close(poly.deriv().roots(), tol=1000)
     if np.iscomplexobj(roots):
         raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
-    interior = np.sort(np.asarray(roots, dtype=np.float64))
+    interior = np.sort(np.asarray(roots, dtype=REAL_DTYPE))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)
-    return np.ascontiguousarray(points, dtype=np.float64), np.ascontiguousarray(weights, dtype=np.float64)
+    return np.ascontiguousarray(points, dtype=REAL_DTYPE), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def _lagrange_basis(nodes: np.ndarray, points: np.ndarray) -> np.ndarray:
     """Evaluate 1D nodal Lagrange basis functions at ``points``."""
-    nodes = np.asarray(nodes, dtype=np.float64)
-    points = np.asarray(points, dtype=np.float64)
-    values = np.ones((nodes.size, points.size), dtype=np.float64)
+    nodes = np.asarray(nodes, dtype=REAL_DTYPE)
+    points = np.asarray(points, dtype=REAL_DTYPE)
+    values = np.ones((nodes.size, points.size), dtype=REAL_DTYPE)
     for i in range(nodes.size):
         for j in range(nodes.size):
             if i != j:
@@ -476,7 +478,7 @@ class ReferenceElementData:
         object.__setattr__(
             self,
             "ref_tri_verts",
-            np.array(((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)), dtype=np.float64),
+            np.array(((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0)), dtype=REAL_DTYPE),
         )
 
         edge_points, edge_weights = _edge_quadrature(order, self.edge_quad_1d)
@@ -645,7 +647,7 @@ class ReferenceElementData:
         numpy.ndarray
             Array with shape ``(num_points, el_dof)``.
         """
-        points = np.asarray(reference_points, dtype=np.float64)
+        points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.Krf_quads:
             return self.phi
         return _evaluate_basis(self.basis_type, self.order, points)
@@ -662,7 +664,7 @@ class ReferenceElementData:
         numpy.ndarray
             Array with shape ``(num_points, el_dof, 2)``.
         """
-        points = np.asarray(reference_points, dtype=np.float64)
+        points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.Krf_quads:
             return self.gphi
         return _evaluate_gradients(self.basis_type, self.order, points)

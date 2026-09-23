@@ -1,0 +1,6 @@
+# Heavy Euler vortex-gas disk: h=0.008, p=6, Poisson tau=1000.
+# H2-BDF3, dt=0.005 to T=50 (10000 steps), Holoviz/diagnostics every 0.5.
+# First two steps: SI-Euler extrap3 (6 transport + 7 Poisson solves each).
+# Regular steps: BDF3 predictor/corrector (2 transport + 2 Poisson solves).
+# Append command-line overrides after @file; qualitative run is user-operated.
+--preset euler_vortex_gas_h2_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr

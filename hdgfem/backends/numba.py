@@ -302,9 +302,17 @@ def _advection_stabilization_coefficients(stabilization, space: DGSpace) -> tupl
 
     The fused kernels evaluate ``tau`` on face quadrature.  ``kind=0`` selects
     the built-in upwind value ``abs(beta_h.n)``, ``kind=1`` uses a scalar, and
-    ``kind=2`` evaluates a same-space DG coefficient field.  Callable
+    ``kind=2`` evaluates a same-space DG coefficient field, and ``kind=3``
+    selects ``tau_scalar*abs(beta_h.n)`` for scaled upwind stabilization.
+    ``kind=4`` builds conflict-averaged weights inside the element loop. Callable
     stabilizations must be projected before using the fused backend.
     """
+    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    if is_conflict_averaged_upwind(stabilization):
+        return 4, 1.0, np.zeros((1, 1), dtype=np.float64)
+    factor = upwind_factor(stabilization)
+    if stabilization is not None and factor is not None:
+        return 3, factor, np.zeros((1, 1), dtype=np.float64)
     if stabilization is None:
         return 0, 0.0, np.zeros((1, 1), dtype=np.float64)
     if np.isscalar(stabilization):
@@ -337,11 +345,17 @@ def _advection_trace_weight_tables(
         *,
         trace_space: DGTraceSpace | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    r"""Precompute Numba side weights ``tau`` and ``tau-beta.n``."""
+    r"""Allocate side weights and precompute policies without neighbor coupling.
+
+    Kind 4 deliberately returns uninitialized storage: each owning element
+    fills its weights during assembly/reconstruction from immutable beta data.
+    """
     mesh = space.mesh
     trace_ref = _trace_ref(space, trace_space)
     tau_face_values = np.empty((mesh.num_tri, 3, trace_ref.weights.size), dtype=np.float64)
     gamma_face_values = np.empty_like(tau_face_values)
+    if tau_kind == 4:
+        return tau_face_values, gamma_face_values
     assemble_face_trace_weights_kernel(
         tau_face_values,
         gamma_face_values,
@@ -666,6 +680,9 @@ def assemble_projected_trace_system_numba(
         bool(reaction_is_scalar),
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
         float(boundary_penalty),
+        tau_kind == 4,
+        mesh.edge_side_indices,
+        False,
     )
     timings["kernel"] = time.perf_counter() - start
 
@@ -748,7 +765,7 @@ def assemble_projected_trace_system_eliminated_numba(
         trace_space=trace_ref,
     )
     timings["trace_weights"] = time.perf_counter() - start
-    if zero_boundary_flux:
+    if zero_boundary_flux and tau_kind != 4:
         start = time.perf_counter()
         _zero_boundary_face_values(space, tau_face_values, gamma_face_values)
         timings["boundary_flux_zeroing"] = time.perf_counter() - start
@@ -827,6 +844,9 @@ def assemble_projected_trace_system_eliminated_numba(
         float(reaction_scalar),
         bool(reaction_is_scalar),
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
+        tau_kind == 4,
+        mesh.edge_side_indices,
+        zero_boundary_flux,
     )
     timings["kernel"] = time.perf_counter() - start
 
@@ -1612,7 +1632,7 @@ def reconstruct_projected_field_numba(
         tau_coeffs,
         trace_space=trace_ref,
     )
-    if zero_boundary_flux:
+    if zero_boundary_flux and tau_kind != 4:
         _zero_boundary_face_values(space, tau_face_values, gamma_face_values)
     reconstruct_projected_field_kernel(
         coeffs,
@@ -1638,6 +1658,9 @@ def reconstruct_projected_field_numba(
         np.ascontiguousarray(reaction_coeffs, dtype=np.float64),
         float(reaction_scalar),
         bool(reaction_is_scalar),
+        tau_kind == 4,
+        mesh.edge_side_indices,
+        zero_boundary_flux,
     )
     return space.field(coeffs, name=name)
 

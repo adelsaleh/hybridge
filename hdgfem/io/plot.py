@@ -60,6 +60,7 @@ def _robust_clim(
         *,
         percentile: float = 95.0,
         zero_min: bool = False,
+        symmetric: bool = False,
 ) -> tuple[float, float]:
     """Return robust finite color limits from scalar samples.
 
@@ -68,12 +69,17 @@ def _robust_clim(
     and use the selected percentile as the upper limit.
     """
     percentile = float(percentile)
-    if percentile <= 0.0 or percentile > 100.0:
+    if not np.isfinite(percentile) or percentile <= 0.0 or percentile > 100.0:
         raise ValueError("percentile must satisfy 0 < percentile <= 100")
     finite = np.asarray(values, dtype=np.float64).reshape(-1)
     finite = finite[np.isfinite(finite)]
+    if symmetric and zero_min:
+        raise ValueError("symmetric and zero_min cannot both be enabled")
     if finite.size == 0:
-        return 0.0, 1.0
+        return (-1.0, 1.0) if symmetric else (0.0, 1.0)
+    if symmetric:
+        extent = max(float(np.percentile(np.abs(finite), percentile)), 1.e-30)
+        return -extent, extent
 
     if zero_min:
         minimum = 0.0
@@ -89,6 +95,24 @@ def _robust_clim(
             float(v) for v in np.percentile(finite, (tail, 100.0 - tail))
         )
     return _expand_clim(minimum, maximum)
+
+
+def scalar_color_limits(
+        values: np.ndarray,
+        *,
+        percentile: float = 95.0,
+        zero_min: bool = False,
+        symmetric: bool = False,
+) -> tuple[float, float]:
+    """Return finite display limits for host scalar samples.
+
+    By default use the central ``percentile`` percent of finite samples.
+    ``symmetric=True`` uses the selected percentile of absolute values around
+    zero; ``percentile=100`` includes every finite sample. ``zero_min=True``
+    anchors error-like quantities at zero. These two policies are exclusive.
+    NaNs/infinities are ignored and constant ranges are expanded.
+    """
+    return _robust_clim(values, percentile=percentile, zero_min=zero_min, symmetric=symmetric)
 
 
 def _safe_clim(values: np.ndarray) -> tuple[float, float]:
@@ -425,50 +449,33 @@ def add_field_to_plotter(
         mesh_color: str = "black",
         mesh_opacity: float = 0.45,
         mesh_line_width: float | None = None,
+        show_grid: bool = True,
+        title_position: str = "upper_edge",
+        title_font_size: int = 11,
+        return_actor: bool = False,
 ):
     """Add a sampled DG field to an existing PyVista plotter.
 
     This is the lowest-level plotting helper intended for custom layouts.  It
     returns the refined field mesh so callers may inspect or reuse the sampled
-    scalar array.
+    scalar array. With ``return_actor=True``, return ``(mesh, actor)`` so live
+    viewers can update the scalar range without recreating the actor.
     """
-    if subplot is not None:
-        plotter.subplot(*subplot)
-
-    scalar = field.name if scalar_name is None else str(scalar_name)
-    refined_mesh = refined_field_polydata(
-        field,
-        resolution=resolution,
-        reference_points=reference_points,
-        values=values,
-        scalar_name=scalar,
+    if reference_points is None:
+        reference_points = reference_plot_points(resolution)
+    else:
+        reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+    if values is None:
+        values = field.values_at_ref(reference_points)
+    return add_samples_to_plotter(
+        plotter, field.space.mesh, reference_points, values,
+        scalar_name=field.name if scalar_name is None else str(scalar_name),
+        title=title, subplot=subplot, show_mesh=show_mesh, cmap=cmap, clim=clim,
+        scalar_bar_args=scalar_bar_args, show_edges=show_edges,
+        mesh_color=mesh_color, mesh_opacity=mesh_opacity, mesh_line_width=mesh_line_width,
+        show_grid=show_grid, title_position=title_position, title_font_size=title_font_size,
+        return_actor=return_actor,
     )
-    scalar_values = refined_mesh.point_data[scalar]
-    if clim is None:
-        clim = _safe_clim(scalar_values)
-
-    plotter.add_mesh(
-        refined_mesh,
-        scalars=scalar,
-        cmap=cmap,
-        clim=clim,
-        show_edges=show_edges,
-        scalar_bar_args=scalar_bar_args,
-    )
-    if show_mesh:
-        plotter.add_mesh(
-            coarse_mesh_polydata(field.space.mesh),
-            style="wireframe",
-            color=mesh_color,
-            line_width=_mesh_overlay_line_width(field.space.mesh) if mesh_line_width is None else float(mesh_line_width),
-            opacity=mesh_opacity,
-        )
-    if title:
-        plotter.add_text(title, position="upper_edge", font_size=11, shadow=False)
-    plotter.enable_parallel_projection()
-    plotter.view_xy()
-    plotter.show_grid(color=(100, 100, 100, 0.15))
-    return refined_mesh
 
 
 def add_samples_to_plotter(
@@ -488,12 +495,17 @@ def add_samples_to_plotter(
         mesh_color: str = "black",
         mesh_opacity: float = 0.45,
         mesh_line_width: float | None = None,
+        show_grid: bool = True,
+        title_position: str = "upper_edge",
+        title_font_size: int = 11,
+        return_actor: bool = False,
 ):
     """Add mesh-only scalar samples to an existing PyVista plotter.
 
     This is intended for exact/reference callables.  It maps the supplied
     reference points with the mesh geometry and never touches a DG basis or a
     :class:`DGField`, so the rendered data are independent of polynomial order.
+    With ``return_actor=True``, return ``(mesh, actor)`` instead of only the mesh.
     """
     if subplot is not None:
         plotter.subplot(*subplot)
@@ -508,7 +520,7 @@ def add_samples_to_plotter(
     if clim is None:
         clim = _safe_clim(scalar_values)
 
-    plotter.add_mesh(
+    actor = plotter.add_mesh(
         refined_mesh,
         scalars=scalar_name,
         cmap=cmap,
@@ -525,11 +537,12 @@ def add_samples_to_plotter(
             opacity=mesh_opacity,
         )
     if title:
-        plotter.add_text(title, position="upper_edge", font_size=11, shadow=False)
+        plotter.add_text(title, position=title_position, font_size=title_font_size, shadow=False)
     plotter.enable_parallel_projection()
     plotter.view_xy()
-    plotter.show_grid(color=(100, 100, 100, 0.15))
-    return refined_mesh
+    if show_grid:
+        plotter.show_grid(color=(100, 100, 100, 0.15))
+    return (refined_mesh, actor) if return_actor else refined_mesh
 
 
 def plot_field(
@@ -663,12 +676,14 @@ def matplotlib_discontinuous_triangulation(mesh: DGMesh, reference_points: np.nd
     return mtri.Triangulation(points[:, 0], points[:, 1], triangles)
 
 
-def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: float = 0.65, alpha: float = 0.55):
-    """Overlay the coarse physical mesh on a Matplotlib axes."""
-    import matplotlib.tri as mtri
+def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: float = 0.65,
+                        alpha: float = 0.55, bounds=None):
+    """Overlay the physical mesh, optionally selecting a rectangular close-up.
 
-    coarse = mtri.Triangulation(mesh.node_coords[:, 0], mesh.node_coords[:, 1], mesh.triangles)
-    return ax.triplot(coarse, color=color, linewidth=linewidth, alpha=alpha)
+    The array-only implementation is in hdgfem.io.figures.add_matplotlib_mesh.
+    """
+    from .figures import add_matplotlib_mesh as overlay
+    return overlay(ax, mesh, color=color, linewidth=linewidth, alpha=alpha, bounds=bounds)
 
 
 def _matplotlib_backend_is_noninteractive(backend: str) -> bool:
@@ -884,6 +899,88 @@ def plot_scalar_sample_panels_matplotlib(
                 pad=0.035,
                 location="right",
             )
+    if show and not _matplotlib_backend_is_noninteractive(plt.get_backend()):
+        plt.show()
+    return fig
+
+
+def plot_scalar_raster_panels_matplotlib(
+        panels: Sequence[tuple],
+        bounds: tuple[float, float, float, float],
+        *,
+        suptitle: str | None = None,
+        cmap: str = "viridis",
+        clim: tuple[float, float] | None = None,
+        share_clim: bool = True,
+        symmetric: bool = False,
+        robust_percentile: float = 95.0,
+        show: bool = True,
+        figsize: tuple[float, float] | None = None,
+):
+    """Plot scalar rasters with physical extents and optional shared color limits.
+
+    Each panel is ``(title, values)`` or ``(title, values, options)`` with a
+    nonempty 2D host array. NaNs, infinities, and masked pixels remain masked,
+    preserving mesh holes. Row zero is at the top, matching ``RasterGeometry``;
+    no interpolation is applied across pixels or discontinuities. ``bounds``
+    is ``(xmin, xmax, ymin, ymax)`` as returned by that geometry.
+
+    Per-panel options may override ``cmap``, ``clim``, ``symmetric``, and
+    ``robust_percentile``. With ``share_clim=True``, panels use shared limits
+    unless overridden. A single colorbar is used only when no panel overrides
+    color options; otherwise each panel gets a colorbar.
+    Returns the figure for callers to save or further annotate.
+    """
+    bounds = tuple(float(v) for v in bounds)
+    if (len(bounds) != 4 or not np.isfinite(bounds).all()
+            or bounds[0] >= bounds[1] or bounds[2] >= bounds[3]):
+        raise ValueError("bounds must be finite (xmin, xmax, ymin, ymax) with positive spans")
+    normalized = []
+    for panel in panels:
+        if len(panel) not in (2, 3):
+            raise ValueError("each panel must be (title, values) or include an options dict")
+        title, values = panel[:2]
+        options = dict(panel[2] or {}) if len(panel) == 3 else {}
+        values = np.ma.masked_invalid(np.ma.asarray(values, dtype=np.float64))
+        if values.ndim != 2 or not values.size:
+            raise ValueError("raster values must be a nonempty two-dimensional array")
+        normalized.append((title, values, options))
+    if not normalized:
+        raise ValueError("at least one panel is required")
+    shared_range = clim
+    if share_clim and shared_range is None:
+        shared_range = scalar_color_limits(
+            np.concatenate([values.compressed() for _, values, _ in normalized]),
+            percentile=robust_percentile, symmetric=symmetric,
+        )
+    color_options = {"cmap", "clim", "symmetric", "robust_percentile"}
+    shared_colorbar = share_clim and not any(color_options.intersection(o) for _, _, o in normalized)
+    plt = _matplotlib_pyplot(show=show)
+    fig, axes = plt.subplots(
+        1, len(normalized), squeeze=False,
+        figsize=figsize or (5.0 * len(normalized), 4.8), constrained_layout=True,
+    )
+    for ax, (title, values, options) in zip(axes.flat, normalized):
+        limits = options.get("clim", shared_range)
+        if limits is None or (
+            options.get("clim") is None and {"symmetric", "robust_percentile"}.intersection(options)
+        ):
+            limits = scalar_color_limits(
+                values.compressed(), percentile=options.get("robust_percentile", robust_percentile),
+                symmetric=options.get("symmetric", symmetric),
+            )
+        limits = _expand_clim(float(limits[0]), float(limits[1]))
+        image = ax.imshow(
+            values, extent=bounds, origin="upper", interpolation="nearest",
+            cmap=options.get("cmap", cmap), vmin=limits[0], vmax=limits[1],
+        )
+        ax.set(title=title, xlabel="x", ylabel="y", aspect="equal")
+        if not shared_colorbar:
+            fig.colorbar(image, ax=ax, shrink=0.7)
+    if shared_colorbar:
+        fig.colorbar(image, ax=axes.ravel().tolist(), shrink=0.7)
+    if suptitle:
+        fig.suptitle(suptitle)
     if show and not _matplotlib_backend_is_noninteractive(plt.get_backend()):
         plt.show()
     return fig

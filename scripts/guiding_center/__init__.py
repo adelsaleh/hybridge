@@ -1,1 +1,1 @@
-"""Guiding-center case runners and presets."""
+"""Guiding-center runners, organized studies, and numerical support modules."""

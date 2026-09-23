@@ -7,6 +7,8 @@ the established fused assembler; only storage and launch geometry differ.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
+
 from dataclasses import dataclass
 import statistics
 import time
@@ -57,9 +59,9 @@ class RawAdvectionTsleWorkspace:
         )
         if self.signature == signature:
             return
-        self.local_operator = cupy.empty((num_elements, nel, nel), dtype=cupy.float64)
-        self.local_response = cupy.empty((num_elements, nel, ncols), dtype=cupy.float64)
-        self.face_flux = cupy.empty((num_elements, 2, 3, nqf), dtype=cupy.float64)
+        self.local_operator = cupy.empty((num_elements, nel, nel), dtype=REAL_DTYPE)
+        self.local_response = cupy.empty((num_elements, nel, ncols), dtype=REAL_DTYPE)
+        self.face_flux = cupy.empty((num_elements, 2, 3, nqf), dtype=REAL_DTYPE)
         self.signature = signature
 
     @property
@@ -96,6 +98,8 @@ extern "C" __global__ void advection_tsle_build(
         double* __restrict__ element_response,
         double* __restrict__ element_face_flux,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_side_indices,
+        const bool* __restrict__ orientations,
         const long long* __restrict__ edge_to_solve_edge,
         const double* __restrict__ aff_jacs,
         const double* __restrict__ inv_aff_mats_t,
@@ -148,7 +152,7 @@ extern "C" __global__ void advection_tsle_build(
         use_sparse_advection, mass_is_diagonal,
         face_basis, face_weights, trace_basis,
         source_coeffs, beta_coeffs, reaction_coeffs,
-        reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
+        reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
         zero_boundary_flux, num_elements, element);
 
     for (int idx = threadIdx.x; idx < NEL * NEL; idx += blockDim.x) {
@@ -206,6 +210,7 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
         const double* __restrict__ element_response,
         const double* __restrict__ element_face_flux,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_side_indices,
         const bool* __restrict__ orientations,
         const long long* __restrict__ interior_side_index,
         const long long* __restrict__ edge_to_solve_edge,
@@ -246,6 +251,17 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
             continue;
         }
 
+        bool gauge_face = false;
+#if RAW_CONFLICT_AVERAGED_UPWIND
+        const long long other = edge_side_indices[row_edge * 2 + 1];
+        gauge_face = edge_side_indices[row_edge * 2] == element * 3 + row_face && other >= 0;
+        if (gauge_face) {
+            // The build kernel has completed; all face weights are immutable.
+            const double* other_tau = element_face_flux + (other / 3) * (6 * NQF) + (other % 3) * NQF;
+            for (int q = 0; q < NQF; ++q)
+                gauge_face = gauge_face && tau_face[row_face * NQF + q] == 0.0 && other_tau[q] == 0.0;
+        }
+#endif
         const bool row_positive = orientations[element * 3 + row_face];
         const int row_local_dof = raw_local_trace_dof(row_positive, row_dof);
         const double row_sign = raw_trace_orientation_sign(row_positive, row_dof);
@@ -296,7 +312,7 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
             for (int col_dof = 0; col_dof < NTR; ++col_dof) {
                 const int col_local_dof = raw_local_trace_dof(row_positive, col_dof);
                 const double col_sign = raw_trace_orientation_sign(row_positive, col_dof);
-                double mass_value = 0.0;
+                double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;
                 for (int qf = 0; qf < NQF; ++qf) {
                     const double mu_row = row_sign
                         * trace_basis[row_local_dof * NQF + qf];
@@ -326,7 +342,7 @@ def _shared_bytes_solve(nel: int, ncols: int, block_size: int) -> int:
     """Return dynamic shared bytes for cooperative LU/all-column solve."""
     doubles = nel * nel + nel * ncols + block_size
     ints = nel + block_size
-    return int(doubles * 8 + ints * 4 + 256)
+    return int(doubles * REAL_ITEMSIZE + ints * 4 + 256)
 
 
 def _shared_bytes_scatter(nel: int, ntr: int) -> int:
@@ -340,10 +356,14 @@ def _device_property(properties: dict, name: str, default: int) -> int:
     return int(value)
 
 
-def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: str) -> _TsleKernels:
+def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: str, advection_stabilization=None) -> _TsleKernels:
     """Compile or reuse the three kernels for one discrete CUDA signature."""
     device_id = int(cupy.cuda.runtime.getDevice())
-    key = (device_id, int(nel), int(ntr), int(nqf), str(trace_orientation))
+    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    factor = upwind_factor(advection_stabilization)
+    if factor is None:
+        raise ValueError("Unsupported TSLE advection stabilization")
+    key = (device_id, int(nel), int(ntr), int(nqf), str(trace_orientation), factor, is_conflict_averaged_upwind(advection_stabilization))
     cached = _TSLE_MODULE_CACHE.get(key)
     if cached is not None:
         return _TsleKernels(cached.build, cached.solve, cached.scatter, 0.0)
@@ -356,9 +376,10 @@ def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: s
         nqf=nqf,
         lu_mode="coop",
         trace_orientation=trace_orientation,
+        advection_stabilization=advection_stabilization,
     )
     started = time.perf_counter()
-    module = cupy.RawModule(
+    module = real_raw_module(
         code=source,
         options=("--std=c++11", "--generate-line-info"),
         name_expressions=_TSLE_KERNEL_NAMES,
@@ -602,6 +623,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         zero_boundary_flux: bool = False,
         workspace: RawAdvectionTsleWorkspace | None = None,
         cache_local_response: bool = True,
+        advection_stabilization=None,
 ) -> RawAdvectionAssemblyResult:
     """Assemble a reduced face-BSR system with the TSLE three-stage pipeline."""
     cupy = require_cupy()
@@ -624,30 +646,30 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     nqf = int(trace_ref.weights.size)
     ncols = 3 * ntr + 1
 
-    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=cupy.float64)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=cupy.float64)
+    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
+    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
     reaction_coeffs = (
-        cupy.empty(1, dtype=cupy.float64)
+        cupy.empty(1, dtype=REAL_DTYPE)
         if reaction_is_scalar
-        else cupy.ascontiguousarray(reaction_coeffs, dtype=cupy.float64)
+        else cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
     )
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
+    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
-    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=cupy.float64)
-    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=cupy.float64)
+    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
+    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=REAL_DTYPE)
 
     if zero_boundary_flux:
-        boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=cupy.float64)
+        boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=REAL_DTYPE)
     else:
-        boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=cupy.float64)
+        boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=REAL_DTYPE)
 
     pattern_start = time.perf_counter()
     pattern = build_reduced_csr_pattern_raw(cspace, timings, matrix_format="bsr")
     timings["raw.tsle.pattern.wrapper"] = time.perf_counter() - pattern_start
-    data = cupy.zeros((pattern.num_blocks, ntr, ntr), dtype=cupy.float64)
-    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+    data = cupy.zeros((pattern.num_blocks, ntr, ntr), dtype=REAL_DTYPE)
+    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
     if mesh_h.bnd_edges_inds.size:
         boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
@@ -672,6 +694,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         ntr=ntr,
         nqf=nqf,
         trace_orientation=trace_orientation,
+        advection_stabilization=advection_stabilization,
     )
     timings["raw.tsle.jit"] = float(kernels.jit_seconds)
 
@@ -680,6 +703,8 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         workspace.local_response,
         workspace.face_flux,
         cspace.mesh.loc2glob_edge,
+        cspace.mesh.edge_side_indices,
+        cspace.mesh.orientations,
         pattern.edge_to_solve_edge,
         cspace.mesh.aff_jacs,
         cspace.mesh.inv_aff_mats_t,
@@ -700,7 +725,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         source_coeffs,
         beta_coeffs,
         reaction_coeffs,
-        np.float64(reaction_scalar),
+        REAL_DTYPE(reaction_scalar),
         np.int32(1 if reaction_is_scalar else 0),
         np.int32(1 if zero_boundary_flux else 0),
         np.int64(num_elements),
@@ -717,6 +742,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         workspace.local_response,
         workspace.face_flux,
         cspace.mesh.loc2glob_edge,
+        cspace.mesh.edge_side_indices,
         cspace.mesh.orientations,
         pattern.interior_side_index,
         pattern.edge_to_solve_edge,
@@ -817,6 +843,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     # one-shot call. The final event above has completed before this scope exits.
     _ = owned_workspace
     return RawAdvectionAssemblyResult(
+        advection_stabilization=advection_stabilization,
         data=data,
         rhs=rhs,
         boundary_trace=boundary_trace,

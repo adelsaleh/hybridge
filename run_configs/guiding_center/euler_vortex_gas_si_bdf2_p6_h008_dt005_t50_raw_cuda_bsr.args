@@ -1,0 +1,5 @@
+# Euler vortex gas: h=0.008, p=6, semi-implicit BDF2, dt=0.05 to T=50.
+# One SI-Euler startup step, then one transport and one Poisson solve per step.
+# Holoviz plots and diagnostics every 10 steps (0.5 time units).
+# Override values after @file, e.g. --dt 0.02 --num-steps 2500 for T=50.
+--preset euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr

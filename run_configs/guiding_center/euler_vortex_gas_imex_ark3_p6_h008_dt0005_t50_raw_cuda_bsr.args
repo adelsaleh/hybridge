@@ -1,0 +1,5 @@
+# Heavy Euler vortex-gas disk: h=0.008, p=6, Poisson tau=1000.
+# IMEX-ARK3, dt=0.005 to T=50; user-operated qualitative run.
+# Each step: 3 transport solves (one operator assembly) + 4 Poisson solves.
+# Embedded second-order difference is diagnostic; timestep remains fixed.
+--preset euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr

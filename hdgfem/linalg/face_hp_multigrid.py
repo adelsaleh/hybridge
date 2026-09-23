@@ -8,14 +8,23 @@ production integration.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, audit_arrays
+
 import copy
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable
 
 import numpy as np
 
 from ..backends.cupy import require_cupy
+from .system import residual_history_is_stagnated
+from .face_hp_policy import (
+    scalar_p0_amgx_config,
+    robust_scalar_p0_amgx_config,
+    face_hp_mg_preconditioner_parameters,
+)
 from ..backends.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     modal_degree_schedule,
@@ -104,6 +113,12 @@ class FaceBlockHpMgPcgResult:
     target: float
     history: tuple[float, ...]
     elapsed_seconds: float
+    best_iteration: int | None = None
+    terminal_residual_norm: float | None = None
+    true_residual_check_count: int = 0
+    returned_best_iterate: bool = False
+    breakdown_reason: str | None = None
+    residual_restart_count: int = 0
 
 
 def _format_fb_hp_mg_pcg_stats(
@@ -112,10 +127,18 @@ def _format_fb_hp_mg_pcg_stats(
         rhs_norm: float, target: float, true_residual_every: int,
         workspace_bytes: int, coarse_apply_count: int,
         coarse_apply_seconds: float,
+        best_iteration: int | None = None,
+        terminal_residual_norm: float | None = None,
+        returned_best_iterate: bool = False,
+        preconditioner_policy: str = "standard",
+        section: str = "all",
+        residual_restart_count: int = 0,
+        breakdown_reason: str | None = None,
+        original_matrix_residual: bool = False,
 ) -> str:
-    """Format the native outer-PCG telemetry without exposing inner AMGX rows."""
+    """Format native telemetry, optionally just the live header or final summary."""
     initial_norm = history[0] if history else residual_norm
-    tiny = np.finfo(float).tiny
+    tiny = np.finfo(REAL_DTYPE).tiny
     schedule = " -> ".join(f"p={item.degree}" for item in diagnostics)
     fine = diagnostics[0] if diagnostics else None
     smoother = "unknown" if fine is None else fine.smoother_backend
@@ -123,8 +146,12 @@ def _format_fb_hp_mg_pcg_stats(
     lines = [
         "  FB-HP-MG-PCG convergence (native outer solver):",
         f"    fine action: {spmv} face BSR, block={int(degree) + 1}",
-        f"    hierarchy: {schedule}; smoother={smoother}",
+        (
+            f"    hierarchy: {schedule}; smoother={smoother}; "
+            f"policy={preconditioner_policy}"
+        ),
         "    coarse correction: scalar AMGX p=0, one fixed V-cycle/application",
+        "    outer recurrence: flexible PCGF; restart on significant residual gap",
         (
             "    residual: assembly-basis L2; recursive between true refreshes "
             f"(every {int(true_residual_every)} iterations and at exit)"
@@ -133,10 +160,20 @@ def _format_fb_hp_mg_pcg_stats(
         "    iter       residual        res/rhs    res/initial       sample",
         "    --------------------------------------------------------------",
     ]
+    if original_matrix_residual:
+        lines.insert(6, "    true residual action: original assembled matrix")
+    if section == "header":
+        return "\n".join(lines)
+    if section not in {"all", "footer"}:
+        raise ValueError(f"unknown PCGF report section: {section}")
     displayed = list(history[:int(iterations) + 1])
     if not displayed:
         displayed = [residual_norm]
-    displayed[-1] = residual_norm
+    displayed[-1] = (
+        residual_norm
+        if terminal_residual_norm is None
+        else terminal_residual_norm
+    )
     for iteration, value in enumerate(displayed):
         is_true = (
             iteration == 0
@@ -146,17 +183,17 @@ def _format_fb_hp_mg_pcg_stats(
                 and iteration % int(true_residual_every) == 0
             )
         )
-        sample = "true" if is_true else "recursive"
-        lines.append(
-            f"    {iteration:4d}  {value:14.6e}  "
-            f"{value / max(rhs_norm, tiny):13.3e}  "
-            f"{value / max(initial_norm, tiny):13.3e}  {sample:>11}"
-        )
+        lines.append(_format_fb_hp_mg_pcg_row(
+            iteration, value, rhs_norm, initial_norm, is_true=is_true,
+        ))
+    if section == "footer":
+        lines = []
     lines.extend((
         "    --------------------------------------------------------------",
         f"    Total iterations: {int(iterations)}",
         (
-            f"    Final true residual: {residual_norm:.6e} "
+            f"    {'Returned' if returned_best_iterate else 'Final'} true residual: "
+            f"{residual_norm:.6e} "
             f"({residual_norm / max(rhs_norm, tiny):.3e} of RHS)"
         ),
         f"    Native workspace: {workspace_bytes / (1024.0 ** 3):.3f} GiB",
@@ -165,7 +202,35 @@ def _format_fb_hp_mg_pcg_stats(
             f"elapsed={coarse_apply_seconds:.5f}s; hierarchy=reused"
         ),
     ))
+    if terminal_residual_norm is not None:
+        lines.insert(-2, (
+            f"    Terminal true residual: {terminal_residual_norm:.6e}; "
+            f"best checkpoint: iter {int(best_iteration or 0)}"
+            + (" (returned)" if returned_best_iterate else "")
+        ))
+    lines.append(f"    Residual restarts: {int(residual_restart_count)}")
+    if breakdown_reason is not None:
+        lines.append(f"    Stopped: {breakdown_reason}")
     return "\n".join(lines)
+
+
+def _format_fb_hp_mg_pcg_row(
+        iteration: int, value: float, rhs_norm: float, initial_norm: float,
+        *, is_true: bool,
+) -> str:
+    """Format one immediately available residual sample for live output."""
+    tiny = np.finfo(REAL_DTYPE).tiny
+    sample = "true" if is_true else "recursive"
+    return (
+        f"    {iteration:4d}  {value:14.6e}  "
+        f"{value / max(rhs_norm, tiny):13.3e}  "
+        f"{value / max(initial_norm, tiny):13.3e}  {sample:>11}"
+    )
+
+
+def _pcgf_beta(cp, preconditioned_residual, residual_delta, previous_rho):
+    """AMGX's flexible CG update, shared by native and prototype iterations."""
+    return cp.real(cp.vdot(preconditioned_residual, residual_delta)) / previous_rho
 
 
 class AmgxScalarVcycle:
@@ -298,45 +363,6 @@ def symmetric_scalar_amgx_config(base_config: dict | None = None) -> dict:
     return {"config_version": 2, "solver": amg}
 
 
-def scalar_p0_amgx_config() -> dict:
-    """Return a dedicated fixed-work scalar-AMG cycle for the p=0 face graph.
-
-    This configuration deliberately does not inherit the full-order nodal trace
-    preset. The p=0 operator has one scalar constant mode per face, so it uses
-    one diagonal L1-Jacobi pre/post sweep and no aggressive first level.
-    """
-    amg = {
-        "solver": "AMG",
-        "algorithm": "CLASSICAL",
-        "selector": "PMIS",
-        "strength": "AHAT",
-        "strength_threshold": 0.25,
-        "interpolator": "D2",
-        "cycle": "V",
-        "presweeps": 1,
-        "postsweeps": 1,
-        "smoother": {"solver": "JACOBI_L1", "max_iters": 1},
-        "coarse_solver": "DENSE_LU_SOLVER",
-        "max_iters": 1,
-        "max_levels": 100,
-        "dense_lu_num_rows": 2048,
-        "dense_lu_max_rows": 4096,
-        "coarsest_sweeps": 2,
-        "aggressive_levels": 0,
-        "interp_max_elements": 4,
-        "error_scaling": 0,
-        "tolerance": 1.0e-30,
-        "convergence": "ABSOLUTE",
-        "norm": "L2",
-        # PyAMGXCsrDeviceSolver records history for diagnostics, so AMGX
-        # requires residual monitoring even for a fixed one-cycle apply.
-        "monitor_residual": 1,
-        "print_solve_stats": 0,
-        "obtain_timings": 0,
-    }
-    return {"config_version": 2, "solver": amg}
-
-
 def _block_action(blocks, vector, block_size: int):
     """Apply a batch of dense face blocks to a face-major vector."""
     cp = require_cupy()
@@ -356,7 +382,7 @@ def _estimate_preconditioned_lambda_max(
     cp = require_cupy()
     size = int(operator.shape[0])
     block_size = int(operator.block_size)
-    phase = cp.arange(size, dtype=cp.float64)
+    phase = cp.arange(size, dtype=REAL_DTYPE)
     vector = cp.sin(0.731 * (phase + 1.0)) + cp.cos(0.193 * (phase + 0.5))
     vector /= cp.linalg.norm(vector)
     for _ in range(max(2, int(iterations))):
@@ -380,7 +406,7 @@ def _chebyshev_richardson_weights(order: int, low: float, high: float) -> tuple[
         raise ValueError("Chebyshev order must be positive")
     if not 0.0 < low < high:
         raise ValueError("Chebyshev interval must satisfy 0 < low < high")
-    indices = np.arange(order, dtype=np.float64)
+    indices = np.arange(order, dtype=REAL_DTYPE)
     roots = (
         0.5 * (high + low)
         - 0.5 * (high - low)
@@ -416,7 +442,7 @@ class FaceBlockPmgPrototype:
         self.cp = cp
         self.indptr = cp.ascontiguousarray(indptr, dtype=cp.int32)
         self.indices = cp.ascontiguousarray(indices, dtype=cp.int32)
-        self.orthonormal_data = cp.ascontiguousarray(orthonormal_data, dtype=cp.float64)
+        self.orthonormal_data = cp.ascontiguousarray(orthonormal_data, dtype=REAL_DTYPE)
         self.degree_schedule = modal_degree_schedule(degree, schedule)
         self.num_faces = int(self.indptr.size - 1)
         self.diagonal_positions = cp.ascontiguousarray(diagonal_positions, dtype=cp.int32)
@@ -499,10 +525,10 @@ class FaceBlockPmgPrototype:
             fine_size = self.num_faces * level.block_size
             coarse_size = self.num_faces * coarse_level.block_size
             self._workspaces.append(_FacePmgWorkspace(
-                correction=cp.empty(fine_size, dtype=cp.float64),
-                scratch=cp.empty(fine_size, dtype=cp.float64),
-                residual=cp.empty(fine_size, dtype=cp.float64),
-                coarse_rhs=cp.empty(coarse_size, dtype=cp.float64),
+                correction=cp.empty(fine_size, dtype=REAL_DTYPE),
+                scratch=cp.empty(fine_size, dtype=REAL_DTYPE),
+                residual=cp.empty(fine_size, dtype=REAL_DTYPE),
+                coarse_rhs=cp.empty(coarse_size, dtype=REAL_DTYPE),
             ))
         self._apply_active = False
 
@@ -624,7 +650,7 @@ class FaceBlockPmgPrototype:
 
     def apply(self, rhs):
         """Apply one serial V-cycle and return its borrowed workspace output."""
-        rhs = self.cp.asarray(rhs, dtype=self.cp.float64)
+        rhs = self.cp.asarray(rhs, dtype=REAL_DTYPE)
         if rhs.ndim != 1 or int(rhs.size) != int(self.fine_operator.shape[0]):
             raise ValueError(f"rhs must have shape ({self.fine_operator.shape[0]},)")
         if self._apply_active:
@@ -638,7 +664,7 @@ class FaceBlockPmgPrototype:
     def symmetry_defect(self) -> float:
         """Measure ``|x^T B y-y^T B x|`` with deterministic device vectors."""
         size = int(self.fine_operator.shape[0])
-        modes = self.cp.arange(size, dtype=self.cp.float64)
+        modes = self.cp.arange(size, dtype=REAL_DTYPE)
         x = self.cp.sin(0.37 * (modes + 1.0))
         y = self.cp.cos(0.23 * (modes + 0.5))
         bx = self.apply(x).copy()
@@ -648,19 +674,19 @@ class FaceBlockPmgPrototype:
         denominator = self.cp.linalg.norm(x) * self.cp.linalg.norm(by)
         denominator += self.cp.linalg.norm(y) * self.cp.linalg.norm(bx)
         return float((self.cp.abs(left - right) / self.cp.maximum(
-            denominator, self.cp.finfo(self.cp.float64).tiny
+            denominator, self.cp.finfo(REAL_DTYPE).tiny
         )).get())
 
     def positive_action_sample(self) -> float:
         """Return a sampled normalized ``x^T B x`` curvature value."""
         size = int(self.fine_operator.shape[0])
-        modes = self.cp.arange(size, dtype=self.cp.float64)
+        modes = self.cp.arange(size, dtype=REAL_DTYPE)
         x = self.cp.sin(0.41 * (modes + 1.25))
         bx = self.apply(x)
         value = self.cp.real(self.cp.vdot(x, bx))
         scale = self.cp.linalg.norm(x) * self.cp.linalg.norm(bx)
         return float((value / self.cp.maximum(
-            scale, self.cp.finfo(self.cp.float64).tiny
+            scale, self.cp.finfo(REAL_DTYPE).tiny
         )).get())
 
     def close(self) -> None:
@@ -675,17 +701,19 @@ class FaceBlockPmgPrototype:
 
 
 class FaceBlockHpMgPcgSolver:
-    """Reusable native face-BSR p-multigrid PCG backend.
+    """Reusable native face-BSR p-multigrid flexible-CG backend.
 
     Inputs use the HDG Legendre assembly basis. Setup performs the congruence
-    transformation to orthonormal modal coordinates once, builds a direct
-    ``p -> 0`` hierarchy, and retains all Krylov and multigrid workspaces.
+    transformation to orthonormal modal coordinates once, builds the selected
+    symmetric p-hierarchy, and retains all Krylov and multigrid workspaces.
     Solutions are mapped back to the assembly basis for HDG reconstruction.
     """
 
     def __init__(
             self, *, indptr, indices, data, degree: int, diagonal_positions,
-            symmetry_limit: float = 1.0e-10, curvature_limit: float = 0.0,
+            symmetry_limit: float = max(1.0e-10, 32 * np.finfo(REAL_DTYPE).eps), curvature_limit: float = 0.0,
+            preconditioner_policy: str = "standard",
+            preconditioner_tuning: dict | None = None,
             verbose: int = 0,
     ):
         """Build and validate the fixed native hierarchy."""
@@ -696,6 +724,11 @@ class FaceBlockHpMgPcgSolver:
         self.verbose = max(0, int(verbose))
         self.degree = int(degree)
         self.block_size = self.degree + 1
+        self.preconditioner_policy = str(preconditioner_policy).replace("_", "-").lower()
+        policy = face_hp_mg_preconditioner_parameters(
+            self.preconditioner_policy, overrides=preconditioner_tuning,
+        )
+        self.preconditioner_parameters = policy
         if not 4 <= self.degree <= 6:
             raise ValueError(
                 "FB-HP-MG-PCG currently supports polynomial degrees 4 through 6"
@@ -722,15 +755,15 @@ class FaceBlockHpMgPcgSolver:
                 orthonormal_data=self.orthonormal_data,
                 degree=self.degree,
                 diagonal_positions=diagonal_positions,
-                schedule="direct-to-zero",
-                chebyshev_order=2,
-                presweeps=1,
-                postsweeps=1,
+                schedule=policy["schedule"],
+                chebyshev_order=policy["chebyshev_order"],
+                presweeps=policy["presweeps"],
+                postsweeps=policy["postsweeps"],
                 spmv_backend="auto",
                 smoother_backend="fused-raw-cuda",
                 coarse_factory=lambda operator: AmgxScalarVcycle(
                     operator,
-                    config=scalar_p0_amgx_config(),
+                    config=policy["coarse_config"],
                     verbose=0,
                 ),
             )
@@ -759,12 +792,14 @@ class FaceBlockHpMgPcgSolver:
             raise
 
         size = int(self.preconditioner.fine_operator.shape[0])
-        self._rhs_orthonormal = cp.empty(size, dtype=cp.float64)
-        self._x = cp.empty(size, dtype=cp.float64)
-        self._residual = cp.empty(size, dtype=cp.float64)
-        self._direction = cp.empty(size, dtype=cp.float64)
-        self._applied = cp.empty(size, dtype=cp.float64)
-        self._assembly_solution = cp.empty(size, dtype=cp.float64)
+        self._rhs_orthonormal = cp.empty(size, dtype=REAL_DTYPE)
+        self._x = cp.empty(size, dtype=REAL_DTYPE)
+        self._residual = cp.empty(size, dtype=REAL_DTYPE)
+        self._residual_delta = cp.empty(size, dtype=REAL_DTYPE)
+        self._direction = cp.empty(size, dtype=REAL_DTYPE)
+        self._applied = cp.empty(size, dtype=REAL_DTYPE)
+        self._best_x = cp.empty(size, dtype=REAL_DTYPE)
+        self._assembly_solution = cp.empty(size, dtype=REAL_DTYPE)
         self.setup_seconds = time.perf_counter() - started
         self.solve_count = 0
         self.setup_count = 1
@@ -780,8 +815,9 @@ class FaceBlockHpMgPcgSolver:
         krylov = sum(
             int(array.nbytes)
             for array in (
-                self._rhs_orthonormal, self._x, self._residual,
-                self._direction, self._applied, self._assembly_solution,
+                self._rhs_orthonormal, self._x, self._residual, self._residual_delta,
+                self._direction, self._applied, self._best_x,
+                self._assembly_solution,
             )
         )
         return krylov + int(self.preconditioner.workspace_bytes)
@@ -797,51 +833,125 @@ class FaceBlockHpMgPcgSolver:
         """Return the norm after mapping a modal RHS/residual by ``S^-1``."""
         return float(self._assembly_norm_device(orthonormal_vector).get())
 
+    def _refresh_true_residual(self, rhs, *, assembly_matvec, out):
+        """Refresh ``S*(b-A*x)`` and return its assembly-basis norm on device.
+
+        When the original action is supplied, measure the norm before mapping
+        the residual into Krylov coordinates. This avoids the roundoff mismatch
+        between the original coefficients and the stored congruence ``S*A*S``.
+        Only scratch vectors are used; no extra iterate checkpoint is retained.
+        """
+        cp = self.cp
+        if assembly_matvec is None:
+            self.fine_operator.matvec(self._x, out=out)
+            cp.subtract(self._rhs_orthonormal, out, out=out)
+            return self._assembly_norm_device(out)
+        cp.multiply(
+            self._x.reshape((-1, self.block_size)), self.scales[None, :],
+            out=self._assembly_solution.reshape((-1, self.block_size)),
+        )
+        cp.subtract(rhs, assembly_matvec(self._assembly_solution), out=out)
+        norm = cp.linalg.norm(out)
+        view = out.reshape((-1, self.block_size))
+        cp.multiply(view, self.scales[None, :], out=view)
+        return norm
+
     def solve(
             self, rhs, *, initial_guess=None, rtol: float = 1.0e-8,
             atol: float = 0.0, maxiter: int = 500,
             true_residual_every: int = 10,
+            residual_gap_restart: float = 0.1,
+            stagnation_checks: int = 6,
+            assembly_matvec: Callable[[Any], Any] | None = None,
     ) -> FaceBlockHpMgPcgResult:
-        """Solve one RHS and validate its FP64 residual in assembly coordinates."""
+        """Solve with PCGF, retaining one best checked iterate for recovery.
+
+        True refreshes that materially change the recursive residual restart
+        the search direction. Six true checks without 1% improvement in the
+        best norm end an unproductive attempt, without relaxing the tolerance.
+        ``stagnation_checks=0`` disables that safeguard.
+
+        ``assembly_matvec(x)`` optionally applies the original assembled matrix
+        to an assembly-basis vector. Every true check (including convergence and
+        checkpoint selection) then uses that action, while Krylov products keep
+        using the transformed operator. A rejected convergence check refreshes
+        the residual and restarts PCGF instead of abandoning the hierarchy.
+        """
         cp = self.cp
-        rhs = cp.asarray(rhs, dtype=cp.float64)
+        rhs = cp.asarray(rhs, dtype=REAL_DTYPE)
         size = int(self.fine_operator.shape[0])
         if rhs.ndim != 1 or int(rhs.size) != size:
             raise ValueError(f"rhs must have shape ({size},)")
-        if rtol < 0.0 or atol < 0.0:
-            raise ValueError("rtol and atol must be nonnegative")
+        if not np.isfinite(rtol) or not np.isfinite(atol) or rtol < 0.0 or atol < 0.0:
+            raise ValueError("rtol and atol must be finite and nonnegative")
+        if not np.isfinite(residual_gap_restart) or residual_gap_restart <= 0.0:
+            raise ValueError("residual_gap_restart must be finite and positive")
+        if int(stagnation_checks) != stagnation_checks or (stagnation_checks != 0 and stagnation_checks < 2):
+            raise ValueError("stagnation_checks must be zero or an integer at least two")
         cp.multiply(
             rhs.reshape((-1, self.block_size)),
             self.scales[None, :],
             out=self._rhs_orthonormal.reshape((-1, self.block_size)),
         )
-        rhs_orthonormal = self._rhs_orthonormal
         if initial_guess is None:
             self._x.fill(0.0)
         else:
-            guess = cp.asarray(initial_guess, dtype=cp.float64)
+            guess = cp.asarray(initial_guess, dtype=REAL_DTYPE)
             if guess.ndim != 1 or int(guess.size) != size:
                 raise ValueError(f"initial_guess must have shape ({size},)")
             self._x[...] = (
                 guess.reshape((-1, self.block_size)) / self.scales[None, :]
             ).reshape(-1)
 
+        audit_arrays("poisson-krylov-workspace", self, rhs)
         coarse_solver = self.preconditioner.coarse_solver
         coarse_count_before = int(getattr(coarse_solver, "apply_count", 0))
         coarse_seconds_before = float(getattr(coarse_solver, "apply_seconds", 0.0))
         started = time.perf_counter()
-        self.fine_operator.matvec(self._x, out=self._residual)
-        cp.subtract(rhs_orthonormal, self._residual, out=self._residual)
+        initial_norm_device = self._refresh_true_residual(
+            rhs, assembly_matvec=assembly_matvec, out=self._residual,
+        )
         rhs_norm, initial_norm = (
             float(value)
             for value in cp.stack(
-                (cp.linalg.norm(rhs), self._assembly_norm_device(self._residual))
+                (cp.linalg.norm(rhs), initial_norm_device)
             ).get()
         )
         target = max(float(atol), float(rtol) * rhs_norm)
         history = [initial_norm]
+        if not np.isfinite(rhs_norm) or not np.isfinite(initial_norm):
+            raise ValueError("FB-HP-MG requires finite RHS and initial residual norms")
+        best_residual_norm = initial_norm
+        best_iteration = 0
+        true_residual_check_count = 1
+        self._best_x[...] = self._x
+        residual_restart_count = 0
+        recent_best = deque([initial_norm], maxlen=max(2, int(stagnation_checks)))
+
+        if self.verbose >= 3:
+            print(_format_fb_hp_mg_pcg_stats(
+                degree=self.degree, diagnostics=self.preconditioner.diagnostics,
+                history=tuple(history), iterations=0, residual_norm=initial_norm,
+                rhs_norm=rhs_norm, target=target, true_residual_every=true_residual_every,
+                workspace_bytes=0, coarse_apply_count=0, coarse_apply_seconds=0.,
+                preconditioner_policy=self.preconditioner_policy, section="header",
+                original_matrix_residual=assembly_matvec is not None,
+            ), flush=True)
+            print(_format_fb_hp_mg_pcg_row(
+                0, initial_norm, rhs_norm, initial_norm, is_true=True,
+            ), flush=True)
+
+        def retain_true_checkpoint(iteration: int, value: float) -> None:
+            """Keep exactly one device iterate: the best true-residual point."""
+            nonlocal best_residual_norm, best_iteration
+            if np.isfinite(value) and value < best_residual_norm:
+                best_residual_norm = value
+                best_iteration = int(iteration)
+                self._best_x[...] = self._x
+
         converged = initial_norm <= target
         iterations = 0
+        breakdown_reason = None
         if not converged:
             z = self.preconditioner.apply(self._residual)
             rho = cp.real(cp.vdot(self._residual, z))
@@ -856,63 +966,128 @@ class FaceBlockHpMgPcgSolver:
             for iteration in range(1, int(maxiter) + 1):
                 self.fine_operator.matvec(self._direction, out=self._applied)
                 curvature = cp.real(cp.vdot(self._direction, self._applied))
+                self._residual_delta[...] = self._residual
                 alpha = rho / curvature
                 self._x += alpha * self._direction
                 self._residual -= alpha * self._applied
-                if (
+                is_true = (
                     true_residual_every > 0
                     and iteration % int(true_residual_every) == 0
-                ):
-                    self.fine_operator.matvec(self._x, out=self._residual)
-                    cp.subtract(
-                        rhs_orthonormal, self._residual, out=self._residual
-                    )
-                residual_norm, curvature_value, rho_value = (
-                    float(value)
-                    for value in cp.stack(
-                        (
-                            self._assembly_norm_device(self._residual),
-                            curvature,
-                            rho,
-                        )
-                    ).get()
                 )
-                if not np.isfinite(rho_value) or rho_value <= 0.0:
-                    if rho_iteration == 0:
-                        raise RuntimeError(
-                            "FB-HP-MG preconditioner is not positive on the initial "
-                            f"residual: {rho_value}"
+                gap_norm_device = None
+                if is_true:
+                    # _applied is now free: use it for b-A*x while retaining
+                    # the recursive residual long enough to measure its gap.
+                    true_norm_device = self._refresh_true_residual(
+                        rhs, assembly_matvec=assembly_matvec, out=self._applied,
+                    )
+                    self._residual -= self._applied
+                    gap_norm_device = self._assembly_norm_device(self._residual)
+                    self._residual[...] = self._applied
+                    true_residual_check_count += 1
+                check_scalars = [
+                    (true_norm_device if is_true
+                     else self._assembly_norm_device(self._residual)),
+                    curvature, rho,
+                ]
+                if is_true:
+                    check_scalars.append(gap_norm_device)
+                checked_values = tuple(
+                    float(value)
+                    for value in cp.stack(check_scalars).get()
+                )
+                residual_norm, curvature_value, rho_value = checked_values[:3]
+                history.append(residual_norm)
+                iterations = iteration
+                restart_direction = False
+                if is_true:
+                    gap_norm = checked_values[3]
+                    restart_direction = (
+                        not np.isfinite(gap_norm)
+                        or gap_norm > residual_gap_restart * max(
+                            residual_norm, np.finfo(REAL_DTYPE).tiny,
                         )
-                    raise RuntimeError(
+                    )
+                if residual_norm <= target and not is_true:
+                    residual_norm = float(self._refresh_true_residual(
+                        rhs, assembly_matvec=assembly_matvec, out=self._residual,
+                    ).get())
+                    true_residual_check_count += 1
+                    history[-1] = residual_norm
+                    is_true = True
+                    restart_direction = residual_norm > target
+                if self.verbose >= 3:
+                    print(_format_fb_hp_mg_pcg_row(
+                        iteration, residual_norm, rhs_norm, initial_norm, is_true=is_true,
+                    ), flush=True)
+                if not np.isfinite(rho_value) or rho_value <= 0.0:
+                    breakdown_reason = (
                         "FB-HP-MG preconditioner lost positive curvature at "
                         f"iteration {rho_iteration}: {rho_value}"
                     )
+                    break
                 if not np.isfinite(curvature_value) or curvature_value <= 0.0:
-                    raise RuntimeError(
+                    breakdown_reason = (
                         "FB-HP-MG-PCG lost positive A-curvature at iteration "
                         f"{iteration}: {curvature_value}"
                     )
-                history.append(residual_norm)
-                iterations = iteration
+                    break
+                if not np.isfinite(residual_norm):
+                    breakdown_reason = f"non-finite residual at iteration {iteration}"
+                    break
+                if is_true:
+                    retain_true_checkpoint(iteration, residual_norm)
+                    recent_best.append(best_residual_norm)
                 if residual_norm <= target:
                     converged = True
                     break
+                if is_true and stagnation_checks and residual_history_is_stagnated(
+                    recent_best, window=int(stagnation_checks), relative_improvement=0.01,
+                ):
+                    breakdown_reason = (
+                        f"true-residual stagnation over {int(stagnation_checks)} checks; "
+                        f"best {best_residual_norm:.6e} exceeds target {target:.6e}"
+                    )
+                    break
                 if iteration == int(maxiter):
                     break
-                z = self.preconditioner.apply(self._residual)
+                cp.subtract(self._residual, self._residual_delta, out=self._residual_delta)
+                try:
+                    z = self.preconditioner.apply(self._residual)
+                except RuntimeError as exc:
+                    breakdown_reason = (
+                        "FB-HP-MG preconditioner application failed after "
+                        f"iteration {iteration}: {exc}"
+                    )
+                    break
                 rho_new = cp.real(cp.vdot(self._residual, z))
-                self._direction *= rho_new / rho
-                self._direction += z
+                if restart_direction:
+                    self._direction[...] = z
+                    residual_restart_count += 1
+                else:
+                    self._direction *= _pcgf_beta(cp, z, self._residual_delta, rho)
+                    self._direction += z
                 rho = rho_new
                 rho_iteration = iteration
 
-        self.fine_operator.matvec(self._x, out=self._residual)
-        cp.subtract(rhs_orthonormal, self._residual, out=self._residual)
-        residual_norm = self._assembly_norm(self._residual)
+        terminal_residual_norm = float(self._refresh_true_residual(
+            rhs, assembly_matvec=assembly_matvec, out=self._residual,
+        ).get())
+        true_residual_check_count += 1
+        if history:
+            history[-1] = terminal_residual_norm
+        retain_true_checkpoint(iterations, terminal_residual_norm)
+        returned_best_iterate = bool(
+            not np.isfinite(terminal_residual_norm)
+            or best_residual_norm < terminal_residual_norm
+        )
+        if returned_best_iterate:
+            self._x[...] = self._best_x
+        residual_norm = best_residual_norm
         elapsed = time.perf_counter() - started
-        relative = residual_norm / max(rhs_norm, np.finfo(float).tiny)
-        over_initial = residual_norm / max(initial_norm, np.finfo(float).tiny)
-        converged = bool(converged and residual_norm <= target)
+        relative = residual_norm / max(rhs_norm, np.finfo(REAL_DTYPE).tiny)
+        over_initial = residual_norm / max(initial_norm, np.finfo(REAL_DTYPE).tiny)
+        converged = bool(breakdown_reason is None and residual_norm <= target)
         self._assembly_solution[...] = (
             self._x.reshape((-1, self.block_size)) * self.scales[None, :]
         ).reshape(-1)
@@ -928,6 +1103,12 @@ class FaceBlockHpMgPcgSolver:
             target=target,
             history=tuple(history),
             elapsed_seconds=elapsed,
+            best_iteration=best_iteration,
+            terminal_residual_norm=terminal_residual_norm,
+            true_residual_check_count=true_residual_check_count,
+            returned_best_iterate=returned_best_iterate,
+            breakdown_reason=breakdown_reason,
+            residual_restart_count=residual_restart_count,
         )
         if self.verbose >= 3:
             print(_format_fb_hp_mg_pcg_stats(
@@ -948,6 +1129,14 @@ class FaceBlockHpMgPcgSolver:
                     float(getattr(coarse_solver, "apply_seconds", 0.0))
                     - coarse_seconds_before
                 ),
+                best_iteration=result.best_iteration,
+                terminal_residual_norm=result.terminal_residual_norm,
+                returned_best_iterate=result.returned_best_iterate,
+                preconditioner_policy=self.preconditioner_policy,
+                section="footer",
+                residual_restart_count=residual_restart_count,
+                breakdown_reason=breakdown_reason,
+                original_matrix_residual=assembly_matvec is not None,
             ), flush=True)
         return result
 
@@ -970,9 +1159,9 @@ def solve_pcg_prototype(
         true_residual_every: int = 10,
         initial_guess=None,
 ) -> PrototypePcgResult:
-    """Solve with FP64 PCG and the repository's true-residual contract."""
+    """Solve with PCG at the selected precision and the repository's true-residual contract."""
     cp = require_cupy()
-    rhs = cp.asarray(rhs, dtype=cp.float64)
+    rhs = cp.asarray(rhs, dtype=REAL_DTYPE)
     if rhs.ndim != 1 or int(rhs.size) != int(operator.shape[0]):
         raise ValueError(f"rhs must have shape ({operator.shape[0]},)")
     if rtol < 0.0 or atol < 0.0:
@@ -980,7 +1169,7 @@ def solve_pcg_prototype(
     if initial_guess is None:
         x = cp.zeros_like(rhs)
     else:
-        x = cp.asarray(initial_guess, dtype=cp.float64).copy()
+        x = cp.asarray(initial_guess, dtype=REAL_DTYPE).copy()
         if x.shape != rhs.shape:
             raise ValueError(
                 f"initial_guess must have shape {rhs.shape}; got {x.shape}"
@@ -993,7 +1182,7 @@ def solve_pcg_prototype(
     if initial_norm <= target:
         return PrototypePcgResult(
             x, True, 0, initial_norm, rhs_norm,
-            initial_norm / max(rhs_norm, np.finfo(float).tiny),
+            initial_norm / max(rhs_norm, np.finfo(REAL_DTYPE).tiny),
             0.0 if initial_norm == 0.0 else 1.0,
             target, tuple(history), 0.0,
         )
@@ -1039,8 +1228,8 @@ def solve_pcg_prototype(
     cp.cuda.get_current_stream().synchronize()
     residual_norm = float(cp.linalg.norm(true_residual).get())
     elapsed = time.perf_counter() - started
-    relative = residual_norm / max(rhs_norm, np.finfo(float).tiny)
-    over_initial = residual_norm / max(initial_norm, np.finfo(float).tiny)
+    relative = residual_norm / max(rhs_norm, np.finfo(REAL_DTYPE).tiny)
+    over_initial = residual_norm / max(initial_norm, np.finfo(REAL_DTYPE).tiny)
     converged = bool(converged and residual_norm <= target)
     return PrototypePcgResult(
         solution=x,
@@ -1065,22 +1254,32 @@ def solve_pcgf_prototype(
         atol: float = 0.0,
         maxiter: int = 500,
         true_residual_every: int = 10,
+        initial_guess=None,
 ) -> PrototypePcgResult:
-    """Solve with the AMGX PCGF recurrence and true FP64 residual checks.
+    """Solve with the AMGX PCGF recurrence and true residual checks at the selected precision.
 
     PCGF is a diagnostic outer method while the p=0 correction is not proven
     self-adjoint. The implementation mirrors AMGX's flexible beta update,
     ``z_new.T @ (r_new-r_old) / (r_old.T @ z_old)``, and still rejects loss of
-    positive operator or preconditioner curvature.
+    positive operator or preconditioner curvature. An optional initial guess
+    is copied; the convergence target remains relative to the original RHS.
     """
     cp = require_cupy()
-    rhs = cp.asarray(rhs, dtype=cp.float64)
+    rhs = cp.asarray(rhs, dtype=REAL_DTYPE)
     if rhs.ndim != 1 or int(rhs.size) != int(operator.shape[0]):
         raise ValueError(f"rhs must have shape ({operator.shape[0]},)")
     if rtol < 0.0 or atol < 0.0:
         raise ValueError("rtol and atol must be nonnegative")
-    x = cp.zeros_like(rhs)
-    residual = rhs.copy()
+    if initial_guess is None:
+        x = cp.zeros_like(rhs)
+        residual = rhs.copy()
+    else:
+        x = cp.asarray(initial_guess, dtype=REAL_DTYPE).copy()
+        if x.shape != rhs.shape:
+            raise ValueError(
+                f"initial_guess must have shape {rhs.shape}; got {x.shape}"
+            )
+        residual = rhs - operator.matvec(x)
     rhs_norm = float(cp.linalg.norm(rhs).get())
     initial_norm = float(cp.linalg.norm(residual).get())
     target = max(float(atol), float(rtol) * rhs_norm)
@@ -1088,7 +1287,7 @@ def solve_pcgf_prototype(
     if initial_norm <= target:
         return PrototypePcgResult(
             x, True, 0, initial_norm, rhs_norm,
-            initial_norm / max(rhs_norm, np.finfo(float).tiny),
+            initial_norm / max(rhs_norm, np.finfo(REAL_DTYPE).tiny),
             0.0 if initial_norm == 0.0 else 1.0,
             target, tuple(history), 0.0,
         )
@@ -1133,7 +1332,7 @@ def solve_pcgf_prototype(
                 f"preconditioner lost positive curvature at iteration {iteration}: "
                 f"{rho_new_value}"
             )
-        beta = cp.real(cp.vdot(z_new, residual_delta)) / rho
+        beta = _pcgf_beta(cp, z_new, residual_delta, rho)
         direction = z_new + beta * direction
         z = z_new
         rho = rho_new
@@ -1141,8 +1340,8 @@ def solve_pcgf_prototype(
     cp.cuda.get_current_stream().synchronize()
     residual_norm = float(cp.linalg.norm(true_residual).get())
     elapsed = time.perf_counter() - started
-    relative = residual_norm / max(rhs_norm, np.finfo(float).tiny)
-    over_initial = residual_norm / max(initial_norm, np.finfo(float).tiny)
+    relative = residual_norm / max(rhs_norm, np.finfo(REAL_DTYPE).tiny)
+    over_initial = residual_norm / max(initial_norm, np.finfo(REAL_DTYPE).tiny)
     converged = bool(converged and residual_norm <= target)
     return PrototypePcgResult(
         solution=x,
@@ -1162,8 +1361,12 @@ __all__ = [
     "AmgxScalarVcycle",
     "CupyxCgScalarSolve",
     "FaceBlockPmgPrototype",
+    "FaceBlockHpMgPcgResult",
+    "FaceBlockHpMgPcgSolver",
     "FacePmgLevelDiagnostics",
     "PrototypePcgResult",
+    "face_hp_mg_preconditioner_parameters",
+    "robust_scalar_p0_amgx_config",
     "scalar_p0_amgx_config",
     "solve_pcgf_prototype",
     "solve_pcg_prototype",

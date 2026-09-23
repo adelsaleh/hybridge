@@ -1,0 +1,6 @@
+# Two SI-Euler extrap3 startup steps followed by four H1-BDF3 steps; user-run configuration.
+--preset rho_helm_wave_host_accuracy
+--time-scheme h1-bdf3
+--num-steps 6
+--plot-every 0
+--diagnostics-prefix h1_bdf3_host_accuracy

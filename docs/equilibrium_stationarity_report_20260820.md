@@ -73,7 +73,7 @@ mpiexec -n 2 env \
   XDG_CACHE_HOME=/tmp/hdgfem_fenics_cache \
   MPLCONFIGDIR=/tmp/hdgfem_mpl_cache \
   /home/as305/miniforge3/envs/fenicsx-dgfem/bin/python \
-  scripts/guiding_center/dolfinx_torsion_guiding_center_supg.py \
+  scripts/guiding_center/reference/dolfinx_torsion_guiding_center_supg.py \
   --equilibrium tmp/torsion_reduced_optimization_homotopy/equilibrium_h005_p2_optimized_20260820_20260820-180220-890586/out/equilibrium.npz \
   --order 2 \
   --dt 0.05 \

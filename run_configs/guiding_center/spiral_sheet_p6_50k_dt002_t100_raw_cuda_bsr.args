@@ -1,0 +1,5 @@
+# Five-turn Gaussian spiral sheet on the unit disk, r=0.12 to 0.75.
+# sigma=0.005 (FWHM about 0.0118), approximately unit peak density.
+# Zero potential boundary and zero density flux; 50k+ triangles and p=6.
+# Predictor-corrector dt=0.02, 5000 steps to T=100; plots every t=1.
+--preset spiral_sheet_p6_50k_dt002_t100_raw_cuda_bsr

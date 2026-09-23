@@ -1,0 +1,4 @@
+# Smooth first qualification case: radial power 4, untruncated, DG order 6.
+# h=0.008, ARK3 dt=0.05, T=70; initial projection 32x32, tau=128000.
+# Positivity is measured at every ARK stage; no positivity limiter is applied.
+--preset diocotron_smooth_m9_ark3_p6_h008_dt005_t70

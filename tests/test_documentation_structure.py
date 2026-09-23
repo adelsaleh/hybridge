@@ -27,6 +27,9 @@ ALGORITHM_CONTENTS = {
     },
     "advection_reaction": {
         "README.md",
+        "h1_bdf3.md",
+        "h2_bdf3.md",
+        "imex_ark3.md",
         "upwind_block_gauss_seidel.tex",
         "upwind_scc_ordering.tex",
     },
@@ -34,6 +37,11 @@ ALGORITHM_CONTENTS = {
         "README.md",
         "assembly.tex",
         "postprocessing.tex",
+    },
+    "hp_amg": {
+        "README.md",
+        "hp_amg.tex",
+        "hierarchies.md",
     },
     "quadrature": {
         "README.md",
@@ -153,6 +161,9 @@ def test_guiding_center_gpu_documentation_matches_current_retry() -> None:
     manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
     assert "PBICGSTAB aggregation-DILU postsmooth2" not in manual
     for required in (
+        "configs/amgx/adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json",
+        "configs/amgx/adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json",
+        "jacobi_l1_scalar_rows_for_blocks=1",
         "configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json",
         "FGMRES",
         "`MULTICOLOR_DILU`",

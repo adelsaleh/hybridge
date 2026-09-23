@@ -1,0 +1,2 @@
+# euler_vortex_gas: predictor corrector, p=6, h=0.0068, 150k+ triangles.
+--preset euler_vortex_gas_predictor_corrector_p6_h0068_dt005_t50

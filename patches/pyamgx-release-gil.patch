@@ -1,0 +1,71 @@
+--- a/pyamgx/amgxc.pxi
++++ b/pyamgx/amgxc.pxi
+@@ -147,17 +147,17 @@
+ 
+     AMGX_RC AMGX_solver_setup(
+         AMGX_solver_handle slv,
+-        AMGX_matrix_handle mtx)
++        AMGX_matrix_handle mtx) nogil
+ 
+     AMGX_RC AMGX_solver_solve(
+         AMGX_solver_handle slv,
+         AMGX_vector_handle rhs,
+-        AMGX_vector_handle sol)
++        AMGX_vector_handle sol) nogil
+ 
+     AMGX_RC AMGX_solver_solve_with_0_initial_guess(
+         AMGX_solver_handle slv,
+         AMGX_vector_handle rhs,
+-        AMGX_vector_handle sol)
++        AMGX_vector_handle sol) nogil
+ 
+     AMGX_RC AMGX_solver_get_iterations_number(
+         AMGX_solver_handle slv,
+--- a/pyamgx/Solver.pyx
++++ b/pyamgx/Solver.pyx
+@@ -43,9 +43,11 @@
+             to be solved.
+         """
+         self.A = A
+-        check_error(AMGX_solver_setup(
+-            self.slv,
+-            A.mtx))
++        cdef AMGX_RC status
++        # Native setup runs without the GIL; error handling retains it.
++        with nogil:
++            status = AMGX_solver_setup(self.slv, A.mtx)
++        check_error(status)
+ 
+     def solve(self, Vector b, Vector x, zero_initial_guess=False):
+         """
+@@ -83,11 +85,14 @@
+             raise ValueError, "RHS - solution dimension mismatch: {} != {}".format(
+                 b_size, x_size)
+ 
++        cdef AMGX_RC status
+         if zero_initial_guess:
+-             check_error(AMGX_solver_solve_with_0_initial_guess(
+-                self.slv, b.vec, x.vec))
++            with nogil:
++                status = AMGX_solver_solve_with_0_initial_guess(self.slv, b.vec, x.vec)
+         else:
+-            check_error(AMGX_solver_solve(self.slv, b.vec, x.vec))
++            with nogil:
++                status = AMGX_solver_solve(self.slv, b.vec, x.vec)
++        check_error(status)
+ 
+     @property
+     def status(self):
+--- a/pyamgx/System.pyx
++++ b/pyamgx/System.pyx
+@@ -73,7 +73,9 @@
+ cdef void c_register_print_callback(AMGX_print_callback function):
+     AMGX_register_print_callback(function)
+ 
+-cdef void c_print_callback(const char *msg, int length) noexcept:
++# Native setup/solve can invoke this callback without holding the GIL.
++# Reacquire it before decoding text and calling the Python logger.
++cdef void c_print_callback(const char *msg, int length) noexcept with gil:
+     global print_callback
+     print_callback(msg.decode('utf-8'))
+ 

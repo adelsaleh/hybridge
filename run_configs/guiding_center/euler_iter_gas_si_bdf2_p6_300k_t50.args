@@ -1,0 +1,4 @@
+# Supplied ITER.geo curved wall, original coordinates; 11,520 signed vortices, h=0.014.
+# 300k minimum triangles; DG p=6, SI-BDF2 dt=0.05 to T=50.
+# One SI-Euler startup step, then one transport and one Poisson solve per step.
+--preset euler_iter_gas_si_bdf2_p6_300k_t50

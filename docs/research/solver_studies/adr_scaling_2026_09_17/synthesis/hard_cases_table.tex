@@ -1,0 +1,12 @@
+\begin{tabular}{llrrrrrrll}
+\toprule
+Geometry & Class & \multicolumn{2}{c}{ASM+PP} & \multicolumn{2}{c}{AMG} & \multicolumn{2}{c}{$p$MG--AMG} & \multicolumn{2}{c}{CPU LU} \\
+ & & Fresh & Reused & Fresh & Reused & Fresh & Reused & Fresh & Reused \\
+\midrule
+Square & Low & 8040.6 & 6915.1 & 17811.8 & 17054.3 & NC & NC & $\mathrm{P\!-\!LU}_{16}$ 4057.424 & $\mathrm{P\!-\!LU}_{8}$ 683.291 \\
+Square & Directional & 12254.6 & 11214.4 & NC & NC & 4019.9 & 2751.1 & $\mathrm{P\!-\!LU}_{24}$ 3846.385 & $\mathrm{P\!-\!LU}_{16}$ 696.707 \\
+\midrule
+Annulus & Low & 13773.3 & 12369.2 & 16961.3 & 16389.6 & NC & NC & $\mathrm{P\!-\!LU}_{16}$ 4231.684 & $\mathrm{P\!-\!LU}_{16}$ 689.025 \\
+Annulus & Directional & 5024.0 & 3994.5 & NC & NC & 3011.8 & 1730.8 & $\mathrm{P\!-\!LU}_{24}$ 4177.154 & $\mathrm{P\!-\!LU}_{16}$ 685.854 \\
+\bottomrule
+\end{tabular}

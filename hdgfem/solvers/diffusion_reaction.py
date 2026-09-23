@@ -15,6 +15,8 @@ fused trace assembly path in Numba.
 
 from __future__ import annotations
 
+from hdgfem.precision import audit_arrays, REAL_DTYPE
+
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, fields, replace
@@ -144,6 +146,8 @@ class DiffusionReactionResult:
     scale_system: bool | Literal["none", "left", "symmetric"] = True
     assembly_backend: AssemblyBackend = "numpy"
     global_solve_result: SolveResult | None = None
+    trace_device: Any = None
+    local_unknowns_device: Any = None
 
 
 @dataclass(frozen=True)
@@ -170,7 +174,7 @@ def flux_coefficients(result: DiffusionReactionResult) -> np.ndarray:
     This helper gives assembly code a contiguous component-first array in the
     mixed-HDG ordering ``(q_x, q_y)``.
     """
-    coeffs = np.asarray(result.flux.as_component_first(), dtype=np.float64)
+    coeffs = np.asarray(result.flux.as_component_first(), dtype=REAL_DTYPE)
     if coeffs.shape[0] != 2:
         raise ValueError(f"expected two flux components; got shape {coeffs.shape}")
     return np.ascontiguousarray(coeffs)
@@ -211,6 +215,8 @@ class DiffusionReactionHDGOptions:
     petsc_monitor: bool = False
     cupyx_solver: str = "bicgstab"
     amgx_config: dict | None = None
+    amgx_retry_attempts: tuple[dict[str, Any], ...] | None = None
+    fb_hp_mg_preconditioner_policy: Literal["standard", "robust"] = "standard"
     cache_device_matrix: bool = True
     cache_local_factors: LocalFactorCachePolicy = "none"
     ilu_drop_tol: float = 1e-10
@@ -325,8 +331,8 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
 def normalize_diffusion_stabilization(stabilization, space: DGSpace) -> np.ndarray:
     """Return element-face stabilization parameters with shape ``(K, 3)``."""
     if np.isscalar(stabilization):
-        return np.full((space.mesh.num_tri, 3), float(stabilization), dtype=np.float64)
-    tau = np.asarray(stabilization, dtype=np.float64)
+        return np.full((space.mesh.num_tri, 3), float(stabilization), dtype=REAL_DTYPE)
+    tau = np.asarray(stabilization, dtype=REAL_DTYPE)
     if tau.shape == (space.mesh.num_tri,):
         return np.broadcast_to(tau[:, None], (space.mesh.num_tri, 3)).copy()
     if tau.shape != (space.mesh.num_tri, 3):
@@ -339,7 +345,7 @@ def is_identity_diffusion(diffusion) -> bool:
     if np.isscalar(diffusion):
         return bool(float(diffusion) == 1.0)
     try:
-        array = np.asarray(diffusion, dtype=np.float64)
+        array = np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         return False
     if array.shape == (2, 2):
@@ -359,15 +365,15 @@ def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np
     num_elements = space.mesh.num_tri
     num_quads = space.quad_data.Krf_w.shape[0]
     if np.isscalar(component):
-        return np.full((num_elements, num_quads), float(component), dtype=np.float64)
+        return np.full((num_elements, num_quads), float(component), dtype=REAL_DTYPE)
     if isinstance(component, DGField):
         component.space.assert_same_mesh(space)
-        return np.asarray(component.values_at_ref(space.quad_data.Krf_quads), dtype=np.float64)
+        return np.asarray(component.values_at_ref(space.quad_data.Krf_quads), dtype=REAL_DTYPE)
     if callable(component):
         points = space.mapped_quads()
         values = component(points[:, :, 0], points[:, :, 1])
     else:
-        values = np.asarray(component, dtype=np.float64)
+        values = np.asarray(component, dtype=REAL_DTYPE)
         if values.shape == space.shape:
             values = space.field(values, name=label).values()
         elif values.shape != (num_elements, num_quads):
@@ -376,9 +382,9 @@ def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np
                 f"{space.shape}, or quadrature values with shape ({num_elements}, {num_quads}); "
                 f"got {values.shape}"
             )
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     if values.ndim == 0:
-        return np.full((num_elements, num_quads), float(values), dtype=np.float64)
+        return np.full((num_elements, num_quads), float(values), dtype=REAL_DTYPE)
     if values.shape == (num_quads,):
         return np.broadcast_to(values[None, :], (num_elements, num_quads)).copy()
     if values.shape != (num_elements, num_quads):
@@ -392,21 +398,21 @@ def _diffusion_components(diffusion, space: DGSpace) -> tuple[np.ndarray, np.nda
     """Return diffusion tensor components sampled on volume quadrature points."""
     num_elements = space.mesh.num_tri
     num_quads = space.quad_data.Krf_w.shape[0]
-    zeros = np.zeros((num_elements, num_quads), dtype=np.float64)
+    zeros = np.zeros((num_elements, num_quads), dtype=REAL_DTYPE)
 
     if np.isscalar(diffusion):
-        diagonal = np.full((num_elements, num_quads), float(diffusion), dtype=np.float64)
+        diagonal = np.full((num_elements, num_quads), float(diffusion), dtype=REAL_DTYPE)
         return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
 
     try:
-        constant = np.asarray(diffusion, dtype=np.float64)
+        constant = np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         constant = None
     if constant is not None and constant.shape == (2, 2):
-        k00 = np.full((num_elements, num_quads), constant[0, 0], dtype=np.float64)
-        k01 = np.full((num_elements, num_quads), constant[0, 1], dtype=np.float64)
-        k10 = np.full((num_elements, num_quads), constant[1, 0], dtype=np.float64)
-        k11 = np.full((num_elements, num_quads), constant[1, 1], dtype=np.float64)
+        k00 = np.full((num_elements, num_quads), constant[0, 0], dtype=REAL_DTYPE)
+        k01 = np.full((num_elements, num_quads), constant[0, 1], dtype=REAL_DTYPE)
+        k10 = np.full((num_elements, num_quads), constant[1, 0], dtype=REAL_DTYPE)
+        k11 = np.full((num_elements, num_quads), constant[1, 1], dtype=REAL_DTYPE)
         return k00, k01, k10, k11
 
     if isinstance(diffusion, (tuple, list)):
@@ -453,10 +459,10 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     inv11 = k00 / det
 
     shape = (space.mesh.num_tri, space.el_dof, space.el_dof)
-    g00 = np.empty(shape, dtype=np.float64)
-    g01 = np.empty(shape, dtype=np.float64)
-    g10 = np.empty(shape, dtype=np.float64)
-    g11 = np.empty(shape, dtype=np.float64)
+    g00 = np.empty(shape, dtype=REAL_DTYPE)
+    g01 = np.empty(shape, dtype=REAL_DTYPE)
+    g10 = np.empty(shape, dtype=REAL_DTYPE)
+    g11 = np.empty(shape, dtype=REAL_DTYPE)
     hdg_mats.set_weighted_mass_from_values(g00, inv00, space)
     hdg_mats.set_weighted_mass_from_values(g01, inv01, space)
     hdg_mats.set_weighted_mass_from_values(g10, inv10, space)
@@ -466,12 +472,12 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
 
 def _project_quadrature_values(values: np.ndarray, space: DGSpace) -> np.ndarray:
     """Project element-quadrature values into same-space DG coefficients."""
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
     if values.shape != expected:
         raise ValueError(f"values must have shape {expected}; got {values.shape}")
     rhs = values @ space.quad_data.weighted_phi
-    return np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=np.float64)
+    return np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=REAL_DTYPE)
 
 
 def _project_inverse_diffusion_for_numba(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -537,7 +543,7 @@ def diffusion_trace_lift(
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     oriented_restriction = trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling].copy()
     oriented_restriction *= mesh.jacs_el_fc[..., None, None]
-    lift = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, 3 * q.el_dof), dtype=np.float64)
+    lift = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, 3 * q.el_dof), dtype=REAL_DTYPE)
     lift[..., :q.el_dof] = tau[..., None, None] * oriented_restriction
     lift[..., q.el_dof:2 * q.el_dof] = mesh.normals[..., 0, None, None] * oriented_restriction
     lift[..., 2 * q.el_dof:] = mesh.normals[..., 1, None, None] * oriented_restriction
@@ -555,7 +561,7 @@ def diffusion_element_boundary_mats(
     mesh = space.mesh
     q = space.quad_data
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-    result = np.zeros((mesh.num_tri, 3 * q.el_dof, 3 * trace_ref.edg_dof), dtype=np.float64)
+    result = np.zeros((mesh.num_tri, 3 * q.el_dof, 3 * trace_ref.edg_dof), dtype=REAL_DTYPE)
     result_r = result.reshape(mesh.num_tri, 3, q.el_dof, 3, trace_ref.edg_dof)
     face_element_trace = trace_ref.face_trace_test_element_trial_oriented[:3].transpose(2, 0, 1)
     result_r[:, 0] = (tau * mesh.jacs_el_fc)[:, None, :, None] * face_element_trace[None, :, :, :]
@@ -649,14 +655,14 @@ def hdg_residual(
     )
     local_trace = hdg_assembly.element_traces(trace, space)
 
-    flux_coeffs = np.asarray(flux_coeffs, dtype=np.float64)
+    flux_coeffs = np.asarray(flux_coeffs, dtype=REAL_DTYPE)
     expected_flux_shape = (2, mesh.num_tri, q.el_dof)
     if flux_coeffs.shape != expected_flux_shape:
         raise ValueError(f"flux_coeffs must have shape {expected_flux_shape}; got {flux_coeffs.shape}")
     qx_coeffs = np.ascontiguousarray(flux_coeffs[0])
     qy_coeffs = np.ascontiguousarray(flux_coeffs[1])
 
-    local = np.zeros((mesh.num_tri, 3 * q.el_dof), dtype=np.float64)
+    local = np.zeros((mesh.num_tri, 3 * q.el_dof), dtype=REAL_DTYPE)
     local[:, :q.el_dof] = (
         np.einsum("Kij,Kj->Ki", m_tau, field.coeffs, optimize=True)
         + np.einsum("Kij,Kj->Ki", m_n0 - d0, qx_coeffs, optimize=True)
@@ -674,7 +680,7 @@ def hdg_residual(
     local -= np.einsum("Kij,Kj->Ki", element_boundary, local_trace, optimize=True)
     local -= source
 
-    trace_residual_full = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    trace_residual_full = np.zeros((mesh.num_edg, q.edg_dof), dtype=REAL_DTYPE)
     oriented = q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     u_lift = np.einsum("Kfai,Ki->Kfa", oriented, field.coeffs, optimize=True)
     qx_lift = np.einsum("Kfai,Ki->Kfa", oriented, qx_coeffs, optimize=True)
@@ -724,7 +730,7 @@ def _local_solver_tensor_blocks_numpy(
     block mass matrix of ``kappa^{-1}`` in the two flux rows.
     """
     q = space.quad_data
-    local_matrix = np.zeros((space.mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof), dtype=np.float64)
+    local_matrix = np.zeros((space.mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof), dtype=REAL_DTYPE)
     blocks = local_matrix.reshape(space.mesh.num_tri, 3, q.el_dof, 3, q.el_dof)
 
     blocks[:, 0, :, 0, :] = m_tau
@@ -769,7 +775,7 @@ def _local_solver_blocks_numpy(
     q = space.quad_data
     mn_d0 = m_n0 - d0
     mn_d1 = m_n1 - d1
-    identity = np.eye(q.el_dof, dtype=np.float64)[None]
+    identity = np.eye(q.el_dof, dtype=REAL_DTYPE)[None]
     jacs_inv2 = jacs_inv * jacs_inv
 
     e_m0 = e @ mn_d0 @ q.MKrf_inv
@@ -783,7 +789,7 @@ def _local_solver_blocks_numpy(
     d1_e_m0 = d1_e @ mn_d0 @ q.MKrf_inv
     d1_e_m1 = d1_e @ mn_d1 @ q.MKrf_inv
 
-    local_solver = np.zeros((space.mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof), dtype=np.float64)
+    local_solver = np.zeros((space.mesh.num_tri, 3 * q.el_dof, 3 * q.el_dof), dtype=REAL_DTYPE)
     solver_r = local_solver.reshape(space.mesh.num_tri, 3, q.el_dof, 3, q.el_dof)
     solver_r[:, 0, :, 0, :] = e
     solver_r[:, 0, :, 1, :] = jacs_inv * e_m0
@@ -882,14 +888,14 @@ def impose_boundary_trace_on_guess(
     the already assembled target-order projection removes that penalty residual
     without changing interior trace data.
     """
-    guess = np.asarray(initial_guess, dtype=np.float64).copy()
+    guess = np.asarray(initial_guess, dtype=REAL_DTYPE).copy()
     mesh = space.mesh
     edg_dof = space.quad_data.edg_dof
     expected_shape = (mesh.num_edg * edg_dof,)
     if guess.shape != expected_shape:
         raise ValueError(f"initial_guess must have shape {expected_shape}; got {guess.shape}")
     if boundary_trace is not None:
-        boundary_trace = np.asarray(boundary_trace, dtype=np.float64)
+        boundary_trace = np.asarray(boundary_trace, dtype=REAL_DTYPE)
         expected_boundary_shape = (mesh.num_edg, edg_dof)
         if boundary_trace.shape != expected_boundary_shape:
             raise ValueError(f"boundary_trace must have shape {expected_boundary_shape}; got {boundary_trace.shape}")
@@ -989,7 +995,7 @@ def assemble_diffusion_trace_system(
 
 def split_diffusion_unknowns(local_unknowns: np.ndarray, space: DGSpace) -> tuple[DGField, VectorDGField]:
     """Split raw ``[u_h, q_x, q_y]`` coefficients into DG field objects."""
-    unknowns = np.asarray(local_unknowns, dtype=np.float64)
+    unknowns = np.asarray(local_unknowns, dtype=REAL_DTYPE)
     expected_shape = (space.mesh.num_tri, 3 * space.el_dof)
     if unknowns.shape != expected_shape:
         raise ValueError(f"local_unknowns must have shape {expected_shape}; got {unknowns.shape}")
@@ -1032,6 +1038,7 @@ class _HDGPostprocessCache:
     flux_schur_pivots: np.ndarray | None = None
     primal_lu: np.ndarray | None = None
     primal_pivots: np.ndarray | None = None
+    raw_flux_cache: Any = None
 
 
 def _normalize_hdg_postprocess_mode(mode) -> HDGPostprocessMode:
@@ -1099,19 +1106,20 @@ def _resolve_diffusion_postprocessing_backend(
             assembly_backend
             if assembly_backend in {"cupy", "raw-cuda"}
             and want_flux
-            and flux_space == "RT_projection"
+            and (flux_space == "RT_projection" or (assembly_backend == "raw-cuda" and mode == "flux"))
             else "numba"
         )
     if backend not in {"numba", "cupy", "raw-cuda"}:
         raise ValueError(
             "postprocessing_backend must be 'auto', 'numba', 'cupy', or 'raw-cuda'"
         )
-    if backend in {"cupy", "raw-cuda"} and (
-        not want_flux or flux_space != "RT_projection"
+    if backend in {"cupy", "raw-cuda"} and not (
+        want_flux and (flux_space == "RT_projection" or (backend == "raw-cuda" and mode == "flux"))
     ):
         raise NotImplementedError(
             f"postprocessing_backend={backend!r} supports only flux "
-            "postprocessing with flux_postprocess_space='RT_projection'"
+            "postprocessing with flux_postprocess_space='RT_projection', "
+            "or flux-only l2_closest with raw-cuda"
         )
     return backend
 
@@ -1138,11 +1146,11 @@ def _legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     roots = np.real_if_close(poly.deriv().roots(), tol=1000)
     if np.iscomplexobj(roots):
         raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
-    interior = np.sort(np.asarray(roots, dtype=np.float64))
+    interior = np.sort(np.asarray(roots, dtype=REAL_DTYPE))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)
-    return np.ascontiguousarray(points, dtype=np.float64), np.ascontiguousarray(weights, dtype=np.float64)
+    return np.ascontiguousarray(points, dtype=REAL_DTYPE), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def _edge_lagrange_basis(order: int, points: np.ndarray) -> np.ndarray:
@@ -1150,9 +1158,9 @@ def _edge_lagrange_basis(order: int, points: np.ndarray) -> np.ndarray:
     order = int(order)
     if order < 0:
         raise ValueError("order must be nonnegative")
-    points = np.asarray(points, dtype=np.float64)
+    points = np.asarray(points, dtype=REAL_DTYPE)
     nodes, _ = _legendre_gauss_lobatto(order + 1)
-    values = np.ones((order + 1, points.size), dtype=np.float64)
+    values = np.ones((order + 1, points.size), dtype=REAL_DTYPE)
     for i in range(order + 1):
         for j in range(order + 1):
             if i != j:
@@ -1180,8 +1188,8 @@ def _face_base_to_post_trace(space: DGSpace, post_space: DGSpace) -> np.ndarray:
 def _edge_legendre_basis(order: int, points: np.ndarray) -> np.ndarray:
     """Evaluate the modal Legendre trace basis of ``order`` at edge points."""
     order = int(order)
-    points = np.asarray(points, dtype=np.float64)
-    values = np.empty((order + 1, points.size), dtype=np.float64)
+    points = np.asarray(points, dtype=REAL_DTYPE)
+    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
     return np.ascontiguousarray(values)
@@ -1192,9 +1200,9 @@ def _edge_bernstein_basis(order: int, points: np.ndarray) -> np.ndarray:
     from math import factorial
 
     order = int(order)
-    points = np.asarray(points, dtype=np.float64)
+    points = np.asarray(points, dtype=REAL_DTYPE)
     r = 0.5 * (points + 1.0)
-    values = np.empty((order + 1, points.size), dtype=np.float64)
+    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         coeff = factorial(order) / (factorial(j) * factorial(order - j))
         values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
@@ -1243,8 +1251,8 @@ def _interior_postprocess_moments(space: DGSpace, post_space: DGSpace) -> tuple[
     """Return reference volume moments against ``P_{p-1}`` test functions."""
     if space.order == 0:
         return (
-            np.empty((0, space.el_dof), dtype=np.float64),
-            np.empty((0, post_space.el_dof), dtype=np.float64),
+            np.empty((0, space.el_dof), dtype=REAL_DTYPE),
+            np.empty((0, post_space.el_dof), dtype=REAL_DTYPE),
         )
     low_space = DGSpace(
         space.mesh,
@@ -1354,19 +1362,19 @@ def _build_hdg_postprocess_cache(
         constraints = 3 * post_edg_dof + 2 * low_dof
         cache.flux_ainv_constraint_t = np.empty(
             (space.mesh.num_tri, 2 * post_el_dof, constraints),
-            dtype=np.float64,
+            dtype=REAL_DTYPE,
         )
-        cache.flux_schur_lu = np.empty((space.mesh.num_tri, constraints, constraints), dtype=np.float64)
+        cache.flux_schur_lu = np.empty((space.mesh.num_tri, constraints, constraints), dtype=REAL_DTYPE)
         cache.flux_schur_pivots = np.empty((space.mesh.num_tri, constraints), dtype=np.int64)
         factor_hdiv_flux_min_distance_postprocess_kernel(
             cache.flux_ainv_constraint_t,
             cache.flux_schur_lu,
             cache.flux_schur_pivots,
-            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
-            np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
-            np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=REAL_DTYPE),
+            np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=REAL_DTYPE),
+            np.ascontiguousarray(space.mesh.normals, dtype=REAL_DTYPE),
+            np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=REAL_DTYPE),
+            np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=REAL_DTYPE),
             cache.interior_low_to_post,
         )
 
@@ -1375,13 +1383,13 @@ def _build_hdg_postprocess_cache(
 
         post_el_dof = cache.post_space.el_dof
         rows = post_el_dof + 1
-        cache.primal_lu = np.empty((space.mesh.num_tri, rows, rows), dtype=np.float64)
+        cache.primal_lu = np.empty((space.mesh.num_tri, rows, rows), dtype=REAL_DTYPE)
         cache.primal_pivots = np.empty((space.mesh.num_tri, rows), dtype=np.int64)
         factor_primal_postprocess_kernel(
             cache.primal_lu,
             cache.primal_pivots,
-            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=REAL_DTYPE),
+            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=REAL_DTYPE),
             cache.primal_stiffness_rr,
             cache.primal_stiffness_rs,
             cache.primal_stiffness_ss,
@@ -1414,7 +1422,7 @@ def _postprocess_rt_flux_from_samples(
         .transpose(1, 2, 0)
     )
     if space.order == 0:
-        low_volume = np.empty((qpost.Krf_w.size, 0), dtype=np.float64)
+        low_volume = np.empty((qpost.Krf_w.size, 0), dtype=REAL_DTYPE)
     else:
         low_space = DGSpace(
             space.mesh,
@@ -1430,10 +1438,10 @@ def _postprocess_rt_flux_from_samples(
     r_volume = qpost.Krf_quads[:, 0]
     s_volume = qpost.Krf_quads[:, 1]
     radial_volume = np.empty(
-        (2, space.order + 1, qpost.Krf_w.size), dtype=np.float64
+        (2, space.order + 1, qpost.Krf_w.size), dtype=REAL_DTYPE
     )
     radial_face = np.empty(
-        (2, 3, space.order + 1, nqf), dtype=np.float64
+        (2, 3, space.order + 1, nqf), dtype=REAL_DTYPE
     )
     for degree_r in range(space.order + 1):
         homogeneous = (
@@ -1486,7 +1494,7 @@ def _postprocess_rt_flux_from_samples(
         if njit is None:
             raise RuntimeError("Numba RT flux postprocessing requires numba")
         coeffs = np.empty(
-            (2, space.mesh.num_tri, post_space.el_dof), dtype=np.float64
+            (2, space.mesh.num_tri, post_space.el_dof), dtype=REAL_DTYPE
         )
         solve_adr_rt_total_flux_postprocess_kernel(coeffs, *rt_inputs)
     else:
@@ -1602,14 +1610,28 @@ def _postprocess_diffusion_solution(
             "postprocessing_backend must resolve to 'numba', 'cupy', or 'raw-cuda'"
         )
 
-    local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=np.float64))
+    if postprocessing_backend == "raw-cuda" and mode == "flux":
+        from ..backends.diffusion_flux_recovery_raw_cuda import recover_diffusion_flux_raw_cuda
+        trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+        if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
+            cache = _new_hdg_postprocess_cache(space, trace_ref)
+        recovered, cache.raw_flux_cache = recover_diffusion_flux_raw_cuda(
+            local_unknowns, trace, space, trace_ref, stabilization, flux_space,
+            cache=cache.raw_flux_cache,
+        )
+        # Include completed GPU work in the solver's postprocessing timing.
+        from ..backends.cupy import require_cupy
+        require_cupy().cuda.get_current_stream().synchronize()
+        return None, recovered, cache
+
+    local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=REAL_DTYPE))
     expected_unknowns = (space.mesh.num_tri, 3 * space.el_dof)
     if local_unknowns.shape != expected_unknowns:
         raise ValueError(f"local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}")
 
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     trace_orientation_mode = _postprocess_trace_orientation_mode(trace_ref)
-    trace = np.ascontiguousarray(np.asarray(trace, dtype=np.float64))
+    trace = np.ascontiguousarray(np.asarray(trace, dtype=REAL_DTYPE))
     expected_trace = (space.mesh.num_edg * trace_ref.edg_dof,)
     if trace.shape != expected_trace:
         raise ValueError(f"trace must have shape {expected_trace}; got {trace.shape}")
@@ -1632,15 +1654,15 @@ def _postprocess_diffusion_solution(
         if cache.primal_lu is None or cache.primal_pivots is None:
             raise RuntimeError("missing primal post-processing factorization")
         inv00, inv01, inv10, inv11 = _inverse_diffusion_values(diffusion, cache.post_space)
-        coeffs = np.empty(cache.post_space.shape, dtype=np.float64)
+        coeffs = np.empty(cache.post_space.shape, dtype=REAL_DTYPE)
         solve_primal_postprocess_kernel(
             coeffs,
             local_unknowns,
-            np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
-            np.ascontiguousarray(cache.post_space.quad_data.Krf_w, dtype=np.float64),
+            np.ascontiguousarray(space.mesh.aff_jacs, dtype=REAL_DTYPE),
+            np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=REAL_DTYPE),
+            np.ascontiguousarray(cache.post_space.quad_data.Krf_w, dtype=REAL_DTYPE),
             cache.base_basis_on_post_quads,
-            np.ascontiguousarray(cache.post_space.quad_data.gphi, dtype=np.float64),
+            np.ascontiguousarray(cache.post_space.quad_data.gphi, dtype=REAL_DTYPE),
             cache.mean_base,
             inv00,
             inv01,
@@ -1675,25 +1697,25 @@ def _postprocess_diffusion_solution(
         ):
             raise RuntimeError("missing flux post-processing factorization")
         tau = normalize_diffusion_stabilization(stabilization, space)
-        coeffs = np.empty((2, space.mesh.num_tri, cache.post_space.el_dof), dtype=np.float64)
+        coeffs = np.empty((2, space.mesh.num_tri, cache.post_space.el_dof), dtype=REAL_DTYPE)
         if postprocessed_field is not None and _diffusion_is_identity(diffusion):
             solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel(
                 coeffs,
                 local_unknowns,
                 trace,
-                np.ascontiguousarray(postprocessed_field.coeffs, dtype=np.float64),
+                np.ascontiguousarray(postprocessed_field.coeffs, dtype=REAL_DTYPE),
                 np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
                 np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
-                np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-                np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=np.float64),
-                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
-                np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.aff_jacs, dtype=REAL_DTYPE),
+                np.ascontiguousarray(space.mesh.inv_aff_mats_t, dtype=REAL_DTYPE),
+                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=REAL_DTYPE),
+                np.ascontiguousarray(space.mesh.normals, dtype=REAL_DTYPE),
                 tau,
                 cache.post_grad_project_r,
                 cache.post_grad_project_s,
                 cache.face_base_to_post,
                 cache.trace_base_to_post,
-                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=REAL_DTYPE),
                 cache.interior_low_to_base,
                 cache.interior_low_to_post,
                 cache.flux_ainv_constraint_t,
@@ -1708,15 +1730,15 @@ def _postprocess_diffusion_solution(
                 trace,
                 np.ascontiguousarray(space.mesh.loc2glob_edge, dtype=np.int64),
                 np.ascontiguousarray(space.mesh.orientations, dtype=np.bool_),
-                np.ascontiguousarray(space.mesh.aff_jacs, dtype=np.float64),
-                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=np.float64),
-                np.ascontiguousarray(space.mesh.normals, dtype=np.float64),
+                np.ascontiguousarray(space.mesh.aff_jacs, dtype=REAL_DTYPE),
+                np.ascontiguousarray(space.mesh.jacs_el_fc, dtype=REAL_DTYPE),
+                np.ascontiguousarray(space.mesh.normals, dtype=REAL_DTYPE),
                 tau,
-                np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=np.float64),
+                np.ascontiguousarray(cache.post_space.quad_data.MKrf_inv, dtype=REAL_DTYPE),
                 cache.base_to_post_mass,
                 cache.face_base_to_post,
                 cache.trace_base_to_post,
-                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=np.float64),
+                np.ascontiguousarray(cache.post_space.quad_data.face_element_test_trace_trial, dtype=REAL_DTYPE),
                 cache.interior_low_to_base,
                 cache.interior_low_to_post,
                 cache.flux_ainv_constraint_t,
@@ -1755,6 +1777,12 @@ def _result_with_hdg_postprocessing(
     result_values["postprocessed_flux"] = postprocessed_flux
     result_values["flux_postprocess_space"] = flux_postprocess_space
     result_values["postprocessing_backend"] = postprocessing_backend
+    if postprocessing_backend == "raw-cuda":
+        # Recovery has consumed these transient reconstruction buffers. Keep
+        # owning raw/recovered fields and the reduced trace, not duplicate
+        # full mixed tables in every accepted BDF history result.
+        result_values["local_unknowns_device"] = None
+        result_values["trace_device"] = None
     return DiffusionReactionResult(**result_values)
 
 
@@ -1775,7 +1803,7 @@ def _host_array(value, *, dtype=None) -> np.ndarray | None:
 
 def _full_boundary_trace_from_compact(boundary_trace, space: DGSpace) -> np.ndarray:
     """Normalize full-edge or compact boundary-edge trace data to full-edge shape."""
-    trace = _host_array(boundary_trace, dtype=np.float64)
+    trace = _host_array(boundary_trace, dtype=REAL_DTYPE)
     mesh = space.mesh
     edg_dof = space.quad_data.edg_dof
     full_shape = (mesh.num_edg, edg_dof)
@@ -1784,7 +1812,7 @@ def _full_boundary_trace_from_compact(boundary_trace, space: DGSpace) -> np.ndar
     compact_shape = (mesh.bnd_edges_inds.size, edg_dof)
     if trace.shape != compact_shape:
         raise ValueError(f"boundary_trace must have shape {full_shape} or {compact_shape}; got {trace.shape}")
-    full = np.zeros(full_shape, dtype=np.float64)
+    full = np.zeros(full_shape, dtype=REAL_DTYPE)
     full[mesh.bnd_edges_inds] = trace
     return np.ascontiguousarray(full)
 
@@ -1807,22 +1835,22 @@ def _reduction_from_reduced_trace_system(
     old_to_new = np.full(mesh.num_edg * edg_dof, -1, dtype=np.int64)
     old_to_new[free_mask] = np.arange(np.count_nonzero(free_mask), dtype=np.int64)
     empty_i = np.empty(0, dtype=np.int64)
-    empty_f = np.empty(0, dtype=np.float64)
+    empty_f = np.empty(0, dtype=REAL_DTYPE)
     return KnownDofReduction(
         rows=empty_i if rows is None else np.ascontiguousarray(rows, dtype=np.int64),
         cols=empty_i if cols is None else np.ascontiguousarray(cols, dtype=np.int64),
-        data=empty_f if rows is None else np.ascontiguousarray(data, dtype=np.float64),
-        rhs=np.ascontiguousarray(rhs, dtype=np.float64),
+        data=empty_f if rows is None else np.ascontiguousarray(data, dtype=REAL_DTYPE),
+        rhs=np.ascontiguousarray(rhs, dtype=REAL_DTYPE),
         free_mask=np.ascontiguousarray(free_mask),
         known_mask=np.ascontiguousarray(known_mask),
-        known_values=np.ascontiguousarray(boundary_trace.ravel(), dtype=np.float64),
+        known_values=np.ascontiguousarray(boundary_trace.ravel(), dtype=REAL_DTYPE),
         old_to_new=np.ascontiguousarray(old_to_new),
     )
 
 
 def _reduced_result_from_full_trace_system(trace_system, space: DGSpace) -> tuple[hdg_assembly.TraceSystem, KnownDofReduction]:
     """Eliminate boundary dofs from a full trace system."""
-    boundary_trace = np.asarray(trace_system.boundary_trace, dtype=np.float64)
+    boundary_trace = np.asarray(trace_system.boundary_trace, dtype=REAL_DTYPE)
     known_mask = ~hdg_assembly.free_trace_dofs(space)
     reduction = eliminate_known_dofs(
         trace_system.rows,
@@ -1882,6 +1910,7 @@ class DiffusionReactionHDGSolver:
         self.reaction = None
         self.boundary_condition = None
         self._problem_is_set = False
+        self._raw_cuda_amgx_retry_solver_cache: dict[Any, Any] = {}
 
         self.clear_cache()
 
@@ -2017,8 +2046,27 @@ class DiffusionReactionHDGSolver:
             self.clear_cache()
         return self
 
+    def _close_raw_cuda_amgx_retry_solvers(self) -> None:
+        """Release stateful AMGX fallback solvers owned by this instance."""
+        solvers = getattr(self, "_raw_cuda_amgx_retry_solver_cache", {})
+        for solver in set(solvers.values()):
+            solver.close(suppress_errors=True)
+        solvers.clear()
+
+    def close(self) -> None:
+        """Release persistent device solver state owned by this instance."""
+        self.clear_cache()
+
+    def __del__(self):
+        """Best-effort release of persistent AMGX retry state."""
+        try:
+            self._close_raw_cuda_amgx_retry_solvers()
+        except Exception:
+            pass
+
     def clear_cache(self) -> "DiffusionReactionHDGSolver":
         """Clear assembled matrices, local solvers, and latest solution."""
+        self._close_raw_cuda_amgx_retry_solvers()
         native_solver = getattr(self, "_raw_cuda_fb_hp_mg_solver", None)
         if native_solver is not None:
             close = getattr(native_solver, "close", None)
@@ -2259,8 +2307,8 @@ class DiffusionReactionHDGSolver:
                 )
             rows = _host_array(gpu.rows, dtype=np.int64)
             cols = _host_array(gpu.cols, dtype=np.int64)
-            data = _host_array(gpu.data, dtype=np.float64)
-            rhs = _host_array(gpu.rhs, dtype=np.float64)
+            data = _host_array(gpu.data, dtype=REAL_DTYPE)
+            rhs = _host_array(gpu.rhs, dtype=REAL_DTYPE)
             boundary_trace = _full_boundary_trace_from_compact(gpu.boundary_trace, self.space)
             indptr = _host_array(gpu.indptr, dtype=np.int32)
             indices = _host_array(gpu.indices, dtype=np.int32)
@@ -2281,9 +2329,9 @@ class DiffusionReactionHDGSolver:
         result = DiffusionReactionAssemblyResult(
             rows=None if trace_system.rows is None else np.ascontiguousarray(trace_system.rows, dtype=np.int64),
             cols=None if trace_system.cols is None else np.ascontiguousarray(trace_system.cols, dtype=np.int64),
-            data=np.ascontiguousarray(trace_system.data, dtype=np.float64),
-            rhs=np.ascontiguousarray(trace_system.rhs, dtype=np.float64),
-            boundary_trace=np.ascontiguousarray(trace_system.boundary_trace, dtype=np.float64),
+            data=np.ascontiguousarray(trace_system.data, dtype=REAL_DTYPE),
+            rhs=np.ascontiguousarray(trace_system.rhs, dtype=REAL_DTYPE),
+            boundary_trace=np.ascontiguousarray(trace_system.boundary_trace, dtype=REAL_DTYPE),
             reduction=reduction,
             assembly_backend=backend,
             matrix_format=matrix_format,
@@ -2426,6 +2474,18 @@ class DiffusionReactionHDGSolver:
                 "requires raw_matrix_format='auto', 'csr', or 'bsr'"
             )
         native_requested = normalized_solver == "fb-hp-mg-pcg"
+        native_policy = str(options.fb_hp_mg_preconditioner_policy).replace(
+            "_", "-"
+        ).lower()
+        if native_policy not in {"standard", "robust"}:
+            raise ValueError(
+                "fb_hp_mg_preconditioner_policy must be 'standard' or 'robust'"
+            )
+        if native_policy == "robust" and not native_requested:
+            raise ValueError(
+                "fb_hp_mg_preconditioner_policy='robust' requires "
+                "solver='fb-hp-mg-pcg'"
+            )
         if native_requested and matrix_format != "bsr":
             raise ValueError("solver='fb-hp-mg-pcg' requires raw_matrix_format='auto' or 'bsr'")
         if native_requested and str(options.trace_basis).replace("_", "-").lower() != "legendre-modal":
@@ -2656,7 +2716,7 @@ class DiffusionReactionHDGSolver:
             guess = options.initial_guess if options.initial_guess is not None else self._raw_cuda_last_trace_reduced
             if guess is None:
                 return None
-            guess_cp = cp.asarray(guess, dtype=cp.float64)
+            guess_cp = cp.asarray(guess, dtype=REAL_DTYPE)
             reduced_size = int(assembly_result.rhs.size)
             if guess_cp.size == reduced_size:
                 return cp.ascontiguousarray(guess_cp.reshape((reduced_size,)))
@@ -2669,6 +2729,7 @@ class DiffusionReactionHDGSolver:
                 f"got {guess_cp.size}"
             )
 
+        audit_arrays('poisson-assembly', assembly_result, cspace)
         effective_scale_system = options.scale_system
         scale_mode = (
             "left" if effective_scale_system is True
@@ -2680,11 +2741,21 @@ class DiffusionReactionHDGSolver:
         native_setup_wall = 0.0
         native_fallback_reason = None
         native_result = None
-        native_key = (operator_key, int(assembly_result.rhs.size))
+        native_fallback_guess = None
+        native_physical_stats = None
+        native_metrics: dict[str, float] = {}
+        native_key = (
+            operator_key, int(assembly_result.rhs.size), native_policy,
+        )
         if native_requested and self._raw_cuda_fb_hp_mg_failed_key != native_key:
             try:
                 from ..backends.legendre_face_bsr import diagonal_block_positions
                 from ..linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+                from ..backends.advection_cuda import (
+                    _assembly_device_csr_matrix, _device_compressed_matvec,
+                    _residual_stats_cp,
+                )
+                from ..backends.cupy import require_cupyx_sparse
 
                 native_hierarchy_reused = (
                     self._raw_cuda_fb_hp_mg_solver is not None
@@ -2707,22 +2778,103 @@ class DiffusionReactionHDGSolver:
                         data=assembly_result.data,
                         degree=self.space.order,
                         diagonal_positions=diagonal_positions,
+                        preconditioner_policy=native_policy,
                         verbose=verbosity,
                     )
                     cp.cuda.get_current_stream().synchronize()
                     native_setup_wall = time.perf_counter() - setup_started
                     self._raw_cuda_fb_hp_mg_solver_key = native_key
+                # Use the same original coefficients for native true refreshes
+                # and the final acceptance gate. A transformed-matrix residual
+                # can fall just below tolerance while the original one does not;
+                # PCGF must continue from that point, not enter a cold fallback.
+                checked_at = time.perf_counter()
+                sparse = require_cupyx_sparse()
+                physical_matrix = _assembly_device_csr_matrix(assembly_result, cp, sparse)
+                native_metrics["solve.fb_hp_mg.physical_check"] = time.perf_counter() - checked_at
+
+                def assembly_matvec(vector):
+                    return _device_compressed_matvec(physical_matrix, vector, sparse, cp)
+
                 native_result = self._raw_cuda_fb_hp_mg_solver.solve(
                     assembly_result.rhs,
                     initial_guess=solve_initial_guess,
+                    assembly_matvec=assembly_matvec,
                     rtol=options.solver_rtol,
                     atol=options.solver_atol,
-                    maxiter=500 if options.maxiter is None else options.maxiter,
+                    maxiter=(
+                        1000
+                        if options.maxiter is None and native_policy == "robust"
+                        else 500 if options.maxiter is None else options.maxiter
+                    ),
                 )
+                native_metrics.update({
+                    "solve.fb_hp_mg.setup": (
+                        0.0 if native_hierarchy_reused
+                        else float(self._raw_cuda_fb_hp_mg_solver.setup_seconds)
+                    ),
+                    "solve.fb_hp_mg.setup_outer": float(native_setup_wall),
+                    "solve.fb_hp_mg.setup_outer_overhead": max(
+                        0.0,
+                        float(native_setup_wall) - (
+                            0.0 if native_hierarchy_reused
+                            else float(self._raw_cuda_fb_hp_mg_solver.setup_seconds)
+                        ),
+                    ),
+                    "solve.fb_hp_mg.krylov": float(native_result.elapsed_seconds),
+                    "solve.fb_hp_mg.workspace_bytes": float(
+                        self._raw_cuda_fb_hp_mg_solver.workspace_bytes
+                    ),
+                    "solve.fb_hp_mg.symmetry_defect": float(
+                        self._raw_cuda_fb_hp_mg_solver.symmetry_defect
+                    ),
+                    "solve.fb_hp_mg.positive_curvature": float(
+                        self._raw_cuda_fb_hp_mg_solver.positive_curvature
+                    ),
+                    "solve.fb_hp_mg.best_iteration": float(
+                        native_result.best_iteration or 0
+                    ),
+                    "solve.fb_hp_mg.best_residual": float(
+                        native_result.residual_norm
+                    ),
+                    "solve.fb_hp_mg.terminal_residual": float(
+                        native_result.terminal_residual_norm
+                        if native_result.terminal_residual_norm is not None
+                        else native_result.residual_norm
+                    ),
+                    "solve.fb_hp_mg.true_residual_checks": float(
+                        native_result.true_residual_check_count
+                    ),
+                    "solve.fb_hp_mg.residual_restarts": float(
+                        native_result.residual_restart_count
+                    ),
+                    "solve.fb_hp_mg.returned_best_iterate": float(
+                        native_result.returned_best_iterate
+                    ),
+                })
                 if not native_result.converged:
                     raise RuntimeError(
                         "FB-HP-MG-PCG failed the true-residual convergence gate: "
                         f"{native_result.relative_residual:.3e}"
+                        + (f" ({native_result.breakdown_reason})"
+                           if native_result.breakdown_reason else "")
+                    )
+                # Independently validate the returned assembly-basis vector,
+                # even though native true checks now use this same action.
+                checked_at = time.perf_counter()
+                physical_residual = assembly_result.rhs - assembly_matvec(native_result.solution)
+                native_physical_stats = _residual_stats_cp(
+                    physical_residual, assembly_result.rhs,
+                    rtol=options.solver_rtol, atol=options.solver_atol,
+                )
+                native_metrics["solve.fb_hp_mg.physical_check"] += time.perf_counter() - checked_at
+                physical_norm, _, physical_relative, physical_target = native_physical_stats
+                native_metrics["solve.fb_hp_mg.physical_residual"] = physical_norm
+                if not np.isfinite(physical_norm) or physical_norm > physical_target:
+                    raise RuntimeError(
+                        "FB-HP-MG-PCG failed the original-matrix residual gate: "
+                        f"{physical_relative:.3e} relative; "
+                        f"{physical_norm:.3e} > {physical_target:.3e}"
                     )
                 if verbosity:
                     print(
@@ -2731,11 +2883,24 @@ class DiffusionReactionHDGSolver:
                         f"setup={native_setup_wall:.5f}s "
                         f"solve={native_result.elapsed_seconds:.5f}s "
                         f"iterations={native_result.iterations} "
-                        f"true_rel={native_result.relative_residual:.3e}",
+                        f"true_rel={physical_relative:.3e}",
                         flush=True,
                     )
+            except SyntaxError:
+                # Import/programming errors are not numerical failures.
+                raise
             except Exception as exc:
+                if REAL_DTYPE == np.float32:
+                    raise RuntimeError(
+                        f"FP32 native Poisson solve failed: {exc}. "
+                        "No alternate solver or higher-precision fallback was used."
+                    ) from exc
                 native_fallback_reason = f"{type(exc).__name__}: {exc}"
+                if native_result is not None:
+                    native_fallback_guess = native_result.solution
+                    # A failed native result is a retry seed, never an accepted
+                    # Poisson solution.  Clear this sentinel before dispatch.
+                    native_result = None
                 self._raw_cuda_fb_hp_mg_failed_key = native_key
                 self._raw_cuda_fb_hp_mg_failure_reason = native_fallback_reason
                 if self._raw_cuda_fb_hp_mg_solver is not None:
@@ -2756,7 +2921,10 @@ class DiffusionReactionHDGSolver:
             from ..linalg.system import SolveResult
 
             trace_reduced_cp = native_result.solution
-            solve_time = native_setup_wall + native_result.elapsed_seconds
+            solve_time = (
+                native_setup_wall + native_result.elapsed_seconds
+                + native_metrics.get("solve.fb_hp_mg.physical_check", 0.0)
+            )
             global_solve_result = SolveResult(
                 x=None, x_device=trace_reduced_cp,
                 residual_norm=native_result.residual_norm, info=0,
@@ -2773,10 +2941,10 @@ class DiffusionReactionHDGSolver:
                 solver_rhs_norm=native_result.rhs_norm,
                 solver_relative_residual_norm=native_result.relative_residual,
                 solver_residual_target=native_result.target,
-                physical_residual_norm=native_result.residual_norm,
-                physical_rhs_norm=native_result.rhs_norm,
-                physical_relative_residual_norm=native_result.relative_residual,
-                physical_residual_target=native_result.target,
+                physical_residual_norm=native_physical_stats[0],
+                physical_rhs_norm=native_physical_stats[1],
+                physical_relative_residual_norm=native_physical_stats[2],
+                physical_residual_target=native_physical_stats[3],
                 rtol=options.solver_rtol, atol=options.solver_atol,
                 backend="fb-hp-mg-pcg", backend_info=0, status="converged",
                 converged=True, solution_is_finite=True,
@@ -2814,18 +2982,43 @@ class DiffusionReactionHDGSolver:
                     + ("reused" if amgx_hierarchy_reused else "created on this solve"),
                     flush=True,
                 )
-            (global_solve_result, trace_reduced_cp), solve_time = _timed_call(
+            amgx_initial_guess = (
+                native_fallback_guess
+                if native_fallback_guess is not None
+                else solve_initial_guess
+            )
+            retry_seed_guess = native_fallback_guess
+            retry_seed_label = "native-fb-hp-mg-best"
+            if (
+                retry_seed_guess is None
+                and options.amgx_retry_attempts
+                and solve_initial_guess is not None
+            ):
+                retry_seed_guess = solve_initial_guess
+                retry_seed_label = "poisson-initial-guess"
+            (global_solve_result, trace_reduced_cp), amgx_solve_time = _timed_call(
                 "solving global system (raw-cuda device hybrid AMGX)",
                 verbosity,
                 lambda: solve_reduced_system_amgx_device(
                     assembly_result, config=options.amgx_config,
+                    retry_attempts=options.amgx_retry_attempts,
                     tolerance=options.solver_rtol, check_rtol=options.solver_rtol,
                     atol=options.solver_atol, maxiter=options.maxiter,
-                    initial_guess=solve_initial_guess, reusable_solver=reusable_solver,
+                    initial_guess=amgx_initial_guess,
+                    reusable_solver=reusable_solver,
+                    retry_solver_cache=self._raw_cuda_amgx_retry_solver_cache,
+                    retry_seed_solution=retry_seed_guess,
+                    retry_seed_label=retry_seed_label,
                     scale_system=effective_scale_system, raise_on_nonconvergence=True,
                     materialize_host_solution=False, verbose=verbosity,
                 ),
                 multiline=verbosity >= 1,
+            )
+            solve_time = (
+                amgx_solve_time
+                + native_setup_wall
+                + native_metrics.get("solve.fb_hp_mg.krylov", 0.0)
+                + native_metrics.get("solve.fb_hp_mg.physical_check", 0.0)
             )
 
         self._raw_cuda_last_trace_reduced = trace_reduced_cp
@@ -2901,6 +3094,7 @@ class DiffusionReactionHDGSolver:
             verbosity,
             reconstruct_raw,
         )
+        audit_arrays("poisson-reconstruction", field, flux, trace_cp, local_unknowns_cp)
 
         details = {
             f"raw.assembly.{key}": float(value)
@@ -2927,22 +3121,7 @@ class DiffusionReactionHDGSolver:
         details["solve.amgx.hierarchy_reused"] = float(amgx_hierarchy_reused)
         details["solve.fb_hp_mg.hierarchy_reused"] = float(native_hierarchy_reused)
         details["solve.fb_hp_mg.fallback"] = float(native_requested and native_result is None)
-        if self._raw_cuda_fb_hp_mg_solver is not None:
-            native_solver = self._raw_cuda_fb_hp_mg_solver
-            details["solve.fb_hp_mg.setup"] = (
-                0.0 if native_hierarchy_reused else float(native_solver.setup_seconds)
-            )
-            details["solve.fb_hp_mg.setup_outer"] = float(native_setup_wall)
-            details["solve.fb_hp_mg.setup_outer_overhead"] = max(
-                0.0, float(native_setup_wall)
-                - (0.0 if native_hierarchy_reused else float(native_solver.setup_seconds))
-            )
-            details["solve.fb_hp_mg.krylov"] = (
-                0.0 if native_result is None else float(native_result.elapsed_seconds)
-            )
-            details["solve.fb_hp_mg.workspace_bytes"] = float(native_solver.workspace_bytes)
-            details["solve.fb_hp_mg.symmetry_defect"] = float(native_solver.symmetry_defect)
-            details["solve.fb_hp_mg.positive_curvature"] = float(native_solver.positive_curvature)
+        details.update(native_metrics)
         if global_solve_result is not None:
             for detail_key, attr in (
                 ("solve.amgx.csr", "amgx_csr_elapsed_seconds"),
@@ -2975,16 +3154,22 @@ class DiffusionReactionHDGSolver:
             total=time.perf_counter() - total_start,
             details=dict(details),
         )
-        host_trace = cp.asnumpy(trace_cp) if postprocess_mode == "flux" else None
-        host_local_unknowns = (
-            cp.asnumpy(local_unknowns_cp) if postprocess_mode == "flux" else None
-        )
+        device_postprocess = postprocess_mode == "flux" and _resolve_diffusion_postprocessing_backend(
+            "raw-cuda", postprocess_mode,
+            _normalize_flux_postprocess_space(options.flux_postprocess_space),
+            options.postprocessing_backend,
+        ) == "raw-cuda"
+        host_postprocess = postprocess_mode == "flux" and not device_postprocess
+        host_trace = cp.asnumpy(trace_cp) if host_postprocess else None
+        host_local_unknowns = cp.asnumpy(local_unknowns_cp) if host_postprocess else None
         result = DiffusionReactionResult(
             field=field,
             flux=flux,
             trace=host_trace,
             timings=timings,
             trace_reduced_device=trace_reduced_cp,
+            trace_device=trace_cp if device_postprocess else None,
+            local_unknowns_device=local_unknowns_cp if device_postprocess else None,
             local_unknowns=host_local_unknowns,
             matrix_rows=None,
             matrix_cols=None,
@@ -3083,7 +3268,7 @@ class DiffusionReactionHDGSolver:
             if scale_system:
                 scaled_matrix, inverse_diagonal = diagonal_scale_system(
                     host_matrix,
-                    np.ones(self.solve_rhs.size, dtype=np.float64),
+                    np.ones(self.solve_rhs.size, dtype=REAL_DTYPE),
                     copy_matrix=True,
                 )
                 self._host_scaled_solve_matrix = scaled_matrix
@@ -3096,7 +3281,7 @@ class DiffusionReactionHDGSolver:
         if scale_system:
             device_host_matrix, _ = diagonal_scale_system(
                 host_matrix,
-                np.zeros(self.solve_rhs.size, dtype=np.float64),
+                np.zeros(self.solve_rhs.size, dtype=REAL_DTYPE),
                 copy_matrix=True,
             )
         else:
@@ -3126,32 +3311,13 @@ class DiffusionReactionHDGSolver:
         )
 
     def _reduced_rhs_from_cached_numpy_operator(self, rhs_full: np.ndarray, boundary_trace: np.ndarray):
-        """Eliminate known trace values from a RHS using the cached host operator."""
-        reduction = self.reduction
-        if reduction is None:
+        """Eliminate known trace values using the shared fixed-operator helper."""
+        from ..linalg.system import update_known_dof_rhs
+        if self.reduction is None:
             raise RuntimeError("cached reduced RHS requires a KnownDofReduction")
-        known_values = np.asarray(boundary_trace, dtype=np.float64).ravel()
-        reduced_rhs = np.asarray(rhs_full, dtype=np.float64)[reduction.free_mask].copy()
-        row_indices = np.asarray(self.rows, dtype=np.int64)
-        col_indices = np.asarray(self.cols, dtype=np.int64)
-        matrix_values = np.asarray(self.data, dtype=np.float64)
-        free_known = reduction.free_mask[row_indices] & reduction.known_mask[col_indices]
-        if np.any(free_known):
-            np.add.at(
-                reduced_rhs,
-                reduction.old_to_new[row_indices[free_known]],
-                -matrix_values[free_known] * known_values[col_indices[free_known]],
-            )
-        return np.ascontiguousarray(reduced_rhs), type(reduction)(
-            rows=self.solve_rows,
-            cols=self.solve_cols,
-            data=self.solve_data,
-            rhs=np.ascontiguousarray(reduced_rhs),
-            free_mask=reduction.free_mask,
-            known_mask=reduction.known_mask,
-            known_values=np.ascontiguousarray(known_values),
-            old_to_new=reduction.old_to_new,
-        )
+        reduction = update_known_dof_rhs(self.rows, self.cols, self.data, rhs_full,
+                                         boundary_trace, self.reduction)
+        return reduction.rhs, reduction
 
     def _solve_numpy_with_cached_operator(self) -> DiffusionReactionResult:
         """Solve with cached host local solvers and reduced trace matrix."""
@@ -3482,10 +3648,10 @@ class DiffusionReactionHDGSolver:
         verbosity = _verbosity_level(self.options.verbose)
 
         def postprocess():
-            """Compute requested superconvergent primal and flux postprocessing fields."""
+            """Compute requested primal and conservative flux postprocessing fields."""
             postprocessed_field, postprocessed_flux, cache = _postprocess_diffusion_solution(
-                result.local_unknowns,
-                result.trace,
+                result.local_unknowns_device if result.local_unknowns_device is not None else result.local_unknowns,
+                result.trace_device if result.trace_device is not None else result.trace,
                 self.space,
                 self.options.stabilization,
                 self.options.diffusion,
@@ -3563,6 +3729,8 @@ def solve_diffusion_reaction_hdg(
         petsc_monitor: bool = False,
         cupyx_solver: str = "bicgstab",
         amgx_config: dict | None = None,
+        amgx_retry_attempts: tuple[dict[str, Any], ...] | None = None,
+        fb_hp_mg_preconditioner_policy: Literal["standard", "robust"] = "standard",
         cache_device_matrix: bool = False,
         cache_local_factors: LocalFactorCachePolicy = "none",
         ilu_drop_tol: float = 1e-10,
@@ -3834,7 +4002,7 @@ def solve_diffusion_reaction_hdg(
 
     initial_guess_time = 0.0
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        initial_guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
 
     if initial_guess is not None:
         initial_guess = impose_boundary_trace_on_guess(initial_guess, trace_system.boundary_trace, space)
@@ -3914,7 +4082,7 @@ def solve_diffusion_reaction_hdg(
         multiline=verbosity >= 1,
     )
     if reduction is None:
-        trace = np.asarray(global_solve_result.x, dtype=np.float64)
+        trace = np.asarray(global_solve_result.x, dtype=REAL_DTYPE)
     else:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 

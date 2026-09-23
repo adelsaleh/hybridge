@@ -1,0 +1,5 @@
+# Heavy disk qualitative trial: h=0.008, p=6, Poisson tau=1000.
+# H1-BDF3, dt=0.005 to T=50 (10000 steps); Holoviz and diagnostics every 0.5.
+# First two steps use SI-Euler extrap3 (6 transport solves each); later steps use 1.
+# The trial timestep is not a validated stability limit. Append overrides after @file.
+--preset euler_vortex_gas_h1_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr

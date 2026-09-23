@@ -1,0 +1,196 @@
+--- a/hdgfem-gmres/hdgfem/solvers/adv_diff_rea.py
++++ b/hdgfem-gmres/hdgfem/solvers/adv_diff_rea.py
+@@ -55,7 +55,7 @@
+ 
+ 
+ def prepare_adr_local_matrices(source, beta, reaction, space, *, diffusion=1., stabilization=1.,
++                               backend='numpy', timings=None, coefficient_sampler=None):
+-                               backend='numpy', timings=None):
+     """Return A, B, C, D, f with A*x = f+B*uhat and flux = C*x-D*uhat.
+ 
+     A:(NE,3P,3P), B:(NE,3P,3F), C:(NE,3,F,3P), D:(NE,3,F,F).
+@@ -69,13 +69,26 @@
+     tau = _normalize_tau(stabilization, space)
+     if not np.all(np.isfinite(tau)) or np.any(tau <= 0):
+         raise ValueError('diffusive stabilization must be finite and strictly positive')
++    sampled_beta, sampled_source = None, None
++    if coefficient_sampler is None:
++        k00,k01,k10,k11 = _diffusion_components(diffusion, space)
++    else:
++        points = space.mapped_quads()
++        sampled = coefficient_sampler.volume(points[..., 0], points[..., 1])
++        expected = (6, mesh.num_tri, q.Krf_w.size)
++        if sampled.shape != expected:
++            raise ValueError(f"bundled volume coefficients must have shape {expected}")
++        k00, k01, k11 = sampled[:3]
++        k10 = k01
++        sampled_beta = np.ascontiguousarray(np.moveaxis(sampled[3:5], 0, -1))
++        sampled_source = sampled[5]
+-    k00,k01,k10,k11 = _diffusion_components(diffusion, space)
+     if (not all(np.all(np.isfinite(k)) for k in (k00,k01,k10,k11))
+             or not np.allclose(k01,k10,rtol=1e-12,atol=1e-14)
+             or np.any(k00 <= 0) or np.any(k00*k11-k01*k10 <= 0)):
+         raise ValueError("diffusion must be symmetric positive definite at quadrature points")
+     beta = _velocity(beta)
++    bn = _callable_beta_normal_flux(beta, space, sampler=(
++        coefficient_sampler.velocity if coefficient_sampler is not None else None))
+-    bn = _callable_beta_normal_flux(beta, space)
+     if not np.all(np.isfinite(bn)):
+         raise ValueError('nonfinite velocity on faces')
+     up = np.maximum(bn, 0.)
+@@ -94,7 +107,7 @@
+     v = a.reshape(ne, 3, p, 3, p)
+     weights = mesh.jacs_el_fc[..., None] * q.weights_JGL
+     phi, psi = q.bas_of_bd_quads, q.bas1d_of_ref_edg_qds
++    v[:, 0, :, 0, :] = mt - _callable_advection_mats(space, beta, backend=backend, sampled_values=sampled_beta) + np.einsum(
+-    v[:, 0, :, 0, :] = mt - _callable_advection_mats(space, beta, backend=backend) + np.einsum(
+         'efq,fiq,fjq->eij', weights*up, phi, phi, optimize=True)
+     v[:, 0, :, 1, :], v[:, 0, :, 2, :] = n0-d0, n1-d1
+     v[:, 1, :, 0, :], v[:, 2, :, 0, :] = d0, d1
+@@ -116,7 +129,8 @@
+     d[neg] = d[neg][:, ::-1, ::-1]
+     timings['host_trace_coupling'] = perf_counter()-t
+     t = perf_counter()
++    rhs = hdg.block_source_moments(source if sampled_source is None else sampled_source,
++                                 space, num_blocks=3, source_block=0)
+-    rhs = hdg.block_source_moments(source, space, num_blocks=3, source_block=0)
+     timings['host_source'] = perf_counter()-t
+     t = perf_counter()
+     if not all(np.all(np.isfinite(x)) for x in (a,b,c,d,rhs)):
+@@ -126,7 +140,7 @@
+ 
+ 
+ def assemble_advection_diffusion_reaction(source, beta, reaction, boundary_condition, space,
++                                         *, diffusion=1., stabilization=1., backend='numpy', coefficient_sampler=None):
+-                                         *, diffusion=1., stabilization=1., backend='numpy'):
+     if backend not in ('numpy', 'cupy', 'numba'):
+         raise ValueError("backend must be 'numpy', 'cupy' or 'numba'")
+     if backend == 'numba':
+@@ -138,7 +152,8 @@
+     timings = {}
+     a,b,c,d,rhs = prepare_adr_local_matrices(source,beta,reaction,space,
+         diffusion=diffusion,stabilization=stabilization,
++        backend='numba' if backend == 'numba' else 'numpy', timings=timings,
++        coefficient_sampler=coefficient_sampler)
+-        backend='numba' if backend == 'numba' else 'numpy', timings=timings)
+     topology = build_face_topology(space.mesh.loc2glob_edge)
+     timings['host_preparation'] = perf_counter()-start
+     xp = np
+--- a/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py
++++ b/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py
+@@ -68,6 +68,7 @@
+     from scripts.adr_performance_common import atomic_json, read_json
+     from scripts import adr_performance_common as common
+ 
++    sampler = None
+     try:
+         mesh = Path(spec["mesh_path"])
+         if hashlib.sha256(mesh.read_bytes()).hexdigest() != spec["mesh_sha256"]:
+@@ -76,7 +77,15 @@
+             raise ValueError("Cached operator/RHS changed since assembly")
+         from scripts.adv_diff_rea_cases import register_case
+         parameters = StressParameters(**spec["stress_parameters"])
++        if spec["worker_kind"] == "assemble" and spec.get("coefficient_backend", "legacy") != "legacy":
++            from closed_loop_stress_sampling import StressCoefficientSampler
++            sampler = StressCoefficientSampler(spec)
++        def factory():
++            kwargs, exact = make_case(parameters, spec["velocity_normalization"])
++            if sampler is not None:
++                kwargs["coefficient_sampler"] = sampler
++            return kwargs, exact
++        register_case(spec["case"], factory)
+-        register_case(spec["case"], lambda: make_case(parameters, spec["velocity_normalization"]))
+         result = dispatch(spec, common)
+     except (Exception, SystemExit) as exc:
+         result = read_json(spec["result"]) if Path(spec["result"]).exists() else {}
+@@ -84,6 +93,8 @@
+             result.update(status="error", error=str(exc), traceback=traceback.format_exc())
+     result.update(stress_parameters=spec["stress_parameters"],
+                   velocity_normalization=spec["velocity_normalization"], mesh_sha256=spec["mesh_sha256"])
++    if sampler is not None:
++        result["coefficient_sampling"] = dict(sampler.stats)
+     atomic_json(spec["result"], result)
+     return 0 if result["status"] == "passed" else 1
+ 
+--- a/hdgfem/scripts/advection_diffusion_reaction/run_closed_loop_stress.py
++++ b/hdgfem/scripts/advection_diffusion_reaction/run_closed_loop_stress.py
+@@ -151,6 +151,8 @@
+         raise ValueError("maxiter must be positive")
+     if args.numba_threads < 1:
+         raise ValueError("numba-threads must be positive")
++    if args.coefficient_chunk_points < 1 or not 0 < args.coefficient_memory_fraction <= 1:
++        raise ValueError("coefficient chunk points must be positive and memory fraction in (0, 1]")
+     if not math.isfinite(args.timeout) or args.timeout <= 0:
+         raise ValueError("timeout must be positive and finite")
+     if not math.isfinite(args.heartbeat_seconds) or args.heartbeat_seconds <= 0:
+@@ -360,6 +362,9 @@
+                           maxiter=plan["maxiter"], restart=plan["restart"], warmup=args.warmup, repeats=args.repeats, solves_per_setup=2,
+                           assembly_backend=args.assembly_backend, assembly_warmup=0, assembly_repeats=1,
+                           numba_threads=args.numba_threads, numba_threading_layer=args.numba_threading_layer,
++                          coefficient_backend=args.coefficient_backend,
++                          coefficient_chunk_points=args.coefficient_chunk_points,
++                          coefficient_memory_fraction=args.coefficient_memory_fraction,
+                           reference_max_dofs=args.reference_max_dofs, memory_fraction=args.memory_fraction,
+                           host_limit_gib=None, volume_quad_1d=args.quadrature or 2*p+4,
+                           edge_quad_1d=args.edge_quadrature or 2*p+4, record_residual_history=True,
+@@ -446,6 +451,12 @@
+                         help="CPU assembly can reduce VRAM demand on larger meshes; solves remain on GPU")
+     result.add_argument("--numba-threads", type=int, default=8,
+                         help="Parallel CPU assembly threads; BLAS stays single-threaded (default: 8)")
++    result.add_argument("--coefficient-backend", choices=("legacy", "auto", "cupy", "numba", "numpy"),
++                        default="legacy", help="Bundled sampling: auto prefers GPU then Numba; legacy preserves existing campaigns")
++    result.add_argument("--coefficient-chunk-points", type=int, default=131072,
++                        help="Target maximum points per coefficient batch, rounded to whole elements")
++    result.add_argument("--coefficient-memory-fraction", type=float, default=0.5,
++                        help="Fraction of free GPU memory after a 512 MiB reserve used for sampling")
+     result.add_argument("--numba-threading-layer", choices=("default", "tbb", "omp", "workqueue"), default="default",
+                         help="Numba scheduler; default selects an available runtime")
+     result.add_argument("--reference-max-dofs", type=int, default=100000)
+--- a/hdgfem-gmres/scripts/adr_performance_worker.py
++++ b/hdgfem-gmres/scripts/adr_performance_worker.py
+@@ -156,9 +156,12 @@
+     validation={}
+     if a.system.num_dofs<=spec['reference_max_dofs']:
+         ref=a
++        if spec['assembly_backend'] in ('cupy','numba') or kw.get('coefficient_sampler') is not None:
++            # The independent reference must not reuse the accelerated sampler.
++            ref_kw = {key:value for key,value in kw.items() if key != 'coefficient_sampler'}
++            ref=assemble_advection_diffusion_reaction(space=space,backend='numpy',**ref_kw)
++            prefix=('cpu_gpu' if spec['assembly_backend']=='cupy' else
++                    'numpy_numba' if spec['assembly_backend']=='numba' else 'sampling')
+-        if spec['assembly_backend'] in ('cupy','numba'):
+-            ref=assemble_advection_diffusion_reaction(space=space,backend='numpy',**kw)
+-            prefix='cpu_gpu' if spec['assembly_backend']=='cupy' else 'numpy_numba'
+             validation[prefix+'_blocks_relative_error']=relative(a.system.blocks,ref.system.blocks)
+             validation[prefix+'_rhs_relative_error']=relative(a.system.rhs,ref.system.rhs)
+             if max(validation.values())>1e-9:raise RuntimeError('Assembly disagrees with independent NumPy assembly')
+@@ -177,6 +180,8 @@
+         'space_setup_ms':space_ms,'assembly_samples_ms':samples,'validation':validation,
+         'assembly_median_ms':float(np.median([s['assembly_total'] for s in samples])),
+         'arrays':{p.name:p.stat().st_size for p in cache.glob('*.npy')}}
++    if kw.get('coefficient_sampler') is not None:
++        result['coefficient_sampling'] = dict(kw['coefficient_sampler'].stats)
+     atomic_json(cache/'metadata.json',result)
+     return result
+ 
+--- a/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_logging.py
++++ b/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_logging.py
+@@ -141,6 +141,8 @@
+     if result.get("status") in ("timeout", "process_error", "assembly_failed", "artifact_error"):
+         details["reasons"].append(result["status"])
+     if result.get("kind") == "assembly":
++        if "coefficient_sampling" in result:
++            details["coefficient_sampling"] = result["coefficient_sampling"]
+         timings = result.get("assembly_samples_ms", [])
+         details["assembly_stages_ms"] = timings[-1] if timings else {}
+         details["space_setup_ms"] = result.get("space_setup_ms")
+@@ -203,6 +205,9 @@
+     if "assembly_median_ms" in details:
+         emit(f"  space_setup_ms={_format(details.get('space_setup_ms'), '.3f')} "
+              f"assembly_median_ms={_format(details.get('assembly_median_ms'), '.3f')}")
++    if "coefficient_sampling" in details:
++        sampling = details["coefficient_sampling"]
++        emit("  coefficient sampling: "+json.dumps(sampling, sort_keys=True))
+     if "numba_warmup_ms" in details:
+         emit(f"  Numba threads={details.get('numba_threads')} scheduler={details.get('numba_threading_layer')} "
+              f"fastmath={details.get('numba_fastmath')} excluded_warmup_ms={_format(details['numba_warmup_ms'], '.3f')} "

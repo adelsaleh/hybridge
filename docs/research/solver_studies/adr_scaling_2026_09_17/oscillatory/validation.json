@@ -1,0 +1,3852 @@
+{
+  "status": "passed",
+  "systems": 48,
+  "configurations": 192,
+  "passed_configurations": 121,
+  "failed_configurations": 71,
+  "reused_configurations": 4,
+  "new_configurations": 188,
+  "passing_configuration_solves": 968,
+  "attempted_solves": 1039,
+  "worst_physical_relative_residual": 9.989466264822921e-12,
+  "worst_cross_solver_trace_relative_difference": 6.271166186331101e-09,
+  "independent_cpu_reference_systems": 36,
+  "worst_cpu_gpu_blocks_relative_error": 5.204820697043479e-14,
+  "worst_cpu_gpu_rhs_relative_error": 8.991330684435572e-14,
+  "systems_audit": [
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2048,
+      "trace_dofs": 21056,
+      "operator_rhs_sha256": "ec1f5559f84272854b2df5ab722c570e98b916b6ffdd4aea1510a48adfe84f87",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_fgmres": 5.506183932353209e-12,
+        "native_hp": 1.2940009907757964e-11,
+        "amg_pbicgstab": 4.619421263601903e-12
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 4.425211249455325e-13,
+        "amg_fgmres": 8.319368004546628e-12,
+        "native_hp": 5.852714658375567e-12,
+        "amg_pbicgstab": 8.65291210597825e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp",
+        "amg_pbicgstab"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2048,
+      "trace_dofs": 21056,
+      "operator_rhs_sha256": "b250a77acf83b76ee5de2b83d81d233949ad5b696c0fb543544404a928d9e971",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 4.684694169003136e-16
+      },
+      "passing_candidates": [
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "dilu_fgmres",
+        "dilu_pbicgstab",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2048,
+      "trace_dofs": 21056,
+      "operator_rhs_sha256": "0ef6e0f37c8be6e072f6968899ac996ac1075efdbf7a2510076abbdb5aa1f9ce",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 3.616361531092631e-12
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8192,
+      "trace_dofs": 24320,
+      "operator_rhs_sha256": "0df61b00721538e7d3bbafc8befabda61b1945cc185b521603cf42a891d26d91",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 1.0824345980147498e-11,
+        "asm_d24": 0.0,
+        "amg_fgmres": 1.0974989987966692e-11,
+        "native_hp": 1.0894677879582872e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 9.976731581137291e-12,
+        "asm_d24": 1.3572375776733102e-12,
+        "amg_fgmres": 9.127621856222856e-12,
+        "native_hp": 4.451692181595173e-15
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8192,
+      "trace_dofs": 24320,
+      "operator_rhs_sha256": "9c8751991b7a9d693daf9eec604dd868cbed778e17644eae64d72ab0a0f61afb",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_fgmres": 6.794271491202471e-11,
+        "asm_d24": 0.0,
+        "dilu_pbicgstab": 2.429629883682579e-10,
+        "amg_pbicgstab": 2.925168932359536e-11,
+        "dilu_fgmres": 3.2622314863269687e-10
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_fgmres": 6.605632543435329e-12,
+        "asm_d24": 1.4426857452014386e-12,
+        "dilu_pbicgstab": 9.30288331413509e-12,
+        "amg_pbicgstab": 9.895875344708955e-12,
+        "dilu_fgmres": 9.749337488554112e-12
+      },
+      "passing_candidates": [
+        "amg_fgmres",
+        "asm_d24",
+        "dilu_pbicgstab",
+        "amg_pbicgstab",
+        "dilu_fgmres"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8192,
+      "trace_dofs": 24320,
+      "operator_rhs_sha256": "b563e8603dc6527bb7deb91ff62d0adbf0300bd293a872ebafa49eead22a3b5f",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 3.0167718273263635e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8192,
+      "trace_dofs": 36480,
+      "operator_rhs_sha256": "10e5c30454a15856915b8a1191ecbcf0dab1a44708c96f6439617f2f47bba317",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 5.174107603180571e-12,
+        "amg_fgmres": 5.2305980028108676e-12,
+        "native_hp": 5.212770830775058e-12,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 7.355193249496906e-12,
+        "amg_fgmres": 4.239013101106367e-12,
+        "native_hp": 6.984798806142967e-15,
+        "asm_d24": 2.77164752920058e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp",
+        "asm_d24"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8192,
+      "trace_dofs": 36480,
+      "operator_rhs_sha256": "07f37aaf1c14f17e3b6519aa8d8f49ec1b52fdd01ec9068067c2be0db4fc0807",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 1.099373043761085e-09,
+        "amg_fgmres": 9.075931362290795e-10,
+        "dilu_fgmres": 2.0820099806316486e-09,
+        "asm_d24": 0.0,
+        "dilu_pbicgstab": 2.240064043619286e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 8.86718341833136e-12,
+        "amg_fgmres": 9.440902367218307e-12,
+        "dilu_fgmres": 9.85891094911561e-12,
+        "asm_d24": 7.221109147244228e-13,
+        "dilu_pbicgstab": 8.074562677745633e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "dilu_fgmres",
+        "asm_d24",
+        "dilu_pbicgstab"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8192,
+      "trace_dofs": 36480,
+      "operator_rhs_sha256": "1199896c70bca2d820974ac23751b773cf2f96db8ec0d5042abaa2a33ef77303",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 7.542484632878649e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8192,
+      "trace_dofs": 48640,
+      "operator_rhs_sha256": "500ce66fc06483f06d6baed6ae2a33db070356b931f0b189df00fe02e7660ff9",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 1.1002592784737917e-11,
+        "native_hp": 1.0992264910149286e-11,
+        "asm_d24": 0.0,
+        "amg_fgmres": 1.1001655601988749e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 9.771765489059445e-12,
+        "native_hp": 9.150553040600521e-15,
+        "asm_d24": 4.530405442614116e-12,
+        "amg_fgmres": 7.073473682536412e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "native_hp",
+        "asm_d24",
+        "amg_fgmres"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8192,
+      "trace_dofs": 48640,
+      "operator_rhs_sha256": "935ae7f515fac9936e1f51a74435b59b0326da1b72d79bb5cdd7dfc99837d181",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 6.27545108275667e-16
+      },
+      "passing_candidates": [
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "dilu_fgmres",
+        "dilu_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8192,
+      "trace_dofs": 48640,
+      "operator_rhs_sha256": "ea3395a2889fd2001af207d6867e1d5e4936146c386599ab7b038612763fa3ac",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 6.028103124542781e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8192,
+      "trace_dofs": 60800,
+      "operator_rhs_sha256": "6e987317dd0f55cb607d30ee46e61d5938f528f00b2a56199bdffd5f02ac6b16",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 7.123342929494954e-12,
+        "amg_fgmres": 7.148878461356624e-12,
+        "native_hp": 7.0893415398210105e-12
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 3.059651555168408e-12,
+        "amg_pbicgstab": 9.383696588371037e-12,
+        "amg_fgmres": 9.5083598908344e-12,
+        "native_hp": 1.2525587394802308e-14
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8192,
+      "trace_dofs": 60800,
+      "operator_rhs_sha256": "ab5e6a701bc24ea0de576ffa28ce3b317d12a999b39064da5152f4a60b183c5a",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 6.723171286219993e-16
+      },
+      "passing_candidates": [
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "dilu_pbicgstab",
+        "amg_fgmres",
+        "amg_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8192,
+      "trace_dofs": 60800,
+      "operator_rhs_sha256": "91c2bed40fe492efac8ac170f6db3a7d99531618ffa30dd960825cb7326f7fb0",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 1.3962253958567363e-12
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8192,
+      "trace_dofs": 85120,
+      "operator_rhs_sha256": "026e86b57fcb59bb1a0035a86c6dc546ada216f098e2f51e1f521b81fb13747a",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 8.825031756454506e-12,
+        "native_hp": 8.817278627484665e-12,
+        "amg_fgmres": 8.853589386667548e-12,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 8.156574563940204e-12,
+        "native_hp": 1.8941305166030997e-14,
+        "amg_fgmres": 5.735714847216593e-12,
+        "asm_d24": 4.409660330798854e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "native_hp",
+        "amg_fgmres",
+        "asm_d24"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8192,
+      "trace_dofs": 85120,
+      "operator_rhs_sha256": "4e4ca9966c5b50f3f747a437418ac46aeb936165f68583073ad2934a9b29594d",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 1.3650454931712427e-09,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 5.691663440118498e-12,
+        "asm_d24": 7.978738932261247e-16
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "dilu_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8192,
+      "trace_dofs": 85120,
+      "operator_rhs_sha256": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 1.769171009111162e-14
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 32768,
+      "trace_dofs": 342272,
+      "operator_rhs_sha256": "cd0b0facc8fa26749602872f8eeb190dc5a72c6ea080d1e7359709d492481aea",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 4.632324675540586e-13,
+        "amg_fgmres": 1.687880410300935e-13,
+        "native_hp": 7.689210578884469e-14
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 7.465374770502558e-14,
+        "amg_pbicgstab": 8.522548555573672e-12,
+        "amg_fgmres": 7.532489511886083e-12,
+        "native_hp": 7.488289433639206e-14
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 32768,
+      "trace_dofs": 342272,
+      "operator_rhs_sha256": "1c815afe65b33fa688cd207baa6964c76e6a68ef25ea2b8642f5cfcf41b3fe70",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 2.649869148815185e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 1.6646689580604045e-15,
+        "amg_pbicgstab": 9.258621055955026e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "dilu_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 32768,
+      "trace_dofs": 342272,
+      "operator_rhs_sha256": "dd990f79460b0bbe0b669b94099c8ee2bf3b251e9870423281ebf5ba045e3ab0",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 1.3410730862572181e-12
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_high",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99458,
+      "trace_dofs": 1041187,
+      "operator_rhs_sha256": "ff090b189295cc486bee6b252c83ad3a9dcb168ed562a90beffbd6b561b15611",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 8.539750124308025e-14,
+        "asm_d24": 0.0,
+        "amg_fgmres": 1.1281214119309624e-13,
+        "native_hp": 8.419011745632354e-14
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 3.883548906198322e-12,
+        "asm_d24": 2.2643192897061512e-13,
+        "amg_fgmres": 7.72585426622494e-12,
+        "native_hp": 2.2670394983469254e-13
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_weak",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99458,
+      "trace_dofs": 1041187,
+      "operator_rhs_sha256": "3a2d82506d4f6b7c1f1fc7b411ef5c774ed66179655550f430bfb79c9d3fd029",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 2.454581560015779e-09,
+        "asm_d24": 0.0,
+        "amg_fgmres": 2.711937445402541e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 9.4049966816423e-12,
+        "asm_d24": 1.201248145611097e-12,
+        "amg_fgmres": 9.722283887591832e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres"
+      ],
+      "failed_candidates": [
+        "dilu_fgmres",
+        "dilu_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "square",
+      "case": "cellular7_directional",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99458,
+      "trace_dofs": 1041187,
+      "operator_rhs_sha256": "667ca4ca7d9870b9f287b9a3cba115c383e2a3f291917c644e6f578c9c1a8e24",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 9.007081397820794e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2043,
+      "trace_dofs": 20482,
+      "operator_rhs_sha256": "7f9272d00fe2eb5c6aa052d1783bd5be377473b4eea1d407bdbd9a2080480281",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_fgmres": 1.1453141483242034e-11,
+        "native_hp": 9.724507449425246e-12,
+        "amg_pbicgstab": 3.0328824416099416e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 7.235479772933048e-13,
+        "amg_fgmres": 8.69622456613856e-12,
+        "native_hp": 2.5484946736237597e-12,
+        "amg_pbicgstab": 9.78671088319098e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp",
+        "amg_pbicgstab"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2043,
+      "trace_dofs": 20482,
+      "operator_rhs_sha256": "9aabb9e142e56098cd845ca19671fd805825510ebb857f273ffcb0fc532c8c79",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_fgmres": 6.271166186331101e-09,
+        "amg_pbicgstab": 4.272215524782766e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 4.988366091012507e-16,
+        "amg_fgmres": 9.757721752309737e-12,
+        "amg_pbicgstab": 7.680222032277413e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ],
+      "failed_candidates": [
+        "dilu_fgmres",
+        "dilu_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 32,
+      "p": 6,
+      "triangles": 2043,
+      "trace_dofs": 20482,
+      "operator_rhs_sha256": "5c373d131785033027688ea1ae8495fb93aeaf09a0cce94e62001bbd575b7a47",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 1.8156696912434316e-12
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8039,
+      "trace_dofs": 23570,
+      "operator_rhs_sha256": "692f65e5e3dd616e020a9bd203502e5a601ebd8aaeda19fe72fddbbd67e6fe33",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 3.228838665539381e-12,
+        "asm_d24": 0.0,
+        "amg_fgmres": 3.4434593955342825e-12,
+        "native_hp": 5.308811507103674e-12
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 5.464779243302496e-12,
+        "asm_d24": 3.647488390101467e-13,
+        "amg_fgmres": 9.075816374064587e-12,
+        "native_hp": 4.935824579932573e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8039,
+      "trace_dofs": 23570,
+      "operator_rhs_sha256": "0e07046f93acdc0eb88a124ea1bcd3b3648942c4a13566275f93353df3c28cd1",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_fgmres": 2.483893585337033e-10,
+        "asm_d24": 0.0,
+        "dilu_pbicgstab": 8.16636889967407e-10,
+        "amg_pbicgstab": 1.736152752649963e-10,
+        "dilu_fgmres": 7.082925130043387e-10
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_fgmres": 8.321339806147761e-12,
+        "asm_d24": 1.3244712796201053e-12,
+        "dilu_pbicgstab": 9.755785554381053e-12,
+        "amg_pbicgstab": 7.066477476344769e-12,
+        "dilu_fgmres": 9.679785060277614e-12
+      },
+      "passing_candidates": [
+        "amg_fgmres",
+        "asm_d24",
+        "dilu_pbicgstab",
+        "amg_pbicgstab",
+        "dilu_fgmres"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 1,
+      "triangles": 8039,
+      "trace_dofs": 23570,
+      "operator_rhs_sha256": "13cba3f220d7c23fe3e1c94580469ad4629d2e0d98eee77d4f4241a1cdde98d7",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 2.4079928349102356e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8039,
+      "trace_dofs": 35355,
+      "operator_rhs_sha256": "06a466bea17a4c81d923fbcc68cfd41e4c8235d2590a14c8557e35b28b8f6c12",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 8.93188122248823e-12,
+        "amg_fgmres": 6.1914798672987115e-12,
+        "native_hp": 7.948673952800006e-12,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 9.639425559281777e-12,
+        "amg_fgmres": 6.322301700220976e-12,
+        "native_hp": 4.5810446592029674e-12,
+        "asm_d24": 2.2991370238797132e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp",
+        "asm_d24"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8039,
+      "trace_dofs": 35355,
+      "operator_rhs_sha256": "781b2eabfd3910cf13c308465272b1c24ac55f0466c1d7b4ccf68dc5c3ca8432",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 2.597063334404756e-09,
+        "amg_fgmres": 2.8535896794016127e-09,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 6.694769776923297e-12,
+        "amg_fgmres": 9.196790397641391e-12,
+        "asm_d24": 7.871080976604202e-16
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "dilu_fgmres",
+        "dilu_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 2,
+      "triangles": 8039,
+      "trace_dofs": 35355,
+      "operator_rhs_sha256": "612fb2e6981132ca25caa6a6e0a74ad03701fff74ba380222961f30027e01350",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 2.1344108399466443e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8039,
+      "trace_dofs": 47140,
+      "operator_rhs_sha256": "46329ed356d0d5eabfdb8201825914c828e0a3bb290a300a603804b3e2ef3721",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 1.0330948496107814e-11,
+        "native_hp": 1.4715579043649548e-11,
+        "asm_d24": 0.0,
+        "amg_fgmres": 9.82160039379472e-12
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 8.863326911612506e-12,
+        "native_hp": 5.294154123456554e-12,
+        "asm_d24": 2.644734415063618e-12,
+        "amg_fgmres": 6.247439835978959e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "native_hp",
+        "asm_d24",
+        "amg_fgmres"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8039,
+      "trace_dofs": 47140,
+      "operator_rhs_sha256": "0ac006a485765d8156f396d6407bf341c2d63c1a84836b869efb899a4f46bf24",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 3.3654715397173253e-09,
+        "amg_fgmres": 2.063601111297119e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 1.5786876156791018e-13,
+        "amg_pbicgstab": 9.592868472269333e-12,
+        "amg_fgmres": 9.9031314001209e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ],
+      "failed_candidates": [
+        "dilu_fgmres",
+        "dilu_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 3,
+      "triangles": 8039,
+      "trace_dofs": 47140,
+      "operator_rhs_sha256": "2fb17aa1613260c76c7481ddc289fef815a03c88e48e4783d8c3e49ae98212c1",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 3.111355310267847e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8039,
+      "trace_dofs": 58925,
+      "operator_rhs_sha256": "b7589d67bd652cdaf8201736a82324286e567db35c3194de70a9a53acb6afe26",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 8.257303133525995e-12,
+        "amg_fgmres": 9.190183647334125e-12,
+        "native_hp": 1.066080769779751e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 7.853021847220752e-13,
+        "amg_pbicgstab": 2.4338000829890865e-12,
+        "amg_fgmres": 8.767974610893183e-12,
+        "native_hp": 2.621232981447652e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8039,
+      "trace_dofs": 58925,
+      "operator_rhs_sha256": "0832707696adab104392769cbb0b5564062cf571f329a96929f2b5442c490145",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 6.749003976376762e-13
+      },
+      "passing_candidates": [
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "dilu_pbicgstab",
+        "amg_fgmres",
+        "amg_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 4,
+      "triangles": 8039,
+      "trace_dofs": 58925,
+      "operator_rhs_sha256": "83dd723e3a0e400bfdf2cebd0ac6f067524846e1ec3f522287895ee714036607",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 9.747129233640341e-13
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8039,
+      "trace_dofs": 82495,
+      "operator_rhs_sha256": "4be37f59fd3153c8664c78f0a0bf23a409be5a260364bfb5683a3a2e79f8bea4",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 2.7664847526120636e-11,
+        "native_hp": 2.8355737505571376e-11,
+        "amg_fgmres": 2.852268540252281e-11,
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 5.125426697613265e-12,
+        "native_hp": 3.3981367679526684e-12,
+        "amg_fgmres": 8.686626557450243e-12,
+        "asm_d24": 2.4664692781643165e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "native_hp",
+        "amg_fgmres",
+        "asm_d24"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8039,
+      "trace_dofs": 82495,
+      "operator_rhs_sha256": "a6d38b2cd984b6f1962953a33948b4bce926a551384b1cba131e01515a3abc97",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 8.802087348435008e-13
+      },
+      "passing_candidates": [
+        "asm_d24"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "dilu_pbicgstab",
+        "amg_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 64,
+      "p": 6,
+      "triangles": 8039,
+      "trace_dofs": 82495,
+      "operator_rhs_sha256": "996a7231cbf8394f8bb2eb38b023c6940db297831c914ba69bb0ca5e9d49c0b5",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 2.5171510352026846e-12
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 33174,
+      "trace_dofs": 344631,
+      "operator_rhs_sha256": "ce32d3241b439de7da4db9ca17badcac006c238d99f79aef8aa5881e372c878a",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 5.7312960778121167e-11,
+        "amg_fgmres": 5.71694952134899e-11,
+        "native_hp": 5.891814833590303e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 3.001669076873522e-12,
+        "amg_pbicgstab": 7.765841662060277e-12,
+        "amg_fgmres": 7.91868584662139e-12,
+        "native_hp": 4.0192203754218824e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 33174,
+      "trace_dofs": 344631,
+      "operator_rhs_sha256": "8c1a85b4d6789d1cf18aa75ce913025b810a7e0f0c87cf0700bfaea77a89fafc",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d24": 0.0,
+        "amg_pbicgstab": 3.0463009324857893e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d24": 6.313473617749217e-13,
+        "amg_pbicgstab": 9.834535109980198e-12
+      },
+      "passing_candidates": [
+        "asm_d24",
+        "amg_pbicgstab"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "dilu_pbicgstab",
+        "dilu_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 128,
+      "p": 6,
+      "triangles": 33174,
+      "trace_dofs": 344631,
+      "operator_rhs_sha256": "18a6e53cf2bffeae620dffb2b6636fddd2cba413eeab0d62de0eabd4a1b67155",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 2.510879138022318e-15
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_pbicgstab",
+        "amg_fgmres"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_high",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "operator_rhs_sha256": "86742703a56451704aafe9edeab05fa66e3714baa863bc9000fbc88305bac0ba",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 5.380314934457168e-11,
+        "asm_d24": 0.0,
+        "amg_fgmres": 5.395556162597595e-11,
+        "native_hp": 5.485258544715217e-11
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 8.665158183287312e-12,
+        "asm_d24": 5.151848882723249e-13,
+        "amg_fgmres": 8.95934816644602e-12,
+        "native_hp": 5.26016724414288e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres",
+        "native_hp"
+      ],
+      "failed_candidates": []
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_weak",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "operator_rhs_sha256": "3f81adbfcea84fb1b8acb0abe086dde2525fd26b7ebc1418e19d6d80d9742752",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "amg_pbicgstab": 3.1514389717345156e-09,
+        "asm_d24": 0.0,
+        "amg_fgmres": 3.1435697531524925e-09
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "amg_pbicgstab": 9.989466264822921e-12,
+        "asm_d24": 7.891229479816879e-13,
+        "amg_fgmres": 9.959182216064415e-12
+      },
+      "passing_candidates": [
+        "amg_pbicgstab",
+        "asm_d24",
+        "amg_fgmres"
+      ],
+      "failed_candidates": [
+        "dilu_fgmres",
+        "dilu_pbicgstab"
+      ]
+    },
+    {
+      "geometry": "annulus",
+      "case": "cellular7_directional",
+      "nominal_n": 223,
+      "p": 6,
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "operator_rhs_sha256": "db838ae03b8fe20d8366a22ce5430c72868e9e3c4a7d25d2396b00eeea9869e3",
+      "cross_solver_trace_relative_difference_to_asm": {
+        "asm_d48": 0.0
+      },
+      "recomputed_saved_trace_relative_residuals": {
+        "asm_d48": 3.3935962891590574e-15
+      },
+      "passing_candidates": [
+        "asm_d48"
+      ],
+      "failed_candidates": [
+        "amg_fgmres",
+        "amg_pbicgstab"
+      ]
+    }
+  ],
+  "campaigns": [
+    {
+      "geometry": "square",
+      "completion": {
+        "status": "completed",
+        "scheduled": 96,
+        "attempted": 96,
+        "passed": 60,
+        "reused": 4,
+        "preserved_22825_jobs_unchanged": true,
+        "failures": [
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 1,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 1,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "square",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "square",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          }
+        ]
+      },
+      "manifest": {
+        "cases": [
+          "cellular7_high",
+          "cellular7_weak",
+          "cellular7_directional"
+        ],
+        "points": [
+          [
+            32,
+            6
+          ],
+          [
+            64,
+            1
+          ],
+          [
+            64,
+            2
+          ],
+          [
+            64,
+            3
+          ],
+          [
+            64,
+            4
+          ],
+          [
+            64,
+            6
+          ],
+          [
+            128,
+            6
+          ],
+          [
+            223,
+            6
+          ]
+        ],
+        "geometries": [
+          "square"
+        ],
+        "meshes": {},
+        "candidates": {
+          "cellular7_high": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d24",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 24,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "native_hp",
+              "candidate": "native_hp",
+              "policy": "standard"
+            }
+          ],
+          "cellular7_weak": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d24",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 24,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "MULTICOLOR_DILU",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "MULTICOLOR_DILU",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "dilu_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "determinism_flag": 1,
+                "exception_handling": 1,
+                "solver": {
+                  "solver": "FGMRES",
+                  "bsr_spmv_backend": "cusparse_generic",
+                  "monitor_residual": 1,
+                  "convergence": "RELATIVE_INI_CORE",
+                  "tolerance": 1e-10,
+                  "max_iters": 1500,
+                  "print_solve_stats": 0,
+                  "obtain_timings": 0,
+                  "norm": "L2",
+                  "preconditioner": {
+                    "solver": "MULTICOLOR_DILU",
+                    "max_iters": 1,
+                    "coloring_level": 1,
+                    "matrix_coloring_scheme": "PARALLEL_GREEDY",
+                    "max_uncolored_percentage": 0.0,
+                    "relaxation_factor": 0.7
+                  },
+                  "use_scalar_norm": 1
+                }
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "dilu_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "determinism_flag": 1,
+                "exception_handling": 1,
+                "solver": {
+                  "solver": "PBICGSTAB",
+                  "bsr_spmv_backend": "cusparse_generic",
+                  "monitor_residual": 1,
+                  "convergence": "RELATIVE_INI_CORE",
+                  "tolerance": 1e-10,
+                  "max_iters": 1500,
+                  "print_solve_stats": 0,
+                  "obtain_timings": 0,
+                  "norm": "L2",
+                  "preconditioner": {
+                    "solver": "MULTICOLOR_DILU",
+                    "max_iters": 1,
+                    "coloring_level": 1,
+                    "matrix_coloring_scheme": "PARALLEL_GREEDY",
+                    "max_uncolored_percentage": 0.0,
+                    "relaxation_factor": 0.7
+                  },
+                  "use_scalar_norm": 1
+                }
+              }
+            }
+          ],
+          "cellular7_directional": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d48",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 48,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            }
+          ]
+        },
+        "case_parameters": {
+          "cellular7_high": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": 1.0,
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          },
+          "cellular7_weak": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": 1e-05,
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                1e-05,
+                0.0
+              ],
+              [
+                0.0,
+                1e-05
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          },
+          "cellular7_directional": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": [
+              1.0,
+              0.001
+            ],
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                0.7502500000000001,
+                0.4325796891903271
+              ],
+              [
+                0.4325796891903271,
+                0.2507499999999999
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          }
+        },
+        "source_sha256": "f633d1ff5abe187b3c23edb87bb4bb47027c477028107ab310369813cc68e707",
+        "script_sha256": {
+          "run_oscillatory_adr_scaling.py": "cc4c2c2be7af997363fbc9df70b051d218ad71be389e1b0066c20dbf0dd30dc0",
+          "run_oscillatory_adr_study.py": "7566b596744a1c63decc465967b09608999cc6dcf7e6be6f3a58aa0bdc9ffd8f",
+          "run_adr_scaling_study.py": "e98d13758bd1ea83e1b63a874f2a77699a32d47ac716dfc8291805cf5c0ab9fe",
+          "oscillatory_adr_cases.py": "2efbbf7fdf9c080c430036bcde69c1ff03d78a8fda0da55855ea527df403982a",
+          "adv_diff_rea_cases.py": "f2ee3a724e8fb17471ccfa324d55aa617c4f4abd4d00069ef5f577be71560359",
+          "adr_performance_worker.py": "25304a1c32669a2aaf73e7d59ee05de09d623cbdb81ee4cd0e8413826c028b1b",
+          "adr_solver_comparison_worker.py": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
+          "adr_performance_common.py": "ebb46c6002bdf006c111074cad717d89b37896b23e6bd82565f9010e71b82443",
+          "adr_native_hp_worker.py": "f1451b93d33168d0261717a613c3b2e8170b7c7155929b14fecebe92ff88b5d4"
+        },
+        "physical_rtol": 1e-10,
+        "internal_rtol": 1e-11,
+        "maxiter": 1000,
+        "restart": 75,
+        "warmup": 1,
+        "repeats": 3,
+        "solves_per_setup": 2,
+        "assembly_warmup": 1,
+        "assembly_repeats": 3,
+        "previous_square": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
+        "preserved_22825_jobs": {
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+            "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
+            "mtime_ns": 1789727022974003116
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+            "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
+            "mtime_ns": 1789727002523857471
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+            "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
+            "mtime_ns": 1789727067634688353
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+            "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
+            "mtime_ns": 1789727059797792282
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+            "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
+            "mtime_ns": 1789727010210320151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+            "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
+            "mtime_ns": 1789726991061990981
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+            "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
+            "mtime_ns": 1789727135014008865
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+            "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
+            "mtime_ns": 1789727108485466850
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+            "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
+            "mtime_ns": 1789726980858273354
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
+            "mtime_ns": 1789726985285201661
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+            "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
+            "mtime_ns": 1789726996692613693
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+            "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
+            "mtime_ns": 1789727043741876151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
+            "mtime_ns": 1789727070408144049
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
+            "mtime_ns": 1789727012933773635
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+            "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
+            "mtime_ns": 1789727093581636143
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+            "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
+            "mtime_ns": 1789727012935787807
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+            "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
+            "mtime_ns": 1789726996694118264
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+            "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
+            "mtime_ns": 1789727059799994547
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+            "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
+            "mtime_ns": 1789727043743685691
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+            "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
+            "mtime_ns": 1789727002525243548
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+            "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
+            "mtime_ns": 1789726985285768342
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+            "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
+            "mtime_ns": 1789727108488136151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+            "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
+            "mtime_ns": 1789727093584354527
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+            "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
+            "mtime_ns": 1789726973524742997
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
+            "mtime_ns": 1789726980859144029
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+            "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
+            "mtime_ns": 1789726991063562341
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+            "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
+            "mtime_ns": 1789727022975780155
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
+            "mtime_ns": 1789727067635394392
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
+            "mtime_ns": 1789727010211188090
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+            "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
+            "mtime_ns": 1789727070410359367
+          }
+        },
+        "policy": "Original square points exactly; annular counts matched within 3% and below 100k. Same per-class solver coverage as the prior study: high diffusion ASM24/AMG-Jacobi/native hp; transport ASM24/AMG-DILU/direct DILU; anisotropy ASM48/AMG-Jacobi. All AMG outer-method pairs share their preconditioner. Serial synchronized FP64 jobs, explicit zero guesses, one warmup plus three measured fresh setups, two solves/setup. Failures retained. Existing square n64/p6 outcomes reused; no 22,825-triangle job is run.",
+        "orchestration_revisions": [
+          {
+            "previous_sha256": "189712d2fd5b37869b8563beaf27bf70e5246bbe53c7e669437b9da2def29697",
+            "current_sha256": "cc4c2c2be7af997363fbc9df70b051d218ad71be389e1b0066c20dbf0dd30dc0",
+            "reason": "Restrict prior-square cache reuse to cases actually present in the previous campaign; no numerical worker/configuration changes or repeated completed solves."
+          }
+        ]
+      }
+    },
+    {
+      "geometry": "annulus",
+      "completion": {
+        "status": "completed",
+        "scheduled": 96,
+        "attempted": 96,
+        "passed": 61,
+        "reused": 0,
+        "preserved_22825_jobs_unchanged": true,
+        "failures": [
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 2048,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 1,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 1,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 2,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 3,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 4,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 8192,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 32768,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "dilu_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_weak",
+            "geometry": "annulus",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "dilu_pbicgstab",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "amg_fgmres",
+            "status": "numerical_failure"
+          },
+          {
+            "case": "cellular7_directional",
+            "geometry": "annulus",
+            "target_triangles": 99458,
+            "p": 6,
+            "candidate": "amg_pbicgstab",
+            "status": "numerical_failure"
+          }
+        ]
+      },
+      "manifest": {
+        "cases": [
+          "cellular7_high",
+          "cellular7_weak",
+          "cellular7_directional"
+        ],
+        "points": [
+          [
+            32,
+            6
+          ],
+          [
+            64,
+            1
+          ],
+          [
+            64,
+            2
+          ],
+          [
+            64,
+            3
+          ],
+          [
+            64,
+            4
+          ],
+          [
+            64,
+            6
+          ],
+          [
+            128,
+            6
+          ],
+          [
+            223,
+            6
+          ]
+        ],
+        "geometries": [
+          "annulus"
+        ],
+        "meshes": {
+          "2048": {
+            "geometry": "five-lobed annulus",
+            "outer_radius": "1 + 0.35*cos(5*theta)",
+            "hole_radius": 0.58,
+            "nominal_minimum_neck_width": 0.07,
+            "outer_boundary_points": 220,
+            "mesh_size": 0.06483642,
+            "triangles": 2043,
+            "vertices": 1160,
+            "interior_faces": 2926,
+            "boundary_components": 2,
+            "edge_lengths": [
+              0.01627312966701651,
+              0.08033470282489687
+            ],
+            "area": 2.2769108437103442,
+            "mesh_sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
+            "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+            "target_triangles": 2048,
+            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
+            "sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
+            "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
+          },
+          "8192": {
+            "geometry": "five-lobed annulus",
+            "outer_radius": "1 + 0.35*cos(5*theta)",
+            "hole_radius": 0.58,
+            "nominal_minimum_neck_width": 0.07,
+            "outer_boundary_points": 400,
+            "mesh_size": 0.03124461,
+            "triangles": 8039,
+            "vertices": 4293,
+            "interior_faces": 11785,
+            "boundary_components": 2,
+            "edge_lengths": [
+              0.010151579599142877,
+              0.039358784562740015
+            ],
+            "area": 2.27696108274338,
+            "mesh_sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
+            "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+            "target_triangles": 8192,
+            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
+            "sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
+            "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
+          },
+          "32768": {
+            "geometry": "five-lobed annulus",
+            "outer_radius": "1 + 0.35*cos(5*theta)",
+            "hole_radius": 0.58,
+            "nominal_minimum_neck_width": 0.07,
+            "outer_boundary_points": 400,
+            "mesh_size": 0.01549001,
+            "triangles": 33174,
+            "vertices": 17115,
+            "interior_faces": 49233,
+            "boundary_components": 2,
+            "edge_lengths": [
+              0.005888759124938977,
+              0.020216124311229603
+            ],
+            "area": 2.276578026746234,
+            "mesh_sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
+            "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+            "target_triangles": 32768,
+            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
+            "sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
+            "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
+          },
+          "99458": {
+            "geometry": "five-lobed annulus",
+            "outer_radius": "1 + 0.35*cos(5*theta)",
+            "hole_radius": 0.58,
+            "nominal_minimum_neck_width": 0.07,
+            "outer_boundary_points": 400,
+            "mesh_size": 0.007933955,
+            "triangles": 99984,
+            "vertices": 50912,
+            "interior_faces": 149056,
+            "boundary_components": 2,
+            "edge_lengths": [
+              0.004025861098640638,
+              0.01092198138896472
+            ],
+            "area": 2.2764860427038225,
+            "mesh_sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
+            "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+            "target_triangles": 99458,
+            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
+            "sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
+            "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
+          }
+        },
+        "candidates": {
+          "cellular7_high": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d24",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 24,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "native_hp",
+              "candidate": "native_hp",
+              "policy": "standard"
+            }
+          ],
+          "cellular7_weak": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d24",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 24,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "MULTICOLOR_DILU",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "MULTICOLOR_DILU",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "dilu_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "determinism_flag": 1,
+                "exception_handling": 1,
+                "solver": {
+                  "solver": "FGMRES",
+                  "bsr_spmv_backend": "cusparse_generic",
+                  "monitor_residual": 1,
+                  "convergence": "RELATIVE_INI_CORE",
+                  "tolerance": 1e-10,
+                  "max_iters": 1500,
+                  "print_solve_stats": 0,
+                  "obtain_timings": 0,
+                  "norm": "L2",
+                  "preconditioner": {
+                    "solver": "MULTICOLOR_DILU",
+                    "max_iters": 1,
+                    "coloring_level": 1,
+                    "matrix_coloring_scheme": "PARALLEL_GREEDY",
+                    "max_uncolored_percentage": 0.0,
+                    "relaxation_factor": 0.7
+                  },
+                  "use_scalar_norm": 1
+                }
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "dilu_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "determinism_flag": 1,
+                "exception_handling": 1,
+                "solver": {
+                  "solver": "PBICGSTAB",
+                  "bsr_spmv_backend": "cusparse_generic",
+                  "monitor_residual": 1,
+                  "convergence": "RELATIVE_INI_CORE",
+                  "tolerance": 1e-10,
+                  "max_iters": 1500,
+                  "print_solve_stats": 0,
+                  "obtain_timings": 0,
+                  "norm": "L2",
+                  "preconditioner": {
+                    "solver": "MULTICOLOR_DILU",
+                    "max_iters": 1,
+                    "coloring_level": 1,
+                    "matrix_coloring_scheme": "PARALLEL_GREEDY",
+                    "max_uncolored_percentage": 0.0,
+                    "relaxation_factor": 0.7
+                  },
+                  "use_scalar_norm": 1
+                }
+              }
+            }
+          ],
+          "cellular7_directional": [
+            {
+              "family": "asm_pp",
+              "candidate": "asm_d48",
+              "configuration": {
+                "preconditioner": "asm_poly",
+                "operator": "raw_fused",
+                "application": "fused",
+                "local_solver": "cublas_inverse",
+                "polynomial_degree": 48,
+                "orthogonalization": "cgs2",
+                "restart": 75,
+                "polynomial_orthogonalization": "cgs2"
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_fgmres",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "FGMRES",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            },
+            {
+              "family": "amgx",
+              "candidate": "amg_pbicgstab",
+              "matrix_format": "bsr",
+              "amgx_config": {
+                "config_version": 2,
+                "solver": {
+                  "preconditioner": {
+                    "solver": "AMG",
+                    "algorithm": "CLASSICAL",
+                    "classical_bsr_hierarchy": "block_graph_dense",
+                    "bsr_spmv_backend": "cusparse_generic",
+                    "selector": "PMIS",
+                    "strength": "AHAT",
+                    "strength_threshold": 0.25,
+                    "interpolator": "D2",
+                    "aggressive_interpolator": "D2",
+                    "cycle": "V",
+                    "presweeps": 1,
+                    "postsweeps": 1,
+                    "smoother": {
+                      "solver": "BLOCK_JACOBI",
+                      "max_iters": 1,
+                      "relaxation_factor": 1.0
+                    },
+                    "coarse_solver": "DENSE_LU_SOLVER",
+                    "max_iters": 1,
+                    "max_levels": 100,
+                    "print_grid_stats": 0,
+                    "dense_lu_num_rows": 2048,
+                    "dense_lu_max_rows": 4096,
+                    "coarsest_sweeps": 2,
+                    "aggressive_levels": 0,
+                    "interp_max_elements": 4,
+                    "error_scaling": 3,
+                    "block_graph_dense_smoothing_weight": 0.6666666666666666,
+                    "block_graph_dense_pivot_tolerance": 1e-12,
+                    "block_graph_dense_constraint_tolerance": 1e-08,
+                    "block_graph_dense_smoothing_steps": 1,
+                    "block_graph_dense_constraint_mode": "additive"
+                  },
+                  "solver": "PBICGSTAB",
+                  "tolerance": 1e-13,
+                  "max_iters": 300,
+                  "convergence": "ABSOLUTE",
+                  "norm": "L2",
+                  "print_solve_stats": 0,
+                  "monitor_residual": 1,
+                  "store_res_history": 1,
+                  "obtain_timings": 0,
+                  "use_scalar_norm": 1,
+                  "bsr_spmv_backend": "cusparse_generic"
+                },
+                "exception_handling": 1,
+                "determinism_flag": 1
+              }
+            }
+          ]
+        },
+        "case_parameters": {
+          "cellular7_high": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": 1.0,
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          },
+          "cellular7_weak": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": 1e-05,
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                1e-05,
+                0.0
+              ],
+              [
+                0.0,
+                1e-05
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          },
+          "cellular7_directional": {
+            "frequency": 7,
+            "amplitude": 4.0,
+            "diffusion": [
+              1.0,
+              0.001
+            ],
+            "reaction": 0.01,
+            "diffusion_tensor": [
+              [
+                0.7502500000000001,
+                0.4325796891903271
+              ],
+              [
+                0.4325796891903271,
+                0.2507499999999999
+              ]
+            ],
+            "drift": [
+              1.0,
+              0.5
+            ],
+            "solution_modes": [
+              [
+                1.0,
+                6,
+                5
+              ],
+              [
+                0.35,
+                11,
+                9
+              ]
+            ]
+          }
+        },
+        "source_sha256": "f633d1ff5abe187b3c23edb87bb4bb47027c477028107ab310369813cc68e707",
+        "script_sha256": {
+          "run_oscillatory_adr_scaling.py": "cc4c2c2be7af997363fbc9df70b051d218ad71be389e1b0066c20dbf0dd30dc0",
+          "run_oscillatory_adr_study.py": "7566b596744a1c63decc465967b09608999cc6dcf7e6be6f3a58aa0bdc9ffd8f",
+          "run_adr_scaling_study.py": "e98d13758bd1ea83e1b63a874f2a77699a32d47ac716dfc8291805cf5c0ab9fe",
+          "oscillatory_adr_cases.py": "2efbbf7fdf9c080c430036bcde69c1ff03d78a8fda0da55855ea527df403982a",
+          "adv_diff_rea_cases.py": "f2ee3a724e8fb17471ccfa324d55aa617c4f4abd4d00069ef5f577be71560359",
+          "adr_performance_worker.py": "25304a1c32669a2aaf73e7d59ee05de09d623cbdb81ee4cd0e8413826c028b1b",
+          "adr_solver_comparison_worker.py": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
+          "adr_performance_common.py": "ebb46c6002bdf006c111074cad717d89b37896b23e6bd82565f9010e71b82443",
+          "adr_native_hp_worker.py": "f1451b93d33168d0261717a613c3b2e8170b7c7155929b14fecebe92ff88b5d4"
+        },
+        "physical_rtol": 1e-10,
+        "internal_rtol": 1e-11,
+        "maxiter": 1000,
+        "restart": 75,
+        "warmup": 1,
+        "repeats": 3,
+        "solves_per_setup": 2,
+        "assembly_warmup": 1,
+        "assembly_repeats": 3,
+        "previous_square": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
+        "preserved_22825_jobs": {
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+            "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
+            "mtime_ns": 1789727022974003116
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+            "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
+            "mtime_ns": 1789727002523857471
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+            "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
+            "mtime_ns": 1789727067634688353
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+            "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
+            "mtime_ns": 1789727059797792282
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+            "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
+            "mtime_ns": 1789727010210320151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+            "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
+            "mtime_ns": 1789726991061990981
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+            "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
+            "mtime_ns": 1789727135014008865
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+            "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
+            "mtime_ns": 1789727108485466850
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+            "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
+            "mtime_ns": 1789726980858273354
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
+            "mtime_ns": 1789726985285201661
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+            "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
+            "mtime_ns": 1789726996692613693
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+            "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
+            "mtime_ns": 1789727043741876151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
+            "mtime_ns": 1789727070408144049
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
+            "mtime_ns": 1789727012933773635
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+            "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
+            "mtime_ns": 1789727093581636143
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+            "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
+            "mtime_ns": 1789727012935787807
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+            "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
+            "mtime_ns": 1789726996694118264
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+            "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
+            "mtime_ns": 1789727059799994547
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+            "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
+            "mtime_ns": 1789727043743685691
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+            "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
+            "mtime_ns": 1789727002525243548
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+            "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
+            "mtime_ns": 1789726985285768342
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+            "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
+            "mtime_ns": 1789727108488136151
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+            "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
+            "mtime_ns": 1789727093584354527
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+            "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
+            "mtime_ns": 1789726973524742997
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
+            "mtime_ns": 1789726980859144029
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+            "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
+            "mtime_ns": 1789726991063562341
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+            "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
+            "mtime_ns": 1789727022975780155
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
+            "mtime_ns": 1789727067635394392
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+            "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
+            "mtime_ns": 1789727010211188090
+          },
+          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+            "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
+            "mtime_ns": 1789727070410359367
+          }
+        },
+        "policy": "Original square points exactly; annular counts matched within 3% and below 100k. Same per-class solver coverage as the prior study: high diffusion ASM24/AMG-Jacobi/native hp; transport ASM24/AMG-DILU/direct DILU; anisotropy ASM48/AMG-Jacobi. All AMG outer-method pairs share their preconditioner. Serial synchronized FP64 jobs, explicit zero guesses, one warmup plus three measured fresh setups, two solves/setup. Failures retained. Existing square n64/p6 outcomes reused; no 22,825-triangle job is run."
+      }
+    }
+  ],
+  "geometry": [
+    {
+      "geometry": "five-lobed annulus",
+      "outer_radius": "1 + 0.35*cos(5*theta)",
+      "hole_radius": 0.58,
+      "nominal_minimum_neck_width": 0.07,
+      "outer_boundary_points": 220,
+      "mesh_size": 0.06483642,
+      "triangles": 2043,
+      "vertices": 1160,
+      "interior_faces": 2926,
+      "boundary_components": 2,
+      "edge_lengths": [
+        0.01627312966701651,
+        0.08033470282489687
+      ],
+      "area": 2.2769108437103442,
+      "mesh_sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
+      "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+      "target_triangles": 2048,
+      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
+      "sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
+      "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
+      "quality": {
+        "triangles": 2043,
+        "vertices": 1160,
+        "interior_faces": 2926,
+        "connected_components": 1,
+        "boundary_components": 2,
+        "area": 2.2769108437103442,
+        "minimum_angle_degrees": 29.962302286755012,
+        "minimum_edge": 0.01627312966701651,
+        "maximum_edge": 0.08033470282489687
+      }
+    },
+    {
+      "geometry": "five-lobed annulus",
+      "outer_radius": "1 + 0.35*cos(5*theta)",
+      "hole_radius": 0.58,
+      "nominal_minimum_neck_width": 0.07,
+      "outer_boundary_points": 400,
+      "mesh_size": 0.03124461,
+      "triangles": 8039,
+      "vertices": 4293,
+      "interior_faces": 11785,
+      "boundary_components": 2,
+      "edge_lengths": [
+        0.010151579599142877,
+        0.039358784562740015
+      ],
+      "area": 2.27696108274338,
+      "mesh_sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
+      "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+      "target_triangles": 8192,
+      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
+      "sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
+      "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
+      "quality": {
+        "triangles": 8039,
+        "vertices": 4293,
+        "interior_faces": 11785,
+        "connected_components": 1,
+        "boundary_components": 2,
+        "area": 2.27696108274338,
+        "minimum_angle_degrees": 25.836813617682957,
+        "minimum_edge": 0.010151579599142877,
+        "maximum_edge": 0.039358784562740015
+      }
+    },
+    {
+      "geometry": "five-lobed annulus",
+      "outer_radius": "1 + 0.35*cos(5*theta)",
+      "hole_radius": 0.58,
+      "nominal_minimum_neck_width": 0.07,
+      "outer_boundary_points": 400,
+      "mesh_size": 0.01549001,
+      "triangles": 33174,
+      "vertices": 17115,
+      "interior_faces": 49233,
+      "boundary_components": 2,
+      "edge_lengths": [
+        0.005888759124938977,
+        0.020216124311229603
+      ],
+      "area": 2.276578026746234,
+      "mesh_sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
+      "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+      "target_triangles": 32768,
+      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
+      "sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
+      "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
+      "quality": {
+        "triangles": 33174,
+        "vertices": 17115,
+        "interior_faces": 49233,
+        "connected_components": 1,
+        "boundary_components": 2,
+        "area": 2.276578026746234,
+        "minimum_angle_degrees": 26.280790711164485,
+        "minimum_edge": 0.005888759124938977,
+        "maximum_edge": 0.020216124311229603
+      }
+    },
+    {
+      "geometry": "five-lobed annulus",
+      "outer_radius": "1 + 0.35*cos(5*theta)",
+      "hole_radius": 0.58,
+      "nominal_minimum_neck_width": 0.07,
+      "outer_boundary_points": 400,
+      "mesh_size": 0.007933955,
+      "triangles": 99984,
+      "vertices": 50912,
+      "interior_faces": 149056,
+      "boundary_components": 2,
+      "edge_lengths": [
+        0.004025861098640638,
+        0.01092198138896472
+      ],
+      "area": 2.2764860427038225,
+      "mesh_sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
+      "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
+      "target_triangles": 99458,
+      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
+      "sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
+      "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
+      "quality": {
+        "triangles": 99984,
+        "vertices": 50912,
+        "interior_faces": 149056,
+        "connected_components": 1,
+        "boundary_components": 2,
+        "area": 2.2764860427038225,
+        "minimum_angle_degrees": 35.43617156525346,
+        "minimum_edge": 0.004025861098640638,
+        "maximum_edge": 0.01092198138896472
+      }
+    }
+  ],
+  "binaries": {
+    "/home/adelsaleh/src/AMGX-build-cuda13/libamgxsh.so": {
+      "sha256": "f19780cea8929352c8d3cf97ed2a2f43a23180a9932e9ba95a0af4cb1b056023",
+      "size_bytes": 150015696
+    },
+    "/home/adelsaleh/src/AMGX-install-cuda13/lib/libamgxsh.so": {
+      "sha256": "e006ecb3df8e7901450e6540ae14706222b9a642c88fcacce63b62568eca52f7",
+      "size_bytes": 149469856
+    },
+    "/home/adelsaleh/src/hdgfem/.venv/lib/python3.12/site-packages/pyamgx.cpython-312-x86_64-linux-gnu.so": {
+      "sha256": "0fa650106c352469750088d2594b4e66c2baf6a1824252fee2364db327fc2841",
+      "size_bytes": 2012640
+    }
+  },
+  "separate_diagnostics": {
+    "profiles": [
+      {
+        "case": "cellular7_high",
+        "candidate": "asm_d24",
+        "status": "passed"
+      },
+      {
+        "case": "cellular7_weak",
+        "candidate": "asm_d24",
+        "status": "passed"
+      },
+      {
+        "case": "cellular7_directional",
+        "candidate": "asm_d48",
+        "status": "passed"
+      },
+      {
+        "case": "cellular7_high",
+        "candidate": "native_hp",
+        "status": "passed"
+      },
+      {
+        "case": "cellular7_high",
+        "candidate": "amg_fgmres",
+        "status": "passed"
+      },
+      {
+        "case": "cellular7_weak",
+        "candidate": "amg_fgmres",
+        "status": "passed"
+      }
+    ],
+    "quadrature": [
+      {
+        "case": "cellular7_high",
+        "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
+        "volume_points_1d": [
+          14,
+          28
+        ],
+        "edge_points_1d": [
+          14,
+          28
+        ],
+        "matrix_relative_change": 2.064623277031406e-08,
+        "rhs_relative_change": 1.7922690423659475e-08,
+        "primal_l2_difference": 3.8880475862900425e-11,
+        "original_l2_error_high_quadrature": 1.045027978089582e-07,
+        "refined_l2_error": 1.0450352484593178e-07,
+        "difference_over_original_error": 0.00037205200892303293,
+        "status": "passed",
+        "criterion": "Primal-field change below 5% of the original discretization error; both errors evaluated at the higher volume quadrature. This does not assert matrix coefficients agree to roundoff."
+      },
+      {
+        "case": "cellular7_directional",
+        "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
+        "volume_points_1d": [
+          14,
+          28
+        ],
+        "edge_points_1d": [
+          14,
+          28
+        ],
+        "matrix_relative_change": 5.522807128594874e-07,
+        "rhs_relative_change": 3.498438568458153e-07,
+        "primal_l2_difference": 2.571530009760853e-11,
+        "original_l2_error_high_quadrature": 8.74048785248135e-08,
+        "refined_l2_error": 8.740522218063813e-08,
+        "difference_over_original_error": 0.0002942089793112426,
+        "status": "passed",
+        "criterion": "Primal-field change below 5% of the original discretization error; both errors evaluated at the higher volume quadrature. This does not assert matrix coefficients agree to roundoff."
+      }
+    ],
+    "matrix_diagnostics": [
+      {
+        "case": "cellular7_high",
+        "n": 64,
+        "p": 6,
+        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
+        "trace_dofs": 82495,
+        "matrix_sha256": "a3f0ed254eb3315cc9e78fc6de1c31bda7fc8f72b565ff64ce52bbdc0ee20f76",
+        "norm1": 20.787596997650553,
+        "inverse_norm1_lower_estimate": 1612.7836784989515,
+        "condition1_lower_estimate": 33525.89715302462,
+        "relative_asymmetry_frobenius": 0.0021008566893254725,
+        "normalized_commutator_frobenius": 6.964318047964393e-06,
+        "block_offdiag_to_diag_median": 1.3159373111466197,
+        "block_offdiag_to_diag_max": 1.412905853089102,
+        "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+      },
+      {
+        "case": "cellular7_weak",
+        "n": 64,
+        "p": 6,
+        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
+        "trace_dofs": 82495,
+        "matrix_sha256": "5932412428246a12f44890e025f8084465c869da8dad700e16969d75ff0cf5e6",
+        "norm1": 0.05296334886175356,
+        "inverse_norm1_lower_estimate": 6215148.010528874,
+        "condition1_lower_estimate": 329175.0523090743,
+        "relative_asymmetry_frobenius": 0.9466214287300382,
+        "normalized_commutator_frobenius": 0.0032703766208238357,
+        "block_offdiag_to_diag_median": 1.1803562617033576,
+        "block_offdiag_to_diag_max": 2.00379280793577,
+        "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+      },
+      {
+        "case": "cellular7_directional",
+        "n": 64,
+        "p": 6,
+        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
+        "trace_dofs": 82495,
+        "matrix_sha256": "1d1d22ccffd0f88e29fa50d561c63d9a149b5dd8419d6acb65e63a37b64a0375",
+        "norm1": 17.711308128614505,
+        "inverse_norm1_lower_estimate": 297551.01856680517,
+        "condition1_lower_estimate": 5270017.773819782,
+        "relative_asymmetry_frobenius": 0.008024899919322013,
+        "normalized_commutator_frobenius": 4.5346494439256515e-05,
+        "block_offdiag_to_diag_median": 1.5176593113824064,
+        "block_offdiag_to_diag_max": 3.087376499949249,
+        "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+      }
+    ]
+  },
+  "moved_raw_files_unchanged": 943,
+  "preserved_22825_jobs_unchanged": true,
+  "preserved_22825_jobs": {
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+      "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
+      "mtime_ns": 1789727022974003116
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+      "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
+      "mtime_ns": 1789727002523857471
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+      "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
+      "mtime_ns": 1789727067634688353
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+      "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
+      "mtime_ns": 1789727059797792282
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+      "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
+      "mtime_ns": 1789727010210320151
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+      "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
+      "mtime_ns": 1789726991061990981
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+      "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
+      "mtime_ns": 1789727135014008865
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+      "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
+      "mtime_ns": 1789727108485466850
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+      "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
+      "mtime_ns": 1789726980858273354
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
+      "mtime_ns": 1789726985285201661
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+      "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
+      "mtime_ns": 1789726996692613693
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+      "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
+      "mtime_ns": 1789727043741876151
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
+      "mtime_ns": 1789727070408144049
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
+      "mtime_ns": 1789727012933773635
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+      "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
+      "mtime_ns": 1789727093581636143
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+      "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
+      "mtime_ns": 1789727012935787807
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+      "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
+      "mtime_ns": 1789726996694118264
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+      "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
+      "mtime_ns": 1789727059799994547
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+      "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
+      "mtime_ns": 1789727043743685691
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+      "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
+      "mtime_ns": 1789727002525243548
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+      "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
+      "mtime_ns": 1789726985285768342
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+      "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
+      "mtime_ns": 1789727108488136151
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+      "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
+      "mtime_ns": 1789727093584354527
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+      "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
+      "mtime_ns": 1789726973524742997
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
+      "mtime_ns": 1789726980859144029
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+      "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
+      "mtime_ns": 1789726991063562341
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+      "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
+      "mtime_ns": 1789727022975780155
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
+      "mtime_ns": 1789727067635394392
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+      "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
+      "mtime_ns": 1789727010211188090
+    },
+    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+      "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
+      "mtime_ns": 1789727070410359367
+    }
+  },
+  "cpu_tests": {
+    "passed": 23,
+    "deselected": 9,
+    "log": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/checks/cpu_tests.log",
+    "log_sha256": "ec8435d519a568b29ba7a9390333d5d421b37a601d628d76a0b846911215f184",
+    "command": "python -m pytest -q tests/test_oscillatory_adr_cases.py tests/test_adv_diff_rea.py -k 'not gpu'"
+  },
+  "native_adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
+  "scope": "Exact original square h/p points and solver coverage; annular counts within 3%. No 22,825-triangle assembly, solve or profile repeated. Current source snapshots and unchanged prebuilt libraries identify execution. Numerical failures are retained, not timing ranks."
+}

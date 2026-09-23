@@ -1,0 +1,4 @@
+# Provisional high-mode thin-ring candidate, after m=9 qualification.
+# Check projection/resolution with preflight_diocotron before evolving.
+# h=0.008, DG order 6, radial power 4, dt=0.05, T=70, tau=128000.
+--preset diocotron_smooth_m128_ark3_p6_h008_dt005_t70

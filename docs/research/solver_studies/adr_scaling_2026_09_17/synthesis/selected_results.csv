@@ -1,0 +1,877 @@
+suite,geometry,case,n,p,dofs,metric,group,family,method,status,time_ms,iterations,pp_degree,triangles,policy
+smooth,square,trigonometric,32,6,21056,fresh,asm,ASM+PP(24),asm_gmres,passed,69.9067059904337,33,24,2048,
+smooth,square,trigonometric,32,6,21056,fresh,amg,FGMRES,amgx_fgmres_amg,passed,379.69853810500354,49,,2048,
+smooth,square,trigonometric,32,6,21056,fresh,native,standard,native_hp_standard,passed,95.86743789259344,58,,2048,standard
+smooth,square,trigonometric,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,50.26478890795261,,,2048,
+smooth,square,trigonometric,32,6,21056,hot,asm,ASM+PP(24),asm_gmres,passed,35.37780667344729,33,24,2048,
+smooth,square,trigonometric,32,6,21056,hot,amg,FGMRES,amgx_fgmres_amg,passed,144.76975697713593,49,,2048,
+smooth,square,trigonometric,32,6,21056,hot,native,standard,native_hp_standard,passed,45.065132357801,58,,2048,standard
+smooth,square,trigonometric,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.358784948475659,,,2048,
+smooth,square,advection_dominated,32,6,21056,fresh,asm,ASM+PP(24),asm_gmres,passed,43.550560949370265,8,24,2048,
+smooth,square,advection_dominated,32,6,21056,fresh,amg,FGMRES,amgx_fgmres_amg,passed,132.9201520420611,21,,2048,
+smooth,square,advection_dominated,32,6,21056,fresh,native,standard,native_hp_standard,passed,182.50040290877223,150,,2048,standard
+smooth,square,advection_dominated,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,53.21247398387641,,,2048,
+smooth,square,advection_dominated,32,6,21056,hot,asm,ASM+PP(24),asm_gmres,passed,9.034638991579413,8,24,2048,
+smooth,square,advection_dominated,32,6,21056,hot,amg,FGMRES,amgx_fgmres_amg,passed,49.49755830845485,21,,2048,
+smooth,square,advection_dominated,32,6,21056,hot,native,standard,native_hp_standard,passed,123.55097262964894,150,,2048,standard
+smooth,square,advection_dominated,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.311724590137601,,,2048,
+smooth,square,anisotropic,32,6,21056,fresh,asm,ASM+PP(48),asm_gmres,passed,72.76179594919086,14,48,2048,
+smooth,square,anisotropic,32,6,21056,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,189.50036889873445,71,,2048,
+smooth,square,anisotropic,32,6,21056,fresh,native,standard,native_hp_standard,passed,176.5664699487388,150,,2048,standard
+smooth,square,anisotropic,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,54.833166068419814,,,2048,
+smooth,square,anisotropic,32,6,21056,hot,asm,ASM+PP(48),asm_gmres,passed,25.801393707903724,14,48,2048,
+smooth,square,anisotropic,32,6,21056,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,134.7802987244601,71,,2048,
+smooth,square,anisotropic,32,6,21056,hot,native,standard,native_hp_standard,passed,116.6725386865437,150,,2048,standard
+smooth,square,anisotropic,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.277928593568504,,,2048,
+smooth,square,trigonometric,64,1,24320,fresh,asm,ASM+PP(24),asm_gmres,passed,111.0752330860123,48,24,8192,
+smooth,square,trigonometric,64,1,24320,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,567.0464460272342,54,,8192,
+smooth,square,trigonometric,64,1,24320,fresh,native,standard,native_hp_standard,passed,114.25906210206449,50,,8192,standard
+smooth,square,trigonometric,64,1,24320,fresh,lu,P-LU$_{4}$,pardiso_lu,passed,61.98610400315374,,,8192,
+smooth,square,trigonometric,64,1,24320,hot,asm,ASM+PP(24),asm_gmres,passed,46.97096270198623,48,24,8192,
+smooth,square,trigonometric,64,1,24320,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,256.6180990155165,54,,8192,
+smooth,square,trigonometric,64,1,24320,hot,native,standard,native_hp_standard,passed,39.84476567711681,50,,8192,standard
+smooth,square,trigonometric,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5961867766454816,,,8192,
+smooth,square,advection_dominated,64,1,24320,fresh,asm,ASM+PP(24),asm_gmres,passed,74.09499690402299,13,24,8192,
+smooth,square,advection_dominated,64,1,24320,fresh,amg,FGMRES,amgx_fgmres_amg,passed,408.60340103972703,34,,8192,
+smooth,square,advection_dominated,64,1,24320,fresh,native,robust,native_hp_robust,passed,301.06759793125093,225,,8192,robust
+smooth,square,advection_dominated,64,1,24320,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,57.35486897174269,,,8192,
+smooth,square,advection_dominated,64,1,24320,hot,asm,ASM+PP(24),asm_gmres,passed,13.967569024922946,13,24,8192,
+smooth,square,advection_dominated,64,1,24320,hot,amg,FGMRES,amgx_fgmres_amg,passed,96.74085199367255,34,,8192,
+smooth,square,advection_dominated,64,1,24320,hot,native,robust,native_hp_robust,passed,225.39992533468953,225,,8192,robust
+smooth,square,advection_dominated,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5647045578807592,,,8192,
+smooth,square,anisotropic,64,1,24320,fresh,asm,ASM+PP(48),asm_gmres,passed,116.32527189794928,24,48,8192,
+smooth,square,anisotropic,64,1,24320,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,230.93664296902716,62,,8192,
+smooth,square,anisotropic,64,1,24320,fresh,native,robust,native_hp_robust,passed,182.40472907200456,101,,8192,robust
+smooth,square,anisotropic,64,1,24320,fresh,lu,P-LU$_{8}$,pardiso_lu,passed,57.56259791087359,,,8192,
+smooth,square,anisotropic,64,1,24320,hot,asm,ASM+PP(48),asm_gmres,passed,43.84025667483608,24,48,8192,
+smooth,square,anisotropic,64,1,24320,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,153.4390626863266,62,,8192,
+smooth,square,anisotropic,64,1,24320,hot,native,robust,native_hp_robust,passed,107.30753629468381,101,,8192,robust
+smooth,square,anisotropic,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5091764284297824,,,8192,
+smooth,square,trigonometric,64,2,36480,fresh,asm,ASM+PP(24),asm_gmres,passed,97.13364287745208,26,24,8192,
+smooth,square,trigonometric,64,2,36480,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,90.35547787789255,19,,8192,
+smooth,square,trigonometric,64,2,36480,fresh,native,standard,native_hp_standard,passed,118.73849492985755,53,,8192,standard
+smooth,square,trigonometric,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,74.7235978487879,,,8192,
+smooth,square,trigonometric,64,2,36480,hot,asm,ASM+PP(24),asm_gmres,passed,27.516336374295253,26,24,8192,
+smooth,square,trigonometric,64,2,36480,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,32.70892632038643,19,,8192,
+smooth,square,trigonometric,64,2,36480,hot,native,standard,native_hp_standard,passed,42.705740042341255,53,,8192,standard
+smooth,square,trigonometric,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,4.807089408859611,,,8192,
+smooth,square,advection_dominated,64,2,36480,fresh,asm,ASM+PP(24),asm_gmres,passed,86.54796495102346,12,24,8192,
+smooth,square,advection_dominated,64,2,36480,fresh,amg,FGMRES,amgx_fgmres_amg,passed,275.8679910330102,31,,8192,
+smooth,square,advection_dominated,64,2,36480,fresh,native,standard,native_hp_standard,passed,344.77179299574345,300,,8192,standard
+smooth,square,advection_dominated,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,78.8144979160279,,,8192,
+smooth,square,advection_dominated,64,2,36480,hot,asm,ASM+PP(24),asm_gmres,passed,12.334931991063058,12,24,8192,
+smooth,square,advection_dominated,64,2,36480,hot,amg,FGMRES,amgx_fgmres_amg,passed,92.33569904851417,31,,8192,
+smooth,square,advection_dominated,64,2,36480,hot,native,standard,native_hp_standard,passed,264.5209993158157,300,,8192,standard
+smooth,square,advection_dominated,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.322426604107022,,,8192,
+smooth,square,anisotropic,64,2,36480,fresh,asm,ASM+PP(48),asm_gmres,passed,130.9610060416162,27,48,8192,
+smooth,square,anisotropic,64,2,36480,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,407.1971970843151,71,,8192,
+smooth,square,anisotropic,64,2,36480,fresh,native,standard,native_hp_standard,passed,218.53641991037875,150,,8192,standard
+smooth,square,anisotropic,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,78.78638571128249,,,8192,
+smooth,square,anisotropic,64,2,36480,hot,asm,ASM+PP(48),asm_gmres,passed,48.578095311919846,27,48,8192,
+smooth,square,anisotropic,64,2,36480,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,257.48117500916123,71,,8192,
+smooth,square,anisotropic,64,2,36480,hot,native,standard,native_hp_standard,passed,133.81715301269045,150,,8192,standard
+smooth,square,anisotropic,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.031916592270136,,,8192,
+smooth,square,trigonometric,64,3,48640,fresh,asm,ASM+PP(24),asm_gmres,passed,135.20875095855445,56,24,8192,
+smooth,square,trigonometric,64,3,48640,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,136.28576695919037,26,,8192,
+smooth,square,trigonometric,64,3,48640,fresh,native,standard,native_hp_standard,passed,128.1491219997406,58,,8192,standard
+smooth,square,trigonometric,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,97.25825185887516,,,8192,
+smooth,square,trigonometric,64,3,48640,hot,asm,ASM+PP(24),asm_gmres,passed,59.616490616463125,56,24,8192,
+smooth,square,trigonometric,64,3,48640,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,58.9894336493065,26,,8192,
+smooth,square,trigonometric,64,3,48640,hot,native,standard,native_hp_standard,passed,47.40815330296755,58,,8192,standard
+smooth,square,trigonometric,64,3,48640,hot,lu,P-LU$_{8}$,pardiso_lu,passed,10.188514972105622,,,8192,
+smooth,square,advection_dominated,64,3,48640,fresh,asm,ASM+PP(24),asm_gmres,passed,89.32930103037506,12,24,8192,
+smooth,square,advection_dominated,64,3,48640,fresh,amg,FGMRES,amgx_fgmres_amg,passed,121.71202700119466,33,,8192,
+smooth,square,advection_dominated,64,3,48640,fresh,native,standard,native_hp_standard,passed,386.7386120837182,300,,8192,standard
+smooth,square,advection_dominated,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,96.27883997745812,,,8192,
+smooth,square,advection_dominated,64,3,48640,hot,asm,ASM+PP(24),asm_gmres,passed,13.33307366197308,12,24,8192,
+smooth,square,advection_dominated,64,3,48640,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,60.725511012909315,20,,8192,
+smooth,square,advection_dominated,64,3,48640,hot,native,standard,native_hp_standard,passed,310.21982501260936,300,,8192,standard
+smooth,square,advection_dominated,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,8.943204348906875,,,8192,
+smooth,square,anisotropic,64,3,48640,fresh,asm,ASM+PP(48),asm_gmres,passed,178.8384529063478,51,48,8192,
+smooth,square,anisotropic,64,3,48640,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,549.1351690143347,60,,8192,
+smooth,square,anisotropic,64,3,48640,fresh,native,standard,native_hp_standard,passed,235.42034695856273,150,,8192,standard
+smooth,square,anisotropic,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,102.52290475182235,,,8192,
+smooth,square,anisotropic,64,3,48640,hot,asm,ASM+PP(48),asm_gmres,passed,89.94911766300599,51,48,8192,
+smooth,square,anisotropic,64,3,48640,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,293.6084067138533,60,,8192,
+smooth,square,anisotropic,64,3,48640,hot,native,standard,native_hp_standard,passed,151.22900666513792,150,,8192,standard
+smooth,square,anisotropic,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,10.289854183793068,,,8192,
+smooth,square,trigonometric,64,4,60800,fresh,asm,ASM+PP(24),asm_gmres,passed,148.5329989809543,60,24,8192,
+smooth,square,trigonometric,64,4,60800,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,199.46853595320135,27,,8192,
+smooth,square,trigonometric,64,4,60800,fresh,native,standard,native_hp_standard,passed,139.8002930218354,60,,8192,standard
+smooth,square,trigonometric,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.61673332192004,,,8192,
+smooth,square,trigonometric,64,4,60800,hot,asm,ASM+PP(24),asm_gmres,passed,64.530903318276,60,24,8192,
+smooth,square,trigonometric,64,4,60800,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,89.10296966011326,27,,8192,
+smooth,square,trigonometric,64,4,60800,hot,native,standard,native_hp_standard,passed,50.41119498976817,60,,8192,standard
+smooth,square,trigonometric,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,16.529792128130794,,,8192,
+smooth,square,advection_dominated,64,4,60800,fresh,asm,ASM+PP(24),asm_gmres,passed,112.90884006302804,24,24,8192,
+smooth,square,advection_dominated,64,4,60800,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,153.99658994283527,20,,8192,
+smooth,square,advection_dominated,64,4,60800,fresh,native,standard,native_hp_standard,passed,364.0962520148605,300,,8192,standard
+smooth,square,advection_dominated,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,134.95374284684658,,,8192,
+smooth,square,advection_dominated,64,4,60800,hot,asm,ASM+PP(24),asm_gmres,passed,26.645961333997548,24,24,8192,
+smooth,square,advection_dominated,64,4,60800,hot,amg,FGMRES,amgx_fgmres_amg,passed,75.32928763733555,32,,8192,
+smooth,square,advection_dominated,64,4,60800,hot,native,standard,native_hp_standard,passed,277.82505432454246,300,,8192,standard
+smooth,square,advection_dominated,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.374900167807937,,,8192,
+smooth,square,anisotropic,64,4,60800,fresh,asm,ASM+PP(48),asm_gmres,passed,155.904404935427,28,48,8192,
+smooth,square,anisotropic,64,4,60800,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,774.2071249522269,63,,8192,
+smooth,square,anisotropic,64,4,60800,fresh,native,standard,native_hp_standard,passed,222.76436304673553,150,,8192,standard
+smooth,square,anisotropic,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.07662909291685,,,8192,
+smooth,square,anisotropic,64,4,60800,hot,asm,ASM+PP(48),asm_gmres,passed,50.56033000194778,28,48,8192,
+smooth,square,anisotropic,64,4,60800,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,386.05057599488646,63,,8192,
+smooth,square,anisotropic,64,4,60800,hot,native,standard,native_hp_standard,passed,131.1919626702244,150,,8192,standard
+smooth,square,anisotropic,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.633200015872717,,,8192,
+smooth,square,trigonometric,64,6,85120,fresh,asm,ASM+PP(24),asm_gmres,passed,210.94001596793532,65,24,8192,
+smooth,square,trigonometric,64,6,85120,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,362.46970994398,27,,8192,
+smooth,square,trigonometric,64,6,85120,fresh,native,standard,native_hp_standard,passed,176.9503840478137,65,,8192,standard
+smooth,square,trigonometric,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,216.36121021583676,,,8192,
+smooth,square,trigonometric,64,6,85120,hot,asm,ASM+PP(24),asm_gmres,passed,95.61787537919979,65,24,8192,
+smooth,square,trigonometric,64,6,85120,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,133.48025269806385,27,,8192,
+smooth,square,trigonometric,64,6,85120,hot,native,standard,native_hp_standard,passed,55.24575535673648,65,,8192,standard
+smooth,square,trigonometric,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,34.745881194248796,,,8192,
+smooth,square,advection_dominated,64,6,85120,fresh,asm,ASM+PP(24),asm_gmres,passed,131.3044970156625,13,24,8192,
+smooth,square,advection_dominated,64,6,85120,fresh,amg,FGMRES,amgx_fgmres_amg,passed,741.8344171019271,29,,8192,
+smooth,square,advection_dominated,64,6,85120,fresh,native,standard,native_hp_standard,passed,452.2307978477329,300,,8192,standard
+smooth,square,advection_dominated,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,217.608239967376,,,8192,
+smooth,square,advection_dominated,64,6,85120,hot,asm,ASM+PP(24),asm_gmres,passed,20.501090330071747,13,24,8192,
+smooth,square,advection_dominated,64,6,85120,hot,amg,FGMRES,amgx_fgmres_amg,passed,148.2167939733093,29,,8192,
+smooth,square,advection_dominated,64,6,85120,hot,native,standard,native_hp_standard,passed,324.3461843424787,300,,8192,standard
+smooth,square,advection_dominated,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,35.38535558618605,,,8192,
+smooth,square,anisotropic,64,6,85120,fresh,asm,ASM+PP(48),asm_gmres,passed,268.4433601098135,54,48,8192,
+smooth,square,anisotropic,64,6,85120,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,909.497351036407,63,,8192,
+smooth,square,anisotropic,64,6,85120,fresh,native,standard,native_hp_standard,passed,335.0234570680186,225,,8192,standard
+smooth,square,anisotropic,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,218.4910832438618,,,8192,
+smooth,square,anisotropic,64,6,85120,hot,asm,ASM+PP(48),asm_gmres,passed,144.12445462464044,54,48,8192,
+smooth,square,anisotropic,64,6,85120,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,425.71552567339194,63,,8192,
+smooth,square,anisotropic,64,6,85120,hot,native,standard,native_hp_standard,passed,207.10765469508866,225,,8192,standard
+smooth,square,anisotropic,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,34.957837453112006,,,8192,
+smooth,square,trigonometric,128,6,342272,fresh,asm,ASM+PP(24),asm_gmres,passed,1375.0467579811811,126,24,32768,
+smooth,square,trigonometric,128,6,342272,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,449.03730787336826,30,,32768,
+smooth,square,trigonometric,128,6,342272,fresh,native,standard,native_hp_standard,passed,549.2056660586968,70,,32768,standard
+smooth,square,trigonometric,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1229.6155320946127,,,32768,
+smooth,square,trigonometric,128,6,342272,hot,asm,ASM+PP(24),asm_gmres,passed,921.6195433400571,126,24,32768,
+smooth,square,trigonometric,128,6,342272,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,173.59827466619512,30,,32768,
+smooth,square,trigonometric,128,6,342272,hot,native,standard,native_hp_standard,passed,117.72182735148817,70,,32768,standard
+smooth,square,trigonometric,128,6,342272,hot,lu,P-LU$_{24}$,pardiso_lu,passed,238.00669363699853,,,32768,
+smooth,square,advection_dominated,128,6,342272,fresh,asm,ASM+PP(24),asm_gmres,passed,745.7180599449202,40,24,32768,
+smooth,square,advection_dominated,128,6,342272,fresh,amg,FGMRES,amgx_fgmres_amg,passed,561.7174310609698,36,,32768,
+smooth,square,advection_dominated,128,6,342272,fresh,native,standard,native_hp_standard,passed,1295.696803019382,450,,32768,standard
+smooth,square,advection_dominated,128,6,342272,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,1516.2577568553388,,,32768,
+smooth,square,advection_dominated,128,6,342272,hot,asm,ASM+PP(24),asm_gmres,passed,292.6036426409458,40,24,32768,
+smooth,square,advection_dominated,128,6,342272,hot,amg,FGMRES,amgx_fgmres_amg,passed,312.4373699926461,36,,32768,
+smooth,square,advection_dominated,128,6,342272,hot,native,standard,native_hp_standard,passed,882.355457986705,450,,32768,standard
+smooth,square,advection_dominated,128,6,342272,hot,lu,P-LU$_{8}$,pardiso_lu,passed,239.17357581667602,,,32768,
+smooth,square,anisotropic,128,6,342272,fresh,asm,ASM+PP(48),asm_gmres,passed,1322.286511072889,60,48,32768,
+smooth,square,anisotropic,128,6,342272,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,841.5373110910878,63,,32768,
+smooth,square,anisotropic,128,6,342272,fresh,native,standard,native_hp_standard,passed,927.8921049553901,225,,32768,standard
+smooth,square,anisotropic,128,6,342272,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,1311.2685692030936,,,32768,
+smooth,square,anisotropic,128,6,342272,hot,asm,ASM+PP(48),asm_gmres,passed,833.5758363828063,60,48,32768,
+smooth,square,anisotropic,128,6,342272,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,441.37198602159816,63,,32768,
+smooth,square,anisotropic,128,6,342272,hot,native,standard,native_hp_standard,passed,483.22323166454834,225,,32768,standard
+smooth,square,anisotropic,128,6,342272,hot,lu,P-LU$_{16}$,pardiso_lu,passed,236.19564743712544,,,32768,
+smooth,square,trigonometric,223,6,1041187,fresh,asm,ASM+PP(24),asm_gmres,passed,4603.768807835877,150,24,99458,
+smooth,square,trigonometric,223,6,1041187,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,712.6034338725731,29,,99458,
+smooth,square,trigonometric,223,6,1041187,fresh,native,standard,native_hp_standard,passed,1530.4995171027258,71,,99458,standard
+smooth,square,trigonometric,223,6,1041187,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,3855.9499431867152,,,99458,
+smooth,square,trigonometric,223,6,1041187,hot,asm,ASM+PP(24),asm_gmres,passed,3468.7033790008477,150,24,99458,
+smooth,square,trigonometric,223,6,1041187,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,250.37755502853543,29,,99458,
+smooth,square,trigonometric,223,6,1041187,hot,native,standard,native_hp_standard,passed,277.8710680237661,71,,99458,standard
+smooth,square,trigonometric,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,692.5193576142192,,,99458,
+smooth,square,advection_dominated,223,6,1041187,fresh,asm,ASM+PP(24),asm_gmres,passed,1857.9064189689234,32,24,99458,
+smooth,square,advection_dominated,223,6,1041187,fresh,amg,FGMRES,amgx_fgmres_amg,passed,1035.1593409432098,37,,99458,
+smooth,square,advection_dominated,223,6,1041187,fresh,native,standard,native_hp_standard,passed,4405.378677882254,675,,99458,standard
+smooth,square,advection_dominated,223,6,1041187,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,4492.677643895149,,,99458,
+smooth,square,advection_dominated,223,6,1041187,hot,asm,ASM+PP(24),asm_gmres,passed,729.263168371593,32,24,99458,
+smooth,square,advection_dominated,223,6,1041187,hot,amg,FGMRES,amgx_fgmres_amg,passed,569.4684203093251,37,,99458,
+smooth,square,advection_dominated,223,6,1041187,hot,native,standard,native_hp_standard,passed,3134.6563942885646,675,,99458,standard
+smooth,square,advection_dominated,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,690.6932877842337,,,99458,
+smooth,square,anisotropic,223,6,1041187,fresh,asm,ASM+PP(48),asm_gmres,passed,7824.604163062759,150,48,99458,
+smooth,square,anisotropic,223,6,1041187,fresh,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,1101.3644619379193,67,,99458,
+smooth,square,anisotropic,223,6,1041187,fresh,native,standard,native_hp_standard,passed,2408.522428944707,225,,99458,standard
+smooth,square,anisotropic,223,6,1041187,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,3909.755547065288,,,99458,
+smooth,square,anisotropic,223,6,1041187,hot,asm,ASM+PP(48),asm_gmres,passed,6605.234402697533,150,48,99458,
+smooth,square,anisotropic,223,6,1041187,hot,amg,BiCGSTAB,amgx_pbicgstab_amg,passed,621.8792663421482,67,,99458,
+smooth,square,anisotropic,223,6,1041187,hot,native,standard,native_hp_standard,passed,1031.6981609600286,225,,99458,standard
+smooth,square,anisotropic,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,694.3630671594292,,,99458,
+focused_million_dof,square,Variable velocity,289,3,999940,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,3128.75809695106,225,18,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,fresh,bj,,,NC,,,,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,419.20130094513297,21,,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,fresh,native,standard,native_hp_standard,passed,1395.397898973897,67,,167042,standard
+focused_million_dof,square,Variable velocity,289,3,999940,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,2644.3835091777146,,,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,1870.3600219838943,225,18,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,hot,bj,,,NC,,,,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,98.38671799904357,21,,167042,
+focused_million_dof,square,Variable velocity,289,3,999940,hot,native,standard,native_hp_standard,passed,256.40141932914656,67,,167042,standard
+focused_million_dof,square,Variable velocity,289,3,999940,hot,lu,P-LU$_{16}$,pardiso_lu,passed,402.5916491635144,,,167042,
+focused_million_dof,square,Variable velocity,259,4,1003625,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,3442.570516024716,225,18,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,2353.7247190251946,350,18,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,fresh,amg,FGMRES,AMG/Jac.--FGMRES,passed,547.5125859957188,39,,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,fresh,native,standard,native_hp_standard,passed,1233.9389470871538,33,,134162,standard
+focused_million_dof,square,Variable velocity,259,4,1003625,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,2988.5910658631474,,,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,2476.9474013786144,225,18,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,2169.6783893276006,350,18,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,hot,amg,FGMRES,AMG/Jac.--FGMRES,passed,191.20087567716837,39,,134162,
+focused_million_dof,square,Variable velocity,259,4,1003625,hot,native,standard,native_hp_standard,passed,125.80718235888828,33,,134162,standard
+focused_million_dof,square,Variable velocity,259,4,1003625,hot,lu,P-LU$_{12}$,pardiso_lu,passed,501.65426223538816,,,134162,
+focused_million_dof,square,Transport dominated,289,3,999940,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,1654.233098961413,51,18,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,1111.8748679291457,150,18,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,fresh,amg,BiCGSTAB,AMG/DILU--BiCGSTAB,passed,586.7193309823051,19,,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,fresh,native,standard,native_hp_standard,passed,4303.932092036121,675,,167042,standard
+focused_million_dof,square,Transport dominated,289,3,999940,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,2890.3299828525633,,,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,403.97979602372897,51,18,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,729.6917273585374,150,18,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,hot,amg,BiCGSTAB,AMG/DILU--BiCGSTAB,passed,255.1826056248198,19,,167042,
+focused_million_dof,square,Transport dominated,289,3,999940,hot,native,standard,native_hp_standard,passed,3138.273990014568,675,,167042,standard
+focused_million_dof,square,Transport dominated,289,3,999940,hot,lu,P-LU$_{12}$,pardiso_lu,passed,406.09292960725725,,,167042,
+focused_million_dof,square,Transport dominated,259,4,1003625,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,1924.1922649089247,92,18,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,1120.675796060823,200,12,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,fresh,amg,BiCGSTAB,AMG/DILU--BiCGSTAB,passed,703.2935590250418,19,,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,fresh,native,standard,native_hp_standard,passed,4569.8199309408665,675,,134162,standard
+focused_million_dof,square,Transport dominated,259,4,1003625,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,3393.5107411816716,,,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,971.9071827130392,92,18,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,939.1822113345066,200,12,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,hot,amg,BiCGSTAB,AMG/DILU--BiCGSTAB,passed,332.9569050498928,19,,134162,
+focused_million_dof,square,Transport dominated,259,4,1003625,hot,native,standard,native_hp_standard,passed,3348.434383321243,675,,134162,standard
+focused_million_dof,square,Transport dominated,259,4,1003625,hot,lu,P-LU$_{8}$,pardiso_lu,passed,505.5199677590281,,,134162,
+focused_million_dof,square,High diffusion,289,3,999940,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,3056.6927239997312,225,18,167042,
+focused_million_dof,square,High diffusion,289,3,999940,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,2951.231718994677,525,18,167042,
+focused_million_dof,square,High diffusion,289,3,999940,fresh,amg,FGMRES,AMG/Jac.--FGMRES,passed,449.8490708647296,43,,167042,
+focused_million_dof,square,High diffusion,289,3,999940,fresh,native,standard,native_hp_standard,passed,1397.169031901285,68,,167042,standard
+focused_million_dof,square,High diffusion,289,3,999940,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,2698.0308149941266,,,167042,
+focused_million_dof,square,High diffusion,289,3,999940,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,1657.7537546788033,225,18,167042,
+focused_million_dof,square,High diffusion,289,3,999940,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,2567.3197693346688,525,18,167042,
+focused_million_dof,square,High diffusion,289,3,999940,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,128.53866233490407,27,,167042,
+focused_million_dof,square,High diffusion,289,3,999940,hot,native,standard,native_hp_standard,passed,261.2428799814855,68,,167042,standard
+focused_million_dof,square,High diffusion,289,3,999940,hot,lu,P-LU$_{16}$,pardiso_lu,passed,400.18249745480716,,,167042,
+focused_million_dof,square,High diffusion,259,4,1003625,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,3252.159563009627,200,18,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,3254.413237096742,675,12,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,579.9709249986336,26,,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,fresh,native,standard,native_hp_standard,passed,1392.74690405,70,,134162,standard
+focused_million_dof,square,High diffusion,259,4,1003625,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,3009.1327920090407,,,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,2156.3325523165986,200,18,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,3074.0045053341114,675,12,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,219.4997842889279,26,,134162,
+focused_million_dof,square,High diffusion,259,4,1003625,hot,native,standard,native_hp_standard,passed,266.42471629505354,70,,134162,standard
+focused_million_dof,square,High diffusion,259,4,1003625,hot,lu,P-LU$_{8}$,pardiso_lu,passed,488.3081874344498,,,134162,
+focused_scaling,square,Transport dominated,32,6,21056,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,40.607623872347176,10,18,2048,
+focused_scaling,square,Transport dominated,32,6,21056,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,21.40751213300973,20,12,2048,
+focused_scaling,square,Transport dominated,32,6,21056,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,131.50173996109515,21,,2048,
+focused_scaling,square,Transport dominated,32,6,21056,fresh,native,standard,native_hp_standard,passed,182.50040290877223,150,,2048,standard
+focused_scaling,square,Transport dominated,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,53.21247398387641,,,2048,
+focused_scaling,square,Transport dominated,32,6,21056,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,9.719640326996645,10,18,2048,
+focused_scaling,square,Transport dominated,32,6,21056,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,9.776340293077132,20,12,2048,
+focused_scaling,square,Transport dominated,32,6,21056,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,49.2279746880134,21,,2048,
+focused_scaling,square,Transport dominated,32,6,21056,hot,native,standard,native_hp_standard,passed,123.55097262964894,150,,2048,standard
+focused_scaling,square,Transport dominated,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.311724590137601,,,2048,
+focused_scaling,square,Transport dominated,64,1,24320,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,78.78757594153285,32,18,8192,
+focused_scaling,square,Transport dominated,64,1,24320,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,46.49889003485441,76,12,8192,
+focused_scaling,square,Transport dominated,64,1,24320,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,406.9181149825454,34,,8192,
+focused_scaling,square,Transport dominated,64,1,24320,fresh,native,robust,native_hp_robust,passed,301.06759793125093,225,,8192,robust
+focused_scaling,square,Transport dominated,64,1,24320,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,57.35486897174269,,,8192,
+focused_scaling,square,Transport dominated,64,1,24320,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,30.310299014672637,32,18,8192,
+focused_scaling,square,Transport dominated,64,1,24320,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,37.13805368170142,76,12,8192,
+focused_scaling,square,Transport dominated,64,1,24320,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,97.03819368345042,34,,8192,
+focused_scaling,square,Transport dominated,64,1,24320,hot,native,robust,native_hp_robust,passed,225.39992533468953,225,,8192,robust
+focused_scaling,square,Transport dominated,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5647045578807592,,,8192,
+focused_scaling,square,Transport dominated,64,2,36480,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,72.66347005497664,15,18,8192,
+focused_scaling,square,Transport dominated,64,2,36480,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,50.03912281244993,71,12,8192,
+focused_scaling,square,Transport dominated,64,2,36480,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,276.2541539268568,31,,8192,
+focused_scaling,square,Transport dominated,64,2,36480,fresh,native,standard,native_hp_standard,passed,344.77179299574345,300,,8192,standard
+focused_scaling,square,Transport dominated,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,78.8144979160279,,,8192,
+focused_scaling,square,Transport dominated,64,2,36480,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,15.033615326198438,15,18,8192,
+focused_scaling,square,Transport dominated,64,2,36480,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,34.129634383134544,71,12,8192,
+focused_scaling,square,Transport dominated,64,2,36480,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,92.63820596970618,31,,8192,
+focused_scaling,square,Transport dominated,64,2,36480,hot,native,standard,native_hp_standard,passed,264.5209993158157,300,,8192,standard
+focused_scaling,square,Transport dominated,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.322426604107022,,,8192,
+focused_scaling,square,Transport dominated,64,3,48640,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,81.45567891187966,15,18,8192,
+focused_scaling,square,Transport dominated,64,3,48640,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,37.66986902337521,33,12,8192,
+focused_scaling,square,Transport dominated,64,3,48640,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,122.62797506991774,33,,8192,
+focused_scaling,square,Transport dominated,64,3,48640,fresh,native,standard,native_hp_standard,passed,386.7386120837182,300,,8192,standard
+focused_scaling,square,Transport dominated,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,96.27883997745812,,,8192,
+focused_scaling,square,Transport dominated,64,3,48640,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,14.784764343251785,15,18,8192,
+focused_scaling,square,Transport dominated,64,3,48640,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,16.432757683408756,33,12,8192,
+focused_scaling,square,Transport dominated,64,3,48640,hot,amg,BiCGSTAB,AMG/DILU--BiCGSTAB,passed,60.61525864060968,20,,8192,
+focused_scaling,square,Transport dominated,64,3,48640,hot,native,standard,native_hp_standard,passed,310.21982501260936,300,,8192,standard
+focused_scaling,square,Transport dominated,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,8.943204348906875,,,8192,
+focused_scaling,square,Transport dominated,64,4,60800,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,103.38126099668443,30,18,8192,
+focused_scaling,square,Transport dominated,64,4,60800,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,58.5991790285334,63,12,8192,
+focused_scaling,square,Transport dominated,64,4,60800,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,148.90526607632637,32,,8192,
+focused_scaling,square,Transport dominated,64,4,60800,fresh,native,standard,native_hp_standard,passed,364.0962520148605,300,,8192,standard
+focused_scaling,square,Transport dominated,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,134.95374284684658,,,8192,
+focused_scaling,square,Transport dominated,64,4,60800,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,29.061583026001852,30,18,8192,
+focused_scaling,square,Transport dominated,64,4,60800,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,32.69724198617041,63,12,8192,
+focused_scaling,square,Transport dominated,64,4,60800,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,76.25042965325217,32,,8192,
+focused_scaling,square,Transport dominated,64,4,60800,hot,native,standard,native_hp_standard,passed,277.82505432454246,300,,8192,standard
+focused_scaling,square,Transport dominated,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.374900167807937,,,8192,
+focused_scaling,square,Transport dominated,64,6,85120,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,117.61154199484736,15,18,8192,
+focused_scaling,square,Transport dominated,64,6,85120,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,68.73850396368653,57,12,8192,
+focused_scaling,square,Transport dominated,64,6,85120,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,740.6703110318631,29,,8192,
+focused_scaling,square,Transport dominated,64,6,85120,fresh,native,standard,native_hp_standard,passed,452.2307978477329,300,,8192,standard
+focused_scaling,square,Transport dominated,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,217.608239967376,,,8192,
+focused_scaling,square,Transport dominated,64,6,85120,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,19.16960731614381,15,18,8192,
+focused_scaling,square,Transport dominated,64,6,85120,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,28.552332310937345,57,12,8192,
+focused_scaling,square,Transport dominated,64,6,85120,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,148.1114939864104,29,,8192,
+focused_scaling,square,Transport dominated,64,6,85120,hot,native,standard,native_hp_standard,passed,324.3461843424787,300,,8192,standard
+focused_scaling,square,Transport dominated,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,35.38535558618605,,,8192,
+focused_scaling,square,Transport dominated,128,6,342272,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,548.8319819560274,25,18,32768,
+focused_scaling,square,Transport dominated,128,6,342272,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,273.55819602962583,49,12,32768,
+focused_scaling,square,Transport dominated,128,6,342272,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,560.7196750352159,36,,32768,
+focused_scaling,square,Transport dominated,128,6,342272,fresh,native,standard,native_hp_standard,passed,1295.696803019382,450,,32768,standard
+focused_scaling,square,Transport dominated,128,6,342272,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,1516.2577568553388,,,32768,
+focused_scaling,square,Transport dominated,128,6,342272,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,137.16534967534244,25,18,32768,
+focused_scaling,square,Transport dominated,128,6,342272,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,108.32463565748185,49,12,32768,
+focused_scaling,square,Transport dominated,128,6,342272,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,309.0155873214826,36,,32768,
+focused_scaling,square,Transport dominated,128,6,342272,hot,native,standard,native_hp_standard,passed,882.355457986705,450,,32768,standard
+focused_scaling,square,Transport dominated,128,6,342272,hot,lu,P-LU$_{8}$,pardiso_lu,passed,239.17357581667602,,,32768,
+focused_scaling,square,Transport dominated,223,6,1041187,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,1720.3046639915556,41,18,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,1471.2768970057368,164,12,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,fresh,amg,FGMRES,AMG/DILU--FGMRES,passed,1026.908583007753,37,,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,fresh,native,standard,native_hp_standard,passed,4405.378677882254,675,,99458,standard
+focused_scaling,square,Transport dominated,223,6,1041187,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,4492.677643895149,,,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,682.5896873682117,41,18,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,1214.1026156799246,164,12,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,hot,amg,FGMRES,AMG/DILU--FGMRES,passed,573.5497800245261,37,,99458,
+focused_scaling,square,Transport dominated,223,6,1041187,hot,native,standard,native_hp_standard,passed,3134.6563942885646,675,,99458,standard
+focused_scaling,square,Transport dominated,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,690.6932877842337,,,99458,
+focused_scaling,square,High diffusion,32,6,21056,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,67.38139991648495,43,18,2048,
+focused_scaling,square,High diffusion,32,6,21056,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,65.89126097969711,110,12,2048,
+focused_scaling,square,High diffusion,32,6,21056,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,382.30681989807636,30,,2048,
+focused_scaling,square,High diffusion,32,6,21056,fresh,native,standard,native_hp_standard,passed,93.60726096201688,58,,2048,standard
+focused_scaling,square,High diffusion,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,50.26478890795261,,,2048,
+focused_scaling,square,High diffusion,32,6,21056,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,32.815119329219065,43,18,2048,
+focused_scaling,square,High diffusion,32,6,21056,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,53.50707230779032,110,12,2048,
+focused_scaling,square,High diffusion,32,6,21056,hot,amg,FGMRES,AMG/Jac.--FGMRES,passed,144.8682596674189,49,,2048,
+focused_scaling,square,High diffusion,32,6,21056,hot,native,standard,native_hp_standard,passed,42.51780031093707,58,,2048,standard
+focused_scaling,square,High diffusion,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.358784948475659,,,2048,
+focused_scaling,square,High diffusion,64,1,24320,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,107.87222010549158,63,18,8192,
+focused_scaling,square,High diffusion,64,1,24320,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,85.19588399212807,150,12,8192,
+focused_scaling,square,High diffusion,64,1,24320,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,569.6789518697187,54,,8192,
+focused_scaling,square,High diffusion,64,1,24320,fresh,native,standard,native_hp_standard,passed,111.23237397987396,50,,8192,standard
+focused_scaling,square,High diffusion,64,1,24320,fresh,lu,P-LU$_{4}$,pardiso_lu,passed,61.98610400315374,,,8192,
+focused_scaling,square,High diffusion,64,1,24320,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,47.12889366783202,63,18,8192,
+focused_scaling,square,High diffusion,64,1,24320,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,72.02397368382663,150,12,8192,
+focused_scaling,square,High diffusion,64,1,24320,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,258.2018579511593,54,,8192,
+focused_scaling,square,High diffusion,64,1,24320,hot,native,standard,native_hp_standard,passed,39.330876005503036,50,,8192,standard
+focused_scaling,square,High diffusion,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5961867766454816,,,8192,
+focused_scaling,square,High diffusion,64,2,36480,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,117.31889192014933,69,18,8192,
+focused_scaling,square,High diffusion,64,2,36480,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,91.46159794181585,150,12,8192,
+focused_scaling,square,High diffusion,64,2,36480,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,91.53377509210259,19,,8192,
+focused_scaling,square,High diffusion,64,2,36480,fresh,native,standard,native_hp_standard,passed,118.56067390181124,53,,8192,standard
+focused_scaling,square,High diffusion,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,74.7235978487879,,,8192,
+focused_scaling,square,High diffusion,64,2,36480,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,50.26983733599385,69,18,8192,
+focused_scaling,square,High diffusion,64,2,36480,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,75.8686443247522,150,12,8192,
+focused_scaling,square,High diffusion,64,2,36480,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,32.70301595330238,19,,8192,
+focused_scaling,square,High diffusion,64,2,36480,hot,native,standard,native_hp_standard,passed,41.5456349728629,53,,8192,standard
+focused_scaling,square,High diffusion,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,4.807089408859611,,,8192,
+focused_scaling,square,High diffusion,64,3,48640,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,128.8305870257318,74,18,8192,
+focused_scaling,square,High diffusion,64,3,48640,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,96.96863987483084,150,12,8192,
+focused_scaling,square,High diffusion,64,3,48640,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,136.0303530236706,26,,8192,
+focused_scaling,square,High diffusion,64,3,48640,fresh,native,standard,native_hp_standard,passed,127.16245208866894,58,,8192,standard
+focused_scaling,square,High diffusion,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,97.25825185887516,,,8192,
+focused_scaling,square,High diffusion,64,3,48640,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,58.28346005485704,74,18,8192,
+focused_scaling,square,High diffusion,64,3,48640,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,76.52610365767032,150,12,8192,
+focused_scaling,square,High diffusion,64,3,48640,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,59.211334330029786,26,,8192,
+focused_scaling,square,High diffusion,64,3,48640,hot,native,standard,native_hp_standard,passed,48.01637962615738,58,,8192,standard
+focused_scaling,square,High diffusion,64,3,48640,hot,lu,P-LU$_{8}$,pardiso_lu,passed,10.188514972105622,,,8192,
+focused_scaling,square,High diffusion,64,4,60800,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,145.67874802742153,79,18,8192,
+focused_scaling,square,High diffusion,64,4,60800,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,105.11688992846757,150,12,8192,
+focused_scaling,square,High diffusion,64,4,60800,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,198.09841399546713,27,,8192,
+focused_scaling,square,High diffusion,64,4,60800,fresh,native,standard,native_hp_standard,passed,135.0818470818922,60,,8192,standard
+focused_scaling,square,High diffusion,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.61673332192004,,,8192,
+focused_scaling,square,High diffusion,64,4,60800,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,62.18405564626058,79,18,8192,
+focused_scaling,square,High diffusion,64,4,60800,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,76.33782632183284,150,12,8192,
+focused_scaling,square,High diffusion,64,4,60800,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,89.38677337331076,27,,8192,
+focused_scaling,square,High diffusion,64,4,60800,hot,native,standard,native_hp_standard,passed,47.052077017724514,60,,8192,standard
+focused_scaling,square,High diffusion,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,16.529792128130794,,,8192,
+focused_scaling,square,High diffusion,64,6,85120,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,201.01578580215573,86,18,8192,
+focused_scaling,square,High diffusion,64,6,85120,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,119.95574401225895,150,12,8192,
+focused_scaling,square,High diffusion,64,6,85120,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,363.1883109919727,27,,8192,
+focused_scaling,square,High diffusion,64,6,85120,fresh,native,standard,native_hp_standard,passed,173.98792796302587,65,,8192,standard
+focused_scaling,square,High diffusion,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,216.36121021583676,,,8192,
+focused_scaling,square,High diffusion,64,6,85120,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,96.4681572901706,86,18,8192,
+focused_scaling,square,High diffusion,64,6,85120,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,80.95708927915742,150,12,8192,
+focused_scaling,square,High diffusion,64,6,85120,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,134.173876993979,27,,8192,
+focused_scaling,square,High diffusion,64,6,85120,hot,native,standard,native_hp_standard,passed,55.57527237882217,65,,8192,standard
+focused_scaling,square,High diffusion,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,34.745881194248796,,,8192,
+focused_scaling,square,High diffusion,128,6,342272,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,1366.8551609152928,166,18,32768,
+focused_scaling,square,High diffusion,128,6,342272,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,848.6965050688013,300,12,32768,
+focused_scaling,square,High diffusion,128,6,342272,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,446.43972197081894,30,,32768,
+focused_scaling,square,High diffusion,128,6,342272,fresh,native,standard,native_hp_standard,passed,535.5482328450307,70,,32768,standard
+focused_scaling,square,High diffusion,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1229.6155320946127,,,32768,
+focused_scaling,square,High diffusion,128,6,342272,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,922.0462666125968,166,18,32768,
+focused_scaling,square,High diffusion,128,6,342272,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,680.4474923216427,300,12,32768,
+focused_scaling,square,High diffusion,128,6,342272,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,174.08371402416378,30,,32768,
+focused_scaling,square,High diffusion,128,6,342272,hot,native,standard,native_hp_standard,passed,116.68344462911288,70,,32768,standard
+focused_scaling,square,High diffusion,128,6,342272,hot,lu,P-LU$_{24}$,pardiso_lu,passed,238.00669363699853,,,32768,
+focused_scaling,square,High diffusion,223,6,1041187,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,4601.750106085092,200,18,99458,
+focused_scaling,square,High diffusion,223,6,1041187,fresh,bj,BJ+PP(12),BJ+PP--GMRES,passed,6342.233887990005,825,12,99458,
+focused_scaling,square,High diffusion,223,6,1041187,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,704.0588830132037,29,,99458,
+focused_scaling,square,High diffusion,223,6,1041187,fresh,native,standard,native_hp_standard,passed,1506.359310937114,71,,99458,standard
+focused_scaling,square,High diffusion,223,6,1041187,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,3855.9499431867152,,,99458,
+focused_scaling,square,High diffusion,223,6,1041187,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,3493.603508337401,200,18,99458,
+focused_scaling,square,High diffusion,223,6,1041187,hot,bj,BJ+PP(12),BJ+PP--GMRES,passed,6084.011739003472,825,12,99458,
+focused_scaling,square,High diffusion,223,6,1041187,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,250.12308397951224,29,,99458,
+focused_scaling,square,High diffusion,223,6,1041187,hot,native,standard,native_hp_standard,passed,276.0760360009347,71,,99458,standard
+focused_scaling,square,High diffusion,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,692.5193576142192,,,99458,
+focused_scaling,square,Variable velocity,32,6,21056,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,53.24519402347505,22,18,2048,
+focused_scaling,square,Variable velocity,32,6,21056,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,37.62205201201141,38,18,2048,
+focused_scaling,square,Variable velocity,32,6,21056,fresh,amg,FGMRES,AMG/Jac.--FGMRES,passed,350.4895349033177,40,,2048,
+focused_scaling,square,Variable velocity,32,6,21056,fresh,native,standard,native_hp_standard,passed,74.22036002390087,29,,2048,standard
+focused_scaling,square,Variable velocity,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,54.650005884468555,,,2048,
+focused_scaling,square,Variable velocity,32,6,21056,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,22.136419041392703,22,18,2048,
+focused_scaling,square,Variable velocity,32,6,21056,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,24.28382095725586,38,18,2048,
+focused_scaling,square,Variable velocity,32,6,21056,hot,amg,FGMRES,AMG/Jac.--FGMRES,passed,114.61437330581248,40,,2048,
+focused_scaling,square,Variable velocity,32,6,21056,hot,native,standard,native_hp_standard,passed,22.390292297738295,29,,2048,standard
+focused_scaling,square,Variable velocity,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.335987964645028,,,2048,
+focused_scaling,square,Variable velocity,64,1,24320,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,83.03844498004764,34,18,8192,
+focused_scaling,square,Variable velocity,64,1,24320,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,77.68623298034072,100,18,8192,
+focused_scaling,square,Variable velocity,64,1,24320,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,522.6996989222243,44,,8192,
+focused_scaling,square,Variable velocity,64,1,24320,fresh,native,standard,native_hp_standard,passed,87.72222010884434,25,,8192,standard
+focused_scaling,square,Variable velocity,64,1,24320,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,59.40917693078518,,,8192,
+focused_scaling,square,Variable velocity,64,1,24320,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,32.16940835894396,34,18,8192,
+focused_scaling,square,Variable velocity,64,1,24320,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,61.332075662600495,100,18,8192,
+focused_scaling,square,Variable velocity,64,1,24320,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,210.3852123642961,44,,8192,
+focused_scaling,square,Variable velocity,64,1,24320,hot,native,standard,native_hp_standard,passed,20.48575001147886,25,,8192,standard
+focused_scaling,square,Variable velocity,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.604310354217887,,,8192,
+focused_scaling,square,Variable velocity,64,2,36480,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,94.59294495172799,36,18,8192,
+focused_scaling,square,Variable velocity,64,2,36480,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,79.11384897306561,100,18,8192,
+focused_scaling,square,Variable velocity,64,2,36480,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,87.17565191909671,17,,8192,
+focused_scaling,square,Variable velocity,64,2,36480,fresh,native,standard,native_hp_standard,passed,116.65229895152152,54,,8192,standard
+focused_scaling,square,Variable velocity,64,2,36480,fresh,lu,P-LU$_{8}$,pardiso_lu,passed,79.94613191112876,,,8192,
+focused_scaling,square,Variable velocity,64,2,36480,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,33.60920038539916,36,18,8192,
+focused_scaling,square,Variable velocity,64,2,36480,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,63.26803068319956,100,18,8192,
+focused_scaling,square,Variable velocity,64,2,36480,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,29.317599372006953,17,,8192,
+focused_scaling,square,Variable velocity,64,2,36480,hot,native,standard,native_hp_standard,passed,43.268019993168615,54,,8192,standard
+focused_scaling,square,Variable velocity,64,2,36480,hot,lu,P-LU$_{8}$,pardiso_lu,passed,5.174662638455629,,,8192,
+focused_scaling,square,Variable velocity,64,3,48640,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,103.99148997385055,38,18,8192,
+focused_scaling,square,Variable velocity,64,3,48640,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,85.24727798067033,100,18,8192,
+focused_scaling,square,Variable velocity,64,3,48640,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,121.97538407053798,20,,8192,
+focused_scaling,square,Variable velocity,64,3,48640,fresh,native,standard,native_hp_standard,passed,102.40308800712228,29,,8192,standard
+focused_scaling,square,Variable velocity,64,3,48640,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,101.23890405520797,,,8192,
+focused_scaling,square,Variable velocity,64,3,48640,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,34.824205989328526,38,18,8192,
+focused_scaling,square,Variable velocity,64,3,48640,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,61.27543766827633,100,18,8192,
+focused_scaling,square,Variable velocity,64,3,48640,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,45.28541769832373,20,,8192,
+focused_scaling,square,Variable velocity,64,3,48640,hot,native,standard,native_hp_standard,passed,24.890485025631886,29,,8192,standard
+focused_scaling,square,Variable velocity,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,9.273211564868689,,,8192,
+focused_scaling,square,Variable velocity,64,4,60800,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,112.14554694015533,41,18,8192,
+focused_scaling,square,Variable velocity,64,4,60800,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,92.15080889407545,100,18,8192,
+focused_scaling,square,Variable velocity,64,4,60800,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,174.19358796905726,20,,8192,
+focused_scaling,square,Variable velocity,64,4,60800,fresh,native,standard,native_hp_standard,passed,111.51172395329922,30,,8192,standard
+focused_scaling,square,Variable velocity,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.37129815854132,,,8192,
+focused_scaling,square,Variable velocity,64,4,60800,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,39.57715102781852,41,18,8192,
+focused_scaling,square,Variable velocity,64,4,60800,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,63.09903731259207,100,18,8192,
+focused_scaling,square,Variable velocity,64,4,60800,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,66.43367834233989,20,,8192,
+focused_scaling,square,Variable velocity,64,4,60800,hot,native,standard,native_hp_standard,passed,24.752954680783052,30,,8192,standard
+focused_scaling,square,Variable velocity,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.787442401051521,,,8192,
+focused_scaling,square,Variable velocity,64,6,85120,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,155.12024203781039,44,18,8192,
+focused_scaling,square,Variable velocity,64,6,85120,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,109.19310990720987,100,18,8192,
+focused_scaling,square,Variable velocity,64,6,85120,fresh,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,348.5124041326344,24,,8192,
+focused_scaling,square,Variable velocity,64,6,85120,fresh,native,standard,native_hp_standard,passed,138.29568901564926,31,,8192,standard
+focused_scaling,square,Variable velocity,64,6,85120,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,221.5639289934188,,,8192,
+focused_scaling,square,Variable velocity,64,6,85120,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,53.660158339577414,44,18,8192,
+focused_scaling,square,Variable velocity,64,6,85120,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,68.1174867010365,100,18,8192,
+focused_scaling,square,Variable velocity,64,6,85120,hot,amg,BiCGSTAB,AMG/Jac.--BiCGSTAB,passed,119.27247163839638,24,,8192,
+focused_scaling,square,Variable velocity,64,6,85120,hot,native,standard,native_hp_standard,passed,26.278348988853395,31,,8192,standard
+focused_scaling,square,Variable velocity,64,6,85120,hot,lu,P-LU$_{12}$,pardiso_lu,passed,35.512391151860356,,,8192,
+focused_scaling,square,Variable velocity,128,6,342272,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,1250.742760952562,150,18,32768,
+focused_scaling,square,Variable velocity,128,6,342272,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,790.5290819471702,200,18,32768,
+focused_scaling,square,Variable velocity,128,6,342272,fresh,amg,FGMRES,AMG/Jac.--FGMRES,passed,417.0205539558083,43,,32768,
+focused_scaling,square,Variable velocity,128,6,342272,fresh,native,standard,native_hp_standard,passed,480.75710609555244,34,,32768,standard
+focused_scaling,square,Variable velocity,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1220.9389470517635,,,32768,
+focused_scaling,square,Variable velocity,128,6,342272,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,837.3681689845398,150,18,32768,
+focused_scaling,square,Variable velocity,128,6,342272,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,621.2680973112583,200,18,32768,
+focused_scaling,square,Variable velocity,128,6,342272,hot,amg,FGMRES,AMG/Jac.--FGMRES,passed,151.38433505004892,43,,32768,
+focused_scaling,square,Variable velocity,128,6,342272,hot,native,standard,native_hp_standard,passed,57.27920696760217,34,,32768,standard
+focused_scaling,square,Variable velocity,128,6,342272,hot,lu,P-LU$_{16}$,pardiso_lu,passed,234.35590700246394,,,32768,
+focused_scaling,square,Variable velocity,223,6,1041187,fresh,asm,ASM+PP(18),ASM+PP--GMRES,passed,3580.1161560229957,150,18,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,fresh,bj,BJ+PP(18),BJ+PP--GMRES,passed,3862.5446900259703,350,18,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,fresh,amg,FGMRES,AMG/Jac.--FGMRES,passed,668.9847499364987,43,,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,fresh,native,standard,native_hp_standard,passed,1365.182008012198,35,,99458,standard
+focused_scaling,square,Variable velocity,223,6,1041187,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,3842.192000709474,,,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,hot,asm,ASM+PP(18),ASM+PP--GMRES,passed,2567.6775539759547,150,18,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,hot,bj,BJ+PP(18),BJ+PP--GMRES,passed,3602.6377516876287,350,18,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,hot,amg,FGMRES,AMG/Jac.--FGMRES,passed,217.53020565180728,43,,99458,
+focused_scaling,square,Variable velocity,223,6,1041187,hot,native,standard,native_hp_standard,passed,136.45863866743943,35,,99458,standard
+focused_scaling,square,Variable velocity,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,700.8288986049592,,,99458,
+oscillatory,square,cellular7_high,32,6,21056,fresh,asm,ASM+PP(24),asm_d24,passed,51.6329420497641,14,24,2048,
+oscillatory,square,cellular7_high,32,6,21056,fresh,amg,FGMRES,amg_fgmres,passed,366.6477638762444,45,,2048,
+oscillatory,square,cellular7_high,32,6,21056,fresh,native,standard,native_hp_standard,passed,76.09672099351883,29,,2048,standard
+oscillatory,square,cellular7_high,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,50.48518301919103,,,2048,
+oscillatory,square,cellular7_high,32,6,21056,hot,asm,ASM+PP(24),asm_d24,passed,15.066121666071316,14,24,2048,
+oscillatory,square,cellular7_high,32,6,21056,hot,amg,FGMRES,amg_fgmres,passed,132.10437365341932,45,,2048,
+oscillatory,square,cellular7_high,32,6,21056,hot,native,standard,native_hp_standard,passed,21.88150635144363,29,,2048,standard
+oscillatory,square,cellular7_high,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.366385425440967,,,2048,
+oscillatory,square,cellular7_weak,32,6,21056,fresh,asm,ASM+PP(24),asm_d24,passed,194.9611429590732,150,24,2048,
+oscillatory,square,cellular7_weak,32,6,21056,fresh,amg,,,NC,,,,2048,
+oscillatory,square,cellular7_weak,32,6,21056,fresh,native,robust,native_hp_robust,passed,1337.4270081985742,975,,2048,robust
+oscillatory,square,cellular7_weak,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,56.074913940392435,,,2048,
+oscillatory,square,cellular7_weak,32,6,21056,hot,asm,ASM+PP(24),asm_d24,passed,156.7552056706821,150,24,2048,
+oscillatory,square,cellular7_weak,32,6,21056,hot,amg,,,NC,,,,2048,
+oscillatory,square,cellular7_weak,32,6,21056,hot,native,robust,native_hp_robust,passed,1280.1434530022864,975,,2048,robust
+oscillatory,square,cellular7_weak,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.361275188624859,,,2048,
+oscillatory,square,cellular7_directional,32,6,21056,fresh,asm,ASM+PP(48),asm_d48,passed,99.42044015042484,31,48,2048,
+oscillatory,square,cellular7_directional,32,6,21056,fresh,amg,,,NC,,,,2048,
+oscillatory,square,cellular7_directional,32,6,21056,fresh,native,robust,native_hp_robust,passed,353.00367197487503,225,,2048,robust
+oscillatory,square,cellular7_directional,32,6,21056,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,51.44747090525925,,,2048,
+oscillatory,square,cellular7_directional,32,6,21056,hot,asm,ASM+PP(48),asm_d48,passed,57.24521000714352,31,48,2048,
+oscillatory,square,cellular7_directional,32,6,21056,hot,amg,,,NC,,,,2048,
+oscillatory,square,cellular7_directional,32,6,21056,hot,native,robust,native_hp_robust,passed,290.5051913112402,225,,2048,robust
+oscillatory,square,cellular7_directional,32,6,21056,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.371075589209795,,,2048,
+oscillatory,square,cellular7_high,64,1,24320,fresh,asm,ASM+PP(24),asm_d24,passed,82.90902606677264,21,24,8192,
+oscillatory,square,cellular7_high,64,1,24320,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,585.7406249269843,57,,8192,
+oscillatory,square,cellular7_high,64,1,24320,fresh,native,standard,native_hp_standard,passed,115.53175991866738,52,,8192,standard
+oscillatory,square,cellular7_high,64,1,24320,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,57.72097990848124,,,8192,
+oscillatory,square,cellular7_high,64,1,24320,hot,asm,ASM+PP(24),asm_d24,passed,22.64243698058029,21,24,8192,
+oscillatory,square,cellular7_high,64,1,24320,hot,amg,BiCGSTAB,amg_pbicgstab,passed,270.83404699806124,57,,8192,
+oscillatory,square,cellular7_high,64,1,24320,hot,native,standard,native_hp_standard,passed,42.22971565711001,52,,8192,standard
+oscillatory,square,cellular7_high,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5945393834263086,,,8192,
+oscillatory,square,cellular7_weak,64,1,24320,fresh,asm,ASM+PP(24),asm_d24,passed,93.82016700692475,33,24,8192,
+oscillatory,square,cellular7_weak,64,1,24320,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,242.80944000929594,32,,8192,
+oscillatory,square,cellular7_weak,64,1,24320,fresh,native,robust,native_hp_robust,passed,526.763625908643,450,,8192,robust
+oscillatory,square,cellular7_weak,64,1,24320,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,59.634392033331096,,,8192,
+oscillatory,square,cellular7_weak,64,1,24320,hot,asm,ASM+PP(24),asm_d24,passed,33.45446831857165,33,24,8192,
+oscillatory,square,cellular7_weak,64,1,24320,hot,amg,BiCGSTAB,amg_pbicgstab,passed,133.66672163829207,32,,8192,
+oscillatory,square,cellular7_weak,64,1,24320,hot,native,robust,native_hp_robust,passed,452.309694684421,450,,8192,robust
+oscillatory,square,cellular7_weak,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.60444360319525,,,8192,
+oscillatory,square,cellular7_directional,64,1,24320,fresh,asm,ASM+PP(48),asm_d48,passed,131.1672650044784,33,48,8192,
+oscillatory,square,cellular7_directional,64,1,24320,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,1,24320,fresh,native,robust,native_hp_robust,passed,224.0134379826486,150,,8192,robust
+oscillatory,square,cellular7_directional,64,1,24320,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,62.324723112396896,,,8192,
+oscillatory,square,cellular7_directional,64,1,24320,hot,asm,ASM+PP(48),asm_d48,passed,56.01684302867701,33,48,8192,
+oscillatory,square,cellular7_directional,64,1,24320,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,1,24320,hot,native,robust,native_hp_robust,passed,150.9690280460442,150,,8192,robust
+oscillatory,square,cellular7_directional,64,1,24320,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5115264113992453,,,8192,
+oscillatory,square,cellular7_high,64,2,36480,fresh,asm,ASM+PP(24),asm_d24,passed,92.60647394694388,22,24,8192,
+oscillatory,square,cellular7_high,64,2,36480,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,93.36551488377154,19,,8192,
+oscillatory,square,cellular7_high,64,2,36480,fresh,native,standard,native_hp_standard,passed,118.8553828978911,55,,8192,standard
+oscillatory,square,cellular7_high,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,78.93039612099528,,,8192,
+oscillatory,square,cellular7_high,64,2,36480,hot,asm,ASM+PP(24),asm_d24,passed,22.560047994678218,22,24,8192,
+oscillatory,square,cellular7_high,64,2,36480,hot,amg,BiCGSTAB,amg_pbicgstab,passed,34.25927696904788,19,,8192,
+oscillatory,square,cellular7_high,64,2,36480,hot,native,standard,native_hp_standard,passed,45.04512898468723,55,,8192,standard
+oscillatory,square,cellular7_high,64,2,36480,hot,lu,P-LU$_{12}$,pardiso_lu,passed,5.757576273754239,,,8192,
+oscillatory,square,cellular7_weak,64,2,36480,fresh,asm,ASM+PP(24),asm_d24,passed,127.90765310637653,62,24,8192,
+oscillatory,square,cellular7_weak,64,2,36480,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,523.9271570462734,120,,8192,
+oscillatory,square,cellular7_weak,64,2,36480,fresh,native,robust,native_hp_robust,passed,1184.1015870450065,825,,8192,robust
+oscillatory,square,cellular7_weak,64,2,36480,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,81.1418869998306,,,8192,
+oscillatory,square,cellular7_weak,64,2,36480,hot,asm,ASM+PP(24),asm_d24,passed,63.43842899271598,62,24,8192,
+oscillatory,square,cellular7_weak,64,2,36480,hot,amg,BiCGSTAB,amg_pbicgstab,passed,464.49779633743066,120,,8192,
+oscillatory,square,cellular7_weak,64,2,36480,hot,native,robust,native_hp_robust,passed,1139.2108203144744,825,,8192,robust
+oscillatory,square,cellular7_weak,64,2,36480,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.2376763895154,,,8192,
+oscillatory,square,cellular7_directional,64,2,36480,fresh,asm,ASM+PP(48),asm_d48,passed,168.42989507131279,50,48,8192,
+oscillatory,square,cellular7_directional,64,2,36480,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,2,36480,fresh,native,robust,native_hp_robust,passed,286.7488160263747,150,,8192,robust
+oscillatory,square,cellular7_directional,64,2,36480,fresh,lu,P-LU$_{8}$,pardiso_lu,passed,79.70762113109231,,,8192,
+oscillatory,square,cellular7_directional,64,2,36480,hot,asm,ASM+PP(48),asm_d48,passed,87.37212264289458,50,48,8192,
+oscillatory,square,cellular7_directional,64,2,36480,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,2,36480,hot,native,robust,native_hp_robust,passed,199.14331869222224,150,,8192,robust
+oscillatory,square,cellular7_directional,64,2,36480,hot,lu,P-LU$_{8}$,pardiso_lu,passed,5.231668846681714,,,8192,
+oscillatory,square,cellular7_high,64,3,48640,fresh,asm,ASM+PP(24),asm_d24,passed,101.12991603091359,23,24,8192,
+oscillatory,square,cellular7_high,64,3,48640,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,129.00048098526895,22,,8192,
+oscillatory,square,cellular7_high,64,3,48640,fresh,native,standard,native_hp_standard,passed,131.83227111585438,61,,8192,standard
+oscillatory,square,cellular7_high,64,3,48640,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,98.48087397404015,,,8192,
+oscillatory,square,cellular7_high,64,3,48640,hot,asm,ASM+PP(24),asm_d24,passed,24.02764974006762,23,24,8192,
+oscillatory,square,cellular7_high,64,3,48640,hot,amg,BiCGSTAB,amg_pbicgstab,passed,51.18789271606753,22,,8192,
+oscillatory,square,cellular7_high,64,3,48640,hot,native,standard,native_hp_standard,passed,50.118805336145066,61,,8192,standard
+oscillatory,square,cellular7_high,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,9.253316558897495,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,fresh,asm,ASM+PP(24),asm_d24,passed,221.35999600868672,150,24,8192,
+oscillatory,square,cellular7_weak,64,3,48640,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,fresh,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,104.86709093675017,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,hot,asm,ASM+PP(24),asm_d24,passed,147.28264739581695,150,24,8192,
+oscillatory,square,cellular7_weak,64,3,48640,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,hot,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,3,48640,hot,lu,P-LU$_{12}$,pardiso_lu,passed,9.949281765148044,,,8192,
+oscillatory,square,cellular7_directional,64,3,48640,fresh,asm,ASM+PP(48),asm_d48,passed,186.44496600609273,55,48,8192,
+oscillatory,square,cellular7_directional,64,3,48640,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,3,48640,fresh,native,robust,native_hp_robust,passed,444.41423297394067,225,,8192,robust
+oscillatory,square,cellular7_directional,64,3,48640,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,100.41326493956149,,,8192,
+oscillatory,square,cellular7_directional,64,3,48640,hot,asm,ASM+PP(48),asm_d48,passed,94.64426164049655,55,48,8192,
+oscillatory,square,cellular7_directional,64,3,48640,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,3,48640,hot,native,robust,native_hp_robust,passed,354.96027767658234,225,,8192,robust
+oscillatory,square,cellular7_directional,64,3,48640,hot,lu,P-LU$_{16}$,pardiso_lu,passed,10.540545638650656,,,8192,
+oscillatory,square,cellular7_high,64,4,60800,fresh,asm,ASM+PP(24),asm_d24,passed,113.40000398922712,25,24,8192,
+oscillatory,square,cellular7_high,64,4,60800,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,199.14651103317738,24,,8192,
+oscillatory,square,cellular7_high,64,4,60800,fresh,native,standard,native_hp_standard,passed,140.98014996852726,63,,8192,standard
+oscillatory,square,cellular7_high,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.56234990432858,,,8192,
+oscillatory,square,cellular7_high,64,4,60800,hot,asm,ASM+PP(24),asm_d24,passed,27.638631329561274,25,24,8192,
+oscillatory,square,cellular7_high,64,4,60800,hot,amg,BiCGSTAB,amg_pbicgstab,passed,85.0401083395506,24,,8192,
+oscillatory,square,cellular7_high,64,4,60800,hot,native,standard,native_hp_standard,passed,55.33072464944174,63,,8192,standard
+oscillatory,square,cellular7_high,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.58213597163558,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,fresh,asm,ASM+PP(24),asm_d24,passed,248.07845300529152,150,24,8192,
+oscillatory,square,cellular7_weak,64,4,60800,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,fresh,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,144.8380802758038,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,hot,asm,ASM+PP(24),asm_d24,passed,160.272728651762,150,24,8192,
+oscillatory,square,cellular7_weak,64,4,60800,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,hot,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.566970780491829,,,8192,
+oscillatory,square,cellular7_directional,64,4,60800,fresh,asm,ASM+PP(48),asm_d48,passed,217.84729696810246,62,48,8192,
+oscillatory,square,cellular7_directional,64,4,60800,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,4,60800,fresh,native,robust,native_hp_robust,passed,500.40206883568317,225,,8192,robust
+oscillatory,square,cellular7_directional,64,4,60800,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,137.16134801506996,,,8192,
+oscillatory,square,cellular7_directional,64,4,60800,hot,asm,ASM+PP(48),asm_d48,passed,113.6336987062047,62,48,8192,
+oscillatory,square,cellular7_directional,64,4,60800,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,4,60800,hot,native,robust,native_hp_robust,passed,408.2715883463,225,,8192,robust
+oscillatory,square,cellular7_directional,64,4,60800,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.675592003390193,,,8192,
+oscillatory,square,cellular7_high,64,6,85120,fresh,asm,ASM+PP(24),asm_d24,passed,156.14940598607063,27,24,8192,
+oscillatory,square,cellular7_high,64,6,85120,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,380.7756219757721,27,,8192,
+oscillatory,square,cellular7_high,64,6,85120,fresh,native,standard,native_hp_standard,passed,174.11871999502182,65,,8192,standard
+oscillatory,square,cellular7_high,64,6,85120,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,220.24269215762615,,,8192,
+oscillatory,square,cellular7_high,64,6,85120,hot,asm,ASM+PP(24),asm_d24,passed,43.02695898028711,27,24,8192,
+oscillatory,square,cellular7_high,64,6,85120,hot,amg,BiCGSTAB,amg_pbicgstab,passed,138.97317632411918,27,,8192,
+oscillatory,square,cellular7_high,64,6,85120,hot,native,standard,native_hp_standard,passed,57.09633134150257,65,,8192,standard
+oscillatory,square,cellular7_high,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,34.94366998784244,,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,fresh,asm,ASM+PP(24),asm_d24,passed,357.408348005265,150,24,8192,
+oscillatory,square,cellular7_weak,64,6,85120,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,7129.100601072423,672,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,fresh,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,240.1887527666986,,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,hot,asm,ASM+PP(24),asm_d24,passed,245.19898765720427,150,24,8192,
+oscillatory,square,cellular7_weak,64,6,85120,hot,amg,BiCGSTAB,amg_pbicgstab,passed,6809.642369354454,672,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,hot,native,,,NC,,,,8192,
+oscillatory,square,cellular7_weak,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,34.839698811993,,,8192,
+oscillatory,square,cellular7_directional,64,6,85120,fresh,asm,ASM+PP(48),asm_d48,passed,496.371838147752,132,48,8192,
+oscillatory,square,cellular7_directional,64,6,85120,fresh,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,6,85120,fresh,native,standard,native_hp_standard,passed,695.155717083253,525,,8192,standard
+oscillatory,square,cellular7_directional,64,6,85120,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,227.8610090725124,,,8192,
+oscillatory,square,cellular7_directional,64,6,85120,hot,asm,ASM+PP(48),asm_d48,passed,370.92698997973156,132,48,8192,
+oscillatory,square,cellular7_directional,64,6,85120,hot,amg,,,NC,,,,8192,
+oscillatory,square,cellular7_directional,64,6,85120,hot,native,standard,native_hp_standard,passed,572.3675500291089,525,,8192,standard
+oscillatory,square,cellular7_directional,64,6,85120,hot,lu,P-LU$_{16}$,pardiso_lu,passed,36.25745824538171,,,8192,
+oscillatory,square,cellular7_high,128,6,342272,fresh,asm,ASM+PP(24),asm_d24,passed,1302.0379730733112,115,24,32768,
+oscillatory,square,cellular7_high,128,6,342272,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,460.32812108751386,28,,32768,
+oscillatory,square,cellular7_high,128,6,342272,fresh,native,standard,native_hp_standard,passed,546.3206151034683,71,,32768,standard
+oscillatory,square,cellular7_high,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1212.2297030873597,,,32768,
+oscillatory,square,cellular7_high,128,6,342272,hot,asm,ASM+PP(24),asm_d24,passed,842.7009502969062,115,24,32768,
+oscillatory,square,cellular7_high,128,6,342272,hot,amg,BiCGSTAB,amg_pbicgstab,passed,170.42205630180737,28,,32768,
+oscillatory,square,cellular7_high,128,6,342272,hot,native,standard,native_hp_standard,passed,126.44347866686682,71,,32768,standard
+oscillatory,square,cellular7_high,128,6,342272,hot,lu,P-LU$_{8}$,pardiso_lu,passed,235.49741762690246,,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,fresh,asm,ASM+PP(24),asm_d24,passed,2108.2710449118167,225,24,32768,
+oscillatory,square,cellular7_weak,128,6,342272,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,16311.980667058378,896,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,fresh,native,,,NC,,,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1229.8049200326204,,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,hot,asm,ASM+PP(24),asm_d24,passed,1646.4880713416885,225,24,32768,
+oscillatory,square,cellular7_weak,128,6,342272,hot,amg,BiCGSTAB,amg_pbicgstab,passed,15752.25526734721,896,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,hot,native,,,NC,,,,32768,
+oscillatory,square,cellular7_weak,128,6,342272,hot,lu,P-LU$_{16}$,pardiso_lu,passed,225.57848603464663,,,32768,
+oscillatory,square,cellular7_directional,128,6,342272,fresh,asm,ASM+PP(48),asm_d48,passed,2555.5941920029,150,48,32768,
+oscillatory,square,cellular7_directional,128,6,342272,fresh,amg,,,NC,,,,32768,
+oscillatory,square,cellular7_directional,128,6,342272,fresh,native,standard,native_hp_standard,passed,1769.2780460929498,600,,32768,standard
+oscillatory,square,cellular7_directional,128,6,342272,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1295.9298442583531,,,32768,
+oscillatory,square,cellular7_directional,128,6,342272,hot,asm,ASM+PP(48),asm_d48,passed,2077.4169563471028,150,48,32768,
+oscillatory,square,cellular7_directional,128,6,342272,hot,amg,,,NC,,,,32768,
+oscillatory,square,cellular7_directional,128,6,342272,hot,native,standard,native_hp_standard,passed,1317.5919046625495,600,,32768,standard
+oscillatory,square,cellular7_directional,128,6,342272,hot,lu,P-LU$_{16}$,pardiso_lu,passed,232.98944644629955,,,32768,
+oscillatory,square,cellular7_high,223,6,1041187,fresh,asm,ASM+PP(24),asm_d24,passed,4602.065242012031,150,24,99458,
+oscillatory,square,cellular7_high,223,6,1041187,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,728.6598969949409,29,,99458,
+oscillatory,square,cellular7_high,223,6,1041187,fresh,native,standard,native_hp_standard,passed,1540.6857390189543,74,,99458,standard
+oscillatory,square,cellular7_high,223,6,1041187,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,3822.6914580445737,,,99458,
+oscillatory,square,cellular7_high,223,6,1041187,hot,asm,ASM+PP(24),asm_d24,passed,3463.0467580088102,150,24,99458,
+oscillatory,square,cellular7_high,223,6,1041187,hot,amg,BiCGSTAB,amg_pbicgstab,passed,257.92910302213085,29,,99458,
+oscillatory,square,cellular7_high,223,6,1041187,hot,native,standard,native_hp_standard,passed,299.01419366554666,74,,99458,standard
+oscillatory,square,cellular7_high,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,681.9293336477131,,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,fresh,asm,ASM+PP(24),asm_d24,passed,8040.607205010019,300,24,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,fresh,amg,FGMRES,amg_fgmres,passed,17811.753623071127,932,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,fresh,native,,,NC,,,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,4057.423659833148,,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,hot,asm,ASM+PP(24),asm_d24,passed,6915.066415987288,300,24,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,hot,amg,FGMRES,amg_fgmres,passed,17054.304928674053,932,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,hot,native,,,NC,,,,99458,
+oscillatory,square,cellular7_weak,223,6,1041187,hot,lu,P-LU$_{8}$,pardiso_lu,passed,683.2907919771969,,,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,fresh,asm,ASM+PP(20),asm_d20_tuned,passed,12254.589355899952,600,20,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,fresh,amg,,,NC,,,,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,fresh,native,standard,native_hp_standard,passed,4019.9496790301055,600,,99458,standard
+oscillatory,square,cellular7_directional,223,6,1041187,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,3846.385004930198,,,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,hot,asm,ASM+PP(20),asm_d20_tuned,passed,11214.389420696534,600,20,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,hot,amg,,,NC,,,,99458,
+oscillatory,square,cellular7_directional,223,6,1041187,hot,native,standard,native_hp_standard,passed,2751.0763510751226,600,,99458,standard
+oscillatory,square,cellular7_directional,223,6,1041187,hot,lu,P-LU$_{16}$,pardiso_lu,passed,696.7065647244453,,,99458,
+oscillatory,annulus,cellular7_high,32,6,20482,fresh,asm,ASM+PP(24),asm_d24,passed,46.43776104785502,11,24,2043,
+oscillatory,annulus,cellular7_high,32,6,20482,fresh,amg,FGMRES,amg_fgmres,passed,370.5952090676874,41,,2043,
+oscillatory,annulus,cellular7_high,32,6,20482,fresh,native,standard,native_hp_standard,passed,73.24587798211724,27,,2043,standard
+oscillatory,annulus,cellular7_high,32,6,20482,fresh,lu,P-LU$_{8}$,pardiso_lu,passed,50.617231987416744,,,2043,
+oscillatory,annulus,cellular7_high,32,6,20482,hot,asm,ASM+PP(24),asm_d24,passed,12.149429996497929,11,24,2043,
+oscillatory,annulus,cellular7_high,32,6,20482,hot,amg,FGMRES,amg_fgmres,passed,124.04173430210601,41,,2043,
+oscillatory,annulus,cellular7_high,32,6,20482,hot,native,standard,native_hp_standard,passed,22.01691933441907,27,,2043,standard
+oscillatory,annulus,cellular7_high,32,6,20482,hot,lu,P-LU$_{12}$,pardiso_lu,passed,5.3324614418670535,,,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,fresh,asm,ASM+PP(24),asm_d24,passed,176.6548230079934,150,24,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,fresh,amg,FGMRES,amg_fgmres,passed,1494.3895530886948,436,,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,fresh,native,robust,native_hp_robust,passed,1047.0507311401889,750,,2043,robust
+oscillatory,annulus,cellular7_weak,32,6,20482,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,54.83736505266279,,,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,hot,asm,ASM+PP(24),asm_d24,passed,142.29997464766106,150,24,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,hot,amg,FGMRES,amg_fgmres,passed,1394.2257553183783,436,,2043,
+oscillatory,annulus,cellular7_weak,32,6,20482,hot,native,robust,native_hp_robust,passed,1000.5535566791272,750,,2043,robust
+oscillatory,annulus,cellular7_weak,32,6,20482,hot,lu,P-LU$_{12}$,pardiso_lu,passed,5.319976969622076,,,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,fresh,asm,ASM+PP(48),asm_d48,passed,67.93910101987422,11,48,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,fresh,amg,,,NC,,,,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,fresh,native,robust,native_hp_robust,passed,259.0390470577404,150,,2043,robust
+oscillatory,annulus,cellular7_directional,32,6,20482,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,54.991323966532946,,,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,hot,asm,ASM+PP(48),asm_d48,passed,20.395817002281547,11,48,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,hot,amg,,,NC,,,,2043,
+oscillatory,annulus,cellular7_directional,32,6,20482,hot,native,robust,native_hp_robust,passed,206.05101467420658,150,,2043,robust
+oscillatory,annulus,cellular7_directional,32,6,20482,hot,lu,P-LU$_{12}$,pardiso_lu,passed,5.258500808849931,,,2043,
+oscillatory,annulus,cellular7_high,64,1,23570,fresh,asm,ASM+PP(24),asm_d24,passed,77.88727304432541,17,24,8039,
+oscillatory,annulus,cellular7_high,64,1,23570,fresh,amg,FGMRES,amg_fgmres,passed,420.44846108183265,35,,8039,
+oscillatory,annulus,cellular7_high,64,1,23570,fresh,native,standard,native_hp_standard,passed,88.55652599595487,22,,8039,standard
+oscillatory,annulus,cellular7_high,64,1,23570,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,61.48217909503728,,,8039,
+oscillatory,annulus,cellular7_high,64,1,23570,hot,asm,ASM+PP(24),asm_d24,passed,17.86854436310629,17,24,8039,
+oscillatory,annulus,cellular7_high,64,1,23570,hot,amg,FGMRES,amg_fgmres,passed,98.25744099604587,35,,8039,
+oscillatory,annulus,cellular7_high,64,1,23570,hot,native,standard,native_hp_standard,passed,18.731285352259874,22,,8039,standard
+oscillatory,annulus,cellular7_high,64,1,23570,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.4734106147661805,,,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,fresh,asm,ASM+PP(24),asm_d24,passed,99.21954316087067,41,24,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,fresh,amg,FGMRES,amg_fgmres,passed,295.19044409971684,63,,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,fresh,native,robust,native_hp_robust,passed,604.297376004979,525,,8039,robust
+oscillatory,annulus,cellular7_weak,64,1,23570,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,63.5797189315781,,,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,hot,asm,ASM+PP(24),asm_d24,passed,41.027928004041314,41,24,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,hot,amg,BiCGSTAB,amg_pbicgstab,passed,179.38097566366196,40,,8039,
+oscillatory,annulus,cellular7_weak,64,1,23570,hot,native,robust,native_hp_robust,passed,534.8585053191831,525,,8039,robust
+oscillatory,annulus,cellular7_weak,64,1,23570,hot,lu,P-LU$_{16}$,pardiso_lu,passed,4.048041603527963,,,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,fresh,asm,ASM+PP(48),asm_d48,passed,103.52585895452648,14,48,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,fresh,native,standard,native_hp_standard,passed,198.11731099616736,150,,8039,standard
+oscillatory,annulus,cellular7_directional,64,1,23570,fresh,lu,P-LU$_{8}$,pardiso_lu,passed,66.48459902498871,,,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,hot,asm,ASM+PP(48),asm_d48,passed,26.386456719289225,14,48,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,1,23570,hot,native,standard,native_hp_standard,passed,123.2076653201754,150,,8039,standard
+oscillatory,annulus,cellular7_directional,64,1,23570,hot,lu,P-LU$_{16}$,pardiso_lu,passed,2.5507402140647173,,,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,fresh,asm,ASM+PP(24),asm_d24,passed,80.2997009595856,18,24,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,96.98181913699955,18,,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,fresh,native,standard,native_hp_standard,passed,96.18543402757496,24,,8039,standard
+oscillatory,annulus,cellular7_high,64,2,35355,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,80.73622989468277,,,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,hot,asm,ASM+PP(24),asm_d24,passed,20.290958035426836,18,24,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,hot,amg,BiCGSTAB,amg_pbicgstab,passed,34.067716682329774,18,,8039,
+oscillatory,annulus,cellular7_high,64,2,35355,hot,native,standard,native_hp_standard,passed,20.7599833374843,24,,8039,standard
+oscillatory,annulus,cellular7_high,64,2,35355,hot,lu,P-LU$_{16}$,pardiso_lu,passed,5.135245015844703,,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,fresh,asm,ASM+PP(24),asm_d24,passed,200.79720404464751,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,fresh,amg,FGMRES,amg_fgmres,passed,653.4721339121461,220,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,fresh,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,86.51803829707205,,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,hot,asm,ASM+PP(24),asm_d24,passed,144.37868570288023,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,hot,amg,FGMRES,amg_fgmres,passed,591.7606359968582,220,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,hot,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,2,35355,hot,lu,P-LU$_{8}$,pardiso_lu,passed,5.2053481340408325,,,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,fresh,asm,ASM+PP(48),asm_d48,passed,108.56580198742449,20,48,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,fresh,native,standard,native_hp_standard,passed,274.487757938914,225,,8039,standard
+oscillatory,annulus,cellular7_directional,64,2,35355,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,84.7323511261493,,,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,hot,asm,ASM+PP(48),asm_d48,passed,34.28613029730817,20,48,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,2,35355,hot,native,standard,native_hp_standard,passed,192.83697265200317,225,,8039,standard
+oscillatory,annulus,cellular7_directional,64,2,35355,hot,lu,P-LU$_{12}$,pardiso_lu,passed,5.352188786491752,,,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,fresh,asm,ASM+PP(24),asm_d24,passed,97.69977000541985,20,24,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,130.56605600286275,20,,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,fresh,native,standard,native_hp_standard,passed,101.23614396434277,26,,8039,standard
+oscillatory,annulus,cellular7_high,64,3,47140,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,101.5284308232367,,,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,hot,asm,ASM+PP(24),asm_d24,passed,20.790612635513146,20,24,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,hot,amg,BiCGSTAB,amg_pbicgstab,passed,50.26746137688557,20,,8039,
+oscillatory,annulus,cellular7_high,64,3,47140,hot,native,standard,native_hp_standard,passed,22.60587636070947,26,,8039,standard
+oscillatory,annulus,cellular7_high,64,3,47140,hot,lu,P-LU$_{8}$,pardiso_lu,passed,8.81269983947277,,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,fresh,asm,ASM+PP(24),asm_d24,passed,220.4647760372609,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,2294.801931013353,458,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,fresh,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,102.6410588528961,,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,hot,asm,ASM+PP(24),asm_d24,passed,147.88287800426284,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,hot,amg,BiCGSTAB,amg_pbicgstab,passed,2200.1928933508075,458,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,hot,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,3,47140,hot,lu,P-LU$_{16}$,pardiso_lu,passed,8.463246189057827,,,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,fresh,asm,ASM+PP(48),asm_d48,passed,131.11129903700203,23,48,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,fresh,native,standard,native_hp_standard,passed,310.2691440144554,225,,8039,standard
+oscillatory,annulus,cellular7_directional,64,3,47140,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,100.76399007812142,,,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,hot,asm,ASM+PP(48),asm_d48,passed,40.102874006455146,23,48,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,3,47140,hot,native,standard,native_hp_standard,passed,229.59689935669303,225,,8039,standard
+oscillatory,annulus,cellular7_directional,64,3,47140,hot,lu,P-LU$_{16}$,pardiso_lu,passed,8.890459826216102,,,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,fresh,asm,ASM+PP(24),asm_d24,passed,96.15164110437036,21,24,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,fresh,amg,FGMRES,amg_fgmres,passed,192.54257692955434,37,,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,fresh,native,standard,native_hp_standard,passed,109.88106206059456,28,,8039,standard
+oscillatory,annulus,cellular7_high,64,4,58925,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,135.66108606755733,,,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,hot,asm,ASM+PP(24),asm_d24,passed,23.985313717275858,21,24,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,hot,amg,BiCGSTAB,amg_pbicgstab,passed,81.43887533030163,23,,8039,
+oscillatory,annulus,cellular7_high,64,4,58925,hot,native,standard,native_hp_standard,passed,24.378365992257994,28,,8039,standard
+oscillatory,annulus,cellular7_high,64,4,58925,hot,lu,P-LU$_{16}$,pardiso_lu,passed,14.057681988924742,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,fresh,asm,ASM+PP(24),asm_d24,passed,228.83818310219795,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,fresh,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,fresh,lu,P-LU$_{12}$,pardiso_lu,passed,145.8704301621765,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,hot,asm,ASM+PP(24),asm_d24,passed,158.30531731868783,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,hot,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,4,58925,hot,lu,P-LU$_{8}$,pardiso_lu,passed,15.099565777927637,,,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,fresh,asm,ASM+PP(48),asm_d48,passed,130.58088102843612,25,48,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,fresh,native,standard,native_hp_standard,passed,378.8801380433142,300,,8039,standard
+oscillatory,annulus,cellular7_directional,64,4,58925,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,141.1911400500685,,,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,hot,asm,ASM+PP(48),asm_d48,passed,47.12732438929379,25,48,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,4,58925,hot,native,robust,native_hp_robust,passed,281.510304659605,150,,8039,robust
+oscillatory,annulus,cellular7_directional,64,4,58925,hot,lu,P-LU$_{16}$,pardiso_lu,passed,15.765341185033321,,,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,fresh,asm,ASM+PP(24),asm_d24,passed,123.66805609781295,22,24,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,330.00917406752706,25,,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,fresh,native,standard,native_hp_standard,passed,144.33619403280318,30,,8039,standard
+oscillatory,annulus,cellular7_high,64,6,82495,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,214.00799695402384,,,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,hot,asm,ASM+PP(24),asm_d24,passed,33.962216305856906,22,24,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,hot,amg,BiCGSTAB,amg_pbicgstab,passed,121.57417337099712,25,,8039,
+oscillatory,annulus,cellular7_high,64,6,82495,hot,native,standard,native_hp_standard,passed,26.914725623403985,30,,8039,standard
+oscillatory,annulus,cellular7_high,64,6,82495,hot,lu,P-LU$_{16}$,pardiso_lu,passed,32.62770096771419,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,fresh,asm,ASM+PP(24),asm_d24,passed,318.6823958531022,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,fresh,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,226.71618405729532,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,hot,asm,ASM+PP(24),asm_d24,passed,226.44980003436407,150,24,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,hot,native,,,NC,,,,8039,
+oscillatory,annulus,cellular7_weak,64,6,82495,hot,lu,P-LU$_{16}$,pardiso_lu,passed,31.962374225258827,,,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,fresh,asm,ASM+PP(48),asm_d48,passed,175.30690599232912,27,48,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,fresh,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,fresh,native,robust,native_hp_robust,passed,466.6860910365358,150,,8039,robust
+oscillatory,annulus,cellular7_directional,64,6,82495,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,225.65418109297752,,,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,hot,asm,ASM+PP(48),asm_d48,passed,74.66051063966006,27,48,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,hot,amg,,,NC,,,,8039,
+oscillatory,annulus,cellular7_directional,64,6,82495,hot,native,robust,native_hp_robust,passed,334.9097379638503,150,,8039,robust
+oscillatory,annulus,cellular7_directional,64,6,82495,hot,lu,P-LU$_{16}$,pardiso_lu,passed,32.038882188498974,,,8039,
+oscillatory,annulus,cellular7_high,128,6,344631,fresh,asm,ASM+PP(24),asm_d24,passed,698.7643429310992,43,24,33174,
+oscillatory,annulus,cellular7_high,128,6,344631,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,424.05296594370157,24,,33174,
+oscillatory,annulus,cellular7_high,128,6,344631,fresh,native,standard,native_hp_standard,passed,483.3158340770751,31,,33174,standard
+oscillatory,annulus,cellular7_high,128,6,344631,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1185.6075399555266,,,33174,
+oscillatory,annulus,cellular7_high,128,6,344631,hot,asm,ASM+PP(24),asm_d24,passed,321.1003243923187,43,24,33174,
+oscillatory,annulus,cellular7_high,128,6,344631,hot,amg,BiCGSTAB,amg_pbicgstab,passed,144.8619789831961,24,,33174,
+oscillatory,annulus,cellular7_high,128,6,344631,hot,native,standard,native_hp_standard,passed,54.473977031496666,31,,33174,standard
+oscillatory,annulus,cellular7_high,128,6,344631,hot,lu,P-LU$_{8}$,pardiso_lu,passed,219.0074298530817,,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,fresh,asm,ASM+PP(24),asm_d24,passed,2632.159476983361,300,24,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,fresh,amg,BiCGSTAB,amg_pbicgstab,passed,14969.64323404245,889,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,fresh,native,,,NC,,,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1273.5836799256504,,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,hot,asm,ASM+PP(24),asm_d24,passed,2251.2541223550215,300,24,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,hot,amg,BiCGSTAB,amg_pbicgstab,passed,14581.00083101696,889,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,hot,native,,,NC,,,,33174,
+oscillatory,annulus,cellular7_weak,128,6,344631,hot,lu,P-LU$_{16}$,pardiso_lu,passed,222.17167420312762,,,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,fresh,asm,ASM+PP(48),asm_d48,passed,2147.769206087105,123,48,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,fresh,amg,,,NC,,,,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,fresh,native,standard,native_hp_standard,passed,1417.7347350632772,450,,33174,standard
+oscillatory,annulus,cellular7_directional,128,6,344631,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,1237.7429716289043,,,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,hot,asm,ASM+PP(48),asm_d48,passed,1756.9896589654188,123,48,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,hot,amg,,,NC,,,,33174,
+oscillatory,annulus,cellular7_directional,128,6,344631,hot,native,standard,native_hp_standard,passed,980.7319790124893,450,,33174,standard
+oscillatory,annulus,cellular7_directional,128,6,344631,hot,lu,P-LU$_{8}$,pardiso_lu,passed,219.93243340402842,,,33174,
+oscillatory,annulus,cellular7_high,223,6,1043392,fresh,asm,ASM+PP(24),asm_d24,passed,3143.2194829685614,73,24,99984,
+oscillatory,annulus,cellular7_high,223,6,1043392,fresh,amg,FGMRES,amg_fgmres,passed,805.6977090891451,58,,99984,
+oscillatory,annulus,cellular7_high,223,6,1043392,fresh,native,standard,native_hp_standard,passed,1366.7267910204828,32,,99984,standard
+oscillatory,annulus,cellular7_high,223,6,1043392,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,3915.3251119423658,,,99984,
+oscillatory,annulus,cellular7_high,223,6,1043392,hot,asm,ASM+PP(24),asm_d24,passed,1720.3517829766497,73,24,99984,
+oscillatory,annulus,cellular7_high,223,6,1043392,hot,amg,FGMRES,amg_fgmres,passed,306.4059109504645,58,,99984,
+oscillatory,annulus,cellular7_high,223,6,1043392,hot,native,standard,native_hp_standard,passed,133.30365469058356,32,,99984,standard
+oscillatory,annulus,cellular7_high,223,6,1043392,hot,lu,P-LU$_{24}$,pardiso_lu,passed,696.7297501396388,,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,fresh,asm,ASM+PP(24),asm_d24,passed,13773.300637141801,525,24,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,fresh,amg,FGMRES,amg_fgmres,passed,16961.26184996683,948,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,fresh,native,,,NC,,,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,fresh,lu,P-LU$_{16}$,pardiso_lu,passed,4231.684017693624,,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,hot,asm,ASM+PP(24),asm_d24,passed,12369.244520009184,525,24,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,hot,amg,FGMRES,amg_fgmres,passed,16389.561309323955,948,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,hot,native,,,NC,,,,99984,
+oscillatory,annulus,cellular7_weak,223,6,1043392,hot,lu,P-LU$_{16}$,pardiso_lu,passed,689.0247875358909,,,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,fresh,asm,ASM+PP(29),asm_d29_tuned,passed,5023.962302948348,150,29,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,fresh,amg,,,NC,,,,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,fresh,native,standard,native_hp_standard,passed,3011.809852090664,375,,99984,standard
+oscillatory,annulus,cellular7_directional,223,6,1043392,fresh,lu,P-LU$_{24}$,pardiso_lu,passed,4177.153545897454,,,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,hot,asm,ASM+PP(29),asm_d29_tuned,passed,3994.48373199751,150,29,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,hot,amg,,,NC,,,,99984,
+oscillatory,annulus,cellular7_directional,223,6,1043392,hot,native,standard,native_hp_standard,passed,1730.8161950204521,375,,99984,standard
+oscillatory,annulus,cellular7_directional,223,6,1043392,hot,lu,P-LU$_{16}$,pardiso_lu,passed,685.8540797606111,,,99984,

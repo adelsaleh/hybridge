@@ -1,0 +1,205 @@
+{
+  "status": "passed",
+  "configurations": 96,
+  "systems": 24,
+  "solves": 768,
+  "worst_physical_relative_residual": 1.6880813660656584e-11,
+  "worst_cross_solver_trace_relative_difference": 8.246634207949087e-12,
+  "independent_cpu_reference_systems": 18,
+  "worst_cpu_gpu_blocks_relative_error": 3.902564546773466e-14,
+  "worst_cpu_gpu_rhs_relative_error": 1.393052887291755e-13,
+  "matrix_and_worker_provenance_checks": [
+    {
+      "case": "trigonometric",
+      "n": 32,
+      "p": 6,
+      "operator_sha256": "cd1796cfe6c2dea0455271011be7777828cf008c8da0842d2e4ac5f1007c78bd",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 1.1978260128078809e-13
+    },
+    {
+      "case": "advection_dominated",
+      "n": 32,
+      "p": 6,
+      "operator_sha256": "967b11a01d2627fadc94cba7ad7e93254e34a553bc44dea39a1eadb69e1b0ff6",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 6.6868951687835294e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 32,
+      "p": 6,
+      "operator_sha256": "dd9a51d903833ebd0c50ea61eb6220212822142e45ba1fffd3c6bb5b32d9e864",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 5.924713884128731e-12
+    },
+    {
+      "case": "trigonometric",
+      "n": 64,
+      "p": 1,
+      "operator_sha256": "9dcd00e214f12825f53ae0bee884e86adbed682b31446c629a98ce02398c61e2",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 1.6918236642263662e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 64,
+      "p": 1,
+      "operator_sha256": "d4cb641f0506c257bbdeb77fc1258655d300eec7c3b7973b38c42d934b865571",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 2.482013500201865e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 64,
+      "p": 1,
+      "operator_sha256": "91eacb9aa9b0a157fab790933d2d592057551132aeb6b114a71967c24daa5bca",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 2.3831183629122133e-12
+    },
+    {
+      "case": "trigonometric",
+      "n": 64,
+      "p": 2,
+      "operator_sha256": "ab0c12ae810fd7eb50dee4a20cca69a3a0ecde25d0e141fac930cfc5cdf11656",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 5.119077966151042e-13
+    },
+    {
+      "case": "advection_dominated",
+      "n": 64,
+      "p": 2,
+      "operator_sha256": "d627d2e1968ee90455a4a8c7fb7d87addc669a698322ac2cba30bc7356839afe",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 3.1063312244832577e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 64,
+      "p": 2,
+      "operator_sha256": "6630f21c308e73cb113488ed524c52f29c73a5fbe736d3179a2bbb4493e3bce9",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 3.676383608919047e-13
+    },
+    {
+      "case": "trigonometric",
+      "n": 64,
+      "p": 3,
+      "operator_sha256": "3c95ef270c13204cd07d12efde3b470ed0c5a3378e90304b2d45357d12ae8a92",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 1.472218419426808e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 64,
+      "p": 3,
+      "operator_sha256": "738feebe70f05e18ee45d8fdaf8840b84c9ac045911f052fd9a1970ec388365a",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 8.246634207949087e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 64,
+      "p": 3,
+      "operator_sha256": "b9a6f8cc3fa4f4680da0fe2b4a94c16ef7d12e95c013f06705af3949fb52ea52",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 4.700613836689492e-13
+    },
+    {
+      "case": "trigonometric",
+      "n": 64,
+      "p": 4,
+      "operator_sha256": "65790bfe57052db4dc239a60f2ef0a67304b5e9e1ace1085d64b03f5cc951659",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 4.0290976694307935e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 64,
+      "p": 4,
+      "operator_sha256": "e5645d325300a1c943b7bcbcd06fc9a123de55fa11d162a65fa4a54d77c07b61",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 3.789423350080324e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 64,
+      "p": 4,
+      "operator_sha256": "0b2090922ca4068f285f0d9c687981de92ac1d326093bf0196c9702cea8f577b",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 2.932422101403726e-12
+    },
+    {
+      "case": "trigonometric",
+      "n": 64,
+      "p": 6,
+      "operator_sha256": "a7d531a7f9d3187a6e28bc4d039563bb1e5d94ed6a7f3df260974466868adcfb",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 6.33616246259065e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 64,
+      "p": 6,
+      "operator_sha256": "c98f93b09abfc5d120b5afca0af7aed42788d3ec0e2e16a97eeeee079595556e",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 3.985279244440802e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 64,
+      "p": 6,
+      "operator_sha256": "0c200080a1f7cd93b61f0e0852860b60cb020a3cb248bf7231a95a09c24b3f23",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 2.7164260448120197e-13
+    },
+    {
+      "case": "trigonometric",
+      "n": 128,
+      "p": 6,
+      "operator_sha256": "5746a0b03986f28cb662e198b98e5f44b02a5120dabbe4722243d55399beb8e1",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 6.685176085106861e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 128,
+      "p": 6,
+      "operator_sha256": "46cb94eac44ca5fa74ad9f9e9b0eec818a680e24dfea7b4ea7e9839a0e8215d2",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 4.107683617117693e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 128,
+      "p": 6,
+      "operator_sha256": "f2065986687991cbb574be1c95731075c707b4e96791c0c32e0849f21de9230a",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 4.592985404071301e-13
+    },
+    {
+      "case": "trigonometric",
+      "n": 223,
+      "p": 6,
+      "operator_sha256": "9dcb81406a708b62a5026eaf5b930a90d783f2edf1d33ea179344131443bc3c1",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 8.048585389274961e-14
+    },
+    {
+      "case": "advection_dominated",
+      "n": 223,
+      "p": 6,
+      "operator_sha256": "b99e0a6cac305e572346a4c2db79bd977d24b8c90410168031ffc676b147f782",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 3.6775100283412646e-12
+    },
+    {
+      "case": "anisotropic",
+      "n": 223,
+      "p": 6,
+      "operator_sha256": "7920ac51ca2d637b7058fe6bc976320b11c84102c223a004e51168d9684171d6",
+      "matrix_input_paths_match": true,
+      "max_trace_relative_difference_to_asm": 2.9166539703101263e-13
+    }
+  ]
+}

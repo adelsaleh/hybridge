@@ -32,6 +32,8 @@ qualification, while the precomputed raw path keeps its original p <= 6 guard.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -101,6 +103,36 @@ class RawAdvectionAssemblyResult:
     local_response: Any | None = None
     lu_mode: str = "safe"
     zero_boundary_flux: bool = False
+    advection_stabilization: object = None
+
+
+@dataclass
+class RawAdvectionFactorWorkspace:
+    """Owning device LU/pivot/lift storage for repeated transport right-hand sides.
+
+    Assembly refreshes numerical values; shape-compatible allocations survive
+    coefficient updates and are reused throughout a frozen RK step.
+    """
+
+    local_lu: Any | None = None
+    pivots: Any | None = None
+    trace_lift: Any | None = None
+    signature: tuple | None = None
+
+    def ensure(self, cupy, *, num_elements, nel, ntr):
+        """Allocate only when the device, precision, or discrete shape changes."""
+        signature = (int(cupy.cuda.runtime.getDevice()), num_elements, nel, ntr, str(REAL_DTYPE))
+        if signature == self.signature:
+            return
+        self.local_lu = cupy.empty((num_elements, nel, nel), dtype=REAL_DTYPE)
+        self.pivots = cupy.empty((num_elements, nel), dtype=cupy.int32)
+        self.trace_lift = cupy.zeros((num_elements, 3, ntr, nel), dtype=REAL_DTYPE)
+        self.signature = signature
+
+    @property
+    def nbytes(self):
+        """Return additional bytes retained for RHS-only solves."""
+        return sum(int(getattr(a, "nbytes", 0)) for a in (self.local_lu, self.pivots, self.trace_lift))
 
 
 _RAW_LU_SCRATCH_THREADS = 128
@@ -538,9 +570,9 @@ def build_reduced_csr_pattern_cupy_reference(cspace, timings: dict[str, float] |
     scalar_rows = (block_rows[:, None, None] * ntr + i_grid[None, :, :]).ravel()
     scalar_cols = (block_cols[:, None, None] * ntr + j_grid[None, :, :]).ravel()
     coo = sparse.coo_matrix(
-        (cupy.ones(scalar_rows.size, dtype=cupy.float64), (scalar_rows.astype(cupy.int32), scalar_cols.astype(cupy.int32))),
+        (cupy.ones(scalar_rows.size, dtype=REAL_DTYPE), (scalar_rows.astype(cupy.int32), scalar_cols.astype(cupy.int32))),
         shape=(system_size, system_size),
-        dtype=cupy.float64,
+        dtype=REAL_DTYPE,
     )
     csr = coo.tocsr()
     csr.sum_duplicates()
@@ -1005,6 +1037,45 @@ _RAW_FUSED_TEMPLATE = r"""
 #define RAW_LU_SCRATCH_THREADS 128
 #endif
 
+__device__ __forceinline__ double raw_side_normal(
+        const double* beta_coeffs, const double* face_basis, const double* normals,
+        const long long num_elements, const long long side, const int qf)
+{
+    const long long element = side / 3;
+    const int face = side % 3;
+    double bx = 0.0, by = 0.0;
+    for (int k = 0; k < NEL; ++k) {
+        const double phi = face_basis[(face * NEL + k) * NQF + qf];
+        bx += beta_coeffs[element * NEL + k] * phi;
+        by += beta_coeffs[(num_elements + element) * NEL + k] * phi;
+    }
+    return bx * normals[side * 2] + by * normals[side * 2 + 1];
+}
+
+__device__ __forceinline__ bool raw_inactive_face_gauge(
+        const double* tau_face, const double* beta_coeffs, const double* face_basis,
+        const double* normals, const long long* edge_side_indices,
+        const long long num_elements, const long long element, const int face,
+        const long long edge)
+{
+#if RAW_CONFLICT_AVERAGED_UPWIND
+    if (edge_side_indices[edge * 2] != element * 3 + face) return false;
+    const long long other = edge_side_indices[edge * 2 + 1];
+    if (other < 0) return false;
+    for (int q = 0; q < NQF; ++q)
+        if (tau_face[face * NQF + q] != 0.0) return false;
+    // If our effective velocity is zero, the pair is inactive exactly when
+    // the other raw velocity is nonnegative (equal outflow or two zeros).
+    // Read immutable coefficients, never another block's weights.
+    for (int q = 0; q < NQF; ++q)
+        if (raw_side_normal(beta_coeffs, face_basis, normals, num_elements, other, q) < 0.0)
+            return false;
+    return true;
+#else
+    return false;
+#endif
+}
+
 __device__ __forceinline__ void assemble_projected_local_advection_raw(
         double* __restrict__ local_lu,
         double* __restrict__ local_rhs,
@@ -1038,6 +1109,8 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double reaction_scalar,
         const int reaction_is_scalar,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_side_indices,
+        const bool* __restrict__ orientations,
         const long long* __restrict__ edge_to_solve_edge,
         const int zero_boundary_flux,
         const long long num_elements,
@@ -1112,8 +1185,22 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         }
         const double normal_x = normals[(element * 3 + face) * 2 + 0];
         const double normal_y = normals[(element * 3 + face) * 2 + 1];
-        const double normal_flux = beta_x * normal_x + beta_y * normal_y;
-        double tau = fabs(normal_flux);
+        double normal_flux = beta_x * normal_x + beta_y * normal_y;
+#if RAW_CONFLICT_AVERAGED_UPWIND
+        const long long side = element * 3 + face;
+        const long long edge = loc2glob_edge[side];
+        const long long left = edge_side_indices[edge * 2];
+        const long long right = edge_side_indices[edge * 2 + 1];
+        const long long other = left == side ? right : left;
+        if (other >= 0) {
+            const int other_q = orientations[side] == orientations[other] ? qf : NQF - 1 - qf;
+            const double neighbor = raw_side_normal(beta_coeffs, face_basis, normals,
+                                                    num_elements, other, other_q);
+            if (normal_flux >= 0.0 && neighbor >= 0.0 && normal_flux + neighbor > 0.0)
+                normal_flux = (normal_flux - neighbor) * 0.5;
+        }
+#endif
+        double tau = RAW_ADVECTION_TAU_FACTOR * fabs(normal_flux);
         double gamma = tau - normal_flux;
         if (zero_boundary_flux) {
             const long long edge = loc2glob_edge[element * 3 + face];
@@ -1603,7 +1690,12 @@ extern "C" __global__ void assemble_advection_raw_fused(
         double* __restrict__ data,
         double* __restrict__ rhs,
         double* __restrict__ local_response,
+        double* __restrict__ cached_lu,
+        int* __restrict__ cached_pivots,
+        double* __restrict__ cached_lift,
+        const int cache_factors,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_side_indices,
         const bool* __restrict__ orientations,
         const long long* __restrict__ loc2oriented_face_coupling,
         const long long* __restrict__ interior_side_index,
@@ -1682,7 +1774,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
             use_sparse_advection, mass_is_diagonal,
             face_basis, face_weights, trace_basis,
             source_coeffs, beta_coeffs, reaction_coeffs,
-            reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
+            reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
             zero_boundary_flux, num_elements, element);
 #if RAW_LU_MODE_COOP
         factor_local_lu_coop_pivot_scale_raw(local_lu, pivots, lu_pivot_abs, lu_pivot_rows);
@@ -1690,6 +1782,12 @@ extern "C" __global__ void assemble_advection_raw_fused(
         factor_local_lu_coop_safe_raw(local_lu, pivots);
 #endif
         solve_all_columns_raw(local_lu, pivots, local_rhs);
+        if (cache_factors) {
+            for (int entry = tid; entry < NEL * NEL; entry += blockDim.x)
+                cached_lu[element * NEL * NEL + entry] = local_lu[entry];
+            for (int entry = tid; entry < NEL; entry += blockDim.x)
+                cached_pivots[element * NEL + entry] = pivots[entry];
+        }
 
         if (store_local_response) {
             for (int entry = tid; entry < NEL * NCOLS; entry += blockDim.x) {
@@ -1711,6 +1809,9 @@ extern "C" __global__ void assemble_advection_raw_fused(
                 continue;
             }
 
+            const bool gauge_face = raw_inactive_face_gauge(
+                tau_face, beta_coeffs, face_basis, normals, edge_side_indices,
+                num_elements, element, row_face, row_edge);
             const long long side_base = side_flux_offsets[side_id];
             const bool row_positive_lift = orientations[element * 3 + row_face];
             const int row_local_lift_dof = raw_local_trace_dof(row_positive_lift, row_dof);
@@ -1736,6 +1837,8 @@ extern "C" __global__ void assemble_advection_raw_fused(
 #else
                 lift_values[i] = lift;
 #endif
+                if (cache_factors)
+                    cached_lift[(element * 3 * NTR + task) * NEL + i] = lift;
                 rhs_value += lift * local_rhs[i * NCOLS + (NCOLS - 1)];
             }
 
@@ -1778,7 +1881,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
             for (int col_dof = 0; col_dof < NTR; ++col_dof) {
                 const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);
                 const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);
-                double mass_value = 0.0;
+                double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;
                 for (int qf = 0; qf < NQF; ++qf) {
                     const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];
                     const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];
@@ -1799,6 +1902,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         double* __restrict__ uh,
         const double* __restrict__ trace,
         const long long* __restrict__ loc2glob_edge,
+        const long long* __restrict__ edge_side_indices,
         const long long* __restrict__ edge_to_solve_edge,
         const bool* __restrict__ orientations,
         const double* __restrict__ aff_jacs,
@@ -1862,7 +1966,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
             use_sparse_advection, mass_is_diagonal,
         face_basis, face_weights, trace_basis,
         source_coeffs, beta_coeffs, reaction_coeffs,
-        reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_to_solve_edge,
+        reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
             zero_boundary_flux, num_elements, element);
 
     // Collapse the trace/source columns into one physical reconstruction RHS:
@@ -2073,6 +2177,7 @@ def _kernel_source(
         nqf: int | None = None,
         lu_mode: str = 'safe',
         trace_orientation: str = 'nodal',
+        advection_stabilization=None,
 ) -> str:
     """Build an instantiated CUDA kernel source string for advection assembly."""
     source = template.replace('NEL', str(int(nel))).replace('NTR', str(int(ntr))).replace('NCOLS', str(int(ncols)))
@@ -2081,7 +2186,13 @@ def _kernel_source(
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
     if trace_orientation not in {'nodal', 'modal'}:
         raise ValueError("trace_orientation must be 'nodal' or 'modal'")
+    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    factor = upwind_factor(advection_stabilization)
+    if factor is None:
+        raise ValueError("Unsupported raw CUDA advection stabilization")
     prefix = (
+        f"#define RAW_ADVECTION_TAU_FACTOR {factor:.17g}\n"
+        f"#define RAW_CONFLICT_AVERAGED_UPWIND {int(is_conflict_averaged_upwind(advection_stabilization))}\n"
         f"#define RAW_LU_MODE_COOP {1 if normalized_lu_mode == 'coop' else 0}\n"
 
         f"#define RAW_LU_SCRATCH_THREADS {_RAW_LU_SCRATCH_THREADS}\n"
@@ -2115,9 +2226,9 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     """Compute dynamic shared-memory sizes for advection assembly and reconstruction."""
     ncols = 3 * ntr + 1
     assembly_doubles = nel * nel + nel * ncols
-    assembly_bytes = assembly_doubles * 8 + nel * 4 + 256
+    assembly_bytes = assembly_doubles * REAL_ITEMSIZE + nel * 4 + 256
     reconstruct_doubles = nel * nel + nel
-    reconstruct_bytes = reconstruct_doubles * 8 + nel * 4 + 256
+    reconstruct_bytes = reconstruct_doubles * REAL_ITEMSIZE + nel * 4 + 256
     return assembly_bytes, reconstruct_bytes
 
 
@@ -2150,14 +2261,14 @@ def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') 
         assembly_doubles += _RAW_LU_SCRATCH_THREADS
         reconstruct_doubles += _RAW_LU_SCRATCH_THREADS
         ints += _RAW_LU_SCRATCH_THREADS
-    assembly_bytes = assembly_doubles * 8 + ints * 4 + 256
-    reconstruct_bytes = reconstruct_doubles * 8 + ints * 4 + 256
+    assembly_bytes = assembly_doubles * REAL_ITEMSIZE + ints * 4 + 256
+    reconstruct_bytes = reconstruct_doubles * REAL_ITEMSIZE + ints * 4 + 256
     return assembly_bytes, reconstruct_bytes
 
 
 def _compile_kernel(cupy, source: str, name: str, shared_bytes: int) -> str:
     """Compile and cache a raw CUDA kernel source into a callable object."""
-    kernel = cupy.RawKernel(source, name, options=('--std=c++11',))
+    kernel = real_raw_kernel(source, name, options=('--std=c++11',))
     try:
         kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
     except Exception:
@@ -2218,8 +2329,8 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     kernel = kernel.replace(
-        '            const bool row_positive_mass = orientations[element * 3 + row_face];\n            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n            const double mass_scale = jacs_el_fc[element * 3 + row_face];\n            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;\n            for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                double mass_value = 0.0;\n                for (int qf = 0; qf < NQF; ++qf) {\n                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                }\n                const long long out = mass_base + col_dof;\n                rows[out] = row_solve_edge * NTR + row_dof;\n                cols[out] = row_solve_edge * NTR + col_dof;\n                data[out] = mass_value;\n            }',
-        '            const int mass_block_pos = mass_csr_block_pos[row_solve_edge];\n            if (mass_block_pos >= 0) {\n                const bool row_positive_mass = orientations[element * 3 + row_face];\n                const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n                const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n                const double mass_scale = jacs_el_fc[element * 3 + row_face];\n                const long long row = row_solve_edge * NTR + row_dof;\n                for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                    const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                    const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                    double mass_value = 0.0;\n                    for (int qf = 0; qf < NQF; ++qf) {\n                        const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                        const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                        mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                    }\n                    const long long out = (long long)csr_indptr[row] + ((long long)mass_block_pos * NTR + col_dof);\n                    atomicAdd(&data[out], mass_value);\n                }\n            }',
+        '            const bool row_positive_mass = orientations[element * 3 + row_face];\n            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n            const double mass_scale = jacs_el_fc[element * 3 + row_face];\n            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;\n            for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                for (int qf = 0; qf < NQF; ++qf) {\n                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                }\n                const long long out = mass_base + col_dof;\n                rows[out] = row_solve_edge * NTR + row_dof;\n                cols[out] = row_solve_edge * NTR + col_dof;\n                data[out] = mass_value;\n            }',
+        '            const int mass_block_pos = mass_csr_block_pos[row_solve_edge];\n            if (mass_block_pos >= 0) {\n                const bool row_positive_mass = orientations[element * 3 + row_face];\n                const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n                const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n                const double mass_scale = jacs_el_fc[element * 3 + row_face];\n                const long long row = row_solve_edge * NTR + row_dof;\n                for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                    const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                    const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                    double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                    for (int qf = 0; qf < NQF; ++qf) {\n                        const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                        const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                        mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                    }\n                    const long long out = (long long)csr_indptr[row] + ((long long)mass_block_pos * NTR + col_dof);\n                    atomicAdd(&data[out], mass_value);\n                }\n            }',
         1,
     )
     return source[:start] + kernel + source[end:]
@@ -2373,9 +2484,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
 
     rows = cupy.empty(nnz, dtype=cupy.int64)
     cols = cupy.empty_like(rows)
-    data = cupy.empty(nnz, dtype=cupy.float64)
-    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+    data = cupy.empty(nnz, dtype=REAL_DTYPE)
+    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
     if mesh_h.bnd_edges_inds.size:
         boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
@@ -2459,8 +2570,10 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         lu_mode: str = 'safe',
         matrix_format: str = 'coo',
         zero_boundary_flux: bool = False,
+        advection_stabilization=None,
         local_response=None,
         cache_local_response: bool = True,
+        factor_workspace: RawAdvectionFactorWorkspace | None = None,
 ) -> RawAdvectionAssemblyResult:
     """Assemble the reduced advection trace system with fused projected local assembly."""
     cupy = require_cupy()
@@ -2486,17 +2599,17 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         raise ValueError('raw CUDA advection block_size must be one of 1, 32, 64, 128')
     assembly_shared, _ = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode)
 
-    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=cupy.float64)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=cupy.float64)
+    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
+    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
     if reaction_is_scalar:
-        reaction_coeffs = cupy.empty(1, dtype=cupy.float64)
+        reaction_coeffs = cupy.empty(1, dtype=REAL_DTYPE)
     else:
-        reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=cupy.float64)
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
+        reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
+    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
-    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=cupy.float64)
-    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=cupy.float64)
+    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
+    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=REAL_DTYPE)
     use_sparse_advection = bool(use_sparse_advection)
     mass_is_diagonal = bool(mass_is_diagonal)
     matrix_format = str(matrix_format).lower()
@@ -2507,21 +2620,33 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     response_shape = (int(cspace.mesh.num_tri), nel, ncols)
     if cache_local_response:
         if local_response is None:
-            local_response = cupy.empty(response_shape, dtype=cupy.float64)
+            local_response = cupy.empty(response_shape, dtype=REAL_DTYPE)
         else:
             if tuple(local_response.shape) != response_shape:
                 raise ValueError(
                     "local_response workspace must have shape "
                     f"{response_shape}; got {tuple(local_response.shape)}"
                 )
-            if local_response.dtype != cupy.float64 or not local_response.flags.c_contiguous:
+            if local_response.dtype != REAL_DTYPE or not local_response.flags.c_contiguous:
                 raise ValueError("local_response workspace must be C-contiguous float64")
     else:
-        local_response = cupy.empty(1, dtype=cupy.float64)
-    if zero_boundary_flux:
-        boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=cupy.float64)
+        local_response = cupy.empty(1, dtype=REAL_DTYPE)
+    if factor_workspace is not None:
+        if not cache_local_response:
+            raise ValueError("factor caching requires local response caching")
+        previous_lu = factor_workspace.local_lu
+        factor_workspace.ensure(cupy, num_elements=int(cspace.mesh.num_tri), nel=nel, ntr=ntr)
+        reused = previous_lu is not None and factor_workspace.local_lu is previous_lu
+        factor_args = (factor_workspace.local_lu, factor_workspace.pivots,
+                       factor_workspace.trace_lift, np.int32(1))
+        timings["raw.factors.workspace.reused"] = float(reused)
+        timings["raw.factors.workspace.bytes"] = float(factor_workspace.nbytes)
     else:
-        boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=cupy.float64)
+        factor_args = (local_response, cupy.empty(1, dtype=cupy.int32), local_response, np.int32(0))
+    if zero_boundary_flux:
+        boundary_trace = cupy.zeros((mesh_h.bnd_edges_inds.size, ntr), dtype=REAL_DTYPE)
+    else:
+        boundary_trace = cupy.ascontiguousarray(boundary_trace, dtype=REAL_DTYPE)
     cupy.cuda.get_current_stream().synchronize()
     timings['raw.input_prepare'] = time.perf_counter() - raw_wall_start
 
@@ -2544,12 +2669,12 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         rows = cols = None
         zero_start = time.perf_counter()
         data = (
-            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=cupy.float64)
+            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=REAL_DTYPE)
             if matrix_format == 'bsr'
-            else cupy.zeros(indices.size, dtype=cupy.float64)
+            else cupy.zeros(indices.size, dtype=REAL_DTYPE)
         )
-        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
         cupy.cuda.get_current_stream().synchronize()
@@ -2569,9 +2694,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         timings['raw.map_setup'] = time.perf_counter() - start
         rows = cupy.empty(nnz, dtype=cupy.int64)
         cols = cupy.empty_like(rows)
-        data = cupy.empty(nnz, dtype=cupy.float64)
-        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        data = cupy.empty(nnz, dtype=REAL_DTYPE)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
@@ -2586,6 +2711,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         source = _kernel_source(
             template, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
+            advection_stabilization=advection_stabilization,
         )
         source = _apply_fused_assembly_launch_bounds(
             source, kernel_name=kernel_name, nel=nel, block_size=block_size
@@ -2610,7 +2736,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 data,
                 rhs,
                 local_response,
+                *factor_args,
                 cspace.mesh.loc2glob_edge,
+                cspace.mesh.edge_side_indices,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
                 side_index,
@@ -2641,7 +2769,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 beta_coeffs,
                 reaction_coeffs,
                 boundary_trace_full.reshape(-1),
-                np.float64(reaction_scalar),
+                REAL_DTYPE(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
                 np.int32(1 if cache_local_response else 0),
                 np.int32(1 if zero_boundary_flux else 0),
@@ -2654,6 +2782,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         source = _kernel_source(
             _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
+            advection_stabilization=advection_stabilization,
         )
         source = _apply_fused_assembly_launch_bounds(
             source, kernel_name='assemble_advection_raw_fused', nel=nel, block_size=block_size
@@ -2679,7 +2808,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 data,
                 rhs,
                 local_response,
+                *factor_args,
                 cspace.mesh.loc2glob_edge,
+                cspace.mesh.edge_side_indices,
                 cspace.mesh.orientations,
                 cspace.mesh.loc2oriented_face_coupling,
                 side_index,
@@ -2709,7 +2840,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 beta_coeffs,
                 reaction_coeffs,
                 boundary_trace_full.reshape(-1),
-                np.float64(reaction_scalar),
+                REAL_DTYPE(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
                 np.int32(1 if cache_local_response else 0),
                 np.int32(1 if zero_boundary_flux else 0),
@@ -2768,6 +2899,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         local_response=local_response if cache_local_response else None,
         lu_mode=lu_mode,
         zero_boundary_flux=zero_boundary_flux,
+        advection_stabilization=advection_stabilization,
     )
 
 
@@ -2786,7 +2918,7 @@ def reconstruct_projected_advection_field_raw_cuda(
     nel = int(cspace.el_dof)
     ntr = int(cspace.edg_dof)
     _, reconstruct_shared = _shared_sizes(nel, ntr)
-    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=REAL_DTYPE)
     source = _kernel_source(
         _RAW_RECONSTRUCT_TEMPLATE, nel=nel, ntr=ntr, ncols=1,
         trace_orientation=_raw_trace_orientation_mode(trace_ref),
@@ -2832,6 +2964,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         block_size: RawCudaBlockSize = "auto",
         lu_mode: str = 'safe',
         zero_boundary_flux: bool = False,
+        advection_stabilization=None,
 ):
     """Recover primal coefficients with fused projected local reconstruction."""
     cupy = require_cupy()
@@ -2854,24 +2987,25 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         raise ValueError('raw CUDA advection block_size must be one of 1, 32, 64, 128')
     _, reconstruct_shared = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode)
     if reaction_is_scalar:
-        reaction_coeffs = cupy.empty(1, dtype=cupy.float64)
+        reaction_coeffs = cupy.empty(1, dtype=REAL_DTYPE)
     else:
-        reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=cupy.float64)
-    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=cupy.float64)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=cupy.float64)
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=cupy.float64)
+        reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
+    source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
+    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
+    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
-    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=cupy.float64)
-    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=cupy.float64)
+    advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
+    advection_sparse_values1 = cupy.ascontiguousarray(advection_sparse_values1, dtype=REAL_DTYPE)
     use_sparse_advection = bool(use_sparse_advection)
     mass_is_diagonal = bool(mass_is_diagonal)
     zero_boundary_flux = bool(zero_boundary_flux)
     edge_to_solve_edge = _edge_to_solve_edge_device(cspace) if zero_boundary_flux else cupy.empty(1, dtype=cupy.int64)
-    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=REAL_DTYPE)
     source = _kernel_source(
         _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
         lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
+        advection_stabilization=advection_stabilization,
     )
     kernel = _compile_kernel(cupy, source, 'reconstruct_advection_raw_fused', reconstruct_shared)
     start = time.perf_counter()
@@ -2882,6 +3016,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             uh,
             trace.reshape(-1),
             cspace.mesh.loc2glob_edge,
+            cspace.mesh.edge_side_indices,
             edge_to_solve_edge,
             cspace.mesh.orientations,
             cspace.mesh.aff_jacs,
@@ -2903,7 +3038,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             source_coeffs,
             beta_coeffs,
             reaction_coeffs,
-            np.float64(reaction_scalar),
+            REAL_DTYPE(reaction_scalar),
             np.int32(1 if reaction_is_scalar else 0),
             np.int32(1 if zero_boundary_flux else 0),
             np.int64(cspace.mesh.num_tri),
@@ -2949,7 +3084,7 @@ def reconstruct_projected_advection_field_from_response_raw_cuda(
     kernel = _compile_kernel(
         cupy, source, "reconstruct_advection_from_response_raw", 0
     )
-    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=REAL_DTYPE)
     stream = cupy.cuda.get_current_stream()
     begin = cupy.cuda.Event()
     end = cupy.cuda.Event()
@@ -2971,9 +3106,66 @@ def reconstruct_projected_advection_field_from_response_raw_cuda(
     return cupy.ascontiguousarray(uh), cupy.cuda.get_elapsed_time(begin, end) / 1000.0
 
 
+
+_RAW_CACHED_SOURCE_TEMPLATE = r"""
+extern "C" __global__ void solve_advection_cached_source(
+        const double* __restrict__ element_lu,
+        const int* __restrict__ element_pivots,
+        const double* __restrict__ source_moments,
+        double* __restrict__ local_response,
+        double* __restrict__ solved_source,
+        const long long num_elements)
+{
+    extern __shared__ unsigned char shared_raw[];
+    double* lu = reinterpret_cast<double*>(shared_raw);
+    double* rhs = lu + NEL * NEL;
+    int* pivots = reinterpret_cast<int*>(rhs + NEL * NCOLS);
+    const long long element = blockIdx.x;
+    if (element >= num_elements) return;
+    for (int i = threadIdx.x; i < NEL * NEL; i += blockDim.x)
+        lu[i] = element_lu[element * NEL * NEL + i];
+    for (int i = threadIdx.x; i < NEL; i += blockDim.x) {
+        pivots[i] = element_pivots[element * NEL + i];
+        rhs[i * NCOLS] = source_moments[element * NEL + i];
+    }
+    __syncthreads();
+    solve_column_zero_raw(lu, pivots, rhs);
+    for (int i = threadIdx.x; i < NEL; i += blockDim.x) {
+        const double value = rhs[i * NCOLS];
+        solved_source[element * NEL + i] = value;
+        local_response[(element * NEL + i) * NCOLS + NCOLS - 1] = value;
+    }
+}
+"""
+
+
+def solve_cached_advection_source_raw(source_moments, local_response, factors, cspace, trace_ref):
+    """Apply cached element LU factors using the existing triangular solve kernel.
+
+    Only the source column of the local response is replaced; trace response
+    columns and the condensed global operator remain untouched.
+    """
+    cupy = require_cupy()
+    nel, ntr = int(cspace.el_dof), int(cspace.edg_dof)
+    ncols = 3*ntr+1
+    begin = _RAW_FUSED_TEMPLATE.index("__device__ __forceinline__ void solve_column_zero_raw(")
+    end = _RAW_FUSED_TEMPLATE.index("__device__", begin+12)
+    template = _RAW_FUSED_TEMPLATE[begin:end] + _RAW_CACHED_SOURCE_TEMPLATE
+    shared = (nel*nel + nel*ncols)*REAL_ITEMSIZE + nel*4
+    source = _kernel_source(template, nel=nel, ntr=ntr, ncols=ncols)
+    kernel = _compile_kernel(cupy, source, "solve_advection_cached_source", shared)
+    solved = cupy.empty((cspace.mesh.num_tri, nel), dtype=REAL_DTYPE)
+    kernel((int(cspace.mesh.num_tri),), (32,),
+           (factors.local_lu, factors.pivots, source_moments, local_response,
+            solved, np.int64(cspace.mesh.num_tri)), shared_mem=shared)
+    return solved
+
+
 __all__ = [
     'ReducedTraceCsrPattern',
     'RawAdvectionAssemblyResult',
+    'RawAdvectionFactorWorkspace',
+    'solve_cached_advection_source_raw',
     'build_reduced_csr_pattern_raw',
     'build_reduced_csr_pattern_cupy_reference',
     'assert_reduced_csr_patterns_equal',

@@ -1,0 +1,16 @@
+\begin{tabular}{llrrr}
+\toprule
+Class & Preconditioner / Krylov & Apply (ms) & Calls/solve & GPU (\%) \\
+\midrule
+High & PP(24) / GMRES & 21.575 & 74 & 92.8 \\
+ & $p$MG–AMG (S) & 2.589 & 33 & 70.4 \\
+ & AMG / FGMRES & 4.027 & 58 & -- \\
+\addlinespace[2pt]
+Low & PP(24) / GMRES & 21.534 & 532 & 92.6 \\
+ & AMG / FGMRES & 15.945 & 948 & -- \\
+\addlinespace[2pt]
+Directional & PP(48) / GMRES & 42.614 & 152 & 96.1 \\
+ & $p$MG–AMG (S) & 2.886 & 380 & 60.7 \\
+\addlinespace[2pt]
+\bottomrule
+\end{tabular}

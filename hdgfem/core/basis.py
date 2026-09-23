@@ -19,6 +19,8 @@ Explicit ``*_parallel`` wrappers are provided for top-level bulk tabulation.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 from functools import lru_cache
 from math import factorial
 
@@ -32,7 +34,7 @@ BASIS_DUBINER = 2
 
 def _as_points(points: np.ndarray) -> np.ndarray:
     """Validate and cast point arrays to 2D float coordinates."""
-    pts = np.asarray(points, dtype=np.float64)
+    pts = np.asarray(points, dtype=REAL_DTYPE)
     if pts.ndim != 2 or pts.shape[1] != 2:
         raise ValueError(f"points must have shape (num_points, 2); got {pts.shape}")
     return np.ascontiguousarray(pts)
@@ -41,7 +43,7 @@ def _as_points(points: np.ndarray) -> np.ndarray:
 def reference_barycentric(points: np.ndarray) -> np.ndarray:
     """Convert reference coordinates to barycentric coordinates."""
     pts = _as_points(points)
-    bary = np.empty((pts.shape[0], 3), dtype=np.float64)
+    bary = np.empty((pts.shape[0], 3), dtype=REAL_DTYPE)
     bary[:, 1] = 0.5 * (pts[:, 0] + 1.0)
     bary[:, 2] = 0.5 * (pts[:, 1] + 1.0)
     bary[:, 0] = 1.0 - bary[:, 1] - bary[:, 2]
@@ -71,7 +73,7 @@ def bernstein_coefficients(order: int) -> np.ndarray:
         factorial(order) / (factorial(i) * factorial(j) * factorial(k))
         for i, j, k in bernstein_exponents(order)
     ]
-    return np.ascontiguousarray(np.asarray(coeffs, dtype=np.float64))
+    return np.ascontiguousarray(np.asarray(coeffs, dtype=REAL_DTYPE))
 
 
 @nb.njit(cache=True, fastmath=True)
@@ -131,7 +133,7 @@ def _jacobi_derivative_array_kernel(n: int, alpha: float, beta: float, values: n
 
 
 _jacobi_derivative_array_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _jacobi_derivative_array_kernel.py_func
+    getattr(_jacobi_derivative_array_kernel, "py_func", _jacobi_derivative_array_kernel)
 )
 
 
@@ -140,7 +142,7 @@ def _bernstein_basis_kernel(points: np.ndarray, exponents: np.ndarray, coeffs: n
     """Tabulate Bernstein basis values at reference points."""
     num_points = points.shape[0]
     num_modes = exponents.shape[0]
-    out = np.empty((num_points, num_modes), dtype=np.float64)
+    out = np.empty((num_points, num_modes), dtype=REAL_DTYPE)
     for q in nb.prange(num_points):
         l1 = 0.5 * (points[q, 0] + 1.0)
         l2 = 0.5 * (points[q, 1] + 1.0)
@@ -156,7 +158,7 @@ def _bernstein_basis_kernel(points: np.ndarray, exponents: np.ndarray, coeffs: n
 
 
 _bernstein_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _bernstein_basis_kernel.py_func
+    getattr(_bernstein_basis_kernel, "py_func", _bernstein_basis_kernel)
 )
 
 
@@ -165,7 +167,7 @@ def _bernstein_gradient_kernel(points: np.ndarray, exponents: np.ndarray, coeffs
     """Tabulate Bernstein basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = exponents.shape[0]
-    out = np.zeros((num_points, num_modes, 2), dtype=np.float64)
+    out = np.zeros((num_points, num_modes, 2), dtype=REAL_DTYPE)
     for q in nb.prange(num_points):
         lambda0 = 1.0 - 0.5 * (points[q, 0] + 1.0) - 0.5 * (points[q, 1] + 1.0)
         lambda1 = 0.5 * (points[q, 0] + 1.0)
@@ -202,7 +204,7 @@ def _bernstein_gradient_kernel(points: np.ndarray, exponents: np.ndarray, coeffs
 
 
 _bernstein_gradient_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _bernstein_gradient_kernel.py_func
+    getattr(_bernstein_gradient_kernel, "py_func", _bernstein_gradient_kernel)
 )
 
 
@@ -252,7 +254,7 @@ def evaluate_bernstein_gradients_parallel(order: int, points: np.ndarray) -> np.
 
 def jacobi_derivative(n: int, alpha: float, beta: float, x: np.ndarray) -> np.ndarray:
     """Vectorized wrapper for :math:`dP_n^{(\alpha,\beta)}/dx`."""
-    return _jacobi_derivative_array_kernel(int(n), float(alpha), float(beta), np.asarray(x, dtype=np.float64))
+    return _jacobi_derivative_array_kernel(int(n), float(alpha), float(beta), np.asarray(x, dtype=REAL_DTYPE))
 
 
 def jacobi_derivative_parallel(n: int, alpha: float, beta: float, x: np.ndarray) -> np.ndarray:
@@ -261,7 +263,7 @@ def jacobi_derivative_parallel(n: int, alpha: float, beta: float, x: np.ndarray)
         int(n),
         float(alpha),
         float(beta),
-        np.asarray(x, dtype=np.float64),
+        np.asarray(x, dtype=REAL_DTYPE),
     )
 
 
@@ -298,7 +300,7 @@ def _hierarchical_c0_basis_kernel(order: int, points: np.ndarray, modes: np.ndar
     """Tabulate hierarchical C0 basis values at reference points."""
     num_points = points.shape[0]
     num_modes = modes.shape[0]
-    out = np.empty((num_points, num_modes), dtype=np.float64)
+    out = np.empty((num_points, num_modes), dtype=REAL_DTYPE)
     if order == 0:
         for q in nb.prange(num_points):
             out[q, 0] = 1.0
@@ -340,7 +342,7 @@ def _hierarchical_c0_basis_kernel(order: int, points: np.ndarray, modes: np.ndar
 
 
 _hierarchical_c0_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _hierarchical_c0_basis_kernel.py_func
+    getattr(_hierarchical_c0_basis_kernel, "py_func", _hierarchical_c0_basis_kernel)
 )
 
 
@@ -349,7 +351,7 @@ def _hierarchical_c0_gradient_kernel(order: int, points: np.ndarray, modes: np.n
     """Tabulate hierarchical C0 basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = modes.shape[0]
-    out = np.empty((num_points, num_modes, 2), dtype=np.float64)
+    out = np.empty((num_points, num_modes, 2), dtype=REAL_DTYPE)
     if order == 0:
         out[:, :, :] = 0.0
         return out
@@ -423,7 +425,7 @@ def _hierarchical_c0_gradient_kernel(order: int, points: np.ndarray, modes: np.n
 
 
 _hierarchical_c0_gradient_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _hierarchical_c0_gradient_kernel.py_func
+    getattr(_hierarchical_c0_gradient_kernel, "py_func", _hierarchical_c0_gradient_kernel)
 )
 
 
@@ -488,7 +490,7 @@ def _dubiner_basis_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
     """Tabulate Dubiner basis values at reference points."""
     num_points = points.shape[0]
     num_modes = pq.shape[0]
-    out = np.empty((num_points, num_modes), dtype=np.float64)
+    out = np.empty((num_points, num_modes), dtype=REAL_DTYPE)
     for qpt in nb.prange(num_points):
         xi = points[qpt, 0]
         eta = points[qpt, 1]
@@ -514,7 +516,7 @@ def _dubiner_basis_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
 
 
 _dubiner_basis_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _dubiner_basis_kernel.py_func
+    getattr(_dubiner_basis_kernel, "py_func", _dubiner_basis_kernel)
 )
 
 
@@ -523,7 +525,7 @@ def _dubiner_gradient_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
     """Tabulate Dubiner basis gradients at reference points."""
     num_points = points.shape[0]
     num_modes = pq.shape[0]
-    out = np.zeros((num_points, num_modes, 2), dtype=np.float64)
+    out = np.zeros((num_points, num_modes, 2), dtype=REAL_DTYPE)
     for qpt in nb.prange(num_points):
         xi = points[qpt, 0]
         eta = points[qpt, 1]
@@ -562,7 +564,7 @@ def _dubiner_gradient_kernel(points: np.ndarray, pq: np.ndarray) -> np.ndarray:
 
 
 _dubiner_gradient_kernel_parallel = nb.njit(parallel=True, cache=True, fastmath=True)(
-    _dubiner_gradient_kernel.py_func
+    getattr(_dubiner_gradient_kernel, "py_func", _dubiner_gradient_kernel)
 )
 
 
@@ -715,7 +717,7 @@ def modal_eval_payload(name: str, order: int):
     kind = basis_kind(name)
     empty_i3 = np.empty((0, 3), dtype=np.int64)
     empty_i2 = np.empty((0, 2), dtype=np.int64)
-    empty_f = np.empty(0, dtype=np.float64)
+    empty_f = np.empty(0, dtype=REAL_DTYPE)
     if kind == BASIS_BERNSTEIN:
         return kind, _bernstein_exponent_array(order), bernstein_coefficients(order), empty_i2, empty_i2
     if kind == BASIS_HIERARCHICAL_C0:

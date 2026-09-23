@@ -55,11 +55,15 @@ def timed_call(label: str, verbosity: bool | int, function):
 
 
 @contextmanager
-def timed_section(config, level: int, label: str, **fields):
+def timed_section(config, level: int, label: str, *, timings=None, synchronize=None, **fields):
     """Emit ``LABEL_START`` and ``LABEL_DONE time=...`` messages around a block.
 
     Parameters in ``fields`` are printed on the ``START`` line.  The messages
     are suppressed unless ``config.verbosity >= level``.
+    An optional timings mapping accumulates seconds by label across repeated
+    sections. A synchronize callback completes queued work before stopping
+    the timer. Drain earlier work separately before the first GPU section;
+    this helper deliberately does not hide the cost of a pre-section wait.
     """
     verbose = int(getattr(config, "verbosity", 1)) >= int(level)
     if verbose:
@@ -69,8 +73,13 @@ def timed_section(config, level: int, label: str, **fields):
     try:
         yield
     finally:
+        if synchronize is not None:
+            synchronize()
+        elapsed = time.perf_counter() - start
+        if timings is not None:
+            timings[label] = timings.get(label, 0.0) + elapsed
         if verbose:
-            print(f"{label}_DONE time={time.perf_counter() - start:.3f}", flush=True)
+            print(f"{label}_DONE time={elapsed:.3f}", flush=True)
 
 
 def pretty_print(items, title="Results", pad_lines=1, default_fmt=".5g"):

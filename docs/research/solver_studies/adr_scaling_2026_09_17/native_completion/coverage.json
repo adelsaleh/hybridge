@@ -1,0 +1,4998 @@
+[
+  {
+    "system_id": "cd1796cfe6c2dea0455271011be7777828cf008c8da0842d2e4ac5f1007c78bd",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 42.51780031093707,
+        "hot_min_ms": 40.98410194274038,
+        "hot_max_ms": 43.5451619559899,
+        "fresh_median_ms": 93.60726096201688,
+        "setup_median_ms": 50.13706593308598,
+        "iterations": 58,
+        "residual": 1.920032562895864e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 42.51780031093707,
+        "hot_min_ms": 40.98410194274038,
+        "hot_max_ms": 43.5451619559899,
+        "fresh_median_ms": 93.60726096201688,
+        "setup_median_ms": 50.13706593308598,
+        "iterations": 58,
+        "residual": 1.920032562895864e-13
+      }
+    }
+  },
+  {
+    "system_id": "967b11a01d2627fadc94cba7ad7e93254e34a553bc44dea39a1eadb69e1b0ff6",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 123.55097262964894,
+        "hot_min_ms": 119.0545039717108,
+        "hot_max_ms": 129.82745794579387,
+        "fresh_median_ms": 182.50040290877223,
+        "setup_median_ms": 55.59857399202883,
+        "iterations": 150,
+        "residual": 5.195194710190556e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 123.55097262964894,
+        "hot_min_ms": 119.0545039717108,
+        "hot_max_ms": 129.82745794579387,
+        "fresh_median_ms": 182.50040290877223,
+        "setup_median_ms": 55.59857399202883,
+        "iterations": 150,
+        "residual": 5.195194710190556e-12
+      }
+    }
+  },
+  {
+    "system_id": "dd9a51d903833ebd0c50ea61eb6220212822142e45ba1fffd3c6bb5b32d9e864",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 116.6725386865437,
+        "hot_min_ms": 112.96107596717775,
+        "hot_max_ms": 119.44426107220352,
+        "fresh_median_ms": 176.5664699487388,
+        "setup_median_ms": 51.38736008666456,
+        "iterations": 150,
+        "residual": 1.6209965595508115e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 116.6725386865437,
+        "hot_min_ms": 112.96107596717775,
+        "hot_max_ms": 119.44426107220352,
+        "fresh_median_ms": 176.5664699487388,
+        "setup_median_ms": 51.38736008666456,
+        "iterations": 150,
+        "residual": 1.6209965595508115e-13
+      }
+    }
+  },
+  {
+    "system_id": "9dcd00e214f12825f53ae0bee884e86adbed682b31446c629a98ce02398c61e2",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 39.330876005503036,
+        "hot_min_ms": 39.0919049968943,
+        "hot_max_ms": 39.67996395658702,
+        "fresh_median_ms": 111.23237397987396,
+        "setup_median_ms": 71.12981390673667,
+        "iterations": 50,
+        "residual": 1.7330340166648126e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 39.330876005503036,
+        "hot_min_ms": 39.0919049968943,
+        "hot_max_ms": 39.67996395658702,
+        "fresh_median_ms": 111.23237397987396,
+        "setup_median_ms": 71.12981390673667,
+        "iterations": 50,
+        "residual": 1.7330340166648126e-13
+      }
+    }
+  },
+  {
+    "system_id": "d4cb641f0506c257bbdeb77fc1258655d300eec7c3b7973b38c42d934b865571",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 225.39992533468953,
+        "hot_min_ms": 221.83215396944433,
+        "hot_max_ms": 228.1395239988342,
+        "fresh_median_ms": 301.06759793125093,
+        "setup_median_ms": 74.69102705363184,
+        "iterations": 225,
+        "residual": 1.860580470073109e-14
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 225.39992533468953,
+        "hot_min_ms": 221.83215396944433,
+        "hot_max_ms": 228.1395239988342,
+        "fresh_median_ms": 301.06759793125093,
+        "setup_median_ms": 74.69102705363184,
+        "iterations": 225,
+        "residual": 1.860580470073109e-14
+      }
+    }
+  },
+  {
+    "system_id": "91eacb9aa9b0a157fab790933d2d592057551132aeb6b114a71967c24daa5bca",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 107.30753629468381,
+        "hot_min_ms": 103.98089594673365,
+        "hot_max_ms": 109.85430597793311,
+        "fresh_median_ms": 182.40472907200456,
+        "setup_median_ms": 75.81856206525117,
+        "iterations": 101,
+        "residual": 1.5155504454547492e-13
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 107.30753629468381,
+        "hot_min_ms": 103.98089594673365,
+        "hot_max_ms": 109.85430597793311,
+        "fresh_median_ms": 182.40472907200456,
+        "setup_median_ms": 75.81856206525117,
+        "iterations": 101,
+        "residual": 1.5155504454547492e-13
+      }
+    }
+  },
+  {
+    "system_id": "ab0c12ae810fd7eb50dee4a20cca69a3a0ecde25d0e141fac930cfc5cdf11656",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 41.5456349728629,
+        "hot_min_ms": 40.689683984965086,
+        "hot_max_ms": 42.200975003652275,
+        "fresh_median_ms": 118.56067390181124,
+        "setup_median_ms": 74.75551101379097,
+        "iterations": 53,
+        "residual": 2.723281592462966e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 41.5456349728629,
+        "hot_min_ms": 40.689683984965086,
+        "hot_max_ms": 42.200975003652275,
+        "fresh_median_ms": 118.56067390181124,
+        "setup_median_ms": 74.75551101379097,
+        "iterations": 53,
+        "residual": 2.723281592462966e-13
+      }
+    }
+  },
+  {
+    "system_id": "d627d2e1968ee90455a4a8c7fb7d87addc669a698322ac2cba30bc7356839afe",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 264.5209993158157,
+        "hot_min_ms": 260.9084820142016,
+        "hot_max_ms": 269.11729492712766,
+        "fresh_median_ms": 344.77179299574345,
+        "setup_median_ms": 79.36894707381725,
+        "iterations": 300,
+        "residual": 9.128287727407184e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 264.5209993158157,
+        "hot_min_ms": 260.9084820142016,
+        "hot_max_ms": 269.11729492712766,
+        "fresh_median_ms": 344.77179299574345,
+        "setup_median_ms": 79.36894707381725,
+        "iterations": 300,
+        "residual": 9.128287727407184e-12
+      }
+    }
+  },
+  {
+    "system_id": "6630f21c308e73cb113488ed524c52f29c73a5fbe736d3179a2bbb4493e3bce9",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 133.81715301269045,
+        "hot_min_ms": 132.30382406618446,
+        "hot_max_ms": 135.06457395851612,
+        "fresh_median_ms": 218.53641991037875,
+        "setup_median_ms": 81.67137298732996,
+        "iterations": 150,
+        "residual": 2.2582265199012217e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 133.81715301269045,
+        "hot_min_ms": 132.30382406618446,
+        "hot_max_ms": 135.06457395851612,
+        "fresh_median_ms": 218.53641991037875,
+        "setup_median_ms": 81.67137298732996,
+        "iterations": 150,
+        "residual": 2.2582265199012217e-13
+      }
+    }
+  },
+  {
+    "system_id": "3c95ef270c13204cd07d12efde3b470ed0c5a3378e90304b2d45357d12ae8a92",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 48.01637962615738,
+        "hot_min_ms": 46.27020296175033,
+        "hot_max_ms": 49.282939988188446,
+        "fresh_median_ms": 127.16245208866894,
+        "setup_median_ms": 78.59834597911686,
+        "iterations": 58,
+        "residual": 3.615211840348076e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 47.40815330296755,
+        "hot_min_ms": 46.25656898133457,
+        "hot_max_ms": 48.10865200124681,
+        "fresh_median_ms": 128.1491219997406,
+        "setup_median_ms": 80.83415206056088,
+        "iterations": 58,
+        "residual": 3.615211840348076e-13
+      }
+    }
+  },
+  {
+    "system_id": "738feebe70f05e18ee45d8fdaf8840b84c9ac045911f052fd9a1970ec388365a",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 310.21982501260936,
+        "hot_min_ms": 296.60551401320845,
+        "hot_max_ms": 330.4771810071543,
+        "fresh_median_ms": 386.7386120837182,
+        "setup_median_ms": 84.96142306830734,
+        "iterations": 300,
+        "residual": 8.284457529999073e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 310.21982501260936,
+        "hot_min_ms": 296.60551401320845,
+        "hot_max_ms": 330.4771810071543,
+        "fresh_median_ms": 386.7386120837182,
+        "setup_median_ms": 84.96142306830734,
+        "iterations": 300,
+        "residual": 8.284457529999073e-13
+      }
+    }
+  },
+  {
+    "system_id": "b9a6f8cc3fa4f4680da0fe2b4a94c16ef7d12e95c013f06705af3949fb52ea52",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 151.22900666513792,
+        "hot_min_ms": 148.18930195178837,
+        "hot_max_ms": 155.1525869872421,
+        "fresh_median_ms": 235.42034695856273,
+        "setup_median_ms": 89.26266490016133,
+        "iterations": 150,
+        "residual": 3.5989663711153994e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 151.22900666513792,
+        "hot_min_ms": 148.18930195178837,
+        "hot_max_ms": 155.1525869872421,
+        "fresh_median_ms": 235.42034695856273,
+        "setup_median_ms": 89.26266490016133,
+        "iterations": 150,
+        "residual": 3.5989663711153994e-13
+      }
+    }
+  },
+  {
+    "system_id": "65790bfe57052db4dc239a60f2ef0a67304b5e9e1ace1085d64b03f5cc951659",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 47.052077017724514,
+        "hot_min_ms": 46.57671309541911,
+        "hot_max_ms": 47.3453919403255,
+        "fresh_median_ms": 135.0818470818922,
+        "setup_median_ms": 85.45015309937298,
+        "iterations": 60,
+        "residual": 5.094583715756476e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 47.052077017724514,
+        "hot_min_ms": 46.57671309541911,
+        "hot_max_ms": 47.3453919403255,
+        "fresh_median_ms": 135.0818470818922,
+        "setup_median_ms": 85.45015309937298,
+        "iterations": 60,
+        "residual": 5.094583715756476e-13
+      }
+    }
+  },
+  {
+    "system_id": "e5645d325300a1c943b7bcbcd06fc9a123de55fa11d162a65fa4a54d77c07b61",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 277.82505432454246,
+        "hot_min_ms": 272.3589009838179,
+        "hot_max_ms": 288.5328329866752,
+        "fresh_median_ms": 364.0962520148605,
+        "setup_median_ms": 90.31921101268381,
+        "iterations": 300,
+        "residual": 1.6963897017108119e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 277.82505432454246,
+        "hot_min_ms": 272.3589009838179,
+        "hot_max_ms": 288.5328329866752,
+        "fresh_median_ms": 364.0962520148605,
+        "setup_median_ms": 90.31921101268381,
+        "iterations": 300,
+        "residual": 1.6963897017108119e-12
+      }
+    }
+  },
+  {
+    "system_id": "0b2090922ca4068f285f0d9c687981de92ac1d326093bf0196c9702cea8f577b",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 131.1919626702244,
+        "hot_min_ms": 128.2043179962784,
+        "hot_max_ms": 135.17955201677978,
+        "fresh_median_ms": 222.76436304673553,
+        "setup_median_ms": 91.28337900619954,
+        "iterations": 150,
+        "residual": 2.636721491953842e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 131.1919626702244,
+        "hot_min_ms": 128.2043179962784,
+        "hot_max_ms": 135.17955201677978,
+        "fresh_median_ms": 222.76436304673553,
+        "setup_median_ms": 91.28337900619954,
+        "iterations": 150,
+        "residual": 2.636721491953842e-12
+      }
+    }
+  },
+  {
+    "system_id": "a7d531a7f9d3187a6e28bc4d039563bb1e5d94ed6a7f3df260974466868adcfb",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 55.57527237882217,
+        "hot_min_ms": 55.199419031850994,
+        "hot_max_ms": 55.833521066233516,
+        "fresh_median_ms": 173.98792796302587,
+        "setup_median_ms": 119.21901698224247,
+        "iterations": 65,
+        "residual": 7.638634216149896e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 55.24575535673648,
+        "hot_min_ms": 54.559882963076234,
+        "hot_max_ms": 56.135477032512426,
+        "fresh_median_ms": 176.9503840478137,
+        "setup_median_ms": 120.50495704170316,
+        "iterations": 65,
+        "residual": 7.638634216149896e-13
+      }
+    }
+  },
+  {
+    "system_id": "c98f93b09abfc5d120b5afca0af7aed42788d3ec0e2e16a97eeeee079595556e",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      },
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_square_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_square_p6_20260918",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 324.3461843424787,
+        "hot_min_ms": 321.8090150039643,
+        "hot_max_ms": 329.3423290597275,
+        "fresh_median_ms": 452.2307978477329,
+        "setup_median_ms": 128.45640094019473,
+        "iterations": 300,
+        "residual": 8.057892313787769e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 324.3461843424787,
+        "hot_min_ms": 321.8090150039643,
+        "hot_max_ms": 329.3423290597275,
+        "fresh_median_ms": 452.2307978477329,
+        "setup_median_ms": 128.45640094019473,
+        "iterations": 300,
+        "residual": 8.057892313787769e-13
+      }
+    }
+  },
+  {
+    "system_id": "0c200080a1f7cd93b61f0e0852860b60cb020a3cb248bf7231a95a09c24b3f23",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 207.10765469508866,
+        "hot_min_ms": 200.83505904767662,
+        "hot_max_ms": 212.2148600174114,
+        "fresh_median_ms": 335.0234570680186,
+        "setup_median_ms": 125.72901893872768,
+        "iterations": 225,
+        "residual": 6.197167968063336e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 207.10765469508866,
+        "hot_min_ms": 200.83505904767662,
+        "hot_max_ms": 212.2148600174114,
+        "fresh_median_ms": 335.0234570680186,
+        "setup_median_ms": 125.72901893872768,
+        "iterations": 225,
+        "residual": 6.197167968063336e-13
+      }
+    }
+  },
+  {
+    "system_id": "5746a0b03986f28cb662e198b98e5f44b02a5120dabbe4722243d55399beb8e1",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 116.68344462911288,
+        "hot_min_ms": 116.21573998127133,
+        "hot_max_ms": 117.38825601059943,
+        "fresh_median_ms": 535.5482328450307,
+        "setup_median_ms": 418.9996869536117,
+        "iterations": 70,
+        "residual": 3.059825238836449e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 116.68344462911288,
+        "hot_min_ms": 116.21573998127133,
+        "hot_max_ms": 117.38825601059943,
+        "fresh_median_ms": 535.5482328450307,
+        "setup_median_ms": 418.9996869536117,
+        "iterations": 70,
+        "residual": 3.059825238836449e-12
+      }
+    }
+  },
+  {
+    "system_id": "46cb94eac44ca5fa74ad9f9e9b0eec818a680e24dfea7b4ea7e9839a0e8215d2",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 882.355457986705,
+        "hot_min_ms": 853.8560169981793,
+        "hot_max_ms": 934.0650839731097,
+        "fresh_median_ms": 1295.696803019382,
+        "setup_median_ms": 439.82315191533417,
+        "iterations": 450,
+        "residual": 7.74305674394339e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 882.355457986705,
+        "hot_min_ms": 853.8560169981793,
+        "hot_max_ms": 934.0650839731097,
+        "fresh_median_ms": 1295.696803019382,
+        "setup_median_ms": 439.82315191533417,
+        "iterations": 450,
+        "residual": 7.74305674394339e-13
+      }
+    }
+  },
+  {
+    "system_id": "f2065986687991cbb574be1c95731075c707b4e96791c0c32e0849f21de9230a",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 483.22323166454834,
+        "hot_min_ms": 472.56161202676594,
+        "hot_max_ms": 499.4150419952348,
+        "fresh_median_ms": 927.8921049553901,
+        "setup_median_ms": 449.9640699941665,
+        "iterations": 225,
+        "residual": 2.5032660277133768e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 483.22323166454834,
+        "hot_min_ms": 472.56161202676594,
+        "hot_max_ms": 499.4150419952348,
+        "fresh_median_ms": 927.8921049553901,
+        "setup_median_ms": 449.9640699941665,
+        "iterations": 225,
+        "residual": 2.5032660277133768e-12
+      }
+    }
+  },
+  {
+    "system_id": "9dcb81406a708b62a5026eaf5b930a90d783f2edf1d33ea179344131443bc3c1",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "trigonometric",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 276.0760360009347,
+        "hot_min_ms": 275.8919249754399,
+        "hot_max_ms": 276.2305609649047,
+        "fresh_median_ms": 1506.359310937114,
+        "setup_median_ms": 1230.0266349921003,
+        "iterations": 71,
+        "residual": 9.329748621439176e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 276.0760360009347,
+        "hot_min_ms": 275.8919249754399,
+        "hot_max_ms": 276.2305609649047,
+        "fresh_median_ms": 1506.359310937114,
+        "setup_median_ms": 1230.0266349921003,
+        "iterations": 71,
+        "residual": 9.329748621439176e-12
+      }
+    }
+  },
+  {
+    "system_id": "b99e0a6cac305e572346a4c2db79bd977d24b8c90410168031ffc676b147f782",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "advection_dominated",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      },
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3134.6563942885646,
+        "hot_min_ms": 3131.617128965445,
+        "hot_max_ms": 3138.0711019737646,
+        "fresh_median_ms": 4405.378677882254,
+        "setup_median_ms": 1261.4940659841523,
+        "iterations": 675,
+        "residual": 1.916616301581751e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3134.6563942885646,
+        "hot_min_ms": 3131.617128965445,
+        "hot_max_ms": 3138.0711019737646,
+        "fresh_median_ms": 4405.378677882254,
+        "setup_median_ms": 1261.4940659841523,
+        "iterations": 675,
+        "residual": 1.916616301581751e-12
+      }
+    }
+  },
+  {
+    "system_id": "7920ac51ca2d637b7058fe6bc976320b11c84102c223a004e51168d9684171d6",
+    "case": "anisotropic",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "smooth",
+        "campaign": "smooth",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917",
+        "case": "anisotropic",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1031.6981609600286,
+        "hot_min_ms": 1027.405117987655,
+        "hot_max_ms": 1034.8070919280872,
+        "fresh_median_ms": 2408.522428944707,
+        "setup_median_ms": 1375.5986799951643,
+        "iterations": 225,
+        "residual": 7.74695208137525e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1031.6981609600286,
+        "hot_min_ms": 1027.405117987655,
+        "hot_max_ms": 1034.8070919280872,
+        "fresh_median_ms": 2408.522428944707,
+        "setup_median_ms": 1375.5986799951643,
+        "iterations": 225,
+        "residual": 7.74695208137525e-12
+      }
+    }
+  },
+  {
+    "system_id": "ec1f5559f84272854b2df5ab722c570e98b916b6ffdd4aea1510a48adfe84f87",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 21.88150635144363,
+        "hot_min_ms": 21.16836898494512,
+        "hot_max_ms": 23.221125011332333,
+        "fresh_median_ms": 76.09672099351883,
+        "setup_median_ms": 52.96854500193149,
+        "iterations": 29,
+        "residual": 5.852714658375567e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 21.88150635144363,
+        "hot_min_ms": 21.16836898494512,
+        "hot_max_ms": 23.221125011332333,
+        "fresh_median_ms": 76.09672099351883,
+        "setup_median_ms": 52.96854500193149,
+        "iterations": 29,
+        "residual": 5.852714658375567e-12
+      }
+    }
+  },
+  {
+    "system_id": "b250a77acf83b76ee5de2b83d81d233949ad5b696c0fb543544404a928d9e971",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1280.1434530022864,
+        "hot_min_ms": 1268.891584011726,
+        "hot_max_ms": 1290.8965930109844,
+        "fresh_median_ms": 1337.4270081985742,
+        "setup_median_ms": 57.57694109342992,
+        "iterations": 975,
+        "residual": 5.111721136412582e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1280.1434530022864,
+        "hot_min_ms": 1268.891584011726,
+        "hot_max_ms": 1290.8965930109844,
+        "fresh_median_ms": 1337.4270081985742,
+        "setup_median_ms": 57.57694109342992,
+        "iterations": 975,
+        "residual": 5.111721136412582e-12
+      }
+    }
+  },
+  {
+    "system_id": "0ef6e0f37c8be6e072f6968899ac996ac1075efdbf7a2510076abbdb5aa1f9ce",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 290.5051913112402,
+        "hot_min_ms": 284.0626440010965,
+        "hot_max_ms": 295.53223599214107,
+        "fresh_median_ms": 353.00367197487503,
+        "setup_median_ms": 56.50854902341962,
+        "iterations": 225,
+        "residual": 8.716785696475613e-15
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 290.5051913112402,
+        "hot_min_ms": 284.0626440010965,
+        "hot_max_ms": 295.53223599214107,
+        "fresh_median_ms": 353.00367197487503,
+        "setup_median_ms": 56.50854902341962,
+        "iterations": 225,
+        "residual": 8.716785696475613e-15
+      }
+    }
+  },
+  {
+    "system_id": "0df61b00721538e7d3bbafc8befabda61b1945cc185b521603cf42a891d26d91",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 42.22971565711001,
+        "hot_min_ms": 41.48560797329992,
+        "hot_max_ms": 43.50765701383352,
+        "fresh_median_ms": 115.53175991866738,
+        "setup_median_ms": 74.0720359608531,
+        "iterations": 52,
+        "residual": 4.451692181595173e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 42.22971565711001,
+        "hot_min_ms": 41.48560797329992,
+        "hot_max_ms": 43.50765701383352,
+        "fresh_median_ms": 115.53175991866738,
+        "setup_median_ms": 74.0720359608531,
+        "iterations": 52,
+        "residual": 4.451692181595173e-15
+      }
+    }
+  },
+  {
+    "system_id": "9c8751991b7a9d693daf9eec604dd868cbed778e17644eae64d72ab0a0f61afb",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 452.309694684421,
+        "hot_min_ms": 449.6707620564848,
+        "hot_max_ms": 454.47083399631083,
+        "fresh_median_ms": 526.763625908643,
+        "setup_median_ms": 74.79046506341547,
+        "iterations": 450,
+        "residual": 9.731280447604356e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 452.309694684421,
+        "hot_min_ms": 449.6707620564848,
+        "hot_max_ms": 454.47083399631083,
+        "fresh_median_ms": 526.763625908643,
+        "setup_median_ms": 74.79046506341547,
+        "iterations": 450,
+        "residual": 9.731280447604356e-12
+      }
+    }
+  },
+  {
+    "system_id": "b563e8603dc6527bb7deb91ff62d0adbf0300bd293a872ebafa49eead22a3b5f",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 150.9690280460442,
+        "hot_min_ms": 148.01715407520533,
+        "hot_max_ms": 154.30050902068615,
+        "fresh_median_ms": 224.0134379826486,
+        "setup_median_ms": 74.01771796867251,
+        "iterations": 150,
+        "residual": 1.7362570532831635e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 150.9690280460442,
+        "hot_min_ms": 148.01715407520533,
+        "hot_max_ms": 154.30050902068615,
+        "fresh_median_ms": 224.0134379826486,
+        "setup_median_ms": 74.01771796867251,
+        "iterations": 150,
+        "residual": 1.7362570532831635e-12
+      }
+    }
+  },
+  {
+    "system_id": "10e5c30454a15856915b8a1191ecbcf0dab1a44708c96f6439617f2f47bba317",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 45.04512898468723,
+        "hot_min_ms": 44.62278995197266,
+        "hot_max_ms": 45.77468999195844,
+        "fresh_median_ms": 118.8553828978911,
+        "setup_median_ms": 75.29484597034752,
+        "iterations": 55,
+        "residual": 6.984798806142967e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 45.04512898468723,
+        "hot_min_ms": 44.62278995197266,
+        "hot_max_ms": 45.77468999195844,
+        "fresh_median_ms": 118.8553828978911,
+        "setup_median_ms": 75.29484597034752,
+        "iterations": 55,
+        "residual": 6.984798806142967e-15
+      }
+    }
+  },
+  {
+    "system_id": "07f37aaf1c14f17e3b6519aa8d8f49ec1b52fdd01ec9068067c2be0db4fc0807",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1139.2108203144744,
+        "hot_min_ms": 1083.3408610196784,
+        "hot_max_ms": 1168.4013089397922,
+        "fresh_median_ms": 1184.1015870450065,
+        "setup_median_ms": 85.74161503929645,
+        "iterations": 825,
+        "residual": 3.7550594623500364e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1139.2108203144744,
+        "hot_min_ms": 1083.3408610196784,
+        "hot_max_ms": 1168.4013089397922,
+        "fresh_median_ms": 1184.1015870450065,
+        "setup_median_ms": 85.74161503929645,
+        "iterations": 825,
+        "residual": 3.7550594623500364e-12
+      }
+    }
+  },
+  {
+    "system_id": "1199896c70bca2d820974ac23751b773cf2f96db8ec0d5042abaa2a33ef77303",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 199.14331869222224,
+        "hot_min_ms": 196.63089304231107,
+        "hot_max_ms": 200.59792802203447,
+        "fresh_median_ms": 286.7488160263747,
+        "setup_median_ms": 83.07433302979916,
+        "iterations": 150,
+        "residual": 7.0166275573640864e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 199.14331869222224,
+        "hot_min_ms": 196.63089304231107,
+        "hot_max_ms": 200.59792802203447,
+        "fresh_median_ms": 286.7488160263747,
+        "setup_median_ms": 83.07433302979916,
+        "iterations": 150,
+        "residual": 7.0166275573640864e-12
+      }
+    }
+  },
+  {
+    "system_id": "500ce66fc06483f06d6baed6ae2a33db070356b931f0b189df00fe02e7660ff9",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 50.118805336145066,
+        "hot_min_ms": 48.50768100004643,
+        "hot_max_ms": 51.14454100839794,
+        "fresh_median_ms": 131.83227111585438,
+        "setup_median_ms": 82.43455504998565,
+        "iterations": 61,
+        "residual": 9.150553040600521e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 50.118805336145066,
+        "hot_min_ms": 48.50768100004643,
+        "hot_max_ms": 51.14454100839794,
+        "fresh_median_ms": 131.83227111585438,
+        "setup_median_ms": 82.43455504998565,
+        "iterations": 61,
+        "residual": 9.150553040600521e-15
+      }
+    }
+  },
+  {
+    "system_id": "935ae7f515fac9936e1f51a74435b59b0326da1b72d79bb5cdd7dfc99837d181",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "ea3395a2889fd2001af207d6867e1d5e4936146c386599ab7b038612763fa3ac",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 354.96027767658234,
+        "hot_min_ms": 341.85208298731595,
+        "hot_max_ms": 363.25834109447896,
+        "fresh_median_ms": 444.41423297394067,
+        "setup_median_ms": 90.54182190448046,
+        "iterations": 225,
+        "residual": 1.5498380600962428e-14
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 354.96027767658234,
+        "hot_min_ms": 341.85208298731595,
+        "hot_max_ms": 363.25834109447896,
+        "fresh_median_ms": 444.41423297394067,
+        "setup_median_ms": 90.54182190448046,
+        "iterations": 225,
+        "residual": 1.5498380600962428e-14
+      }
+    }
+  },
+  {
+    "system_id": "6e987317dd0f55cb607d30ee46e61d5938f528f00b2a56199bdffd5f02ac6b16",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 55.33072464944174,
+        "hot_min_ms": 54.31164801120758,
+        "hot_max_ms": 56.08280503656715,
+        "fresh_median_ms": 140.98014996852726,
+        "setup_median_ms": 86.67562296614051,
+        "iterations": 63,
+        "residual": 1.2525587394802308e-14
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 55.33072464944174,
+        "hot_min_ms": 54.31164801120758,
+        "hot_max_ms": 56.08280503656715,
+        "fresh_median_ms": 140.98014996852726,
+        "setup_median_ms": 86.67562296614051,
+        "iterations": 63,
+        "residual": 1.2525587394802308e-14
+      }
+    }
+  },
+  {
+    "system_id": "ab5e6a701bc24ea0de576ffa28ce3b317d12a999b39064da5152f4a60b183c5a",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "91c2bed40fe492efac8ac170f6db3a7d99531618ffa30dd960825cb7326f7fb0",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 408.2715883463,
+        "hot_min_ms": 407.91245305445045,
+        "hot_max_ms": 408.69735402520746,
+        "fresh_median_ms": 500.40206883568317,
+        "setup_median_ms": 91.87903394922614,
+        "iterations": 225,
+        "residual": 8.172127925061057e-14
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 408.2715883463,
+        "hot_min_ms": 407.91245305445045,
+        "hot_max_ms": 408.69735402520746,
+        "fresh_median_ms": 500.40206883568317,
+        "setup_median_ms": 91.87903394922614,
+        "iterations": 225,
+        "residual": 8.172127925061057e-14
+      }
+    }
+  },
+  {
+    "system_id": "026e86b57fcb59bb1a0035a86c6dc546ada216f098e2f51e1f521b81fb13747a",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 57.09633134150257,
+        "hot_min_ms": 55.87387201376259,
+        "hot_max_ms": 57.86208005156368,
+        "fresh_median_ms": 174.11871999502182,
+        "setup_median_ms": 116.92980502266437,
+        "iterations": 65,
+        "residual": 1.8941305166030997e-14
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 57.09633134150257,
+        "hot_min_ms": 55.87387201376259,
+        "hot_max_ms": 57.86208005156368,
+        "fresh_median_ms": 174.11871999502182,
+        "setup_median_ms": 116.92980502266437,
+        "iterations": 65,
+        "residual": 1.8941305166030997e-14
+      }
+    }
+  },
+  {
+    "system_id": "4e4ca9966c5b50f3f747a437418ac46aeb936165f68583073ad2934a9b29594d",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      },
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_square_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_square_p6_20260918",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "robust": "numerical_failure",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 572.3675500291089,
+        "hot_min_ms": 564.9419219698757,
+        "hot_max_ms": 579.7316690441221,
+        "fresh_median_ms": 695.155717083253,
+        "setup_median_ms": 120.56065304204822,
+        "iterations": 525,
+        "residual": 2.513267741551071e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 572.3675500291089,
+        "hot_min_ms": 564.9419219698757,
+        "hot_max_ms": 579.7316690441221,
+        "fresh_median_ms": 695.155717083253,
+        "setup_median_ms": 120.56065304204822,
+        "iterations": 525,
+        "residual": 2.513267741551071e-12
+      }
+    }
+  },
+  {
+    "system_id": "cd0b0facc8fa26749602872f8eeb190dc5a72c6ea080d1e7359709d492481aea",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 126.44347866686682,
+        "hot_min_ms": 123.77930502407253,
+        "hot_max_ms": 131.6419580252841,
+        "fresh_median_ms": 546.3206151034683,
+        "setup_median_ms": 422.7424890268594,
+        "iterations": 71,
+        "residual": 7.488289433639206e-14
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 126.44347866686682,
+        "hot_min_ms": 123.77930502407253,
+        "hot_max_ms": 131.6419580252841,
+        "fresh_median_ms": 546.3206151034683,
+        "setup_median_ms": 422.7424890268594,
+        "iterations": 71,
+        "residual": 7.488289433639206e-14
+      }
+    }
+  },
+  {
+    "system_id": "1c815afe65b33fa688cd207baa6964c76e6a68ef25ea2b8642f5cfcf41b3fe70",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "robust": "numerical_failure",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "dd990f79460b0bbe0b669b94099c8ee2bf3b251e9870423281ebf5ba045e3ab0",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1317.5919046625495,
+        "hot_min_ms": 1298.5094910254702,
+        "hot_max_ms": 1330.8092589722946,
+        "fresh_median_ms": 1769.2780460929498,
+        "setup_median_ms": 442.2643620055169,
+        "iterations": 600,
+        "residual": 8.733815742488099e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1317.5919046625495,
+        "hot_min_ms": 1298.5094910254702,
+        "hot_max_ms": 1330.8092589722946,
+        "fresh_median_ms": 1769.2780460929498,
+        "setup_median_ms": 442.2643620055169,
+        "iterations": 600,
+        "residual": 8.733815742488099e-13
+      }
+    }
+  },
+  {
+    "system_id": "ff090b189295cc486bee6b252c83ad3a9dcb168ed562a90beffbd6b561b15611",
+    "case": "cellular7_high",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_high",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 299.01419366554666,
+        "hot_min_ms": 298.76265896018595,
+        "hot_max_ms": 299.2209260119125,
+        "fresh_median_ms": 1540.6857390189543,
+        "setup_median_ms": 1240.150936995633,
+        "iterations": 74,
+        "residual": 2.2670394983469254e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 299.01419366554666,
+        "hot_min_ms": 298.76265896018595,
+        "hot_max_ms": 299.2209260119125,
+        "fresh_median_ms": 1540.6857390189543,
+        "setup_median_ms": 1240.150936995633,
+        "iterations": 74,
+        "residual": 2.2670394983469254e-13
+      }
+    }
+  },
+  {
+    "system_id": "3a2d82506d4f6b7c1f1fc7b411ef5c774ed66179655550f430bfb79c9d3fd029",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_weak",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "667ca4ca7d9870b9f287b9a3cba115c383e2a3f291917c644e6f578c9c1a8e24",
+    "case": "cellular7_directional",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "square",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square",
+        "case": "cellular7_directional",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 2751.0763510751226,
+        "hot_min_ms": 2717.5981680629775,
+        "hot_max_ms": 2784.126028069295,
+        "fresh_median_ms": 4019.9496790301055,
+        "setup_median_ms": 1255.0461729988456,
+        "iterations": 600,
+        "residual": 6.25525149454086e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 2751.0763510751226,
+        "hot_min_ms": 2717.5981680629775,
+        "hot_max_ms": 2784.126028069295,
+        "fresh_median_ms": 4019.9496790301055,
+        "setup_median_ms": 1255.0461729988456,
+        "iterations": 600,
+        "residual": 6.25525149454086e-12
+      }
+    }
+  },
+  {
+    "system_id": "7f9272d00fe2eb5c6aa052d1783bd5be377473b4eea1d407bdbd9a2080480281",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 20482,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 2043,
+        "trace_dofs": 20482
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.01691933441907,
+        "hot_min_ms": 21.513242973014712,
+        "hot_max_ms": 22.51599298324436,
+        "fresh_median_ms": 73.24587798211724,
+        "setup_median_ms": 52.17491206713021,
+        "iterations": 27,
+        "residual": 2.5484946736237597e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.01691933441907,
+        "hot_min_ms": 21.513242973014712,
+        "hot_max_ms": 22.51599298324436,
+        "fresh_median_ms": 73.24587798211724,
+        "setup_median_ms": 52.17491206713021,
+        "iterations": 27,
+        "residual": 2.5484946736237597e-12
+      }
+    }
+  },
+  {
+    "system_id": "9aabb9e142e56098cd845ca19671fd805825510ebb857f273ffcb0fc532c8c79",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 20482,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 2043,
+        "trace_dofs": 20482
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1000.5535566791272,
+        "hot_min_ms": 997.9783099843189,
+        "hot_max_ms": 1004.2834370397031,
+        "fresh_median_ms": 1047.0507311401889,
+        "setup_median_ms": 55.52577204070985,
+        "iterations": 750,
+        "residual": 6.8027936821794435e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1000.5535566791272,
+        "hot_min_ms": 997.9783099843189,
+        "hot_max_ms": 1004.2834370397031,
+        "fresh_median_ms": 1047.0507311401889,
+        "setup_median_ms": 55.52577204070985,
+        "iterations": 750,
+        "residual": 6.8027936821794435e-12
+      }
+    }
+  },
+  {
+    "system_id": "5c373d131785033027688ea1ae8495fb93aeaf09a0cce94e62001bbd575b7a47",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 20482,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 2043,
+        "trace_dofs": 20482
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 206.05101467420658,
+        "hot_min_ms": 201.26087497919798,
+        "hot_max_ms": 208.65635899826884,
+        "fresh_median_ms": 259.0390470577404,
+        "setup_median_ms": 57.661496102809906,
+        "iterations": 150,
+        "residual": 1.1499976199444494e-15
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 206.05101467420658,
+        "hot_min_ms": 201.26087497919798,
+        "hot_max_ms": 208.65635899826884,
+        "fresh_median_ms": 259.0390470577404,
+        "setup_median_ms": 57.661496102809906,
+        "iterations": 150,
+        "residual": 1.1499976199444494e-15
+      }
+    }
+  },
+  {
+    "system_id": "692f65e5e3dd616e020a9bd203502e5a601ebd8aaeda19fe72fddbbd67e6fe33",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 1,
+    "trace_dofs": 23570,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 23570
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 18.731285352259874,
+        "hot_min_ms": 18.249194021336734,
+        "hot_max_ms": 19.097502110525966,
+        "fresh_median_ms": 88.55652599595487,
+        "setup_median_ms": 69.75353602319956,
+        "iterations": 22,
+        "residual": 4.935824579932573e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 18.731285352259874,
+        "hot_min_ms": 18.249194021336734,
+        "hot_max_ms": 19.097502110525966,
+        "fresh_median_ms": 88.55652599595487,
+        "setup_median_ms": 69.75353602319956,
+        "iterations": 22,
+        "residual": 4.935824579932573e-12
+      }
+    }
+  },
+  {
+    "system_id": "0e07046f93acdc0eb88a124ea1bcd3b3648942c4a13566275f93353df3c28cd1",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 1,
+    "trace_dofs": 23570,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 23570
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 534.8585053191831,
+        "hot_min_ms": 528.6241000285372,
+        "hot_max_ms": 542.7133359480649,
+        "fresh_median_ms": 604.297376004979,
+        "setup_median_ms": 73.87679698877037,
+        "iterations": 525,
+        "residual": 7.970016435227812e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 534.8585053191831,
+        "hot_min_ms": 528.6241000285372,
+        "hot_max_ms": 542.7133359480649,
+        "fresh_median_ms": 604.297376004979,
+        "setup_median_ms": 73.87679698877037,
+        "iterations": 525,
+        "residual": 7.970016435227812e-12
+      }
+    }
+  },
+  {
+    "system_id": "13cba3f220d7c23fe3e1c94580469ad4629d2e0d98eee77d4f4241a1cdde98d7",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 1,
+    "trace_dofs": 23570,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 23570
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 123.2076653201754,
+        "hot_min_ms": 121.88902590423822,
+        "hot_max_ms": 125.26044901460409,
+        "fresh_median_ms": 198.11731099616736,
+        "setup_median_ms": 73.70364794041961,
+        "iterations": 150,
+        "residual": 2.421180285335441e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 123.2076653201754,
+        "hot_min_ms": 121.88902590423822,
+        "hot_max_ms": 125.26044901460409,
+        "fresh_median_ms": 198.11731099616736,
+        "setup_median_ms": 73.70364794041961,
+        "iterations": 150,
+        "residual": 2.421180285335441e-13
+      }
+    }
+  },
+  {
+    "system_id": "06a466bea17a4c81d923fbcc68cfd41e4c8235d2590a14c8557e35b28b8f6c12",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 2,
+    "trace_dofs": 35355,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 35355
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 20.7599833374843,
+        "hot_min_ms": 20.270079956389964,
+        "hot_max_ms": 21.62239607423544,
+        "fresh_median_ms": 96.18543402757496,
+        "setup_median_ms": 75.96450299024582,
+        "iterations": 24,
+        "residual": 4.5810446592029674e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 20.7599833374843,
+        "hot_min_ms": 20.270079956389964,
+        "hot_max_ms": 21.62239607423544,
+        "fresh_median_ms": 96.18543402757496,
+        "setup_median_ms": 75.96450299024582,
+        "iterations": 24,
+        "residual": 4.5810446592029674e-12
+      }
+    }
+  },
+  {
+    "system_id": "781b2eabfd3910cf13c308465272b1c24ac55f0466c1d7b4ccf68dc5c3ca8432",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 2,
+    "trace_dofs": 35355,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 35355
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "612fb2e6981132ca25caa6a6e0a74ad03701fff74ba380222961f30027e01350",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 2,
+    "trace_dofs": 35355,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 35355
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 192.83697265200317,
+        "hot_min_ms": 184.08440193161368,
+        "hot_max_ms": 200.1864620251581,
+        "fresh_median_ms": 274.487757938914,
+        "setup_median_ms": 78.68570194114,
+        "iterations": 225,
+        "residual": 1.8015688597413844e-14
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 192.83697265200317,
+        "hot_min_ms": 184.08440193161368,
+        "hot_max_ms": 200.1864620251581,
+        "fresh_median_ms": 274.487757938914,
+        "setup_median_ms": 78.68570194114,
+        "iterations": 225,
+        "residual": 1.8015688597413844e-14
+      }
+    }
+  },
+  {
+    "system_id": "46329ed356d0d5eabfdb8201825914c828e0a3bb290a300a603804b3e2ef3721",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 3,
+    "trace_dofs": 47140,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 47140
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.60587636070947,
+        "hot_min_ms": 22.25735306274146,
+        "hot_max_ms": 23.151200031861663,
+        "fresh_median_ms": 101.23614396434277,
+        "setup_median_ms": 79.33118497021496,
+        "iterations": 26,
+        "residual": 5.294154123456554e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.60587636070947,
+        "hot_min_ms": 22.25735306274146,
+        "hot_max_ms": 23.151200031861663,
+        "fresh_median_ms": 101.23614396434277,
+        "setup_median_ms": 79.33118497021496,
+        "iterations": 26,
+        "residual": 5.294154123456554e-12
+      }
+    }
+  },
+  {
+    "system_id": "0ac006a485765d8156f396d6407bf341c2d63c1a84836b869efb899a4f46bf24",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 3,
+    "trace_dofs": 47140,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 47140
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "2fb17aa1613260c76c7481ddc289fef815a03c88e48e4783d8c3e49ae98212c1",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 3,
+    "trace_dofs": 47140,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 47140
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 229.59689935669303,
+        "hot_min_ms": 219.1858160076663,
+        "hot_max_ms": 242.9889190243557,
+        "fresh_median_ms": 310.2691440144554,
+        "setup_median_ms": 84.43074102979153,
+        "iterations": 225,
+        "residual": 6.0767690055866114e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 229.59689935669303,
+        "hot_min_ms": 219.1858160076663,
+        "hot_max_ms": 242.9889190243557,
+        "fresh_median_ms": 310.2691440144554,
+        "setup_median_ms": 84.43074102979153,
+        "iterations": 225,
+        "residual": 6.0767690055866114e-12
+      }
+    }
+  },
+  {
+    "system_id": "b7589d67bd652cdaf8201736a82324286e567db35c3194de70a9a53acb6afe26",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 4,
+    "trace_dofs": 58925,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 58925
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.378365992257994,
+        "hot_min_ms": 23.959556012414396,
+        "hot_max_ms": 24.713855935260653,
+        "fresh_median_ms": 109.88106206059456,
+        "setup_median_ms": 86.90892299637198,
+        "iterations": 28,
+        "residual": 2.621232981447652e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.378365992257994,
+        "hot_min_ms": 23.959556012414396,
+        "hot_max_ms": 24.713855935260653,
+        "fresh_median_ms": 109.88106206059456,
+        "setup_median_ms": 86.90892299637198,
+        "iterations": 28,
+        "residual": 2.621232981447652e-12
+      }
+    }
+  },
+  {
+    "system_id": "0832707696adab104392769cbb0b5564062cf571f329a96929f2b5442c490145",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 4,
+    "trace_dofs": 58925,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 58925
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "83dd723e3a0e400bfdf2cebd0ac6f067524846e1ec3f522287895ee714036607",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 4,
+    "trace_dofs": 58925,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 58925
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 292.5704955899467,
+        "hot_min_ms": 278.5981019260362,
+        "hot_max_ms": 308.81489894818515,
+        "fresh_median_ms": 378.8801380433142,
+        "setup_median_ms": 92.24534290842712,
+        "iterations": 300,
+        "residual": 1.139704317446101e-13
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 281.510304659605,
+        "hot_min_ms": 270.2420969726518,
+        "hot_max_ms": 297.03851405065507,
+        "fresh_median_ms": 393.752159900032,
+        "setup_median_ms": 95.82435595802963,
+        "iterations": 150,
+        "residual": 2.0398394835753844e-15
+      }
+    }
+  },
+  {
+    "system_id": "4be37f59fd3153c8664c78f0a0bf23a409be5a260364bfb5683a3a2e79f8bea4",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 82495,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 82495
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 26.914725623403985,
+        "hot_min_ms": 26.48135693743825,
+        "hot_max_ms": 27.231356943957508,
+        "fresh_median_ms": 144.33619403280318,
+        "setup_median_ms": 117.89993895217776,
+        "iterations": 30,
+        "residual": 3.3981367679526684e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 26.914725623403985,
+        "hot_min_ms": 26.48135693743825,
+        "hot_max_ms": 27.231356943957508,
+        "fresh_median_ms": 144.33619403280318,
+        "setup_median_ms": 117.89993895217776,
+        "iterations": 30,
+        "residual": 3.3981367679526684e-12
+      }
+    }
+  },
+  {
+    "system_id": "a6d38b2cd984b6f1962953a33948b4bce926a551384b1cba131e01515a3abc97",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 82495,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 82495
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "996a7231cbf8394f8bb2eb38b023c6940db297831c914ba69bb0ca5e9d49c0b5",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 82495,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 8039,
+        "trace_dofs": 82495
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 334.9097379638503,
+        "hot_min_ms": 333.85296701453626,
+        "hot_max_ms": 336.6431249305606,
+        "fresh_median_ms": 466.6860910365358,
+        "setup_median_ms": 130.14607306104153,
+        "iterations": 150,
+        "residual": 4.009115009858544e-13
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 334.9097379638503,
+        "hot_min_ms": 333.85296701453626,
+        "hot_max_ms": 336.6431249305606,
+        "fresh_median_ms": 466.6860910365358,
+        "setup_median_ms": 130.14607306104153,
+        "iterations": 150,
+        "residual": 4.009115009858544e-13
+      }
+    }
+  },
+  {
+    "system_id": "ce32d3241b439de7da4db9ca17badcac006c238d99f79aef8aa5881e372c878a",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 344631,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 129,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 33174,
+        "trace_dofs": 344631
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 54.473977031496666,
+        "hot_min_ms": 54.08933409489691,
+        "hot_max_ms": 54.727897979319096,
+        "fresh_median_ms": 483.3158340770751,
+        "setup_median_ms": 428.91601100564003,
+        "iterations": 31,
+        "residual": 4.0192203754218824e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 54.473977031496666,
+        "hot_min_ms": 54.08933409489691,
+        "hot_max_ms": 54.727897979319096,
+        "fresh_median_ms": 483.3158340770751,
+        "setup_median_ms": 428.91601100564003,
+        "iterations": 31,
+        "residual": 4.0192203754218824e-12
+      }
+    }
+  },
+  {
+    "system_id": "8c1a85b4d6789d1cf18aa75ce913025b810a7e0f0c87cf0700bfaea77a89fafc",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 344631,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 129,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 33174,
+        "trace_dofs": 344631
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "robust": "numerical_failure",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "18a6e53cf2bffeae620dffb2b6636fddd2cba413eeab0d62de0eabd4a1b67155",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 344631,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 129,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 33174,
+        "trace_dofs": 344631
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 980.7319790124893,
+        "hot_min_ms": 972.8024830110371,
+        "hot_max_ms": 990.8644160022959,
+        "fresh_median_ms": 1417.7347350632772,
+        "setup_median_ms": 452.5882570305839,
+        "iterations": 450,
+        "residual": 5.275146146177476e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 980.7319790124893,
+        "hot_min_ms": 972.8024830110371,
+        "hot_max_ms": 990.8644160022959,
+        "fresh_median_ms": 1417.7347350632772,
+        "setup_median_ms": 452.5882570305839,
+        "iterations": 450,
+        "residual": 5.275146146177476e-13
+      }
+    }
+  },
+  {
+    "system_id": "86742703a56451704aafe9edeab05fa66e3714baa863bc9000fbc88305bac0ba",
+    "case": "cellular7_high",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 1043392,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_high",
+        "n": 224,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 99984,
+        "trace_dofs": 1043392
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 133.30365469058356,
+        "hot_min_ms": 128.4750810591504,
+        "hot_max_ms": 142.67180999740958,
+        "fresh_median_ms": 1366.7267910204828,
+        "setup_median_ms": 1237.9442000528798,
+        "iterations": 32,
+        "residual": 5.26016724414288e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 133.30365469058356,
+        "hot_min_ms": 128.4750810591504,
+        "hot_max_ms": 142.67180999740958,
+        "fresh_median_ms": 1366.7267910204828,
+        "setup_median_ms": 1237.9442000528798,
+        "iterations": 32,
+        "residual": 5.26016724414288e-12
+      }
+    }
+  },
+  {
+    "system_id": "3f81adbfcea84fb1b8acb0abe086dde2525fd26b7ebc1418e19d6d80d9742752",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 1043392,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_weak",
+        "n": 224,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 99984,
+        "trace_dofs": 1043392
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "db838ae03b8fe20d8366a22ce5430c72868e9e3c4a7d25d2396b00eeea9869e3",
+    "case": "cellular7_directional",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 1043392,
+    "origins": [
+      {
+        "suite": "oscillatory",
+        "campaign": "annulus",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus",
+        "case": "cellular7_directional",
+        "n": 224,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 99984,
+        "trace_dofs": 1043392
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1730.8161950204521,
+        "hot_min_ms": 1725.3236440010369,
+        "hot_max_ms": 1736.1551040085033,
+        "fresh_median_ms": 3011.809852090664,
+        "setup_median_ms": 1290.2464830549434,
+        "iterations": 375,
+        "residual": 8.392947333264213e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 1730.8161950204521,
+        "hot_min_ms": 1725.3236440010369,
+        "hot_max_ms": 1736.1551040085033,
+        "fresh_median_ms": 3011.809852090664,
+        "setup_median_ms": 1290.2464830549434,
+        "iterations": 375,
+        "residual": 8.392947333264213e-12
+      }
+    }
+  },
+  {
+    "system_id": "7d3a6b1c6907bbb642af62efe0e0e22e4bca7d368e8b43ed65f2118934e1b242",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "advection_dominated",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 188.8118509668857,
+        "hot_min_ms": 185.60055899433792,
+        "hot_max_ms": 192.02314293943346,
+        "fresh_median_ms": 247.6315314997919,
+        "setup_median_ms": 53.26033348683268,
+        "iterations": 225,
+        "residual": 2.510513973832884e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 188.8118509668857,
+        "hot_min_ms": 185.60055899433792,
+        "hot_max_ms": 192.02314293943346,
+        "fresh_median_ms": 247.6315314997919,
+        "setup_median_ms": 53.26033348683268,
+        "iterations": 225,
+        "residual": 2.510513973832884e-15
+      }
+    }
+  },
+  {
+    "system_id": "20717e152dbb3d26cdb51f7cc3cf09e6a8b39fda51da57bf8d7ec8f3de96da5d",
+    "case": "oscillatory_rhs",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "oscillatory_rhs",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 185.7103790389374,
+        "hot_min_ms": 181.88331904821098,
+        "hot_max_ms": 189.5374390296638,
+        "fresh_median_ms": 236.59812955884263,
+        "setup_median_ms": 51.60081555368379,
+        "iterations": 225,
+        "residual": 2.000021031820014e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 185.7103790389374,
+        "hot_min_ms": 181.88331904821098,
+        "hot_max_ms": 189.5374390296638,
+        "fresh_median_ms": 236.59812955884263,
+        "setup_median_ms": 51.60081555368379,
+        "iterations": 225,
+        "residual": 2.000021031820014e-15
+      }
+    }
+  },
+  {
+    "system_id": "957316d60b152221d7a6881126f511b5b1ca15439153bd325e37ea93c68d9354",
+    "case": "cellular4",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "cellular4",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 239.85487449681386,
+        "hot_min_ms": 237.45272995438427,
+        "hot_max_ms": 242.25701903924346,
+        "fresh_median_ms": 289.6750114741735,
+        "setup_median_ms": 50.76631100382656,
+        "iterations": 300,
+        "residual": 6.461759774707982e-14
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 239.85487449681386,
+        "hot_min_ms": 237.45272995438427,
+        "hot_max_ms": 242.25701903924346,
+        "fresh_median_ms": 289.6750114741735,
+        "setup_median_ms": 50.76631100382656,
+        "iterations": 300,
+        "residual": 6.461759774707982e-14
+      }
+    }
+  },
+  {
+    "system_id": "05aa3c01eda2001968125a27da509771b5570bb2b99d6c550a8f80168b6c51b1",
+    "case": "cellular7",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "cellular7",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 179.55724644707516,
+        "hot_min_ms": 177.28637694381177,
+        "hot_max_ms": 181.82811595033854,
+        "fresh_median_ms": 229.14018447045237,
+        "setup_median_ms": 49.27919298643246,
+        "iterations": 225,
+        "residual": 7.193792710418456e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 179.55724644707516,
+        "hot_min_ms": 177.28637694381177,
+        "hot_max_ms": 181.82811595033854,
+        "fresh_median_ms": 229.14018447045237,
+        "setup_median_ms": 49.27919298643246,
+        "iterations": 225,
+        "residual": 7.193792710418456e-13
+      }
+    }
+  },
+  {
+    "system_id": "e7db3720962a5defd44c9f43dd0f6041c9ac9ba3a5746651ec1a8f3f71179960",
+    "case": "cellular7_low",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "cellular7_low",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 285.5567609658465,
+        "hot_min_ms": 282.02295198570937,
+        "hot_max_ms": 289.0905699459836,
+        "fresh_median_ms": 341.99254494160414,
+        "setup_median_ms": 52.77238751295954,
+        "iterations": 225,
+        "residual": 6.601444476210384e-15
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 285.5567609658465,
+        "hot_min_ms": 282.02295198570937,
+        "hot_max_ms": 289.0905699459836,
+        "fresh_median_ms": 341.99254494160414,
+        "setup_median_ms": 52.77238751295954,
+        "iterations": 225,
+        "residual": 6.601444476210384e-15
+      }
+    }
+  },
+  {
+    "system_id": "4a3b78aafaa5b60e3d0663f3d9fd0da5480f66465a7d7e2ff681a2be8064f7de",
+    "case": "cellular7_weak",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "cellular7_weak",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 973.7359769642353,
+        "hot_min_ms": 969.740311964415,
+        "hot_max_ms": 977.7316419640556,
+        "fresh_median_ms": 1033.879450056702,
+        "setup_median_ms": 51.95275251753628,
+        "iterations": 750,
+        "residual": 8.994726415300808e-13
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 973.7359769642353,
+        "hot_min_ms": 969.740311964415,
+        "hot_max_ms": 977.7316419640556,
+        "fresh_median_ms": 1033.879450056702,
+        "setup_median_ms": 51.95275251753628,
+        "iterations": 750,
+        "residual": 8.994726415300808e-13
+      }
+    }
+  },
+  {
+    "system_id": "e6955bdcdff328806a23ebd737ba026bf7b62f5fe42b0b3231fe8afb86079e48",
+    "case": "cellular7_anisotropic",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 15040,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_screen_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_screen_20260918",
+        "case": "cellular7_anisotropic",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 15040
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 583.3648480474949,
+        "hot_min_ms": 579.1348450584337,
+        "hot_max_ms": 587.5948510365561,
+        "fresh_median_ms": 629.219449008815,
+        "setup_median_ms": 52.81922349240631,
+        "iterations": 450,
+        "residual": 8.696323761306382e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 583.3648480474949,
+        "hot_min_ms": 579.1348450584337,
+        "hot_max_ms": 587.5948510365561,
+        "fresh_median_ms": 629.219449008815,
+        "setup_median_ms": 52.81922349240631,
+        "iterations": 450,
+        "residual": 8.696323761306382e-12
+      }
+    }
+  },
+  {
+    "system_id": "150467ab79ce0f9325810ecc12e653a4e116e91f553d8b2b9ec9e2306b5b57bd",
+    "case": "cellular7_anisotropic",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_square_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_square_p6_20260918",
+        "case": "cellular7_anisotropic",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 2095.044464998258,
+        "hot_min_ms": 2078.192897955887,
+        "hot_max_ms": 2118.774707079865,
+        "fresh_median_ms": 2234.3647100497037,
+        "setup_median_ms": 129.28246601950377,
+        "iterations": 900,
+        "residual": 4.308600933611894e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 2095.044464998258,
+        "hot_min_ms": 2078.192897955887,
+        "hot_max_ms": 2118.774707079865,
+        "fresh_median_ms": 2234.3647100497037,
+        "setup_median_ms": 129.28246601950377,
+        "iterations": 900,
+        "residual": 4.308600933611894e-12
+      }
+    }
+  },
+  {
+    "system_id": "dadd1c81c80a0fbf0823d3e2dee90d9a0d4be80cadc819f32d85f05d335f8a47",
+    "case": "advection_dominated",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 62475,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.04_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918",
+        "case": "advection_dominated",
+        "n": 56,
+        "nominal_n": 56,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 6114,
+        "trace_dofs": 62475
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 244.66334302754453,
+        "hot_min_ms": 214.47109803557396,
+        "hot_max_ms": 293.1536880787462,
+        "fresh_median_ms": 327.91297195944935,
+        "setup_median_ms": 105.96518393140286,
+        "iterations": 225,
+        "residual": 2.105348158961373e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 244.66334302754453,
+        "hot_min_ms": 214.47109803557396,
+        "hot_max_ms": 293.1536880787462,
+        "fresh_median_ms": 327.91297195944935,
+        "setup_median_ms": 105.96518393140286,
+        "iterations": 225,
+        "residual": 2.105348158961373e-15
+      }
+    }
+  },
+  {
+    "system_id": "05fe94c53a8b08e5a2946fe60aeb6b4dfd9d27a42c26a32488622adae8d707a0",
+    "case": "oscillatory_rhs",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 62475,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.04_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918",
+        "case": "oscillatory_rhs",
+        "n": 56,
+        "nominal_n": 56,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 6114,
+        "trace_dofs": 62475
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 203.24203403045735,
+        "hot_min_ms": 189.5595780806616,
+        "hot_max_ms": 226.0740320198238,
+        "fresh_median_ms": 296.83577199466527,
+        "setup_median_ms": 100.40509898681194,
+        "iterations": 225,
+        "residual": 1.2335743965140967e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 203.24203403045735,
+        "hot_min_ms": 189.5595780806616,
+        "hot_max_ms": 226.0740320198238,
+        "fresh_median_ms": 296.83577199466527,
+        "setup_median_ms": 100.40509898681194,
+        "iterations": 225,
+        "residual": 1.2335743965140967e-15
+      }
+    }
+  },
+  {
+    "system_id": "796ad17f6beb88ff6bc801d8a291e6faf5304f652447bf5deae9dcbfcd19c903",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 62475,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.04_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918",
+        "case": "cellular7_weak",
+        "n": 56,
+        "nominal_n": 56,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 6114,
+        "trace_dofs": 62475
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "robust": "numerical_failure",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "c0eb999ffe45477d6771269101a0c47a8ceb7915b1224e84aaac9fd9396d5f0b",
+    "case": "cellular7_anisotropic",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 62475,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.04_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.04_p6_20260918",
+        "case": "cellular7_anisotropic",
+        "n": 56,
+        "nominal_n": 56,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 6114,
+        "trace_dofs": 62475
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1304.0648746925096,
+        "hot_min_ms": 1288.5378890205175,
+        "hot_max_ms": 1320.7653369754553,
+        "fresh_median_ms": 1401.5024050604552,
+        "setup_median_ms": 103.81873499136418,
+        "iterations": 675,
+        "residual": 1.6644965832742074e-12
+      },
+      "hot_mean_ms": {
+        "policy": "robust",
+        "hot_mean_ms": 1304.0648746925096,
+        "hot_min_ms": 1288.5378890205175,
+        "hot_max_ms": 1320.7653369754553,
+        "fresh_median_ms": 1401.5024050604552,
+        "setup_median_ms": 103.81873499136418,
+        "iterations": 675,
+        "residual": 1.6644965832742074e-12
+      }
+    }
+  },
+  {
+    "system_id": "90339654604320ecde4a22dab6e2b2dcc14789859e2b7d69dcec9d5cce1d777d",
+    "case": "advection_dominated",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 236502,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.02_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.02_p6_20260918",
+        "case": "advection_dominated",
+        "n": 107,
+        "nominal_n": 107,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 22825,
+        "trace_dofs": 236502
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 488.5749160312116,
+        "hot_min_ms": 478.42096304520965,
+        "hot_max_ms": 498.80632699932903,
+        "fresh_median_ms": 814.6226360695437,
+        "setup_median_ms": 321.73043699003756,
+        "iterations": 300,
+        "residual": 1.3164346119629072e-13
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 488.5749160312116,
+        "hot_min_ms": 478.42096304520965,
+        "hot_max_ms": 498.80632699932903,
+        "fresh_median_ms": 814.6226360695437,
+        "setup_median_ms": 321.73043699003756,
+        "iterations": 300,
+        "residual": 1.3164346119629072e-13
+      }
+    }
+  },
+  {
+    "system_id": "fd460ce8c0b9b8f5ee2a6d440aa16dfed489286872b6ba991ead401aa88423ef",
+    "case": "cellular7_weak",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 236502,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.02_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.02_p6_20260918",
+        "case": "cellular7_weak",
+        "n": 107,
+        "nominal_n": 107,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 22825,
+        "trace_dofs": 236502
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "robust": "numerical_failure",
+      "standard": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "decc5c2370795182ffd5b2038d36b767acd8b5e0aa41e92e37645f3cb0a1da17",
+    "case": "cellular7_anisotropic",
+    "geometry": "annulus",
+    "p": 6,
+    "trace_dofs": 236502,
+    "origins": [
+      {
+        "suite": "initial",
+        "campaign": "adr_oscillatory_star_h0.02_p6_20260918",
+        "source": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial_runs/adr_oscillatory_star_h0.02_p6_20260918",
+        "case": "cellular7_anisotropic",
+        "n": 107,
+        "nominal_n": 107,
+        "p": 6,
+        "geometry": "annulus",
+        "triangles": 22825,
+        "trace_dofs": 236502
+      }
+    ],
+    "attempted": true,
+    "passed": false,
+    "policies": {
+      "standard": "numerical_failure",
+      "robust": "numerical_failure"
+    },
+    "winners": {
+      "fresh_median_ms": null,
+      "hot_mean_ms": null
+    }
+  },
+  {
+    "system_id": "82088e4e50bb2ddf320848dc490004a9f5350719b39c38ffa1808ef9ca3da3d9",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 21056,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 32,
+        "nominal_n": 32,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 2048,
+        "trace_dofs": 21056
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.390292297738295,
+        "hot_min_ms": 21.09660196583718,
+        "hot_max_ms": 23.737828945741057,
+        "fresh_median_ms": 74.22036002390087,
+        "setup_median_ms": 52.53448698204011,
+        "iterations": 29,
+        "residual": 1.6122388599318839e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 22.390292297738295,
+        "hot_min_ms": 21.09660196583718,
+        "hot_max_ms": 23.737828945741057,
+        "fresh_median_ms": 74.22036002390087,
+        "setup_median_ms": 52.53448698204011,
+        "iterations": 29,
+        "residual": 1.6122388599318839e-12
+      }
+    }
+  },
+  {
+    "system_id": "79bac0576d542bac679918581a62d56fb7e612dae5f3ab265eb7da25b26335ce",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 1,
+    "trace_dofs": 24320,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 1,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 24320
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 20.48575001147886,
+        "hot_min_ms": 19.955992000177503,
+        "hot_max_ms": 21.043139975517988,
+        "fresh_median_ms": 87.72222010884434,
+        "setup_median_ms": 67.20707495696843,
+        "iterations": 25,
+        "residual": 7.2673211938241606e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 20.48575001147886,
+        "hot_min_ms": 19.955992000177503,
+        "hot_max_ms": 21.043139975517988,
+        "fresh_median_ms": 87.72222010884434,
+        "setup_median_ms": 67.20707495696843,
+        "iterations": 25,
+        "residual": 7.2673211938241606e-12
+      }
+    }
+  },
+  {
+    "system_id": "a8dc3fb9feabe886b4a9ab4085de5069b17a6b4cc7692ce6a99fd91c09f352e4",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 2,
+    "trace_dofs": 36480,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 2,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 36480
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 43.268019993168615,
+        "hot_min_ms": 42.66627901233733,
+        "hot_max_ms": 44.0743169747293,
+        "fresh_median_ms": 116.65229895152152,
+        "setup_median_ms": 73.69536894839257,
+        "iterations": 54,
+        "residual": 1.6896351094148185e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 43.268019993168615,
+        "hot_min_ms": 42.66627901233733,
+        "hot_max_ms": 44.0743169747293,
+        "fresh_median_ms": 116.65229895152152,
+        "setup_median_ms": 73.69536894839257,
+        "iterations": 54,
+        "residual": 1.6896351094148185e-15
+      }
+    }
+  },
+  {
+    "system_id": "f9e1fbd094a1d98da0f88eca04185bb1da08a2ddad7082270ba52ee603d7e6c2",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 48640,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 48640
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.890485025631886,
+        "hot_min_ms": 24.46279500145465,
+        "hot_max_ms": 25.385284097865224,
+        "fresh_median_ms": 102.40308800712228,
+        "setup_median_ms": 78.77197000198066,
+        "iterations": 29,
+        "residual": 4.410386015838891e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.890485025631886,
+        "hot_min_ms": 24.46279500145465,
+        "hot_max_ms": 25.385284097865224,
+        "fresh_median_ms": 102.40308800712228,
+        "setup_median_ms": 78.77197000198066,
+        "iterations": 29,
+        "residual": 4.410386015838891e-12
+      }
+    }
+  },
+  {
+    "system_id": "2e88aae8e4baecd752320047896e7602a61472e449bca7c69f745b0045abce43",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 60800,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 60800
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.752954680783052,
+        "hot_min_ms": 24.478319915942848,
+        "hot_max_ms": 25.06196207832545,
+        "fresh_median_ms": 111.51172395329922,
+        "setup_median_ms": 84.43454303778708,
+        "iterations": 30,
+        "residual": 5.115802391307122e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 24.752954680783052,
+        "hot_min_ms": 24.478319915942848,
+        "hot_max_ms": 25.06196207832545,
+        "fresh_median_ms": 111.51172395329922,
+        "setup_median_ms": 84.43454303778708,
+        "iterations": 30,
+        "residual": 5.115802391307122e-12
+      }
+    }
+  },
+  {
+    "system_id": "6f3d2c286ce2a231f6043e4551c3456abccbb1c949e797d041f936f9bc53a3cb",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 85120,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 64,
+        "nominal_n": 64,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 8192,
+        "trace_dofs": 85120
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 26.278348988853395,
+        "hot_min_ms": 26.09686995856464,
+        "hot_max_ms": 26.57976804766804,
+        "fresh_median_ms": 138.29568901564926,
+        "setup_median_ms": 112.12613095995039,
+        "iterations": 31,
+        "residual": 2.2292263582555466e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 26.278348988853395,
+        "hot_min_ms": 26.09686995856464,
+        "hot_max_ms": 26.57976804766804,
+        "fresh_median_ms": 138.29568901564926,
+        "setup_median_ms": 112.12613095995039,
+        "iterations": 31,
+        "residual": 2.2292263582555466e-12
+      }
+    }
+  },
+  {
+    "system_id": "4945247af1c0947f61cd90c4bbb91cbbe838af49f25bf28cf181d52ad8bc4ae3",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 342272,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 128,
+        "nominal_n": 128,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 32768,
+        "trace_dofs": 342272
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 57.27920696760217,
+        "hot_min_ms": 56.91792303696275,
+        "hot_max_ms": 57.5007819570601,
+        "fresh_median_ms": 480.75710609555244,
+        "setup_median_ms": 423.2741700252518,
+        "iterations": 34,
+        "residual": 5.132675207662754e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 57.27920696760217,
+        "hot_min_ms": 56.91792303696275,
+        "hot_max_ms": 57.5007819570601,
+        "fresh_median_ms": 480.75710609555244,
+        "setup_median_ms": 423.2741700252518,
+        "iterations": 34,
+        "residual": 5.132675207662754e-12
+      }
+    }
+  },
+  {
+    "system_id": "7e29b0f5c1a7cfed04f94e8cd27946c2122d3fd63e33d88418fc991cf4216ddc",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 6,
+    "trace_dofs": 1041187,
+    "origins": [
+      {
+        "suite": "focused_scaling",
+        "campaign": "adr_named_hp_scaling_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_hp_scaling_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 223,
+        "nominal_n": 223,
+        "p": 6,
+        "geometry": "square",
+        "triangles": 99458,
+        "trace_dofs": 1041187
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 136.45863866743943,
+        "hot_min_ms": 136.16553007159382,
+        "hot_max_ms": 136.94543892052025,
+        "fresh_median_ms": 1365.182008012198,
+        "setup_median_ms": 1228.8015939993784,
+        "iterations": 35,
+        "residual": 2.83052598328253e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 136.45863866743943,
+        "hot_min_ms": 136.16553007159382,
+        "hot_max_ms": 136.94543892052025,
+        "fresh_median_ms": 1365.182008012198,
+        "setup_median_ms": 1228.8015939993784,
+        "iterations": 35,
+        "residual": 2.83052598328253e-12
+      }
+    }
+  },
+  {
+    "system_id": "5e63af927d02cfa77850bcfe6239c54f18a3f7384c85df2a7ab01a5eedac2f55",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 999940,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 289,
+        "nominal_n": 289,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 167042,
+        "trace_dofs": 999940
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 256.40141932914656,
+        "hot_min_ms": 256.29136501811445,
+        "hot_max_ms": 256.55297900084406,
+        "fresh_median_ms": 1395.397898973897,
+        "setup_median_ms": 1139.098369050771,
+        "iterations": 67,
+        "residual": 3.786513125990707e-15
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 256.40141932914656,
+        "hot_min_ms": 256.29136501811445,
+        "hot_max_ms": 256.55297900084406,
+        "fresh_median_ms": 1395.397898973897,
+        "setup_median_ms": 1139.098369050771,
+        "iterations": 67,
+        "residual": 3.786513125990707e-15
+      }
+    }
+  },
+  {
+    "system_id": "eecc9ecbca8adc9e30156c3aba0529ea20de445550c76281355143e1ae8a7ec0",
+    "case": "variable_velocity",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 1003625,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "variable_velocity",
+        "n": 259,
+        "nominal_n": 259,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 134162,
+        "trace_dofs": 1003625
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 125.80718235888828,
+        "hot_min_ms": 125.49291702453047,
+        "hot_max_ms": 125.98596594762057,
+        "fresh_median_ms": 1233.9389470871538,
+        "setup_median_ms": 1107.409987016581,
+        "iterations": 33,
+        "residual": 8.62439745044234e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 125.80718235888828,
+        "hot_min_ms": 125.49291702453047,
+        "hot_max_ms": 125.98596594762057,
+        "fresh_median_ms": 1233.9389470871538,
+        "setup_median_ms": 1107.409987016581,
+        "iterations": 33,
+        "residual": 8.62439745044234e-12
+      }
+    }
+  },
+  {
+    "system_id": "c0f037c4f666021daf71fa7a46b65caf0d6457277272cee9b3579e2d842c92df",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 999940,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 289,
+        "nominal_n": 289,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 167042,
+        "trace_dofs": 999940
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "robust": "passed",
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3138.273990014568,
+        "hot_min_ms": 3076.012506033294,
+        "hot_max_ms": 3253.4386360784993,
+        "fresh_median_ms": 4303.932092036121,
+        "setup_median_ms": 1222.587749012746,
+        "iterations": 675,
+        "residual": 3.5284704679621406e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3138.273990014568,
+        "hot_min_ms": 3076.012506033294,
+        "hot_max_ms": 3253.4386360784993,
+        "fresh_median_ms": 4303.932092036121,
+        "setup_median_ms": 1222.587749012746,
+        "iterations": 675,
+        "residual": 3.5284704679621406e-12
+      }
+    }
+  },
+  {
+    "system_id": "59e6fb19e8082d41509c977a421baa71853d398e92eb37c97b9c0fc49e800ea3",
+    "case": "advection_dominated",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 1003625,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "advection_dominated",
+        "n": 259,
+        "nominal_n": 259,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 134162,
+        "trace_dofs": 1003625
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed",
+      "robust": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3348.434383321243,
+        "hot_min_ms": 3320.1856809901074,
+        "hot_max_ms": 3368.680704035796,
+        "fresh_median_ms": 4569.8199309408665,
+        "setup_median_ms": 1206.0997399967164,
+        "iterations": 675,
+        "residual": 1.4069162929225687e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 3348.434383321243,
+        "hot_min_ms": 3320.1856809901074,
+        "hot_max_ms": 3368.680704035796,
+        "fresh_median_ms": 4569.8199309408665,
+        "setup_median_ms": 1206.0997399967164,
+        "iterations": 675,
+        "residual": 1.4069162929225687e-12
+      }
+    }
+  },
+  {
+    "system_id": "fc40bd552c4a0b19a794dda08ab7dae564cdba03f246a9e3e75ae12bdc1a48b7",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 3,
+    "trace_dofs": 999940,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 289,
+        "nominal_n": 289,
+        "p": 3,
+        "geometry": "square",
+        "triangles": 167042,
+        "trace_dofs": 999940
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 261.2428799814855,
+        "hot_min_ms": 260.87012398056686,
+        "hot_max_ms": 261.78241602610797,
+        "fresh_median_ms": 1397.169031901285,
+        "setup_median_ms": 1136.6690429858863,
+        "iterations": 68,
+        "residual": 7.496106792382927e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 261.2428799814855,
+        "hot_min_ms": 260.87012398056686,
+        "hot_max_ms": 261.78241602610797,
+        "fresh_median_ms": 1397.169031901285,
+        "setup_median_ms": 1136.6690429858863,
+        "iterations": 68,
+        "residual": 7.496106792382927e-12
+      }
+    }
+  },
+  {
+    "system_id": "dc11e1c48168f3d021a085877e45281c32a838e43f0d31cc251ed046253dc37b",
+    "case": "trigonometric",
+    "geometry": "square",
+    "p": 4,
+    "trace_dofs": 1003625,
+    "origins": [
+      {
+        "suite": "focused_endpoints",
+        "campaign": "adr_named_comparison_vv_mt_tr_20260919",
+        "source": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/summary.json",
+        "campaign_root": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919",
+        "case": "trigonometric",
+        "n": 259,
+        "nominal_n": 259,
+        "p": 4,
+        "geometry": "square",
+        "triangles": 134162,
+        "trace_dofs": 1003625
+      }
+    ],
+    "attempted": true,
+    "passed": true,
+    "policies": {
+      "standard": "passed"
+    },
+    "winners": {
+      "fresh_median_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 266.42471629505354,
+        "hot_min_ms": 266.3246509619057,
+        "hot_max_ms": 266.60329196602106,
+        "fresh_median_ms": 1392.74690405,
+        "setup_median_ms": 1126.1283450294286,
+        "iterations": 70,
+        "residual": 8.337277502794395e-12
+      },
+      "hot_mean_ms": {
+        "policy": "standard",
+        "hot_mean_ms": 266.42471629505354,
+        "hot_min_ms": 266.3246509619057,
+        "hot_max_ms": 266.60329196602106,
+        "fresh_median_ms": 1392.74690405,
+        "setup_median_ms": 1126.1283450294286,
+        "iterations": 70,
+        "residual": 8.337277502794395e-12
+      }
+    }
+  }
+]

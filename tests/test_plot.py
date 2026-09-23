@@ -169,3 +169,63 @@ def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
         )
     finally:
         plt.close(fig)
+
+
+def test_raster_panels_preserve_holes_orientation_and_separate_difference_scale():
+    import matplotlib.pyplot as plt
+    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+
+    left = np.array([[np.nan, 2.0], [-4.0, 1.0]])
+    right = left + .25
+    bounds = (-2., 3., -5., 7.)
+    fig = plot_scalar_raster_panels_matplotlib(
+        (("first", left, {"clim": (-4., 4.)}),
+         ("second", right, {"clim": (-4., 4.)}),
+         ("difference", left - right)),
+        bounds, symmetric=True, robust_percentile=100, share_clim=False, show=False,
+    )
+    try:
+        assert len(fig.axes) == 6
+        for axis, expected, limits in zip(fig.axes[:3], (left, right, left-right),
+                                          ((-4., 4.), (-4., 4.), (-.25, .25))):
+            image = axis.images[0]
+            np.testing.assert_array_equal(image.get_array().mask, np.isnan(expected))
+            np.testing.assert_allclose(image.get_array().compressed(), expected[np.isfinite(expected)])
+            assert image.origin == "upper"
+            assert image.get_interpolation() == "nearest"
+            assert tuple(image.get_extent()) == bounds
+            assert image.get_clim() == limits
+            assert tuple(axis.get_ylim()) == bounds[2:]
+    finally:
+        plt.close(fig)
+
+
+def test_raster_shared_colorbar_and_masked_outliers():
+    import matplotlib.pyplot as plt
+    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+
+    first = np.ma.array([[2., 1.e9]], mask=[[False, True]])
+    second = np.array([[-5., np.inf]])
+    fig = plot_scalar_raster_panels_matplotlib(
+        [("first", first), ("second", second)], (0., 2., 0., 1.),
+        symmetric=True, robust_percentile=100, show=False,
+    )
+    try:
+        assert len(fig.axes) == 3
+        for axis in fig.axes[:2]:
+            assert axis.images[0].get_clim() == (-5., 5.)
+        np.testing.assert_allclose(fig.axes[-1].get_ylim(), (-5., 5.))
+    finally:
+        plt.close(fig)
+
+
+@pytest.mark.parametrize("panels, bounds, message", [
+    ([], (0, 1, 0, 1), "at least one panel"),
+    ([("bad", [1, 2])], (0, 1, 0, 1), "two-dimensional"),
+    ([("bad", [[1]])], (1, 0, 0, 1), "bounds"),
+])
+def test_raster_panels_reject_invalid_input(panels, bounds, message):
+    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+
+    with pytest.raises(ValueError, match=message):
+        plot_scalar_raster_panels_matplotlib(panels, bounds, show=False)

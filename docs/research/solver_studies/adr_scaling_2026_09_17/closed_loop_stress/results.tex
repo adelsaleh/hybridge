@@ -1,0 +1,154 @@
+% Audited from adr_closed_loop_stress_strong_numba_h150k/jobs/*.json.
+% Shared result tables for main.tex and main_synthesis.tex; 22 September 2026.
+\paragraph{Completed campaign and reporting contract.}
+The source records are the frozen \texttt{manifest.json} and per-job JSON
+files under \path{run_outputs/solver_studies/}\allowbreak
+\path{adr_closed_loop_stress_strong_numba_h150k/}.
+This campaign used $p_{\rm FE}=6$ on $98\,699$ and $148\,848$ triangles
+(targets 100k and 150k), giving $1\,021\,293$ and $1\,547\,455$ free trace
+degrees of freedom. Each case/mesh shared one immutable matrix
+and RHS across ten candidates. The \texttt{strong} preset used
+ASM+PP(96), BJ+PP(96), GMRES/FGMRES restart 150, AMGX AMG W-cycles with
+two pre/post sweeps, and two direct-DILU inner iterations with relaxation
+0.7. Both $p$MG--AMG policies used Chebyshev order eight, three
+$p$-level pre/post sweeps and three coarse-AMG pre/post sweeps with W-cycles.
+The outer-iteration cap was $2\,000$, with internal tolerance $10^{-11}$
+and acceptance based on the independently checked physical relative
+residual $r_{\rm phys}=\|b-Ax\|_2/\|b\|_2\leq10^{-10}$.
+One excluded warmup setup preceded three measured setups, each with two
+zero-guess solves, provided the warmup passed. Separate profiles were
+disabled. These data are not pooled with the earlier 50k/100k,
+PP(48), restart-75 attempts.
+
+Both meshes passed the implemented neck-size screen (minimum
+gap/element-diameter ratios 8.947 and 8.683, against threshold six).
+The requested \texttt{--neck-elements 12} controls mesh sizing, not a
+verified twelve-element resolution guarantee. The original GPU runner
+recorded no CPU direct reference at these sizes because both exceed its
+$100\,000$-DOF reference limit. The confirmed LU baseline below now covers
+all six saved trace systems. Screen passage and linear-solver
+convergence are not $h/p$/quadrature accuracy certificates.
+
+\paragraph{Convergence across all 60 comparisons.}
+All 60 jobs completed: eight passed the numerical acceptance test and
+52 ended in numerical failure. By case, the pass counts were
+trapping $0/20$, crossing $0/20$, and orthogonal $8/20$.
+Every AMGX candidate failed ($0/36$); all eight passes came from ASM+PP,
+BJ+PP and the two $p$MG--AMG policies on the orthogonal control.
+Table~\ref{tab:adr-closed-loop-residuals} retains every final residual,
+including divergence; completion of the campaign is not convergence of
+its failed systems.
+
+\begin{table}[htbp]
+ \centering
+ \scriptsize
+ \setlength{\tabcolsep}{3pt}
+ \begin{tabular}{@{}lrrrrrr@{}}
+  \toprule
+  & \multicolumn{2}{c}{Trapping} & \multicolumn{2}{c}{Crossing}
+  & \multicolumn{2}{c}{Orthogonal}\\
+  Candidate & 100k & 150k & 100k & 150k & 100k & 150k\\
+  \midrule
+  ASM+PP(96) & $4.848\times10^{-6}$ & $9.006\times10^{-6}$ & $3.843\times10^{-7}$ & $1.558\times10^{-6}$ & $\mathbf{1.196\times10^{-14}}$ & $\mathbf{1.487\times10^{-14}}$\\
+  BJ+PP(96) & $2.005\times10^{-5}$ & $2.322\times10^{-5}$ & $3.763\times10^{-6}$ & $4.209\times10^{-6}$ & $\mathbf{1.197\times10^{-14}}$ & $\mathbf{1.489\times10^{-14}}$\\
+  $p$MG--AMG standard & $8.058\times10^{-5}$ & $9.643\times10^{-5}$ & $4.481\times10^{-4}$ & $5.580\times10^{-4}$ & $\mathbf{4.087\times10^{-12}}$ & $\mathbf{7.970\times10^{-12}}$\\
+  $p$MG--AMG robust & $5.130\times10^{-5}$ & $6.401\times10^{-5}$ & $2.398\times10^{-4}$ & $3.392\times10^{-4}$ & $\mathbf{2.200\times10^{-12}}$ & $\mathbf{4.476\times10^{-13}}$\\
+  \midrule
+  AMGX BJ / FGMRES & $1.864\times10^{-1}$ & $2.128\times10^{-1}$ & $9.564\times10^{-1}$ & $9.698\times10^{-1}$ & $2.678\times10^{-1}$ & $2.618\times10^{-1}$\\
+  AMGX DILU / FGMRES & $9.898\times10^{-1}$ & $9.960\times10^{-1}$ & $9.995\times10^{-1}$ & $9.998\times10^{-1}$ & $7.243\times10^{-1}$ & $8.303\times10^{-1}$\\
+  AMGX MC-DILU / FGMRES & $9.998\times10^{-1}$ & $9.999\times10^{-1}$ & $1.000$ & $1.000$ & $9.999\times10^{-1}$ & $1.005$\\
+  AMGX BJ / PBICGSTAB & $5.006\times10^{-1}$ & $8.088\times10^{-1}$ & $3.918\times10^{1}$ & $1.848\times10^{2}$ & $2.945\times10^{2}$ & $8.440\times10^{1}$\\
+  AMGX DILU / PBICGSTAB & $1.356\times10^{1}$ & $1.851\times10^{1}$ & $9.091\times10^{1}$ & $5.739\times10^{1}$ & $4.457$ & $9.901$\\
+  AMGX MC-DILU / PBICGSTAB & $2.173\times10^{3}$ & $1.058\times10^{5}$ & $6.053\times10^{2}$ & $1.128\times10^{3}$ & $2.604\times10^{16}$ & $1.149\times10^{14}$\\
+  \midrule
+  $\PLU{n}$ & $\mathbf{8.011\times10^{-13}}$ & $\mathbf{1.210\times10^{-12}}$ & $\mathbf{4.301\times10^{-13}}$ & $\mathbf{6.556\times10^{-13}}$ & $\mathbf{9.439\times10^{-15}}$ & $\mathbf{1.171\times10^{-14}}$\\
+  MKL threads $n$ & 16 & 12 & 24 & 12 & 8 & 24\\
+  \bottomrule
+ \end{tabular}
+ \caption{Physical relative residuals for all stress comparisons; 100k/150k
+ denote target triangle counts. The LU baseline uses the reused-selected
+ threads listed below its row. Bold entries passed and report the worst
+ recorded converged residual. Every other entry is the final residual of
+ the failed first warmup solve at 2,000 iterations, not the best residual
+ reached along its history. BJ denotes block Jacobi and MC-DILU multicolor
+ DILU; the AMGX BJ and MC-DILU labels denote their block-AMG candidates.}
+ \label{tab:adr-closed-loop-residuals}
+\end{table}
+
+\paragraph{Timings and field errors for converged solves.}
+Table~\ref{tab:adr-closed-loop-timings} contains the eight passing GPU
+configurations and the LU baseline on all six systems. GPU setup and
+fresh setup-plus-first-solve times are medians
+over three measured setups; reused time is the mean of the second solve
+from each setup. Only preconditioner setup and linear solves are timed;
+excluded warmups do not enter these statistics.
+ASM+PP is fastest among tested GPU methods on both orthogonal meshes, with reused times 5.20 and
+12.08\,s versus 8.30 and 16.17\,s for BJ+PP. The $p$MG--AMG robust policy
+needs fewer iterations than standard (900 versus 1,350), but costs more
+time. Outer iteration counts alone are not comparable work measures
+between polynomial and multigrid preconditioners.
+All four passing methods agree to the displayed precision on the primal
+$L^2$ errors: $6.813\times10^{-7}$ at 100k and $3.613\times10^{-7}$ at
+150k. This is an observed two-mesh decrease, not an established
+asymptotic convergence rate; the later direct campaign validated the
+trace solve, not these reconstructed primal errors.
+
+\begin{table}[htbp]
+ \centering
+ \small
+ \resizebox{\linewidth}{!}{\begin{tabular}{@{}llrrrr@{}}
+  \toprule
+  Mesh target & Candidate & Iterations & Setup (s) & Fresh (s) & Reused (s)\\
+  \midrule
+  100k & ASM+PP(96) & 58 & 1.423 & 6.621 & 5.199\\
+       & BJ+PP(96) & 165 & 0.525 & 8.813 & 8.301\\
+       & $p$MG--AMG standard & 1350 & 1.263 & 43.725 & 42.739\\
+       & $p$MG--AMG robust & 900 & 1.254 & 46.021 & 44.752\\
+  \midrule
+  150k & ASM+PP(96) & 82 & 2.159 & 13.270 & 12.084\\
+       & BJ+PP(96) & 206 & 0.778 & 17.134 & 16.170\\
+       & $p$MG--AMG standard & 1350 & 1.941 & 65.058 & 63.086\\
+       & $p$MG--AMG robust & 900 & 2.013 & 82.225 & 72.529\\
+  \midrule
+  100k trapping & $\PLU{16}$ & -- & 3.284 & 3.951 & $\PLU{16}$ 0.673\\
+  150k trapping & $\PLU{16}$ & -- & 5.435 & 6.901 & $\PLU{12}$ 1.471\\
+  100k crossing & $\PLU{16}$ & -- & 3.261 & 3.933 & $\PLU{24}$ 0.669\\
+  150k crossing & $\PLU{12}$ & -- & 5.518 & 6.943 & $\PLU{12}$ 1.420\\
+  100k orthogonal & $\PLU{24}$ & -- & 3.315 & 3.986 & $\PLU{8}$ 0.664\\
+  150k orthogonal & $\PLU{24}$ & -- & 5.505 & 6.984 & $\PLU{24}$ 1.473\\
+  \bottomrule
+ \end{tabular}}
+ \caption{Converged GPU orthogonal-control timings and LU baseline.
+ LU's solver label identifies setup/fresh threads; reused cells give their
+ independently selected count. All times are seconds.
+ Fresh and reused columns summarize distinct measured solves; fresh time
+ need not equal the displayed setup median plus reused mean. Failed
+ warmups have no measured repetitions and are excluded from this ranking.}
+ \label{tab:adr-closed-loop-timings}
+\end{table}
+
+\paragraph{Unconverged stress cases.}
+ASM+PP gives the smallest final residual on each trapping/crossing system,
+but still misses the target by factors from $3.84\times10^3$ to
+$9.01\times10^4$. Its primal $L^2$ errors are 0.2190/0.3928 for trapping
+and 0.01239/0.05034 for crossing at 100k/150k. These errors still mix
+algebraic and discretization contributions: larger residuals and errors
+on the finer mesh at a fixed iteration cap do not demonstrate worsening
+discretization accuracy. Several AMGX PBICGSTAB runs diverge severely;
+orthogonal MC-DILU reaches $2.604\times10^{16}$ at 100k and
+$1.149\times10^{14}$ at 150k. Such failed-attempt costs are not
+time-to-solution measurements.
+
+\paragraph{Interpretation and remaining checks.}
+The LU baseline solved all six saved stress systems
+to the physical residual target (Table~\ref{tab:adr-closed-loop-timings}),
+including trapping and crossing. Thus the GPU iteration failures do not
+show that these discrete systems cannot be solved. They still require
+conditioning, stabilization and discretization-accuracy checks before
+assigning a cause. AMGX failure on the directly solvable orthogonal
+control also motivates a configuration, hierarchy and operator-transfer
+audit; it is not by itself proof of a software defect. ASM+PP is the
+fastest passing tested GPU method on the orthogonal control and reduces
+the residual most on trapping/crossing, but it did not solve those harder
+systems to the required tolerance. Subsequent solver or stabilization
+changes must be reported separately from this frozen GPU campaign.

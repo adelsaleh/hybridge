@@ -8,9 +8,11 @@ callers that can keep the global solve on device, or host arrays when requested.
 
 from __future__ import annotations
 
+from hdgfem.precision import audit_arrays, REAL_DTYPE, AMGX_MODE, real_raw_kernel
+
 import copy
-import ctypes
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
@@ -19,6 +21,7 @@ import numpy as np
 
 from ..core.space import DGField, DGSpace, DGTraceSpace
 from ..io.config import format_amgx_configuration
+from ..io.terminal import flush_native_stdio as _flush_c_stdio
 from ..linalg.system import (
     KnownDofReduction,
     LinearSolveCapacityError,
@@ -50,13 +53,6 @@ from .advection_tsle_bsr import (
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
 
-
-def _flush_c_stdio() -> None:
-    """Flush pending C stdio output before reading native solver diagnostics."""
-    try:
-        ctypes.CDLL(None).fflush(None)
-    except Exception:
-        pass
 
 RawLocalAssembly = Literal["precomputed", "fused", "split3"]
 RawLuMode = Literal["safe", "coop"]
@@ -90,19 +86,41 @@ class CupyDGTraceSpace:
             device_id=int(device_id),
             kind=trace_space.kind,
             nodal=bool(trace_space.nodal),
-            interpolation_nodes=cp.asarray(trace_space.interpolation_nodes, dtype=cp.float64),
-            quads=cp.asarray(trace_space.quads, dtype=cp.float64),
-            weights=cp.asarray(trace_space.weights, dtype=cp.float64),
-            bas_of_bd_quads=cp.asarray(trace_space.bas_of_bd_quads, dtype=cp.float64),
-            bas1d_of_ref_edg_qds=cp.asarray(trace_space.bas1d_of_ref_edg_qds, dtype=cp.float64),
-            weighted_bas_of_bd_quads=cp.asarray(trace_space.weighted_bas_of_bd_quads, dtype=cp.float64),
-            weighted_bas1d_of_ref_edg_qds=cp.asarray(trace_space.weighted_bas1d_of_ref_edg_qds, dtype=cp.float64),
+            interpolation_nodes=cp.asarray(trace_space.interpolation_nodes, dtype=REAL_DTYPE),
+            quads=cp.asarray(trace_space.quads, dtype=REAL_DTYPE),
+            weights=cp.asarray(trace_space.weights, dtype=REAL_DTYPE),
+            bas_of_bd_quads=cp.asarray(trace_space.bas_of_bd_quads, dtype=REAL_DTYPE),
+            bas1d_of_ref_edg_qds=cp.asarray(trace_space.bas1d_of_ref_edg_qds, dtype=REAL_DTYPE),
+            weighted_bas_of_bd_quads=cp.asarray(trace_space.weighted_bas_of_bd_quads, dtype=REAL_DTYPE),
+            weighted_bas1d_of_ref_edg_qds=cp.asarray(trace_space.weighted_bas1d_of_ref_edg_qds, dtype=REAL_DTYPE),
             face_trace_test_element_trial_oriented=cp.asarray(
                 trace_space.face_trace_test_element_trial_oriented,
-                dtype=cp.float64,
+                dtype=REAL_DTYPE,
             ),
-            M_rf_fc=cp.asarray(trace_space.M_rf_fc, dtype=cp.float64),
+            M_rf_fc=cp.asarray(trace_space.M_rf_fc, dtype=REAL_DTYPE),
         )
+
+    @property
+    def oriented_basis_table(self):
+        """Cached compact orientation tables owned by the host trace formalism."""
+        cached = getattr(self, "_oriented_basis_table", None)
+        if cached is None:
+            cp = require_cupy()
+            with cp.cuda.Device(self.device_id):
+                cached = cp.asarray(self.host.oriented_basis_table)
+            object.__setattr__(self, "_oriented_basis_table", cached)
+        return cached
+
+    @property
+    def mass_inverse(self):
+        """Cached device mirror of the trace mass inverse."""
+        inverse = getattr(self, "_mass_inverse", None)
+        if inverse is None:
+            cp = require_cupy()
+            with cp.cuda.Device(self.device_id):
+                inverse = cp.asarray(self.host.mass_inverse)
+            object.__setattr__(self, "_mass_inverse", inverse)
+        return inverse
 
     @property
     def edg_dof(self) -> int:
@@ -162,16 +180,16 @@ class CudaAdvectionAssembly:
         local = np.arange(edg_dof, dtype=np.int64)
         free_mask[(space.mesh.int_edges_inds[:, None] * edg_dof + local[None, :]).ravel()] = True
         known_mask = ~free_mask
-        known_values = np.zeros(full_size, dtype=np.float64)
-        boundary_host = np.ascontiguousarray(cp.asnumpy(self.boundary_trace), dtype=np.float64)
+        known_values = np.zeros(full_size, dtype=REAL_DTYPE)
+        boundary_host = np.ascontiguousarray(cp.asnumpy(self.boundary_trace), dtype=REAL_DTYPE)
         known_values[(space.mesh.bnd_edges_inds[:, None] * edg_dof + local[None, :]).ravel()] = boundary_host.ravel()
         old_to_new = np.full(full_size, -1, dtype=np.int64)
         old_to_new[free_mask] = np.arange(np.count_nonzero(free_mask), dtype=np.int64)
         return KnownDofReduction(
             rows=np.ascontiguousarray(cp.asnumpy(self.rows), dtype=np.int64),
             cols=np.ascontiguousarray(cp.asnumpy(self.cols), dtype=np.int64),
-            data=np.ascontiguousarray(cp.asnumpy(self.data), dtype=np.float64),
-            rhs=np.ascontiguousarray(cp.asnumpy(self.rhs), dtype=np.float64),
+            data=np.ascontiguousarray(cp.asnumpy(self.data), dtype=REAL_DTYPE),
+            rhs=np.ascontiguousarray(cp.asnumpy(self.rhs), dtype=REAL_DTYPE),
             free_mask=np.ascontiguousarray(free_mask),
             known_mask=np.ascontiguousarray(known_mask),
             known_values=np.ascontiguousarray(known_values),
@@ -199,7 +217,7 @@ def project_callable_cupy(func: Callable, cspace: CupyDGSpace, timings: dict[str
     start = time.perf_counter()
     q = cspace.quad_data
     points = mapped_quads_cupy(cspace)
-    values = cp.asarray(func(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
+    values = cp.asarray(func(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
     coeffs = values @ q.projection_operator.T
     if timings is not None and key is not None:
         timings[key] = timings.get(key, 0.0) + sync_elapsed(start)
@@ -219,7 +237,7 @@ def reaction_coefficients_cupy(reaction, cspace: CupyDGSpace, timings: dict[str,
     """Normalize reaction data into device coefficients or a scalar value."""
     cp = require_cupy()
     if isinstance(reaction, (int, float, np.integer, np.floating)):
-        return cp.empty(1, dtype=cp.float64), float(reaction), True
+        return cp.empty(1, dtype=REAL_DTYPE), float(reaction), True
     if isinstance(reaction, DGField):
         reaction.space.assert_same_mesh(cspace.host)
         return as_cupy_coefficients(reaction, cspace), 0.0, False
@@ -264,7 +282,7 @@ def _reference_advection_tensor_host(cspace: CupyDGSpace) -> np.ndarray:
                 q.gphi,
                 optimize=True,
             ),
-            dtype=np.float64,
+            dtype=REAL_DTYPE,
         )
         object.__setattr__(q, "_hdgfem_reference_advection_tensor", cached)
     return cached
@@ -274,7 +292,15 @@ def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, floa
     """Build or reuse the dense reference advection contraction tensor on device."""
     cp = require_cupy()
     start = time.perf_counter()
-    result = cp.asarray(_reference_advection_tensor_host(cspace))
+    q = cspace.host.quad_data
+    cache = getattr(q, "_hdgfem_reference_advection_tensor_cupy", None)
+    if cache is None:
+        cache = {}
+        object.__setattr__(q, "_hdgfem_reference_advection_tensor_cupy", cache)
+    if cspace.device_id not in cache:
+        with cp.cuda.Device(cspace.device_id):
+            cache[cspace.device_id] = cp.asarray(_reference_advection_tensor_host(cspace))
+    result = cache[cspace.device_id]
     if timings is not None:
         timings["reference_advection_tensor"] = timings.get("reference_advection_tensor", 0.0) + sync_elapsed(start)
     return result
@@ -296,7 +322,7 @@ def reference_advection_sparse_cupy(
         nel = int(q.el_dof)
         by_entry = np.ascontiguousarray(dense.transpose(0, 2, 3, 1))
         scale = max(float(np.max(np.abs(by_entry))), 1.0)
-        zero_tolerance = 128.0 * np.finfo(np.float64).eps * scale
+        zero_tolerance = 128.0 * np.finfo(REAL_DTYPE).eps * scale
         mask = np.any(np.abs(by_entry) > zero_tolerance, axis=0)
         counts = np.count_nonzero(mask, axis=1).reshape(-1)
         offsets = np.empty(nel * nel + 1, dtype=np.int32)
@@ -308,8 +334,8 @@ def reference_advection_sparse_cupy(
         modes = np.broadcast_to(
             np.arange(nel, dtype=np.int32), (nel, nel, nel)
         )[mask]
-        values0 = np.ascontiguousarray(by_entry[0][mask], dtype=np.float64)
-        values1 = np.ascontiguousarray(by_entry[1][mask], dtype=np.float64)
+        values0 = np.ascontiguousarray(by_entry[0][mask], dtype=REAL_DTYPE)
+        values1 = np.ascontiguousarray(by_entry[1][mask], dtype=REAL_DTYPE)
         cached = (offsets, np.ascontiguousarray(modes), values0, values1)
         object.__setattr__(q, "_hdgfem_sparse_advection_tensor", cached)
     # Indirect sparse loads only beat the dense compile-time contraction when
@@ -334,13 +360,13 @@ def reference_advection_sparse_cupy(
     else:
         offsets = cp.zeros(1, dtype=cp.int32)
         modes = cp.zeros(1, dtype=cp.int32)
-        values0 = cp.zeros(1, dtype=cp.float64)
-        values1 = cp.zeros(1, dtype=cp.float64)
-    mass = np.asarray(q.MKrf, dtype=np.float64)
+        values0 = cp.zeros(1, dtype=REAL_DTYPE)
+        values1 = cp.zeros(1, dtype=REAL_DTYPE)
+    mass = np.asarray(q.MKrf, dtype=REAL_DTYPE)
     diagonal = np.diag(np.diag(mass))
     mass_is_diagonal = bool(
         np.max(np.abs(mass - diagonal))
-        <= 128.0 * np.finfo(np.float64).eps * max(float(np.max(np.abs(mass))), 1.0)
+        <= 128.0 * np.finfo(REAL_DTYPE).eps * max(float(np.max(np.abs(mass))), 1.0)
     )
     if timings is not None:
         timings["reference_advection_sparse"] = (
@@ -370,7 +396,7 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
             rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
     else:
         points = mapped_quads_cupy(cspace)
-        values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
+        values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
         rhs = mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w)
     if timings is not None:
         timings["source_moments"] = timings.get("source_moments", 0.0) + sync_elapsed(start)
@@ -396,7 +422,7 @@ def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] 
         constant_value = reaction.constant_value
         if constant_value is not None:
             if constant_value == 0.0:
-                result = cp.zeros((mesh.num_tri, cspace.el_dof, cspace.el_dof), dtype=cp.float64)
+                result = cp.zeros((mesh.num_tri, cspace.el_dof, cspace.el_dof), dtype=REAL_DTYPE)
             else:
                 result = constant_value * mesh.aff_jacs[:, None, None] * q.MKrf[None, :, :]
         else:
@@ -405,7 +431,7 @@ def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] 
             result = mesh.aff_jacs[:, None, None] * flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
     else:
         points = mapped_quads_cupy(cspace)
-        values = cp.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=cp.float64)
+        values = cp.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
         scaled = values * mesh.aff_jacs[:, None]
         flat = scaled @ q.weighted_phi_phi_flat
         result = flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof)
@@ -414,14 +440,14 @@ def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] 
     return result
 
 
-def boundary_mass_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def boundary_mass_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0):
     """Assemble element upwind boundary mass matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     result = cp.einsum(
         "Kf,Kfq,fiq,fjq->Kij",
         cspace.mesh.jacs_el_fc,
-        cp.abs(beta_dot_normal),
+        upwind_scale * cp.abs(beta_dot_normal),
         trace_ref.bas_of_bd_quads,
         trace_ref.weighted_bas_of_bd_quads,
         optimize=True,
@@ -452,11 +478,11 @@ def advection_mats_cupy(beta_coeffs, cspace: CupyDGSpace, timings: dict[str, flo
     return result
 
 
-def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0):
     """Assemble element-to-trace boundary coupling matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
-    flux_weight = cp.abs(beta_dot_normal) - beta_dot_normal
+    flux_weight = upwind_scale * cp.abs(beta_dot_normal) - beta_dot_normal
     result = cp.einsum(
         "Kf,Kfq,fiq,jq->Kifj",
         cspace.mesh.jacs_el_fc,
@@ -470,11 +496,11 @@ def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: 
     return cp.ascontiguousarray(result)
 
 
-def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0):
     """Assemble complete element-local advection-reaction matrices on the device."""
     return (
         reaction_mass_cupy(reaction, cspace, timings)
-        + boundary_mass_cupy(beta_dot_normal, cspace, trace_ref, timings)
+        + boundary_mass_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=upwind_scale)
         - advection_mats_cupy(beta_coeffs, cspace, timings)
     )
 
@@ -520,7 +546,7 @@ def setup_reduced_indices(cspace: CupyDGSpace, timings: dict[str, float] | None 
     return rows, cols
 
 
-def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0):
     """Assemble oriented local trace-lift matrices on the device."""
     cp = require_cupy()
     start = time.perf_counter()
@@ -530,7 +556,7 @@ def trace_lift_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTrace
         cp.einsum(
             "Kf,Kfq,Kfaq,fiq,q->Kfai",
             mesh.jacs_el_fc,
-            cp.abs(beta_dot_normal),
+            upwind_scale * cp.abs(beta_dot_normal),
             oriented_trace,
             trace_ref.bas_of_bd_quads,
             trace_ref.weights,
@@ -553,7 +579,7 @@ def trace_blocks_cupy(solved_el_bd_mats, trace_lift, cspace: CupyDGSpace, trace_
     if mesh.num_negative_orientations:
         neg = blocks[mesh.negative_orientation_elements, :, :, mesh.negative_orientation_faces, :]
         if trace_ref.kind == "legendre-modal":
-            signs = cp.where(cp.arange(edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
+            signs = cp.where(cp.arange(edg_dof, dtype=cp.int64) % 2 == 0, REAL_DTYPE(1.0), REAL_DTYPE(-1.0))
             blocks[mesh.negative_orientation_elements, :, :, mesh.negative_orientation_faces, :] = neg * signs
         else:
             blocks[mesh.negative_orientation_elements, :, :, mesh.negative_orientation_faces, :] = neg[..., ::-1]
@@ -566,27 +592,15 @@ def trace_blocks_cupy(solved_el_bd_mats, trace_lift, cspace: CupyDGSpace, trace_
 def oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
     """Return device trace basis values in global edge orientation."""
     cp = require_cupy()
-    mesh = cspace.mesh
-    basis = cp.broadcast_to(
-        trace_ref.bas1d_of_ref_edg_qds[None, None, :, :],
-        (mesh.num_tri, 3, cspace.edg_dof, trace_ref.weights.size),
-    ).copy()
-    if mesh.num_negative_orientations:
-        neg = basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces]
-        if trace_ref.kind == "legendre-modal":
-            signs = cp.where(cp.arange(cspace.edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
-            basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces] = neg * signs[:, None]
-        else:
-            basis[mesh.negative_orientation_elements, mesh.negative_orientation_faces] = neg[:, ::-1, :]
-    return cp.ascontiguousarray(basis)
+    return cp.ascontiguousarray(trace_ref.oriented_basis_table[(~cspace.mesh.orientations).astype(cp.int32)])
 
 
-def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None):
+def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0, gauge_inactive: bool = False):
     """Assemble upwind trace mass blocks for interior sides on the device."""
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
-    gamma_face = cp.abs(beta_dot_normal) - beta_dot_normal
+    gamma_face = upwind_scale * cp.abs(beta_dot_normal) - beta_dot_normal
     oriented_trace = oriented_trace_basis_cupy(cspace, trace_ref)
     side_blocks = cp.einsum(
         "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
@@ -598,12 +612,15 @@ def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_
         optimize=True,
     )
     result = cp.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
+    if gauge_inactive:
+        from ..solvers.stabilization import gauge_inactive_advection_trace_blocks
+        gauge_inactive_advection_trace_blocks(result, cp.abs(beta_dot_normal), mesh, xp=cp)
     if timings is not None:
         timings["interior_mass"] = timings.get("interior_mass", 0.0) + sync_elapsed(start)
     return result
 
 
-def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, beta_dot_normal, timings: dict[str, float] | None = None):
+def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, beta_dot_normal, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0, gauge_inactive: bool = False):
     """Pack reduced trace matrix values in device COO ordering."""
     cp = require_cupy()
     start = time.perf_counter()
@@ -613,9 +630,9 @@ def trace_data_cupy(trace_blocks, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpa
     valid_faces = mesh.interior_faces
     n_flux = valid_elements.size * 3 * edg_dof * edg_dof
     n_mass = valid_elements.size * edg_dof * edg_dof
-    data = cp.empty(n_flux + n_mass, dtype=cp.float64)
+    data = cp.empty(n_flux + n_mass, dtype=REAL_DTYPE)
     data[:n_flux] = -trace_blocks[valid_elements, valid_faces].ravel()
-    data[n_flux:] = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings).ravel()
+    data[n_flux:] = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=upwind_scale, gauge_inactive=gauge_inactive).ravel()
     if timings is not None:
         timings["data"] = timings.get("data", 0.0) + sync_elapsed(start)
     return data
@@ -633,8 +650,10 @@ def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str
 
 def boundary_trace_values_cupy(boundary_condition: Callable, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
     """Evaluate prescribed boundary trace coefficients on the device."""
-    cp = require_cupy()
-    return cp.asarray(trace_ref.host.boundary_coefficients(boundary_condition)[cspace.host.mesh.bnd_edges_inds], dtype=cp.float64)
+    from ..assembly.hdg import boundary_trace_coefficients
+    with require_cupy().cuda.Device(cspace.device_id):
+        return boundary_trace_coefficients(boundary_condition, cspace.host, trace_space=trace_ref.host,
+                                           backend="device", boundary_only=True)
 
 
 def build_dof_maps(cspace: CupyDGSpace):
@@ -669,7 +688,7 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace:
     keep_count = int(keep.size)
     reduced_rows = cp.empty(keep_count * edg_dof, dtype=cp.int64)
     reduced_cols = cp.empty_like(reduced_rows)
-    reduced_data = cp.empty(keep_count * edg_dof, dtype=cp.float64)
+    reduced_data = cp.empty(keep_count * edg_dof, dtype=REAL_DTYPE)
     reduced_rows.reshape((keep_count, edg_dof))[:] = full_to_reduced[row_r[keep]]
     reduced_cols.reshape((keep_count, edg_dof))[:] = full_to_reduced[col_r[keep]]
     reduced_data.reshape((keep_count, edg_dof))[:] = data_r[keep]
@@ -701,10 +720,16 @@ def assemble_reduced_system_cuda(
     raw_response_workspace=None,
     raw_tsle_workspace: RawAdvectionTsleWorkspace | None = None,
     raw_cache_local_response: bool = True,
+    raw_factor_workspace=None,
+    advection_stabilization=None,
 ) -> CudaAdvectionAssembly:
     """Assemble the boundary-eliminated advection trace system on device."""
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
+    from ..solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
+    factor = upwind_factor(advection_stabilization)
+    if factor is None:
+        raise NotImplementedError("This CUDA wrapper requires an upwind stabilization policy")
     cp = require_cupy()
     cspace = as_cupy_space(cspace)
     trace_ref = trace_space if isinstance(trace_space, CupyDGTraceSpace) else as_cupy_trace_space(trace_space, device=cspace.device_id)
@@ -750,7 +775,7 @@ def assemble_reduced_system_cuda(
                 mass_is_diagonal,
             ) = reference_advection_sparse_cupy(cspace, timings)
             if zero_boundary_flux:
-                boundary_trace = cp.zeros((cspace.mesh.bnd_edges_inds.size, cspace.edg_dof), dtype=cp.float64)
+                boundary_trace = cp.zeros((cspace.mesh.bnd_edges_inds.size, cspace.edg_dof), dtype=REAL_DTYPE)
             else:
                 if boundary_condition is None:
                     raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
@@ -775,6 +800,7 @@ def assemble_reduced_system_cuda(
                 matrix_format=raw_matrix_format,
                 zero_boundary_flux=zero_boundary_flux,
                 cache_local_response=raw_cache_local_response,
+                advection_stabilization=advection_stabilization,
             )
             if raw_local_assembly == "split3":
                 raw = assemble_projected_advection_trace_system_eliminated_tsle_bsr(
@@ -786,18 +812,21 @@ def assemble_reduced_system_cuda(
                     **common_raw_options,
                     lu_mode=raw_lu_mode,
                     local_response=raw_response_workspace,
+                    factor_workspace=raw_factor_workspace,
                 )
         else:
             if zero_boundary_flux:
                 raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
             if beta_dot_normal is None:
                 beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
-            local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings)
-            element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings)
+            beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, advection_stabilization, xp=cp)
+            local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
+            element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
             source_rhs = source_moments_cupy(source, cspace, timings)
             boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
-            side_mass_blocks = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings)
-            trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings)
+            side_mass_blocks = interior_trace_mass_blocks_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor,
+                gauge_inactive=is_conflict_averaged_upwind(advection_stabilization))
+            trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
             raw = assemble_projected_advection_trace_system_eliminated_raw_cuda(
                 local_mats=local_mats,
                 element_boundary=element_boundary,
@@ -809,6 +838,8 @@ def assemble_reduced_system_cuda(
                 trace_ref=trace_ref,
                 block_size=raw_block_size,
             )
+        from dataclasses import replace
+        raw = replace(raw, advection_stabilization=advection_stabilization)
         for key, value in raw.timings.items():
             timings[key if str(key).startswith("raw.") else f"raw.{key}"] = value
         timings["total"] = sync_elapsed(start_total)
@@ -835,19 +866,21 @@ def assemble_reduced_system_cuda(
         raise NotImplementedError("CuPy zero-flux advection assembly is not implemented yet; use backend='raw-cuda' with raw_local_assembly='fused' or backend='numba'")
     if beta_dot_normal is None:
         beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
+    beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, advection_stabilization, xp=cp)
     maps = build_dof_maps(cspace)
     rows, cols = setup_reduced_indices(cspace, timings)
-    local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings)
-    element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings)
+    local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
+    element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
     source_rhs = source_moments_cupy(source, cspace, timings)
     local_rhs = cp.concatenate((element_boundary, source_rhs[..., None]), axis=2)
     solved = solve_local_mats(local_mats, local_rhs, timings, "local.solve.assembly")
     solved_el_bd = solved[:, :, : 3 * cspace.edg_dof]
     solved_src = solved[:, :, 3 * cspace.edg_dof :]
-    trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings)
+    trace_lift = trace_lift_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
     blocks = trace_blocks_cupy(solved_el_bd, trace_lift, cspace, trace_ref, timings)
-    data = trace_data_cupy(blocks, cspace, trace_ref, beta_dot_normal, timings)
-    rhs_full = cp.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=cp.float64)
+    data = trace_data_cupy(blocks, cspace, trace_ref, beta_dot_normal, timings, upwind_scale=factor,
+                           gauge_inactive=is_conflict_averaged_upwind(advection_stabilization))
+    rhs_full = cp.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=REAL_DTYPE)
     rhs_full_r = rhs_full.reshape((cspace.mesh.num_edg, cspace.edg_dof))
     faces = face_rhs_cupy(solved_src, trace_lift, cspace, timings)
     cp.add.at(
@@ -875,11 +908,50 @@ def assemble_reduced_system_cuda(
     )
 
 
+
+def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors):
+    """Condense a new source/boundary RHS with an unchanged raw transport operator.
+
+    Reuses source moments, trace lifting, orientation, scatter, and response
+    reconstruction formalism from the regular assembly path.
+    """
+    from .advection_raw_cuda import solve_cached_advection_source_raw
+    cp = require_cupy()
+    start = time.perf_counter()
+    cspace, trace_ref, raw = assembly.cspace, assembly.trace_ref, assembly.raw
+    if raw is None or raw.local_response is None or factors.signature is None:
+        raise RuntimeError("source-only transport update requires cached raw local factors")
+    timings = {}
+    moments = source_moments_cupy(source, cspace, timings)
+    solved = solve_cached_advection_source_raw(moments, raw.local_response, factors, cspace, trace_ref)
+    if raw.zero_boundary_flux:
+        if boundary_condition is not None:
+            raise ValueError("boundary_condition must be None for zero-flux transport")
+        boundary = assembly.boundary_trace
+    else:
+        boundary = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
+        boundary_full = reconstruct_trace_cupy(cp.zeros_like(assembly.rhs), boundary, cspace)
+        # This applies the retained trace response to prescribed boundary data
+        # and includes the newly solved source column, with correct orientation.
+        solved, _ = reconstruct_advection_field_cuda(boundary_full, source, None, None, assembly)
+    faces = face_rhs_cupy(solved[..., None], factors.trace_lift, cspace, timings)
+    rhs_full = cp.zeros((cspace.mesh.num_edg, cspace.edg_dof), dtype=REAL_DTYPE)
+    elements, sides = cspace.mesh.interior_elements, cspace.mesh.interior_faces
+    cp.add.at(rhs_full, cspace.mesh.loc2glob_edge[elements, sides], faces[elements, sides])
+    rhs = cp.ascontiguousarray(rhs_full[cspace.mesh.int_edges_inds].ravel())
+    raw = replace(raw, rhs=rhs, boundary_trace=boundary,
+                  source_coeffs=source_coefficients_cupy(source, cspace), timings={})
+    timings["operator.reused"] = 1.0
+    timings["local.factors.reused"] = 1.0
+    timings["total"] = sync_elapsed(start)
+    return replace(assembly, rhs=rhs, boundary_trace=boundary, raw=raw, timings=timings)
+
+
 def reconstruct_trace_cupy(trace_reduced, boundary_trace, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
     """Expand reduced trace values into the full device trace vector."""
     cp = require_cupy()
     start = time.perf_counter()
-    trace = cp.empty(cspace.mesh.num_edg * cspace.edg_dof, dtype=cp.float64)
+    trace = cp.empty(cspace.mesh.num_edg * cspace.edg_dof, dtype=REAL_DTYPE)
     trace_r = trace.reshape((cspace.mesh.num_edg, cspace.edg_dof))
     trace_r[cspace.mesh.int_edges_inds] = trace_reduced.reshape((cspace.mesh.int_edges_inds.size, cspace.edg_dof))
     trace_r[cspace.mesh.bnd_edges_inds] = boundary_trace
@@ -925,6 +997,7 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
                 block_size=block_size,
                 lu_mode=raw.lu_mode,
                 zero_boundary_flux=raw.zero_boundary_flux,
+                advection_stabilization=raw.advection_stabilization,
             )
         else:
             uh, kernel_elapsed = reconstruct_projected_advection_field_raw_cuda(
@@ -945,13 +1018,13 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
     if cspace.mesh.num_negative_orientations:
         neg = element_traces[cspace.mesh.negative_orientation_elements, cspace.mesh.negative_orientation_faces]
         if trace_ref.kind == "legendre-modal":
-            signs = cp.where(cp.arange(cspace.edg_dof, dtype=cp.int64) % 2 == 0, 1.0, -1.0)
+            signs = cp.where(cp.arange(cspace.edg_dof, dtype=cp.int64) % 2 == 0, REAL_DTYPE(1.0), REAL_DTYPE(-1.0))
             element_traces[cspace.mesh.negative_orientation_elements, cspace.mesh.negative_orientation_faces] = neg * signs
         else:
             element_traces[cspace.mesh.negative_orientation_elements, cspace.mesh.negative_orientation_faces] = neg[:, ::-1]
     element_traces = element_traces.reshape((cspace.mesh.num_tri, 3 * cspace.edg_dof))
-    local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref)
-    element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref)
+    local_mats = assembly.local_mats
+    element_boundary = assembly.element_boundary
     source_rhs = source_moments_cupy(source, cspace)
     rhs = source_rhs[..., None] + element_boundary @ element_traces[..., None]
     start = time.perf_counter()
@@ -1029,7 +1102,7 @@ def _as_cupyx_csr_matrix(matrix, sparse, cp):
         return sparse.csr_matrix(
             (matrix.data, matrix.indices, matrix.indptr),
             shape=matrix.shape,
-            dtype=cp.float64,
+            dtype=REAL_DTYPE,
         )
     return matrix
 
@@ -1086,11 +1159,11 @@ def _scalarize_device_bsr_matrix(matrix: _DeviceBsrMatrixView, sparse, cp):
     num_block_rows = int(matrix.shape[0] // block_size)
     scalar_indptr = cp.empty(matrix.shape[0] + 1, dtype=cp.int32)
     scalar_indices = cp.empty(int(matrix.data.size), dtype=cp.int32)
-    scalar_data = cp.empty(int(matrix.data.size), dtype=cp.float64)
+    scalar_data = cp.empty(int(matrix.data.size), dtype=REAL_DTYPE)
     device_id = int(cp.cuda.runtime.getDevice())
     kernel = _DEVICE_BSR_TO_SCALAR_CSR_KERNELS.get(device_id)
     if kernel is None:
-        kernel = cp.RawKernel(
+        kernel = real_raw_kernel(
             _DEVICE_BSR_TO_SCALAR_CSR_SOURCE, "device_bsr_to_scalar_csr"
         )
         _DEVICE_BSR_TO_SCALAR_CSR_KERNELS[device_id] = kernel
@@ -1113,7 +1186,7 @@ def _scalarize_device_bsr_matrix(matrix: _DeviceBsrMatrixView, sparse, cp):
     return sparse.csr_matrix(
         (scalar_data, scalar_indices, scalar_indptr),
         shape=matrix.shape,
-        dtype=cp.float64,
+        dtype=REAL_DTYPE,
     )
 
 
@@ -1121,13 +1194,13 @@ def _device_compressed_matvec(matrix, vector, sparse, cp):
     """Apply a device CSR or face-BSR matrix without host materialization."""
     if not isinstance(matrix, _DeviceBsrMatrixView):
         return _as_cupyx_csr_matrix(matrix, sparse, cp) @ vector
-    output = cp.empty(matrix.shape[0], dtype=cp.float64)
+    output = cp.empty(matrix.shape[0], dtype=REAL_DTYPE)
     threads = 256
     blocks = (matrix.shape[0] + threads - 1) // threads
     device_id = int(cp.cuda.runtime.getDevice())
     kernel = _DEVICE_BSR_MATVEC_KERNELS.get(device_id)
     if kernel is None:
-        kernel = cp.RawKernel(_DEVICE_BSR_MATVEC_SOURCE, "device_bsr_matvec")
+        kernel = real_raw_kernel(_DEVICE_BSR_MATVEC_SOURCE, "device_bsr_matvec")
         _DEVICE_BSR_MATVEC_KERNELS[device_id] = kernel
     kernel(
         (blocks,),
@@ -1173,7 +1246,7 @@ def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
     matrix = sparse.coo_matrix(
         (assembly.data, (assembly.rows.astype(cp.int32), assembly.cols.astype(cp.int32))),
         shape=(system_size, system_size),
-        dtype=cp.float64,
+        dtype=REAL_DTYPE,
     ).tocsr()
     matrix.sum_duplicates()
     if matrix.indices.dtype != cp.int32 or matrix.indptr.dtype != cp.int32:
@@ -1184,7 +1257,7 @@ def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
                 matrix.indptr.astype(cp.int32, copy=False),
             ),
             shape=matrix.shape,
-            dtype=cp.float64,
+            dtype=REAL_DTYPE,
         )
     return matrix
 
@@ -1241,10 +1314,10 @@ def _diagonal_scale_csr_rows_in_place(matrix, rhs):
     device_id = int(cp.cuda.runtime.getDevice())
     kernel = _CSR_ROW_SCALE_KERNELS.get(device_id)
     if kernel is None:
-        kernel = cp.RawKernel(_CSR_ROW_SCALE_SOURCE, "diagonal_scale_csr_rows")
+        kernel = real_raw_kernel(_CSR_ROW_SCALE_SOURCE, "diagonal_scale_csr_rows")
         _CSR_ROW_SCALE_KERNELS[device_id] = kernel
     nrows = int(rhs.size)
-    diagonal = cp.empty(nrows, dtype=cp.float64)
+    diagonal = cp.empty(nrows, dtype=REAL_DTYPE)
     if nrows:
         kernel(
             (nrows,),
@@ -1310,8 +1383,8 @@ def _restore_scaled_csr_rows_in_place(
     device_id = int(cp.cuda.runtime.getDevice())
     kernels = _CSR_ROW_UNSCALE_KERNELS.get(device_id)
     if kernels is None:
-        left_kernel = cp.RawKernel(_CSR_ROW_UNSCALE_SOURCE, "restore_left_scaled_csr_rows")
-        symmetric_kernel = cp.RawKernel(
+        left_kernel = real_raw_kernel(_CSR_ROW_UNSCALE_SOURCE, "restore_left_scaled_csr_rows")
+        symmetric_kernel = real_raw_kernel(
             _CSR_ROW_UNSCALE_SOURCE,
             "restore_symmetric_scaled_csr_rows",
         )
@@ -1432,8 +1505,8 @@ def _bsr_row_scale_kernels():
     kernels = _BSR_ROW_SCALE_KERNELS.get(device_id)
     if kernels is None:
         kernels = (
-            cp.RawKernel(_BSR_ROW_SCALE_SOURCE, "diagonal_scale_bsr_rows"),
-            cp.RawKernel(_BSR_ROW_SCALE_SOURCE, "restore_left_scaled_bsr_rows"),
+            real_raw_kernel(_BSR_ROW_SCALE_SOURCE, "diagonal_scale_bsr_rows"),
+            real_raw_kernel(_BSR_ROW_SCALE_SOURCE, "restore_left_scaled_bsr_rows"),
         )
         _BSR_ROW_SCALE_KERNELS[device_id] = kernels
     return kernels
@@ -1443,7 +1516,7 @@ def _diagonal_scale_bsr_rows_in_place(matrix: _DeviceBsrMatrixView, rhs):
     """Apply the scalar CSR left-scaling rule directly to face-BSR values."""
     cp = require_cupy()
     nrows = int(rhs.size)
-    diagonal = cp.empty(nrows, dtype=cp.float64)
+    diagonal = cp.empty(nrows, dtype=REAL_DTYPE)
     if nrows:
         scale_kernel, _ = _bsr_row_scale_kernels()
         scale_kernel(
@@ -1537,7 +1610,7 @@ def _close_reusable_amgx_solvers() -> None:
         live.append(solver)
     _AMGX_REUSABLE_SOLVERS[:] = [solver for solver in live if not solver.closed]
 
-def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0):
+def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0, fixed_amg_cycles: int | None = None):
     """Build an AMGX solver configuration with normalized controls and diagnostics."""
     from .cupy import default_pyamgx_config
 
@@ -1553,16 +1626,25 @@ def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: in
 
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
     solver_config = amgx_config.setdefault("solver", {})
-    solver_config["monitor_residual"] = 1
-    solver_config["store_res_history"] = 1
+    if fixed_amg_cycles is not None:
+        if (isinstance(fixed_amg_cycles, bool) or not isinstance(fixed_amg_cycles, int)
+                or fixed_amg_cycles <= 0):
+            raise ValueError("fixed_amg_cycles must be a positive integer")
+        if solver_config.get("solver") != "AMG":
+            raise ValueError("fixed_amg_cycles requires an AMG solver")
+        solver_config["max_iters"] = fixed_amg_cycles
+        solver_config["monitor_residual"] = 0
+        solver_config["store_res_history"] = 0
+    else:
+        solver_config["monitor_residual"] = 1
+        solver_config.setdefault("store_res_history", 1)
     if verbose_level == 2 or verbose_level >= 4:
         solver_config["obtain_timings"] = 1
     if verbose_level >= 3:
         solver_config["print_solve_stats"] = 1
-        # Keep the runner contract consistent with load_amgx_config(): level
-        # three prints every outer Krylov iteration, irrespective of a JSON
-        # preset's compact logging cadence.
-        solver_config["print_solve_stats_interval"] = 1
+        # Honor an explicit cadence, including the transport guard's compact
+        # default. The native loop always prints the last completed iteration.
+        solver_config.setdefault("print_solve_stats_interval", 1)
     return amgx_config
 
 
@@ -1664,6 +1746,29 @@ def _as_amgx_capacity_error(exc, *, phase: str, cp, pyamgx):
     )
 
 
+def _validate_amgx_block_configuration(config, block_dim: int) -> None:
+    """Reject known scalar-only solvers before invoking native block setup."""
+    if block_dim <= 1:
+        return
+
+    def check(node, path: str) -> None:
+        solver_name = node.get("solver") if isinstance(node, dict) else node
+        if isinstance(solver_name, str) and solver_name.upper() == "CHEBYSHEV_POLY":
+            raise ValueError(
+                f"AMGX {path} uses scalar-only CHEBYSHEV_POLY with "
+                f"block size {block_dim}; use CHEBYSHEV with a "
+                "block-compatible preconditioner or scalarize the matrix"
+            )
+        if isinstance(node, dict):
+            # These solvers act on the same matrix. A coarse_solver may act
+            # on scalar-expanded levels, so its block size is not known here.
+            for key in ("solver", "preconditioner", "smoother"):
+                if key in node:
+                    check(node[key], f"{path}.{key}")
+
+    check(config, "config")
+
+
 class PyAMGXCsrDeviceSolver:
     """Reusable PyAMGX CSR solver for a fixed device-resident matrix."""
 
@@ -1675,11 +1780,16 @@ class PyAMGXCsrDeviceSolver:
             maxiter: int | None = None,
             verbose: bool | int = 0,
             reusable: bool = False,
+            fixed_amg_cycles: int | None = None,
     ):
-        """Initialize this object."""
+        """Initialize a solve, or an explicitly fixed number of AMG cycles.
+
+        Fixed cycles disable tolerance-based early exit for preconditioner use.
+        Ordinary solver calls retain convergence monitoring; history is optional.
+        """
         self.cp = require_cupy()
         self.pyamgx = require_pyamgx()
-        self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose)
+        self.config_dict = _amgx_config_for_solve(config=config, tolerance=tolerance, maxiter=maxiter, verbose=verbose, fixed_amg_cycles=fixed_amg_cycles)
         self.verbose_level = (
             1
             if isinstance(verbose, bool) and verbose
@@ -1706,10 +1816,10 @@ class PyAMGXCsrDeviceSolver:
             failure_phase = "configuration creation"
             self.cfg = self.pyamgx.Config().create_from_dict(self.config_dict)
             failure_phase = "solver-object creation"
-            self.mat = self.pyamgx.Matrix().create(self.rsrc, mode="dDDI")
-            self.vec_b = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
-            self.vec_x = self.pyamgx.Vector().create(self.rsrc, mode="dDDI")
-            self.solver = self.pyamgx.Solver().create(self.rsrc, self.cfg)
+            self.mat = self.pyamgx.Matrix().create(self.rsrc, mode=AMGX_MODE)
+            self.vec_b = self.pyamgx.Vector().create(self.rsrc, mode=AMGX_MODE)
+            self.vec_x = self.pyamgx.Vector().create(self.rsrc, mode=AMGX_MODE)
+            self.solver = self.pyamgx.Solver().create(self.rsrc, self.cfg, mode=AMGX_MODE)
             if self.reusable:
                 _AMGX_REUSABLE_SOLVERS.append(self)
         except Exception as exc:
@@ -1735,11 +1845,13 @@ class PyAMGXCsrDeviceSolver:
                 raise ValueError(
                     f"matrix shape {matrix.shape} is incompatible with block size {block_dim}"
                 )
+            _validate_amgx_block_configuration(self.config_dict, block_dim)
             block_shape = (
                 int(matrix.shape[0] // block_dim),
                 int(matrix.shape[1] // block_dim),
             )
             matrix_upload_start = time.perf_counter()
+            audit_arrays('amgx-matrix-upload', matrix)
             self.mat.upload(
                 matrix.indptr,
                 matrix.indices,
@@ -1807,7 +1919,7 @@ class PyAMGXCsrDeviceSolver:
             x = self.cp.zeros_like(rhs)
             zero_initial_guess = True
         else:
-            x = self.cp.asarray(initial_guess, dtype=self.cp.float64).copy()
+            x = self.cp.asarray(initial_guess, dtype=REAL_DTYPE).copy()
             if tuple(x.shape) != tuple(rhs.shape):
                 raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
             zero_initial_guess = False
@@ -1817,6 +1929,7 @@ class PyAMGXCsrDeviceSolver:
         solve_start = time.perf_counter()
         failure_phase = "vector upload"
         try:
+            audit_arrays('amgx-vector-upload', rhs, x)
             self.vec_b.upload_raw(rhs.data.ptr, self.block_rows, self.block_dim)
             self.vec_x.upload_raw(x.data.ptr, self.block_rows, self.block_dim)
             failure_phase = "solver iteration"
@@ -1880,6 +1993,7 @@ class PyAMGXCsrDeviceSolver:
                     first_error = exc
             self._shared_resources_acquired = False
         self.solver = self.mat = self.vec_x = self.vec_b = self.rsrc = self.cfg = None
+        self._hdgfem_fixed_operator = None
         self.closed = True
         if first_error is not None and not suppress_errors:
             raise first_error
@@ -2011,7 +2125,7 @@ def _solve_reduced_system_amgx_device_once(
         matrix = sparse.coo_matrix(
             (assembly.data, (assembly.rows.astype(cp.int32), assembly.cols.astype(cp.int32))),
             shape=(system_size, system_size),
-            dtype=cp.float64,
+            dtype=REAL_DTYPE,
         ).tocsr()
         matrix.sum_duplicates()
         if matrix.indices.dtype != cp.int32 or matrix.indptr.dtype != cp.int32:
@@ -2022,7 +2136,7 @@ def _solve_reduced_system_amgx_device_once(
                 matrix.indptr.astype(cp.int32, copy=False),
             ),
                 shape=matrix.shape,
-                dtype=cp.float64,
+                dtype=REAL_DTYPE,
             )
     bsr_scalarized = bool(scalarize_bsr and isinstance(matrix, _DeviceBsrMatrixView))
     if bsr_scalarized:
@@ -2097,7 +2211,7 @@ def _solve_reduced_system_amgx_device_once(
             setup_elapsed = 0.0
             matrix_upload_elapsed = 0.0
             solver_setup_elapsed = 0.0
-            preconditioner_reused = False
+            preconditioner_reused = bool(reusable_solver.is_setup)
             if not reusable_solver.is_setup:
                 setup_elapsed = reusable_solver.setup(solve_matrix)
                 matrix_upload_elapsed = reusable_solver.last_matrix_upload_elapsed_seconds
@@ -2110,6 +2224,7 @@ def _solve_reduced_system_amgx_device_once(
             amgx_info["amgx_matrix_upload_elapsed_seconds"] = matrix_upload_elapsed
             amgx_info["amgx_solver_setup_elapsed_seconds"] = solver_setup_elapsed
             amgx_info["amgx_preconditioner_reused"] = preconditioner_reused
+        audit_arrays('amgx-solution', x_cp)
         solver_x_cp = x_cp
         if inverse_sqrt_diagonal is not None:
             x_cp = inverse_sqrt_diagonal * solver_x_cp
@@ -2136,31 +2251,30 @@ def _solve_reduced_system_amgx_device_once(
         )
         solver_residual_elapsed = time.perf_counter() - solver_residual_start
 
+        # Check b-A*x after restoring the physical coefficients. Undoing the
+        # residual scaling algebraically can hide cancellation/roundoff errors.
+        unscale_elapsed = restore_scaled_matrix()
         physical_residual_start = time.perf_counter()
-        if row_diagonal is not None:
-            physical_residual = row_diagonal * solver_residual
-            physical_residual_rhs = row_diagonal * solve_rhs
-        elif inverse_sqrt_diagonal is not None:
-            physical_residual = solver_residual / inverse_sqrt_diagonal
-            physical_residual_rhs = physical_rhs
+        if scale_mode == "none":
+            # The solver and physical systems are identical. Reuse the SpMV
+            # and norms, but retain the independent physical acceptance target.
+            physical_residual_norm = solver_residual_norm
+            physical_rhs_norm = solver_rhs_norm
+            physical_relative = solver_relative
+            physical_target = max(float(result_check_rtol) * physical_rhs_norm, float(atol))
         else:
-            physical_residual = (
-                _device_compressed_matvec(solve_matrix, x_cp, sparse, cp)
-                - physical_rhs
+            physical_residual = _device_compressed_matvec(matrix, x_cp, sparse, cp) - physical_rhs
+            physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
+                physical_residual,
+                physical_rhs,
+                rtol=result_check_rtol,
+                atol=atol,
             )
-            physical_residual_rhs = physical_rhs
-        physical_residual_norm, physical_rhs_norm, physical_relative, physical_target = _residual_stats_cp(
-            physical_residual,
-            physical_residual_rhs,
-            rtol=result_check_rtol,
-            atol=atol,
-        )
         physical_residual_elapsed = time.perf_counter() - physical_residual_start
         validation_elapsed = finite_elapsed + solver_residual_elapsed + physical_residual_elapsed
     except BaseException:
         restore_scaled_matrix()
         raise
-    unscale_elapsed = restore_scaled_matrix()
     native_status = str(amgx_info.get("amgx_status", "unknown"))
     normalized_status = native_status.lower().replace("-", "_").replace(" ", "_")
     backend_success = normalized_status == "unknown" or not any(
@@ -2253,6 +2367,91 @@ def _solve_reduced_system_amgx_device_once(
     return result, x_cp
 
 
+def _solve_reduced_system_cusolver_qr_device_once(
+    assembly: CudaAdvectionAssembly,
+    *,
+    tolerance: float = 1e-13,
+    check_rtol: float | None = None,
+    atol: float = 0.0,
+    materialize_host_solution: bool = True,
+):
+    """Last-resort device sparse QR with an explicit physical residual check.
+
+    Uses CuPy's cuSOLVER sparse QR binding, not a host sparse solve. BSR is
+    expanded on device. The direct solver receives its own canonical CSR copy
+    and the original, unscaled system; it never reuses a failed iterate.
+    """
+    from cupyx.cusolver import csrlsvqr
+
+    cp, sparse = require_cupy(), require_cupyx_sparse()
+    started = time.perf_counter()
+    rtol = float(tolerance if check_rtol is None else check_rtol)
+    if not np.isfinite(rtol) or rtol < 0.0 or not np.isfinite(atol) or atol < 0.0:
+        raise ValueError("direct residual tolerances must be finite and nonnegative")
+    if not bool(cp.all(cp.isfinite(assembly.data)).get()) or not bool(cp.all(cp.isfinite(assembly.rhs)).get()):
+        raise ValueError("device direct system contains non-finite values")
+    matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+    scalarized = isinstance(matrix, _DeviceBsrMatrixView)
+    if max(int(matrix.shape[0]), int(matrix.data.size)) > np.iinfo(np.int32).max:
+        raise ValueError("cuSOLVER sparse QR requires matrix size and scalar nnz to fit int32")
+    csr = (_scalarize_device_bsr_matrix(matrix, sparse, cp) if scalarized
+           else _as_cupyx_csr_matrix(matrix, sparse, cp).copy())
+    csr.sum_duplicates()
+    csr.sort_indices()
+    rhs = cp.ascontiguousarray(assembly.rhs).copy()
+    cp.cuda.get_current_stream().synchronize()
+    setup_elapsed = time.perf_counter() - started
+    solve_start = time.perf_counter()
+    # tol is a pivot-singularity threshold, not the residual tolerance. Reject
+    # a singularity warning as well as explicit backend failures.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", message="(?i).*singular.*")
+        solution = csrlsvqr(csr, rhs, tol=0.0, reorder=1)
+    cp.cuda.get_current_stream().synchronize()
+    solve_elapsed = time.perf_counter() - solve_start
+    residual = _device_compressed_matvec(matrix, solution, sparse, cp) - assembly.rhs
+    norm, rhs_norm, relative, target = _residual_stats_cp(residual, assembly.rhs, rtol=rtol, atol=atol)
+    finite = bool(cp.all(cp.isfinite(solution)).get())
+    result = SolveResult(
+        x=cp.asnumpy(solution) if materialize_host_solution else None,
+        residual_norm=norm, info=0, preconditioner=None,
+        total_elapsed_seconds=time.perf_counter() - started,
+        preconditioner_elapsed_seconds=setup_elapsed, solve_elapsed_seconds=solve_elapsed,
+        rhs_norm=rhs_norm, relative_residual_norm=relative, residual_target=target,
+        solver_residual_norm=norm, solver_rhs_norm=rhs_norm,
+        solver_relative_residual_norm=relative, solver_residual_target=target,
+        physical_residual_norm=norm, physical_rhs_norm=rhs_norm,
+        physical_relative_residual_norm=relative, physical_residual_target=target,
+        rtol=rtol, atol=atol,
+    )
+    result.device_scale_mode = "none"
+    result.amgx_bsr_scalarized = scalarized
+    result.cupyx_solver = "cusolver-qr-device"
+    return finalize_solve_result(
+        result, backend="cusolver-qr-device", backend_info=0,
+        backend_success=True, solution_is_finite=finite, raise_on_nonconvergence=False,
+    ), solution
+
+
+def _device_transport_matrix_diagnostics(assembly) -> dict[str, float | int]:
+    """Cheap row-scale diagnostics on failure; these are not condition estimates."""
+    cp, sparse = require_cupy(), require_cupyx_sparse()
+    matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+    if isinstance(matrix, (_DeviceBsrMatrixView, _DeviceCsrMatrixView)):
+        absolute_matrix = replace(matrix, data=cp.abs(matrix.data))
+    else:
+        absolute_matrix = matrix.copy()
+        absolute_matrix.data = cp.abs(absolute_matrix.data)
+    row_l1 = _device_compressed_matvec(
+        absolute_matrix, cp.ones(matrix.shape[1], dtype=REAL_DTYPE), sparse, cp,
+    )
+    zero_rows = cp.count_nonzero(row_l1 == 0)
+    values = cp.asnumpy(cp.stack((cp.min(row_l1), cp.max(row_l1), zero_rows)))
+    return {"matrix_size": int(matrix.shape[0]), "matrix_scalar_stored_entries": int(matrix.data.size),
+            "matrix_row_l1_min": float(values[0]), "matrix_row_l1_max": float(values[1]),
+            "matrix_zero_rows": int(values[2])}
+
+
 def solve_reduced_system_amgx_device(
     assembly: CudaAdvectionAssembly,
     *,
@@ -2265,19 +2464,49 @@ def solve_reduced_system_amgx_device(
     initial_guess=None,
     reusable_solver: PyAMGXCsrDeviceSolver | None = None,
     retry_solver_cache: dict[Any, PyAMGXCsrDeviceSolver] | None = None,
+    retry_seed_solution=None,
+    retry_seed_label: str | None = None,
+    cache_fixed_operator: bool = False,
     scale_system: bool | str = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
     verbose: bool | int = 0,
 ):
-    """Solve one assembled device system, optionally retrying without reassembly."""
+    """Solve one assembled device system, optionally retrying without reassembly.
+
+    ``retry_seed_solution`` initializes the wrapper's single best-candidate
+    slot from a failed upstream solver.  Its physical residual is evaluated
+    here, and no vector history is retained.
+    """
+    def fixed_solver(key, solver_config):
+        """Keep native allocations; refresh numeric setup only for a new matrix."""
+        if retry_solver_cache is None:
+            raise ValueError("fixed-operator AMGX reuse requires an owning solver cache")
+        key = ("fixed-operator", key)
+        active = retry_solver_cache.get(key)
+        if active is None or active.closed:
+            active = PyAMGXCsrDeviceSolver(config=solver_config, tolerance=tolerance,
+                                           maxiter=maxiter, verbose=verbose, reusable=True)
+            retry_solver_cache[key] = active
+        if getattr(active, "_hdgfem_fixed_operator", None) is not assembly.data:
+            active.is_setup = False
+            active._hdgfem_fixed_operator = assembly.data
+        return active
+
+    if cache_fixed_operator:
+        if reusable_solver is not None:
+            raise ValueError("supply either reusable_solver or cache_fixed_operator")
+        reusable_solver = fixed_solver("primary", config)
     configured_retries = tuple(retry_attempts or ())
+    if retry_seed_solution is not None and not raise_on_nonconvergence:
+        raise ValueError("retry_seed_solution requires raise_on_nonconvergence=True")
     max_attempts = 8
     if 1 + len(configured_retries) > max_attempts:
         raise ValueError(f"AMGX solve supports at most {max_attempts} bounded attempts")
     attempts = [
         {
             "label": "primary-stage-guess" if initial_guess is not None else "primary-zero",
+            "backend": "amgx",
             "config": config,
             "initial_guess": initial_guess,
             "scale_system": _normalize_device_scale_mode(scale_system),
@@ -2290,14 +2519,48 @@ def solve_reduced_system_amgx_device(
         }
     ]
     for index, retry in enumerate(configured_retries, start=1):
+        backend = str(retry.get("backend", "amgx"))
+        if backend not in {"amgx", "cusolver-qr"}:
+            raise ValueError(f"unsupported device retry backend {backend!r}")
+        if backend == "cusolver-qr" and (
+            index != len(configured_retries)
+            or retry.get("residual_correction", False)
+            or retry.get("reuse_preconditioner", False)
+            or _normalize_device_scale_mode(retry.get("scale_system", False)) != "none"
+        ):
+            raise ValueError("cusolver-qr must be the final, unscaled direct retry without preconditioner reuse or correction")
         use_initial_guess = bool(retry.get("use_initial_guess", True))
+        reuse_primary_solver = bool(retry.get("reuse_primary_solver", False))
+        if reuse_primary_solver and (
+            backend != "amgx"
+            or retry.get("scalarize_bsr", False)
+            or retry.get("reuse_preconditioner", False)
+            or retry.get("residual_correction", False)
+        ):
+            raise ValueError(
+                "reuse_primary_solver requires a nonscalarized AMGX retry "
+                "without correction or separate preconditioner reuse"
+            )
+        retry_config = retry.get("config", config)
+        retry_scale_mode = _normalize_device_scale_mode(
+            retry.get("scale_system", False if backend == "cusolver-qr" else scale_system)
+        )
+        if reuse_primary_solver and (
+            retry_config != config
+            or retry_scale_mode != _normalize_device_scale_mode(scale_system)
+        ):
+            raise ValueError(
+                "reuse_primary_solver requires the primary configuration and scaling"
+            )
         attempts.append(
             {
                 "label": str(retry.get("label", f"retry-{index}")),
-                "config": retry.get("config", config),
+                "backend": backend,
+                "config": retry_config,
                 "initial_guess": initial_guess if use_initial_guess else None,
-                "scale_system": _normalize_device_scale_mode(retry.get("scale_system", scale_system)),
-                "reusable_solver": None,
+                "scale_system": retry_scale_mode,
+                "reusable_solver": reusable_solver if reuse_primary_solver else None,
+                "reuse_primary_solver": reuse_primary_solver,
                 "use_best_solution": bool(retry.get("use_best_solution", False)),
                 "residual_correction": bool(retry.get("residual_correction", False)),
                 "scalarize_bsr": bool(retry.get("scalarize_bsr", False)),
@@ -2308,7 +2571,7 @@ def solve_reduced_system_amgx_device(
             }
         )
 
-    if len(attempts) == 1:
+    if len(attempts) == 1 and retry_seed_solution is None:
         return _solve_reduced_system_amgx_device_once(
             assembly,
             config=config,
@@ -2336,7 +2599,56 @@ def solve_reduced_system_amgx_device(
     best_solution = None
     last_solution = None
     best_score = float("inf")
+    seed_metrics = None
     verbose_level = 1 if isinstance(verbose, bool) and verbose else (0 if not verbose else int(verbose))
+    if retry_seed_solution is not None:
+        sparse = require_cupyx_sparse()
+        seed = cp.asarray(retry_seed_solution, dtype=REAL_DTYPE)
+        if seed.ndim != 1 or int(seed.size) != int(assembly.rhs.size):
+            raise ValueError(
+                "retry_seed_solution must have the reduced-system shape "
+                f"({int(assembly.rhs.size)},)"
+            )
+        if bool(cp.all(cp.isfinite(seed)).get()):
+            seed_matrix = _assembly_device_csr_matrix(assembly, cp, sparse)
+            seed_residual = (
+                _device_compressed_matvec(seed_matrix, seed, sparse, cp)
+                - assembly.rhs
+            )
+            seed_check_rtol = (
+                float(tolerance) if check_rtol is None else float(check_rtol)
+            )
+            residual_norm, rhs_norm, relative_residual, residual_target = (
+                _residual_stats_cp(
+                    seed_residual, assembly.rhs,
+                    rtol=seed_check_rtol, atol=atol,
+                )
+            )
+            seed_score = residual_norm / max(residual_target, 1.0e-300)
+            if all(np.isfinite(value) for value in (
+                residual_norm, rhs_norm, relative_residual, residual_target, seed_score,
+            )):
+                best_solution = seed.copy()
+                best_score = seed_score
+                seed_metrics = {
+                    "label": retry_seed_label or "upstream-best",
+                    "physical_residual": residual_norm,
+                    "physical_rhs_norm": rhs_norm,
+                    "physical_relative_residual": relative_residual,
+                    "physical_target": residual_target,
+                }
+
+    def attach_seed_metrics(result) -> None:
+        if result is None or seed_metrics is None:
+            return
+        result.amgx_retry_seed_label = seed_metrics["label"]
+        result.amgx_retry_seed_physical_residual = seed_metrics["physical_residual"]
+        result.amgx_retry_seed_physical_rhs_norm = seed_metrics["physical_rhs_norm"]
+        result.amgx_retry_seed_physical_relative_residual = seed_metrics[
+            "physical_relative_residual"
+        ]
+        result.amgx_retry_seed_physical_target = seed_metrics["physical_target"]
+
     try:
         for index, attempt in enumerate(attempts, start=1):
             try:
@@ -2359,8 +2671,18 @@ def solve_reduced_system_amgx_device(
                     attempt_initial_guess = None
 
                 attempt_solver = attempt["reusable_solver"]
-                replace_coefficients = False
                 if (
+                    attempt.get("reuse_primary_solver", False)
+                    and attempt_solver is not None
+                    and attempt_solver.closed
+                ):
+                    # Setup/iteration exceptions close the primary's AMGX
+                    # objects. Retry with a fresh ephemeral solver in that case.
+                    attempt_solver = None
+                replace_coefficients = False
+                if cache_fixed_operator and attempt["backend"] == "amgx":
+                    attempt_solver = fixed_solver("primary" if index == 1 else index-1, attempt["config"])
+                elif (
                     attempt["reuse_preconditioner"]
                     and retry_solver_cache is not None
                 ):
@@ -2379,26 +2701,32 @@ def solve_reduced_system_amgx_device(
                         retry_solver_cache[cache_key] = attempt_solver
                     replace_coefficients = bool(attempt_solver.is_setup)
 
-                result, solution = _solve_reduced_system_amgx_device_once(
-                    solve_assembly,
-                    config=attempt["config"],
-                    tolerance=tolerance,
-                    check_rtol=check_rtol,
-                    solver_check_rtol=_amgx_relative_residual_check_rtol(
-                        attempt["config"],
-                        tolerance if check_rtol is None else check_rtol,
-                    ),
-                    atol=atol,
-                    maxiter=maxiter,
-                    initial_guess=attempt_initial_guess,
-                    reusable_solver=attempt_solver,
-                    scale_system=attempt["scale_system"],
-                    scalarize_bsr=attempt["scalarize_bsr"],
-                    replace_reusable_coefficients=replace_coefficients,
-                    raise_on_nonconvergence=False,
-                    materialize_host_solution=materialize_host_solution,
-                    verbose=verbose,
-                )
+                if attempt["backend"] == "cusolver-qr":
+                    result, solution = _solve_reduced_system_cusolver_qr_device_once(
+                        assembly, tolerance=tolerance, check_rtol=check_rtol, atol=atol,
+                        materialize_host_solution=materialize_host_solution,
+                    )
+                else:
+                    result, solution = _solve_reduced_system_amgx_device_once(
+                        solve_assembly,
+                        config=attempt["config"],
+                        tolerance=tolerance,
+                        check_rtol=check_rtol,
+                        solver_check_rtol=_amgx_relative_residual_check_rtol(
+                            attempt["config"],
+                            tolerance if check_rtol is None else check_rtol,
+                        ),
+                        atol=atol,
+                        maxiter=maxiter,
+                        initial_guess=attempt_initial_guess,
+                        reusable_solver=attempt_solver,
+                        scale_system=attempt["scale_system"],
+                        scalarize_bsr=attempt["scalarize_bsr"],
+                        replace_reusable_coefficients=replace_coefficients,
+                        raise_on_nonconvergence=False,
+                        materialize_host_solution=materialize_host_solution,
+                        verbose=verbose,
+                    )
                 if base_solution is not None:
                     result.amgx_correction_info = int(result.info)
                     result.amgx_correction_relative_residual_norm = result.solver_relative_residual_norm
@@ -2433,7 +2761,7 @@ def solve_reduced_system_amgx_device(
                         result,
                         backend=result.backend or "pyamgx-device",
                         backend_info=result.backend_info,
-                        backend_success=result.failure_reason != "backend-nonconvergence",
+                        backend_success=result.failure_reason not in {"backend-nonconvergence", "backend-divergence"},
                         solution_is_finite=solution_is_finite,
                         residual_history=result.residual_history,
                         raise_on_nonconvergence=False,
@@ -2465,11 +2793,21 @@ def solve_reduced_system_amgx_device(
                         "preconditioner_reused": bool(
                             getattr(result, "amgx_preconditioner_reused", False)
                         ),
+                        "primary_solver_reused": bool(
+                            attempt.get("reuse_primary_solver", False)
+                            and attempt_solver is not None
+                        ),
                         "status": result.status,
                         "failure_reason": result.failure_reason,
+                        "backend_info": result.backend_info,
+                        "iterations": result.iteration_count,
                         "relative_residual": result.solver_relative_residual_norm,
                         "residual": result.solver_residual_norm,
                         "target": result.solver_residual_target,
+                        "backend": result.backend,
+                        "physical_relative_residual": result.physical_relative_residual_norm,
+                        "physical_residual": result.physical_residual_norm,
+                        "physical_target": result.physical_residual_target,
                     }
                 )
                 last_result = result
@@ -2478,12 +2816,15 @@ def solve_reduced_system_amgx_device(
                     print(
                         f"  AMGX attempt {index}/{len(attempts)} {attempt['label']}: "
                         f"{'accepted' if success else 'rejected'} "
-                        f"rel={result.solver_relative_residual_norm:.3e}",
+                        f"rel={result.solver_relative_residual_norm:.3e} "
+                        f"true_rel={result.physical_relative_residual_norm:.3e} "
+                        f"status={result.status} iterations={result.iteration_count}",
                         flush=True,
                     )
                 if success:
                     result.amgx_attempts = tuple(attempt_log)
                     result.amgx_attempt_count = index
+                    attach_seed_metrics(result)
                     return result, solution
             except Exception as exc:
                 capacity_error = _as_amgx_capacity_error(
@@ -2523,6 +2864,7 @@ def solve_reduced_system_amgx_device(
         retry_wrapper_elapsed = time.perf_counter() - retry_wrapper_start
         timed_result = last_result if last_result is not None else best_result
         if timed_result is not None:
+            attach_seed_metrics(timed_result)
             timed_result.amgx_retry_matrix_backup_elapsed_seconds = 0.0
             timed_result.amgx_retry_matrix_restore_elapsed_seconds = 0.0
             timed_result.amgx_retry_matrix_restore_count = 0
@@ -2547,12 +2889,30 @@ def solve_reduced_system_amgx_device(
     if failed_result is not None:
         failed_result.amgx_attempts = tuple(attempt_log)
         failed_result.amgx_attempt_count = len(attempt_log)
+        attach_seed_metrics(failed_result)
     details = "; ".join(
-        f"{entry['label']}: {entry.get('error', 'residual target not met')}"
+        f"{entry['label']}: {entry.get('error') or entry.get('failure_reason') or 'residual target not met'}"
         for entry in attempt_log
     )
     message = f"pyamgx-device solve exhausted {len(attempts)} bounded attempts: {details}"
     error = LinearSolveConvergenceError(message, result=failed_result)
+    error.amgx_attempts = tuple(attempt_log)
+    if seed_metrics is not None:
+        error.amgx_retry_seed = dict(seed_metrics)
+    # Preserve the failed system for the application error handler. Successful
+    # solves incur no host transfer or snapshot allocation.
+    from ..linalg.transport_diagnostics import save_transport_failure_snapshot
+
+    def save_failure_snapshot(path):
+        return save_transport_failure_snapshot(
+            path, assembly, initial_guess=initial_guess, best_solution=best_solution,
+        )
+
+    error.save_transport_snapshot = save_failure_snapshot
+    try:
+        error.matrix_diagnostics = _device_transport_matrix_diagnostics(assembly)
+    except Exception as diagnostic_error:
+        error.matrix_diagnostics = {"error": f"{type(diagnostic_error).__name__}: {diagnostic_error}"}
     if last_error is not None:
         raise error from last_error
     raise error

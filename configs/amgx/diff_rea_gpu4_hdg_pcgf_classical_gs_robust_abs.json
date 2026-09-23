@@ -1,0 +1,41 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "preconditioner": {
+      "solver": "AMG",
+      "algorithm": "CLASSICAL",
+      "selector": "PMIS",
+      "strength": "AHAT",
+      "strength_threshold": 0.75,
+      "interpolator": "D2",
+      "cycle": "V",
+      "presweeps": 2,
+      "postsweeps": 2,
+      "smoother": {
+        "solver": "MULTICOLOR_GS",
+        "symmetric_GS": 1
+      },
+      "coarse_solver": "DENSE_LU_SOLVER",
+      "max_iters": 1,
+      "max_levels": 100,
+      "print_grid_stats": 0,
+      "dense_lu_num_rows": 128,
+      "dense_lu_max_rows": 256,
+      "coarsest_sweeps": 4,
+      "aggressive_levels": 0,
+      "interp_max_elements": 4,
+      "error_scaling": 0
+    },
+    "solver": "PCGF",
+    "tolerance": 1e-12,
+    "max_iters": 2000,
+    "convergence": "ABSOLUTE",
+    "norm": "L2",
+    "print_solve_stats": 0,
+    "monitor_residual": 1,
+    "store_res_history": 0,
+    "obtain_timings": 0
+  }
+}

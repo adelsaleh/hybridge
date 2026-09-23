@@ -1,0 +1,15 @@
+diff --git a/modules/holoviz/src/glfw_window.cpp b/modules/holoviz/src/glfw_window.cpp
+--- a/modules/holoviz/src/glfw_window.cpp
++++ b/modules/holoviz/src/glfw_window.cpp
+@@ -676,6 +676,11 @@ bool GLFWWindow::is_minimized() {
++  // The operator skips Begin() while minimized. Poll here as well so the
++  // restore event can clear minimized_ instead of leaving the window stuck.
++  // begin() uses the existing GLFW mutex and event-processing path.
++  begin();
++
+   if (impl_->minimized_) {
+     usleep(50);
+   }
+   return impl_->minimized_;
+ }
+ 

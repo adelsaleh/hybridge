@@ -330,6 +330,186 @@ def test_dgfield_scalar_multiply_and_array_multiply_rejection() -> None:
         _ = np.ones(V.shape) * u
 
 
+def test_dgfield_linear_arithmetic_and_scalar_division() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 2, basis_type="dub_orth")
+    u_coeffs = np.arange(np.prod(V.shape), dtype=np.float64).reshape(V.shape)
+    v_coeffs = np.flip(u_coeffs, axis=1).copy()
+    u = V.field(u_coeffs, name="u")
+    v = V.field(v_coeffs, name="v")
+
+    result = (4.0 * u - v) / 3.0
+
+    np.testing.assert_allclose(result.coeffs, (4.0 * u_coeffs - v_coeffs) / 3.0)
+    np.testing.assert_array_equal(u.coeffs, u_coeffs)
+    np.testing.assert_array_equal(v.coeffs, v_coeffs)
+    with pytest.raises(ZeroDivisionError, match="divide a DGField by zero"):
+        _ = u / 0.0
+    with pytest.raises(TypeError, match="division by arrays is ambiguous"):
+        _ = u / np.ones(V.shape)
+
+
+def test_dgfield_linear_arithmetic_preserves_lazy_constants() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 2, basis_type="dub_orth")
+    current = V.constant(2.0, name="current")
+    previous = V.constant(-1.0, name="previous")
+
+    result = (4.0 * current - previous) / 3.0
+
+    assert result.constant_value == pytest.approx(3.0)
+    assert not current.coefficients_materialized
+    assert not previous.coefficients_materialized
+    assert not result.coefficients_materialized
+
+
+def test_dgfield_linear_arithmetic_accepts_coefficient_compatible_spaces() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=4)
+    equivalent_space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=5)
+    u_coeffs = np.arange(np.prod(V.shape), dtype=np.float64).reshape(V.shape)
+    other_coeffs = np.flip(u_coeffs, axis=1).copy()
+    u = V.field(u_coeffs)
+    other = equivalent_space.field(other_coeffs)
+
+    added = u + other
+    subtracted = u - other
+
+    assert V.is_compatible(equivalent_space)
+    assert added.space is V
+    assert subtracted.space is V
+    np.testing.assert_array_equal(added.coeffs, u_coeffs + other_coeffs)
+    np.testing.assert_array_equal(subtracted.coeffs, u_coeffs - other_coeffs)
+
+
+@pytest.mark.parametrize("basis_type", ("bernstein", "hier_C0", "dub_orth"))
+def test_dgfield_linear_arithmetic_elevates_to_higher_order_space(
+        basis_type: str,
+) -> None:
+    mesh = reference_triangle_mesh()
+    low_space = DGSpace(mesh, 1, basis_type=basis_type)
+    high_space = DGSpace(mesh, 3, basis_type=basis_type)
+    low_coeffs = np.arange(np.prod(low_space.shape), dtype=np.float64).reshape(low_space.shape)
+    high_coeffs = (
+        0.25
+        + np.arange(np.prod(high_space.shape), dtype=np.float64).reshape(high_space.shape)
+    )
+    low = low_space.field(low_coeffs, name="low")
+    high = high_space.field(high_coeffs, name="high")
+
+    added = low + high
+    reverse_added = high + low
+    subtracted = low - high
+    reverse_subtracted = high - low
+
+    elevation = high_space.degree_elevation_matrix_from(low_space)
+    assert low_space.is_basis_compatible(high_space)
+    assert not low_space.is_compatible(high_space)
+    expected_low = low_coeffs @ elevation
+    assert elevation is high_space.degree_elevation_matrix_from(low_space)
+    assert all(
+        result.space is high_space
+        for result in (added, reverse_added, subtracted, reverse_subtracted)
+    )
+    np.testing.assert_allclose(added.coeffs, expected_low + high_coeffs)
+    np.testing.assert_allclose(reverse_added.coeffs, high_coeffs + expected_low)
+    np.testing.assert_allclose(subtracted.coeffs, expected_low - high_coeffs)
+    np.testing.assert_allclose(reverse_subtracted.coeffs, high_coeffs - expected_low)
+
+    points = np.array(((-0.8, -0.7), (0.2, -0.4), (-0.4, 0.1)))
+    np.testing.assert_allclose(
+        added.values_at_ref(points),
+        low.values_at_ref(points) + high.values_at_ref(points),
+    )
+
+    constant_result = low_space.constant(2.0) + high_space.constant(-0.5)
+    assert constant_result.space is high_space
+    assert constant_result.constant_value == pytest.approx(1.5)
+    assert not constant_result.coefficients_materialized
+
+    with pytest.raises(ValueError, match="target polynomial order"):
+        low_space.degree_elevation_matrix_from(high_space)
+
+
+def test_dgfield_linear_arithmetic_rejects_incompatible_basis_or_mesh() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 1, basis_type="dub_orth")
+    u = V.zeros()
+
+    with pytest.raises(ValueError, match="same basis type"):
+        _ = u - DGSpace(mesh, 2, basis_type="bernstein").zeros()
+    with pytest.raises(ValueError, match="same mesh object"):
+        _ = u + DGSpace(reference_triangle_mesh(), 2, basis_type="dub_orth").zeros()
+
+
+def test_vectordgfield_componentwise_arithmetic() -> None:
+    mesh = reference_triangle_mesh()
+    V = DGSpace(mesh, 1, basis_type="bernstein")
+    first_coeffs = np.arange(np.prod(V.shape), dtype=np.float64).reshape(V.shape)
+    second_coeffs = first_coeffs + 2.0
+    current = VectorDGField(
+        (V.field(first_coeffs), V.field(second_coeffs)), name="current",
+    )
+    previous = VectorDGField(
+        (V.field(0.5 * first_coeffs), V.field(0.25 * second_coeffs)), name="previous",
+    )
+
+    result = (2.0 * current - previous) / 2.0
+
+    np.testing.assert_allclose(result.components[0].coeffs, 0.75 * first_coeffs)
+    np.testing.assert_allclose(result.components[1].coeffs, 0.875 * second_coeffs)
+
+    copied = current.copy(name="current_copy")
+    assert copied.name == "current_copy"
+    assert tuple(component.name for component in copied.components) == (
+        "current_copy_0", "current_copy_1",
+    )
+    copied.components[0].coeffs[0, 0] += 1.0
+    assert copied.components[0].coeffs[0, 0] != current.components[0].coeffs[0, 0]
+
+    constant = VectorDGField((V.constant(2.0), V.constant(-3.0)))
+    constant_result = 2.0 * constant - constant
+    assert constant_result.constant_values == pytest.approx((2.0, -3.0))
+    assert all(not component.coefficients_materialized for component in constant.components)
+    assert all(not component.coefficients_materialized for component in constant_result.components)
+
+    with pytest.raises(ValueError, match="same dimension"):
+        _ = current + VectorDGField((V.zeros(),))
+    equivalent_space = DGSpace(mesh, 1, basis_type="bernstein")
+    compatible = VectorDGField((
+        equivalent_space.field(0.25 * first_coeffs),
+        equivalent_space.field(0.5 * second_coeffs),
+    ))
+    compatible_result = current - compatible
+    assert all(component.space is V for component in compatible_result.components)
+    np.testing.assert_allclose(compatible_result.components[0].coeffs, 0.75 * first_coeffs)
+    np.testing.assert_allclose(compatible_result.components[1].coeffs, 0.5 * second_coeffs)
+    higher_space = DGSpace(mesh, 2, basis_type="bernstein")
+    higher_first_coeffs = np.arange(
+        np.prod(higher_space.shape), dtype=np.float64,
+    ).reshape(higher_space.shape)
+    higher_second_coeffs = higher_first_coeffs + 3.0
+    higher = VectorDGField((
+        higher_space.field(higher_first_coeffs),
+        higher_space.field(higher_second_coeffs),
+    ))
+    promoted = current + higher
+    elevation = higher_space.degree_elevation_matrix_from(V)
+    assert all(component.space is higher_space for component in promoted.components)
+    np.testing.assert_allclose(
+        promoted.components[0].coeffs, first_coeffs @ elevation + higher_first_coeffs,
+    )
+    np.testing.assert_allclose(
+        promoted.components[1].coeffs, second_coeffs @ elevation + higher_second_coeffs,
+    )
+    incompatible_space = DGSpace(mesh, 1, basis_type="dub_orth")
+    incompatible = VectorDGField((incompatible_space.zeros(), incompatible_space.zeros()))
+    with pytest.raises(ValueError, match="same basis type"):
+        _ = current - incompatible
+    with pytest.raises(TypeError, match="unsupported operand"):
+        _ = current * previous
+
+
 def test_vectordgfield_constructor_projects_callables() -> None:
     mesh = reference_triangle_mesh()
     V = DGSpace(mesh, 2, basis_type="dub_orth")

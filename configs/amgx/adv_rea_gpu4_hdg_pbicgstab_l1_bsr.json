@@ -1,0 +1,22 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "PBICGSTAB",
+    "bsr_spmv_backend": "cusparse_generic",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_INI_CORE",
+    "tolerance": 1e-11,
+    "max_iters": 1500,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2",
+    "preconditioner": {
+      "solver": "JACOBI_L1",
+      "jacobi_l1_scalar_rows_for_blocks": 1,
+      "max_iters": 1,
+      "relaxation_factor": 1.0
+    }
+  }
+}

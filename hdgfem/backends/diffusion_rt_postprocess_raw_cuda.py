@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, real_raw_kernel
+
 import numpy as np
 
 from .cupy import require_cupy
@@ -244,7 +246,7 @@ def solve_diffusion_rt_flux_postprocess_raw_cuda(
         face_test_basis,
     ]
     arrays = [
-        cp.ascontiguousarray(cp.asarray(value), dtype=cp.float64)
+        cp.ascontiguousarray(cp.asarray(value), dtype=REAL_DTYPE)
         for value in arrays
     ]
     (total_values, numerical, affine, jacobian, face_jacobian, normal,
@@ -266,11 +268,11 @@ def solve_diffusion_rt_flux_postprocess_raw_cuda(
             face_test_dof=face_test.shape[0], low_dof=low_volume.shape[1],
             post_dof=post_dof,
         )
-        kernel = cp.RawKernel(source, "diffusion_rt_flux_postprocess_raw")
+        kernel = real_raw_kernel(source, "diffusion_rt_flux_postprocess_raw")
         cached = kernel, rt_dof
         _KERNEL_CACHE[key] = cached
     kernel, rt_dof = cached
-    output = cp.empty((2, num_elements, post_dof), dtype=cp.float64)
+    output = cp.empty((2, num_elements, post_dof), dtype=REAL_DTYPE)
     status = cp.zeros(num_elements, dtype=cp.int32)
     shared_bytes = (rt_dof * rt_dof + 2 * rt_dof + 2 * post_dof) * 8
     kernel(

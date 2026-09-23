@@ -1,0 +1,18 @@
+{
+  "status": "completed",
+  "scheduled": 126,
+  "attempted": 126,
+  "outcomes": {
+    "passed": 91,
+    "numerical_failure": 35
+  },
+  "systems": 101,
+  "native_attempted_systems": 101,
+  "native_passed_systems": 87,
+  "note": "Completed means attempted, not necessarily converged. Numerical failures, setup errors and timeouts remain separate.",
+  "profiles": {
+    "passed": 6,
+    "skipped": 3
+  },
+  "validation": "passed"
+}

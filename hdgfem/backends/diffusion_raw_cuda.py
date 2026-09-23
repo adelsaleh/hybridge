@@ -17,6 +17,8 @@ the reduced matrix directly as COO or CSR.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -56,7 +58,7 @@ def _allocate_local_schur_factors(cupy, *, num_elements: int, nel: int, factor_k
     """Allocate persistent per-element Schur factors with a clear OOM error."""
     if factor_kind != "schur-lu":
         raise ValueError("raw CUDA local factors support only 'schur-lu'")
-    lu_bytes = int(num_elements) * int(nel) * int(nel) * np.dtype(np.float64).itemsize
+    lu_bytes = int(num_elements) * int(nel) * int(nel) * np.dtype(REAL_DTYPE).itemsize
     pivot_bytes = int(num_elements) * int(nel) * np.dtype(np.int32).itemsize
     required = lu_bytes + pivot_bytes
     free, _total = cupy.cuda.runtime.memGetInfo()
@@ -67,7 +69,7 @@ def _allocate_local_schur_factors(cupy, *, num_elements: int, nel: int, factor_k
             f"{int(free)} bytes ({int(free) / (1024 ** 3):.3f} GiB) are available"
         )
     try:
-        schur_lu = cupy.empty((num_elements, nel, nel), dtype=cupy.float64)
+        schur_lu = cupy.empty((num_elements, nel, nel), dtype=REAL_DTYPE)
         schur_pivots = cupy.empty((num_elements, nel), dtype=cupy.int32)
     except Exception as exc:
         out_of_memory = getattr(cupy.cuda.memory, "OutOfMemoryError", ())
@@ -2172,16 +2174,16 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     # Serial assembly stores one RHS/solution column at a time.
     """Compute serial assembly and reconstruction shared-memory requirements."""
     assembly_doubles = 7 * nel * nel + 6 * nel
-    assembly_bytes = assembly_doubles * 8 + nel * 4 + 256
+    assembly_bytes = assembly_doubles * REAL_ITEMSIZE + nel * 4 + 256
     reconstruct_doubles = 7 * nel * nel + 6 * nel
-    reconstruct_bytes = reconstruct_doubles * 8 + nel * 4 + 256
+    reconstruct_bytes = reconstruct_doubles * REAL_ITEMSIZE + nel * 4 + 256
     return assembly_bytes, reconstruct_bytes
 
 
 def _coop_reconstruct_shared_size(nel: int) -> int:
     """Shared memory for compact cooperative mixed-field reconstruction."""
     reconstruct_doubles = 4 * nel * nel + 6 * nel
-    return reconstruct_doubles * 8 + nel * 4 + 256
+    return reconstruct_doubles * REAL_ITEMSIZE + nel * 4 + 256
 
 
 def _coop_shared_sizes(
@@ -2210,12 +2212,12 @@ def _coop_shared_sizes(
         )
     else:
         assembly_doubles = 7 * nel * nel + 4 * nel * ncols
-    return assembly_doubles * 8 + nel * 4 + 256
+    return assembly_doubles * REAL_ITEMSIZE + nel * 4 + 256
 
 
 def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
     """Compile a raw CUDA kernel and request its dynamic shared-memory budget."""
-    kernel = cupy.RawKernel(source, name, options=('--std=c++11',))
+    kernel = real_raw_kernel(source, name, options=('--std=c++11',))
     try:
         kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
     except Exception:
@@ -2340,7 +2342,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         )
         local_factor_bytes = int(cached_factors.local_factor_bytes)
     else:
-        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_lu = cupy.empty(1, dtype=REAL_DTYPE)
         schur_pivots = cupy.empty(1, dtype=cupy.int32)
         local_factor_bytes = 0
 
@@ -2353,9 +2355,9 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
 
     timings['raw.setup'] = time.perf_counter() - raw_wall_start
     zero_start = time.perf_counter()
-    dummy_data = cupy.zeros(1 if block_size != 1 else indices.size, dtype=cupy.float64)
-    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+    dummy_data = cupy.zeros(1 if block_size != 1 else indices.size, dtype=REAL_DTYPE)
+    rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+    boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
     if mesh_h.bnd_edges_inds.size:
         boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
     cupy.cuda.get_current_stream().synchronize()
@@ -2402,7 +2404,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             d1_reference,
             source_rhs,
             boundary_trace_full.reshape(-1),
-            np.float64(tau),
+            REAL_DTYPE(tau),
             np.int64(cspace.mesh.num_tri),
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(0),
@@ -2465,7 +2467,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
             d1_reference,
             source_rhs,
             boundary_trace_full.reshape(-1),
-            np.float64(tau),
+            REAL_DTYPE(tau),
             np.int64(cspace.mesh.num_tri),
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(0),
@@ -2588,7 +2590,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             cupy, num_elements=int(cspace.mesh.num_tri), nel=nel, factor_kind=local_factor_kind
         )
     else:
-        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_lu = cupy.empty(1, dtype=REAL_DTYPE)
         schur_pivots = cupy.empty(1, dtype=cupy.int32)
         local_factor_bytes = 0
     timings['raw.local_factors.allocate'] = time.perf_counter() - factor_allocation_start
@@ -2615,12 +2617,12 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
         zero_start = time.perf_counter()
         rows = cols = None
         data = (
-            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=cupy.float64)
+            cupy.zeros((csr_pattern.num_blocks, ntr, ntr), dtype=REAL_DTYPE)
             if matrix_format == 'bsr'
-            else cupy.zeros(indices.size, dtype=cupy.float64)
+            else cupy.zeros(indices.size, dtype=REAL_DTYPE)
         )
-        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
         cupy.cuda.get_current_stream().synchronize()
@@ -2645,9 +2647,9 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
 
         rows = cupy.empty(nnz, dtype=cupy.int64)
         cols = cupy.empty_like(rows)
-        data = cupy.empty(nnz, dtype=cupy.float64)
-        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=cupy.float64)
-        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=cupy.float64)
+        data = cupy.empty(nnz, dtype=REAL_DTYPE)
+        rhs = cupy.zeros(mesh_h.int_edges_inds.size * ntr, dtype=REAL_DTYPE)
+        boundary_trace_full = cupy.zeros((mesh_h.num_edg, ntr), dtype=REAL_DTYPE)
         if mesh_h.bnd_edges_inds.size:
             boundary_trace_full[cspace.mesh.bnd_edges_inds] = boundary_trace
 
@@ -2693,7 +2695,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
                 d1_reference,
                 source_rhs,
                 boundary_trace_full.reshape(-1),
-                np.float64(tau),
+                REAL_DTYPE(tau),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
                 np.int64(n_flux),
@@ -2738,7 +2740,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
                 d1_reference,
                 source_rhs,
                 boundary_trace_full.reshape(-1),
-                np.float64(tau),
+                REAL_DTYPE(tau),
                 np.int64(cspace.mesh.num_tri),
                 np.int64(cspace.mesh.int_edges_inds.size),
                 np.int64(n_flux),
@@ -2814,7 +2816,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
             d1_reference,
             source_rhs,
             boundary_trace_full.reshape(-1),
-            np.float64(tau),
+            REAL_DTYPE(tau),
             np.int64(cspace.mesh.num_tri),
             np.int64(cspace.mesh.int_edges_inds.size),
             np.int64(n_flux),
@@ -2910,7 +2912,7 @@ def reconstruct_projected_diffusion_field_raw_cuda(
             cached_factors, num_elements=int(cspace.mesh.num_tri), nel=nel, local_factor_key=local_factor_key
         )
     else:
-        schur_lu = cupy.empty(1, dtype=cupy.float64)
+        schur_lu = cupy.empty(1, dtype=REAL_DTYPE)
         schur_pivots = cupy.empty(1, dtype=cupy.int32)
     reconstruct_shared = (
         _shared_sizes(nel, ntr)[1]
@@ -2930,11 +2932,11 @@ def reconstruct_projected_diffusion_field_raw_cuda(
             cupy.ascontiguousarray(mass_inverse @ d1_reference),
             face_element_mass,
         )
-    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=cupy.float64)
+    uh = cupy.empty((cspace.mesh.num_tri, nel), dtype=REAL_DTYPE)
     local_unknowns = (
-        cupy.empty((cspace.mesh.num_tri, 3 * nel), dtype=cupy.float64)
+        cupy.empty((cspace.mesh.num_tri, 3 * nel), dtype=REAL_DTYPE)
         if return_local_unknowns
-        else cupy.empty(1, dtype=cupy.float64)
+        else cupy.empty(1, dtype=REAL_DTYPE)
     )
     template = _RAW_RECONSTRUCT_TEMPLATE if block_size == 1 else _RAW_RECONSTRUCT_COOP_TEMPLATE
     kernel_name = 'reconstruct_diffusion_raw' if block_size == 1 else 'reconstruct_diffusion_raw_coop'
@@ -2969,7 +2971,7 @@ def reconstruct_projected_diffusion_field_raw_cuda(
             d0_reference,
             d1_reference,
             source_rhs,
-            np.float64(tau),
+            REAL_DTYPE(tau),
             np.int64(cspace.mesh.num_tri),
         ),
         shared_mem=int(reconstruct_shared),
@@ -3261,7 +3263,7 @@ def _raw_primal_postprocess_shared_size(post_el_dof: int, post_nq: int) -> int:
     """Compute dynamic shared memory required by primal postprocessing."""
     rows = int(post_el_dof) + 1
     doubles = rows * rows + rows + 2 * int(post_nq) + rows
-    return doubles * 8 + rows * 4 + 256
+    return doubles * REAL_ITEMSIZE + rows * 4 + 256
 
 
 def _as_scalar_or_none(value) -> float | None:
@@ -3269,7 +3271,7 @@ def _as_scalar_or_none(value) -> float | None:
     if np.isscalar(value):
         return float(value)
     try:
-        array = np.asarray(value, dtype=np.float64)
+        array = np.asarray(value, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         return None
     if array.shape == ():
@@ -3287,7 +3289,7 @@ def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, flo
         return inv, 0.0, 0.0, inv
 
     try:
-        array = np.asarray(diffusion, dtype=np.float64)
+        array = np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         array = None
     if array is not None and array.shape == (2, 2):
@@ -3359,7 +3361,7 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     if cache is None or cache.base_space is not cspace.host or cache.trace_space is not trace_ref:
         cache = _new_hdg_postprocess_cache(cspace.host, trace_ref)
     cpost_space = as_cupy_space(cache.post_space, device=cspace.device_id)
-    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=cupy.float64))
+    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=REAL_DTYPE))
     expected_unknowns = (cspace.mesh.num_tri, 3 * cspace.el_dof)
     if tuple(local_unknowns.shape) != expected_unknowns:
         raise ValueError(f'local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}')
@@ -3373,30 +3375,30 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     effective_block_size = _select_raw_primal_postprocess_block_size(cspace.order, block_size)
     shared_bytes = _raw_primal_postprocess_shared_size(post_el_dof, post_nq)
 
-    weights = cupy.asarray(cache.post_space.quad_data.Krf_w, dtype=cupy.float64)
-    base_basis = cupy.asarray(cache.base_basis_on_post_quads, dtype=cupy.float64)
-    post_grad = cupy.asarray(cache.post_space.quad_data.gphi, dtype=cupy.float64)
-    mean_base = cupy.asarray(cache.mean_base, dtype=cupy.float64)
-    mean_post = cupy.asarray(cache.mean_post, dtype=cupy.float64)
-    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=cupy.float64)
-    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=cupy.float64)
-    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=cupy.float64)
+    weights = cupy.asarray(cache.post_space.quad_data.Krf_w, dtype=REAL_DTYPE)
+    base_basis = cupy.asarray(cache.base_basis_on_post_quads, dtype=REAL_DTYPE)
+    post_grad = cupy.asarray(cache.post_space.quad_data.gphi, dtype=REAL_DTYPE)
+    mean_base = cupy.asarray(cache.mean_base, dtype=REAL_DTYPE)
+    mean_post = cupy.asarray(cache.mean_post, dtype=REAL_DTYPE)
+    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=REAL_DTYPE)
+    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=REAL_DTYPE)
+    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=REAL_DTYPE)
     inverse_constants = _constant_inverse_diffusion_components(diffusion)
     if inverse_constants is None:
         from ..solvers.diffusion_reaction import _inverse_diffusion_values
 
         inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
         inverse_mode = np.int32(1)
-        inv00_scalar = inv01_scalar = inv10_scalar = inv11_scalar = np.float64(0.0)
-        inv00 = cupy.asarray(inv00_h, dtype=cupy.float64)
-        inv01 = cupy.asarray(inv01_h, dtype=cupy.float64)
-        inv10 = cupy.asarray(inv10_h, dtype=cupy.float64)
-        inv11 = cupy.asarray(inv11_h, dtype=cupy.float64)
+        inv00_scalar = inv01_scalar = inv10_scalar = inv11_scalar = REAL_DTYPE(0.0)
+        inv00 = cupy.asarray(inv00_h, dtype=REAL_DTYPE)
+        inv01 = cupy.asarray(inv01_h, dtype=REAL_DTYPE)
+        inv10 = cupy.asarray(inv10_h, dtype=REAL_DTYPE)
+        inv11 = cupy.asarray(inv11_h, dtype=REAL_DTYPE)
     else:
         inverse_mode = np.int32(0)
-        inv00_scalar, inv01_scalar, inv10_scalar, inv11_scalar = map(np.float64, inverse_constants)
+        inv00_scalar, inv01_scalar, inv10_scalar, inv11_scalar = map(REAL_DTYPE, inverse_constants)
         inv00 = inv01 = inv10 = inv11 = weights
-    coeffs = cupy.empty((cspace.mesh.num_tri, post_el_dof), dtype=cupy.float64)
+    coeffs = cupy.empty((cspace.mesh.num_tri, post_el_dof), dtype=REAL_DTYPE)
     stream.synchronize()
     timings['postprocess.primal.raw_cuda.setup'] = time.perf_counter() - setup_start
 

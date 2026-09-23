@@ -1,0 +1,172 @@
+% Insertable results section. Requires amsmath, graphicx, booktabs and hyperref.
+% Set \ADRResultsPath to this artifact directory before \input if needed.
+\providecommand{\ADRResultsPath}{docs/research/solver_studies/adr_scaling_2026_09_17}
+\providecommand{\ADRResultsFigurePath}{@@FIGURE_PATH@@}
+\section{GPU solver performance for stationary ADR}
+\label{sec:adr-gpu-results}
+
+We compare block additive Schwarz (ASM) and block Jacobi (BJ), augmented
+by polynomial preconditioning, against block algebraic multigrid and
+$p$MG--AMG: face-block modal polynomial multigrid with an AMGX coarse
+hierarchy. Polynomial coarsening reduces the face degree on the same mesh;
+AMGX algebraically coarsens the scalar degree-zero system. Configuration
+labels PP($d$) report the polynomial degree, separately from the finite-element degree.
+The smooth problems establish scaling; oscillatory transport and nonconvex
+geometry expose robustness limits. $p$MG--AMG results now cover every matrix
+and right-hand side in the study. Fresh and reused costs remain distinct,
+and only physically converged solves enter timing comparisons.
+
+\input{\ADRResultsPath/pardiso_lu/protocol.tex}
+
+\subsection{Smooth three-regime scaling}
+\label{sec:adr-smooth-scaling}
+\paragraph{Problem and common protocol.}
+We solve a manufactured stationary problem on $\Omega=[-1,1]^2$,
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+\boldsymbol\beta\cdot\nabla u+u&=f,
+ &u|_{\partial\Omega}&=u_\star &&\text{(high diffusion)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -10^{-3}\Delta u+\boldsymbol\beta\cdot\nabla u+u&=f,
+ &u|_{\partial\Omega}&=u_\star &&\text{(transport dominated)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -\nabla\cdot\!\left(\operatorname{diag}(1,10^{-2})\nabla u\right)
+ +\boldsymbol\beta\cdot\nabla u+u&=f,
+ &u|_{\partial\Omega}&=u_\star &&\text{(anisotropic)},
+ \end{aligned}
+\end{equation}
+where $u_\star=\sin(\pi x)\sin(\pi y)$ and
+$\boldsymbol\beta=(1,1/2)^T$ in all three cases.
+On a grid of $n\times n$ split squares,
+$h=2/n$, $N_T=2n^2$, and the condensed trace dimension is
+$N_\lambda=(3n^2-2n)(p+1)$.
+We vary $n\in\{32,64,128,223\}$ at $p=6$, and
+$p\in\{1,2,3,4,6\}$ at $n=64$.
+The largest system has $99\,458$ triangles and $1\,041\,187$ trace unknowns.
+
+All methods receive the same FP64 Bernstein trace matrix and right-hand
+side, with no outer scaling and a zero initial guess.
+The HDG stabilization is $\tau=1+\max(\boldsymbol\beta\!\cdot\boldsymbol n,0)$.
+\textbf{Acceptance is based on the independently recomputed physical residual}
+$\|b-A\lambda\|_2/\|b\|_2\le10^{-10}$;
+the common internal tolerance is $10^{-11}$, GMRES restart is 75, and the
+iteration limit is 1,000. GPU measurements use one RTX PRO 5000 Blackwell GPU.
+One setup is discarded as warmup, then three fresh setups each perform two
+zero-guess solves.  Reported hot times average the second solve of each
+setup; error bars span those three measurements.
+Hot solve time covers only the linear solve; preconditioner setup and
+host residual/reconstruction checks are reported separately or untimed.
+
+\textbf{Configurations are frozen along each curve.}
+ASM+PP(24) is used for high diffusion and transport, and ASM+PP(48)
+for anisotropy, all with CGS2 GMRES.  AMGX uses natural $(p+1)\times(p+1)$ BSR blocks and a classical
+hierarchy built from dense block adjacency, with block-Jacobi smoothing
+for high/anisotropic diffusion and
+block-DILU smoothing for transport.  Its FGMRES and BiCGSTAB runs share the
+same preconditioner parameters.
+Direct block-DILU is additionally tested
+for transport.  $p$MG--AMG is tested in all three regimes: its hierarchy
+preconditions the symmetric part in modal coordinates, with an AMGX scalar
+coarse solve, while outer GMRES applies the original ADR operator.
+The $p$MG--AMG standard policy uses direct degree-zero transfer, order-two
+Chebyshev smoothing and one pre/post sweep. The robust policy uses successive
+degree halving, order-four smoothing and two pre/post sweeps. Both policies
+are shown wherever measured; the other configurations remain fixed along
+each curve.
+
+\subsubsection{Mesh and polynomial-order scaling}
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/h_scaling.pdf}
+ \caption{Mesh refinement at $p=6$: mean hot solve time (top) and Krylov
+ iterations (bottom). LU appears in timing panels, with MKL thread counts
+ beside its points. AMG and DILU curves use AMGX; $p$MG--AMG denotes the face-block modal hierarchy. A cross in a panel's top strip marks a failed run, not a timing
+ value.  Iterations are not equal units of work: BiCGSTAB usually applies
+ its preconditioner twice per iteration.}
+ \label{fig:adr-h-scaling}
+\end{figure}
+
+@@H_FINDING@@
+The direct-DILU comparison also separates the effect of the outer Krylov
+method from that of a multilevel preconditioner: @@DILU_FINDING@@
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/p_scaling.pdf}
+ \caption{Polynomial-order scaling on $8\,192$ triangles. LU point labels
+ give the MKL thread count. The block size
+ grows from 2 to 7; trace dimension grows from $24\,320$ to $85\,120$.
+ GPU parameters are fixed within each regime, but the algebraic hierarchies
+ change with the matrix.  Thus these empirical curves need not be
+ monotonic in $p$.}
+ \label{fig:adr-p-scaling}
+\end{figure}
+
+@@P_FINDING@@
+The accuracy gain is shown in Figure~\ref{fig:adr-cost-accuracy};
+$p$-refinement should therefore be judged at comparable error, not solely
+by the time of one linear solve.
+
+\subsubsection{Cost, robustness, and practical choice}
+\begin{table}[!htbp]
+ \centering
+ \caption{Selected passing configurations on $99\,458$ triangles at $p=6$.
+ Hot times are means; setup times are medians, in milliseconds. LU uses
+ its reused-selected thread count for both columns.
+ The block-AMG row in each regime is the faster of its two tested outer
+ Krylov methods.}
+ \label{tab:adr-largest}
+ {\small\setlength{\tabcolsep}{3.3pt}
+ \input{\ADRResultsPath/largest_table.tex}}
+\end{table}
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/cost_accuracy.pdf}
+ \caption{Left: setup plus one hot solve for the selected large-system
+ candidates (an arithmetic cost model, not a measured full PDE pipeline).
+ F/B denote FGMRES/BiCGSTAB; High/Low/Aniso. identify diffusion regimes.
+ For $R$ reused right-hand sides, the per-solve model is
+ $T_{\rm hot}+T_{\rm setup}/R$.
+ LU uses one thread count for both terms, shown in its label.
+ Right: reconstructed primal $L^2$ error at fixed $8\,192$ triangles,
+ using independent CPU direct-reference solutions.}
+ \label{fig:adr-cost-accuracy}
+\end{figure}
+
+@@LARGE_FINDING@@
+Prior application profiling on these same $p=6$ matrices attributes
+roughly 92--96\% of ASM+PP GPU operation time to preconditioning:
+one complete degree-24/48 application costs about 21/42 ms.
+The $p$MG--AMG application costs about 2.6 ms; AMGX block-AMG costs depend
+on the smoother (about 4--15 ms per cycle).
+These separately instrumented numbers explain cost; they are not used to
+rank the uninstrumented solves. Earlier profiling sampled solver-memory
+increases of roughly 1.75 GiB for $p$MG--AMG and 2.8--3.3 GiB for the compared
+ASM/FGMRES block-AMG paths.
+
+\textbf{A stopping-trigger effect matters.}
+With unchanged matrix and polynomial preconditioner, transport ASM+PP
+at internal tolerance $5\times10^{-11}$ takes two 31-step restart cycles
+(1.414 s); tightening to $10^{-11}$ retains one 32-step cycle (about 0.730 s).
+The early projected-residual test had triggered a restart before the true
+residual passed.  The scaling study uses the latter internal tolerance for
+\emph{every} method; it does not mix the two timing protocols.
+
+\textbf{Validation and scope.}
+@@VALIDATION@@
+Failures are retained explicitly; none contribute to time rankings.
+These reference curves use a smooth manufactured stationary solution.
+The focused comparisons below add coefficient variation and isolate the
+AMGX--ASM+PP crossover before the final oscillatory, nonconvex problem.
+The combined report audits the $p$MG--AMG extension separately.
+Configurations are selected from the preceding sweep; conclusions concern
+the tested hardware and parameter range.  Exact AMGX internal multilevel
+operator counts are unavailable, so iteration counts do not represent equal
+work across methods.

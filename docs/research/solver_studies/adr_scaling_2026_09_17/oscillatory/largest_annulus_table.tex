@@ -1,0 +1,28 @@
+\begin{tabular}{llrrr}
+\toprule
+Class & Preconditioner / Krylov & Iter. & Hot (s) & Setup (s) \\
+\midrule
+High & ASM+PP(24) / GMRES & 73 & 1.720 & 1.412 \\
+ & AMG / FGMRES & 58 & 0.306 & 0.476 \\
+ & AMG / BiCGSTAB & 49 & 0.423 & 0.479 \\
+ & $p$MG--AMG (S) & 32 & 0.133 & 1.238 \\
+ & $\mathrm{P\!-\!LU}_{24}$ & -- & 0.697 & 3.227 \\
+\addlinespace[2pt]
+Low & ASM+PP(24) / GMRES & 525 & 12.369 & 1.393 \\
+ & AMG / FGMRES & 948 & 16.390 & 0.523 \\
+ & AMG / BiCGSTAB & 675 & 22.037 & 0.540 \\
+ & DILU / FGMRES & 1000 & NC & -- \\
+ & DILU / BiCGSTAB & 1000 & NC & -- \\
+ & $p$MG--AMG (S) & 1000 & NC & -- \\
+ & $p$MG--AMG (R) & 1000 & NC & -- \\
+ & $\mathrm{P\!-\!LU}_{16}$ & -- & 0.689 & 3.512 \\
+\addlinespace[2pt]
+Directional & ASM+PP(48) / GMRES & 150 & 6.733 & 1.431 \\
+ & AMG / FGMRES & 1000 & NC & -- \\
+ & AMG / BiCGSTAB & 1000 & NC & -- \\
+ & $p$MG--AMG (S) & 375 & 1.731 & 1.290 \\
+ & $p$MG--AMG (R) & 225 & 3.711 & 1.267 \\
+ & $\mathrm{P\!-\!LU}_{16}$ & -- & 0.686 & 3.462 \\
+\addlinespace[2pt]
+\bottomrule
+\end{tabular}

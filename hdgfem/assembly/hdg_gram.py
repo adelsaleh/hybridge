@@ -637,39 +637,161 @@ def _trace_apply_element_contrib(local_solution, trace_by_edge, face_u_trace, fa
     return out
 
 
-def _physical_stiffness_blocks(space: DGSpace) -> np.ndarray:
-    """Assemble physical-element stiffness blocks for the scalar field."""
-    mesh = space.mesh
+def _reference_gradient_grams(space: DGSpace) -> tuple[np.ndarray, ...]:
+    """Return the three reference derivative Gram blocks in double precision."""
     q = space.quad_data
-    gradients = np.einsum(
-        "KcD,Diq->Kciq",
-        mesh.inv_aff_mats_t,
-        q.dbas_of_quads,
-        optimize=True,
-    )
-    return np.einsum(
-        "K,q,Kciq,Kcjq->Kij",
-        mesh.aff_jacs,
-        q.Krf_w,
-        gradients,
-        gradients,
-        optimize=True,
+    grad = np.asarray(q.gphi, dtype=np.float64)
+    weights = np.asarray(q.Krf_w, dtype=np.float64)
+    return tuple(
+        grad[:, :, a].T @ (weights[:, None] * grad[:, :, b])
+        for a, b in ((0, 0), (0, 1), (1, 1))
     )
 
 
-def _face_jump_weight(space: DGSpace, sigma: float, jump_weight: str) -> np.ndarray:
-    """Return unit or mesh-scaled trace jump weights for every face."""
+def _physical_stiffness_blocks(space: DGSpace) -> np.ndarray:
+    """Assemble physical stiffness using the shared reference Gram blocks."""
+    mesh = space.mesh
+    inv = np.asarray(mesh.inv_aff_mats, dtype=np.float64)
+    metric = inv @ inv.swapaxes(1, 2)
+    rr, rs, ss = _reference_gradient_grams(space)
+    return mesh.aff_jacs[:, None, None] * (
+        metric[:, 0, 0, None, None] * rr
+        + metric[:, 0, 1, None, None] * (rs + rs.T)
+        + metric[:, 1, 1, None, None] * ss
+    )
+
+
+def _face_jump_weight(space: DGSpace, sigma: float, jump_weight: str, *, xp=np):
+    """Return unit, sigma*p^2/h_F, or 1/h_K face weights; h_K is diameter."""
     if jump_weight == "unit":
-        return np.ones_like(space.mesh.jacs_el_fc, dtype=np.float64)
+        return xp.ones_like(space.mesh.jacs_el_fc, dtype=xp.float64)
+    face_length = 2.0 * xp.asarray(space.mesh.jacs_el_fc, dtype=xp.float64)
+    if jump_weight == "element":
+        return xp.broadcast_to(1.0 / face_length.max(axis=1)[:, None], face_length.shape)
     if jump_weight != "scaled":
-        raise ValueError("jump_weight must be 'unit' or 'scaled'")
+        raise ValueError("jump_weight must be 'unit', 'scaled', or 'element'")
     p = max(1, int(space.order))
-    face_length = 2.0 * space.mesh.jacs_el_fc
     return float(sigma) * p * p / face_length
 
 
+class ScalarHDGGram:
+    r"""Evaluate scalar HDG quadratic forms with NumPy or resident CuPy arrays.
+
+    The default squared norm is ||u||^2 + sum_K ||grad u||^2 + J, with
+    J = sum_K h_K^-1 ||u-uhat||^2 on element boundaries and h_K the longest
+    element edge. Interior faces contribute both element sides. Derivative
+    Gram blocks and weights are shared with :func:`assemble_hdg_gram`; no
+    global matrix or Gram inverse is needed.
+
+    Supply the actual full trace in global edge order and its basis. Set
+    include_boundary=False where no boundary trace is defined, including the
+    unused zero slots of zero-flux transport. backend='device' reuses cached
+    device geometry and evaluates all changing-field contractions with CuPy;
+    only the scalar returned by each method is transferred to the host.
+    """
+
+    def __init__(self, space: DGSpace, *, trace_basis: str = "legacy-lagrange",
+                 jump_weight: str = "element", sigma: float = 10.0,
+                 include_boundary: bool = True, chunk_size: int = 16384,
+                 backend: str = "host"):
+        """Cache small reference Gram blocks and geometry on the chosen backend."""
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be positive")
+        if backend not in {"host", "device"}:
+            raise ValueError("backend must be 'host' or 'device'")
+        self.space, self.backend = space, backend
+        self.trace_basis, self.jump_weight, self.sigma = trace_basis, jump_weight, sigma
+        self.include_boundary, self.chunk_size = include_boundary, int(chunk_size)
+        if backend == "device":
+            from ..backends.cupy import as_cupy_space, require_cupy
+
+            self.xp = require_cupy()
+            self.cspace = as_cupy_space(space)
+            self.mesh = self.cspace.mesh
+        else:
+            self.xp, self.mesh = np, space.mesh
+        xp = self.xp
+        self.mass = xp.asarray(space.quad_data.MKrf, dtype=xp.float64)
+        self.stiffness = tuple(xp.asarray(s) for s in _reference_gradient_grams(space))
+        self.det = xp.asarray(self.mesh.aff_jacs, dtype=xp.float64)
+        inv = xp.asarray(self.mesh.inv_aff_mats, dtype=xp.float64)
+        self.metric = inv @ inv.swapaxes(1, 2)
+        self._trace_data = None
+
+    def _chunks(self, coefficients):
+        """Yield validated coefficient chunks without per-chunk synchronization."""
+        expected = (len(self.det), self.mass.shape[0])
+        if coefficients.shape != expected:
+            raise ValueError(f"coefficients must have shape {expected}; got {coefficients.shape}")
+        for start in range(0, len(self.det), self.chunk_size):
+            selection = slice(start, start + self.chunk_size)
+            yield selection, self.xp.asarray(coefficients[selection], dtype=self.xp.float64)
+
+    def l2_squared(self, coefficients) -> float:
+        """Evaluate the volume mass quadratic form, returning one host scalar."""
+        xp, total = self.xp, 0.0
+        for selection, c in self._chunks(coefficients):
+            total = total + xp.dot(self.det[selection], xp.einsum("ki,ki->k", c @ self.mass, c))
+        return float(xp.maximum(total, 0.0))
+
+    def gradient_squared(self, coefficients) -> float:
+        """Evaluate the physical broken-gradient quadratic form."""
+        xp, total = self.xp, 0.0
+        for selection, c in self._chunks(coefficients):
+            metric = self.metric[selection]
+            rr, rs, ss = (xp.einsum("ki,ki->k", c @ block, c) for block in self.stiffness)
+            total = total + xp.dot(self.det[selection],
+                                  metric[:, 0, 0]*rr + 2*metric[:, 0, 1]*rs + metric[:, 1, 1]*ss)
+        return float(xp.maximum(total, 0.0))
+
+    def trace_mismatch_squared(self, coefficients, trace) -> float:
+        """Evaluate the factored face Gram on the selected backend."""
+        xp, mesh = self.xp, self.mesh
+        if self._trace_data is None:
+            host_trace = self.space.trace_space(self.trace_basis)
+            if self.backend == "device":
+                from ..backends.advection_cuda import as_cupy_trace_space
+
+                trace_space = as_cupy_trace_space(host_trace)
+            else:
+                trace_space = host_trace
+            weights = _face_jump_weight(self.cspace if self.backend == "device" else self.space,
+                                        self.sigma, self.jump_weight, xp=xp) * mesh.jacs_el_fc
+            if not self.include_boundary:
+                interior = xp.zeros(mesh.num_edg, dtype=bool)
+                interior[mesh.int_edges_inds] = True
+                weights = weights * interior[mesh.loc2glob_edge]
+            self._trace_data = (trace_space, weights)
+        trace_space, weights = self._trace_data
+        trace = xp.asarray(trace, dtype=xp.float64)
+        expected_size = mesh.num_edg * trace_space.edg_dof
+        if trace.size != expected_size:
+            raise ValueError(f"full trace needs {expected_size} coefficients; got {trace.size}")
+        by_edge = trace.reshape(mesh.num_edg, trace_space.edg_dof)
+        face_basis = xp.asarray(trace_space.bas_of_bd_quads, dtype=xp.float64)
+        edge_basis = xp.asarray(trace_space.bas1d_of_ref_edg_qds, dtype=xp.float64)
+        signs = xp.asarray(np.where(np.arange(trace_space.edg_dof) % 2, -1.0, 1.0))
+        total = 0.0
+        for selection, c in self._chunks(coefficients):
+            local = by_edge[mesh.loc2glob_edge[selection]]
+            reversed_local = local * signs if trace_space.kind == "legendre-modal" else local[:, :, ::-1]
+            # where avoids the device-size lookup of boolean advanced indexing.
+            local = xp.where(mesh.orientations[selection, :, None], local, reversed_local)
+            difference = xp.einsum("ki,fiq->kfq", c, face_basis, optimize=True) - local @ edge_basis
+            # Factored evaluation avoids cancellation when the two traces
+            # nearly coincide, unlike separately summed uu/u-hat/hat-hat blocks.
+            total = total + xp.einsum("kf,kfq,q->", weights[selection], difference*difference,
+                                     trace_space.weights, optimize=True)
+        return float(total)
+
+    def norm_squared(self, coefficients, trace) -> float:
+        """Evaluate the full scalar HDG H1 norm squared, including volume L2."""
+        return (self.l2_squared(coefficients) + self.gradient_squared(coefficients)
+                + self.trace_mismatch_squared(coefficients, trace))
+
+
 def assemble_hdg_gram(space: DGSpace, *, sigma: float = 10.0, jump_weight: str = "unit"):
-    """Assemble the sparse HDG Gram matrix on ``(q_x, q_y, u, uhat)``.
+    """Assemble the sparse HDG Gram matrix on element ``[u, q_x, q_y]`` and uhat.
 
     Boundary trace degrees of freedom are eliminated, so ``uhat`` contains
     only interior-edge trace coefficients.
@@ -911,6 +1033,7 @@ def build_ilu_bicgstab_inverse(
 
 __all__ = [
     "HDGGram",
+    "ScalarHDGGram",
     "KrylovHDGGramInverse",
     "ILUBiCGSTABGramInverse",
     "GramSolveDiagnostics",

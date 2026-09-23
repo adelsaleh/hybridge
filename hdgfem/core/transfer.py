@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from hdgfem.precision import REAL_DTYPE
 from dataclasses import dataclass
 
 import numba as nb
@@ -303,6 +304,45 @@ def _project_values_on_target(values: np.ndarray, target: DGSpace) -> np.ndarray
     return np.ascontiguousarray(coeffs, dtype=np.float64)
 
 
+def project_same_mesh_field(field: DGField, target: DGSpace, *, name: str | None = None) -> DGField:
+    """L2-project between degrees on one mesh, retaining host/device residency.
+
+    The reference projection is cached per pair of spaces. Integration uses
+    the higher-degree space so restriction does not alias source modes into
+    the lower-degree RHS. Identical spaces return the original field unless
+    a different name is requested.
+    """
+    source = field.space
+    source.assert_same_mesh(target)
+    name = field.name if name is None else name
+    if source is target:
+        return field if name == field.name else field.copy(name=name)
+    if field.constant_value is not None:
+        return target.constant(field.constant_value, name=name)
+    cache = getattr(target, "_same_mesh_projection_cache", None)
+    if cache is None:
+        cache = target._same_mesh_projection_cache = {}
+    if source not in cache:
+        integration = source if source.order >= target.order else target
+        points, weights = integration.quad_data.Krf_quads, integration.quad_data.Krf_w
+        cross_mass = source.basis_at(points).T @ (weights[:, None] * target.basis_at(points))
+        matrix = np.ascontiguousarray(cross_mass @ target.quad_data.MKrf_inv, dtype=REAL_DTYPE)
+        cache[source] = (matrix, {})
+    matrix, device_matrices = cache[source]
+    devices = field._device_coeffs or {}
+    if devices:
+        from ..backends.cupy import field_from_cupy_coefficients, require_cupy
+        cp = require_cupy()
+        device_id = min(devices)
+        with cp.cuda.Device(device_id):
+            if device_id not in device_matrices:
+                device_matrices[device_id] = cp.asarray(matrix)
+            coefficients = field._device_coefficients_for(device_id) @ device_matrices[device_id]
+            return field_from_cupy_coefficients(
+                target, cp.ascontiguousarray(coefficients), device=device_id, name=name)
+    return target.field(np.ascontiguousarray(field.coeffs @ matrix), name=name)
+
+
 def project_field(
         field: DGField,
         target: DGSpace,
@@ -315,14 +355,15 @@ def project_field(
     source = field.space
     if source.mesh is target.mesh:
         t0 = time.perf_counter()
-        values = field.values_at_ref(target.quad_data.Krf_quads)
-        eval_seconds = time.perf_counter() - t0
-        t0 = time.perf_counter()
-        coeffs = _project_values_on_target(values, target)
+        projected = project_same_mesh_field(field, target)
+        if projected is field:
+            projected = field.copy()
+        eval_seconds = 0.0
         project_seconds = time.perf_counter() - t0
+        n_points = target.mesh.num_tri * max(source, target, key=lambda s: s.order).quad_data.Krf_w.size
         diag = TransferDiagnostics(
-            n_target_points=int(values.size),
-            n_located_points=int(values.size),
+            n_target_points=int(n_points),
+            n_located_points=int(n_points),
             n_missed_points=0,
             n_duplicate_hits=0,
             locate_seconds=0.0,
@@ -331,7 +372,7 @@ def project_field(
             project_seconds=project_seconds,
             total_seconds=time.perf_counter() - total_start,
         )
-        return target.field(coeffs, name=field.name), diag
+        return projected, diag
 
     if plan is None:
         plan = build_transfer_plan(source, target, verbose=verbose)

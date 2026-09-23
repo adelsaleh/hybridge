@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 import time
 from collections.abc import Callable
 
@@ -50,13 +52,13 @@ def dg_project(
     if basis_values is None:
         basis_values = space.basis_at(reference_points)
 
-    mapped_points = np.asarray(mapped_points, dtype=np.float64)
+    mapped_points = np.asarray(mapped_points, dtype=REAL_DTYPE)
     if mapped_points.shape != (space.mesh.num_tri, reference_points.shape[0], 2):
         raise ValueError(
             "mapped_points must have shape "
             f"({space.mesh.num_tri}, {reference_points.shape[0]}, 2); got {mapped_points.shape}"
         )
-    basis_values = np.asarray(basis_values, dtype=np.float64)
+    basis_values = np.asarray(basis_values, dtype=REAL_DTYPE)
     if basis_values.shape != (reference_points.shape[0], space.el_dof):
         raise ValueError(
             "basis_values must have shape "
@@ -71,11 +73,78 @@ def dg_project(
     )
     values = _normalize_callable_values(raw, space.mesh.num_tri, reference_points.shape[0])
     rhs = values @ (basis_values * integration_space.quad_data.Krf_w[:, None])
-    coeffs = np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=np.float64)
+    coeffs = np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=REAL_DTYPE)
 
     if verbose:
         print(time.perf_counter() - start)
     return coeffs
+
+
+def project_callable(
+        func: Callable, space: DGSpace, *, backend: str = "host",
+        volume_quad_1d: int | None = None, parameters=None, name: str = "Pi_h f",
+        synchronize: bool = False, timings: dict[str, float] | None = None,
+) -> DGField:
+    """Project with existing host/device formalism and optional richer quadrature.
+
+    Supplying timings opts into synchronized wall-time attribution, including
+    shared device setup. Repeated batch phases are accumulated in seconds.
+    Instrumentation adds synchronization and can perturb elapsed time.
+    """
+    from contextlib import nullcontext
+    from ..io.output import timed_section
+
+    sync = None
+
+    def section(key):
+        return (nullcontext() if timings is None else
+                timed_section(None, 2, key, timings=timings, synchronize=sync))
+
+    if backend not in {"host", "device"}:
+        raise ValueError("projection backend must be host or device")
+    with section("reference_setup_time"):
+        integration = None
+        if volume_quad_1d is not None:
+            if int(volume_quad_1d) != volume_quad_1d or volume_quad_1d < space.order+1:
+                raise ValueError("projection quadrature needs an integer >= order+1")
+            cache = getattr(space, "_callable_projection_spaces", None)
+            if cache is None:
+                cache = {}
+                setattr(space, "_callable_projection_spaces", cache)
+            if volume_quad_1d not in cache:
+                cache[volume_quad_1d] = DGSpace(space.mesh, space.order,
+                    basis_type=space.reference.basis_type, volume_quad_1d=volume_quad_1d)
+            integration = cache[volume_quad_1d]
+    if backend == "host":
+        with section("host_projection_time"):
+            if integration is None:
+                return space.project_callable(func, parameters=parameters, name=name)
+            coeffs = dg_project(func, space, quadrature_integration=integration,
+                                parameters=parameters, verbose=False)
+            return space.field(coeffs, name=name, _coefficient_kind="projected")
+    with section("backend_import_time"):
+        from ..backends.cupy import as_cupy_space, require_cupy
+        cp = require_cupy()
+    # Charge context startup and previously queued work separately, before
+    # timing shared mesh/reference mirrors or any projection GPU operations.
+    if timings is not None:
+        with section("device_initialization_and_pending_work_time"):
+            device_id = int(cp.cuda.Device().id)
+            sync = cp.cuda.get_current_stream().synchronize
+            sync()
+        timings["device_space_cache_hit"] = float(
+            device_id in getattr(space, "_hdgfem_cupy_space_cache", {}))
+    with section("device_mesh_and_reference_setup_time"):
+        cspace = as_cupy_space(space)
+    with cp.cuda.Device(cspace.device_id):
+        field = cspace.project_callable(func, quadrature_integration=integration,
+                                        parameters=parameters, name=name, timings=timings)
+        if synchronize or timings is not None:
+            # Phase timings already complete their own GPU work; this records
+            # any final wait rather than hiding it in coefficient evaluation.
+            with section("completion_wait_time"):
+                cp.cuda.get_current_stream().synchronize()
+    return field
 
 
 def project_dg_fields(
@@ -152,8 +221,8 @@ def project_dg_fields(
         verbose=False,
     )
     return (
-        np.ascontiguousarray(beta_h, dtype=np.float64),
-        np.ascontiguousarray(source_h, dtype=np.float64),
+        np.ascontiguousarray(beta_h, dtype=REAL_DTYPE),
+        np.ascontiguousarray(source_h, dtype=REAL_DTYPE),
     )
 
 
@@ -165,7 +234,7 @@ def project_quadrature_values(space: DGSpace, values: np.ndarray, *, name: str) 
     The returned field is the element-local :math:`L^2` projection into the DG
     basis.
     """
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
     if values.shape != expected:
         raise ValueError(f"values must have shape {expected}; got {values.shape}")
@@ -181,10 +250,18 @@ def field_from_moments(space: DGSpace, moments: np.ndarray, *, name: str) -> DGF
     :math:`\int_K f_h\phi_i\,dx`.  The local coefficients are recovered with
     the reference mass inverse and the affine element Jacobian.
     """
-    moments = np.asarray(moments, dtype=np.float64)
+    if not hasattr(moments, "__cuda_array_interface__"):
+        moments = np.asarray(moments, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.el_dof)
-    if moments.shape != expected:
+    if tuple(moments.shape) != expected:
         raise ValueError(f"moments must have shape {expected}; got {moments.shape}")
+    if hasattr(moments, "__cuda_array_interface__"):
+        from ..backends.cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
+        device = int(moments.device.id)
+        with require_cupy().cuda.Device(device):
+            cspace = as_cupy_space(space, device=device)
+            coeffs = (moments / cspace.mesh.aff_jacs[:, None]) @ cspace.quad_data.MKrf_inv
+            return field_from_cupy_coefficients(cspace, coeffs, name=name)
     coeffs = (moments / space.mesh.aff_jacs[:, None]) @ space.quad_data.MKrf_inv
     return space.field(np.ascontiguousarray(coeffs), name=name)
 
@@ -196,7 +273,7 @@ def scalar_moments_from_values(space: DGSpace, values: np.ndarray) -> np.ndarray
     result has shape ``space.shape`` and entries
     :math:`\int_K values\,\phi_i\,dx`.
     """
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
     if values.shape != expected:
         raise ValueError(f"values must have shape {expected}; got {values.shape}")
@@ -207,7 +284,7 @@ def scalar_moments_from_values(space: DGSpace, values: np.ndarray) -> np.ndarray
 
 def mass_from_values(space: DGSpace, values: np.ndarray) -> float:
     r"""Integrate scalar quadrature values over the DG mesh."""
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
     if values.shape != expected:
         raise ValueError(f"values must have shape {expected}; got {values.shape}")
@@ -216,7 +293,7 @@ def mass_from_values(space: DGSpace, values: np.ndarray) -> float:
 
 def l2_from_values(space: DGSpace, values: np.ndarray) -> float:
     r"""Return the physical :math:`L^2` norm of scalar quadrature values."""
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
     if values.shape != expected:
         raise ValueError(f"values must have shape {expected}; got {values.shape}")
@@ -229,6 +306,7 @@ __all__ = [
     "field_from_moments",
     "l2_from_values",
     "mass_from_values",
+    "project_callable",
     "project_dg_fields",
     "project_quadrature_values",
     "scalar_moments_from_values",

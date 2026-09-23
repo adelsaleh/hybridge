@@ -1343,7 +1343,8 @@ def run_strategy(args: argparse.Namespace) -> State:
                 log2(args, f"LINE_SEARCH_START ieps={ieps} k={k} oldMerit={old_merit:.6e}")
                 while alpha >= params.alpha_min and n_backtrack <= params.max_backtrack:
                     trial_start = time.perf_counter()
-                    trial_u = space.field(old_state.u.coeffs + alpha * du.coeffs, name="phi")
+                    trial_u = old_state.u + alpha * du
+                    trial_u.name = "phi"
                     trial_flux = old_state.flux + alpha * flux_du
                     trial_trace = old_state.trace + alpha * trace_du
                     trial_values_start = time.perf_counter()

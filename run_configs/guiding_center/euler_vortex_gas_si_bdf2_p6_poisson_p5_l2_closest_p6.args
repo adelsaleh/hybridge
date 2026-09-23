@@ -1,0 +1,2 @@
+# BDF2 disk Euler gas, DG(5) Poisson and raw-CUDA L2-closest DG(6) flux recovery.
+euler_vortex_gas_si_bdf2_p6_poisson_p5_l2_closest_p6

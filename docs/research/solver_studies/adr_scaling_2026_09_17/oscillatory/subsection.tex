@@ -1,0 +1,256 @@
+% Insertable subsection of the combined ADR study; no document class/preamble.
+\providecommand{\ADRResultsPath}{docs/research/solver_studies/adr_scaling_2026_09_17}
+\providecommand{\ADRResultsFigurePath}{run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+\providecommand{\ADROscPath}{\ADRResultsPath/oscillatory}
+\subsection{Oscillatory cellular transport and geometry}
+\label{sec:adr-oscillatory-scaling}
+
+This problem adds rapid variation in both the exact solution and the
+transport field. Three diffusion classes distinguish an elliptic-dominated
+operator, nearly pure transport, and strong directional coupling. Keeping the
+velocity, reaction and exact solution fixed makes their differences attributable
+to diffusion and its interaction with the discretization. The square repeats
+the preceding scaling tests exactly; a five-lobed annulus adds a nonconvex
+boundary, a hole and narrow passages.
+
+\paragraph{Common fields and three classes.}
+The common exact solution and divergence-free velocity are
+\begin{equation}
+ \begin{aligned}
+ u_\star(x,y)&=\sin(6\pi x)\sin(5\pi y)
+                   +0.35\sin(11\pi x)\sin(9\pi y),\\
+ \boldsymbol\beta(x,y)&=\bigl(1+4\sin(7\pi x)\cos(7\pi y),\;
+              \tfrac12-4\cos(7\pi x)\sin(7\pi y)\bigr)^T.
+ \end{aligned}
+ \label{eq:adr-oscillatory-fields}
+\end{equation}
+With exact Dirichlet data on every boundary component, the three classes are
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+\nabla\cdot(\boldsymbol\beta u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star \qquad\text{(high diffusion)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -10^{-5}\Delta u+\nabla\cdot(\boldsymbol\beta u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star \qquad\text{(low diffusion)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -\nabla\cdot(K_{\rm dir}\nabla u)+\nabla\cdot(\boldsymbol\beta u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star,\\
+ K_{\rm dir}&=R(\pi/6)\operatorname{diag}(1,10^{-3})R(\pi/6)^T.
+ \end{aligned}
+ \label{eq:adr-oscillatory-classes}
+\end{equation}
+where $R$ is a planar rotation. The cellular length-scale ratio
+$4/(7\pi\kappa)$ is approximately $0.18$ in the high-diffusion class,
+$1.8\times10^4$ in the low-diffusion class, and $0.18$ to $182$ along the
+tensor's principal directions. Thus the third class combines a diffusive
+direction with a weakly diffused, transported direction; it is distinct from
+uniformly small diffusion.
+
+The velocity adapts the sinusoidal cellular-flow family of Haynes and
+Vanneste.\footnote{P.~H. Haynes and J. Vanneste,
+\emph{Dispersion in the large-deviation regime. Part II: Cellular flow at large
+P\'eclet number} (2014), \url{https://arxiv.org/abs/1401.6666}.}
+The drift, Fourier solution, reaction, diffusion choices and annulus are
+manufactured extensions. They retain an exact error measure while increasing
+coefficient variation and algebraic difficulty; this complete test is not
+claimed to be a published benchmark.
+
+\paragraph{Geometry and matched refinement.}
+Besides $[-1,1]^2$, use
+\[
+ \Omega_\star=\{(r,\theta):\;0.58<r<1+0.35\cos(5\theta)\}.
+\]
+Its narrowest nominal passage is $0.07$. Affine triangles approximate the
+outer wall and circular hole, with exact Dirichlet values on every discrete
+boundary edge. The coarsest annular mesh uses 220 outer segments; finer levels
+use 400. A fixed 400-segment polygon forces more than 3,000 triangles even
+at coarse target sizes, so resolving its boundary vertices would defeat the
+2k-triangle comparison. Each mesh has one connected component and two closed
+boundary loops. The velocity need not be tangent to the wall; this is a
+manufactured Dirichlet transport problem. The effect of holes depends on their
+boundary conditions, as also emphasized in published work on perforated
+advection problems.\footnote{C. Le Bris, F. Legoll and S. Madiot,
+\emph{Multiscale Finite Element methods for advection-dominated problems in
+perforated domains}, \url{https://arxiv.org/abs/1710.09331}.}
+
+The square uses $N_T=2,048,\ 8,192,\ 32,768,\ 99,458$ at $p=6$ and
+$p=1,2,3,4,6$ at $N_T=8,192$, exactly as in the smooth test.
+The corresponding annular counts are $2,043,\ 8,039,\ 33,174,\ 99,984$;
+the order sweep fixes the 8,039-triangle mesh. These counts differ from their
+square targets by less than $1.9\%$, and all remain below 100,000.
+The annulus has a different area, boundary and trace dimension, so equal
+triangle count does not by itself isolate a causal geometry penalty.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/oscillatory/initial_geometry_fields.pdf}
+ \caption{Annular geometry, exact solution and oscillatory speed/streamlines.
+ The displayed 6,114-triangle mesh belongs to the preserved initial stress
+ checks; the new scaling ladder uses the counts stated in the text.}
+ \label{fig:adr-oscillatory-fields}
+\end{figure}
+
+\paragraph{Per-class solver setups.}
+The common precision, Bernstein coordinates, stabilization, physical residual
+contract, internal tolerance, restart length and timing protocol are unchanged.
+In particular, every solve starts from zero; means average three second solves
+from fresh setups after one excluded warmup setup. Validation
+is outside the solve timer. The same per-class families as in the smooth
+study are transferred without per-point tuning:
+\begin{itemize}
+ \item High diffusion: degree-24 polynomially preconditioned ASM/GMRES, block-AMG with block-Jacobi
+ smoothing under FGMRES or BiCGSTAB, and $p$MG--AMG inside GMRES.
+ \item Low diffusion: degree-24 polynomially preconditioned ASM/GMRES, block-AMG with DILU smoothing
+ under either outer method, direct block-DILU under both outer methods, and
+ $p$MG--AMG.
+ \item Directional anisotropy: degree-48 polynomially preconditioned ASM/GMRES and block-AMG with
+ block-Jacobi smoothing under FGMRES or BiCGSTAB, and $p$MG--AMG.
+\end{itemize}
+All AMGX paths use natural $(p+1)\times(p+1)$ BSR blocks. The FGMRES/BiCGSTAB
+pair shares its preconditioner parameters. The $p$MG--AMG hierarchy preconditions
+the symmetric part while GMRES applies the full oscillatory operator; it is
+now tested in all three classes on both geometries, with the standard and
+robust policies distinguished in the figures. The full ADR matrix and
+right-hand side are unchanged for each comparison. These choices allow different classes to favor different setups,
+but a winner is determined by measured acceptance and cost, not by its label.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/oscillatory/h_scaling.pdf}
+ \caption{Mesh scaling at $p=6$ for all three oscillatory classes. Top two rows:
+ square; bottom two: annulus. Times are means, with measured ranges; iterations
+ are outer Krylov counts. Crosses above an axis mark failed configurations,
+ whose solve times are excluded. The same iteration limit of 1,000 applies to
+ every GPU method. LU timing points give the MKL thread count and have no
+ Krylov iteration count. ASM polynomial degree and AMG smoother are fixed within each
+ class as specified in the text.}
+ \label{fig:adr-oscillatory-h}
+\end{figure}
+
+\paragraph{High diffusion.}
+On the 99,458-triangle square, the fastest tested passing GPU configuration is AMG / BiCGSTAB: 29 iterations, 0.258 s mean hot time and 0.472 s median setup. On the 99,984-triangle annulus, the fastest tested passing GPU configuration is $p$MG--AMG (S): 32 iterations, 0.133 s mean hot time and 1.238 s median setup. On the square mesh ladder, block-AMG/FGMRES grows from 45 to 50 iterations, while $p$MG--AMG grows from 29 to 74 and polynomially preconditioned ASM from 14 to 150. The high-diffusion annular $p$MG--AMG hierarchy stays between 27 and 32 iterations; geometry changes the large-system ranking. Setup changes the choice for a few right-hand sides: on the finest annulus, the arithmetic setup-plus-hot-solve model gives 0.782 s for AMG / FGMRES versus 1.371 s for $p$MG--AMG. With the same hierarchy reused, $p$MG--AMG overtakes this AMG variant at about 5 right-hand sides; this is a cost model, not a measured multi-RHS pipeline.
+The mesh ladder exposes whether a method's small-system advantage survives
+refinement. $p$MG--AMG and block-AMG communicate through a coarse hierarchy,
+whereas polynomially preconditioned ASM pays for repeated fine-grid operator and patch applications.
+The measurements test that practical distinction without treating one Krylov
+iteration as an equal amount of work across implementations.
+
+\paragraph{Low diffusion.}
+On the 99,458-triangle square, the fastest tested passing GPU configuration is ASM+PP(24) / GMRES: 300 iterations, 6.915 s mean hot time and 1.126 s median setup. The failed configurations are DILU / FGMRES, DILU / BiCGSTAB, $p$MG–AMG (S), $p$MG–AMG (R). On the 99,984-triangle annulus, the fastest tested passing GPU configuration is ASM+PP(24) / GMRES: 525 iterations, 12.369 s mean hot time and 1.393 s median setup. The failed configurations are DILU / FGMRES, DILU / BiCGSTAB, $p$MG–AMG (S), $p$MG–AMG (R). Against the faster passing AMG variant on the annulus, the ASM hot-time advantage decreases from 9.8 times on the coarsest mesh to 1.33 times on the finest. Its coarse-mesh advantage therefore overstates its fine-mesh margin. The robust LU baseline is faster on that finest annulus: $\mathrm{P\!-\!LU}_{16}$ 4.232\,s fresh and $\mathrm{P\!-\!LU}_{16}$ 0.689\,s reused.
+The rapidly changing transport direction and weak reaction make the smooth
+transport ranking unreliable. Failed AMGX runs are retained explicitly;
+nonconvergence at this cap is a limitation of the tested frozen configuration,
+not a proof that every AMGX hierarchy or ordering would fail. BiCGSTAB can also
+use fewer outer iterations yet take longer because its iteration requires more
+preconditioner work. Increasing $p$ changes the discrete operator and its
+resolution of the flow, so iteration counts need not vary monotonically.
+
+\paragraph{Directional anisotropy.}
+On the 99,458-triangle square, the fastest tested passing GPU configuration is $p$MG--AMG (S): 600 iterations, 2.751 s mean hot time and 1.255 s median setup. The failed configurations are AMG / FGMRES, AMG / BiCGSTAB. On the 99,984-triangle annulus, the fastest tested passing GPU configuration is $p$MG--AMG (S): 375 iterations, 1.731 s mean hot time and 1.290 s median setup. The failed configurations are AMG / FGMRES, AMG / BiCGSTAB. Across both complete ladders, 32 of 32 transferred block-AMG configurations fail acceptance.
+A small transverse diffusivity and a tensor rotated relative to the mesh
+produce directional coupling that differs from both isotropic classes.
+Degree-48 polynomial preconditioning costs more per application than degree-24 polynomial preconditioning; its outer iteration
+count alone therefore cannot establish a lower total cost. Block-AMG/Jacobi
+results characterize the transferred configuration under this stronger,
+rotated anisotropy. They do not establish that this smoother remains the best
+AMGX choice for the new operator.
+A separate 8,192-triangle, $p=6$ square probe replaces the AMG block-Jacobi smoother with block DILU while retaining the hierarchy settings. Both outer methods still reach 1,000 iterations without acceptance (physical residuals 0.968, 10.6). This bounded probe does not support extending the DILU variant to a second scaling sweep; broader hierarchy tuning remains open.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/oscillatory/p_scaling.pdf}
+ \caption{The repeated $p=1,2,3,4,6$ test on the fixed square and annular
+ meshes. Failed points are gaps with crosses above the axes. $p$MG--AMG standard and robust policies retain their individual curves; all
+ methods use the same physical-residual acceptance test.}
+ \label{fig:adr-oscillatory-p}
+\end{figure}
+
+\begin{table}[!htbp]
+ \centering\small
+ \setlength{\tabcolsep}{3.5pt}
+ \input{\ADROscPath/largest_annulus_table.tex}
+ \caption{All tested configurations on 99,984 annular triangles at $p=6$.
+ Times are seconds: hot solve is the mean, setup the median. NC is a failed
+ acceptance contract, not a time rank. The corresponding square table is
+ included in the companion files.}
+ \label{tab:adr-oscillatory-largest}
+\end{table}
+
+\paragraph{Application cost and matrix diagnostics.}
+Complete polynomially preconditioned ASM applications cost high diffusion 21.57 ms; low diffusion / transport 21.53 ms; directional anisotropy 42.61 ms. They account for 92.6--96.1\% of attributed GPU operation time. The count includes every profiled preconditioner application, including restart/residual work. The near doubling for degree 48 reflects additional polynomial stages; reducing outer iterations must offset this cost. Host synchronization waits overlap GPU work and must not be added to GPU operation totals.
+\begin{table}[!htbp]
+ \centering\small
+ \setlength{\tabcolsep}{4pt}
+ \input{\ADROscPath/application_table.tex}
+ \caption{Separate preconditioner profiles on 99,984 annular triangles at
+ $p=6$. ASM and $p$MG--AMG report means of ten warmed applications;
+ AMGX reports immediate-preconditioner event means over two instrumented
+ solves. The instrumentation protocols differ, so these numbers explain
+ cost but do not replace the uninstrumented solve ranking. GPU denotes the
+ fraction of attributed operation time; this fraction is unavailable for AMGX.}
+ \label{tab:adr-oscillatory-applications}
+\end{table}
+At 8,039 annular triangles and $p=6$, the reproducible 1-norm condition lower estimates are $3.35\times10^{4}$ (high diffusion), $3.29\times10^{5}$ (low diffusion / transport), $5.27\times10^{6}$ (directional anisotropy). They use sparse LU with a randomized 1-norm estimator, seed 1729, four probing columns and eight iterations. They describe the unscaled Bernstein matrix, not the preconditioned spectrum or exact $\kappa_2$; a condition estimate alone does not explain AMG convergence.
+
+\paragraph{Accuracy and validation.}
+The original ladder contains 192 configurations on 48 systems: 121 pass and 71 fail. Four existing square outcomes were reused; 188 configurations were newly measured. All 22,825-triangle jobs and specifications remain unchanged. Passing configurations contribute 968 warmup/measured solves, with worst physical relative residual $9.99\times10^{-12}$. 36 systems have independent CPU direct references; cross-solver traces agree within $6.27\times10^{-9}$ relative to ASM.
+Doubling volume and edge quadrature from 14 to 28 points in each direction on that same mesh changes the reconstructed field by 0.0372\% of its spatial error (high diffusion), 0.0294\% of its spatial error (directional anisotropy). These direct-reference checks support the reported discretization errors without assuming that oscillatory coefficients integrate exactly.
+The manufactured derivative/source checks and existing CPU ADR checks pass
+23 tests. Figure~\ref{fig:adr-oscillatory-accuracy} separates polynomial
+approximation error from linear-solver convergence: all curves use independent
+CPU direct references on the fixed intermediate mesh. Fine meshes above the
+reference threshold instead use an independently recomputed physical residual,
+analytic primal error and agreement between passing solvers. No formal
+asymptotic order is inferred from the annular mesh ladder alone, whose
+polygonal boundary also changes with refinement.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/oscillatory/p_accuracy.pdf}
+ \caption{Primal $L^2$ error under the repeated degree sweep. These reference
+ errors measure spatial approximation, independently of which iterative
+ configuration is fastest. Low-order timings should not be compared with
+ high-order timings as though they deliver the same solution accuracy.}
+ \label{fig:adr-oscillatory-accuracy}
+\end{figure}
+
+\paragraph{Preserved initial stress tests.}
+The first annular experiments remain part of this study. Their additional
+weak-anisotropic tensor was
+$K=R(\pi/6)\operatorname{diag}(10^{-4},10^{-6})R(\pi/6)^T$;
+it is a separate stress control, not the directional class in
+\eqref{eq:adr-oscillatory-classes}. On 22,825 triangles at $p=6$, its polynomially preconditioned ASM
+result remains 150 iterations and 0.759~s, compared with 230/1.851~s for
+block-AMG/FGMRES and 162/2.294~s for block-AMG/BiCGSTAB; direct DILU fails.
+The low-isotropic initial result remains 300 ASM iterations and 1.515~s,
+with all three initially tested AMGX configurations failing at the cap.
+Both $p$MG--AMG policies also fail on these two 22,825-triangle stress systems.
+The original linear systems, competing-solver measurements and profiles are
+retained; only the missing $p$MG--AMG solves were added. The less severe
+6,114-triangle weak-anisotropic annulus admits the robust $p$MG--AMG policy,
+but its reused solve remains slower than polynomially preconditioned ASM.
+
+The source-only control leaves the smooth matrix byte-identical and retains
+8 or 9 ASM iterations on its square/coarse-annular grids: oscillating the
+solution alone does not alter matrix conditioning. On the 6,114-triangle
+annulus, 1-norm condition lower estimates were $1.47\times10^4$ for the smooth
+reference, $1.51\times10^5$ for weak anisotropy and $4.14\times10^5$ for low
+isotropic diffusion. These are basis-dependent matrix diagnostics, not exact
+spectral or preconditioned condition numbers. Original reconstructed errors
+fall from $9.04\times10^{-8}$ to $4.99\times10^{-10}$ for weak anisotropy,
+and from $1.61\times10^{-7}$ to $7.77\times10^{-10}$ for low isotropic diffusion.
+Doubling coarse quadrature changes the field by less than $0.033\%$ of its
+spatial error and preserves all four weak-anisotropic solver iteration counts.
+
+Separate original CUDA-event profiles give complete degree-24 polynomially preconditioned ASM
+application means of 1.063 and 4.495~ms on the 6,114- and 22,825-triangle
+weak-anisotropic systems, accounting for 83.2\% and 90.5\% of attributed GPU
+operation time. Those instrumented profiles do not enter timing ranks, and
+host synchronization waits overlap GPU work. Application cost remains a practical optimization target. The completed
+$p$MG--AMG census and separate application profiles are summarized next.

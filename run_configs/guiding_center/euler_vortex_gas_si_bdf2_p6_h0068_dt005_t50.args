@@ -1,0 +1,2 @@
+# euler_vortex_gas: si bdf2, p=6, h=0.0068, 150k+ triangles.
+--preset euler_vortex_gas_si_bdf2_p6_h0068_dt005_t50

@@ -13,6 +13,8 @@ from .mesh import (
     default_mesh_cache_dir,
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
+    gmsh_polygon_mesh,
+    gmsh_geo_mesh,
     gmsh_rectangle_mesh,
     gmsh_smooth_star_mesh,
     gmsh_star_mesh,
@@ -33,7 +35,15 @@ from .field_ops import (
 from .trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
 from .space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
+from .geometry import DiskDomain, PolygonDomain, shaped_domain
+from .profiles import GaussianBlobField, sample_gaussian_blob_field
+
 __all__ = [
+    "PolygonDomain",
+    "DiskDomain",
+    "GaussianBlobField",
+    "shaped_domain",
+    "sample_gaussian_blob_field",
     "DGCoefficientLayout",
     "DGTraceSpace",
     "DGField",
@@ -49,6 +59,8 @@ __all__ = [
     "default_mesh_cache_dir",
     "gmsh_disc_mesh",
     "gmsh_lshape_mesh",
+    "gmsh_polygon_mesh",
+    "gmsh_geo_mesh",
     "gmsh_rectangle_mesh",
     "gmsh_smooth_star_mesh",
     "gmsh_star_mesh",

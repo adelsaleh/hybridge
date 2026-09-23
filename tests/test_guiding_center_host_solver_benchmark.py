@@ -9,16 +9,14 @@ import pytest
 
 from hdgfem.diagnostics import azimuthal_mode_diagnostics
 
-from scripts.guiding_center.benchmark_host_solver_stages import (
+from scripts.guiding_center.benchmarks.benchmark_host_solver_stages import (
     SCIPY_ITERATIVE_SOLVERS,
     STRENGTHS,
     StageBenchmark,
     _assert_no_scipy_direct,
 )
-from scripts.guiding_center.guiding_center_presets import preset_by_key
-from scripts.guiding_center.run_guiding_center_cases import (
-    GuidingCenterStepSnapshot,
-)
+from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
+from scripts.guiding_center.runtime.models import GuidingCenterStepSnapshot
 
 
 def test_host_benchmark_rejects_scipy_direct_lu_solvers() -> None:

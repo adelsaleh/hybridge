@@ -1,5 +1,7 @@
 # Classical AMG With A BSR Fine Operator: August 2026
 
+The newer [157,280-triangle Euler vortex-gas comparison (2026-09-13)](../../development/plans/face_block_hp_multigrid.md#matched-euler-vortex-gas-comparison-2026-09-13) compares this hybrid path against native hp-BSR and screened scalar CSR AMGX at p=4–6. It records repeated Poisson calls, setup costs, a common residual contract, and the p=4 step-80 acceptance failure.
+
 This study validates the hybrid classical-AMG algorithm described in
 [`../../backends/amgx_classical_bsr.md`](../../backends/amgx_classical_bsr.md).
 It is dated performance evidence, not a backend support or default-policy
@@ -489,3 +491,9 @@ rejected as the next production interpolation and retained only as an opt-in
 diagnostic. The scalar edge metric, support size, damping, repeated Jacobi
 smoothing, normalization, scalar-guided face promotion, and this local
 block-elimination formula have now all failed to close the p>=3 hybrid gap.
+
+The [2026-09-14 convergence study](../../../artifacts/full_bsr_convergence_20260914/README.md) reconfirmed the fully BSR versus hybrid gap on three p=6 guiding-center steps at 157,280 and 315,425 triangles. The original fully BSR counts were 28/23/19 and 28/23/20, versus hybrid 16/13/12 at both sizes. Coarsening, smoothing-degree, spectral-interval, and F/W-cycle changes did not close the iteration gap with competitive solve time. Three V-cycles per outer iteration reached 17/14/12 at 150k but increased warm solve time from 247 to 443 ms.
+
+The opt-in interpolation preserving only the nodal scalar constant, with exact coarse-point injection, has now been built and tested. On the saved systems it reduced warm solve time from 247.03 to 239.37 ms at 150k and from 507.76 to 448.89 ms at 300k. Fresh independent three-step trajectories confirmed 26/21/19 and 27/22/19 iterations, at 239.19 and 451.01 ms, versus hybrid 16/13/12 at 106.22 and 203.70 ms. Matched inputs are guaranteed within each campaign; the fresh numerical matrix values and RHS/guesses are not bitwise identical to the original captures. Further interpolation and basis screens did not close the gap.
+
+The block DILU path was also repaired, including 7×7 support, and all 106 native smoother/interpolation/DILU algebra tests passed. Its best tested schedules still required 29/24/21 iterations at 150k and 30/25/22 at 300k, without improving on the constant-vector Chebyshev/block-Jacobi solve time. Neither interpolation nor DILU has been promoted as a new default. The [hierarchy comparison](../../../artifacts/full_bsr_convergence_20260914/hybrid_advantage.md) relates the remaining gap to the measured coarse-space and sparsity differences.

@@ -1511,7 +1511,7 @@ advection-reaction or diffusion-reaction HDG workflows.
 ### Fixed-Mesh Guiding-Center Cases Runner
 
 The fixed-mesh guiding-center runner lives in `scripts/guiding_center/` and is
-separate from the older semilinear-equilibrium scripts. It supports two fixed-
+separate from the older semilinear-equilibrium scripts. It supports three fixed-
 mesh time schemes. With `A(v) rho = div(v rho)`, `q = -grad(phi)`, and
 `v = (-q_y, q_x)`, semi-implicit Euler is
 
@@ -1531,21 +1531,88 @@ rho^(n+1) = 2 w - rho^n
 -Delta phi^(n+1) = rho^(n+1)
 ```
 
-The predictor is internal: diagnostics and PyVista receive accepted endpoint
+The predictor is internal: diagnostics and plotting receive accepted endpoint
 states only. Solver objects and the fixed Poisson operator/AMGX setup are reused.
 
-Registered cases are defined in `scripts/guiding_center/guiding_center_cases.py`:
+The second-order `si-bdf2` option uses one SI-Euler startup step, then, for
+constant `dt`, performs
+
+```text
+v_star = 2 v^n - v^(n-1)
+(I + 2 dt/3 A(v_star)) rho^(n+1) = (4 rho^n - rho^(n-1)) / 3
+-Delta phi^(n+1) = rho^(n+1)
+```
+
+The endpoint density comes directly from the upwind solve. Each step needs one
+transport and one Poisson solve. Density and standard Poisson-flux history are
+retained on their existing backend and advanced only after both solves succeed.
+Boundary data are evaluated at the endpoint. Diagnostics identify the startup
+step with `bdf2_startup` and report `transport_time_order` as 1 there, then 2.
+BDF2 damps stiff linear modes but does not guarantee pointwise bounds for the
+high-order spatial discretization. Varying `dt` within a run would require
+variable-step BDF2 coefficients; the current runner uses a fixed step.
+
+The third-order `h1-bdf3` hybrid uses an AB3 density predictor, predictor
+Poisson, one BDF3 transport corrector, and accepted-endpoint Poisson. The first
+two steps use third-order SI-Euler extrapolation startup (six transport and
+seven Poisson solves per step; explicit SSPRK3 remains available via
+`--h1-startup ssprk3`). Startup and the explicit predictor have timestep
+restrictions; prior Euler/BDF2 timestep settings are not a stability guarantee.
+The closest available stage in time seeds each iterative solve. Accepted
+residual history, trace projection data and device reference tensors are cached.
+See [H1-BDF3](docs/algorithms/advection_reaction/h1_bdf3.md) for the equations,
+cache policy, stage counts, and user launch commands. Full runs are left to the
+user; host temporal convergence, static matrix and canned-solver checks cover
+order and implementation wiring. Short heavy-mesh GPU runs and matched
+host/GPU checks now cover the revised startup; full T=50 stability is untested.
+
+The `h2-bdf3` hybrid predicts density with extrapolated-drift BDF3, recomputes
+Poisson, then corrects using the same BDF3 source and the predicted drift.
+Regular steps use two transport and two Poisson solves, with no explicit
+residual. The two startup steps share H1's SI-Euler extrapolation initializer
+(`--h2-startup si-euler-extrap3`). Both corrector solves start from their
+same-time predictor traces; accepted density/drift histories and device caches
+are retained. See [H2-BDF3](docs/algorithms/advection_reaction/h2_bdf3.md) for
+its equations, validation scope and matched heavy Euler vortex-gas command.
+
+A matched BDF2 vortex-gas preset selects NVIDIA Holoviz plotting:
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr.args
+```
+
+It uses `h=0.008`, `p=6`, `dt=0.05`, and 1000 steps to `T=50`. To use `dt=0.02`
+and retain `T=50`, append `--dt 0.02 --num-steps 2500`. Append
+`--plot-every 25 --diagnostics-every 25` to retain the 0.5-time-unit output cadence.
+
+
+Registered cases are defined in `scripts/guiding_center/cases/guiding_center_cases.py`:
 
 ```text
 diocotron_gaussian_annulus  legacy Gaussian-annulus density with (1 + eps cos(k theta)) perturbation;
                             zero potential boundary; zero-flux transport boundary
 diocotron_k                 sharp annular-band density with (1 + eps cos(k theta)) perturbation;
                             zero potential boundary; zero-flux transport boundary
+euler_vortex_gas            signed multiscale Gaussian vorticity on the unit disk
+positive_turbulence         nonnegative compact multiscale Gaussian density, identically zero
+                            in a neighborhood of the unit-disk wall
+euler_star_vortex_gas       signed multiscale vorticity in a nonconvex star with a circular hole
+euler_shaped_vortex_gas     signed multiscale vorticity in horseshoe, ITER, or Pac-Man geometry
+spiral_sheet                positive Gaussian-smoothed finite Archimedean spiral on the disk
 rho_helm_wave               legacy manufactured rho/phi pair with nonzero exact boundary data;
                             rectangle default with optional domain override
 ```
 
-Presets are defined in `scripts/guiding_center/guiding_center_presets.py` and
+The positive-turbulence response file enables the existing initial and
+every-IMEX-stage positivity diagnostics without applying a limiter:
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr.args
+```
+
+Presets are defined in `scripts/guiding_center/cases/guiding_center_presets.py` and
 can be listed or inspected from the CLI:
 
 Long guiding-center commands can also be stored in argparse response files and
@@ -1569,17 +1636,24 @@ Important CLI controls:
 ```text
 --case-param key=value              override case parameters, for example k=20 or eps=0.1
 --mesh-size, --order, --dt          override preset mesh/order/time-step controls
---time-scheme NAME                  si-euler or predictor-corrector
+--time-scheme NAME                  si-euler, predictor-corrector, si-bdf2, h1-bdf3, or h2-bdf3
 --poisson-*                         Poisson assembly, solver, AMGX, scaling, raw-CSR options
 --transport-*                       transport assembly, solver, AMGX, zero-flux, raw-CSR options
 --transport-initial-guess MODE      solver-default or initial-density-trace
 --transport-retry-policy POLICY     none or amgx-robust
 --diagnostics-every N               materialize/record every N accepted steps
 --backend-profile host|device|hybrid shorthand defaults, with explicit flags taking precedence
---plot-every N                      update PyVista every N accepted steps; 0 disables plotting
+--plot-every N                      offer a plot every N accepted steps; 0 disables plotting
+--plot-backend pyvista|holoviz       select visualization backend (default: pyvista)
+--plot-width N --plot-height N      Holoviz pixels per panel (default: 1024 x 1024)
+--plot-max-fps N                    Holoviz live preview rate cap (default: 10)
 --plot-both                         plot density and potential; default plotting shows density only
---screenshot-dir DIR                write PyVista screenshots with scalar arrays updated in place
+--screenshot-dir DIR                explicitly save completed plot images
 ```
+
+Holoviz keeps DG sampling, colour scaling, and rendering on the GPU. Only
+explicit screenshots download a completed image. See the
+[Holoviz guide](docs/backends/holoviz.md) for installation and static smoke checks.
 
 Diagnostics are written incrementally to JSONL and then to CSV at shutdown.
 They include mass drift, `||q||_L2` drift, field min/max, solver iterations,
@@ -1604,25 +1678,152 @@ endpoint density data; its corrector uses the average of exact density traces at
 `t_n` and `t_(n+1)`. Because its velocity is not tangent to the rectangle,
 `boundary_mode=eliminate` is mandatory and zero-flux configurations are rejected.
 
-`--transport-retry-policy amgx-robust` keeps the assembled CSR/RHS on device and
-tries the configured primary solve with the stage guess, the same primary solve
-from zero, then unscaled absolute-convergence FGMRES with direct
-`MULTICOLOR_DILU` from zero. If needed, two additional FGMRES solves correct the
-best iterate using the independently formed residual. Every candidate is
-accepted only when its finite, row-unscaled physical residual meets the target;
-attempt labels and residuals are stored in CSV/JSONL diagnostics. The fallback
-configuration is
-`configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json`.
+`--transport-retry-policy amgx-robust` keeps the assembled matrix and RHS on
+device and tries, in order:
 
-Temporal convergence for Euler, predictor-corrector, or both is available with:
+1. The configured primary solve with the stage trace guess (normally scaled,
+   unpreconditioned BICGSTAB).
+2. `PBICGSTAB` with one AMGX `JACOBI_L1` application from zero, using
+   `configs/amgx/adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json`.
+3. `PBICGSTAB` with one AMGX `BLOCK_JACOBI` application from zero, using
+   `configs/amgx/adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json`.
+4. Absolute-convergence FGMRES with direct `MULTICOLOR_DILU` from zero, using
+   `configs/amgx/adv_rea_gpu4_hdg_fgmres_dilu_abs.json` and the configured
+   transport scaling (enabled by the device presets).
+5. If needed, up to two more FGMRES/DILU solves correct the best finite iterate
+   using the independently formed residual.
+
+Plain AMGX `BICGSTAB` ignores nested preconditioners; `PBICGSTAB` applies them.
+Both Jacobi retries inherit `--transport-scale-system` (enabled by the device
+presets), retain native BSR storage, and rebuild their inexpensive preconditioner
+data for the current matrix. L1 uses the installed AMGX fork's
+`jacobi_l1_scalar_rows_for_blocks=1`: scalar-row L1 Jacobi evaluated directly on
+BSR, followed by true block Jacobi if needed. Among the AMGX retries, only the
+DILU fallback expands BSR to scalar CSR on device, because DILU does not support p=6 face blocks in
+this AMGX build. The existing DILU cache retains its factors across retries and
+steps while replacing matrix coefficients.
+
+AMGX transport attempts also stop early on confirmed residual growth: after
+10 startup iterations, 5 consecutive residuals above 1000 times the best seen
+(with an initial-residual roundoff floor) trigger an explicit `b-A*x` check.
+Confirmed growth returns `diverged` and advances to the next retry; non-finite
+residuals stop immediately. This requires rebuilding the local AMGX fork.
+At `-v 3`, transport prints every 10 iterations plus the final row and exit
+reason. These defaults and their JSON overrides are documented in
+[AMGX configurations](configs/amgx/README.md).
+
+The policy stops at the first accepted candidate, with at most six attempts by
+default. `--transport-direct-fallback cusolver-qr` optionally adds a seventh
+attempt using device sparse QR on scalar CSR. This last resort is validated only
+on small matrices; sparse factorization fill can require substantial memory.
+Every candidate must meet the existing solver and finite physical `b-A*x`
+residual checks; preconditioning does not relax the physical tolerance. Attempt
+labels and residuals are stored in CSV/JSONL diagnostics. The Jacobi choices
+come from the existing
+[AMGX BSR benchmarks](docs/backends/advection_bsr_benchmark_20260824.md);
+their speed on a particular turbulent step still requires measurement. Boundary
+normal velocity, elementwise divergence and interior normal jumps are recorded
+at diagnostic intervals. Failed stages write a separate transport-failure JSON
+with the actual beta field diagnostics and matrix row scales. See
+[the transport investigation](docs/development/transport_boundary_diagnostics.md)
+for exact versus discrete tangency, the localized vortex preset, and scaling
+comparisons.
+
+Temporal convergence for Euler, predictor-corrector, and BDF2 is available with:
 
 ```bash
-LD_LIBRARY_PATH=$HOME/.local/amgx/lib:$LD_LIBRARY_PATH .venv/bin/python scripts/guiding_center/run_guiding_center_temporal_convergence.py --scheme both --plot-convergence
+LD_LIBRARY_PATH=$HOME/.local/amgx/lib:$LD_LIBRARY_PATH .venv/bin/python scripts/guiding_center/benchmarks/run_guiding_center_temporal_convergence.py --scheme both --plot-convergence
 ```
 
+Use `--scheme si-bdf2` for BDF2 alone, `--scheme h1-bdf3` for H1, `--scheme h2-bdf3` for H2, or `--scheme all` for all five schemes;
+`--scheme both` retains the Euler/predictor-corrector comparison.
+
 The default study uses `rho_helm_wave`, raw-CUDA/AMGX, Gmsh rectangle mesh size
-`0.025`, DG order 6, `T=0.2`, and `dt=0.04,0.02,0.01,0.005`. It writes aggregate
-CSV/JSON data and optional four-panel Matplotlib L2/Linf convergence plots.
+`0.025`, DG order 6, `T=0.2`, and `dt=0.04,0.02,0.01,0.005`. Poisson uses
+cached CuPy Schur-Cholesky local factors; both global systems use device AMGX.
+CSV/JSON data and optional Matplotlib plots report L2, sampled Linf,
+broken-gradient L2, trace mismatch, and full HDG H1 errors for both density
+and potential, with rates for each metric.
+
+The scalar evaluator in [hdg_gram.py](hdgfem/assembly/hdg_gram.py) shares the
+reference derivative Gram blocks and face weights with the assembled mixed
+Gram. It evaluates the factored quadratic forms without assembling a global
+matrix or applying a Gram inverse. With `h_K` the element diameter, it uses
+
+```text
+J_h(u_h, uhat_h) = sum_K h_K^(-1) ||u_h - uhat_h||^2_(L2(boundary K))
+||e||^2_HDG,H1 = ||u_h-u||^2_L2 + sum_K ||grad(u_h-u)||^2_L2(K) + J_h
+```
+
+Interior faces contribute both element sides. Manufactured errors use the
+analytic physical gradient and the accepted endpoint trace in its configured
+basis, including prescribed boundary traces. The exact trace is the restriction
+of the smooth exact field, so its contribution cancels in the face mismatch.
+For predictor-corrector, the density trace is extrapolated to the endpoint
+along with the density. Decreasing dt on a fixed mesh can reach a spatial
+error floor, especially in the gradient and face terms.
+
+Changing-field diagnostics, exact errors and trace expansion use resident
+CuPy arrays with scalar results copied back for reports. The GPU is preferred
+even when a host mirror exists. HDG norm reductions accumulate in float64 in
+bounded element chunks. Static reference tables and mesh setup remain on the
+host; each report records the diagnostic backend.
+
+The same driver also compares unforced vortex gas at matching physical times:
+
+```bash
+export CUDA_PATH=/usr/local/cuda-13.0
+export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+HDGFEM_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
+  --study vortex-gas --scheme si-bdf2 --final-time 5 --dts 0.01,0.005 \
+  --sample-interval 0.5 --plot-comparison --cached-kernels-only \
+  --prefix star_hole_bdf2_dt_comparison
+```
+
+This defaults to the star-with-hole BDF2 preset, retaining its h=0.008, p=6,
+Poisson tau=1000, seed and solver tolerances. Use `--preset` to select the disk
+vortex-gas preset instead. Both runs start from the same initial condition;
+500 and 1,000 steps reach T=5, with samples every 0.5 physical time units.
+`--dry-run` prints all configurations without launching a solve. The optional
+`--cached-kernels-only` rejects a missing Numba or CUDA kernel cache instead of
+compiling; omit it when deliberately allowing JIT compilation. Use a fresh
+`--prefix` for a new comparison: an existing comparison manifest is protected
+from overwrite. `--output-dir` selects the common artifact directory.
+
+Outputs supplement the manufactured errors with enstrophy retention, energy
+change, broken palinstrophy, the separate trace mismatch J, and HDG palinstrophy:
+
+```text
+Z = 1/2 ||rho_h||^2_L2
+P_broken = 1/2 sum_K ||grad rho_h||^2_L2(K)
+P_HDG = P_broken + 1/2 J_h(rho_h, rhohat_h)
+```
+
+Enstrophy retains its physical definition. The HDG diagnostic adds sensitivity
+to element/trace mismatch. For zero-flux transport, boundary slots are unused
+zeros rather than numerical traces; those boundary sides are excluded from J.
+Interior sides use the actual solved trace. The final density and trace
+coefficients are saved separately. Old comparisons lacking trace artifacts
+cannot recover this diagnostic from density coefficients alone.
+
+The driver also reports `dt * max_K(max|beta| / min_edge_K)` using the accepted
+velocity, rather than the BDF2 extrapolated stage velocity. Both gradient lengths,
+`sqrt(Z/P_broken)` and `sqrt(Z/P_HDG)`, are RMS scales rather than minimum
+filament widths. Matched images use identical geometry and shared field color
+limits; their difference has its own color scale. Raster resolution is set
+with `--resolution` (default 1024); quantitative norms use DG quadrature.
+CuPy computes the norms and final DG L2 differences, and cuSPARSE samples
+resident device fields through a cached sparse raster map. Only scalar reports,
+image pixels and final saved coefficient artifacts are transferred to the host.
+The final L2 difference is normalized by the finest-dt field norm. CSV/JSON
+summaries, sample histories, individual run diagnostics/timings and a
+configuration/mesh manifest are saved.
+
+Two step sizes measure temporal sensitivity on the chosen spatial discretization.
+They do not establish an observed order or an exact temporal error. Use the
+manufactured study for formal-order checks and further time/space refinements
+for turbulent-flow accuracy. A small algebraic residual alone cannot validate
+temporal accuracy or preservation of subelement filaments.
 
 The guiding-center scripts compute diocotron-like equilibria through a
 semilinear elliptic equation of the form

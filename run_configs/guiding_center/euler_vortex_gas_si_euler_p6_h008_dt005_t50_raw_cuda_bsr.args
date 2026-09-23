@@ -1,0 +1,4 @@
+# Matched Euler vortex gas: h=0.008, p=6, semi-implicit Euler, dt=0.05 to T=50.
+# Same initial vortices, spatial operators and linear solver tolerances.
+# Plots and diagnostics every 10 steps (0.5 time units).
+--preset euler_vortex_gas_si_euler_p6_h008_dt005_t50_raw_cuda_bsr

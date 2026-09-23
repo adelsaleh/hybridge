@@ -15,6 +15,7 @@
         "solver": "CHEBYSHEV",
         "preconditioner": {
           "solver": "JACOBI_L1",
+          "jacobi_l1_scalar_rows_for_blocks": 1,
           "max_iters": 1
         },
         "max_iters": 1,

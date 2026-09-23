@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hdgfem.precision import audit_arrays, REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel, real_raw_module
+
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -135,7 +137,7 @@ extern "C" __global__ void compact_diffusion_rhs(
     }
     __syncwarp();
 
-    // Solve L y = f followed by L^T u = y.  The factor is the validated FP64
+    // Solve L y = f followed by L^T u = y.  The factor uses the selected real precision
     // Cholesky factor used by the reference cuBLAS path.
     for (int i = 0; i < NEL; ++i) {
         double partial = 0.0;
@@ -300,7 +302,7 @@ extern "C" __global__ void compact_diffusion_reconstruct(
 def _compile_compact_diffusion_kernels(cupy, *, nel: int, ntr: int):
     """Compile the fixed-order compact RHS and reconstruction kernels."""
     source = f"#define NEL {int(nel)}\n#define NTR {int(ntr)}\n" + _COMPACT_DIFFUSION_KERNEL_TEMPLATE
-    module = cupy.RawModule(
+    module = real_raw_module(
         code=source,
         options=("--std=c++11",),
         name_expressions=("compact_diffusion_rhs", "compact_diffusion_reconstruct"),
@@ -340,7 +342,7 @@ extern "C" __global__ void scatter_reduced_diffusion_rhs(
 
 def _compile_reduced_rhs_scatter_kernel(cupy):
     """Compile the persistent one-thread-per-side/dof RHS gather kernel."""
-    kernel = cupy.RawKernel(
+    kernel = real_raw_kernel(
         _REDUCED_RHS_SCATTER_SOURCE,
         "scatter_reduced_diffusion_rhs",
         options=("--std=c++11",),
@@ -354,7 +356,7 @@ def _as_scalar_or_none(value) -> float | None:
     if np.isscalar(value):
         return float(value)
     try:
-        array = np.asarray(value, dtype=np.float64)
+        array = np.asarray(value, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         return None
     if array.shape == ():
@@ -372,7 +374,7 @@ def _constant_inverse_diffusion_components(diffusion) -> tuple[float, float, flo
         return inv, 0.0, 0.0, inv
 
     try:
-        array = np.asarray(diffusion, dtype=np.float64)
+        array = np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         array = None
     if array is not None and array.shape == (2, 2):
@@ -420,18 +422,18 @@ def legendre_gauss_lobatto(num_points: int) -> tuple[np.ndarray, np.ndarray]:
     roots = np.real_if_close(poly.deriv().roots(), tol=1000)
     if np.iscomplexobj(roots):
         raise ArithmeticError("Legendre derivative produced non-real Gauss-Lobatto nodes")
-    interior = np.sort(np.asarray(roots, dtype=np.float64))
+    interior = np.sort(np.asarray(roots, dtype=REAL_DTYPE))
     points = np.concatenate(([-1.0], interior, [1.0]))
     values = poly(points)
     weights = 2.0 / ((num_points - 1) * num_points * values * values)
-    return np.ascontiguousarray(points, dtype=np.float64), np.ascontiguousarray(weights, dtype=np.float64)
+    return np.ascontiguousarray(points, dtype=REAL_DTYPE), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
 def lagrange_basis(nodes: np.ndarray, points: np.ndarray) -> np.ndarray:
     """Evaluate one-dimensional Lagrange basis functions."""
-    nodes = np.asarray(nodes, dtype=np.float64)
-    points = np.asarray(points, dtype=np.float64)
-    values = np.ones((nodes.size, points.size), dtype=np.float64)
+    nodes = np.asarray(nodes, dtype=REAL_DTYPE)
+    points = np.asarray(points, dtype=REAL_DTYPE)
+    values = np.ones((nodes.size, points.size), dtype=REAL_DTYPE)
     for i in range(nodes.size):
         for j in range(nodes.size):
             if i != j:
@@ -444,7 +446,7 @@ def bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
     from math import factorial
 
     r = 0.5 * (points + 1.0)
-    values = np.empty((order + 1, points.size), dtype=np.float64)
+    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         coeff = factorial(order) / (factorial(j) * factorial(order - j))
         values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
@@ -453,7 +455,7 @@ def bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
 
 def legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
     """Evaluate modal Legendre edge basis functions on [-1, 1]."""
-    values = np.empty((order + 1, points.size), dtype=np.float64)
+    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
     return np.ascontiguousarray(values)
@@ -508,16 +510,16 @@ def build_trace_reference(cspace, kind: str) -> TraceReferenceData:
         return TraceReferenceData(
             kind="bernstein",
             nodal=False,
-            interpolation_nodes=cupy.asarray(edge_quads, dtype=cupy.float64),
-            quads=cupy.asarray(edge_quads, dtype=cupy.float64),
-            weights=cupy.asarray(edge_weights, dtype=cupy.float64),
-            bas_of_bd_quads=cupy.asarray(face_basis, dtype=cupy.float64),
-            bas1d_of_ref_edg_qds=cupy.asarray(edge_basis, dtype=cupy.float64),
-            weighted_bas_of_bd_quads=cupy.asarray(weighted_face_basis, dtype=cupy.float64),
-            weighted_bas1d_of_ref_edg_qds=cupy.asarray(weighted_edge_basis, dtype=cupy.float64),
-            face_element_test_trace_trial=cupy.asarray(face_coupling, dtype=cupy.float64),
-            face_trace_test_element_trial_oriented=cupy.asarray(trace_lift, dtype=cupy.float64),
-            M_rf_fc=cupy.asarray(np.ascontiguousarray(edge_mass), dtype=cupy.float64),
+            interpolation_nodes=cupy.asarray(edge_quads, dtype=REAL_DTYPE),
+            quads=cupy.asarray(edge_quads, dtype=REAL_DTYPE),
+            weights=cupy.asarray(edge_weights, dtype=REAL_DTYPE),
+            bas_of_bd_quads=cupy.asarray(face_basis, dtype=REAL_DTYPE),
+            bas1d_of_ref_edg_qds=cupy.asarray(edge_basis, dtype=REAL_DTYPE),
+            weighted_bas_of_bd_quads=cupy.asarray(weighted_face_basis, dtype=REAL_DTYPE),
+            weighted_bas1d_of_ref_edg_qds=cupy.asarray(weighted_edge_basis, dtype=REAL_DTYPE),
+            face_element_test_trace_trial=cupy.asarray(face_coupling, dtype=REAL_DTYPE),
+            face_trace_test_element_trial_oriented=cupy.asarray(trace_lift, dtype=REAL_DTYPE),
+            M_rf_fc=cupy.asarray(np.ascontiguousarray(edge_mass), dtype=REAL_DTYPE),
         )
     if normalized not in {"legacy_lagrange", "legendre_modal"}:
         raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
@@ -547,16 +549,16 @@ def build_trace_reference(cspace, kind: str) -> TraceReferenceData:
     return TraceReferenceData(
         kind=kind_out,
         nodal=nodal,
-        interpolation_nodes=cupy.asarray(interpolation_nodes, dtype=cupy.float64),
-        quads=cupy.asarray(edge_quads, dtype=cupy.float64),
-        weights=cupy.asarray(edge_weights, dtype=cupy.float64),
-        bas_of_bd_quads=cupy.asarray(np.ascontiguousarray(face_basis), dtype=cupy.float64),
-        bas1d_of_ref_edg_qds=cupy.asarray(edge_basis, dtype=cupy.float64),
-        weighted_bas_of_bd_quads=cupy.asarray(weighted_face_basis, dtype=cupy.float64),
-        weighted_bas1d_of_ref_edg_qds=cupy.asarray(weighted_edge_basis, dtype=cupy.float64),
-        face_element_test_trace_trial=cupy.asarray(np.ascontiguousarray(face_coupling), dtype=cupy.float64),
-        face_trace_test_element_trial_oriented=cupy.asarray(trace_lift, dtype=cupy.float64),
-        M_rf_fc=cupy.asarray(np.ascontiguousarray(edge_mass), dtype=cupy.float64),
+        interpolation_nodes=cupy.asarray(interpolation_nodes, dtype=REAL_DTYPE),
+        quads=cupy.asarray(edge_quads, dtype=REAL_DTYPE),
+        weights=cupy.asarray(edge_weights, dtype=REAL_DTYPE),
+        bas_of_bd_quads=cupy.asarray(np.ascontiguousarray(face_basis), dtype=REAL_DTYPE),
+        bas1d_of_ref_edg_qds=cupy.asarray(edge_basis, dtype=REAL_DTYPE),
+        weighted_bas_of_bd_quads=cupy.asarray(weighted_face_basis, dtype=REAL_DTYPE),
+        weighted_bas1d_of_ref_edg_qds=cupy.asarray(weighted_edge_basis, dtype=REAL_DTYPE),
+        face_element_test_trace_trial=cupy.asarray(np.ascontiguousarray(face_coupling), dtype=REAL_DTYPE),
+        face_trace_test_element_trial_oriented=cupy.asarray(trace_lift, dtype=REAL_DTYPE),
+        M_rf_fc=cupy.asarray(np.ascontiguousarray(edge_mass), dtype=REAL_DTYPE),
     )
 
 
@@ -641,7 +643,7 @@ def reaction_mass_cupy(reaction, cspace):
         values = coeffs @ q.bas_of_quads
     else:
         points = mapped_quads_cupy(cspace)
-        values = cupy.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=cupy.float64)
+        values = cupy.asarray(reaction(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
     scaled = values * mesh.aff_jacs[:, None]
     flat = scaled @ q.weighted_phi_phi_flat
     return cupy.ascontiguousarray(flat.reshape(mesh.num_tri, cspace.el_dof, cspace.el_dof))
@@ -676,7 +678,7 @@ def local_lhs_mats_cupy(reaction, cspace, trace_ref, tau: float):
     m_rea = reaction_mass_cupy(reaction, cspace)
     d0t, d1t = reference_derivative_mats(cspace)
     face_mass = face_element_mass(trace_ref)
-    local_lhs = cupy.zeros((mesh.num_tri, 3 * el_dof, 3 * el_dof), dtype=cupy.float64)
+    local_lhs = cupy.zeros((mesh.num_tri, 3 * el_dof, 3 * el_dof), dtype=REAL_DTYPE)
     blocks = local_lhs.reshape((mesh.num_tri, 3, el_dof, 3, el_dof))
     blocks[:, 0, :, 0, :] = m_rea + cupy.sum(float(tau) * mesh.jacs_el_fc[..., None, None] * face_mass[None, ...], axis=1)
     blocks[:, 1, :, 1, :] = -mesh.aff_jacs[:, None, None] * q.MKrf[None, ...]
@@ -702,7 +704,7 @@ def element_boundary_mats_cupy(cspace, trace_ref, tau: float):
     mesh = cspace.mesh
     el_dof = cspace.el_dof
     edg_dof = cspace.edg_dof
-    result = cupy.zeros((mesh.num_tri, 3 * el_dof, 3 * edg_dof), dtype=cupy.float64)
+    result = cupy.zeros((mesh.num_tri, 3 * el_dof, 3 * edg_dof), dtype=REAL_DTYPE)
     blocks = result.reshape((mesh.num_tri, 3, el_dof, 3, edg_dof))
     oriented = trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     coupling = oriented.transpose(0, 3, 1, 2)
@@ -718,7 +720,7 @@ def source_moments_cupy(source: Callable, cspace):
     cupy = require_cupy()
     mesh = cspace.mesh
     q = cspace.quad_data
-    rhs = cupy.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=cupy.float64)
+    rhs = cupy.zeros((mesh.num_tri, 3 * cspace.el_dof), dtype=REAL_DTYPE)
     if np.isscalar(source):
         ref_moments = cupy.asarray(cspace.host._constant_reference_moments(float(source)))
         rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
@@ -738,7 +740,7 @@ def source_moments_cupy(source: Callable, cspace):
         return cupy.ascontiguousarray(rhs)
     else:
         points = mapped_quads_cupy(cspace)
-        values = cupy.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=cupy.float64)
+        values = cupy.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
     rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * cupy.einsum(
         "Kq,iq,q->Ki",
         values,
@@ -766,7 +768,7 @@ def _batched_cublas_cholesky_solve(
     cupy = require_cupy()
     from cupy.cuda import cublas
 
-    rhs_array = cupy.asarray(rhs, dtype=cupy.float64)
+    rhs_array = cupy.asarray(rhs, dtype=REAL_DTYPE)
     squeeze = rhs_array.ndim == 2
     if squeeze:
         rhs_array = rhs_array[..., None]
@@ -790,8 +792,8 @@ def _batched_cublas_cholesky_solve(
     # A C-contiguous row-major L is seen by cuBLAS as column-major L^T. The
     # transposed RHS work array is likewise a column-major N x NRHS matrix.
     work = cupy.ascontiguousarray(rhs_array.transpose(0, 2, 1))
-    rhs_stride = n * n_rhs * np.dtype(np.float64).itemsize
-    alpha = np.array(1.0, dtype=np.float64)
+    rhs_stride = n * n_rhs * np.dtype(REAL_DTYPE).itemsize
+    alpha = np.array(1.0, dtype=REAL_DTYPE)
     handle = cupy.cuda.device.get_cublas_handle()
     chunk_size = max(1, int(chunk_size))
     for begin in range(0, batch_count, chunk_size):
@@ -802,12 +804,12 @@ def _batched_cublas_cholesky_solve(
         rhs_ptrs = cupy.ascontiguousarray(
             work.data.ptr + cupy.arange(begin, begin + count, dtype=cupy.uintp) * rhs_stride
         )
-        cublas.dtrsmBatched(
+        (cublas.strsmBatched if REAL_ITEMSIZE == 4 else cublas.dtrsmBatched)(
             handle, cublas.CUBLAS_SIDE_LEFT, cublas.CUBLAS_FILL_MODE_UPPER,
             cublas.CUBLAS_OP_T, cublas.CUBLAS_DIAG_NON_UNIT, n, n_rhs,
             alpha.ctypes.data, factor_ptrs.data.ptr, n, rhs_ptrs.data.ptr, n, count,
         )
-        cublas.dtrsmBatched(
+        (cublas.strsmBatched if REAL_ITEMSIZE == 4 else cublas.dtrsmBatched)(
             handle, cublas.CUBLAS_SIDE_LEFT, cublas.CUBLAS_FILL_MODE_UPPER,
             cublas.CUBLAS_OP_N, cublas.CUBLAS_DIAG_NON_UNIT, n, n_rhs,
             alpha.ctypes.data, factor_ptrs.data.ptr, n, rhs_ptrs.data.ptr, n, count,
@@ -833,7 +835,7 @@ def _build_compact_trace_response_cupy(
     nel = int(cspace.el_dof)
     ntr = int(cspace.edg_dof)
     ncols = 3 * ntr
-    response = cupy.empty((num_elements, nel, ncols), dtype=cupy.float64)
+    response = cupy.empty((num_elements, nel, ncols), dtype=REAL_DTYPE)
     chunk_size = max(1, int(chunk_size))
     oriented_table = trace_ref.face_trace_test_element_trial_oriented
     for begin in range(0, num_elements, chunk_size):
@@ -905,7 +907,7 @@ def compact_schur_cholesky_cache_cupy(
         trace_ref.face_trace_test_element_trial_oriented
     )
     source_solution = cupy.empty(
-        (int(cspace.mesh.num_tri), int(cspace.el_dof)), dtype=cupy.float64
+        (int(cspace.mesh.num_tri), int(cspace.el_dof)), dtype=REAL_DTYPE
     )
     rhs_kernel, reconstruct_kernel = _compile_compact_diffusion_kernels(
         cupy, nel=int(cspace.el_dof), ntr=int(cspace.edg_dof)
@@ -951,7 +953,7 @@ def assemble_compact_diffusion_rhs_cupy(
     if not cache.compact or cache.compact_rhs_kernel is None:
         raise ValueError("compact diffusion RHS assembly requires a compact Cholesky cache")
     nel = int(cspace.el_dof)
-    source_array = cupy.asarray(source_rhs, dtype=cupy.float64)
+    source_array = cupy.asarray(source_rhs, dtype=REAL_DTYPE)
     if source_array.ndim != 2 or int(source_array.shape[0]) != int(cspace.mesh.num_tri):
         raise ValueError("diffusion source moments must have shape (num_elements, NEL or 3*NEL)")
     if int(source_array.shape[1]) == 3 * nel:
@@ -962,7 +964,7 @@ def assemble_compact_diffusion_rhs_cupy(
         raise ValueError("diffusion source moments must have NEL or 3*NEL columns")
     rhs = cupy.zeros(
         int(cspace.mesh.int_edges_inds.size) * int(cspace.edg_dof),
-        dtype=cupy.float64,
+        dtype=REAL_DTYPE,
     )
     cache.compact_rhs_kernel(
         (int(cspace.mesh.num_tri),),
@@ -982,7 +984,7 @@ def assemble_compact_diffusion_rhs_cupy(
             cspace.mesh.loc2glob_edge,
             cspace.mesh.loc2oriented_face_coupling,
             cache.edge_to_solve_edge,
-            np.float64(tau),
+            REAL_DTYPE(tau),
             np.int64(cspace.mesh.num_tri),
         ),
     )
@@ -999,9 +1001,9 @@ def reconstruct_compact_diffusion_field_cupy(
     if not cache.compact or cache.compact_reconstruct_kernel is None:
         raise ValueError("compact diffusion reconstruction requires a compact Cholesky cache")
     nel = int(cspace.el_dof)
-    uh = cupy.empty((int(cspace.mesh.num_tri), nel), dtype=cupy.float64)
+    uh = cupy.empty((int(cspace.mesh.num_tri), nel), dtype=REAL_DTYPE)
     local_unknowns = cupy.empty(
-        (int(cspace.mesh.num_tri), 3 * nel), dtype=cupy.float64
+        (int(cspace.mesh.num_tri), 3 * nel), dtype=REAL_DTYPE
     )
     stream = cupy.cuda.get_current_stream()
     begin = cupy.cuda.Event()
@@ -1011,7 +1013,7 @@ def reconstruct_compact_diffusion_field_cupy(
         (int(cspace.mesh.num_tri),),
         (32,),
         (
-            cupy.ascontiguousarray(trace, dtype=cupy.float64),
+            cupy.ascontiguousarray(trace, dtype=REAL_DTYPE),
             cache.trace_response,
             cache.source_solution,
             uh,
@@ -1041,7 +1043,7 @@ def build_scalar_schur_cholesky_cache_cupy(
         trace_ref,
         tau: float,
         *,
-        symmetry_rtol: float = 5.0e-11,
+        symmetry_rtol: float = max(5.0e-11, 32 * np.finfo(REAL_DTYPE).eps),
 ) -> CupyDiffusionSchurCholeskyCache:
     """Build and factor the SPD scalar local Schur operators."""
     cupy = require_cupy()
@@ -1140,7 +1142,7 @@ def build_scalar_schur_cholesky_cache_cupy(
     timings["cupy.local_cache.cholesky"] = time.perf_counter() - phase_start
     phase_start = time.perf_counter()
     n = int(cspace.el_dof)
-    factor_stride = n * n * np.dtype(np.float64).itemsize
+    factor_stride = n * n * np.dtype(REAL_DTYPE).itemsize
     factor_ptrs = cupy.ascontiguousarray(
         factor.data.ptr + cupy.arange(int(mesh.num_tri), dtype=cupy.uintp) * factor_stride
     )
@@ -1155,6 +1157,7 @@ def build_scalar_schur_cholesky_cache_cupy(
     stream.synchronize()
     timings["cupy.local_cache.finalize"] = time.perf_counter() - phase_start
     timings["cupy.local_cache.factor_total"] = time.perf_counter() - total_start
+    audit_arrays('poisson-local-factors', factor, coupling_x, coupling_y, mass_inverse, cspace)
     return CupyDiffusionSchurCholeskyCache(
         factor=factor,
         coupling_x=coupling_x,
@@ -1175,7 +1178,7 @@ def build_scalar_schur_cholesky_cache_cupy(
 def solve_mixed_from_scalar_cholesky_cupy(cache: CupyDiffusionSchurCholeskyCache, rhs):
     """Solve mixed local diffusion systems through cached scalar Schur factors."""
     cupy = require_cupy()
-    rhs_array = cupy.asarray(rhs, dtype=cupy.float64)
+    rhs_array = cupy.asarray(rhs, dtype=REAL_DTYPE)
     squeeze = rhs_array.ndim == 2
     if squeeze:
         rhs_array = rhs_array[..., None]
@@ -1212,7 +1215,7 @@ def b_trace_mats_cupy(cspace, trace_ref, tau: float):
     el_dof = cspace.el_dof
     edg_dof = cspace.edg_dof
     lift = mesh.jacs_el_fc[..., None, None] * trace_ref.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
-    result = cupy.zeros((mesh.num_tri, 3, edg_dof, 3 * el_dof), dtype=cupy.float64)
+    result = cupy.zeros((mesh.num_tri, 3, edg_dof, 3 * el_dof), dtype=REAL_DTYPE)
     result[..., :el_dof] = float(tau) * lift
     result[..., el_dof : 2 * el_dof] = lift * mesh.normals[..., 0, None, None]
     result[..., 2 * el_dof :] = lift * mesh.normals[..., 1, None, None]
@@ -1238,7 +1241,7 @@ def trace_data_cupy(trace_blocks, cspace, trace_ref, tau: float):
     valid_faces = mesh.interior_faces
     n_flux = valid_elements.size * 3 * edg_dof * edg_dof
     n_mass = mesh.int_edges_inds.size * edg_dof * edg_dof
-    data = cupy.empty(n_flux + n_mass, dtype=cupy.float64)
+    data = cupy.empty(n_flux + n_mass, dtype=REAL_DTYPE)
     data[:n_flux] = -trace_blocks[valid_elements, valid_faces].ravel()
     data[n_flux:] = (2.0 * float(tau) * mesh.edge_jacs[mesh.int_edges_inds, None, None] * trace_ref.M_rf_fc[None]).ravel()
     return data
@@ -1282,18 +1285,18 @@ def boundary_trace_values_cupy(boundary_condition: Callable, cspace, trace_ref):
     cupy = require_cupy()
     mesh = cspace.mesh
     if mesh.bnd_edges_inds.size == 0:
-        return cupy.empty((0, cspace.edg_dof), dtype=cupy.float64)
+        return cupy.empty((0, cspace.edg_dof), dtype=REAL_DTYPE)
     edge_coords = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
     t = trace_ref.interpolation_nodes if trace_ref.nodal else trace_ref.quads
     points = 0.5 * (
         (1.0 - t)[None, :, None] * edge_coords[:, 0:1, :]
         + (1.0 + t)[None, :, None] * edge_coords[:, 1:2, :]
     )
-    values = cupy.asarray(boundary_condition(points[..., 0], points[..., 1]), dtype=cupy.float64)
+    values = cupy.asarray(boundary_condition(points[..., 0], points[..., 1]), dtype=REAL_DTYPE)
     num_points = int(t.size)
     expected_shape = (int(mesh.bnd_edges_inds.size), num_points)
     if values.ndim == 0:
-        values = cupy.full(expected_shape, float(values), dtype=cupy.float64)
+        values = cupy.full(expected_shape, float(values), dtype=REAL_DTYPE)
     elif values.shape == (num_points,):
         values = cupy.broadcast_to(values[None, :], expected_shape)
     if values.shape != expected_shape:
@@ -1338,7 +1341,7 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace)
     keep_count = int(keep.size)
     reduced_rows = cupy.empty(keep_count * edg_dof, dtype=cupy.int64)
     reduced_cols = cupy.empty_like(reduced_rows)
-    reduced_data = cupy.empty(keep_count * edg_dof, dtype=cupy.float64)
+    reduced_data = cupy.empty(keep_count * edg_dof, dtype=REAL_DTYPE)
     reduced_rows.reshape((keep_count, edg_dof))[:] = full_to_reduced[row_r[keep]]
     reduced_cols.reshape((keep_count, edg_dof))[:] = full_to_reduced[col_r[keep]]
     reduced_data.reshape((keep_count, edg_dof))[:] = data_r[keep]
@@ -1353,7 +1356,7 @@ def eliminate_boundary_cupy(rows, cols, data, rhs, boundary_trace, maps, cspace)
 def compact_boundary_trace_to_full(boundary_trace, cspace):
     """Expand compact boundary-edge trace values to a full edge table."""
     cupy = require_cupy()
-    full = cupy.zeros((cspace.mesh.num_edg, cspace.edg_dof), dtype=cupy.float64)
+    full = cupy.zeros((cspace.mesh.num_edg, cspace.edg_dof), dtype=REAL_DTYPE)
     if cspace.mesh.bnd_edges_inds.size:
         full[cspace.mesh.bnd_edges_inds] = boundary_trace
     return cupy.ascontiguousarray(full)
@@ -1425,7 +1428,7 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
     blocks = trace_blocks_cupy(b_el_fc, solved_el_bd, cspace, trace_ref)
     data = trace_data_cupy(blocks, cspace, trace_ref, float(stabilization))
     faces = face_rhs_cupy(b_el_fc, solved_src, cspace)
-    rhs_full = cupy.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=cupy.float64)
+    rhs_full = cupy.zeros(cspace.mesh.num_edg * cspace.edg_dof, dtype=REAL_DTYPE)
     rhs_full_r = rhs_full.reshape((cspace.mesh.num_edg, cspace.edg_dof))
     cupy.add.at(
         rhs_full_r,
@@ -1440,14 +1443,14 @@ def assemble_projected_diffusion_trace_system_eliminated_cupy(
     matrix = sparse.coo_matrix(
         (data, (rows.astype(cupy.int32), cols.astype(cupy.int32))),
         shape=(system_size, system_size),
-        dtype=cupy.float64,
+        dtype=REAL_DTYPE,
     ).tocsr()
     matrix.sum_duplicates()
     if matrix.indices.dtype != cupy.int32 or matrix.indptr.dtype != cupy.int32:
         matrix = sparse.csr_matrix(
             (matrix.data, matrix.indices.astype(cupy.int32), matrix.indptr.astype(cupy.int32)),
             shape=matrix.shape,
-            dtype=cupy.float64,
+            dtype=REAL_DTYPE,
         )
     rows = cols = None
     data, indices, indptr = matrix.data, matrix.indices, matrix.indptr
@@ -1579,7 +1582,7 @@ def assemble_projected_diffusion_trace_rhs_cached_cupy(
     events[4].record(stream)
     num_sides = int(cspace.mesh.interior_elements.size)
     edge_dof = int(cspace.edg_dof)
-    rhs = cupy.zeros(int(cspace.mesh.int_edges_inds.size) * edge_dof, dtype=cupy.float64)
+    rhs = cupy.zeros(int(cspace.mesh.int_edges_inds.size) * edge_dof, dtype=REAL_DTYPE)
     threads = 256
     count = num_sides * edge_dof
     cache.rhs_scatter_kernel(
@@ -1896,7 +1899,7 @@ def postprocess_projected_diffusion_primal_cupy(
     setup_start = time.perf_counter()
     cache = _postprocess_reference_cache(space, trace_space, cache)
     cpost_space = as_cupy_space(cache.post_space, device=cspace.device_id)
-    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=cupy.float64))
+    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=REAL_DTYPE))
     expected_unknowns = (cspace.mesh.num_tri, 3 * cspace.el_dof)
     if tuple(local_unknowns.shape) != expected_unknowns:
         raise ValueError(f"local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}")
@@ -1907,12 +1910,12 @@ def postprocess_projected_diffusion_primal_cupy(
     num_elements = int(cspace.mesh.num_tri)
     q_post = cpost_space.quad_data
 
-    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=cupy.float64)
-    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=cupy.float64)
-    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=cupy.float64)
-    mean_post = cupy.asarray(cache.mean_post, dtype=cupy.float64)
-    mean_base = cupy.asarray(cache.mean_base, dtype=cupy.float64)
-    base_basis_t = cupy.asarray(cache.base_basis_on_post_quads.T, dtype=cupy.float64)
+    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=REAL_DTYPE)
+    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=REAL_DTYPE)
+    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=REAL_DTYPE)
+    mean_post = cupy.asarray(cache.mean_post, dtype=REAL_DTYPE)
+    mean_base = cupy.asarray(cache.mean_base, dtype=REAL_DTYPE)
+    base_basis_t = cupy.asarray(cache.base_basis_on_post_quads.T, dtype=REAL_DTYPE)
     weights = q_post.Krf_w
     post_grad = q_post.gphi
 
@@ -1921,10 +1924,10 @@ def postprocess_projected_diffusion_primal_cupy(
         from ..solvers.diffusion_reaction import _inverse_diffusion_values
 
         inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
-        inv00 = cupy.asarray(inv00_h, dtype=cupy.float64)
-        inv01 = cupy.asarray(inv01_h, dtype=cupy.float64)
-        inv10 = cupy.asarray(inv10_h, dtype=cupy.float64)
-        inv11 = cupy.asarray(inv11_h, dtype=cupy.float64)
+        inv00 = cupy.asarray(inv00_h, dtype=REAL_DTYPE)
+        inv01 = cupy.asarray(inv01_h, dtype=REAL_DTYPE)
+        inv10 = cupy.asarray(inv10_h, dtype=REAL_DTYPE)
+        inv11 = cupy.asarray(inv11_h, dtype=REAL_DTYPE)
     else:
         inv00, inv01, inv10, inv11 = map(float, inverse_constants)
     stream.synchronize()
@@ -1941,7 +1944,7 @@ def postprocess_projected_diffusion_primal_cupy(
     metric_rs = inv00_geom * inv01_geom + inv10_geom * inv11_geom
     metric_ss = inv01_geom * inv01_geom + inv11_geom * inv11_geom
 
-    matrix = cupy.zeros((num_elements, rows, rows), dtype=cupy.float64)
+    matrix = cupy.zeros((num_elements, rows, rows), dtype=REAL_DTYPE)
     matrix[:, :post_el_dof, :post_el_dof] = aff_jacs[:, None, None] * (
         metric_rr[:, None, None] * stiffness_rr[None, :, :]
         + metric_rs[:, None, None] * stiffness_rs[None, :, :]
@@ -1956,7 +1959,7 @@ def postprocess_projected_diffusion_primal_cupy(
     cqx_values = inv00 * qx_values + inv01 * qy_values
     cqy_values = inv10 * qx_values + inv11 * qy_values
 
-    rhs = cupy.zeros((num_elements, rows), dtype=cupy.float64)
+    rhs = cupy.zeros((num_elements, rows), dtype=REAL_DTYPE)
     for quad in range(int(weights.shape[0])):
         grad_r = post_grad[quad, :, 0]
         grad_s = post_grad[quad, :, 1]

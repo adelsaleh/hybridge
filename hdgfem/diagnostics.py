@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hdgfem.precision import audit_arrays, REAL_DTYPE
+
 from dataclasses import dataclass
 from typing import Callable, Literal
 
@@ -9,6 +11,36 @@ import numpy as np
 
 from .core.quadrature import ReferenceElementData
 from .core.space import DGField, VectorDGField
+
+
+def modal_activity(amplitudes, modes, *, relative_threshold=1e-3, top=3):
+    """Rank active angular modes independently at each recorded time.
+
+    Activity means positive finite amplitude at least relative_threshold
+    times the current maximum. Rankings describe amplitude, without treating
+    a large amplitude as an estimate of an exponential growth exponent.
+    Missing and all-zero spectra produce no active modes.
+    """
+    values = np.atleast_2d(np.asarray(amplitudes, dtype=float))
+    modes = np.asarray(modes)
+    if values.ndim != 2 or modes.ndim != 1 or values.shape[1] != len(modes) or not len(modes):
+        raise ValueError("amplitudes must have shape (samples, number of modes)")
+    if not np.all(np.isfinite(modes)) or np.any(modes < 1) or np.any(modes != modes.astype(int)) or len(np.unique(modes)) != len(modes):
+        raise ValueError("modes must be distinct positive integers")
+    if not np.isfinite(relative_threshold) or not 0 <= relative_threshold <= 1 or int(top) != top or top < 1:
+        raise ValueError("relative_threshold must be in [0, 1] and top a positive integer")
+    clean = np.where(np.isfinite(values) & (values > 0), values, 0.0)
+    maxima = clean.max(axis=1, keepdims=True)
+    relative = np.divide(clean, maxima, out=np.zeros_like(clean), where=maxima > 0)
+    active = (clean > 0) & (relative >= relative_threshold)
+    ranking = np.argsort(-clean, axis=1, kind="stable")[:, :min(int(top), len(modes))]
+    valid = np.take_along_axis(active, ranking, axis=1)
+    return {
+        "dominant_modes": np.where(valid, modes[ranking], np.nan),
+        "dominant_amplitudes": np.where(valid, np.take_along_axis(clean, ranking, axis=1), np.nan),
+        "active_counts": active.sum(axis=1),
+        "relative_amplitudes": np.where(np.isfinite(values), relative, np.nan),
+    }
 
 
 @dataclass(frozen=True)
@@ -19,6 +51,26 @@ class ScalarErrorMetrics:
     linf: float
     mean_element_linf: float
     max_element: int
+
+
+@dataclass(frozen=True)
+class ScalarHDGErrorMetrics:
+    """Scalar exact-error norms with the HDG gradient and face terms separate."""
+
+    l2: float
+    gradient_l2: float
+    trace_mismatch: float
+    backend: str = "host"
+
+    @property
+    def hdg_h1_seminorm(self) -> float:
+        """Return sqrt(gradient error squared + weighted face mismatch)."""
+        return float(np.hypot(self.gradient_l2, self.trace_mismatch))
+
+    @property
+    def hdg_h1(self) -> float:
+        """Return the full HDG H1 error, including the volume L2 error."""
+        return float(np.hypot(self.l2, self.hdg_h1_seminorm))
 
 
 @dataclass(frozen=True)
@@ -79,7 +131,7 @@ class VectorErrorReport:
 
 def relative_drift(value: float, baseline: float) -> float:
     """Return ``(value - baseline) / abs(baseline)`` with safe zero scaling."""
-    scale = max(abs(float(baseline)), np.finfo(np.float64).tiny)
+    scale = max(abs(float(baseline)), np.finfo(REAL_DTYPE).tiny)
     return (float(value) - float(baseline)) / scale
 
 
@@ -90,6 +142,28 @@ def result_transfer_time(result) -> float:
         float(value)
         for key, value in details.items()
         if "host" in str(key) or "to_device" in str(key) or "materialization" in str(key)
+    )
+
+
+
+def solver_diagnostics_snapshot(result):
+    """Keep common HDG solve metrics without owning fields, matrices or factors.
+
+    Rejected time stages still contribute iterations and timings. Their device
+    systems can be released once the caller has copied any warm-start traces.
+    The original result and its cached preconditioner are never mutated.
+    """
+    from copy import copy
+    from types import SimpleNamespace
+
+    global_solve = getattr(result, "global_solve_result", None)
+    if global_solve is not None:
+        global_solve = copy(global_solve)
+        global_solve.x = global_solve.x_device = global_solve.preconditioner = None
+    return SimpleNamespace(
+        timings=result.timings, global_solve_result=global_solve,
+        assembly_backend=result.assembly_backend, boundary_mode=result.boundary_mode,
+        ordering_result=getattr(result, "ordering_result", None),
     )
 
 
@@ -127,6 +201,17 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
                 getattr(global_solve, "amgx_attempt_count", len(attempts))
             )
             row[f"{prefix}_amgx_attempts"] = list(attempts)
+        for key, attribute in {
+            "retry_seed_label": "amgx_retry_seed_label",
+            "retry_seed_physical_residual": "amgx_retry_seed_physical_residual",
+            "retry_seed_physical_rhs_norm": "amgx_retry_seed_physical_rhs_norm",
+            "retry_seed_physical_rel_residual": (
+                "amgx_retry_seed_physical_relative_residual"
+            ),
+            "retry_seed_physical_target": "amgx_retry_seed_physical_target",
+        }.items():
+            if hasattr(global_solve, attribute):
+                row[f"{prefix}_{key}"] = getattr(global_solve, attribute)
         attributes = {
             "solver_residual": "solver_residual_norm",
             "solver_rhs_norm": "solver_rhs_norm",
@@ -190,9 +275,9 @@ def azimuthal_mode_diagnostics(field: DGField, equilibrium: DGField, mode: int) 
     space = field.space
     points = space.mapped_quads()
     theta = np.arctan2(points[:, :, 1], points[:, :, 0])
-    perturbation = np.asarray(field.values() - equilibrium.values(), dtype=np.float64)
+    perturbation = np.asarray(field.values() - equilibrium.values(), dtype=REAL_DTYPE)
     weights = space.mesh.aff_jacs[:, None] * space.quad_data.Krf_w[None, :]
-    normalization = max(abs(float(np.sum(equilibrium.values() * weights))), np.finfo(np.float64).tiny)
+    normalization = max(abs(float(np.sum(equilibrium.values() * weights))), np.finfo(REAL_DTYPE).tiny)
     amplitudes = []
     for harmonic in (1, 2, 3):
         angle = float(harmonic * int(mode)) * theta
@@ -204,8 +289,92 @@ def azimuthal_mode_diagnostics(field: DGField, equilibrium: DGField, mode: int) 
         "diocotron_mode_1k_amplitude": amplitudes[0],
         "diocotron_mode_2k_amplitude": amplitudes[1],
         "diocotron_mode_3k_amplitude": amplitudes[2],
-        "diocotron_harmonic_ratio": amplitudes[1] / max(amplitudes[0], np.finfo(np.float64).tiny),
+        "diocotron_harmonic_ratio": amplitudes[1] / max(amplitudes[0], np.finfo(REAL_DTYPE).tiny),
     }
+
+
+
+class ScalarPositivityDiagnostics:
+    """Cached host/device polynomial bounds and sampled negative-density metrics.
+
+    Bernstein coefficients bound the polynomial on each whole affine triangle.
+    A negative lower bound alone is inconclusive; a negative sampled value is
+    a witness. Floating-point bounds are interpreted with the stated tolerance.
+    Negative mass/L2 use volume quadrature and are not exact negative-part integrals.
+    No limiter or density modification is performed.
+    """
+
+    def __init__(self, space, *, backend="host", tolerance=1.e-12, chunk_size=8192):
+        from .assembly.advection_residual import HDGTraceWorkspace
+        from .core.basis import evaluate_bernstein_basis
+
+        if not np.isfinite(tolerance) or tolerance < 0 or chunk_size < 1:
+            raise ValueError("nonnegative finite tolerance and positive chunk_size required")
+        self.space, self.tolerance, self.chunk_size = space, float(tolerance), int(chunk_size)
+        self.workspace = HDGTraceWorkspace(space, backend=backend)
+        self.xp = xp = self.workspace.xp
+        order = space.order
+        def lattice(n):
+            return np.array([(-1+2*i/n, -1+2*j/n)
+                             for i in range(n+1) for j in range(n+1-i)], dtype=REAL_DTYPE)
+        nodes = lattice(max(order, 1))
+        if order == 0:
+            nodes = np.array([[-1/3, -1/3]], dtype=REAL_DTYPE)
+        # One small reference-space conversion, reused for every cell and step.
+        transform = np.linalg.solve(evaluate_bernstein_basis(order, nodes), space.reference.basis_at(nodes)).T
+        sample_points = lattice(max(2*order+2, 2))
+        with self.workspace._device_context():
+            self.bernstein_transform = xp.asarray(transform)
+            self.sample_basis = xp.asarray(space.reference.basis_at(sample_points).T)
+            self.volume_basis = xp.asarray(space.quad_data.bas_of_quads)
+            self.weights = xp.asarray(space.quad_data.Krf_w)
+            self.weight_sum = float(space.quad_data.Krf_w.sum())
+            self.jacobians = xp.asarray(space.mesh.aff_jacs)
+
+    def measure(self, field):
+        """Return small scalar diagnostics while keeping device coefficients resident."""
+        if field.space is not self.space:
+            raise ValueError("positivity diagnostics require their original DGSpace")
+        with self.workspace._device_context():
+            xp = self.xp
+            if self.workspace.cspace is None:
+                coefficients = field.coeffs
+            else:
+                from .backends.cupy import as_cupy_coefficients
+                coefficients = as_cupy_coefficients(field, self.workspace.cspace)
+            low, high = xp.asarray(np.inf), xp.asarray(-np.inf)
+            lower, upper, mean_low = xp.asarray(np.inf), xp.asarray(-np.inf), xp.asarray(np.inf)
+            negative_mass, negative_l2, negative_cells = xp.asarray(0.), xp.asarray(0.), xp.asarray(0.)
+            for start in range(0, self.space.mesh.num_tri, self.chunk_size):
+                stop = start+self.chunk_size
+                c = coefficients[start:stop]
+                volume = c @ self.volume_basis
+                samples = c @ self.sample_basis
+                cell_min = xp.minimum(volume.min(axis=1), samples.min(axis=1))
+                low = xp.minimum(low, cell_min.min())
+                high = xp.maximum(high, xp.maximum(volume.max(), samples.max()))
+                negative_cells += xp.count_nonzero(cell_min < -self.tolerance)
+                b = c @ self.bernstein_transform
+                lower, upper = xp.minimum(lower, b.min()), xp.maximum(upper, b.max())
+                averages = volume @ self.weights / self.weight_sum
+                mean_low = xp.minimum(mean_low, averages.min())
+                negative = xp.maximum(-volume, 0.)
+                weight = self.jacobians[start:stop, None]*self.weights[None, :]
+                negative_mass += xp.sum(negative*weight)
+                negative_l2 += xp.sum(negative*negative*weight)
+            packed = xp.stack([low, high, lower, upper, mean_low, negative_mass,
+                               xp.sqrt(negative_l2), negative_cells])
+            values = packed.get() if self.workspace.cspace is not None else packed
+        keys = ("rho_min_checked", "rho_max_checked", "rho_bernstein_lower_bound",
+                "rho_bernstein_upper_bound", "rho_cell_average_min",
+                "rho_negative_mass_quadrature", "rho_negative_l2_quadrature", "rho_negative_cells_sampled")
+        result = {key: float(value) for key,value in zip(keys,values)}
+        result["positivity_status"] = ("nonfinite" if not np.isfinite(values).all() else
+            "violated" if values[0] < -self.tolerance else
+            "bound_satisfied" if values[2] >= -self.tolerance else "inconclusive")
+        result["positivity_tolerance"] = self.tolerance
+        result["positivity_backend"] = self.workspace.backend
+        return result
 
 
 def guiding_center_field_diagnostics(
@@ -255,6 +424,7 @@ def guiding_center_field_diagnostics(
             "phi_min": phi_min,
             "phi_max": phi_max,
             "q_l2_standard": standard_q_l2,
+            "rho_l2_squared": density.l2_norm()**2,
             "diagnostics_backend": "host",
         }
         if postprocessed_flux is not None:
@@ -284,13 +454,12 @@ def guiding_center_field_diagnostics(
     cp = require_cupy()
     base_space = density.space
     base_space.assert_same_mesh(potential.space)
-    if potential.space is not base_space:
-        raise ValueError("device guiding-center diagnostics require one scalar DGSpace")
     cspace = as_cupy_space(base_space)
+    potential_cspace = as_cupy_space(potential.space, device=cspace.device_id)
     jacobians = cspace.mesh.aff_jacs
     reference_moments = cp.sum(cspace.quad_data.weighted_phi, axis=0)
     density_coeffs = as_cupy_coefficients(density, cspace)
-    potential_coeffs = as_cupy_coefficients(potential, cspace)
+    potential_coeffs = as_cupy_coefficients(potential, potential_cspace)
 
     pending: dict[str, object] = {}
 
@@ -306,44 +475,46 @@ def guiding_center_field_diagnostics(
         jacobians * (density_coeffs @ reference_moments)
     )
     density_values = density_coeffs @ cspace.quad_data.bas_of_quads
-    potential_values = potential_coeffs @ cspace.quad_data.bas_of_quads
+    potential_values = potential_coeffs @ potential_cspace.quad_data.bas_of_quads
     pending["mass"] = density_integral
+    pending["rho_l2_squared"] = cp.maximum(l2_squared(density_coeffs, cspace), 0.0)
     pending["rho_min"] = cp.min(density_values)
     pending["rho_max"] = cp.max(density_values)
     pending["phi_min"] = cp.min(potential_values)
     pending["phi_max"] = cp.max(potential_values)
     del density_values, potential_values
 
-    flux_l2_squared = cp.asarray(0.0, dtype=cp.float64)
+    flux_l2_squared = cp.asarray(0.0, dtype=REAL_DTYPE)
     for component in flux.components:
-        if component.space is not base_space:
-            raise ValueError("device guiding-center flux components must use the scalar DGSpace")
+        base_space.assert_same_mesh(component.space)
+        component_cspace = as_cupy_space(component.space, device=cspace.device_id)
         flux_l2_squared = flux_l2_squared + l2_squared(
-            as_cupy_coefficients(component, cspace), cspace
+            as_cupy_coefficients(component, component_cspace), component_cspace
         )
     pending["q_l2_standard"] = cp.sqrt(cp.maximum(flux_l2_squared, 0.0))
 
     if postprocessed_flux is not None:
-        post_l2_squared = cp.asarray(0.0, dtype=cp.float64)
+        post_l2_squared = cp.asarray(0.0, dtype=REAL_DTYPE)
         for component in postprocessed_flux.components:
-            component_cspace = as_cupy_space(component.space)
+            base_space.assert_same_mesh(component.space)
+            component_cspace = as_cupy_space(component.space, device=cspace.device_id)
             post_l2_squared = post_l2_squared + l2_squared(
                 as_cupy_coefficients(component, component_cspace), component_cspace
             )
         pending["q_l2_postprocessed"] = cp.sqrt(cp.maximum(post_l2_squared, 0.0))
 
     if equilibrium_potential is not None:
-        if equilibrium_potential.space is not base_space:
-            raise ValueError("device equilibrium potential must use the scalar DGSpace")
-        equilibrium_phi_coeffs = as_cupy_coefficients(equilibrium_potential, cspace)
+        if equilibrium_potential.space is not potential.space:
+            raise ValueError("device equilibrium potential must use the potential DGSpace")
+        equilibrium_phi_coeffs = as_cupy_coefficients(equilibrium_potential, potential_cspace)
         phi_difference = potential_coeffs - equilibrium_phi_coeffs
         pending["diocotron_phi_eq_l2"] = cp.sqrt(
-            cp.maximum(l2_squared(phi_difference, cspace), 0.0)
+            cp.maximum(l2_squared(phi_difference, potential_cspace), 0.0)
         )
-        phi_difference_values = phi_difference @ cspace.quad_data.bas_of_quads
+        phi_difference_values = phi_difference @ potential_cspace.quad_data.bas_of_quads
         pending["diocotron_phi_eq_linf"] = cp.max(cp.abs(phi_difference_values))
         pending["diocotron_phi_eq_reference_l2"] = cp.sqrt(
-            cp.maximum(l2_squared(equilibrium_phi_coeffs, cspace), 0.0)
+            cp.maximum(l2_squared(equilibrium_phi_coeffs, potential_cspace), 0.0)
         )
         del phi_difference_values
 
@@ -378,7 +549,7 @@ def guiding_center_field_diagnostics(
             perturbation = rho_difference @ cspace.quad_data.bas_of_quads
             weights = jacobians[:, None] * cspace.quad_data.Krf_w[None, :]
             normalization = cp.maximum(
-                cp.abs(equilibrium_integral), cp.finfo(cp.float64).tiny
+                cp.abs(equilibrium_integral), cp.finfo(REAL_DTYPE).tiny
             )
             amplitudes = []
             for harmonic in (1, 2, 3):
@@ -386,20 +557,114 @@ def guiding_center_field_diagnostics(
                 cosine = cp.sum(perturbation * cp.cos(angle) * weights)
                 sine = cp.sum(perturbation * cp.sin(angle) * weights)
                 amplitudes.append(2.0 * cp.hypot(cosine, sine) / normalization)
-            pending["diocotron_mode_base"] = cp.asarray(float(mode), dtype=cp.float64)
+            pending["diocotron_mode_base"] = cp.asarray(float(mode), dtype=REAL_DTYPE)
             pending["diocotron_mode_1k_amplitude"] = amplitudes[0]
             pending["diocotron_mode_2k_amplitude"] = amplitudes[1]
             pending["diocotron_mode_3k_amplitude"] = amplitudes[2]
             pending["diocotron_harmonic_ratio"] = amplitudes[1] / cp.maximum(
-                amplitudes[0], cp.finfo(cp.float64).tiny
+                amplitudes[0], cp.finfo(REAL_DTYPE).tiny
             )
 
+    audit_arrays('diagnostic-reductions', pending, cspace)
     keys = tuple(pending)
     packed = cp.stack([pending[key] for key in keys])
     values = cp.asnumpy(packed)
     result = {key: float(value) for key, value in zip(keys, values, strict=True)}
     result["diagnostics_backend"] = "cuda"
     return result
+
+def transport_velocity_diagnostics(
+        velocity: VectorDGField,
+        *,
+        backend: Literal["auto", "host", "device"] = "auto",
+) -> dict[str, float | str]:
+    """Measure compatibility of a 2D DG transport velocity on the mesh faces.
+
+    Boundary normal flux and interior jumps use the actual polygonal mesh
+    normals. Jumps sum the two outward normal traces at aligned quadrature
+    points. Divergence is the physical, elementwise polynomial derivative.
+    Maxima are sampled, not rigorous bounds. If passed a stage coefficient
+    beta=c*v, every absolute norm is scaled by abs(c).
+
+    Device fields stay resident; only the final scalar reductions are copied
+    to the host. These diagnostics do not alter the velocity or its fluxes.
+    """
+    if not isinstance(velocity, VectorDGField) or len(velocity.components) != 2:
+        raise TypeError("velocity must be a two-component VectorDGField")
+    space = velocity.components[0].space
+    if any(component.space is not space for component in velocity.components):
+        raise ValueError("velocity components must share one scalar DGSpace")
+    normalized = str(backend).lower()
+    if normalized not in {"auto", "host", "device"}:
+        raise ValueError("backend must be 'auto', 'host', or 'device'")
+    use_device = normalized == "device" or (
+        normalized == "auto"
+        and any(component.device_coefficients_materialized() for component in velocity.components)
+    )
+    if use_device:
+        from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+
+        xp = require_cupy()
+        cspace = as_cupy_space(space)
+        mesh, quad = cspace.mesh, cspace.quad_data
+        coefficients = [as_cupy_coefficients(component, cspace) for component in velocity.components]
+    else:
+        xp = np
+        mesh, quad = space.mesh, space.quad_data
+        coefficients = [component.coeffs for component in velocity.components]
+
+    trace = space.trace_space("legendre-modal")
+    t = trace.quads
+    ones = np.ones_like(t)
+    points = np.stack((np.stack((t, -ones), axis=1),
+                       np.stack((-t, t), axis=1),
+                       np.stack((-ones, -t), axis=1)))
+    face_basis = xp.asarray(space.basis_at(points.reshape(-1, 2)).reshape(3, t.size, -1))
+    face_values = [xp.einsum("ki,fqi->kfq", coeff, face_basis) for coeff in coefficients]
+    normal = face_values[0] * mesh.normals[:, :, 0, None] + face_values[1] * mesh.normals[:, :, 1, None]
+    face_speed_squared = face_values[0]**2 + face_values[1]**2
+    weights = mesh.jacs_el_fc[:, :, None] * xp.asarray(trace.weights)
+    boundary_normal = xp.where(mesh.interior_face_mask[:, :, None], 0.0, normal)
+    boundary_speed_squared = xp.where(mesh.interior_face_mask[:, :, None], 0.0, face_speed_squared)
+    boundary_l2 = xp.sqrt(xp.sum(weights * boundary_normal**2))
+    boundary_speed_l2 = xp.sqrt(xp.sum(weights * boundary_speed_squared))
+
+    # Local face orientations differ on the two sides of an interior edge.
+    aligned = xp.where(mesh.orientations[:, :, None], normal, normal[:, :, ::-1])
+    jumps = xp.zeros((mesh.num_edg, t.size), dtype=coefficients[0].dtype)
+    xp.add.at(jumps, mesh.loc2glob_edge.reshape(-1), aligned.reshape(-1, t.size))
+    jumps[mesh.bnd_edges_inds] = 0.0
+    jump_weights = mesh.edge_jacs[:, None] * xp.asarray(trace.weights)
+
+    divergence = xp.zeros((mesh.num_tri, quad.Krf_w.size), dtype=coefficients[0].dtype)
+    speed_squared = xp.zeros_like(divergence)
+    for axis, coeff in enumerate(coefficients):
+        reference_gradient = xp.einsum("ki,qid->kqd", coeff, quad.gphi)
+        divergence += xp.einsum("kd,kqd->kq", mesh.inv_aff_mats_t[:, axis, :], reference_gradient)
+        speed_squared += (coeff @ quad.bas_of_quads)**2
+    volume_weights = mesh.aff_jacs[:, None] * quad.Krf_w
+    # Dimensionless for beta=dt*v; a diagnostic, not a timestep stability bound.
+    cell_speed = xp.sqrt(xp.maximum(xp.max(speed_squared, axis=1), xp.max(face_speed_squared, axis=(1, 2))))
+    min_edge_length = 2.0 * xp.min(mesh.jacs_el_fc, axis=1)
+    pending = {
+        "velocity_boundary_normal_l2": boundary_l2,
+        "velocity_boundary_normal_linf": xp.max(xp.abs(boundary_normal)),
+        "velocity_boundary_speed_l2": boundary_speed_l2,
+        "velocity_boundary_normal_relative_l2": boundary_l2 / xp.maximum(boundary_speed_l2, xp.finfo(coefficients[0].dtype).tiny),
+        "velocity_normal_jump_l2": xp.sqrt(xp.sum(jump_weights * jumps**2)),
+        "velocity_normal_jump_linf": xp.max(xp.abs(jumps)),
+        "velocity_divergence_l2": xp.sqrt(xp.sum(volume_weights * divergence**2)),
+        "velocity_divergence_linf": xp.max(xp.abs(divergence)),
+        "velocity_speed_linf": xp.max(cell_speed),
+        "velocity_max_speed_over_min_edge": xp.max(cell_speed / min_edge_length),
+    }
+    values = xp.stack(tuple(pending.values()))
+    if use_device:
+        values = xp.asnumpy(values)
+    result = {key: float(value) for key, value in zip(pending, values, strict=True)}
+    result["velocity_diagnostics_backend"] = "cuda" if use_device else "host"
+    return result
+
 
 def _error_quadrature(field: DGField, volume_quad_1d: int | None):
     """Return reference points, weights, and basis values for error integration."""
@@ -427,7 +692,7 @@ def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_s
     space = field.space
     error_points, weights, basis = _error_quadrature(field, volume_quad_1d)
     mapped = space.mesh.map_reference_points(error_points)
-    exact_values = np.asarray(exact(mapped[:, :, 0], mapped[:, :, 1]), dtype=np.float64)
+    exact_values = np.asarray(exact(mapped[:, :, 0], mapped[:, :, 1]), dtype=REAL_DTYPE)
     numerical_values = field.coeffs @ basis
     diff = numerical_values - exact_values
     l2 = float(np.sqrt(np.einsum("K,Kq,q->", space.mesh.aff_jacs, diff * diff, weights, optimize=True)))
@@ -436,7 +701,7 @@ def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_s
     else:
         reference_points = _sample_reference_points(sample_resolution)
         mapped = space.mesh.map_reference_points(reference_points)
-        sampled_exact = np.asarray(exact(mapped[:, :, 0], mapped[:, :, 1]), dtype=np.float64)
+        sampled_exact = np.asarray(exact(mapped[:, :, 0], mapped[:, :, 1]), dtype=REAL_DTYPE)
         sampled_numerical = field.coeffs @ space.basis_at(reference_points).T
     element_maximum = np.max(np.abs(sampled_numerical - sampled_exact), axis=1)
     metrics = ScalarErrorMetrics(
@@ -446,9 +711,9 @@ def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_s
         max_element=int(np.argmax(element_maximum)),
     )
     samples = None if not include_samples else ScalarComparisonSamples(
-        np.ascontiguousarray(reference_points, dtype=np.float64),
-        np.ascontiguousarray(sampled_numerical, dtype=np.float64),
-        np.ascontiguousarray(sampled_exact, dtype=np.float64),
+        np.ascontiguousarray(reference_points, dtype=REAL_DTYPE),
+        np.ascontiguousarray(sampled_numerical, dtype=REAL_DTYPE),
+        np.ascontiguousarray(sampled_exact, dtype=REAL_DTYPE),
     )
     return ScalarErrorReport(metrics, samples)
 
@@ -467,11 +732,11 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
         basis = cspace.quad_data.bas_of_quads
     else:
         host_points, host_weights, host_basis = _error_quadrature(field, volume_quad_1d)
-        error_points = cp.asarray(host_points, dtype=cp.float64)
-        weights = cp.asarray(host_weights, dtype=cp.float64)
-        basis = cp.asarray(host_basis, dtype=cp.float64)
+        error_points = cp.asarray(host_points, dtype=REAL_DTYPE)
+        weights = cp.asarray(host_weights, dtype=REAL_DTYPE)
+        basis = cp.asarray(host_basis, dtype=REAL_DTYPE)
     mapped = cp.einsum("Krc,qc->Krq", cspace.mesh.aff_mats, error_points) + cspace.mesh.aff_vecs[:, :, None]
-    exact_values = cp.asarray(exact(mapped[:, 0, :], mapped[:, 1, :]), dtype=cp.float64)
+    exact_values = cp.asarray(exact(mapped[:, 0, :], mapped[:, 1, :]), dtype=REAL_DTYPE)
     numerical_values = coefficients @ basis
     diff = numerical_values - exact_values
     l2 = cp.sqrt(cp.einsum("K,Kq,q->", cspace.mesh.aff_jacs, diff * diff, weights, optimize=True))
@@ -479,23 +744,26 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
         reference_points, sampled_numerical, sampled_exact = error_points, numerical_values, exact_values
     else:
         host_reference_points = _sample_reference_points(sample_resolution)
-        reference_points = cp.asarray(host_reference_points, dtype=cp.float64)
-        sample_basis = cp.asarray(space.basis_at(host_reference_points), dtype=cp.float64)
+        reference_points = cp.asarray(host_reference_points, dtype=REAL_DTYPE)
+        sample_basis = cp.asarray(space.basis_at(host_reference_points), dtype=REAL_DTYPE)
         mapped = cp.einsum("Krc,qc->Krq", cspace.mesh.aff_mats, reference_points) + cspace.mesh.aff_vecs[:, :, None]
-        sampled_exact = cp.asarray(exact(mapped[:, 0, :], mapped[:, 1, :]), dtype=cp.float64)
+        sampled_exact = cp.asarray(exact(mapped[:, 0, :], mapped[:, 1, :]), dtype=REAL_DTYPE)
         sampled_numerical = coefficients @ sample_basis.T
     element_maximum = cp.max(cp.abs(sampled_numerical - sampled_exact), axis=1)
-    cp.cuda.get_current_stream().synchronize()
+    # One compact transfer after the reductions; retain full samples only
+    # when explicitly requested by the caller.
+    packed = cp.stack((l2, cp.max(element_maximum), cp.mean(element_maximum),
+                       cp.argmax(element_maximum).astype(cp.float64))).get()
     metrics = ScalarErrorMetrics(
-        l2=float(l2.get()),
-        linf=float(cp.max(element_maximum).get()),
-        mean_element_linf=float(cp.mean(element_maximum).get()),
-        max_element=int(cp.argmax(element_maximum).get()),
+        l2=float(packed[0]),
+        linf=float(packed[1]),
+        mean_element_linf=float(packed[2]),
+        max_element=int(packed[3]),
     )
     samples = None if not include_samples else ScalarComparisonSamples(
-        np.ascontiguousarray(cp.asnumpy(reference_points), dtype=np.float64),
-        np.ascontiguousarray(cp.asnumpy(sampled_numerical), dtype=np.float64),
-        np.ascontiguousarray(cp.asnumpy(sampled_exact), dtype=np.float64),
+        np.ascontiguousarray(cp.asnumpy(reference_points), dtype=REAL_DTYPE),
+        np.ascontiguousarray(cp.asnumpy(sampled_numerical), dtype=REAL_DTYPE),
+        np.ascontiguousarray(cp.asnumpy(sampled_exact), dtype=REAL_DTYPE),
     )
     return ScalarErrorReport(metrics, samples)
 
@@ -515,7 +783,7 @@ def _exact_vector_values(
             raise ValueError(f"exact vector must have {dim} components; got {len(raw)}")
         components = raw
     else:
-        array = np.asarray(raw, dtype=np.float64)
+        array = np.asarray(raw, dtype=REAL_DTYPE)
         if array.shape[:1] != (dim,):
             raise ValueError(
                 f"exact vector must return {dim} components or an array "
@@ -524,9 +792,9 @@ def _exact_vector_values(
         components = array
     normalized = []
     for component in components:
-        values = np.asarray(component, dtype=np.float64)
+        values = np.asarray(component, dtype=REAL_DTYPE)
         if values.ndim == 0:
-            values = np.full(target, float(values), dtype=np.float64)
+            values = np.full(target, float(values), dtype=REAL_DTYPE)
         else:
             try:
                 values = np.broadcast_to(values, target)
@@ -535,7 +803,7 @@ def _exact_vector_values(
                     f"exact vector component must broadcast to {target}; got {values.shape}"
                 ) from exc
         normalized.append(values)
-    return np.ascontiguousarray(np.stack(normalized, axis=0), dtype=np.float64)
+    return np.ascontiguousarray(np.stack(normalized, axis=0), dtype=REAL_DTYPE)
 
 
 def evaluate_vector_error(
@@ -612,9 +880,9 @@ def evaluate_vector_error(
         max_element=int(np.argmax(element_maximum)),
     )
     samples = None if not include_samples else VectorComparisonSamples(
-        np.ascontiguousarray(reference_points, dtype=np.float64),
-        np.ascontiguousarray(sampled_numerical, dtype=np.float64),
-        np.ascontiguousarray(sampled_exact, dtype=np.float64),
+        np.ascontiguousarray(reference_points, dtype=REAL_DTYPE),
+        np.ascontiguousarray(sampled_numerical, dtype=REAL_DTYPE),
+        np.ascontiguousarray(sampled_exact, dtype=REAL_DTYPE),
     )
     return VectorErrorReport(metrics, samples)
 
@@ -635,7 +903,7 @@ def evaluate_scalar_error(
     if normalized not in {"auto", "host", "device"}:
         raise ValueError("backend must be 'auto', 'host', or 'device'")
     use_device = normalized == "device" or (
-        normalized == "auto" and field.device_coefficients_materialized() and not field.coefficients_materialized
+        normalized == "auto" and field.device_coefficients_materialized()
     )
     evaluator = _evaluate_device if use_device else _evaluate_host
     return evaluator(
@@ -647,9 +915,83 @@ def evaluate_scalar_error(
     )
 
 
+def evaluate_hdg_scalar_error(
+        field: DGField,
+        trace: np.ndarray,
+        exact: Callable,
+        exact_gradient: Callable,
+        *,
+        trace_basis: str = "legacy-lagrange",
+        include_boundary: bool = True,
+        chunk_size: int = 16384,
+        backend: Literal["auto", "host", "device"] = "auto",
+) -> ScalarHDGErrorMetrics:
+    r"""Measure exact scalar error in the fixed-p, 1/h_K HDG H1 norm.
+
+    Volume errors are integrated against the analytic value and physical
+    gradient, not a projection of the exact field. For a smooth exact field
+    with its own restriction as exact trace, (u_h-u)-(uhat_h-u)=u_h-uhat_h
+    on each face. Thus the face term is exactly the numerical mismatch J.
+    The supplied trace must be full, globally oriented, and correspond to
+    the same time as the field. Boundary faces may be excluded where the
+    discretization has no numerical trace. All reductions use float64 on
+    the selected backend and the space's quadrature. Device-backed fields
+    stay resident; only reduced scalar results are copied to the host.
+    """
+    from .assembly.hdg_gram import ScalarHDGGram
+
+    space = field.space
+    if backend not in {"auto", "host", "device"}:
+        raise ValueError("backend must be 'auto', 'host', or 'device'")
+    use_device = backend == "device" or (backend == "auto" and field.device_coefficients_materialized())
+    gram = ScalarHDGGram(space, trace_basis=trace_basis, include_boundary=include_boundary,
+                         chunk_size=chunk_size, backend="device" if use_device else "host")
+    xp = gram.xp
+    if use_device:
+        from .backends.cupy import as_cupy_coefficients
+
+        q, mesh = gram.cspace.quad_data, gram.cspace.mesh
+        coefficients = as_cupy_coefficients(field, gram.cspace, copy=False)
+    else:
+        q, mesh, coefficients = space.quad_data, space.mesh, field.coeffs
+    phi = xp.asarray(q.phi, dtype=xp.float64)
+    grad = xp.asarray(q.gphi, dtype=xp.float64)
+    points = xp.asarray(q.Krf_quads, dtype=xp.float64)
+    weights = xp.asarray(q.Krf_w, dtype=xp.float64)
+    l2_squared = xp.asarray(0.0, dtype=xp.float64)
+    gradient_squared = xp.asarray(0.0, dtype=xp.float64)
+    for start in range(0, mesh.num_tri, chunk_size):
+        selection = slice(start, start + chunk_size)
+        c = xp.asarray(coefficients[selection], dtype=xp.float64)
+        mapped = xp.einsum("krc,qc->kqr", mesh.aff_mats[selection], points)
+        mapped += mesh.aff_vecs[selection, None, :]
+        x, y = mapped[:, :, 0], mapped[:, :, 1]
+        difference = c @ phi.T - xp.asarray(exact(x, y), dtype=xp.float64)
+        numerical_gradient = xp.einsum("ki,qid->kqd", c, grad, optimize=True)
+        numerical_gradient = xp.einsum("kqd,kdc->kqc", numerical_gradient,
+                                       mesh.inv_aff_mats[selection], optimize=True)
+        exact_components = exact_gradient(x, y)
+        if len(exact_components) != 2:
+            raise ValueError("exact_gradient must return two physical components")
+        for axis, component in enumerate(exact_components):
+            numerical_gradient[:, :, axis] -= xp.asarray(component, dtype=xp.float64)
+        l2_squared += xp.einsum("k,kq,q->", mesh.aff_jacs[selection],
+                               difference*difference, weights, optimize=True)
+        gradient_squared += xp.einsum("k,kqc,q->", mesh.aff_jacs[selection],
+                                     numerical_gradient*numerical_gradient, weights, optimize=True)
+    mismatch_squared = gram.trace_mismatch_squared(coefficients, trace)
+    values = xp.sqrt(xp.stack((l2_squared, gradient_squared)))
+    values = values.get() if use_device else values
+    return ScalarHDGErrorMetrics(float(values[0]), float(values[1]), float(np.sqrt(mismatch_squared)),
+                                 backend=gram.backend)
+
+
 __all__ = [
+    "modal_activity",
     "ScalarComparisonSamples",
     "ScalarErrorMetrics",
+    "ScalarPositivityDiagnostics",
+    "ScalarHDGErrorMetrics",
     "ScalarErrorReport",
     "VectorComparisonSamples",
     "VectorErrorMetrics",
@@ -657,8 +999,10 @@ __all__ = [
     "azimuthal_mode_diagnostics",
     "guiding_center_field_diagnostics",
     "evaluate_scalar_error",
+    "evaluate_hdg_scalar_error",
     "evaluate_vector_error",
     "relative_drift",
     "result_transfer_time",
     "solver_result_metrics",
+    "solver_diagnostics_snapshot",
 ]

@@ -7,6 +7,8 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 
 ## Guides
 
+- [`holoviz.md`](holoviz.md): optional GPU plotting for guiding-center runs,
+  device sampling, explicit image saving, and static smoke checks.
 - [`cuda_execution.md`](cuda_execution.md): CUDA runner entry points, matrix
   formats, sparse-solve handoff, and direct-CSR timing anchor.
 - [`amgx_classical_bsr.md`](amgx_classical_bsr.md): hybrid classical-AMG

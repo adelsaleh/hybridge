@@ -47,6 +47,8 @@ def _face_normal_flux(beta_coeffs, face_basis, normals, element, face, point, ne
 @njit(cache=True, inline="always", fastmath=True)
 def _advection_tau(tau_kind, tau_scalar, tau_coeffs, face_basis, element, face, point, nel, normal_flux):
     """Return the upwind stabilization value for a normal flux."""
+    if tau_kind == 3:
+        return tau_scalar * abs(normal_flux)
     if tau_kind == 0:
         return abs(normal_flux)
     if tau_kind == 1:
@@ -125,6 +127,37 @@ def assemble_face_trace_weights_kernel(
             tau_scalar,
             tau_coeffs,
         )
+
+
+@njit(cache=True, inline="always")
+def _assemble_conflict_face_trace_weights(tau, gamma, element, normals, face_basis,
+                                         beta_coeffs, loc2glob_edge, orientations,
+                                         edge_side_indices, zero_boundary_flux):
+    """Build this element's repaired weights using only immutable neighbor data."""
+    nel, nqf = face_basis.shape[1], face_basis.shape[2]
+    gauge = np.zeros(3, dtype=np.bool_)
+    for face in range(3):
+        side = 3 * element + face
+        edge = loc2glob_edge[element, face]
+        left, right = edge_side_indices[edge, 0], edge_side_indices[edge, 1]
+        other = right if left == side else left
+        inactive = other >= 0
+        for qf in range(nqf):
+            a = _face_normal_flux(beta_coeffs, face_basis, normals, element, face, qf, nel)
+            if other >= 0:
+                k, f = other // 3, other % 3
+                q = qf if orientations[element, face] == orientations[k, f] else nqf - 1 - qf
+                b = _face_normal_flux(beta_coeffs, face_basis, normals, k, f, q, nel)
+                if a >= 0 and b >= 0 and a + b > 0:
+                    a = (a - b) * 0.5
+                    b = -a
+                inactive = inactive and a == 0 and b == 0
+            elif zero_boundary_flux:
+                a = 0.0
+            tau[element, face, qf] = abs(a)
+            gamma[element, face, qf] = abs(a) - a
+        gauge[face] = inactive and left == side
+    return gauge
 
 
 @njit(cache=True, inline="always")
@@ -343,6 +376,9 @@ def assemble_projected_trace_system_kernel(
         reaction_is_scalar,
         boundary_trace,
         boundary_penalty,
+        conflict_averaged,
+        edge_side_indices,
+        zero_boundary_flux,
 ):
     r"""Assemble the projected-coefficient HDG trace system in COO form.
 
@@ -360,6 +396,12 @@ def assemble_projected_trace_system_kernel(
     n_mass = n_int * 2 * ntr * ntr
 
     for element in prange(num_elements):
+        gauge = np.zeros(3, dtype=np.bool_)
+        if conflict_averaged:
+            gauge = _assemble_conflict_face_trace_weights(
+                tau_face_values, gamma_face_values, element, normals, face_basis,
+                beta_coeffs, loc2glob_edge, orientations, edge_side_indices, zero_boundary_flux)
+
         local_matrix = np.empty((nel, nel), dtype=np.float64)
         local_rhs_columns = np.empty((nel, 3 * ntr + 1), dtype=np.float64)
         weighted_lift = np.empty((ntr, nel), dtype=np.float64)
@@ -460,6 +502,8 @@ def assemble_projected_trace_system_kernel(
                         gamma_face_values,
                         trace_orientation_mode,
                     )
+                    if gauge[row_face] and row_dof == col_dof:
+                        data[out] += 1.0
 
     boundary_matrix_offset = n_flux + n_mass
     boundary_rhs_offset = num_elements * 3 * ntr
@@ -520,6 +564,9 @@ def assemble_projected_trace_system_eliminated_kernel(
         reaction_scalar,
         reaction_is_scalar,
         boundary_trace,
+        conflict_averaged,
+        edge_side_indices,
+        zero_boundary_flux,
 ):
     r"""Assemble a boundary-eliminated projected HDG trace system in COO form.
 
@@ -533,6 +580,12 @@ def assemble_projected_trace_system_eliminated_kernel(
     ntr = trace_basis.shape[0]
 
     for element in prange(num_elements):
+        gauge = np.zeros(3, dtype=np.bool_)
+        if conflict_averaged:
+            gauge = _assemble_conflict_face_trace_weights(
+                tau_face_values, gamma_face_values, element, normals, face_basis,
+                beta_coeffs, loc2glob_edge, orientations, edge_side_indices, zero_boundary_flux)
+
         local_matrix = np.empty((nel, nel), dtype=np.float64)
         local_rhs_columns = np.empty((nel, 3 * ntr + 1), dtype=np.float64)
         weighted_lift = np.empty((ntr, nel), dtype=np.float64)
@@ -661,6 +714,8 @@ def assemble_projected_trace_system_eliminated_kernel(
                         gamma_face_values,
                         trace_orientation_mode,
                     )
+                    if gauge[row_face] and row_dof == col_dof:
+                        mass_value += 1.0
                     rows[out] = row_solve_edge * ntr + row_dof
                     cols[out] = row_solve_edge * ntr + col_dof
                     data[out] = mass_value
@@ -693,6 +748,9 @@ def reconstruct_projected_field_kernel(
         reaction_coeffs,
         reaction_scalar,
         reaction_is_scalar,
+        conflict_averaged,
+        edge_side_indices,
+        zero_boundary_flux,
 ):
     r"""Recover element coefficients by rebuilding and solving local systems."""
     num_elements = loc2glob_edge.shape[0]
@@ -700,6 +758,11 @@ def reconstruct_projected_field_kernel(
     ntr = trace_basis.shape[0]
 
     for element in prange(num_elements):
+        if conflict_averaged:
+            _assemble_conflict_face_trace_weights(
+                tau_face_values, gamma_face_values, element, normals, face_basis,
+                beta_coeffs, loc2glob_edge, orientations, edge_side_indices, zero_boundary_flux)
+
         local_matrix = np.empty((nel, nel), dtype=np.float64)
         local_rhs_columns = np.empty((nel, 3 * ntr + 1), dtype=np.float64)
 

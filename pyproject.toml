@@ -26,6 +26,7 @@ dependencies = [
 mesh = ["gmsh"]
 pardiso = ["pypardiso>=0.4.7,<0.5"]
 plot = ["matplotlib", "pyvista"]
+holoviz = ["holoscan-cu13>=4.6,<5", "cupy-cuda13x>=14,<15", "matplotlib", "pillow"]
 test = ["pytest", "matplotlib", "tomli; python_version < '3.11'"]
 release = ["build", "twine"]
 all = ["gmsh", "matplotlib", "pyvista", "pytest", "tomli; python_version < '3.11'"]
@@ -38,3 +39,6 @@ include = ["hdgfem*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+"hdgfem.core" = ["geometries/*.geo"]

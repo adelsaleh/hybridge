@@ -470,6 +470,9 @@ def validate_advection_backend_configuration(
     raw_matrix_format: str,
     requires_host_system: bool,
     advection_stabilization_is_default: bool,
+    advection_stabilization_is_lax_friedrichs: bool = False,
+    advection_stabilization_is_scaled_upwind: bool = False,
+    advection_stabilization_is_conflict_averaged: bool = False,
 ) -> BackendCapability:
     """Validate advection backend support before coefficient or device setup."""
     backend = normalize_assembly_backend(assembly_backend)
@@ -537,13 +540,16 @@ def validate_advection_backend_configuration(
                 solver_backend,
                 "zero-flux raw-CUDA assembly requires raw_local_assembly='fused' or 'split3'",
             )
-        if not advection_stabilization_is_default:
+        if not advection_stabilization_is_default and not (
+            advection_stabilization_is_lax_friedrichs or advection_stabilization_is_scaled_upwind
+            or advection_stabilization_is_conflict_averaged
+        ):
             _unsupported(
                 "advection-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw-CUDA supports only advection_stabilization=None",
+                "raw-CUDA supports default upwind, ScaledUpwind, 'lax-friedrichs', or 'conflict-averaged-upwind' stabilization",
             )
         if raw_local_assembly == "split3" and raw_matrix_format in {"coo", "csr"}:
             _unsupported(

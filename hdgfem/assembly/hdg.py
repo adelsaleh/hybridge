@@ -9,6 +9,8 @@ recover element coefficients.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from numbers import Real
@@ -75,15 +77,15 @@ def reaction_mass(reaction, space: DGSpace) -> np.ndarray:
         constant_value = reaction.constant_value
         if constant_value is not None:
             if constant_value == 0.0:
-                return np.zeros((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=np.float64)
+                return np.zeros((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=REAL_DTYPE)
             return constant_value * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
         return hdg_mats.mass_from_field(space, reaction)
     if callable(reaction):
         return space.weighted_mass(reaction)
 
-    values = np.asarray(reaction, dtype=np.float64)
+    values = np.asarray(reaction, dtype=REAL_DTYPE)
     if values.shape == (space.mesh.num_tri, space.quad_data.Krf_w.shape[0]):
-        out = np.empty((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=np.float64)
+        out = np.empty((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=REAL_DTYPE)
         return hdg_mats.set_weighted_mass_from_values(out, values, space)
     if values.shape == (space.mesh.num_tri, space.el_dof):
         return hdg_mats.mass_from_field(space, space.field(values, name="reaction"))
@@ -97,17 +99,17 @@ def source_moments(source, space: DGSpace) -> np.ndarray:
         constant_value = source.constant_value
         if constant_value is not None:
             rhs = space._constant_reference_moments(constant_value)
-            return np.ascontiguousarray(space.mesh.aff_jacs[:, None] * rhs[None, :], dtype=np.float64)
+            return np.ascontiguousarray(space.mesh.aff_jacs[:, None] * rhs[None, :], dtype=REAL_DTYPE)
         if source.space is space:
             rhs = source.coeffs @ space.quad_data.MKrf
             rhs *= space.mesh.aff_jacs[:, None]
-            return np.ascontiguousarray(rhs, dtype=np.float64)
+            return np.ascontiguousarray(rhs, dtype=REAL_DTYPE)
         values = source.values_at_ref(space.quad_data.Krf_quads)
     elif callable(source):
         points = space.mapped_quads()
         values = source(points[:, :, 0], points[:, :, 1])
     else:
-        array = np.asarray(source, dtype=np.float64)
+        array = np.asarray(source, dtype=REAL_DTYPE)
         if array.shape == space.shape:
             return np.ascontiguousarray(array)
         if array.shape == (space.mesh.num_tri, space.quad_data.Krf_w.shape[0]):
@@ -115,7 +117,7 @@ def source_moments(source, space: DGSpace) -> np.ndarray:
         else:
             raise TypeError("source must be a DGField, callable, source moments, or quadrature values")
 
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     if values.ndim == 0:
         values = np.full((space.mesh.num_tri, space.quad_data.Krf_w.shape[0]), float(values))
     elif values.shape == (space.quad_data.Krf_w.shape[0],):
@@ -128,7 +130,7 @@ def source_moments(source, space: DGSpace) -> np.ndarray:
 
     rhs = values @ space.quad_data.weighted_phi
     rhs *= space.mesh.aff_jacs[:, None]
-    return np.ascontiguousarray(rhs, dtype=np.float64)
+    return np.ascontiguousarray(rhs, dtype=REAL_DTYPE)
 
 
 def block_source_moments(
@@ -151,12 +153,12 @@ def block_source_moments(
     if source_block < 0 or source_block >= num_blocks:
         raise ValueError("source_block must satisfy 0 <= source_block < num_blocks")
 
-    array = np.asarray(source, dtype=np.float64) if not callable(source) and not isinstance(source, DGField) else None
+    array = np.asarray(source, dtype=REAL_DTYPE) if not callable(source) and not isinstance(source, DGField) else None
     if array is not None and array.shape == (space.mesh.num_tri, num_blocks * space.el_dof):
         return np.ascontiguousarray(array)
 
     scalar_moments = source_moments(source, space)
-    result = np.zeros((space.mesh.num_tri, num_blocks * space.el_dof), dtype=np.float64)
+    result = np.zeros((space.mesh.num_tri, num_blocks * space.el_dof), dtype=REAL_DTYPE)
     start = source_block * space.el_dof
     result[:, start:start + space.el_dof] = scalar_moments
     return result
@@ -204,11 +206,49 @@ def boundary_trace_coefficients(
         *,
         trace_basis: str = "legacy-lagrange",
         trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    """Return Dirichlet coefficients for the requested trace basis."""
+        backend: str = "host",
+        boundary_only: bool = False,
+):
+    """Return prescribed coefficients using the existing nodal/modal convention.
+
+    Host behavior is unchanged by default. The device path caches sample
+    points and mass inverses and evaluates compatible callables on device.
+    boundary_only returns just prescribed edge rows, avoiding a full trace.
+    """
+    if backend not in {"host", "device"}:
+        raise ValueError("boundary trace backend must be 'host' or 'device'")
     trace_ref = space.trace_space(trace_basis) if trace_space is None else trace_space
     boundary_condition = normalize_boundary_condition(boundary_condition)
-    return trace_ref.boundary_coefficients(boundary_condition)
+    if backend == "host":
+        values = trace_ref.boundary_coefficients(boundary_condition)
+        return values[space.mesh.bnd_edges_inds] if boundary_only else values
+    from ..backends.cupy import as_cupy_space, require_cupy
+    from ..backends.advection_cuda import as_cupy_trace_space
+    xp = require_cupy()
+    cspace = as_cupy_space(space)
+    mesh = cspace.mesh
+    trace = as_cupy_trace_space(trace_ref, device=cspace.device_id)
+    points = getattr(trace, "_boundary_sample_points", None)
+    if points is None:
+        vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+        t = trace.interpolation_nodes if trace.nodal else trace.quads
+        points = .5*((1-t)[None, :, None]*vertices[:, :1] + (1+t)[None, :, None]*vertices[:, 1:])
+        object.__setattr__(trace, "_boundary_sample_points", points)
+    try:
+        sampled = boundary_condition(points[:, :, 0], points[:, :, 1])
+    except TypeError:
+        # Existing NumPy-only callables remain supported; guiding-center
+        # callables handle device arrays and avoid this transfer fallback.
+        values = xp.asarray(trace_ref.boundary_coefficients(boundary_condition)[space.mesh.bnd_edges_inds])
+    else:
+        values = xp.broadcast_to(xp.asarray(sampled, dtype=REAL_DTYPE), points.shape[:2])
+        if not trace.nodal:
+            values = ((values*trace.weights) @ trace.bas1d_of_ref_edg_qds.T) @ trace.mass_inverse
+    if boundary_only:
+        return xp.ascontiguousarray(values)
+    full = xp.zeros((mesh.num_edg, trace.edg_dof), dtype=REAL_DTYPE)
+    full[mesh.bnd_edges_inds] = values
+    return full
 
 
 def free_trace_dofs(
@@ -306,7 +346,7 @@ def element_to_trace_matrix_from_lift(
     q = space.quad_data
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     edg_dof = trace_ref.edg_dof
-    trace_lift = np.asarray(trace_lift, dtype=np.float64)
+    trace_lift = np.asarray(trace_lift, dtype=REAL_DTYPE)
     expected_shape = (mesh.num_tri, 3, edg_dof, local_solver.shape[-1])
     if trace_lift.shape != expected_shape:
         raise ValueError(f"trace_lift must have shape {expected_shape}; got {trace_lift.shape}")
@@ -371,7 +411,7 @@ def trace_matrix_data(
     else:
         n_interior_mass = valid_elements.size * edg_dof * edg_dof
     n_boundary = mesh.bnd_edges_inds.size * edg_dof
-    data = np.empty(n_interior_flux + n_interior_mass + n_boundary, dtype=np.float64)
+    data = np.empty(n_interior_flux + n_interior_mass + n_boundary, dtype=REAL_DTYPE)
 
     data[:n_interior_flux] = -trace_blocks[valid_elements, valid_faces].ravel()
 
@@ -382,7 +422,7 @@ def trace_matrix_data(
         edge_jacs = mesh.edge_jacs[mesh.int_edges_inds]
         data[offset:offset + n_interior_mass] = (edge_jacs[:, None, None] * trace_ref.M_rf_fc[None, :, :]).ravel()
     else:
-        blocks = np.asarray(interior_mass_blocks, dtype=np.float64)
+        blocks = np.asarray(interior_mass_blocks, dtype=REAL_DTYPE)
         if interior_mass_mode == "edge":
             expected_shape = (mesh.int_edges_inds.size, edg_dof, edg_dof)
         else:
@@ -410,13 +450,13 @@ def trace_rhs_from_lift(
     mesh = space.mesh
     q = space.quad_data
     edg_dof = q.edg_dof if trace_space is None else trace_space.edg_dof
-    trace_lift = np.asarray(trace_lift, dtype=np.float64)
+    trace_lift = np.asarray(trace_lift, dtype=REAL_DTYPE)
     expected_shape = (mesh.num_tri, 3, edg_dof, local_solver.shape[-1])
     if trace_lift.shape != expected_shape:
         raise ValueError(f"trace_lift must have shape {expected_shape}; got {trace_lift.shape}")
     face_rhs = (trace_lift @ (local_solver @ source_rhs[..., None])[:, None, :, :]).squeeze(-1)
 
-    rhs = np.zeros((mesh.num_edg, edg_dof), dtype=np.float64)
+    rhs = np.zeros((mesh.num_edg, edg_dof), dtype=REAL_DTYPE)
     valid_elements = mesh.interior_elements
     valid_faces = mesh.interior_faces
     if valid_elements.size:
@@ -492,7 +532,7 @@ def element_traces(
         return trace_space.element_coefficients(trace)
     mesh = space.mesh
     edg_dof = space.quad_data.edg_dof
-    trace = np.asarray(trace, dtype=np.float64)
+    trace = np.asarray(trace, dtype=REAL_DTYPE)
     if trace.shape != (mesh.num_edg * edg_dof,):
         raise ValueError(f"trace must have shape ({mesh.num_edg * edg_dof},); got {trace.shape}")
     traces = trace.reshape(mesh.num_edg, edg_dof)[mesh.loc2glob_edge].copy()
@@ -510,8 +550,8 @@ def trace_from_field_faces(field: DGField) -> np.ndarray:
     space = field.space
     mesh = space.mesh
     q = space.quad_data
-    rhs = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
-    mass = np.zeros((mesh.num_edg, q.edg_dof, q.edg_dof), dtype=np.float64)
+    rhs = np.zeros((mesh.num_edg, q.edg_dof), dtype=REAL_DTYPE)
+    mass = np.zeros((mesh.num_edg, q.edg_dof, q.edg_dof), dtype=REAL_DTYPE)
     oriented = q.face_trace_test_element_trial_oriented[mesh.loc2oriented_face_coupling]
     face_rhs = mesh.jacs_el_fc[:, :, None] * np.einsum("Kfai,Ki->Kfa", oriented, field.coeffs, optimize=True)
     face_mass = mesh.jacs_el_fc[:, :, None, None] * q.M_rf_fc[None, None, :, :]
@@ -521,7 +561,7 @@ def trace_from_field_faces(field: DGField) -> np.ndarray:
         np.add.at(rhs, edges[interior], face_rhs[interior, face])
         np.add.at(mass, edges[interior], face_mass[interior, face])
 
-    trace = np.zeros((mesh.num_edg, q.edg_dof), dtype=np.float64)
+    trace = np.zeros((mesh.num_edg, q.edg_dof), dtype=REAL_DTYPE)
     for edge in mesh.int_edges_inds:
         trace[edge] = np.linalg.solve(mass[edge], rhs[edge])
     return trace.reshape(-1)
@@ -537,7 +577,7 @@ def h1_flux_jump_norm(field: DGField, flux_coeffs: np.ndarray, trace: np.ndarray
     space = field.space
     mesh = space.mesh
     q = space.quad_data
-    flux_coeffs = np.asarray(flux_coeffs, dtype=np.float64)
+    flux_coeffs = np.asarray(flux_coeffs, dtype=REAL_DTYPE)
     expected = (2, mesh.num_tri, q.el_dof)
     if flux_coeffs.shape != expected:
         raise ValueError(f"flux_coeffs must have shape {expected}; got {flux_coeffs.shape}")
@@ -576,7 +616,7 @@ def mixed_u_block_rhs_from_residual(residual: np.ndarray, space: DGSpace, *, num
     if num_blocks <= 0:
         raise ValueError("num_blocks must be positive")
     local_size = space.mesh.num_tri * num_blocks * space.el_dof
-    local = np.asarray(residual[:local_size], dtype=np.float64).reshape(space.mesh.num_tri, num_blocks * space.el_dof)
+    local = np.asarray(residual[:local_size], dtype=REAL_DTYPE).reshape(space.mesh.num_tri, num_blocks * space.el_dof)
     return np.ascontiguousarray(-local[:, :space.el_dof])
 
 

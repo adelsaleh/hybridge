@@ -9,6 +9,8 @@ quadrature tuples.
 
 from __future__ import annotations
 
+from hdgfem.precision import audit_arrays, REAL_DTYPE
+
 import time
 import json
 from dataclasses import dataclass, field, fields, replace
@@ -25,6 +27,7 @@ from ..backends.capabilities import (
 )
 from ..backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 from ..backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
+from ..backends.advection_raw_cuda import RawAdvectionFactorWorkspace
 from ..assembly import matrices_numpy as hdg_mats
 from ..linalg.system import (
     KnownDofReduction,
@@ -33,6 +36,8 @@ from ..linalg.system import (
     eliminate_known_dofs,
     expand_known_dofs,
     solve_global_system,
+    diagonal_scale_system,
+    update_known_dof_rhs,
 )
 from ..linalg.ordering import (
     GraphOrderingResult,
@@ -157,6 +162,7 @@ class AdvectionReactionHDGOptions:
     materialize_host_solution: bool | None = None
     advection_stabilization: Any = None
     cache_local_solvers: bool = False
+    cache_operator: bool = False  # Retain the operator across explicit set_source updates.
     initial_guess: Any = None
     verbose: bool | int = True
 
@@ -224,13 +230,13 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
 
 def _normalize_coefficient_values(values, space: DGSpace, num_points: int, label: str) -> np.ndarray:
     """Normalize scalar coefficient samples to ``(num_elements, num_points)``."""
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     if values.shape == (space.mesh.num_tri, num_points):
         return values
     if values.shape == (num_points,):
         return np.broadcast_to(values[None, :], (space.mesh.num_tri, num_points))
     if values.ndim == 0:
-        return np.full((space.mesh.num_tri, num_points), float(values), dtype=np.float64)
+        return np.full((space.mesh.num_tri, num_points), float(values), dtype=REAL_DTYPE)
     raise ValueError(
         f"{label} must return a scalar, shape ({num_points},), or shape "
         f"({space.mesh.num_tri}, {num_points}); got {values.shape}"
@@ -241,7 +247,7 @@ def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSp
     """Evaluate callable advection coefficients on solution volume quadrature."""
     points = space.mapped_quads()
     num_points = space.quad_data.Krf_w.shape[0]
-    values = np.empty((space.mesh.num_tri, num_points, 2), dtype=np.float64)
+    values = np.empty((space.mesh.num_tri, num_points, 2), dtype=REAL_DTYPE)
     values[..., 0] = _normalize_coefficient_values(
         beta[0](points[:, :, 0], points[:, :, 1]),
         space,
@@ -259,7 +265,7 @@ def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSp
 
 def _reference_edge_points_from_trace(trace_space: DGTraceSpace) -> np.ndarray:
     """Map trace-space 1D edge quadrature nodes to reference-triangle faces."""
-    t = np.asarray(trace_space.quads, dtype=np.float64)
+    t = np.asarray(trace_space.quads, dtype=REAL_DTYPE)
     return np.ascontiguousarray(
         np.stack(
             (
@@ -284,7 +290,7 @@ def _callable_beta_normal_flux(
     mapped_points = space.mesh.map_reference_points(face_points)
     num_face_quads = trace_ref.weights.size
     num_flat_points = face_points.shape[0]
-    beta_values = np.empty((space.mesh.num_tri, num_flat_points, 2), dtype=np.float64)
+    beta_values = np.empty((space.mesh.num_tri, num_flat_points, 2), dtype=REAL_DTYPE)
     beta_values[..., 0] = _normalize_coefficient_values(
         beta[0](mapped_points[:, :, 0], mapped_points[:, :, 1]),
         space,
@@ -489,6 +495,8 @@ class AdvectionReactionHDGSolver:
         self.boundary_condition = None
         self._problem_is_set = False
         self._raw_cuda_response_workspace = None
+        self._raw_cuda_factor_workspace = RawAdvectionFactorWorkspace()
+        self._operator_cache = {}
         self._raw_cuda_tsle_workspace = RawAdvectionTsleWorkspace()
         self._raw_cuda_amgx_retry_solver_cache: dict[Any, Any] = {}
 
@@ -643,12 +651,20 @@ class AdvectionReactionHDGSolver:
         """
         return self.set_problem(source_h, beta_h, reaction_h, boundary_condition)
 
-    def set_source(self, source) -> "AdvectionReactionHDGSolver":
-        """Replace only the source input and invalidate cached artifacts."""
+    def set_source(self, source, *, boundary_condition=_UNSET) -> "AdvectionReactionHDGSolver":
+        """Replace RHS data, retaining an operator enabled by ``cache_operator``.
+
+        Optional prescribed boundary values may change too. Call ``set_beta``,
+        ``set_reaction``, ``set_problem`` or ``clear_cache`` when coefficients
+        have changed, including in-place edits to their arrays.
+        """
         self._require_problem_or_partial_update()
         self.source = source
+        if boundary_condition is not _UNSET:
+            self.boundary_condition = hdg_assembly.normalize_boundary_condition(
+                boundary_condition, require_none=self.options.boundary_mode == "zero-flux")
         self._problem_is_set = self._has_complete_problem()
-        self.clear_cache(preserve_retry_preconditioners=True)
+        self.clear_cache(preserve_retry_preconditioners=True, preserve_operator=True)
         return self
 
     def set_beta(self, beta) -> "AdvectionReactionHDGSolver":
@@ -689,6 +705,8 @@ class AdvectionReactionHDGSolver:
         """Release persistent device solver state owned by this instance."""
         self._close_raw_cuda_amgx_retry_solvers()
         self._raw_cuda_tsle_workspace.clear()
+        self._raw_cuda_factor_workspace = RawAdvectionFactorWorkspace()
+        self._raw_cuda_response_workspace = None
         self.clear_cache()
 
     def __del__(self):
@@ -699,7 +717,7 @@ class AdvectionReactionHDGSolver:
             pass
 
     def clear_cache(
-            self, *, preserve_retry_preconditioners: bool = False,
+            self, *, preserve_retry_preconditioners: bool = False, preserve_operator: bool = False,
     ) -> "AdvectionReactionHDGSolver":
         """Clear assembled matrices, factorization/preconditioner, and solution.
 
@@ -707,6 +725,8 @@ class AdvectionReactionHDGSolver:
         when external mutable arrays/callables have changed but the Python object
         identities stored on the solver are the same.
         """
+        if not preserve_operator:
+            self._operator_cache.clear()
         if not hasattr(self, "_raw_cuda_last_trace_reduced"):
             self._raw_cuda_last_trace_reduced = None
         if not preserve_retry_preconditioners:
@@ -739,6 +759,10 @@ class AdvectionReactionHDGSolver:
 
     def clear_factorization(self) -> "AdvectionReactionHDGSolver":
         """Drop the cached preconditioner/factorization from the last solve."""
+        self._operator_cache.pop("preconditioner", None)
+        for key in list(self._raw_cuda_amgx_retry_solver_cache):
+            if isinstance(key, tuple) and key[0] == "fixed-operator":
+                self._raw_cuda_amgx_retry_solver_cache.pop(key).close(suppress_errors=True)
         self.preconditioner = None
         if self.global_solve_result is not None:
             self.global_solve_result.preconditioner = None
@@ -831,6 +855,7 @@ class AdvectionReactionHDGSolver:
             raw_matrix_format="bsr",
             zero_boundary_flux=True,
             raw_tsle_workspace=self._raw_cuda_tsle_workspace,
+            advection_stabilization=options.advection_stabilization,
             raw_cache_local_response=False,
         )
         if assembly.matrix_format != "bsr":
@@ -893,6 +918,8 @@ class AdvectionReactionHDGSolver:
             _raw_response_workspace=self._raw_cuda_response_workspace,
             _raw_tsle_workspace=self._raw_cuda_tsle_workspace,
             _raw_amgx_retry_solver_cache=self._raw_cuda_amgx_retry_solver_cache,
+            _operator_cache=self._operator_cache,
+            _raw_factor_workspace=self._raw_cuda_factor_workspace,
             **solve_kwargs,
         )
         self._store_result(result)
@@ -997,12 +1024,15 @@ def solve_advection_reaction_hdg(
         materialize_host_solution: bool | None = None,
         advection_stabilization=None,
         cache_local_solvers: bool = False,
+        cache_operator: bool = False,
         initial_guess=None,
         verbose: bool | int = True,
         return_: Iterable[ReturnKey] = ("result",),
         _raw_response_workspace=None,
         _raw_tsle_workspace=None,
         _raw_amgx_retry_solver_cache=None,
+        _operator_cache=None,
+        _raw_factor_workspace=None,
 ):
     r"""Solve :math:`\beta\cdot\nabla u + r u = f` with an HDG trace system.
 
@@ -1121,13 +1151,21 @@ def solve_advection_reaction_hdg(
         generic physical-point callables. The Numba fused backend accepts
         ``None``, scalars, or :class:`DGField` objects; project callable
         stabilizations before requesting ``assembly_backend="numba"``. The raw-CUDA backend
-        currently supports only ``None`` and rejects explicit stabilization
+        supports ``None``, ``ScaledUpwind(factor)``, and ``"lax-friedrichs"``
+        (the factor-two alias) in all local assembly modes. All backends accept
+        ``ScaledUpwind`` and ``"conflict-averaged-upwind"`` (face-only double-outflow
+        repair with unchanged volume coefficients); raw CUDA rejects other explicit stabilization
         inputs before device setup.
     cache_local_solvers
         If ``True``, retain dense local inverse and element-boundary blocks in
         the returned result. Numba and CuPy do not cache them unless this flag
         or ``return_`` asks explicitly; CuPy reconstruction instead rebuilds
         the local operators and performs a batched device solve.
+    cache_operator
+        Retain the frozen local/trace operator across ``set_source`` calls on
+        :class:`AdvectionReactionHDGSolver`. NumPy and fused raw-CUDA are
+        supported. Coefficient, space, or option changes invalidate the cache.
+        This option requires the stateful solver, which owns its workspaces.
     verbose
         Verbosity level.  ``False`` disables logs, ``True``/``1`` prints one
         line per major solve phase, and ``2`` also prints assembly substeps.
@@ -1163,6 +1201,7 @@ def solve_advection_reaction_hdg(
         or matrix_pattern_dir is not None
         or any(key in want for key in ("matrix_rows", "matrix_cols", "matrix_data"))
     )
+    from .stabilization import is_lax_friedrichs, ScaledUpwind, is_conflict_averaged_upwind
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
         operation=operation,
@@ -1178,11 +1217,27 @@ def solve_advection_reaction_hdg(
         raw_matrix_format=raw_matrix_format,
         requires_host_system=requires_host_system,
         advection_stabilization_is_default=advection_stabilization is None,
+        advection_stabilization_is_lax_friedrichs=is_lax_friedrichs(advection_stabilization),
+        advection_stabilization_is_scaled_upwind=isinstance(advection_stabilization, ScaledUpwind),
+        advection_stabilization_is_conflict_averaged=is_conflict_averaged_upwind(advection_stabilization),
     )
     boundary_condition = hdg_assembly.normalize_boundary_condition(
         boundary_condition,
         require_none=boundary_mode == "zero-flux",
     )
+    cache_operator = bool(cache_operator)
+    if cache_operator:
+        if effective_backend not in {"numpy", "raw-cuda"}:
+            raise ValueError("cache_operator currently supports numpy and raw-cuda assembly")
+        if trace_ordering != "none" or matrix_pattern_only or matrix_pattern_dir is not None:
+            raise ValueError("cache_operator requires unordered solves without matrix-pattern diagnostics")
+        if effective_backend == "raw-cuda" and raw_local_assembly != "fused":
+            raise ValueError("raw-cuda cache_operator requires raw_local_assembly='fused'")
+        if _operator_cache is None:
+            raise ValueError("cache_operator requires an owning AdvectionReactionHDGSolver")
+        if _raw_factor_workspace is None:
+            _raw_factor_workspace = RawAdvectionFactorWorkspace()
+    cached = _operator_cache.get("assembly") if cache_operator else None
     total_start = time.perf_counter()
     detail_timings: dict[str, float] = {}
     verbosity = _verbosity_level(verbose)
@@ -1226,6 +1281,10 @@ def solve_advection_reaction_hdg(
 
     def prepare_data():
         """Normalize coefficient inputs and prepare backend-specific assembly data."""
+        if cached is not None:
+            source_rhs = (_require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
+                          if effective_backend == "raw-cuda" else hdg_assembly.source_moments(source, space))
+            return cached["beta_h"], cached["beta_dot_normal"], cached["beta_callables"], source_rhs, cached["reaction_h"]
         if effective_backend == "raw-cuda":
             source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
             reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="raw-cuda")
@@ -1377,7 +1436,37 @@ def solve_advection_reaction_hdg(
     cuda_beta_coeffs = None
     raw_cuda_device_amgx = False
     trace_reduced_cp = None
-    if effective_backend == "numba":
+    trace_lift = None
+    if cached is not None:
+        rows, cols, data = cached["rows"], cached["cols"], cached["data"]
+        local_solver, element_boundary_mats = cached["local_solver"], cached["element_boundary_mats"]
+        trace_lift = cached["trace_lift"]
+        cuda_beta_coeffs = cached["cuda_beta_coeffs"]
+        raw_cuda_device_amgx = cached["raw_cuda_device_amgx"]
+        wants_host_system = requires_host_system
+        local_assembly = local_inverse = boundary_assembly = 0.0
+        if effective_backend == "raw-cuda":
+            from ..backends.advection_cuda import update_reduced_system_rhs_cuda
+            cuda_assembly, trace_assembly = _timed_call(
+                "updating RHS with cached transport LU and trace operator", verbosity,
+                lambda: update_reduced_system_rhs_cuda(cached["cuda_assembly"], source_data,
+                                                         boundary_condition, _raw_factor_workspace))
+            if raw_cuda_device_amgx and not wants_host_system:
+                rhs = boundary_trace = None
+            else:
+                reduction = cuda_assembly.to_host_reduction()
+                rows, cols, data, rhs = reduction.rows, reduction.cols, reduction.data, reduction.rhs
+                boundary_trace = reduction.known_values.reshape(space.layout.trace_shape)
+        else:
+            (rhs, boundary_trace), trace_assembly = _timed_call(
+                "updating RHS with cached transport local inverse and trace operator", verbosity,
+                lambda: hdg_assembly.trace_rhs_from_lift(trace_lift, source_data, local_solver,
+                        boundary_condition, space, boundary_penalty, trace_space=trace_space_host))
+            if cached["reduction"] is not None:
+                reduction = update_known_dof_rhs(rows, cols, data, rhs, boundary_trace, cached["reduction"])
+        detail_timings["operator.reused"] = 1.0
+        detail_timings["local.factors.reused"] = 1.0
+    elif effective_backend == "numba":
         from ..backends.numba import (
             assemble_local_advection_reaction_numba,
             assemble_projected_trace_system_eliminated_numba,
@@ -1536,6 +1625,7 @@ def solve_advection_reaction_hdg(
                 trace_ref,
                 backend="raw-cuda",
                 beta_dot_normal=beta_dot_normal_cp,
+                advection_stabilization=advection_stabilization,
                 raw_block_size=raw_block_size,
                 raw_local_assembly=raw_local_assembly,
                 raw_lu_mode=raw_lu_mode,
@@ -1544,6 +1634,7 @@ def solve_advection_reaction_hdg(
                 raw_response_workspace=_raw_response_workspace,
                 raw_tsle_workspace=_raw_tsle_workspace,
                 raw_cache_local_response=not matrix_pattern_only,
+                raw_factor_workspace=_raw_factor_workspace if cache_operator else None,
             ),
             multiline=_detailed_logging(verbosity),
         )
@@ -1754,6 +1845,7 @@ def solve_advection_reaction_hdg(
 
         def assemble_global_trace_system():
             """Assemble the condensed global advection-reaction trace system."""
+            nonlocal trace_lift
             trace_lift, _ = _timed_call(
                 "building weighted advection trace lift",
                 verbosity,
@@ -1789,6 +1881,7 @@ def solve_advection_reaction_hdg(
                     space,
                     gamma_face,
                     trace_space=trace_space_host,
+                    inactive_tau=tau_face if is_conflict_averaged_upwind(advection_stabilization) else None,
                 ),
                 level=2,
             )
@@ -1965,6 +2058,28 @@ def solve_advection_reaction_hdg(
             matrix_pattern_plots=matrix_pattern_plots,
         )
 
+    if cache_operator:
+        detail_timings.setdefault("operator.reused", 0.0)
+        detail_timings.setdefault("local.factors.reused", 0.0)
+        _operator_cache["assembly"] = dict(
+            rows=rows, cols=cols, data=data, local_solver=local_solver,
+            element_boundary_mats=element_boundary_mats, trace_lift=trace_lift,
+            cuda_assembly=cuda_assembly, cuda_beta_coeffs=cuda_beta_coeffs,
+            raw_cuda_device_amgx=raw_cuda_device_amgx, reduction=reduction,
+            beta_h=beta_h, beta_dot_normal=beta_dot_normal, beta_callables=beta_callables,
+            reaction_h=reaction_h,
+        )
+        if not raw_cuda_device_amgx:
+            if "matrix" not in _operator_cache:
+                cache_start = time.perf_counter()
+                matrix = assemble_global_matrix(solve_rows, solve_cols, solve_data, solve_size)
+                _operator_cache["matrix"] = matrix
+                if effective_scale_system and normalized_solver not in {"direct", ""}:
+                    scaled, inverse = diagonal_scale_system(matrix, np.ones(solve_size, dtype=REAL_DTYPE))
+                    _operator_cache.update(scaled=scaled, inverse=inverse)
+                preparation += time.perf_counter()-cache_start
+            preconditioner = _operator_cache.get("preconditioner", preconditioner)
+
     upwind_level_widths = None
     if ordering_result is not None and ordering_result.diagnostics.largest_component_size == 1:
         upwind_level_widths = ordering_result.diagnostics.level_widths
@@ -1976,7 +2091,7 @@ def solve_advection_reaction_hdg(
             from ..backends.cupy import require_cupy
 
             cp = require_cupy()
-            guess = cp.asarray(initial_guess, dtype=cp.float64)
+            guess = cp.asarray(initial_guess, dtype=REAL_DTYPE)
             if guess.size == solve_size:
                 solve_initial_guess = cp.ascontiguousarray(guess.reshape((solve_size,)))
             elif boundary_mode != "penalty" and guess.size == full_size:
@@ -1989,7 +2104,7 @@ def solve_advection_reaction_hdg(
                     f"initial_guess must have solve size {solve_size} or full trace size {full_size}; got {guess.size}"
                 )
         else:
-            guess = np.asarray(initial_guess, dtype=np.float64)
+            guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
             if guess.size == solve_size:
                 solve_initial_guess = np.ascontiguousarray(guess.reshape((solve_size,)))
             elif boundary_mode != "penalty" and guess.size == full_size:
@@ -2029,7 +2144,10 @@ def solve_advection_reaction_hdg(
             upwind_level_widths=upwind_level_widths,
             upwind_diagonal_regularization=upwind_diagonal_regularization,
             scale_system=effective_scale_system,
-            scale_matrix_in_place=effective_scale_system,
+            scale_matrix_in_place=effective_scale_system and not cache_operator,
+            assembled_matrix=_operator_cache.get("matrix") if cache_operator else None,
+            prepared_scaled_matrix=_operator_cache.get("scaled") if cache_operator else None,
+            prepared_inverse_diagonal=_operator_cache.get("inverse") if cache_operator else None,
             permutation=trace_permutation,
             raise_on_nonconvergence=True,
             materialize_host_solution=wants_host_solution,
@@ -2066,7 +2184,10 @@ def solve_advection_reaction_hdg(
             upwind_level_widths=upwind_level_widths,
             upwind_diagonal_regularization=upwind_diagonal_regularization,
             scale_system=effective_scale_system,
-            scale_matrix_in_place=effective_scale_system,
+            scale_matrix_in_place=effective_scale_system and not cache_operator,
+            assembled_matrix=_operator_cache.get("matrix") if cache_operator else None,
+            prepared_scaled_matrix=_operator_cache.get("scaled") if cache_operator else None,
+            prepared_inverse_diagonal=_operator_cache.get("inverse") if cache_operator else None,
             permutation=trace_permutation,
             raise_on_nonconvergence=True,
             materialize_host_solution=wants_host_solution,
@@ -2084,7 +2205,7 @@ def solve_advection_reaction_hdg(
             guess = initial_guess
             if guess is None:
                 return None
-            guess_cp = cp.asarray(guess, dtype=cp.float64)
+            guess_cp = cp.asarray(guess, dtype=REAL_DTYPE)
             reduced_size = int(cuda_assembly.rhs.size)
             if guess_cp.size == reduced_size:
                 return cp.ascontiguousarray(guess_cp.reshape((reduced_size,)))
@@ -2104,6 +2225,7 @@ def solve_advection_reaction_hdg(
                 config=amgx_config,
                 retry_attempts=amgx_retry_attempts,
                 retry_solver_cache=_raw_amgx_retry_solver_cache,
+                cache_fixed_operator=cache_operator,
                 tolerance=solver_rtol,
                 check_rtol=solver_rtol,
                 atol=solver_atol,
@@ -2170,6 +2292,8 @@ def solve_advection_reaction_hdg(
             solve_lambda,
             multiline=verbosity >= 1,
         )
+    if cache_operator and not raw_cuda_device_amgx and global_solve_result.preconditioner is not None:
+        _operator_cache["preconditioner"] = global_solve_result.preconditioner
     if preordered_trace_permutation is not None:
         if global_solve_result.x is None:
             raise RuntimeError("trace permutation requires a host-materialized solve vector")
@@ -2183,7 +2307,7 @@ def solve_advection_reaction_hdg(
     elif global_solve_result.x is None:
         trace = None
     elif reduction is None:
-        trace = np.asarray(global_solve_result.x, dtype=np.float64)
+        trace = np.asarray(global_solve_result.x, dtype=REAL_DTYPE)
     else:
         trace = expand_known_dofs(global_solve_result.x, reduction)
 
@@ -2198,7 +2322,8 @@ def solve_advection_reaction_hdg(
         if trace_reduced_cp is None:
             if global_solve_result.x is None:
                 raise RuntimeError("raw-cuda reconstruction requires a device or host reduced trace vector")
-            trace_reduced_cp = cp.asarray(global_solve_result.x, dtype=cp.float64)
+            trace_reduced_cp = cp.asarray(global_solve_result.x, dtype=REAL_DTYPE)
+        audit_arrays("transport-assembly", cuda_assembly)
         trace_reconstruct_start = time.perf_counter()
         trace_cp = reconstruct_trace_cupy(trace_reduced_cp, cuda_assembly.boundary_trace, cuda_assembly.cspace)
         cp.cuda.get_current_stream().synchronize()
@@ -2207,6 +2332,7 @@ def solve_advection_reaction_hdg(
         reconstruction_start = time.perf_counter()
         uh_cp, _local_reconstruction = reconstruct_advection_field_cuda(trace_cp, source_data, reaction_h, cuda_beta_coeffs, cuda_assembly)
         cp.cuda.get_current_stream().synchronize()
+        audit_arrays("transport-reconstruction", trace_cp, uh_cp)
         trace_device = trace_cp
         field_device = uh_cp
         field_reconstruction = time.perf_counter() - reconstruction_start
@@ -2214,8 +2340,8 @@ def solve_advection_reaction_hdg(
         reconstruction = trace_reconstruction + field_reconstruction
         if wants_host_solution:
             materialize_start = time.perf_counter()
-            field = space.field(np.ascontiguousarray(asnumpy(uh_cp), dtype=np.float64), name="u_h")
-            trace = np.ascontiguousarray(asnumpy(trace_cp), dtype=np.float64)
+            field = space.field(np.ascontiguousarray(asnumpy(uh_cp), dtype=REAL_DTYPE), name="u_h")
+            trace = np.ascontiguousarray(asnumpy(trace_cp), dtype=REAL_DTYPE)
             materialize_elapsed = time.perf_counter() - materialize_start
             detail_timings["raw.host_solution_materialization"] = materialize_elapsed
             reconstruction += materialize_elapsed
@@ -2237,7 +2363,7 @@ def solve_advection_reaction_hdg(
             if trace_reduced_cp is None:
                 if global_solve_result.x is None:
                     raise RuntimeError("CuPy reconstruction requires a device or host trace vector")
-                trace_reduced_cp = cp.asarray(global_solve_result.x, dtype=cp.float64)
+                trace_reduced_cp = cp.asarray(global_solve_result.x, dtype=REAL_DTYPE)
             trace_reconstruct_start = time.perf_counter()
             if cupy_device_trace_handoff and boundary_mode == "eliminate":
                 trace_cp = expand_boundary_trace_cupy(
@@ -2275,8 +2401,8 @@ def solve_advection_reaction_hdg(
             reconstruction = trace_reconstruction + field_reconstruction
             if wants_host_solution:
                 materialize_start = time.perf_counter()
-                field = space.field(np.ascontiguousarray(asnumpy(uh_cp), dtype=np.float64), name="u_h")
-                trace = np.ascontiguousarray(asnumpy(trace_cp), dtype=np.float64)
+                field = space.field(np.ascontiguousarray(asnumpy(uh_cp), dtype=REAL_DTYPE), name="u_h")
+                trace = np.ascontiguousarray(asnumpy(trace_cp), dtype=REAL_DTYPE)
                 materialize_elapsed = time.perf_counter() - materialize_start
                 detail_timings["cupy.host_solution_materialization"] = materialize_elapsed
                 reconstruction += materialize_elapsed

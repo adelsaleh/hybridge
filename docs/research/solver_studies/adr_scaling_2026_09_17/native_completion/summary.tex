@@ -1,0 +1,72 @@
+\subsection{$p$MG--AMG hierarchy: complete coverage and application cost}
+\label{sec:adr-native-completion}
+$p$MG--AMG has now been attempted on all 101 distinct matrix/right-hand-side
+pairs. The extension adds 126 policy/system measurements: 91 converge and
+35 fail numerically, with no execution errors. Including earlier accepted
+measurements, $p$MG--AMG convergence covers 87 systems. Table~\ref{tab:adr-native-coverage}
+separates overlapping studies from the distinct-system total.
+
+The standard policy transfers directly from degree $p$ to degree zero, with
+order-two Chebyshev smoothing and one pre/post sweep. The robust policy
+halves the degree through intermediate levels, uses order-four Chebyshev
+smoothing and two pre/post sweeps. Both build a hierarchy for $(A+A^T)/2$
+in modal coordinates, use a scalar AMG coarse correction, and apply outer
+GMRES to the unchanged full ADR operator. Standard is usually cheaper when
+both converge; fewer robust-policy iterations do not imply a shorter solve.
+
+\begin{table}[!htbp]
+ \centering\small
+ \input{\ADRResultsPath/native_completion/coverage_table.tex}
+ \caption{$p$MG--AMG coverage. Study rows overlap; the last row counts each
+ matrix/right-hand-side pair once. Convergence means at least one $p$MG--AMG
+ policy passes the physical-residual contract.}
+ \label{tab:adr-native-coverage}
+\end{table}
+
+$p$MG--AMG converges on every smooth and focused system and all 16 directional
+oscillatory systems. Its 14 unresolved systems comprise 13 weak-isotropic
+oscillatory systems and the initial 22,825-triangle weak-anisotropic annulus.
+polynomially preconditioned ASM therefore retains a robustness advantage on those difficult controls,
+while $p$MG--AMG provides a faster alternative where the transferred block-AMG
+hierarchies fail on directional anisotropy. Numerical failure here means
+failure under the tested policies and stopping contract, not mathematical
+impossibility of convergence.
+
+\begin{table}[!htbp]
+ \centering\small
+ \input{\ADRResultsPath/native_completion/application_table.tex}
+ \caption{Separate standard-policy $p$MG--AMG profiles near one million trace
+ unknowns. Apply is the mean of ten warmed complete applications; calls and
+ GPU share come from an independently instrumented solve. These profiles do
+ not enter timing rankings. Failed cases receive no performance profile.}
+ \label{tab:adr-native-applications}
+\end{table}
+
+\begin{table}[!htbp]
+ \centering\small
+ \resizebox{\linewidth}{!}{\input{\ADRResultsPath/native_completion/directional_tuned_table.tex}}
+ \caption{Tuned directional endpoints at $p=6$ near one million unknowns.
+ Setup/fresh/reused times are seconds; Apply is a separately profiled
+ complete application in milliseconds. Both $p$MG--AMG policies are compared with the retuned polynomially preconditioned ASM
+ correction, with LU as the baseline. LU cells identify threads; its setup
+ uses the fresh-selected count. This supplements the fixed-degree ASM scaling curves.}
+ \label{tab:adr-native-tuned}
+\end{table}
+
+At the directional endpoints, standard $p$MG--AMG and tuned polynomially preconditioned ASM use the same
+608 preconditioner applications on the square; on the annulus $p$MG--AMG uses
+380 versus 152 for polynomially preconditioned ASM. $p$MG--AMG's timing advantage thus comes from its much
+cheaper complete correction, not a uniformly smaller outer iteration count.
+Its multilevel correction and ASM's polynomial/patch composition perform
+different mathematical work. These measurements establish the advantage of
+the tested algorithms and implementations; they do not establish global
+implementation optimality or isolate a purely mathematical cause.
+
+Fresh time remains the median of paired setup-plus-first-solve measurements;
+reused time is the mean second solve from zero across independent setups.
+Reusing setup does not mean reusing the previous solution as an initial guess.
+Two measured setups are retained for the initial degree-four controls and
+three elsewhere. Profiles are separate. The new accepted runs have worst
+physical relative residual $9.73\times10^{-12}$ and worst recorded relative
+trace difference from the peer solve $8.29\times10^{-9}$; the latter is a
+diagnostic rather than an additional convergence criterion.

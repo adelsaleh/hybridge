@@ -32,6 +32,7 @@ _DIFFUSION_EXPORTS = {
 }
 _STABILIZATION_EXPORTS = {
     "GlobalLengthDiffusion",
+    "ScaledUpwind",
     "automatic_domain_length",
     "compute_domain_length",
     "geometric_diffusion_tau",
@@ -89,6 +90,7 @@ __all__ = [
     "DiffusionReactionResult",
     "DiffusionReactionTimings",
     "GlobalLengthDiffusion",
+    "ScaledUpwind",
     "automatic_domain_length",
     "compute_domain_length",
     "geometric_diffusion_tau",

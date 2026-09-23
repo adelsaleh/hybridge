@@ -1,0 +1,21 @@
+\begin{tabular}{llrrr}
+\toprule
+Case & Preconditioner / Krylov & Iter. & Hot (ms) & Setup (ms) \\
+\midrule
+High & ASM+PP(24) / GMRES & 150 & 3468.7 & 1134.8 \\
+High & AMG / BiCGSTAB & 29 & 250.4 & 462.4 \\
+High & $p$MG--AMG (standard) & 71 & 277.9 & 1254.2 \\
+Low & ASM+PP(24) / GMRES & 32 & 729.3 & 1129.9 \\
+Low & AMG / FGMRES & 37 & 569.5 & 464.1 \\
+Low & $p$MG--AMG (standard) & 675 & 3134.7 & 1261.5 \\
+Low & $p$MG--AMG (robust) & 300 & 5141.1 & 1266.8 \\
+Low & DILU / BiCGSTAB & 264 & 637.5 & 310.1 \\
+Aniso. & ASM+PP(48) / GMRES & 150 & 6605.2 & 1203.7 \\
+Aniso. & AMG / BiCGSTAB & 67 & 621.9 & 479.7 \\
+Aniso. & $p$MG--AMG (standard) & 225 & 1031.7 & 1375.6 \\
+Aniso. & $p$MG--AMG (robust) & 150 & 2521.3 & 1277.8 \\
+High & $\mathrm{P\!-\!LU}_{8}$ & -- & 692.5 & 3586.6 \\
+Low & $\mathrm{P\!-\!LU}_{8}$ & -- & 690.7 & 5105.7 \\
+Aniso. & $\mathrm{P\!-\!LU}_{8}$ & -- & 694.4 & 3602.4 \\
+\bottomrule
+\end{tabular}

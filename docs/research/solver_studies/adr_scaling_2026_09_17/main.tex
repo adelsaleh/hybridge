@@ -1,0 +1,25 @@
+% GPU solver study with confirmed multithreaded PyPardiso LU baseline, 23 September 2026.
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,microtype}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{9pt plus 2pt minus 2pt}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+
+\newcommand{\ADRResultsPath}{.}
+\newcommand{\ADRResultsFigurePath}{../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+\newcommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
+
+\begin{document}
+\input{section.tex}
+\clearpage
+\input{\ADRResultsPath/closed_loop_stress/section.tex}
+\end{document}

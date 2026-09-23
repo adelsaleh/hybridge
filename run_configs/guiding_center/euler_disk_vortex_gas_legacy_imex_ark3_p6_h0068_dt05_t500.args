@@ -1,0 +1,16 @@
+# Euler vortex-gas turbulence — disk — archived IMEX-ARK3 — p=6, dt=0.5, T=500.
+# Run with scripts.guiding_center.reference.legacy_ark3.runner.
+--preset euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr
+--time-scheme imex-ark3
+--verbosity 2
+--plot-every 50
+--dt 0.5
+--num-steps 1000
+--mesh-size 0.0068
+--minimum-triangles 150000
+--diagnostics-every 1
+--plot-backend pyvista
+--poisson-tau 1000
+--poisson-tau-retry-factor 2
+--poisson-tau-max-retries 8
+--diagnostics-prefix euler_disk_vortex_gas_legacy_imex_ark3_p6_h0068_dt05_t500

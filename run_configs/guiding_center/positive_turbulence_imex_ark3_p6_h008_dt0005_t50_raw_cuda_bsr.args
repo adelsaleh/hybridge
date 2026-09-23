@@ -1,0 +1,5 @@
+# Positive Vlasov-like guiding-center turbulence on the unit disk.
+# The analytic rho_0 is nonnegative everywhere and exactly zero for r>0.96.
+# IMEX-ARK3 audits the projected initial field, every stage, and every endpoint;
+# diagnostics detect loss of positivity but do not apply a positivity limiter.
+--preset positive_turbulence_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr

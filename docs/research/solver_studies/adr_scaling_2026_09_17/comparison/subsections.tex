@@ -1,0 +1,150 @@
+% Focused AMGX versus polynomial-preconditioner comparison.
+\providecommand{\ADRResultsPath}{docs/research/solver_studies/adr_scaling_2026_09_17}
+\providecommand{\ADRResultsFigurePath}{run_outputs/solver_studies/adr_scaling_2026_09_17/figures}
+
+\subsection{Focused AMGX--polynomial comparison}
+\label{sec:adr-focused-comparison}
+
+Three square-domain problems sharpen the comparison between AMGX and
+polynomial-preconditioned GMRES. On $\Omega=[-1,1]^2$ with exact Dirichlet data:
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+(1+x,-\tfrac12+y)^T\cdot\nabla u+\tfrac12u&=f,
+ &u_\star&=1+x^2+2y^2 \quad\text{(variable velocity)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -10^{-3}\Delta u+(1,\tfrac12)^T\cdot\nabla u+u&=f,
+ &u_\star&=\sin(\pi x)\sin(\pi y) \quad\text{(transport)},
+ \end{aligned}
+\end{equation}
+\begin{equation}
+ \begin{aligned}
+ -\Delta u+(1,\tfrac12)^T\cdot\nabla u+u&=f,
+ &u_\star&=\sin(\pi x)\sin(\pi y) \quad\text{(high diffusion)}.
+ \end{aligned}
+\end{equation}
+The endpoint comparison uses $999\,940$ trace unknowns at $p=3$ and
+$1\,003\,625$ at $p=4$.  The scaling comparison repeats
+$n=32,64,128,223$ at $p=6$ and $p=1,2,3,4,6$ at $n=64$.
+
+Every GPU solve uses FP64 arithmetic, a zero initial guess, internal tolerance
+$10^{-11}$, physical-residual acceptance at $10^{-10}$, and a 1,000-iteration
+limit.  After one warmup setup, three fresh setups each perform two solves.
+Fresh time is the median setup-plus-first-solve time; reused time is the mean
+second-solve time.  The scaling curves freeze one qualified configuration per
+method and problem.  AMGX uses natural $(p+1)\times(p+1)$ BSR blocks; its AMG
+variants use block Jacobi for the two diffusive problems and multicolor DILU
+for transport.  The polynomial families use standalone polynomial preconditioning, block Jacobi, and block additive Schwarz under
+GMRES.  All three problems include $p$MG--AMG/GMRES; the transport problem
+also includes direct BSR-DILU/BiCGSTAB. The $p$MG--AMG curves select the fastest
+passing available policy independently for fresh and reused timing.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/comparison/million_dof_comparison.pdf}
+ \caption{All configurations attempted near one million trace unknowns.
+ Filled and open symbols denote $p=3$ and $p=4$; crosses denote failed
+ acceptance, and blank positions were not selected for that problem.  Each
+ point is the best recorded fresh or reused time under the common protocol.
+ Jac. abbreviates block Jacobi; LU labels give the MKL thread count.}
+ \label{fig:adr-focused-million}
+\end{figure}
+
+At both endpoint degrees, a passing AMGX AMG configuration gives the fastest
+fresh solve in every problem.  At $p=4$, its fresh-time advantage over polynomially preconditioned ASM
+is $6.3\times$ for variable velocity (0.548 versus 3.443~s), $2.7\times$ for
+transport (0.703 versus 1.924~s), and $5.6\times$ for high diffusion
+(0.580 versus 3.252~s).  With setup reused, the corresponding AMGX advantages
+are $13.0\times$, $2.9\times$, and $9.8\times$.  The $p$MG--AMG hierarchy gives the
+overall fastest reused $p=4$ variable-velocity solve, 0.126~s, but its fresh
+time is 1.234~s.  Thus setup amortization changes the best method, while it
+does not reverse the AMGX--polynomially preconditioned ASM comparison at these endpoints.
+
+\subsubsection{Variable-velocity crossover}
+The spatially varying drift tests coefficient variation without oscillatory
+geometry.  Direct DILU fails acceptance for both outer methods and degrees;
+polynomially preconditioned BJ also narrowly fails at $p=3$.  Every multilevel AMGX configuration,
+polynomially preconditioned ASM, polynomial preconditioning, and $p$MG--AMG passes.  The fastest AMGX fresh times are 0.419 and
+0.548~s at $p=3,4$, compared with 3.129 and 3.443~s for polynomially preconditioned ASM.
+
+Mesh refinement exposes the crossover.  At 21k unknowns, polynomially preconditioned BJ gives the
+fastest fresh result (37.6~ms), and polynomially preconditioned ASM and $p$MG--AMG tie within 0.3~ms for
+the fastest reused solve.  At 1.04 million unknowns, AMG/FGMRES takes
+0.669~s fresh and 0.218~s reused, versus 3.580 and 2.568~s for polynomially preconditioned ASM.
+The $p$MG--AMG hierarchy remains the fastest reused method at 0.136~s.  Standalone
+polynomial preconditioning reaches the iteration limit at the two finest meshes.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/comparison/h_scaling.pdf}
+ \caption{Mesh scaling at $p=6$ for the three focused problems.  Top: setup
+ plus first solve; bottom: repeated solve with setup reused.  Every solver family
+ is shown; $p$MG--AMG is a metric-specific policy envelope, and crosses at the top edge mark failed acceptance.
+ The largest mesh has 99,458 triangles and 1,041,187 trace unknowns.}
+ \label{fig:adr-focused-h}
+\end{figure}
+
+\subsubsection{Transport-dominated crossover}
+Small and moderate systems favor local preconditioners.  Across the fixed
+$n=64$ degree sweep, polynomial preconditioning or polynomially preconditioned BJ is always fastest fresh among GPU methods, while polynomially preconditioned ASM or
+direct DILU is the fastest GPU option reused. The million-unknown endpoint instead favors
+AMGX AMG: its fresh times are 0.587 and 0.703~s at $p=3,4$, versus 1.654 and
+1.924~s for polynomially preconditioned ASM.  Direct DILU/FGMRES fails at $p=3$ and is much slower at
+$p=4$; DILU/BiCGSTAB passes both.
+
+$p$MG--AMG also converges on every transport system, but its additional
+iterations make it slower than polynomially preconditioned ASM at the million-unknown endpoints.
+The standard policy is faster than robust despite requiring more iterations;
+strengthening this hierarchy is not a time-to-solution improvement here.
+
+At the largest $p=6$ mesh, direct DILU/BiCGSTAB has the best fresh time
+(0.936~s), narrowly ahead of AMG/FGMRES (1.027~s).  Reusing setup reverses
+them: AMG/FGMRES takes 0.574~s, direct DILU 0.634~s, and polynomially preconditioned ASM 0.683~s.
+This is the only focused problem in which polynomially preconditioned ASM approaches the large-system
+AMGX reused time; its remaining gap is $19\%$.
+
+\begin{figure}[!htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRResultsFigurePath/comparison/p_scaling.pdf}
+ \caption{Polynomial-degree scaling on 8,192 triangles.  Fresh and reused
+ times are separated, and all measured solver families are shown, including $p$MG--AMG transport results.
+ AMGX uses BSR AMG in every panel; the transport panels additionally show
+ direct BSR-DILU.}
+ \label{fig:adr-focused-p}
+\end{figure}
+
+\subsubsection{High-diffusion trigonometric robustness}
+All 16 endpoint configurations pass.  AMGX AMG gives the fastest fresh and
+reused times at both degrees: 0.450/0.128~s at $p=3$ and 0.580/0.219~s at
+$p=4$, where each pair is fresh/reused.  polynomially preconditioned ASM needs 3.057/1.657~s and
+3.252/2.157~s.  $p$MG--AMG is intermediate for a fresh solve and approaches
+AMGX when its hierarchy is reused.
+
+At 1.04 million unknowns and $p=6$, AMG/BiCGSTAB remains fastest at
+0.704~s fresh and 0.250~s reused.  $p$MG--AMG reaches 0.276~s reused, while
+polynomially preconditioned ASM takes 3.494~s; standalone polynomial preconditioning reaches the iteration limit.  The fixed
+8,192-triangle degree sweep still favors polynomial preconditioning or polynomially preconditioned BJ for one fresh solve,
+showing that the large-system advantage is a scaling result rather than a
+uniform ranking across sizes.
+
+\begin{table}[!htbp]
+ \centering\small
+ \setlength{\tabcolsep}{3.2pt}
+ \input{\ADRResultsPath/comparison/largest_table.tex}
+ \caption{Selected family configurations on 99,458 triangles at $p=6$
+ (1,041,187 trace unknowns).  Reused time is a mean; fresh time is a median.
+ $p$MG--AMG selects the best reused-time policy and reports both of its timings.
+ Bold entries are the best passing times among the displayed rows.  NC denotes
+ failure of the common acceptance contract.}
+ \label{tab:adr-focused-largest}
+\end{table}
+
+In the original endpoint and scaling studies, 184 of 194 configurations pass; the
+largest passing physical relative residual is $1.65\times10^{-11}$.  All four
+scaling failures are standalone polynomial preconditioning at the two finest variable-velocity and
+high-diffusion meshes.  Block AMG passes every focused scaling point.  The
+results therefore support AMGX as the stronger large-system default, with
+local polynomial methods preferred for inexpensive fresh solves at small and
+moderate size and $p$MG--AMG competitive when a diffusive hierarchy is reused.

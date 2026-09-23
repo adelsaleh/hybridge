@@ -1,0 +1,172 @@
+% Insertable results section; requires amsmath, graphicx, booktabs and hyperref.
+\providecommand{\ADRStressPath}{docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial}
+\providecommand{\ADRStressFigurePath}{run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures}
+\subsubsection{Oscillatory transport on a nonconvex annulus}
+\label{sec:adr-oscillatory}
+
+A manufactured cellular-flow problem combines a narrow-necked domain with
+rapidly varying transport and weak, rotated diffusion. It provides a substantially
+harder stationary HDG system than the smooth constant-velocity reference while
+retaining an exact solution for accuracy checks.
+
+\paragraph{Problem and geometry.}
+On the five-lobed annulus
+\begin{equation}
+ \Omega=\{(r,\theta):\;0.58<r<1+0.35\cos(5\theta)\},
+ \qquad -\nabla\!\cdot(K\nabla u)+\nabla\!\cdot(\boldsymbol\beta u)+c u=f,
+ \label{eq:adr-stress-domain}
+\end{equation}
+set exact Dirichlet data on both boundary components and prescribe
+\begin{align}
+ u_\star(x,y)&=\sin(6\pi x)\sin(5\pi y)
+               +0.35\sin(11\pi x)\sin(9\pi y),\label{eq:adr-stress-exact}\\
+ \boldsymbol\beta(x,y)&=
+ \begin{pmatrix}1+4\sin(7\pi x)\cos(7\pi y)\\
+                 \tfrac12-4\cos(7\pi x)\sin(7\pi y)\end{pmatrix},
+ \quad c=10^{-2},\label{eq:adr-stress-velocity}\\
+ K&=R(\pi/6)\operatorname{diag}(10^{-4},10^{-6})R(\pi/6)^T,
+ \label{eq:adr-stress-tensor}
+\end{align}
+where $R$ is a planar rotation. Since $\nabla\!\cdot\boldsymbol\beta=0$, the
+manufactured source is
+$f=-K_{11}u_{\star,xx}-2K_{12}u_{\star,xy}-K_{22}u_{\star,yy}
++\boldsymbol\beta\cdot\nabla u_\star+c u_\star$.
+The velocity is a drifted version of the sinusoidal cellular-flow family studied
+by Haynes and Vanneste;\footnote{P.~H. Haynes and J. Vanneste,
+\emph{Dispersion in the large-deviation regime. Part II: Cellular flow at large
+P\'eclet number} (2014), \url{https://arxiv.org/abs/1401.6666}.}
+the exact solution, drift, tensor, reaction and annulus here are manufactured
+extensions. The characteristic ratio $4/(7\pi\lambda_{\min}(K))\simeq1.8\times10^5$
+quantifies the weak diffusion. The isotropic weak-diffusion variant keeps the other fields unchanged:
+\begin{equation}
+ \begin{aligned}
+ -10^{-5}\Delta u+\nabla\cdot(\boldsymbol\beta u)+10^{-2}u&=f,
+ &u|_{\partial\Omega}&=u_\star.
+ \end{aligned}
+ \label{eq:adr-stress-isotropic}
+\end{equation}
+
+The nominal minimum neck width is $0.07$. Affine triangular meshes use a
+400-segment outer polygon and a polygonal circular hole, with exact data applied
+to the actual discrete edges. At target sizes $0.04$ and $0.02$, there are
+6,114 and 22,825 triangles, respectively; at $p=6$ these give 62,475 and
+236,502 free trace unknowns. Minimum triangle angles are $26.1^\circ$ and
+$30.2^\circ$. The field need not be tangent to the walls: this is a Dirichlet
+transport test. Geometry alone need not worsen convergence; published work on
+perforated transport problems shows that the boundary condition on holes also
+matters.\footnote{C. Le Bris, F. Legoll and S. Madiot,
+\emph{Multiscale Finite Element methods for advection-dominated problems in
+perforated domains}, \url{https://arxiv.org/abs/1710.09331}.}
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRStressFigurePath/geometry_fields.pdf}
+ \caption{Coarse annular mesh, exact oscillatory solution and drifted cellular
+ velocity. The central hole and five narrow passages combine geometry and
+ coefficient variation without introducing a corner-singular exact solution.}
+ \label{fig:adr-stress-fields}
+\end{figure}
+
+\paragraph{Matched solver protocol.}
+One NVIDIA RTX PRO 5000 Blackwell GPU runs serial FP64 solves of the same
+unscaled Bernstein trace matrix and right-hand side, with fixed face stabilization
+$\tau=1+\max(\boldsymbol\beta\cdot n,0)$, from an explicitly zeroed
+initial guess. Acceptance requires solver convergence and an independently
+recomputed $\|b-Ax\|_2/\|b\|_2\leq10^{-10}$; the internal target is $10^{-11}$,
+the iteration cap is 1,000 and the GMRES restart length is 75.
+Block additive Schwarz uses ASM+PP(24) with CGS2 GMRES.
+AMGX uses natural $7\times7$ face BSR blocks at $p=6$: either a classical
+block-AMG V-cycle with one pre/post DILU sweep, or direct block DILU.
+The two AMG rows differ only in their outer Krylov method. These are fixed
+configurations transferred from the preceding ADR comparison, using the same
+block-AMG hierarchy parameters; they are not an exhaustive tuning
+study of this new problem.
+
+Each $p=6$ result is the mean second-solve time over three fresh setups, after
+one excluded warmup setup; both solves start from zero. Preconditioner setup and
+accuracy checks are excluded from the heatmap timings. The companion CSV
+records timing ranges and setup separately. An initial $p=4$ square screening
+uses two measured setups. In the original comparison, 55 of 68 tested configurations pass; the remaining 13 fail the common contract and are retained as NC.
+The $p$MG--AMG extension attempts both policies on all 17 distinct initial
+systems and converges on 13. Standard uses direct transfer to degree zero,
+order-two Chebyshev smoothing and one pre/post sweep; robust uses degree
+halving, order-four smoothing and two pre/post sweeps. Both precondition the
+symmetric part while GMRES solves the full ADR system.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{\ADRStressFigurePath/solver_comparison.pdf}
+ \caption{Iterations and mean hot solve time at $p=6$. Base denotes
+ $u_\star=\sin(\pi x)\sin(\pi y)$, constant $\boldsymbol\beta=(1,1/2)$,
+ $K=10^{-3}I$ and $c=1$. Low iso. and Aniso. use the oscillatory data above.
+ The $p$MG--AMG row selects the fastest passing policy by mean reused time.
+ Gray NC entries fail the common acceptance contract and are not timing ranks.
+ Square and annular meshes have different domains and sizes; their columns do
+ not isolate a causal geometry penalty.}
+ \label{fig:adr-stress-solvers}
+\end{figure}
+
+\paragraph{Difficulty and solver behavior.}
+On the 6,114-triangle annulus, polynomially preconditioned ASM rises from 9 iterations (13.4 ms) for the smooth reference to 75 iterations (100.3 ms) for the oscillatory anisotropic case. On 22,825 triangles the latter takes 150 iterations and 758.8 ms.
+On the fine annulus, block-AMG/FGMRES takes 230 iterations and 1.85~s,
+and block-AMG/BiCGSTAB takes 162 iterations and 2.29~s; direct DILU/BiCGSTAB
+fails at the cap. Median setup times are 322~ms for ASM and 202~ms for
+either AMG outer method, so ASM remains cheaper for a fresh solve here. For $K=10^{-5}I$, polynomially preconditioned ASM takes 300 iterations and 1.51~s,
+while all three tested AMGX configurations fail at 1,000 iterations.
+The lower iteration count of BiCGSTAB does not imply a cheaper solve.
+Both $p$MG--AMG policies also fail on these two fine-annulus stress variants.
+polynomially preconditioned ASM therefore retains its advantage after $p$MG--AMG coverage is completed.
+On the coarse weak-anisotropic annulus, robust $p$MG--AMG converges but remains
+slower than polynomially preconditioned ASM; standard $p$MG--AMG fails. Iteration growth under refinement
+remains substantial.
+
+Changing only the exact solution and source leaves the matrix byte-for-byte
+unchanged on both the square and coarse annulus; this control takes the same
+8 or 9 ASM iterations as the corresponding smooth reference. Oscillatory
+forcing alone therefore does not change matrix conditioning. On the coarse
+annulus, reproducible lower estimates of $\kappa_1(A)$ rise from
+$1.47\times10^4$ (base) to $1.51\times10^5$ (anisotropic) and
+$4.14\times10^5$ (low isotropic). Relative Frobenius asymmetry rises from
+$0.540$ to $0.942$ and $0.946$. These are diagnostics in the fixed Bernstein
+basis, not exact spectral condition numbers or a complete explanation of
+preconditioned nonnormal Krylov convergence. The coefficient, diffusion and
+reaction controls are retained in the data archive.
+
+\paragraph{Accuracy and cost attribution.}
+Fourteen systems pass independent CPU direct-solution comparisons;
+the fine annular systems are checked by physical residual and analytic PDE
+error. Across the original 390 solves belonging to passing configurations, the largest
+physical relative residual is $9.98\times10^{-12}$, and saved trace solutions
+agree between solvers within $3.06\times10^{-9}$ relative to ASM.
+Table~\ref{tab:adr-stress-accuracy} shows the reconstructed primal errors.
+Doubling both quadrature point counts from 14 to 28 on the coarse annulus changes the
+primal field by less than $0.033\%$ of its discretization error; the anisotropic
+probe also preserves all four solver outcomes and iteration counts.
+No formal convergence order is inferred from just these two unstructured,
+polygonally approximated domains.
+
+\begin{table}[htbp]
+ \centering\small
+ \input{\ADRStressPath/accuracy_table.tex}
+ \caption{polynomially preconditioned ASM primal $L^2$ error on the 6,114- and 22,825-triangle annuli,
+ both at $p=6$. Independent coarse direct solves give matching errors.}
+ \label{tab:adr-stress-accuracy}
+\end{table}
+
+Separate CUDA-event profiles of the anisotropic case give mean complete
+polynomially preconditioned ASM application times of 1.063 and 4.495~ms on the coarse and fine meshes
+(ten samples after three warmups). Preconditioning accounts for 83.2\% and
+90.5\% of attributed GPU operation time. These instrumented measurements do
+not enter the solver ranking; overlapping host synchronization waits must not
+be added to GPU times. The completed $p$MG--AMG measurements separate setup and reuse below.
+
+\begin{table}[!htbp]
+ \centering\scriptsize
+ \setlength{\tabcolsep}{3pt}
+ \input{\ADRStressPath/native_completion_table.tex}
+ \caption{$p$MG--AMG completion of every initial system, including the coefficient
+ and source controls. Fresh and reused columns independently select the fastest
+ passing policy; S/R denote standard/robust, and iterations belong to the reused
+ winner. NC means neither policy passes. Every reused solve starts from zero.}
+ \label{tab:adr-initial-native}
+\end{table}

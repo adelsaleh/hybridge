@@ -1,0 +1,4 @@
+# Unit disk, zero potential boundary and zero density flux.
+# rho_init = A(r) * (1 + 0.15 * sum_{m=3}^7 cos(m*theta + 0.37*m^2)).
+# A(r) = 0.5 * (tanh((r-0.3724)/0.003) - tanh((r-0.46)/0.003)).
+--preset diocotron_multimode_p6_50k_dt01_t100_raw_cuda_bsr

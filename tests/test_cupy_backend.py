@@ -7,6 +7,7 @@ import scipy.sparse
 import pytest
 
 from hdgfem import DGMesh, DGSpace, VectorDGField, rectangle_mesh
+from hdgfem.precision import REAL_DTYPE
 from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
 from scripts.advection_reaction.cases import CASE_DEFINITIONS, test2 as adv_rea_test2
@@ -1437,6 +1438,68 @@ def test_cupy_space_field_keeps_coefficients_device_backed_until_host_access():
     assert coeffs_device.data.ptr == coeffs.data.ptr
     np.testing.assert_allclose(cp.asnumpy(field.coeffs), cp.asnumpy(coeffs))
     assert field.coefficients_materialized
+
+
+@pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
+def test_field_arithmetic_preserves_device_residency_and_lazy_constants():
+    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+
+    cp = require_cupy()
+    mesh = rectangle_mesh(1, 1)
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=5)
+    lower_space = DGSpace(mesh, 1, basis_type="dub_orth", volume_quad_1d=4)
+    cspace = as_cupy_space(space)
+    lower_cspace = as_cupy_space(lower_space)
+    dtype = cp.dtype(REAL_DTYPE)
+    current_coeffs = cp.arange(np.prod(space.shape), dtype=dtype).reshape(space.shape)
+    previous_coeffs = cp.arange(np.prod(lower_space.shape), dtype=dtype).reshape(lower_space.shape)
+    current = cspace.field(current_coeffs, name="current")
+    previous = lower_cspace.field(previous_coeffs, name="previous")
+    constant = lower_space.constant(2.0, name="constant")
+
+    current_copy = current.copy(name="current_copy")
+    source = (4.0 * current - previous) / 3.0
+    shifted = current + constant
+    flux = VectorDGField((current, previous), name="flux")
+    flux_copy = flux.copy(name="flux_copy")
+    previous_flux = VectorDGField((previous, current), name="previous_flux")
+    extrapolated_flux = 2.0 * flux - previous_flux
+
+    elevation = cspace.degree_elevation_matrix_from(lower_space)
+    elevated_previous_coeffs = previous_coeffs @ elevation
+    cp.testing.assert_array_equal(as_cupy_coefficients(current_copy, cspace), current_coeffs)
+    assert as_cupy_coefficients(current_copy, cspace).data.ptr != current_coeffs.data.ptr
+    cp.testing.assert_allclose(
+        as_cupy_coefficients(source, cspace),
+        (4.0 * current_coeffs - elevated_previous_coeffs) / 3.0,
+    )
+    constant_coeffs = cp.asarray(space._constant_reference_coeffs(2.0), dtype=dtype)
+    cp.testing.assert_allclose(
+        as_cupy_coefficients(shifted, cspace),
+        current_coeffs + constant_coeffs[None, :],
+    )
+    cp.testing.assert_allclose(
+        as_cupy_coefficients(extrapolated_flux.components[0], cspace),
+        2.0 * current_coeffs - elevated_previous_coeffs,
+    )
+    cp.testing.assert_allclose(
+        as_cupy_coefficients(extrapolated_flux.components[1], cspace),
+        2.0 * elevated_previous_coeffs - current_coeffs,
+    )
+    cp.testing.assert_array_equal(as_cupy_coefficients(flux_copy.components[0], cspace), current_coeffs)
+    cp.testing.assert_array_equal(
+        as_cupy_coefficients(flux_copy.components[1], lower_cspace), previous_coeffs,
+    )
+    assert all(component.space is space for component in extrapolated_flux.components)
+    fields = [
+        current, previous, constant, current_copy, source, shifted,
+        *flux_copy.components, *extrapolated_flux.components,
+    ]
+    assert all(not field.coefficients_materialized for field in fields)
+    assert all(
+        field.device_coefficients_materialized(cspace.device_id)
+        for field in fields if field is not constant
+    )
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")

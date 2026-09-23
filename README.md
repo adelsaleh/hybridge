@@ -236,7 +236,7 @@ materialization. The primary BICGSTAB solve and robust FGMRES/DILU retries all
 use the configured transport row scaling, retain device trace guesses, and are
 accepted only after checking the original unscaled physical residual. Compare
 both temporal schemes with
-`scripts/guiding_center/run_guiding_center_temporal_convergence.py`.
+`scripts/guiding_center/benchmarks/run_guiding_center_temporal_convergence.py`.
 
 Optional semilinear diocotron-equilibrium scripts live under
 `scripts/diocotron_hdg/` and `scripts/diocotron_dolfinx/`.  They are documented
@@ -435,6 +435,7 @@ Useful supporting notes include:
 - [docs/backends/raw_cuda.md](docs/backends/raw_cuda.md): raw-CUDA kernel ownership, launch policy, and parity audits.
 - [docs/algorithms/advection_reaction/](docs/algorithms/advection_reaction/): upwind flux, SCC ordering, and block-GS derivations.
 - [docs/algorithms/diffusion_reaction/](docs/algorithms/diffusion_reaction/): mixed HDG assembly and postprocessing derivations.
+- [docs/algorithms/hp_amg/](docs/algorithms/hp_amg/): shared HDG multigrid formalism, native pMG-AMG, and proposed geometric/algebraic hp hierarchies.
 - [docs/algorithms/quadrature/](docs/algorithms/quadrature/): symmetric triangle quadrature derivation and validation requirements.
 - [docs/research/solver_studies/](docs/research/solver_studies/): dated solver and preconditioner evidence, not current support contracts.
 - [configs/amgx/README.md](configs/amgx/README.md): AMGX/PyAMGX presets and recommendations.

@@ -8,6 +8,8 @@ preconditioning, and cheap diagonal Jacobi preconditioning.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 import threading
 import time
 from dataclasses import dataclass
@@ -39,7 +41,7 @@ _ITERATIVE_SOLVERS = {
 _PYPARDISO_LOCK = threading.RLock()
 _PYPARDISO_SOLVERS: dict[tuple[int, int], Any] = {}
 
-SolveStatus = Literal["converged", "not-converged", "stagnated", "non-finite"]
+SolveStatus = Literal["converged", "not-converged", "diverged", "stagnated", "non-finite"]
 
 
 class LinearSolveError(RuntimeError):
@@ -429,7 +431,7 @@ def _coo_diagonal(
     system_size: int,
 ) -> NDArray:
     """Return the diagonal of a COO matrix without constructing CSR."""
-    diagonal = np.zeros(system_size, dtype=np.float64)
+    diagonal = np.zeros(system_size, dtype=REAL_DTYPE)
     diagonal_mask = row_indices == col_indices
     if np.any(diagonal_mask):
         np.add.at(diagonal, row_indices[diagonal_mask], matrix_values[diagonal_mask])
@@ -448,7 +450,7 @@ def _coo_matvec(
         row_indices,
         weights=matrix_values * x[col_indices],
         minlength=system_size,
-    ).astype(np.float64, copy=False)
+    ).astype(REAL_DTYPE, copy=False)
 
 
 def _coo_residual(
@@ -487,10 +489,10 @@ def eliminate_known_dofs(
     """
     row_indices = np.asarray(row_indices)
     col_indices = np.asarray(col_indices)
-    matrix_values = np.asarray(matrix_values, dtype=np.float64)
-    rhs = np.asarray(rhs, dtype=np.float64)
+    matrix_values = np.asarray(matrix_values, dtype=REAL_DTYPE)
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     known_mask = np.asarray(known_mask, dtype=bool)
-    known_values = np.asarray(known_values, dtype=np.float64)
+    known_values = np.asarray(known_values, dtype=REAL_DTYPE)
 
     if rhs.ndim != 1:
         raise ValueError("rhs must be one-dimensional")
@@ -540,9 +542,33 @@ def eliminate_known_dofs(
     )
 
 
+def update_known_dof_rhs(row_indices, col_indices, matrix_values, rhs, known_values, reduction):
+    """Refresh a reduced RHS/boundary while retaining the fixed reduced operator.
+
+    This is shared by diffusion and frozen-operator transport solves. The full
+    COO matrix is needed only for the free/known boundary-column contribution.
+    """
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
+    known_values = np.asarray(known_values, dtype=REAL_DTYPE).ravel()
+    if rhs.shape != reduction.free_mask.shape or known_values.shape != rhs.shape:
+        raise ValueError("RHS and known values must match the full reduction size")
+    rows, cols = np.asarray(row_indices), np.asarray(col_indices)
+    data = np.asarray(matrix_values, dtype=REAL_DTYPE)
+    reduced_rhs = rhs[reduction.free_mask].copy()
+    free_known = reduction.free_mask[rows] & reduction.known_mask[cols]
+    np.add.at(reduced_rhs, reduction.old_to_new[rows[free_known]],
+              -data[free_known]*known_values[cols[free_known]])
+    return KnownDofReduction(
+        rows=reduction.rows, cols=reduction.cols, data=reduction.data,
+        rhs=np.ascontiguousarray(reduced_rhs), free_mask=reduction.free_mask,
+        known_mask=reduction.known_mask, known_values=np.ascontiguousarray(known_values),
+        old_to_new=reduction.old_to_new,
+    )
+
+
 def expand_known_dofs(reduced_solution: NDArray, reduction: KnownDofReduction) -> NDArray:
     """Expand a reduced solution by reinserting prescribed dof values."""
-    reduced_solution = np.asarray(reduced_solution, dtype=np.float64)
+    reduced_solution = np.asarray(reduced_solution, dtype=REAL_DTYPE)
     expected_shape = (np.count_nonzero(reduction.free_mask),)
     if reduced_solution.shape != expected_shape:
         raise ValueError(f"reduced_solution must have shape {expected_shape}; got {reduced_solution.shape}")
@@ -595,7 +621,7 @@ def scale_sparse_system(
         raise ValueError("mode must be one of 'none', 'left', or 'symmetric'")
 
     csr = matrix.tocsr(copy=True)
-    vector = np.ascontiguousarray(rhs, dtype=np.float64)
+    vector = np.ascontiguousarray(rhs, dtype=REAL_DTYPE)
     if csr.shape != (vector.size, vector.size):
         raise ValueError(f"matrix must have shape ({vector.size}, {vector.size}); got {csr.shape}")
     if normalized == "none":
@@ -604,7 +630,7 @@ def scale_sparse_system(
         scaled_matrix, scaled_rhs = diagonal_scale_system(csr, vector, copy_matrix=False)
         return scaled_matrix, np.ascontiguousarray(scaled_rhs), None
 
-    diagonal = np.asarray(csr.diagonal(), dtype=np.float64)
+    diagonal = np.asarray(csr.diagonal(), dtype=REAL_DTYPE)
     if np.any(~np.isfinite(diagonal)) or np.any(diagonal <= 0.0):
         raise ValueError("symmetric scaling requires a finite, strictly positive diagonal")
     inverse_sqrt = 1.0 / np.sqrt(diagonal)
@@ -662,7 +688,7 @@ def build_jacobi_preconditioner(
     must be strictly positive; otherwise the diagonal preconditioner would not
     be symmetric positive definite.
     """
-    diagonal = np.asarray(matrix.diagonal(), dtype=np.float64)
+    diagonal = np.asarray(matrix.diagonal(), dtype=REAL_DTYPE)
     if not np.all(np.isfinite(diagonal)):
         raise ValueError("Jacobi preconditioner diagonal contains non-finite entries")
     if np.any(diagonal <= 0.0):
@@ -674,7 +700,7 @@ def build_jacobi_preconditioner(
         """Apply the inverse Jacobi diagonal to a vector."""
         return inverse_diagonal * vector
 
-    return LinearOperator(matrix.shape, matvec=apply, rmatvec=apply, dtype=np.float64)
+    return LinearOperator(matrix.shape, matvec=apply, rmatvec=apply, dtype=REAL_DTYPE)
 
 
 def _import_petsc():
@@ -813,7 +839,7 @@ def _petsc_matrix_from_scipy(
         coo = matrix.tocoo(copy=False)
         rows = np.asarray(coo.row, dtype=PETSc.IntType)
         cols = np.asarray(coo.col, dtype=PETSc.IntType)
-        values = np.asarray(coo.data, dtype=np.float64)
+        values = np.asarray(coo.data, dtype=REAL_DTYPE)
         petsc_matrix.setSizes(matrix.shape)
         petsc_matrix.setType(PETSc.Mat.Type.AIJ)
         petsc_matrix.setPreallocationCOO(rows, cols)
@@ -825,7 +851,7 @@ def _petsc_matrix_from_scipy(
     csr.sum_duplicates()
     row_pointers = np.asarray(csr.indptr, dtype=PETSc.IntType)
     column_indices = np.asarray(csr.indices, dtype=PETSc.IntType)
-    values = np.asarray(csr.data, dtype=np.float64)
+    values = np.asarray(csr.data, dtype=REAL_DTYPE)
     petsc_matrix.setSizes(matrix.shape)
     petsc_matrix.setType(PETSc.Mat.Type.AIJ)
     petsc_matrix.setPreallocationCSR((row_pointers, column_indices))
@@ -866,14 +892,14 @@ def _solve_petsc_system_impl(
     petsc_import_elapsed_seconds = time.time() - import_start
     _solver_print(verbose, 2, "  PETSc runtime initialized in %.5fs", petsc_import_elapsed_seconds)
     matrix = matrix.tocsr()
-    rhs = np.asarray(rhs, dtype=np.float64)
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     if matrix.shape != (rhs.size, rhs.size):
         raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
     _validate_finite_array(np.asarray(matrix.data), "matrix data")
     _validate_finite_array(rhs, "rhs")
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, rhs.size)
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        initial_guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
         if initial_guess.shape != rhs.shape:
             raise ValueError(f"initial_guess must have shape {rhs.shape}; got {initial_guess.shape}")
         _validate_finite_array(initial_guess, "initial_guess")
@@ -1126,7 +1152,7 @@ def solve_pyamgx_system(
     from ..backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
 
     physical_matrix = matrix.tocsr()
-    physical_rhs = np.asarray(rhs, dtype=np.float64)
+    physical_rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     if physical_matrix.shape != (physical_rhs.size, physical_rhs.size):
         raise ValueError(
             f"matrix must have shape ({physical_rhs.size}, {physical_rhs.size}), "
@@ -1136,7 +1162,7 @@ def solve_pyamgx_system(
     _validate_finite_array(physical_rhs, "rhs")
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, physical_rhs.size)
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        initial_guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
         if initial_guess.shape != physical_rhs.shape:
             raise ValueError(f"initial_guess must have shape {physical_rhs.shape}; got {initial_guess.shape}")
         _validate_finite_array(initial_guess, "initial_guess")
@@ -1176,7 +1202,7 @@ def solve_pyamgx_system(
         verbose=verbose,
         return_info=True,
     )
-    solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+    solution = np.ascontiguousarray(asnumpy(solution_cp), dtype=REAL_DTYPE)
     solution_is_finite = bool(np.all(np.isfinite(solution)))
     solve_elapsed_seconds = time.time() - solve_start
 
@@ -1325,7 +1351,7 @@ def solve_cupyx_system(
 
     import os
 
-    cupy_dtype_name = os.environ.get("HDGFEM_CUPYX_DTYPE", "float64").lower()
+    cupy_dtype_name = os.environ.get("HDGFEM_CUPYX_DTYPE", np.dtype(REAL_DTYPE).name).lower()
     if cupy_dtype_name in {"fp32", "single"}:
         cupy_dtype_name = "float32"
     elif cupy_dtype_name in {"fp64", "double"}:
@@ -1343,10 +1369,10 @@ def solve_cupyx_system(
             "cupyx_solver='bicgstab' or set scale_system=False for SPD systems."
         )
 
-    physical_rhs = np.asarray(rhs, dtype=np.float64)
+    physical_rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     diagnostic_rows = _normalize_diagnostic_rows(diagnostic_rows, physical_rhs.size)
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        initial_guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
         if initial_guess.shape != physical_rhs.shape:
             raise ValueError(f"initial_guess must have shape {physical_rhs.shape}; got {initial_guess.shape}")
 
@@ -1356,7 +1382,7 @@ def solve_cupyx_system(
             raise ValueError("row_indices, col_indices, matrix_values, and system_size are required when matrix is None")
         row_indices = np.asarray(row_indices, dtype=np.int64)
         col_indices = np.asarray(col_indices, dtype=np.int64)
-        physical_values = np.asarray(matrix_values, dtype=np.float64)
+        physical_values = np.asarray(matrix_values, dtype=REAL_DTYPE)
         system_size = int(system_size)
         if physical_rhs.shape != (system_size,):
             raise ValueError(f"rhs must have shape ({system_size},), got {physical_rhs.shape}")
@@ -1385,7 +1411,7 @@ def solve_cupyx_system(
             solve_rhs = inverse_diagonal * physical_rhs
             solve_matrix = None
         else:
-            diagonal = np.asarray(physical_matrix.diagonal(), dtype=np.float64)
+            diagonal = np.asarray(physical_matrix.diagonal(), dtype=REAL_DTYPE)
             diagonal[diagonal == 0.0] = 1.0
             inverse_diagonal = 1.0 / diagonal
             solve_matrix, solve_rhs = diagonal_scale_system(physical_matrix, physical_rhs, copy_matrix=True)
@@ -1610,7 +1636,7 @@ def solve_cupyx_system(
         restart=restart,
     )
     solution = (
-        np.ascontiguousarray(asnumpy(solution_cp), dtype=np.float64)
+        np.ascontiguousarray(asnumpy(solution_cp), dtype=REAL_DTYPE)
         if materialize_host_solution
         else None
     )
@@ -1806,7 +1832,7 @@ def residual_history_is_stagnated(
     relative_improvement: float = 1.0e-6,
 ) -> bool:
     """Return whether the recent finite residual history has stopped improving."""
-    values = np.asarray(() if history is None else tuple(history), dtype=np.float64)
+    values = np.asarray(() if history is None else tuple(history), dtype=REAL_DTYPE)
     if values.size < int(window) or int(window) < 2:
         return False
     recent = values[-int(window):]
@@ -1867,6 +1893,9 @@ def finalize_solve_result(
     native_info = result.info if backend_info is None else backend_info
     if backend_success is None:
         backend_success = result.info in {None, 0}
+    backend_diverged = isinstance(native_info, str) and "diverg" in native_info.lower()
+    if backend_diverged:
+        backend_success = False
 
     history = tuple(float(value) for value in (() if residual_history is None else residual_history))[-64:]
     if solution_is_finite is None:
@@ -1939,6 +1968,9 @@ def finalize_solve_result(
         elif not solver_residual_is_finite or not physical_residual_is_finite:
             result.status = "non-finite"
             result.failure_reason = "non-finite-residual"
+        elif backend_diverged:
+            result.status = "diverged"
+            result.failure_reason = "backend-divergence"
         elif stagnated:
             result.status = "stagnated"
             result.failure_reason = "stagnation"
@@ -1989,7 +2021,7 @@ def solve_direct_system(
     """Solve an already assembled sparse system with ``spsolve``."""
     _validate_solver_controls(rtol=rtol, atol=atol)
     matrix = matrix.tocsr()
-    rhs = np.asarray(rhs, dtype=np.float64)
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     if matrix.shape != (rhs.size, rhs.size):
         raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
     _validate_finite_array(np.asarray(matrix.data), "matrix data")
@@ -2045,6 +2077,74 @@ def solve_direct_system(
     )
 
 
+def refine_host_linear_solution(matrix, rhs, solution, *, solve_correction,
+                                rtol: float, atol: float = 0.0,
+                                max_corrections: int = 2) -> tuple[NDArray, int]:
+    """Correct a host solution against the original operator with retained factors.
+
+    ``solve_correction(residual)`` applies the caller-owned approximate inverse.
+    For example, roundoff-asymmetric SPD systems can retain Cholesky factors of
+    the symmetric upper-triangle interpretation, while residuals use the full
+    original matrix. Inputs are not modified. Return the corrected vector and
+    number of correction solves; callers must independently verify convergence.
+    Include these residual evaluations and corrections in solver timings.
+    """
+    _validate_solver_controls(rtol=rtol, atol=atol)
+    if isinstance(max_corrections, bool) or not isinstance(max_corrections, (int, np.integer)) or max_corrections < 0:
+        raise ValueError("max_corrections must be a nonnegative integer")
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
+    x = np.array(solution, dtype=REAL_DTYPE, copy=True)
+    if rhs.ndim != 1 or x.shape != rhs.shape or matrix.shape != (rhs.size, rhs.size):
+        raise ValueError("matrix, rhs and solution shapes are incompatible")
+    _validate_finite_array(rhs, "rhs")
+    _validate_finite_array(x, "solution")
+    target = max(float(atol), float(rtol) * float(np.linalg.norm(rhs)))
+    count = 0
+    for _ in range(max_corrections):
+        residual = rhs - matrix @ x
+        _validate_finite_array(residual, "refinement residual")
+        if float(np.linalg.norm(residual)) <= target:
+            break
+        delta = np.asarray(solve_correction(residual), dtype=REAL_DTYPE)
+        if delta.shape != rhs.shape:
+            raise ValueError("correction has the wrong shape")
+        _validate_finite_array(delta, "refinement correction")
+        x += delta
+        count += 1
+    return x, count
+
+
+def prepare_pypardiso_spd_matrix(matrix) -> scipy.sparse.csr_matrix:
+    """Validate symmetry and return upper CSR storage for PARDISO mtype=2.
+
+    Accept a full real square matrix, not an already truncated triangle. This
+    shared preparation can be timed once by callers that explicitly retain a
+    PyPardiso Cholesky factorization. Positive definiteness is checked by the
+    subsequent native factorization, not established by this symmetry check.
+    """
+    if np.issubdtype(matrix.dtype, np.complexfloating):
+        raise TypeError("pypardiso supports real-valued systems only")
+    matrix = scipy.sparse.csr_matrix(matrix, dtype=REAL_DTYPE)
+    if matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("PARDISO SPD input must be square")
+    matrix.sum_duplicates()
+    matrix.sort_indices()
+    _validate_finite_array(matrix.data, "matrix data")
+    asymmetry = matrix - matrix.T
+    scale = 0.0 if matrix.nnz == 0 else float(np.max(np.abs(matrix.data)))
+    defect = 0.0 if asymmetry.nnz == 0 else float(np.max(np.abs(asymmetry.data)))
+    tolerance = 1.0e-11 * max(1.0, scale)
+    if defect > tolerance:
+        raise ValueError(
+            "matrix_type='spd' requires a symmetric matrix; "
+            f"max_abs_asymmetry={defect:.3e}, tolerance={tolerance:.3e}"
+        )
+    upper = scipy.sparse.triu(matrix, format="csr")
+    upper.sum_duplicates()
+    upper.sort_indices()
+    return upper
+
+
 def solve_pypardiso_system(
     matrix: scipy.sparse.spmatrix | scipy.sparse.sparray,
     rhs: NDArray,
@@ -2069,10 +2169,10 @@ def solve_pypardiso_system(
         raise TypeError("pypardiso supports real-valued systems only")
     if rhs.ndim != 1:
         raise ValueError(f"rhs must be one-dimensional, got shape {rhs.shape}")
-    matrix = scipy.sparse.csr_matrix(matrix, dtype=np.float64)
+    matrix = scipy.sparse.csr_matrix(matrix, dtype=REAL_DTYPE)
     matrix.sum_duplicates()
     matrix.sort_indices()
-    rhs = np.asarray(rhs, dtype=np.float64)
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     if matrix.shape != (rhs.size, rhs.size):
         raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
     _validate_finite_array(np.asarray(matrix.data), "matrix data")
@@ -2086,21 +2186,7 @@ def solve_pypardiso_system(
     pardiso_mtype = 11
     backend = "pypardiso-direct"
     if normalized_matrix_type == "spd":
-        asymmetry = matrix - matrix.T
-        max_abs_matrix = 0.0 if matrix.nnz == 0 else float(np.max(np.abs(matrix.data)))
-        max_abs_asymmetry = (
-            0.0 if asymmetry.nnz == 0 else float(np.max(np.abs(asymmetry.data)))
-        )
-        symmetry_tolerance = 1.0e-11 * max(1.0, max_abs_matrix)
-        if max_abs_asymmetry > symmetry_tolerance:
-            raise ValueError(
-                "matrix_type='spd' requires a symmetric matrix; "
-                f"max_abs_asymmetry={max_abs_asymmetry:.3e}, "
-                f"tolerance={symmetry_tolerance:.3e}"
-            )
-        native_matrix = scipy.sparse.triu(matrix, format="csr")
-        native_matrix.sum_duplicates()
-        native_matrix.sort_indices()
+        native_matrix = prepare_pypardiso_spd_matrix(matrix)
         pardiso_mtype = 2
         backend = "pypardiso-spd"
 
@@ -2222,14 +2308,14 @@ def solve_iterative_system(
     """Solve an already assembled sparse system with a SciPy Krylov method."""
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     matrix = matrix.tocsr()
-    rhs = np.asarray(rhs, dtype=np.float64)
+    rhs = np.asarray(rhs, dtype=REAL_DTYPE)
     if matrix.shape != (rhs.size, rhs.size):
         raise ValueError(f"matrix must have shape ({rhs.size}, {rhs.size}), got {matrix.shape}")
     if validate_matrix:
         _validate_finite_array(np.asarray(matrix.data), "matrix data")
     _validate_finite_array(rhs, "rhs")
     if initial_guess is not None:
-        initial_guess = np.asarray(initial_guess, dtype=np.float64)
+        initial_guess = np.asarray(initial_guess, dtype=REAL_DTYPE)
         if initial_guess.shape != rhs.shape:
             raise ValueError(f"initial_guess must have shape {rhs.shape}, got {initial_guess.shape}")
         _validate_finite_array(initial_guess, "initial_guess")
@@ -3089,6 +3175,7 @@ __all__ = [
     "diagonal_scale_system",
     "eliminate_known_dofs",
     "expand_known_dofs",
+    "update_known_dof_rhs",
     "finalize_solve_result",
     "get_iterative_solver",
     "residual_diagnostics",

@@ -1,0 +1,3 @@
+# Disk with a 60-degree mouth, 360 signed vortices, h=0.006.
+# 150k+ triangles; DG p=6, IMEX-ARK3 dt=0.05 to T=50.
+--preset euler_pacman_gas_imex_ark3_p6_150k_t50

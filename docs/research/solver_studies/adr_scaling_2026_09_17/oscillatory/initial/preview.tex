@@ -1,0 +1,18 @@
+% Optional standalone wrapper. Run LaTeX locally; section.tex is insertable.
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,microtype}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{9pt plus 2pt minus 2pt}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+\newcommand{\ADRStressPath}{.}
+\newcommand{\ADRStressFigurePath}{../../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures}
+\begin{document}
+\input{section.tex}
+\end{document}

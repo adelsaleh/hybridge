@@ -13,6 +13,8 @@ module.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE
+
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Sequence
 import numpy as np
@@ -38,7 +40,7 @@ def _normalize_callable_values(values, num_elements: int, num_points: int) -> np
     point, or one value per element and reference point.  Assembly code expects
     the normalized shape ``(num_elements, num_points)``.
     """
-    values = np.asarray(values, dtype=np.float64)
+    values = np.asarray(values, dtype=REAL_DTYPE)
     if values.shape == (num_elements, num_points):
         return values
     if values.shape == (num_points,):
@@ -118,8 +120,8 @@ def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
     """Tabulate the Bernstein trace basis at one-dimensional edge points."""
     from math import factorial
 
-    r = 0.5 * (np.asarray(points, dtype=np.float64) + 1.0)
-    values = np.empty((order + 1, r.size), dtype=np.float64)
+    r = 0.5 * (np.asarray(points, dtype=REAL_DTYPE) + 1.0)
+    values = np.empty((order + 1, r.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         coeff = factorial(order) / (factorial(j) * factorial(order - j))
         values[j] = coeff * (1.0 - r) ** (order - j) * r ** j
@@ -128,8 +130,8 @@ def _bernstein_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
 
 def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
     """Tabulate the Legendre trace basis at one-dimensional edge points."""
-    points = np.asarray(points, dtype=np.float64)
-    values = np.empty((order + 1, points.size), dtype=np.float64)
+    points = np.asarray(points, dtype=REAL_DTYPE)
+    values = np.empty((order + 1, points.size), dtype=REAL_DTYPE)
     for j in range(order + 1):
         values[j] = np.polynomial.legendre.Legendre.basis(j)(points)
     return np.ascontiguousarray(values)
@@ -137,7 +139,7 @@ def _legendre_edge_basis(order: int, points: np.ndarray) -> np.ndarray:
 
 def _reference_edge_points(edge_points_1d: np.ndarray) -> np.ndarray:
     """Map one-dimensional edge coordinates onto all reference-triangle faces."""
-    t = np.asarray(edge_points_1d, dtype=np.float64)
+    t = np.asarray(edge_points_1d, dtype=REAL_DTYPE)
     return np.ascontiguousarray(
         np.stack(
             (
@@ -173,9 +175,9 @@ class DGTraceSpace:
         trace_kind = _normalize_trace_basis_kind(kind)
         order = space.order
         if trace_kind == "bernstein":
-            edge_quads = np.ascontiguousarray(space.quad_data.quads_JGL, dtype=np.float64)
-            edge_weights = np.ascontiguousarray(space.quad_data.weights_JGL, dtype=np.float64)
-            face_basis = np.ascontiguousarray(space.quad_data.bas_of_bd_quads, dtype=np.float64)
+            edge_quads = np.ascontiguousarray(space.quad_data.quads_JGL, dtype=REAL_DTYPE)
+            edge_weights = np.ascontiguousarray(space.quad_data.weights_JGL, dtype=REAL_DTYPE)
+            face_basis = np.ascontiguousarray(space.quad_data.bas_of_bd_quads, dtype=REAL_DTYPE)
             negative_face_points = _reference_edge_points(-edge_quads)
             negative_face_basis = space.basis_at(negative_face_points.reshape(-1, 2)).reshape(
                 edge_quads.size, 3, space.el_dof
@@ -219,21 +221,42 @@ class DGTraceSpace:
             space=space,
             kind=trace_kind,
             nodal=nodal,
-            interpolation_nodes=np.ascontiguousarray(interpolation_nodes, dtype=np.float64),
-            quads=np.ascontiguousarray(edge_quads, dtype=np.float64),
-            weights=np.ascontiguousarray(edge_weights, dtype=np.float64),
-            bas_of_bd_quads=np.ascontiguousarray(face_basis, dtype=np.float64),
-            bas1d_of_ref_edg_qds=np.ascontiguousarray(edge_basis, dtype=np.float64),
+            interpolation_nodes=np.ascontiguousarray(interpolation_nodes, dtype=REAL_DTYPE),
+            quads=np.ascontiguousarray(edge_quads, dtype=REAL_DTYPE),
+            weights=np.ascontiguousarray(edge_weights, dtype=REAL_DTYPE),
+            bas_of_bd_quads=np.ascontiguousarray(face_basis, dtype=REAL_DTYPE),
+            bas1d_of_ref_edg_qds=np.ascontiguousarray(edge_basis, dtype=REAL_DTYPE),
             weighted_bas_of_bd_quads=weighted_face_basis,
             weighted_bas1d_of_ref_edg_qds=weighted_edge_basis,
             face_trace_test_element_trial_oriented=trace_lift,
-            M_rf_fc=np.ascontiguousarray(edge_mass, dtype=np.float64),
+            M_rf_fc=np.ascontiguousarray(edge_mass, dtype=REAL_DTYPE),
         )
 
     @property
     def edg_dof(self) -> int:
         """Number of trace basis coefficients per edge."""
         return self.space.layout.edg_dof
+
+    @property
+    def oriented_basis_table(self) -> np.ndarray:
+        """Two compact trace tables, in positive and reversed edge orientation."""
+        cached = getattr(self, "_oriented_basis_table", None)
+        if cached is None:
+            basis = self.bas1d_of_ref_edg_qds
+            reverse = (basis * np.where(np.arange(self.edg_dof) % 2, -1, 1)[:, None]
+                       if self.kind == "legendre-modal" else basis[::-1])
+            cached = np.ascontiguousarray(np.stack((basis, reverse)), dtype=REAL_DTYPE)
+            object.__setattr__(self, "_oriented_basis_table", cached)
+        return cached
+
+    @property
+    def mass_inverse(self) -> np.ndarray:
+        """Cached reference trace mass inverse."""
+        inverse = getattr(self, "_mass_inverse", None)
+        if inverse is None:
+            inverse = np.ascontiguousarray(np.linalg.inv(self.M_rf_fc), dtype=REAL_DTYPE)
+            object.__setattr__(self, "_mass_inverse", inverse)
+        return inverse
 
     def boundary_coefficients(self, boundary_condition: Callable) -> np.ndarray:
         """Return boundary data coefficients for this trace basis.
@@ -242,17 +265,18 @@ class DGTraceSpace:
         trace spaces store L2-projected coefficients in the edge basis.
         """
         mesh = self.space.mesh
-        trace_coeffs = np.zeros(self.space.layout.trace_shape, dtype=np.float64)
+        trace_coeffs = np.zeros(self.space.layout.trace_shape, dtype=REAL_DTYPE)
         if mesh.bnd_edges_inds.size == 0:
             return trace_coeffs
 
-        edge_vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
         t = self.interpolation_nodes if self.nodal else self.quads
-        points = 0.5 * (
-            (1.0 - t)[None, :, None] * edge_vertices[:, 0:1, :]
-            + (1.0 + t)[None, :, None] * edge_vertices[:, 1:2, :]
-        )
-        values = np.asarray(boundary_condition(points[:, :, 0], points[:, :, 1]), dtype=np.float64)
+        points = getattr(self, "_boundary_sample_points", None)
+        if points is None:
+            edge_vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+            points = 0.5 * ((1-t)[None, :, None]*edge_vertices[:, :1]
+                            + (1+t)[None, :, None]*edge_vertices[:, 1:])
+            object.__setattr__(self, "_boundary_sample_points", points)
+        values = np.asarray(boundary_condition(points[:, :, 0], points[:, :, 1]), dtype=REAL_DTYPE)
         num_points = t.size
         if values.ndim == 0:
             values = np.full((mesh.bnd_edges_inds.size, num_points), float(values))
@@ -267,14 +291,14 @@ class DGTraceSpace:
             trace_coeffs[mesh.bnd_edges_inds] = values
         else:
             rhs = (values * self.weights[None, :]) @ self.bas1d_of_ref_edg_qds.T
-            trace_coeffs[mesh.bnd_edges_inds] = rhs @ np.linalg.inv(self.M_rf_fc)
+            trace_coeffs[mesh.bnd_edges_inds] = rhs @ self.mass_inverse
         return np.ascontiguousarray(trace_coeffs)
 
     def element_coefficients(self, trace: np.ndarray) -> np.ndarray:
         """Return element-local trace coefficients with local face orientation."""
         mesh = self.space.mesh
         edg_dof = self.edg_dof
-        trace = np.asarray(trace, dtype=np.float64)
+        trace = np.asarray(trace, dtype=REAL_DTYPE)
         expected = (mesh.num_edg * edg_dof,)
         if trace.shape != expected:
             raise ValueError(f"trace must have shape {expected}; got {trace.shape}")
@@ -283,7 +307,7 @@ class DGTraceSpace:
         negative = ~mesh.orientations
         if np.any(negative):
             if self.kind == "legendre-modal":
-                signs = np.where(np.arange(edg_dof) % 2 == 0, 1.0, -1.0)
+                signs = np.where(np.arange(edg_dof) % 2 == 0, REAL_DTYPE(1.0), REAL_DTYPE(-1.0))
                 traces[negative] *= signs[None, :]
             else:
                 traces[negative] = traces[negative][:, ::-1]
@@ -387,6 +411,7 @@ class DGSpace:
         self.name = str(name)
         self._basis_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
         self._gradient_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
+        self._degree_elevation_cache: dict[int, np.ndarray] = {}
         self._mapped_quad_points: np.ndarray | None = None
         self._layout = DGCoefficientLayout(
             num_elements=self.mesh.num_tri,
@@ -486,16 +511,40 @@ class DGSpace:
         )
 
     def is_compatible(self, other: "DGSpace") -> bool:
-        """Return ``True`` when two spaces share mesh and reference objects.
+        """Return whether coefficient tables have the same mathematical layout.
 
-        This is stricter than mathematical compatibility: both spaces must
-        point at the same triangulation object and the same
-        :class:`ReferenceElementData` instance.
+        Compatible spaces share the triangulation, polynomial order, and basis
+        family. Their quadrature rules and other reference-data caches may
+        differ because those choices do not change the meaning of coefficients.
         """
+        if not isinstance(other, DGSpace):
+            return False
         return (
-            self.mesh.triangulation is other.mesh.triangulation
-            and self.quad_data is other.quad_data
+            self.is_basis_compatible(other)
+            and self.order == other.order
         )
+
+    def is_basis_compatible(self, other: "DGSpace") -> bool:
+        """Return whether two spaces belong to one nested basis hierarchy."""
+        return (
+            isinstance(other, DGSpace)
+            and self.mesh.triangulation is other.mesh.triangulation
+            and self.reference.basis_type == other.reference.basis_type
+        )
+
+    def assert_basis_compatible(self, other: "DGSpace") -> None:
+        """Raise when spaces cannot participate in degree-promoting arithmetic."""
+        if not isinstance(other, DGSpace):
+            raise TypeError("basis compatibility requires another DGSpace")
+        self.assert_same_mesh(other)
+        if self.reference.basis_type != other.reference.basis_type:
+            raise ValueError("DG field operations require the same basis type")
+
+    def assert_coefficient_compatible(self, other: "DGSpace") -> None:
+        """Raise when coefficient-wise field arithmetic is not well-defined."""
+        self.assert_basis_compatible(other)
+        if self.order != other.order:
+            raise ValueError("DG field operations require the same polynomial order")
 
     def assert_same_mesh(self, other: "DGSpace") -> None:
         """Raise if two spaces do not live on the same triangulation object."""
@@ -518,16 +567,16 @@ class DGSpace:
         """Return reference moments ``int_Kref value * phi_i`` for a constant."""
         scalar = float(value)
         if scalar == 0.0:
-            return np.zeros(self.el_dof, dtype=np.float64)
-        return np.ascontiguousarray(scalar * np.sum(self.quad_data.weighted_phi, axis=0), dtype=np.float64)
+            return np.zeros(self.el_dof, dtype=REAL_DTYPE)
+        return np.ascontiguousarray(scalar * np.sum(self.quad_data.weighted_phi, axis=0), dtype=REAL_DTYPE)
 
     def _constant_reference_coeffs(self, value: float) -> np.ndarray:
         """Return element-reference coefficients for a scalar constant."""
         scalar = float(value)
         if scalar == 0.0:
-            return np.zeros(self.el_dof, dtype=np.float64)
+            return np.zeros(self.el_dof, dtype=REAL_DTYPE)
         rhs = self._constant_reference_moments(scalar)
-        return np.ascontiguousarray(rhs @ self.quad_data.MKrf_inv, dtype=np.float64)
+        return np.ascontiguousarray(rhs @ self.quad_data.MKrf_inv, dtype=REAL_DTYPE)
 
     def zeros(self, *, name: str = "u") -> "DGField":
         """Create a lazy zero scalar field in this space."""
@@ -566,7 +615,7 @@ class DGSpace:
         copied to C-contiguous storage because most assembly kernels assume
         contiguous element-major coefficient arrays.
         """
-        array = np.asarray(coeffs, dtype=np.float64)
+        array = np.asarray(coeffs, dtype=REAL_DTYPE)
         if copy:
             array = array.copy(order="C")
         if array.shape != self.shape:
@@ -601,7 +650,7 @@ class DGSpace:
         the space's own quadrature array returns the precomputed reference
         table; other arrays are cached by identity for repeated evaluations.
         """
-        points = np.asarray(reference_points, dtype=np.float64)
+        points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.quad_data.Krf_quads:
             return self.quad_data.phi
         key = _cache_key(points)
@@ -611,13 +660,43 @@ class DGSpace:
             self._basis_cache[key] = values
         return values
 
+    def degree_elevation_matrix_from(self, source: "DGSpace") -> np.ndarray:
+        """Map ``source`` coefficients exactly into this higher-degree space.
+
+        Both spaces must share their mesh and basis family. The returned matrix
+        has shape ``(source.el_dof, self.el_dof)`` and acts on the right of an
+        element-major coefficient table. It is built with the package's usual
+        reference-element projection and cached by source degree.
+        """
+        self.assert_basis_compatible(source)
+        if source.order > self.order:
+            raise ValueError(
+                "degree elevation requires the target polynomial order to be "
+                "at least the source order"
+            )
+        if source.order == self.order:
+            return np.eye(self.el_dof, dtype=REAL_DTYPE)
+
+        matrix = self._degree_elevation_cache.get(source.order)
+        if matrix is None:
+            source_values = source.basis_at(self.quad_data.Krf_quads)
+            matrix = (
+                source_values.T
+                @ self.quad_data.weighted_phi
+                @ self.quad_data.MKrf_inv
+            )
+            matrix = np.ascontiguousarray(matrix, dtype=REAL_DTYPE)
+            matrix.setflags(write=False)
+            self._degree_elevation_cache[source.order] = matrix
+        return matrix
+
     def gradient_basis_at(self, reference_points: np.ndarray) -> np.ndarray:
         """Reference gradients at points with shape ``(num_points, el_dof, 2)``.
 
         The last axis stores derivatives with respect to reference coordinates.
         :meth:`DGField.grad_at_ref` applies the physical inverse-transpose maps.
         """
-        points = np.asarray(reference_points, dtype=np.float64)
+        points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.quad_data.Krf_quads:
             return self.quad_data.gphi
         key = _cache_key(points)
@@ -757,10 +836,13 @@ class DGField:
     ``coeffs[K, i]``; exact zero/constant fields created by :class:`DGSpace`
     materialize this table lazily only when coefficient access is requested.
     Addition and subtraction act on coefficients, which is the exact
-    representation of DG field addition.  Multiplication by a scalar
-    scales coefficients, while multiplication by another same-space
-    :class:`DGField` returns the :math:`L^2` projection of the pointwise
-    product.
+    representation of DG field addition. For operands with different
+    polynomial orders on the same mesh and in the same basis family, the
+    lower-order coefficients are elevated and the result uses the higher-order
+    space. Linear combinations, multiplication by a scalar, and division by a
+    scalar retain lazy constants and common device residency. Multiplication by
+    another same-mesh :class:`DGField` returns the :math:`L^2` projection of the
+    pointwise product.
     """
 
     __array_priority__ = 1000.0
@@ -865,7 +947,7 @@ class DGField:
 
         Accepted data are another same-space ``DGField``, an analytic callable,
         or an array-like object.  Callables are projected; arrays are only
-        normalized to ``float64`` here and shape-checked in ``__post_init__``.
+        normalized to the selected real dtype here and shape-checked in ``__post_init__``.
         """
         if data is _LAZY_COEFFICIENTS:
             if self._coefficient_kind not in {"zero", "constant"} or self._constant_value is None:
@@ -890,7 +972,7 @@ class DGField:
             projected = self.space.project_callable(data, parameters=parameters, name=self.name)
             return projected.coeffs.copy(order="C") if copy else projected.coeffs
 
-        array = np.asarray(data, dtype=np.float64)
+        array = np.asarray(data, dtype=REAL_DTYPE)
         if copy:
             array = array.copy(order="C")
         return array
@@ -930,8 +1012,8 @@ class DGField:
         return self._normalize_coefficients_array(array)
 
     def _normalize_coefficients_array(self, coeffs) -> np.ndarray:
-        """Validate and normalize host coefficients to contiguous float64 storage."""
-        array = np.asarray(coeffs, dtype=np.float64)
+        """Validate and normalize host coefficients to contiguous selected-real-dtype storage."""
+        array = np.asarray(coeffs, dtype=REAL_DTYPE)
         if array.shape != self.space.shape:
             raise ValueError(f"coeffs must have shape {self.space.shape}; got {array.shape}")
         if not array.flags.c_contiguous:
@@ -942,14 +1024,14 @@ class DGField:
         """Materialize lazy zero or constant coefficients in the active basis."""
         constant_value = self._constant_value
         if self._coefficient_kind == "zero" or constant_value == 0.0:
-            return np.zeros(self.space.shape, dtype=np.float64)
+            return np.zeros(self.space.shape, dtype=REAL_DTYPE)
         if self._coefficient_kind == "constant" and constant_value is not None:
             reference_coeffs = self.space._constant_reference_coeffs(constant_value)
             return np.broadcast_to(reference_coeffs[None, :], self.space.shape).copy(order="C")
         raise RuntimeError("only zero/constant DGFields can materialize coefficients lazily")
 
     def __post_init__(self) -> None:
-        """Validate coefficient shape and ensure contiguous ``float64`` storage."""
+        """Validate coefficient shape and ensure contiguous the selected real dtype storage."""
         if self._device_coeffs:
             for coeffs in self._device_coeffs.values():
                 self._validate_device_coefficients(coeffs)
@@ -1057,18 +1139,36 @@ class DGField:
         return self.is_constant
 
     def copy(self, *, name: str | None = None) -> "DGField":
-        """Copy the field while preserving lazy constant storage when possible."""
+        """Return an independent copy without changing coefficient residency."""
         copy_name = self.name if name is None else name
         constant_value = self.constant_value
         if constant_value is not None:
             return self.space.constant(constant_value, name=copy_name)
-        return DGField(
-            self.space,
-            self.coeffs.copy(),
-            name=copy_name,
-            _coefficient_kind=self._coefficient_kind,
-            _constant_value=self._constant_value,
-        )
+        if self._coeffs is not None:
+            return DGField(
+                self.space,
+                self._coeffs.copy(),
+                name=copy_name,
+                _coefficient_kind=self._coefficient_kind,
+                _constant_value=self._constant_value,
+                _device_coeffs={
+                    device_id: coefficients.copy()
+                    for device_id, coefficients in self._device_coeffs.items()
+                },
+            )
+        if self._device_coeffs:
+            return DGField(
+                self.space,
+                _DEVICE_COEFFICIENTS,
+                name=copy_name,
+                _coefficient_kind=self._coefficient_kind,
+                _constant_value=self._constant_value,
+                _device_coeffs={
+                    device_id: coefficients.copy()
+                    for device_id, coefficients in self._device_coeffs.items()
+                },
+            )
+        raise RuntimeError("DGField has neither host nor device coefficients")
 
     def values(self) -> np.ndarray:
         """Evaluate on this field's volume quadrature points.
@@ -1082,7 +1182,7 @@ class DGField:
             return np.full(
                 (self.space.mesh.num_tri, self.space.quad_data.Krf_w.shape[0]),
                 constant_value,
-                dtype=np.float64,
+                dtype=REAL_DTYPE,
             )
         return self.coeffs @ self.space.quad_data.bas_of_quads
 
@@ -1098,8 +1198,8 @@ class DGField:
             return self.values()
         constant_value = self.constant_value
         if constant_value is not None:
-            points = np.asarray(reference_points, dtype=np.float64)
-            return np.full((self.space.mesh.num_tri, points.shape[0]), constant_value, dtype=np.float64)
+            points = np.asarray(reference_points, dtype=REAL_DTYPE)
+            return np.full((self.space.mesh.num_tri, points.shape[0]), constant_value, dtype=REAL_DTYPE)
         return self.coeffs @ self.space.basis_at(reference_points).T
 
     def grad_values(self) -> tuple[np.ndarray, np.ndarray]:
@@ -1119,9 +1219,9 @@ class DGField:
         """
         constant_value = self.constant_value
         if constant_value is not None:
-            points = np.asarray(reference_points, dtype=np.float64)
+            points = np.asarray(reference_points, dtype=REAL_DTYPE)
             shape = (self.space.mesh.num_tri, points.shape[0])
-            return np.zeros(shape, dtype=np.float64), np.zeros(shape, dtype=np.float64)
+            return np.zeros(shape, dtype=REAL_DTYPE), np.zeros(shape, dtype=REAL_DTYPE)
         grad_basis = self.space.gradient_basis_at(reference_points)
         ref_grad = np.einsum("Ki,qid->Kqd", self.coeffs, grad_basis, optimize=True)
         phys_grad = np.einsum(
@@ -1169,7 +1269,7 @@ class DGField:
             return self.values()
 
         if y is None:
-            points = np.asarray(x, dtype=np.float64)
+            points = np.asarray(x, dtype=REAL_DTYPE)
             if points.shape == (2,):
                 point_shape = ()
                 flat_points = points.reshape(1, 2)
@@ -1180,16 +1280,16 @@ class DGField:
                 raise ValueError(f"x must have trailing shape (..., 2); got {points.shape}")
         else:
             x_values, y_values = np.broadcast_arrays(
-                np.asarray(x, dtype=np.float64),
-                np.asarray(y, dtype=np.float64),
+                np.asarray(x, dtype=REAL_DTYPE),
+                np.asarray(y, dtype=REAL_DTYPE),
             )
             point_shape = x_values.shape
             flat_points = np.stack((x_values.ravel(), y_values.ravel()), axis=1)
 
         if reference:
-            values = self.values_at_ref(np.ascontiguousarray(flat_points, dtype=np.float64))
+            values = self.values_at_ref(np.ascontiguousarray(flat_points, dtype=REAL_DTYPE))
             return values.reshape((self.space.mesh.num_tri,) + point_shape)
-        values = self.values_at_xy(np.ascontiguousarray(flat_points, dtype=np.float64), missing=missing)
+        values = self.values_at_xy(np.ascontiguousarray(flat_points, dtype=REAL_DTYPE), missing=missing)
         return values.reshape(point_shape)
 
     def __call__(self, x=None, y=None, *, reference: bool = False, missing=np.nan) -> np.ndarray:
@@ -1239,8 +1339,9 @@ class DGField:
     def project_to(self, target: DGSpace, *, plan=None, verbose: bool = True) -> tuple["DGField", object]:
         """Project this field into ``target`` using quadrature-based L2 transfer.
 
-        On the same mesh, this evaluates on the target reference quadrature and
-        applies the target mass inverse.  Across meshes, the transfer utility
+        On the same mesh, this uses a cached reference projection with the
+        higher-degree space's quadrature and retains device residency.
+        Across meshes, the transfer utility
         locates target quadrature points in the source mesh; passing a reusable
         ``plan`` avoids repeating that search.
         """
@@ -1325,15 +1426,24 @@ class DGField:
     def _binary_field_op(self, other, op, symbol: str) -> "DGField":
         """Apply a coefficient-wise binary operation to compatible DG fields."""
         if isinstance(other, DGField):
-            if self.space is not other.space:
-                raise ValueError("field operations require the same DGSpace object")
-            return DGField(self.space, op(self.coeffs, other.coeffs), name=f"({self.name}{symbol}{other.name})")
+            from .field_ops import field_linear_combination
+
+            self.space.assert_basis_compatible(other.space)
+            result_space = (
+                self.space if self.space.order >= other.space.order else other.space
+            )
+            other_weight = 1.0 if op is np.add else -1.0
+            return field_linear_combination(
+                result_space,
+                [(1.0, self), (other_weight, other)],
+                name=f"({self.name}{symbol}{other.name})",
+            )
         return DGField(self.space, op(self.coeffs, other), name=f"({self.name}{symbol}{other})")
 
     def _scaled_by(self, other, *, reverse: bool = False) -> "DGField":
         """Return a DG field with coefficients scaled by a scalar value."""
         try:
-            scalar = np.asarray(other, dtype=np.float64)
+            scalar = np.asarray(other, dtype=REAL_DTYPE)
         except (TypeError, ValueError) as exc:
             raise TypeError("DGField multiplication supports only scalars or another DGField") from exc
         if scalar.ndim != 0:
@@ -1348,7 +1458,11 @@ class DGField:
             return self.space.constant(constant_value * value, name=f"({label})")
         if value == 0.0:
             return self.space.zeros(name=f"({label})")
-        return DGField(self.space, self.coeffs * value, name=f"({label})")
+        from .field_ops import field_linear_combination
+
+        return field_linear_combination(
+            self.space, [(value, self)], name=f"({label})",
+        )
 
     def __add__(self, other):
         """Define arithmetic operator behavior for this type."""
@@ -1368,6 +1482,24 @@ class DGField:
         """Define arithmetic operator behavior for this type."""
         return self._scaled_by(other, reverse=True)
 
+    def __truediv__(self, other):
+        """Divide field coefficients by a scalar without changing residency."""
+        try:
+            scalar = np.asarray(other, dtype=REAL_DTYPE)
+        except (TypeError, ValueError) as exc:
+            raise TypeError("DGField division supports only scalars") from exc
+        if scalar.ndim != 0:
+            raise TypeError(
+                "DGField division by arrays is ambiguous; use field.coeffs explicitly "
+                "for coefficientwise operations"
+            )
+        value = float(scalar)
+        if value == 0.0:
+            raise ZeroDivisionError("cannot divide a DGField by zero")
+        result = self._scaled_by(1.0 / value)
+        result.name = f"({self.name}/{other})"
+        return result
+
 
 def vector_fields_from_flux(space: DGSpace, flux: np.ndarray, *, name: str) -> tuple[DGField, DGField]:
     """Build scalar component fields from a two-component flux coefficient array.
@@ -1376,7 +1508,7 @@ def vector_fields_from_flux(space: DGSpace, flux: np.ndarray, *, name: str) -> t
     interpreted as ``x`` and ``y`` components, and the returned fields are named
     ``f"{name}_x"`` and ``f"{name}_y"``.
     """
-    flux = np.asarray(flux, dtype=np.float64)
+    flux = np.asarray(flux, dtype=REAL_DTYPE)
     expected = (2, space.mesh.num_tri, space.el_dof)
     if flux.shape != expected:
         raise ValueError(f"flux must have shape {expected}; got {flux.shape}")
@@ -1464,7 +1596,7 @@ class VectorDGSpace:
             fields = tuple(fields)
             return VectorDGField(fields, name=name)
 
-        array = np.asarray(coeffs, dtype=np.float64)
+        array = np.asarray(coeffs, dtype=REAL_DTYPE)
         same_shape = all(space.shape == self.components[0].shape for space in self.components)
         if self.dim == 1 and array.shape == self.components[0].shape:
             return VectorDGField(
@@ -1500,8 +1632,14 @@ class VectorDGField:
 
     Component arrays are not packed internally.  The ``as_component_first`` and
     ``as_component_last`` helpers provide packed views for kernels or legacy
-    code that expect an ndarray layout.
+    code that expect an ndarray layout. Addition and subtraction operate
+    componentwise on vectors whose spaces share a mesh and basis family. A
+    lower-degree component is elevated into the higher-degree component's
+    space. Scalar multiplication and division also operate componentwise and
+    preserve each component's coefficient residency.
     """
+
+    __array_priority__ = 1000.0
 
     components: tuple[DGField, ...]
     name: str = "u"
@@ -1553,7 +1691,7 @@ class VectorDGField:
                 return tuple(fields)
 
             if isinstance(data, np.ndarray):
-                array = np.asarray(data, dtype=np.float64)
+                array = np.asarray(data, dtype=REAL_DTYPE)
                 if array.shape == space.shape:
                     return (DGField(array, space, name=f"{self.name}_0", copy=copy),)
                 if array.ndim != 3:
@@ -1642,6 +1780,66 @@ class VectorDGField:
         """Compatibility alias for :attr:`is_constant`."""
         return self.is_constant
 
+    def copy(self, *, name: str | None = None) -> "VectorDGField":
+        """Return an independent componentwise copy preserving residency."""
+        copy_name = self.name if name is None else str(name)
+        components = tuple(
+            component.copy(
+                name=component.name if name is None else f"{copy_name}_{index}",
+            )
+            for index, component in enumerate(self.components)
+        )
+        return VectorDGField(components, name=copy_name)
+
+    def _binary_field_op(self, other, *, subtract: bool):
+        """Apply addition or subtraction componentwise to compatible vectors."""
+        if not isinstance(other, VectorDGField):
+            return NotImplemented
+        if self.dim != other.dim:
+            raise ValueError("vector field operations require the same dimension")
+        for left, right in zip(self.components, other.components):
+            left.space.assert_basis_compatible(right.space)
+        symbol = "-" if subtract else "+"
+        components = tuple(
+            left - right if subtract else left + right
+            for left, right in zip(self.components, other.components)
+        )
+        return VectorDGField(components, name=f"({self.name}{symbol}{other.name})")
+
+    def _scaled_by(self, other, *, reverse: bool = False):
+        """Scale every component by the same scalar value."""
+        components = tuple(
+            component._scaled_by(other, reverse=reverse)
+            for component in self.components
+        )
+        label = f"{other}*{self.name}" if reverse else f"{self.name}*{other}"
+        return VectorDGField(components, name=f"({label})")
+
+    def __add__(self, other):
+        """Add compatible vector DG fields componentwise."""
+        return self._binary_field_op(other, subtract=False)
+
+    def __sub__(self, other):
+        """Subtract compatible vector DG fields componentwise."""
+        return self._binary_field_op(other, subtract=True)
+
+    def __mul__(self, other):
+        """Multiply every component by a scalar."""
+        if isinstance(other, (DGField, VectorDGField)):
+            return NotImplemented
+        return self._scaled_by(other)
+
+    def __rmul__(self, other):
+        """Multiply every component by a scalar."""
+        if isinstance(other, (DGField, VectorDGField)):
+            return NotImplemented
+        return self._scaled_by(other, reverse=True)
+
+    def __truediv__(self, other):
+        """Divide every component by the same scalar."""
+        components = tuple(component / other for component in self.components)
+        return VectorDGField(components, name=f"({self.name}/{other})")
+
     def as_component_first(self) -> np.ndarray:
         """Return packed coefficients with shape ``(dim, num_elements, el_dof)``."""
         return np.stack([component.coeffs for component in self.components], axis=0)
@@ -1678,7 +1876,7 @@ class VectorDGField:
                 raise ValueError(f"exact vector must have {self.dim} components; got {len(raw)}")
             components = raw
         else:
-            array = np.asarray(raw, dtype=np.float64)
+            array = np.asarray(raw, dtype=REAL_DTYPE)
             if array.shape[:1] != (self.dim,):
                 raise ValueError(
                     f"exact vector must return {self.dim} components or an array "
@@ -1687,9 +1885,9 @@ class VectorDGField:
             components = array
         normalized = []
         for component in components:
-            values = np.asarray(component, dtype=np.float64)
+            values = np.asarray(component, dtype=REAL_DTYPE)
             if values.ndim == 0:
-                values = np.full(target, float(values), dtype=np.float64)
+                values = np.full(target, float(values), dtype=REAL_DTYPE)
             else:
                 try:
                     values = np.broadcast_to(values, target)

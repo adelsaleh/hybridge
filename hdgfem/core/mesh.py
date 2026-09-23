@@ -9,6 +9,8 @@ the small set of legacy attribute names that are useful for numerical kernels
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, PRECISION
+
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -91,6 +93,8 @@ def _mesh_cache_files(
         "algorithm": None if algorithm is None else int(algorithm),
         "geometry": _normalize_mesh_cache_value({} if cache_key_data is None else cache_key_data),
     }
+    if PRECISION != "float64":
+        payload["precision"] = PRECISION
     payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
     slug = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(model_name))
@@ -178,7 +182,10 @@ def _load_cached_gmsh_mesh(
             cache_key_json = handle.read(key_size).decode("utf-8")
             if cache_key_json != expected_cache_key_json:
                 raise ValueError("mesh cache key mismatch")
-            node_coords = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.float64)
+            cached_nodes = np.load(handle, allow_pickle=False)
+            if PRECISION == "float64" and cached_nodes.dtype != np.float64:
+                raise ValueError("mesh cache contains reduced-precision coordinates")
+            node_coords = np.ascontiguousarray(cached_nodes, dtype=REAL_DTYPE)
             triangles = np.ascontiguousarray(np.load(handle, allow_pickle=False), dtype=np.int64)
             _validate_uniform_gmsh_mesh_arrays(node_coords, triangles, mesh_size)
             return DGMesh.from_arrays(node_coords, triangles)
@@ -189,7 +196,10 @@ def _load_cached_gmsh_mesh(
                 cache_key_json = str(np.asarray(data["cache_key"]).item())
                 if cache_key_json != expected_cache_key_json:
                     raise ValueError("mesh cache key mismatch")
-            node_coords = np.ascontiguousarray(data["node_coords"], dtype=np.float64)
+            cached_nodes = data["node_coords"]
+            if PRECISION == "float64" and cached_nodes.dtype != np.float64:
+                raise ValueError("mesh cache contains reduced-precision coordinates")
+            node_coords = np.ascontiguousarray(cached_nodes, dtype=REAL_DTYPE)
             triangles = np.ascontiguousarray(data["triangles"], dtype=np.int64)
         _validate_uniform_gmsh_mesh_arrays(node_coords, triangles, mesh_size)
         return DGMesh.from_arrays(node_coords, triangles)
@@ -210,7 +220,7 @@ def _write_cached_gmsh_mesh(cache_path: Path, mesh: DGMesh, cache_key_json: str)
             handle.write(_MESH_CACHE_MAGIC)
             handle.write(f"{len(key_bytes)}\n".encode("ascii"))
             handle.write(key_bytes)
-            np.save(handle, np.ascontiguousarray(mesh.node_coords, dtype=np.float64), allow_pickle=False)
+            np.save(handle, np.ascontiguousarray(mesh.node_coords, dtype=REAL_DTYPE), allow_pickle=False)
             np.save(handle, np.ascontiguousarray(mesh.triangles, dtype=np.int64), allow_pickle=False)
         os.replace(tmp_path, cache_path)
     finally:
@@ -326,7 +336,7 @@ class DGMesh:
 
     def __post_init__(self) -> None:
         """Validate mesh arrays and derive geometry and connectivity data."""
-        nodes = np.ascontiguousarray(self.node_coords, dtype=np.float64)
+        nodes = np.ascontiguousarray(self.node_coords, dtype=REAL_DTYPE)
         tris = np.ascontiguousarray(self.triangles, dtype=np.int64)
         if nodes.ndim != 2 or nodes.shape[1] != 2:
             raise ValueError(f"node_coords must have shape (num_nodes, 2); got {nodes.shape}")
@@ -487,7 +497,7 @@ class DGMesh:
         """Return reference-to-physical edge Jacobians for all global edges."""
         vertices = self.node_coords[edges]
         lengths = np.linalg.norm(vertices[:, 1] - vertices[:, 0], axis=1)
-        return np.ascontiguousarray(0.5 * lengths, dtype=np.float64)
+        return np.ascontiguousarray(0.5 * lengths, dtype=REAL_DTYPE)
 
     def _compute_affine_maps(self) -> tuple[np.ndarray, np.ndarray]:
         """Compute reference-to-physical affine maps and translations."""
@@ -498,8 +508,8 @@ class DGMesh:
         aff_mats = 0.5 * np.stack((p1 - p0, p2 - p0), axis=-1)
         aff_vecs = 0.5 * (p1 + p2)
         return (
-            np.ascontiguousarray(aff_mats, dtype=np.float64),
-            np.ascontiguousarray(aff_vecs, dtype=np.float64),
+            np.ascontiguousarray(aff_mats, dtype=REAL_DTYPE),
+            np.ascontiguousarray(aff_vecs, dtype=REAL_DTYPE),
         )
 
     def _compute_face_normals_and_jacobians(self) -> tuple[np.ndarray, np.ndarray]:
@@ -518,8 +528,8 @@ class DGMesh:
         outward_test = np.einsum("Kfd,Kfd->Kf", normals, face_midpoints - centroids[:, None, :])
         normals[outward_test < 0.0] *= -1.0
         return (
-            np.ascontiguousarray(normals, dtype=np.float64),
-            np.ascontiguousarray(0.5 * lengths, dtype=np.float64),
+            np.ascontiguousarray(normals, dtype=REAL_DTYPE),
+            np.ascontiguousarray(0.5 * lengths, dtype=REAL_DTYPE),
         )
 
     def _compute_h(self) -> float:
@@ -529,6 +539,16 @@ class DGMesh:
         d12 = np.linalg.norm(vertices[:, 1] - vertices[:, 2], axis=1)
         d20 = np.linalg.norm(vertices[:, 2] - vertices[:, 0], axis=1)
         return float(np.max(np.maximum(d01, np.maximum(d12, d20))))
+
+    @property
+    def edge_side_indices(self) -> np.ndarray:
+        """Inverse local-edge map: two flattened element-side ids, or -1."""
+        cached = getattr(self, "_edge_side_indices", None)
+        if cached is None:
+            cached = np.full((self.num_edg, 2), -1, dtype=np.int64)
+            cached[self.loc2glob_edge.ravel(), (~self.orientations).astype(np.int32).ravel()] = np.arange(3*self.num_tri)
+            object.__setattr__(self, "_edge_side_indices", cached)
+        return cached
 
     def get_edge_neighbors(self, edge_id: int) -> tuple[int, int]:
         """Compatibility alias for :meth:`get_edge_elements`."""
@@ -540,12 +560,12 @@ class DGMesh:
 
     def map_reference_points(self, reference_points: np.ndarray) -> np.ndarray:
         r"""Map reference points to all physical elements."""
-        points = np.asarray(reference_points, dtype=np.float64)
+        points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points.ndim != 2 or points.shape[1] != 2:
             raise ValueError(f"reference_points must have shape (num_points, 2); got {points.shape}")
         mapped = np.einsum("Krc,qc->Kqr", self.aff_mats, points, optimize=True)
         mapped += self.aff_vecs[:, None, :]
-        return np.ascontiguousarray(mapped, dtype=np.float64)
+        return np.ascontiguousarray(mapped, dtype=REAL_DTYPE)
 
     def flatten_mapped_reference_points(self, reference_points: np.ndarray) -> np.ndarray:
         """Return mapped reference points as ``(num_elements*num_points, 2)``."""
@@ -553,7 +573,7 @@ class DGMesh:
 
     def physical_to_reference(self, points_xy: np.ndarray, element_indices: np.ndarray) -> np.ndarray:
         """Map physical points to reference coordinates in selected elements."""
-        points = np.asarray(points_xy, dtype=np.float64)
+        points = np.asarray(points_xy, dtype=REAL_DTYPE)
         elements = np.asarray(element_indices, dtype=np.int64)
         if points.ndim != 2 or points.shape[1] != 2:
             raise ValueError(f"points_xy must have shape (num_points, 2); got {points.shape}")
@@ -561,7 +581,7 @@ class DGMesh:
             raise ValueError(f"element_indices must have shape ({points.shape[0]},); got {elements.shape}")
         delta = points - self.aff_vecs[elements]
         xi = np.einsum("Krc,Kc->Kr", self.inv_aff_mats[elements], delta, optimize=True)
-        return np.ascontiguousarray(xi, dtype=np.float64)
+        return np.ascontiguousarray(xi, dtype=REAL_DTYPE)
 
 
 def as_dg_mesh(mesh: DGMesh) -> DGMesh:
@@ -811,7 +831,8 @@ def _generate_gmsh_mesh(
         gmsh.model.occ.synchronize()
         if boundary_tags is not None:
             gmsh.model.addPhysicalGroup(1, list(boundary_tags), tag=1, name=f"{model_name}_boundary")
-        gmsh.model.addPhysicalGroup(2, [surface_tag], tag=1, name=model_name)
+        if surface_tag is not None:
+            gmsh.model.addPhysicalGroup(2, [surface_tag], tag=1, name=model_name)
         gmsh.model.mesh.generate(2)
         mesh = _gmsh_model_to_mesh(gmsh, write_path=write_path)
         _validate_uniform_gmsh_mesh_arrays(mesh.node_coords, mesh.triangles, mesh_size)
@@ -962,7 +983,7 @@ def gmsh_star_mesh(
     if not (0.0 < inner_radius < outer_radius):
         raise ValueError("inner_radius must satisfy 0 < inner_radius < outer_radius")
     cx, cy = float(center[0]), float(center[1])
-    angles = float(rotation) + np.arange(2 * corners, dtype=np.float64) * np.pi / corners
+    angles = float(rotation) + np.arange(2 * corners, dtype=REAL_DTYPE) * np.pi / corners
     radii = np.where(np.arange(2 * corners) % 2 == 0, outer_radius, inner_radius)
     vertices = np.column_stack((cx + radii * np.cos(angles), cy + radii * np.sin(angles)))
 
@@ -1002,6 +1023,67 @@ def gmsh_star_mesh(
     )
 
 
+def _gmsh_polygon_surface(gmsh, vertices, mesh_size, *, circular_holes=()):
+    """Build a polygonal OCC surface with optional circular inner walls."""
+    occ = gmsh.model.occ
+    points = [occ.addPoint(float(x), float(y), 0.0, mesh_size) for x, y in vertices]
+    lines = [occ.addLine(points[i], points[(i+1) % len(points)]) for i in range(len(points))]
+    loops = [occ.addCurveLoop(lines)]
+    for cx, cy, radius in circular_holes:
+        circle = occ.addCircle(float(cx), float(cy), 0.0, float(radius))
+        loops.append(occ.addCurveLoop([circle]))
+        lines.append(circle)
+    return occ.addPlaneSurface(loops), lines
+
+
+
+def gmsh_geo_mesh(mesh_size: float, *, path, **kwargs) -> DGMesh:
+    """Mesh a .geo source through the shared cache, preserving physical labels.
+
+    Explicit mesh_size overrides the source's characteristic lengths.
+    Geometry content participates in cache identity.
+    """
+    import hashlib
+    path = Path(path).resolve(strict=True)
+    content = path.read_bytes()
+
+    def build(gmsh):
+        gmsh.merge(str(path))
+        gmsh.model.geo.synchronize()
+        gmsh.model.occ.synchronize()
+        if len(gmsh.model.getEntities(2)) != 1:
+            raise ValueError("expected one planar surface in the geometry file")
+        for option in ("Mesh.MeshSizeMin", "Mesh.MeshSizeMax"):
+            _set_required_gmsh_number_option(gmsh, option, float(mesh_size))
+        gmsh.model.mesh.setSize(gmsh.model.getEntities(0), float(mesh_size))
+        _set_required_gmsh_number_option(gmsh, "Mesh.ElementOrder", 1)
+        return None  # Keep the source's wall/interior physical labels.
+
+    return _generate_gmsh_mesh(
+        "geo", mesh_size, build,
+        cache_key_data={"source": str(path), "sha256": hashlib.sha256(content).hexdigest()},
+        **kwargs,
+    )
+
+def gmsh_polygon_mesh(
+        mesh_size: float, *, vertices, verbosity: int = 0,
+        algorithm: int | None = None, write_path: str | None = None,
+        cache: bool = True, cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None, log_cache: bool = True,
+) -> DGMesh:
+    """Mesh a simple polygon through the standard Gmsh geometry/cache path."""
+    from .geometry import PolygonDomain
+
+    domain = PolygonDomain(vertices)
+    return _generate_gmsh_mesh(
+        "polygon", mesh_size,
+        lambda gmsh: _gmsh_polygon_surface(gmsh, domain.vertices, mesh_size),
+        verbosity=verbosity, algorithm=algorithm, write_path=write_path,
+        cache=cache, cache_dir=cache_dir, num_threads=num_threads, log_cache=log_cache,
+        cache_key_data={"geometry": "polygon", "vertices": domain.vertices},
+    )
+
+
 def gmsh_smooth_star_mesh(
         mesh_size: float,
         *,
@@ -1009,6 +1091,7 @@ def gmsh_smooth_star_mesh(
         radius: float = 1.5,
         amplitude: float = 0.32,
         mode: int = 5,
+        hole_radius: float = 0.0,
         center: tuple[float, float] = (0.0, 0.0),
         rotation: float = 0.0,
         verbosity: int = 0,
@@ -1025,33 +1108,43 @@ def gmsh_smooth_star_mesh(
     The boundary follows ``r(theta) = radius + amplitude*cos(mode*theta)`` and
     is sampled by straight segments, matching FreeFEM's ``buildmesh`` use of
     ``border GammaStar(t=0, 2*pi)`` with ``GammaStar(boundary_points)``.
+    A positive ``hole_radius`` removes a concentric circular disk. Both the
+    outer wall and the hole belong to the physical boundary group.
     """
     boundary_points = int(boundary_points)
     mode = int(mode)
     radius = float(radius)
     amplitude = float(amplitude)
+    hole_radius = float(hole_radius)
     if boundary_points < max(8, 4 * mode):
         raise ValueError("boundary_points is too small for the requested star mode")
     if radius <= abs(amplitude):
         raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
+    # This disk fits even inside the chords of the sampled outer boundary.
+    inner_bound = (radius - abs(amplitude)) * np.cos(np.pi / boundary_points)
+    if not np.isfinite(hole_radius) or not 0.0 <= hole_radius < inner_bound:
+        raise ValueError("hole_radius must be nonnegative and strictly inside the sampled star")
     cx, cy = float(center[0]), float(center[1])
     theta = float(rotation) + np.linspace(0.0, 2.0 * np.pi, boundary_points, endpoint=False)
     rr = radius + amplitude * np.cos(mode * (theta - float(rotation)))
     vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
 
     def build(gmsh):
-        """Create the spline-bounded star surface and return its tag."""
-        occ = gmsh.model.occ
-        points = [
-            occ.addPoint(float(x), float(y), 0.0, mesh_size)
-            for x, y in vertices
-        ]
-        lines = [
-            occ.addLine(points[i], points[(i + 1) % len(points)])
-            for i in range(len(points))
-        ]
-        loop = occ.addCurveLoop(lines)
-        return occ.addPlaneSurface([loop]), lines
+        """Create the polygonal star surface, optionally with an inner wall."""
+        holes = ((cx, cy, hole_radius),) if hole_radius > 0.0 else ()
+        return _gmsh_polygon_surface(gmsh, vertices, mesh_size, circular_holes=holes)
+
+    cache_key_data = {
+        "geometry": "smooth_star",
+        "boundary_points": boundary_points,
+        "radius": radius,
+        "amplitude": amplitude,
+        "mode": mode,
+        "center": center,
+        "rotation": rotation,
+    }
+    if hole_radius > 0.0:
+        cache_key_data["hole_radius"] = hole_radius
 
     return _generate_gmsh_mesh(
         "smooth_star",
@@ -1063,15 +1156,7 @@ def gmsh_smooth_star_mesh(
         msh_file_version=msh_file_version,
         cache=cache,
         cache_dir=cache_dir,
-        cache_key_data={
-            "geometry": "smooth_star",
-            "boundary_points": boundary_points,
-            "radius": radius,
-            "amplitude": amplitude,
-            "mode": mode,
-            "center": center,
-            "rotation": rotation,
-        },
+        cache_key_data=cache_key_data,
         num_threads=num_threads,
         log_cache=log_cache,
     )
@@ -1088,6 +1173,7 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         background_origin: tuple[float, float],
         background_spacing: tuple[float, float],
         background_values: np.ndarray,
+        hole_radius: float = 0.0,
         center: tuple[float, float] = (0.0, 0.0),
         rotation: float = 0.0,
         verbosity: int = 0,
@@ -1103,6 +1189,8 @@ def gmsh_smooth_star_mesh_with_background_sizes(
     ``background_origin`` and grid spacing ``background_spacing``; the field is
     then installed as the background mesh.  This avoids Python point-callbacks
     during Gmsh refinement and is suitable for repeated adaptive remeshing.
+    A positive ``hole_radius`` removes the same concentric circular hole as
+    :func:`gmsh_smooth_star_mesh`; both walls receive the background sizes.
 
     When ``timing_prefix`` is provided, phase timings are printed as
     ``{timing_prefix}_PHASE_START`` / ``DONE`` lines.
@@ -1113,12 +1201,16 @@ def gmsh_smooth_star_mesh_with_background_sizes(
     mode = int(mode)
     radius = float(radius)
     amplitude = float(amplitude)
+    hole_radius = float(hole_radius)
     hmin = float(hmin)
     hmax = float(hmax)
     if boundary_points < max(8, 4 * mode):
         raise ValueError("boundary_points is too small for the requested star mode")
     if radius <= abs(amplitude):
         raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
+    inner_bound = (radius - abs(amplitude)) * np.cos(np.pi / boundary_points)
+    if not np.isfinite(hole_radius) or not 0.0 <= hole_radius < inner_bound:
+        raise ValueError("hole_radius must be nonnegative and strictly inside the sampled star")
     if hmin <= 0.0 or hmax <= 0.0 or hmax < hmin:
         raise ValueError("hmin and hmax must satisfy 0 < hmin <= hmax")
     if num_threads is not None and int(num_threads) <= 0:
@@ -1169,12 +1261,9 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         theta = float(rotation) + np.linspace(0.0, 2.0 * np.pi, boundary_points, endpoint=False)
         rr = radius + amplitude * np.cos(mode * (theta - float(rotation)))
         vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
-        occ = gmsh.model.occ
-        points = [occ.addPoint(float(x), float(y), 0.0, hmax) for x, y in vertices]
-        lines = [occ.addLine(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
-        loop = occ.addCurveLoop(lines)
-        surface = occ.addPlaneSurface([loop])
-        finish_phase("GEOMETRY_BUILD", t_phase, points=len(points), lines=len(lines))
+        holes = ((cx, cy, hole_radius),) if hole_radius > 0.0 else ()
+        surface, lines = _gmsh_polygon_surface(gmsh, vertices, hmax, circular_holes=holes)
+        finish_phase("GEOMETRY_BUILD", t_phase, points=len(vertices), lines=len(lines))
 
         t_phase = start_phase("OCC_SYNC")
         gmsh.model.occ.synchronize()
@@ -1182,7 +1271,7 @@ def gmsh_smooth_star_mesh_with_background_sizes(
         finish_phase("OCC_SYNC", t_phase)
 
         t_phase = start_phase("BACKGROUND_FIELD")
-        bg_values = np.ascontiguousarray(background_values, dtype=np.float64)
+        bg_values = np.ascontiguousarray(background_values, dtype=REAL_DTYPE)
         if bg_values.ndim != 2:
             raise ValueError(f"background_values must have shape (nx, ny); got {bg_values.shape}")
         nx, ny = bg_values.shape

@@ -8,6 +8,8 @@ control.  This is an internal prototype, not a public backend contract.
 
 from __future__ import annotations
 
+from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+
 import ctypes
 from dataclasses import dataclass
 from typing import Any
@@ -23,7 +25,7 @@ _CUSPARSE_INDEX_32I = 2
 _CUSPARSE_INDEX_BASE_ZERO = 0
 _CUSPARSE_ORDER_ROW = 2
 _CUSPARSE_SPMV_ALG_DEFAULT = 0
-_CUDA_R_64F = 1
+_CUDA_REAL = 0 if REAL_ITEMSIZE == 4 else 1
 _GENERIC_BSR_MIN_RUNTIME = 13010
 
 
@@ -45,7 +47,7 @@ def legendre_orthonormal_scales(block_size: int, *, xp=np):
     block_size = int(block_size)
     if block_size < 1:
         raise ValueError("block_size must be positive")
-    modes = xp.arange(block_size, dtype=xp.float64)
+    modes = xp.arange(block_size, dtype=REAL_DTYPE)
     return xp.sqrt((2.0 * modes + 1.0) / 2.0)
 
 
@@ -165,6 +167,11 @@ def _configure_cusparse(lib) -> None:
         ptr, ptr, ptr, cint, cint, cint, cint, cint,
     ]
     lib.cusparseCreateBsr.restype = cint
+    lib.cusparseCreateCsr.argtypes = [
+        ctypes.POINTER(ptr), i64, i64, i64,
+        ptr, ptr, ptr, cint, cint, cint, cint,
+    ]
+    lib.cusparseCreateCsr.restype = cint
     lib.cusparseDestroySpMat.argtypes = [ptr]
     lib.cusparseDestroySpMat.restype = cint
     lib.cusparseCreateDnVec.argtypes = [ctypes.POINTER(ptr), i64, ptr, cint]
@@ -207,7 +214,7 @@ def _load_cusparse():
 class _CusparseGenericBsrOperator:
     """Matrix-owned CUDA 13 BSR descriptors, preprocessing, and workspace."""
 
-    def __init__(self, indptr, indices, data):
+    def __init__(self, indptr, indices, data, *, shape=None):
         """Create and preprocess descriptors for one fixed BSR matrix."""
         self.cp = require_cupy()
         runtime = int(self.cp.cuda.runtime.runtimeGetVersion())
@@ -218,8 +225,23 @@ class _CusparseGenericBsrOperator:
         self.lib = _load_cusparse()
         self.indptr, self.indices, self.data = indptr, indices, data
         self.block_rows = int(indptr.size - 1)
-        self.block_size = int(data.shape[1])
+        is_csr = data.ndim == 1
+        if not is_csr and (data.ndim != 3 or data.shape[1] != data.shape[2]):
+            raise ValueError("BSR data must contain square blocks")
+        self.block_size = 1 if is_csr else int(data.shape[1])
         self.size = self.block_rows * self.block_size
+        self.shape = (self.size, self.size) if shape is None else tuple(map(int, shape))
+        if (len(self.shape) != 2 or self.shape[0] != self.size
+                or self.shape[1] < 0 or self.shape[1] % self.block_size):
+            raise ValueError("shape must match block rows and have a block-aligned column count")
+        if (data.dtype != REAL_DTYPE or indices.dtype != np.int32
+                or indptr.dtype != np.int32
+                or not all(a.flags.c_contiguous for a in (data, indices, indptr))):
+            raise ValueError("Require contiguous real values and int32 indices/row pointers")
+        if data.shape[0] != indices.size:
+            raise ValueError("data and indices counts differ")
+        self.block_cols = self.shape[1] // self.block_size
+        self.input_size = self.shape[1]
         self.handle = ctypes.c_void_p(int(self.cp.cuda.device.get_cusparse_handle()))
         self.stream_ptr: int | None = None
         self.matrix = ctypes.c_void_p()
@@ -228,34 +250,40 @@ class _CusparseGenericBsrOperator:
         self.workspace = None
         self.workspace_size = 0
         self.closed = False
-        self.alpha = ctypes.c_double(1.0)
-        self.beta = ctypes.c_double(0.0)
-        self.scratch_x = self.cp.empty(self.size, dtype=self.cp.float64)
-        self.scratch_y = self.cp.empty(self.size, dtype=self.cp.float64)
+        self.alpha = (ctypes.c_float if REAL_ITEMSIZE == 4 else ctypes.c_double)(1.0)
+        self.beta = (ctypes.c_float if REAL_ITEMSIZE == 4 else ctypes.c_double)(0.0)
+        self.scratch_x = self.cp.empty(self.input_size, dtype=REAL_DTYPE)
+        self.scratch_y = self.cp.empty(self.size, dtype=REAL_DTYPE)
         try:
-            self._check(self.lib.cusparseCreateBsr(
-                ctypes.byref(self.matrix), self.block_rows, self.block_rows,
-                int(indices.size), self.block_size, self.block_size,
+            create = self.lib.cusparseCreateCsr if is_csr else self.lib.cusparseCreateBsr
+            dimensions = [self.block_rows, self.block_cols, int(indices.size)]
+            if not is_csr:
+                dimensions += [self.block_size, self.block_size]
+            types = [_CUSPARSE_INDEX_32I, _CUSPARSE_INDEX_32I,
+                     _CUSPARSE_INDEX_BASE_ZERO, _CUDA_REAL]
+            if not is_csr:
+                types += [_CUSPARSE_ORDER_ROW]
+            self._check(create(
+                ctypes.byref(self.matrix), *dimensions,
                 ctypes.c_void_p(int(indptr.data.ptr)),
                 ctypes.c_void_p(int(indices.data.ptr)),
                 ctypes.c_void_p(int(data.data.ptr)),
-                _CUSPARSE_INDEX_32I, _CUSPARSE_INDEX_32I,
-                _CUSPARSE_INDEX_BASE_ZERO, _CUDA_R_64F, _CUSPARSE_ORDER_ROW,
-            ), "cusparseCreateBsr")
+                *types,
+            ), "cusparseCreateCsr" if is_csr else "cusparseCreateBsr")
             self._check(self.lib.cusparseCreateDnVec(
-                ctypes.byref(self.x_descriptor), self.size,
-                ctypes.c_void_p(int(self.scratch_x.data.ptr)), _CUDA_R_64F,
+                ctypes.byref(self.x_descriptor), self.input_size,
+                ctypes.c_void_p(int(self.scratch_x.data.ptr)), _CUDA_REAL,
             ), "cusparseCreateDnVec(x)")
             self._check(self.lib.cusparseCreateDnVec(
                 ctypes.byref(self.y_descriptor), self.size,
-                ctypes.c_void_p(int(self.scratch_y.data.ptr)), _CUDA_R_64F,
+                ctypes.c_void_p(int(self.scratch_y.data.ptr)), _CUDA_REAL,
             ), "cusparseCreateDnVec(y)")
             self._set_stream()
             workspace_size = ctypes.c_size_t()
             self._check(self.lib.cusparseSpMV_bufferSize(
                 self.handle, _CUSPARSE_OPERATION_NON_TRANSPOSE, self._alpha_ptr,
                 self.matrix, self.x_descriptor, self._beta_ptr,
-                self.y_descriptor, _CUDA_R_64F, _CUSPARSE_SPMV_ALG_DEFAULT,
+                self.y_descriptor, _CUDA_REAL, _CUSPARSE_SPMV_ALG_DEFAULT,
                 ctypes.byref(workspace_size),
             ), "cusparseSpMV_bufferSize(BSR)")
             self.workspace_size = int(workspace_size.value)
@@ -264,7 +292,7 @@ class _CusparseGenericBsrOperator:
             self._check(self.lib.cusparseSpMV_preprocess(
                 self.handle, _CUSPARSE_OPERATION_NON_TRANSPOSE, self._alpha_ptr,
                 self.matrix, self.x_descriptor, self._beta_ptr,
-                self.y_descriptor, _CUDA_R_64F, _CUSPARSE_SPMV_ALG_DEFAULT,
+                self.y_descriptor, _CUDA_REAL, _CUSPARSE_SPMV_ALG_DEFAULT,
                 self._workspace_ptr,
             ), "cusparseSpMV_preprocess(BSR)")
         except Exception as exc:
@@ -321,16 +349,16 @@ class _CusparseGenericBsrOperator:
         """Apply the cached BSR descriptor asynchronously."""
         if self.closed:
             raise RuntimeError("cannot apply a closed cuSPARSE BSR operator")
-        x = self.cp.asarray(x, dtype=self.cp.float64)
-        if x.ndim != 1 or int(x.size) != self.size:
-            raise ValueError(f"x must have shape ({self.size},)")
+        x = self.cp.asarray(x, dtype=REAL_DTYPE)
+        if x.ndim != 1 or int(x.size) != self.input_size:
+            raise ValueError(f"x must have shape ({self.input_size},)")
         if not x.flags.c_contiguous:
             x = self.cp.ascontiguousarray(x)
         if out is None:
-            out = self.cp.empty_like(x)
+            out = self.cp.empty(self.size, dtype=REAL_DTYPE)
         elif (out.ndim != 1 or int(out.size) != self.size
-              or out.dtype != self.cp.float64 or not out.flags.c_contiguous):
-            raise ValueError(f"out must be contiguous float64 with shape ({self.size},)")
+              or out.dtype != REAL_DTYPE or not out.flags.c_contiguous):
+            raise ValueError(f"out must be contiguous at the selected real precision with shape ({self.size},)")
         if int(x.data.ptr) == int(out.data.ptr):
             raise ValueError("x and out must not alias")
         self._set_stream()
@@ -343,7 +371,7 @@ class _CusparseGenericBsrOperator:
         self._check(self.lib.cusparseSpMV(
             self.handle, _CUSPARSE_OPERATION_NON_TRANSPOSE, self._alpha_ptr,
             self.matrix, self.x_descriptor, self._beta_ptr, self.y_descriptor,
-            _CUDA_R_64F, _CUSPARSE_SPMV_ALG_DEFAULT, self._workspace_ptr,
+            _CUDA_REAL, _CUSPARSE_SPMV_ALG_DEFAULT, self._workspace_ptr,
         ), "cusparseSpMV(BSR)")
         return out
 
@@ -376,6 +404,15 @@ class _CusparseGenericBsrOperator:
             self.close(suppress_errors=True)
         except Exception:
             pass
+
+
+class _CusparseGenericCsrOperator(_CusparseGenericBsrOperator):
+    """Generic CSR SpMV sharing BSR's descriptors and preallocation contract."""
+
+    def __init__(self, indptr, indices, data, *, shape):
+        if data.ndim != 1:
+            raise ValueError("CSR data must be one-dimensional")
+        super().__init__(indptr, indices, data, shape=shape)
 
 
 _FUSED_FACE_BLOCK_JACOBI_STEP = r"""
@@ -513,13 +550,13 @@ class _RawFaceBsrOperator:
         kernel = _RAW_KERNEL_CACHE.get(self.block_size)
         if kernel is None:
             source = f"#define BLOCK_SIZE {self.block_size}\n" + _RAW_FACE_BSR_SPMV
-            kernel = self.cp.RawKernel(source, "legendre_face_bsr_spmv")
+            kernel = real_raw_kernel(source, "legendre_face_bsr_spmv")
             _RAW_KERNEL_CACHE[self.block_size] = kernel
         self.kernel = kernel
 
     def matvec(self, x, out=None):
         """Apply the fallback kernel asynchronously."""
-        x = self.cp.asarray(x, dtype=self.cp.float64)
+        x = self.cp.asarray(x, dtype=REAL_DTYPE)
         if x.ndim != 1 or int(x.size) != self.size:
             raise ValueError(f"x must have shape ({self.size},)")
         if not x.flags.c_contiguous:
@@ -527,8 +564,8 @@ class _RawFaceBsrOperator:
         if out is None:
             out = self.cp.empty_like(x)
         elif (out.ndim != 1 or int(out.size) != self.size
-              or out.dtype != self.cp.float64 or not out.flags.c_contiguous):
-            raise ValueError(f"out must be contiguous float64 with shape ({self.size},)")
+              or out.dtype != REAL_DTYPE or not out.flags.c_contiguous):
+            raise ValueError(f"out must be contiguous at the selected real precision with shape ({self.size},)")
         if int(x.data.ptr) == int(out.data.ptr):
             raise ValueError("x and out must not alias")
         self.kernel((self.block_rows,), (32,), (
@@ -554,7 +591,7 @@ class LegendreFaceBsrOperator:
         cp = require_cupy()
         self.indptr = cp.ascontiguousarray(self.indptr, dtype=cp.int32)
         self.indices = cp.ascontiguousarray(self.indices, dtype=cp.int32)
-        self.data = cp.ascontiguousarray(self.data, dtype=cp.float64)
+        self.data = cp.ascontiguousarray(self.data, dtype=REAL_DTYPE)
         if self.indptr.ndim != 1 or self.indices.ndim != 1:
             raise ValueError("BSR indptr and indices must be one-dimensional")
         if self.data.ndim != 3 or self.data.shape[1] != self.data.shape[2]:
@@ -614,9 +651,9 @@ class LegendreFaceBsrOperator:
         inverse diagonal block without materializing a residual or update.
         """
         cp = require_cupy()
-        rhs = cp.asarray(rhs, dtype=cp.float64)
-        correction = cp.asarray(correction, dtype=cp.float64)
-        diagonal_inverse = cp.asarray(diagonal_inverse, dtype=cp.float64)
+        rhs = cp.asarray(rhs, dtype=REAL_DTYPE)
+        correction = cp.asarray(correction, dtype=REAL_DTYPE)
+        diagonal_inverse = cp.asarray(diagonal_inverse, dtype=REAL_DTYPE)
         size = int(self.shape[0])
         for name, vector in (("rhs", rhs), ("correction", correction)):
             if (
@@ -624,7 +661,7 @@ class LegendreFaceBsrOperator:
                 or not vector.flags.c_contiguous
             ):
                 raise ValueError(
-                    f"{name} must be contiguous float64 with shape ({size},)"
+                    f"{name} must be contiguous at the selected real precision with shape ({size},)"
                 )
         expected_diagonal_shape = (
             self.block_rows, self.block_size, self.block_size
@@ -634,7 +671,7 @@ class LegendreFaceBsrOperator:
             or not diagonal_inverse.flags.c_contiguous
         ):
             raise ValueError(
-                "diagonal_inverse must be contiguous float64 with shape "
+                "diagonal_inverse must be contiguous at the selected real precision with shape "
                 f"{expected_diagonal_shape}"
             )
         weight = float(weight)
@@ -644,10 +681,10 @@ class LegendreFaceBsrOperator:
             out = cp.empty_like(correction)
         elif (
             out.ndim != 1 or int(out.size) != size
-            or out.dtype != cp.float64 or not out.flags.c_contiguous
+            or out.dtype != REAL_DTYPE or not out.flags.c_contiguous
         ):
             raise ValueError(
-                f"out must be contiguous float64 with shape ({size},)"
+                f"out must be contiguous at the selected real precision with shape ({size},)"
             )
         if int(out.data.ptr) in {int(rhs.data.ptr), int(correction.data.ptr)}:
             raise ValueError("out must not alias rhs or correction")
@@ -661,13 +698,13 @@ class LegendreFaceBsrOperator:
                 f"#define BLOCK_SIZE {self.block_size}\n"
                 + _FUSED_FACE_BLOCK_JACOBI_STEP
             )
-            kernel = cp.RawKernel(
+            kernel = real_raw_kernel(
                 source, "legendre_face_bsr_block_jacobi_step"
             )
             _FUSED_BLOCK_JACOBI_KERNEL_CACHE[self.block_size] = kernel
         kernel((self.block_rows,), (32,), (
             np.int32(self.block_rows), self.indptr, self.indices, self.data,
-            diagonal_inverse, rhs, correction, np.float64(weight), out,
+            diagonal_inverse, rhs, correction, REAL_DTYPE(weight), out,
         ))
         return out
 
@@ -682,15 +719,15 @@ class LegendreFaceBsrOperator:
         operator during the first pre-smoothing stage.
         """
         cp = require_cupy()
-        rhs = cp.asarray(rhs, dtype=cp.float64)
-        diagonal_inverse = cp.asarray(diagonal_inverse, dtype=cp.float64)
+        rhs = cp.asarray(rhs, dtype=REAL_DTYPE)
+        diagonal_inverse = cp.asarray(diagonal_inverse, dtype=REAL_DTYPE)
         size = int(self.shape[0])
         if (
             rhs.ndim != 1 or int(rhs.size) != size
             or not rhs.flags.c_contiguous
         ):
             raise ValueError(
-                f"rhs must be contiguous float64 with shape ({size},)"
+                f"rhs must be contiguous at the selected real precision with shape ({size},)"
             )
         expected_diagonal_shape = (
             self.block_rows, self.block_size, self.block_size
@@ -700,7 +737,7 @@ class LegendreFaceBsrOperator:
             or not diagonal_inverse.flags.c_contiguous
         ):
             raise ValueError(
-                "diagonal_inverse must be contiguous float64 with shape "
+                "diagonal_inverse must be contiguous at the selected real precision with shape "
                 f"{expected_diagonal_shape}"
             )
         weight = float(weight)
@@ -710,10 +747,10 @@ class LegendreFaceBsrOperator:
             out = cp.empty_like(rhs)
         elif (
             out.ndim != 1 or int(out.size) != size
-            or out.dtype != cp.float64 or not out.flags.c_contiguous
+            or out.dtype != REAL_DTYPE or not out.flags.c_contiguous
         ):
             raise ValueError(
-                f"out must be contiguous float64 with shape ({size},)"
+                f"out must be contiguous at the selected real precision with shape ({size},)"
             )
         if int(out.data.ptr) == int(rhs.data.ptr):
             raise ValueError("out must not alias rhs")
@@ -729,7 +766,7 @@ class LegendreFaceBsrOperator:
                 f"#define BLOCK_SIZE {self.block_size}\n"
                 + _FUSED_FACE_BLOCK_JACOBI_ZERO_START
             )
-            kernel = cp.RawKernel(
+            kernel = real_raw_kernel(
                 source, "legendre_face_block_jacobi_zero_start"
             )
             _FUSED_BLOCK_JACOBI_ZERO_START_KERNEL_CACHE[
@@ -737,7 +774,7 @@ class LegendreFaceBsrOperator:
             ] = kernel
         kernel((self.block_rows,), (32,), (
             np.int32(self.block_rows), diagonal_inverse, rhs,
-            np.float64(weight), out,
+            REAL_DTYPE(weight), out,
         ))
         return out
 

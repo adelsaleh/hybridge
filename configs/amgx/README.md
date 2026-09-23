@@ -9,12 +9,33 @@
 These JSON files are readable, reusable PyAMGX configurations for the CUDA HDG runners. The Python scripts keep embedded fallback copies, but load these files by default when present. Use `--amgx-config` to run an edited copy without changing source code.
 
 At guiding-center runner verbosity `-v 3`, HDGFEM enables AMGX solve
-statistics with `print_solve_stats_interval=1`. The local AMGX formatter shows
-one aggregate block-L2 residual column, relative-to-initial and
-relative-to-previous ratios, and used/held device memory. This aggregation is
-presentation-only: block-component convergence checks and stored residual
-history are unchanged. Direct solver verbosity `2` or `>=4` retains the Python
-backend micro-timing/configuration diagnostics.
+statistics. Transport defaults to `print_solve_stats_interval=10`; an explicit
+JSON value is preserved (use `1` for every iteration). The initial and final
+rows and any divergence exit reason are always printed when the table is
+active. The local AMGX formatter shows one aggregate block-L2 residual column,
+relative-to-initial and relative-to-previous ratios, and used/held device
+memory. Sampling affects printing only: convergence checks and stored residual
+history still run every iteration. Direct solver verbosity `2` or `>=4` retains
+the Python backend micro-timing/configuration diagnostics.
+
+Guiding-center AMGX transport enables a native guard on the primary and every
+AMGX retry. After ten startup iterations, five consecutive completed iterations
+above 1000 times the best monitored residual request a fresh `b-A*x` check.
+Confirmed growth returns `AMGX_ST_DIVERGED` immediately, allowing the bounded
+retry policy to continue. Non-finite residuals terminate immediately, including
+during startup. The reference has a floor of 64 times vector-precision epsilon
+times the initial residual, so a tiny recursive residual does not make ordinary
+roundoff count as explosive growth. Finite growth in restarted GMRES/FGMRES is
+verified only when the current solution has been formed. Isolated spikes and
+large initial residuals alone do not stop a solve.
+
+The outer solver JSON keys are `rel_div_tolerance` (default `1000` for transport,
+nonpositive disables), `divergence_patience` (`5`), and
+`divergence_grace_iters` (`10`). Explicit values are preserved. Poisson keeps its
+own configuration. These controls require rebuilding the local AMGX fork;
+Python-side rejection alone cannot interrupt an active native solve. Independent
+physical residual acceptance remains mandatory. This guard detects explosive
+growth; it does not declare every plateau a failure.
 
 The JSON basenames retain their original `adv_rea_gpu4_hdg_*` and
 `diff_rea_gpu4_hdg_*` benchmark identifiers because archived run logs cite
@@ -25,6 +46,15 @@ In the examples below, replace `/path/to/amgx/lib` with the directory containing
 your AMGX shared library, for example `libamgxsh.so`. If AMGX is installed in a
 system or environment path already known to the dynamic loader, the
 `LD_LIBRARY_PATH=...` prefix is not needed.
+
+## FP32 Guiding-Center Transport
+
+`adv_rea_gpu4_hdg_fgmres_scaled_none.json` provides restarted FGMRES (50 vectors,
+300 iterations, explicit `NOSOLVER` preconditioner, relative tolerance 5e-3).
+It retains raw-CUDA BSR assembly, diagonal row scaling and independently checked
+physical/scaled residuals. This is the FP32 guiding-center replacement for the
+stock unpreconditioned BiCGSTAB configuration, which can diverge in FP32.
+See the [FP32 run and validation notes](../../docs/development/fp32_guiding_center.md).
 
 ## Advection-Reaction HDGFEM
 
@@ -82,8 +112,16 @@ one iteration, unit relaxation, and
 `jacobi_l1_scalar_rows_for_blocks=1`. It was about twice as fast as direct
 block Jacobi at p=6, `ms=0.02`, but generally did not beat plain scaled
 BICGSTAB on the fine `ms=0.01` mesh. Keep BICGSTAB as the default; use
-PBICGSTAB+L1 as the block-size-safe preconditioned comparison. Aggregation AMG
-and `MULTICOLOR_DILU` are not valid pure-BSR p=6 choices in the current build.
+PBICGSTAB+L1 as the block-size-safe preconditioned comparison. Aggregation AMG remains unsupported for pure-BSR p=6. The repaired
+`MULTICOLOR_DILU` path supports 7×7 blocks and passed its algebra tests, but
+did not improve Poisson convergence in the
+[150k/300k study](../../artifacts/full_bsr_convergence_20260914/README.md).
+
+The absolute-tolerance Poisson fallback
+`diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive_abs.json` also enables
+`jacobi_l1_scalar_rows_for_blocks=1` in its Chebyshev L1 preconditioner.
+This is needed when a native FB-HP-MG solve falls back with p=6 face BSR
+(block size 7); scalar CSR behavior is unchanged.
 
 For pure BSR at p=1..3, the stronger measured option is
 `adv_rea_gpu4_hdg_pbicgstab_dilu_bsr_p1_p3.json`: direct PBICGSTAB with one
@@ -99,13 +137,41 @@ Additional raw-CSR preconditioner checks on 2026-07-21 used `p=6`, `ms=0.01`, `d
 
 Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation (`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
 
-Guiding-center device presets use `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`, whose JSON contains no inactive nested preconditioner. HDGFEM applies left row scaling and supplies the accepted density trace as the initial guess. The k100/k50 stress family uses an AMGX stopping tolerance of `1e-8` while independently retaining its `1e-11`/`5e-9` physical residual contract; a rejected primary enters scaled FGMRES with direct `MULTICOLOR_DILU`. Because AMGX DILU is not enabled for the p=6 face block size, only that fallback expands face BSR to scalar CSR with a raw-CUDA device kernel. The stateful solver keeps the first DILU factors as a fixed FGMRES preconditioner, replaces matrix coefficients in place on later steps, and never materializes the matrix on host. On the 157,280-triangle p=6 case, the accepted primary reduced warm transport from 32 to 23 iterations and from about 0.366 s to 0.340 s; the fallback did not occur.
+Guiding-center device presets use `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`, whose JSON contains no inactive nested preconditioner. HDGFEM applies left row scaling and supplies the accepted density trace as the initial guess. The k100/k50 stress family uses an AMGX stopping tolerance of `1e-8` while independently retaining its `1e-11`/`5e-9` physical residual contract; a rejected primary first tries `PBICGSTAB` with one `JACOBI_L1` application (`adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json`), then one `BLOCK_JACOBI` application (`adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json`). Both start from zero, keep native BSR, inherit `transport_scale_system` (left row scaling in the device presets), use the configured transport relative tolerance, and rebuild their cheap preconditioner data for the current matrix. L1 uses `jacobi_l1_scalar_rows_for_blocks=1`; block Jacobi inverts the dense diagonal blocks. If both fail, the policy enters FGMRES with direct `MULTICOLOR_DILU` and the same scaling option, followed by at most two residual-correction solves. There is no repeated unpreconditioned retry. Because AMGX DILU is not enabled for the p=6 face block size, only that fallback expands face BSR to scalar CSR with a raw-CUDA device kernel. The stateful solver keeps the first DILU factors as a fixed FGMRES preconditioner, replaces matrix coefficients in place on later steps, and never materializes the matrix on host. On the 157,280-triangle p=6 case, the accepted primary reduced warm transport from 32 to 23 iterations and from about 0.366 s to 0.340 s; the fallback did not occur.
+
+A recoverable block-Jacobi setup or solve exception advances immediately to the
+FGMRES/`MULTICOLOR_DILU` attempt. A CUDA device memory fault can leave the context
+unusable, so catching that exception alone cannot make a later fallback succeed.
+The 2026-09-11 investigation reproduced out-of-bounds writes in AMGX's large-block
+Jacobi setup (block sizes above five): its temporary buffer was sized by grid
+blocks but indexed by threads. The local AMGX fixes remove that buffer, correct
+the diagonal BSR multiply's block count and backend selection, and fix the sign
+and half-warp synchronization in the large-block inverse. Rebuild `amgxsh` after
+applying these native changes. `tests/test_amgx_bsr_retry_preconditioners.py`
+checks a single Jacobi update against a dense per-block solve with AMGX pooling
+disabled, and injects recoverable BJ errors to verify the next real FGMRES/DILU
+solve succeeds. These checks use small synthetic matrices, without time stepping.
+After rebuilding the patched CUDA 13 library on 2026-09-11, all 30 tests passed
+in each of FP64 and FP32 under Compute Sanitizer memcheck (zero errors). The ten
+large-block update cases also passed a targeted racecheck of the native Jacobi
+setup kernel with zero hazards.
+
+The optional guiding-center flag `--transport-direct-fallback cusolver-qr` adds
+an unscaled device sparse QR solve after all six AMGX attempts. It is disabled
+by default. Every attempt records a fresh physical `b-A*x` residual separately
+from its solver-coordinate residual; failed stages also write boundary,
+divergence, normal-jump and matrix row-scale diagnostics. See
+[the transport investigation](../../docs/development/transport_boundary_diagnostics.md)
+for tangency conditions, the localized initial-data preset, and small-test
+scaling/direct-solve evidence.
 
 Experimental advection-reaction configs retained for comparison:
 
 Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_advection_disk_tangent_cuda.py` with `p=4`, `ms=0.01`, `dub_orth`, `legacy-lagrange`, fused raw-CUDA CSR, cooperative LU, and `--amgx-tolerance 1e-10`. The default BICGSTAB/classical-ILU0 AMG route needed about 2200 iterations. `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json` reduced this to 73 iterations using `PBICGSTAB + aggregation AMG + MULTICOLOR_DILU` with `presweeps=0`, `postsweeps=2`. This is a stronger diagnostic config, not yet the global default: each preconditioner application is much heavier, so the wall-clock solve was slightly slower on that screen. Use it with `--no-scale-system`; external row scaling made the PBICGSTAB aggregation-DILU variants fail, and AMGX internal `BINORMALIZATION` terminated before the runner summary with device-pool leak diagnostics.
 
 - `adv_rea_gpu4_hdg_pbicgstab_aggregation_dilu_postsmooth2.json`: strong zero-flux disk-tangent diagnostic; requires `--no-scale-system`.
+- `adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json`: first guiding-center retry; PBICGSTAB with the configured transport scaling with one scalar-row L1 Jacobi application directly on BSR.
+- `adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json`: second guiding-center retry; PBICGSTAB with the configured transport scaling with one native block-Jacobi application.
 - `adv_rea_gpu4_hdg_pbicgstab_dilu_bsr_p1_p3.json`: direct block-DILU comparison for unscaled p=1..3 BSR only.
 - `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested L1 configuration is inactive.
 - `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested Chebyshev/L1 configuration is inactive.
@@ -179,12 +245,17 @@ Working configs:
 - `diff_rea_gpu4_hdg_fgmres_cheb_l1_block_graph_identity_bsr.json`: validated opt-in pure-BSR classical hierarchy using a Frobenius block graph, D2 scalar weights, identity-lifted BSR transfers, weighted BSR Galerkin, and FGMRES; requires the accompanying patched AMGX source.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_identity_bsr.json`: validated PCGF path for the identity-lifted pure-BSR hierarchy. After fixing the multilevel correction overrun, all radius-5 disk cases at 99,896, 124,831, and 150,209 triangles for p=1..6 converge; its high iteration count reflects weak interpolation, not PCGF incompatibility.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_dense_bsr.json`: validated one-step/additive PCGF/Chebyshev baseline for fixed-support dense block interpolation, exact block transpose, and dense BSR Galerkin. It requires the patched AMGX source and sets `aggressive_levels=0`: aggressive D2 can leave fine block rows without interpolation support, whereas the dense mode enforces `sum_c P_ic = I_b` on every row.
+- `diff_rea_gpu4_hdg_pcgf_cheb_block_jacobi_block_graph_dense_bsr.json`: opt-in fully BSR PCGF with true face-block Jacobi inside order-two Chebyshev, 0 pre-sweeps and 3 post-sweeps. It uses fixed weighted-power spectral estimates (`chebyshev_lambda_estimate_mode=4`), direct zero-start block-Jacobi corrections, and reuse of Chebyshev’s initial correction; these require the accompanying AMGX patches. The two cycle shortcuts reduced matched p=6 warm solve time, including preconditioning, from 408 to 247 ms at 157,280 triangles and from 896 to 544 ms at 315,425 triangles, with identical iteration counts and residual histories. All 80 native algebra tests passed. The preset uses absolute tolerance 1e-13 and a 300-iteration cap; runners can override the tolerance. See the [cycle-cost report](../../artifacts/full_bsr_cycle_cost_20260914/README.md) and [earlier smoothing study](../../artifacts/full_bsr_smoothing_steps_20260913/README.md).
+- `diff_rea_gpu4_hdg_pcgf_cheb_block_jacobi_constant_vector_bsr.json`: experimental fully BSR interpolation for scalar Poisson in nodal coordinates. It preserves `P*1=1` and exact coarse-point injection while allowing other block components to relax. The existing additive constraint remains the default. The AMGX `constant_vector` patch is built and validated. Fresh three-step p=6 runs gave 26/21/19 iterations and 239.19 ms warm solve at 157,280 triangles, and 27/22/19 and 451.01 ms at 315,425 triangles. Hybrid still achieved 16/13/12 at both sizes, with 106.22/203.70 ms warm solve. All 106 smoother/interpolation/DILU algebra tests passed; this remains opt-in. See the [150k/300k convergence study](../../artifacts/full_bsr_convergence_20260914/README.md).
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_extended_i_dense_bsr.json`: rejected block Extended+i diagnostic retained for reproduction. It is correct and memory-safe, but is one to two PCGF iterations worse than projected Jacobi on the 152,909-triangle p=2/p=6 cases at thresholds 0.25 and 0.47.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_scalar_guided_dense_bsr.json`: rejected mode-aware coarse-face diagnostic retained for reproduction. Any-mode promotion regresses the production-size p=2 case from 20 to 28 iterations and its temporary scalar expansion exceeds the available p=6 setup memory.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_inverse_scaled_dense_bsr.json`: completed diagnostic for the symmetric inverse-diagonal block-action metric. It is slightly worse than raw Frobenius and has higher setup cost; retain it for reproduction, not production.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_normalized_dense_bsr.json`: completed diagnostic for diagonal-normalized Frobenius strength. It shifts the p=6 hierarchy transition but does not beat the raw-Frobenius optimum; retain it for reproduction, not as a production default.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_energy_bsr.json` and `diff_rea_gpu4_hdg_pcgf_cheb_l1_block_graph_energy_strong_bsr.json`: rejected diagnostic configs retained only to reproduce the interpolation screen. Right normalization greatly increases iterations and fails on deeper levels with two or more smoothing steps; do not use these configs for production solves.
 - `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive_abs.json`: same PCGF + Chebyshev/L1 hierarchy with `convergence=ABSOLUTE`; used by guiding-center Poisson presets so `poisson_solver_atol` is the AMGX stopping tolerance.
+- `diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_robust_abs.json`: strong coefficient-exact hybrid BSR/CSR Poisson stage, selected by the signed and positive turbulence presets. It keeps PCGF, uses a scalar-expanded classical hierarchy, order-four `CHEBYSHEV` with scalar-row `JACOBI_L1`, symmetric 2+2 smoothing, four coarse sweeps, and no aggressive level. `chebyshev_lambda_estimate_mode=2` uses the established L1-preconditioned spectral estimate. The historical filename is retained for existing response files; the smoother must be `CHEBYSHEV`, because `CHEBYSHEV_POLY` rejects the fine face-BSR blocks and ignores a nested L1 preconditioner. The wrapper records scalar residual diagnostics without an iterate-vector history.
+- `diff_rea_gpu4_hdg_pcgf_classical_gs_robust_abs.json`: pure scalar-CSR PCGF retry with symmetric 2+2 multicolor Gauss-Seidel and a stronger fixed V-cycle. The turbulence policy reuses this hierarchy for zero-start and residual-correction attempts.
+- `diff_rea_gpu4_hdg_fgmres_dilu_robust_abs.json`: scalar-CSR terminal escape hatch: one FGMRES attempt with direct `MULTICOLOR_DILU`, reached only after all native, hybrid, and pure-CSR PCGF attempts fail.
 - `diff_rea_gpu4_hdg_pcgf_chebpoly4_l1_aggressive.json`: second nodal candidate and experimental modal PCGF candidate.
 - `diff_rea_gpu4_hdg_pcgf_classical_amg.json`: conservative classical AMG baseline and modal BICGSTAB preconditioner.
 - `diff_rea_gpu4_hdg_pcgf_aggregation_block_jacobi_bsr.json`: stock-AMGX face-BSR aggregation-AMG path for p=1..4 (block sizes 2..5).

@@ -1,0 +1,129 @@
+{
+  "status": "passed",
+  "artifacts": [
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/README.md",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/README.md",
+      "sha256": "d95b1286cb2e733d8e946a29c47230fa9186a636eac634f20b07be54362b10de",
+      "size_bytes": 10828,
+      "original_zip_member": "docs/README.md",
+      "merged_sha256": "09cc3c9affab692030570e8e161801a96642de2a425ed7144426609748146d02",
+      "adaptation": "Relative documentation/figure paths and heading level adapted to the merged study; original bytes preserved in premerge_artifacts.zip."
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/accuracy_table.tex",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/accuracy_table.tex",
+      "sha256": "23c55c81155279a0eacf2305dff8adc89ffb699e3bf066c9fdc6a6e41a89b1e2",
+      "size_bytes": 273,
+      "original_zip_member": "docs/accuracy_table.tex",
+      "merged_sha256": "23c55c81155279a0eacf2305dff8adc89ffb699e3bf066c9fdc6a6e41a89b1e2"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/comparison.csv",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/comparison.csv",
+      "sha256": "f6b8e8334653410ad3746c0dfa98c4d4af2b58d890abf2012f754e19b0fbc3d1",
+      "size_bytes": 15418,
+      "original_zip_member": "docs/comparison.csv",
+      "merged_sha256": "f6b8e8334653410ad3746c0dfa98c4d4af2b58d890abf2012f754e19b0fbc3d1"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/figure_hashes.json",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figure_hashes.json",
+      "sha256": "1848ed7ed7e9e6cd99f7b681b4da2cab976cb711ddacd83351d1198bd360e95d",
+      "size_bytes": 939,
+      "original_zip_member": "docs/figure_hashes.json",
+      "merged_sha256": "1848ed7ed7e9e6cd99f7b681b4da2cab976cb711ddacd83351d1198bd360e95d"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/preview.tex",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/preview.tex",
+      "sha256": "c7a5a73ef7c31c88557ad9bff18ba0c0b0210c5920c43e6ba6e7f5da07987d9c",
+      "size_bytes": 733,
+      "original_zip_member": "docs/preview.tex",
+      "merged_sha256": "4e8a7c90bb32bbd8395833c4597f82197ae32d3426f9040e325d99b5c927605f",
+      "adaptation": "Relative documentation/figure paths and heading level adapted to the merged study; original bytes preserved in premerge_artifacts.zip."
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/results.data.json",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/results.data.json",
+      "sha256": "0788567babb4d355797e2130ec952c76c14a14b9c7c3ca62fa2ee2ed69e7948d",
+      "size_bytes": 897784,
+      "original_zip_member": "docs/results.data.json",
+      "merged_sha256": "0788567babb4d355797e2130ec952c76c14a14b9c7c3ca62fa2ee2ed69e7948d"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/section.tex",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/section.tex",
+      "sha256": "c64aec888b6215a97b22b165150d17201d53c3251e7051f577fcccc9bbbd9e39",
+      "size_bytes": 8676,
+      "original_zip_member": "docs/section.tex",
+      "merged_sha256": "1bcb62f17c0a6f3fb8689d5783cd45a2a71e492444e6c6cde3ad636c55356d57",
+      "adaptation": "Relative documentation/figure paths and heading level adapted to the merged study; original bytes preserved in premerge_artifacts.zip."
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_oscillatory_2026_09_18/verification.json",
+      "merged": "/home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/verification.json",
+      "sha256": "6d73843fecb806c6b91ce74515bc5b666307f42c3d9af8d8a07f51b5dfe558d7",
+      "size_bytes": 40446,
+      "original_zip_member": "docs/verification.json",
+      "merged_sha256": "6d73843fecb806c6b91ce74515bc5b666307f42c3d9af8d8a07f51b5dfe558d7"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/adr_oscillatory_bundle.zip",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/adr_oscillatory_bundle.zip",
+      "sha256": "3c01bbca4e3d5b016fba2666bdc90cd47bb7c727101dbb07380ae1ac1a0ff11b",
+      "size_bytes": 1599065,
+      "original_zip_member": "outputs/adr_oscillatory_bundle.zip",
+      "merged_sha256": "3c01bbca4e3d5b016fba2666bdc90cd47bb7c727101dbb07380ae1ac1a0ff11b"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/geometry_fields.pdf",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/geometry_fields.pdf",
+      "sha256": "f4057bc2d9c25e758a5491a601bc2fd640e6a61acfcca020ecfe25c253b6d531",
+      "size_bytes": 232392,
+      "original_zip_member": "outputs/figures/geometry_fields.pdf",
+      "merged_sha256": "f4057bc2d9c25e758a5491a601bc2fd640e6a61acfcca020ecfe25c253b6d531"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/geometry_fields.png",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/geometry_fields.png",
+      "sha256": "07aeb8ae6183381113366a0dc7d783c64c841486a24a2237216d3086a2cd0b42",
+      "size_bytes": 339129,
+      "original_zip_member": "outputs/figures/geometry_fields.png",
+      "merged_sha256": "07aeb8ae6183381113366a0dc7d783c64c841486a24a2237216d3086a2cd0b42"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/geometry_fields.svg",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/geometry_fields.svg",
+      "sha256": "b4a7b542bf02b176141de0dd66f33d48010357703855b709b4f0b4c3374c1fcc",
+      "size_bytes": 751617,
+      "original_zip_member": "outputs/figures/geometry_fields.svg",
+      "merged_sha256": "b4a7b542bf02b176141de0dd66f33d48010357703855b709b4f0b4c3374c1fcc"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/solver_comparison.pdf",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/solver_comparison.pdf",
+      "sha256": "639a0272bea7a69f6b19babbfb17bd9b2c63dc231b02cc4558f8a4f50a1af75e",
+      "size_bytes": 16558,
+      "original_zip_member": "outputs/figures/solver_comparison.pdf",
+      "merged_sha256": "639a0272bea7a69f6b19babbfb17bd9b2c63dc231b02cc4558f8a4f50a1af75e"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/solver_comparison.png",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/solver_comparison.png",
+      "sha256": "6b18f63795fc68568758ba2a0e81c112a8afe54ea6f9203d8000e2191ad98df8",
+      "size_bytes": 132766,
+      "original_zip_member": "outputs/figures/solver_comparison.png",
+      "merged_sha256": "6b18f63795fc68568758ba2a0e81c112a8afe54ea6f9203d8000e2191ad98df8"
+    },
+    {
+      "original": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_oscillatory_2026_09_18/figures/solver_comparison.svg",
+      "merged": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/solver_comparison.svg",
+      "sha256": "5d4aa8cd0c0a82280ce5028f21b673d00f72a7b28ede3472cea55c06a30ea230",
+      "size_bytes": 104148,
+      "original_zip_member": "outputs/figures/solver_comparison.svg",
+      "merged_sha256": "5d4aa8cd0c0a82280ce5028f21b673d00f72a7b28ede3472cea55c06a30ea230"
+    }
+  ],
+  "note": "All original oscillatory report artifacts and raw runs moved under the previous study. Historical paths are compatibility symlinks. Measurement bytes are unchanged; only the three documented presentation files were adapted."
+}

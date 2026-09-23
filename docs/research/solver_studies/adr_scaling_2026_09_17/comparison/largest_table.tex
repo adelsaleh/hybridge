@@ -1,0 +1,31 @@
+\begin{tabular}{llrrr}
+\toprule
+Problem & Method & Iter. & Reused & Fresh \\
+ & & & \multicolumn{2}{c}{time (ms)} \\
+\midrule
+Variable velocity & PP(18) / GMRES & 1000 & -- & NC \\
+ & BJ+PP(18) / GMRES & 350 & 3602.6 & 3862.5 \\
+ & ASM+PP(18) / GMRES & 150 & 2567.7 & 3580.1 \\
+ & $p$MG--AMG & 35 & \textbf{136.5} & 1365.2 \\
+ & AMG/Jac.--FGMRES & 43 & 217.5 & \textbf{669.0} \\
+ & AMG/Jac.--BiCGSTAB & 26 & 221.3 & 674.2 \\
+ & CPU LU & -- & $\mathrm{P\!-\!LU}_{8}$ 700.829 & $\mathrm{P\!-\!LU}_{16}$ 3842.192 \\
+\midrule
+Transport dominated & PP(18) / GMRES & 225 & 2212.6 & 2451.0 \\
+ & BJ+PP(12) / GMRES & 164 & 1214.1 & 1471.3 \\
+ & ASM+PP(18) / GMRES & 41 & 682.6 & 1720.3 \\
+ & $p$MG--AMG & 675 & 3134.7 & 4405.4 \\
+ & DILU--BiCGSTAB & 264 & 633.8 & \textbf{936.4} \\
+ & AMG/DILU--FGMRES & 37 & \textbf{573.5} & 1026.9 \\
+ & AMG/DILU--BiCGSTAB & 20 & 576.7 & 1035.0 \\
+ & CPU LU & -- & $\mathrm{P\!-\!LU}_{8}$ 690.693 & $\mathrm{P\!-\!LU}_{24}$ 4492.678 \\
+\midrule
+High diffusion & PP(18) / GMRES & 1000 & -- & NC \\
+ & BJ+PP(12) / GMRES & 825 & 6084.0 & 6342.2 \\
+ & ASM+PP(18) / GMRES & 200 & 3493.6 & 4601.8 \\
+ & $p$MG--AMG & 71 & 276.1 & 1506.4 \\
+ & AMG/Jac.--FGMRES & 54 & 277.9 & 731.4 \\
+ & AMG/Jac.--BiCGSTAB & 29 & \textbf{250.1} & \textbf{704.1} \\
+ & CPU LU & -- & $\mathrm{P\!-\!LU}_{8}$ 692.519 & $\mathrm{P\!-\!LU}_{16}$ 3855.950 \\
+\bottomrule
+\end{tabular}

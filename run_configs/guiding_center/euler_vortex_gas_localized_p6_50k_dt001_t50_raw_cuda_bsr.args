@@ -1,0 +1,5 @@
+# Signed Euler vortex gas with all vortex centers inside r<=0.5.
+# Same 360 vortices, widths, amplitudes and seed as the domain-filling case.
+# Gaussian tails are small near the wall; the Poisson field is not compact.
+# p=6, 50k+ triangles, semi-implicit Euler dt=0.01 to T=50.
+--preset euler_vortex_gas_localized_p6_50k_dt001_t50_raw_cuda_bsr

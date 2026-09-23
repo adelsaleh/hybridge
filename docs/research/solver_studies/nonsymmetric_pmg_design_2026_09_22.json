@@ -1,0 +1,230 @@
+{
+  "scope": "dense algebra diagnostics; exact terminal solve, no AMG, HDG assembly, or GPU",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "identities": {
+    "ideal_RAP_minus_S": 9.01762591134108e-16,
+    "ideal_RA_high": 3.007696493658712e-16,
+    "ideal_AP_high": 6.647054908131171e-16,
+    "ideal_inverse_residual": 5.613182147816708e-16,
+    "approximate_RAP_expansion_error": 1.4333487982485708e-15,
+    "approximate_RAP_minus_naive_S": 0.3504048493780914,
+    "coordinate_mapped_inverse_residual": 9.874674444443906e-16,
+    "counterexample_determinant": 1.0,
+    "injected_coarse_value": 0.0,
+    "petrov_coarse_value": 0.5,
+    "counterexample_inverse_residual": 0.0,
+    "indefinite_symmetric_part_inverse_residual": 2.220446049250313e-16,
+    "singular_high_split_rejected": true
+  },
+  "samples": [
+    {
+      "case": "symmetric_control",
+      "transfer": "injection",
+      "size": 48,
+      "gmres_iterations": 6,
+      "gmres_info": 0,
+      "true_relative_residual": 1.3986040765782468e-11,
+      "relative_solution_error": 4.102908225928617e-11,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 6.443398113205658,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 144
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 4.999999999999999,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 36
+        }
+      ]
+    },
+    {
+      "case": "symmetric_control",
+      "transfer": "local_petrov",
+      "size": 48,
+      "gmres_iterations": 6,
+      "gmres_info": 0,
+      "true_relative_residual": 2.9734391396696768e-12,
+      "relative_solution_error": 6.445406010855463e-12,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 6.371728390528095,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 336
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 4.879178086593056,
+          "restriction_transpose_defect": 1.734723475976807e-18,
+          "coarse_numerical_nonzeros": 144
+        }
+      ]
+    },
+    {
+      "case": "directed_cycle",
+      "transfer": "injection",
+      "size": 48,
+      "gmres_iterations": 14,
+      "gmres_info": 0,
+      "true_relative_residual": 2.146193978405123e-11,
+      "relative_solution_error": 3.8889291641265946e-11,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 18.344292530665562,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 144
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 15.000000000000002,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 36
+        }
+      ]
+    },
+    {
+      "case": "directed_cycle",
+      "transfer": "local_petrov",
+      "size": 48,
+      "gmres_iterations": 14,
+      "gmres_info": 0,
+      "true_relative_residual": 1.0025576508144838e-11,
+      "relative_solution_error": 1.4300224912188896e-11,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 17.8965066799707,
+          "restriction_transpose_defect": 0.16709922487192128,
+          "coarse_numerical_nonzeros": 336
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 14.300427217747684,
+          "restriction_transpose_defect": 0.2115276009603148,
+          "coarse_numerical_nonzeros": 144
+        }
+      ]
+    },
+    {
+      "case": "skew_coupled",
+      "transfer": "injection",
+      "size": 48,
+      "gmres_iterations": 14,
+      "gmres_info": 0,
+      "true_relative_residual": 1.0860680481383675e-12,
+      "relative_solution_error": 1.957849538335359e-12,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 2.0530566073433003,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 144
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 4.999999999999999,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 36
+        }
+      ]
+    },
+    {
+      "case": "skew_coupled",
+      "transfer": "local_petrov",
+      "size": 48,
+      "gmres_iterations": 5,
+      "gmres_info": 0,
+      "true_relative_residual": 2.469809894177469e-12,
+      "relative_solution_error": 4.009339302172831e-12,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 2.168615759261707,
+          "restriction_transpose_defect": 2.2363841631153996,
+          "coarse_numerical_nonzeros": 336
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 1.1303880566669875,
+          "restriction_transpose_defect": 7.078668916507535,
+          "coarse_numerical_nonzeros": 144
+        }
+      ]
+    },
+    {
+      "case": "unequal_couplings",
+      "transfer": "injection",
+      "size": 48,
+      "gmres_iterations": 23,
+      "gmres_info": 0,
+      "true_relative_residual": 9.583132318375547e-11,
+      "relative_solution_error": 4.7830119711527935e-09,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 245.79867343884072,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 144
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 204.5796810094369,
+          "restriction_transpose_defect": 0.0,
+          "coarse_numerical_nonzeros": 36
+        }
+      ]
+    },
+    {
+      "case": "unequal_couplings",
+      "transfer": "local_petrov",
+      "size": 48,
+      "gmres_iterations": 19,
+      "gmres_info": 0,
+      "true_relative_residual": 6.350086964645444e-11,
+      "relative_solution_error": 3.103471425189395e-09,
+      "passed_residual_check": true,
+      "levels": [
+        {
+          "size": 48,
+          "block_size": 4,
+          "coarse_condition_2": 238.66972491759918,
+          "restriction_transpose_defect": 0.05597830911525493,
+          "coarse_numerical_nonzeros": 336
+        },
+        {
+          "size": 24,
+          "block_size": 2,
+          "coarse_condition_2": 194.5499790281447,
+          "restriction_transpose_defect": 0.15015586784110843,
+          "coarse_numerical_nonzeros": 144
+        }
+      ]
+    }
+  ]
+}

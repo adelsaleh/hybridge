@@ -50,6 +50,19 @@ def load_amgx_config(
     return config, resolved_path
 
 
+def with_amgx_residual_history(config: Mapping[str, Any] | None, enabled: bool) -> dict | None:
+    """Copy a solve configuration with optional history, retaining stopping rules.
+
+    A missing configuration keeps backend defaults. Explicit history choices
+    control diagnostic storage/downloads, never convergence monitoring.
+    """
+    if config is None:
+        return None
+    result = copy.deepcopy(dict(config))
+    result.setdefault("solver", {})["store_res_history"] = int(enabled)
+    return result
+
+
 def describe_amgx_solver(config: Mapping[str, Any]) -> str:
     """Return the configured top-level AMGX solver name."""
     return str(config.get("solver", {}).get("solver", "unknown"))
@@ -97,4 +110,5 @@ __all__ = [
     "describe_amgx_solver",
     "format_amgx_configuration",
     "load_amgx_config",
+    "with_amgx_residual_history",
 ]

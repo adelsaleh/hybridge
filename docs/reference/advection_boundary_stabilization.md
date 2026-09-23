@@ -29,14 +29,14 @@ separate default-change task is completed.
 With side-normal flux `b = beta . n`, `advection_stabilization=None` selects
 the upwind value `tau = abs(b)`. Assembly uses both `tau` and
 `gamma = tau - b` on each element side. For an interior face, left and right
-contributions remain distinct; discontinuous advection is not averaged.
+contributions remain distinct under standard upwind.
 
 | Assembly backend | Boundary modes | Accepted explicit `tau` inputs | Ordering |
 |---|---|---|---|
 | NumPy | `penalty`, `eliminate` | Scalar, callable `tau(x, y)` or `tau(x, y, K, e)`, `DGField`, compatible coefficient arrays, per-face constants, or evaluated face-quadrature tables | `none`, `upwind-scc` |
 | Numba | `penalty`, `eliminate`, `zero-flux` | Scalar or same-space projected `DGField`; callable stabilization must be projected first | `none`, `upwind-scc` |
 | CuPy | `penalty`, `eliminate` | Same forms as NumPy | `none`, `upwind-scc` with host graph construction |
-| Raw CUDA | `eliminate`, `zero-flux` | None; explicit stabilization is rejected before device setup | `none` only; zero-flux also requires fused local assembly |
+| Raw CUDA | `eliminate`, `zero-flux` | Built-in upwind policies and `ScaledUpwind` | `none` only; zero-flux requires fused or split local assembly |
 
 NumPy and CuPy sample analytic stabilization callables directly at face
 quadrature points. A `DGField` has discrete rather than analytic semantics:
@@ -75,3 +75,55 @@ boundary and materializes the trace system before solving.
 Raw-CUDA direct-CSR/AMGX runs may keep the reduced trace and reconstructed
 field on the device. Host materialization changes residency only; it does not
 change boundary ownership or stabilization semantics.
+
+## Conflict-averaged upwind
+
+All advection backends accept `advection_stabilization="conflict-averaged-upwind"`.
+For interior quadrature nodes with outward velocities `a >= 0`, `b >= 0`,
+and `a+b > 0`, use `sL=(a-b)/2`, `sR=-sL`. All other nodes, including
+ordinary inflow/outflow pairs and double inflow, retain their side velocities.
+Exterior handling and volume velocity coefficients are unchanged. Both
+weights use the effective velocity: `tau=abs(s)`, `gamma=abs(s)-s`.
+
+An interior face with exactly zero effective velocity on both sides at every
+quadrature node has an irrelevant trace. Its canonical incident element adds
+an identity to the existing diagonal mass block with zero RHS, preserving
+physical fluxes and sparsity. No small velocity is clipped and no partially
+supported active face is regularized. Existing convergence checks still apply.
+
+This is a numerical face-flux repair, not an H(div) velocity reconstruction or
+an energy-conservation guarantee. No increased penalty or automatic
+dissipative fallback is part of the policy. `ScaledUpwind` and
+`"lax-friedrichs"` keep their existing behavior on the original velocities.
+Connectivity is cached on the mesh and mirrored once per device; fused CUDA
+and Numba construct weights inside existing element loops. The split CUDA
+build does likewise, and its scatter consumes the completed weight table.
+
+The non-compiling regression check is:
+
+```bash
+NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=0 \
+  .venv/bin/python -m pytest -q tests/test_conflict_averaged_upwind.py
+```
+
+Compiled qualification is opt-in. The following checks Numba and raw CUDA
+at degrees 2 and 6, including COO/CSR/BSR where supported, both trace bases,
+and cached/rebuilt reconstruction:
+
+```bash
+NUMBA_DISABLE_JIT=0 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=1 \
+  .venv/bin/python -m pytest -q tests/test_conflict_averaged_upwind.py
+```
+
+User-authorized compiled validation passed on 2026-09-17 with Numba 0.67.0,
+CuPy 14.2.0, and an NVIDIA RTX PRO 5000 Blackwell: 205 original cases plus
+160 degree-six CUDA cases, with no skips in either selection. These cover
+eliminated and zero-flux boundaries, conflict averaging, exact inactive-face
+gauges, variable velocities, and reconstruction with and without cached local
+responses. Both saved failure fixtures retain full weighted trace-sampling rank.
+The existing scaled-upwind suite also passed all 28 cases with JIT and CUDA
+enabled, including its degree-six fused/split reconstruction comparisons.
+
+Performance measurements and time-integration comparisons remain separate
+user-authorized work. These small-matrix checks establish no performance or
+long-time stability claim.

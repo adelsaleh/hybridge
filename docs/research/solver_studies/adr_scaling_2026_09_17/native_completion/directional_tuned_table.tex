@@ -1,0 +1,16 @@
+\begin{tabular}{llrrrrr}
+\toprule
+Geometry & Solver & Iter. & Apply & Setup & Fresh & Reused \\
+ & & & (ms) & \multicolumn{3}{c}{time (s)} \\
+\midrule
+Square & ASM+PP(20) & 600 & 16.60 & \textbf{1.037} & 12.255 & 11.214 \\
+ & $p$MG--AMG standard & 600 & 2.62 & 1.255 & 4.020 & 2.751 \\
+ & $p$MG--AMG robust & 375 & 14.34 & 1.250 & 7.397 & 6.140 \\
+ & CPU LU & -- & -- & $\mathrm{P\!-\!LU}_{24}$ 3.100 & \textbf{$\mathrm{P\!-\!LU}_{24}$ 3.846} & \textbf{$\mathrm{P\!-\!LU}_{16}$ 0.697} \\
+\midrule
+Annulus & ASM+PP(29) & 150 & 24.38 & \textbf{1.056} & 5.024 & 3.994 \\
+ & $p$MG--AMG standard & 375 & 2.89 & 1.290 & \textbf{3.012} & 1.731 \\
+ & $p$MG--AMG robust & 225 & 14.42 & 1.267 & 4.952 & 3.711 \\
+ & CPU LU & -- & -- & $\mathrm{P\!-\!LU}_{24}$ 3.486 & $\mathrm{P\!-\!LU}_{24}$ 4.177 & \textbf{$\mathrm{P\!-\!LU}_{16}$ 0.686} \\
+\bottomrule
+\end{tabular}

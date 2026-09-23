@@ -163,7 +163,7 @@ ALPHA_TEST_LANES = (
             (
                 "{python}",
                 "-m",
-                "scripts.guiding_center.run_guiding_center_temporal_convergence",
+                "scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence",
                 "--scheme",
                 "both",
                 "--final-time",

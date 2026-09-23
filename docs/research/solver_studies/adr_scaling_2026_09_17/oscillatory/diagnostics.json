@@ -1,0 +1,1872 @@
+{
+  "completion": {
+    "status": "completed",
+    "profiles": 6,
+    "quadrature": 2,
+    "condition_estimates": 3
+  },
+  "manifest": {
+    "annular_completion": {
+      "status": "completed",
+      "scheduled": 96,
+      "attempted": 96,
+      "passed": 61,
+      "reused": 0,
+      "preserved_22825_jobs_unchanged": true,
+      "failures": [
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 2048,
+          "p": 6,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 2048,
+          "p": 6,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 2048,
+          "p": 6,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 2048,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 1,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 1,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 2,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 2,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 2,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 2,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 3,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 3,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 3,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 3,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 4,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 8192,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 32768,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 32768,
+          "p": 6,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 32768,
+          "p": 6,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 32768,
+          "p": 6,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 32768,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 99458,
+          "p": 6,
+          "candidate": "dilu_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_weak",
+          "geometry": "annulus",
+          "target_triangles": 99458,
+          "p": 6,
+          "candidate": "dilu_pbicgstab",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 99458,
+          "p": 6,
+          "candidate": "amg_fgmres",
+          "status": "numerical_failure"
+        },
+        {
+          "case": "cellular7_directional",
+          "geometry": "annulus",
+          "target_triangles": 99458,
+          "p": 6,
+          "candidate": "amg_pbicgstab",
+          "status": "numerical_failure"
+        }
+      ]
+    },
+    "source_sha256": {
+      "run_oscillatory_scaling_diagnostics.py": "c514db5982971d5b13024314724b52e9f73640e174bd1faaba23cef4f7a96ea4",
+      "adr_performance_worker.py": "25304a1c32669a2aaf73e7d59ee05de09d623cbdb81ee4cd0e8413826c028b1b",
+      "adr_native_hp_worker.py": "f1451b93d33168d0261717a613c3b2e8170b7c7155929b14fecebe92ff88b5d4",
+      "profile_adr_amgx_preconditioner.py": "75d8cb1b0ac62649fb4c11512841d76d74798ccfa5e54dffa2998fc8646732aa",
+      "adr_solver_comparison_worker.py": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
+      "check_oscillatory_adr_quadrature.py": "066986d4ebb73fb7b8892d73309c1be3aea53c5ae775c37008bae1a160d3d10d",
+      "diagnose_oscillatory_adr_matrix.py": "810a31b74a53437ea865048a1bebaa5af581f65679f9e0a72f9fcd1b8d8beed4",
+      "oscillatory_adr_cases.py": "2efbbf7fdf9c080c430036bcde69c1ff03d78a8fda0da55855ea527df403982a"
+    },
+    "profiles": [
+      "annulus_cellular7_high_target99458_p6_asm_d24",
+      "annulus_cellular7_weak_target99458_p6_asm_d24",
+      "annulus_cellular7_directional_target99458_p6_asm_d48",
+      "annulus_cellular7_high_target99458_p6_native_hp",
+      "annulus_cellular7_high_target99458_p6_amg_fgmres",
+      "annulus_cellular7_weak_target99458_p6_amg_fgmres"
+    ],
+    "quadrature_cases": [
+      "cellular7_high",
+      "cellular7_directional"
+    ],
+    "quadrature_nominal_n": 64,
+    "p": 6,
+    "note": "Only new annular meshes: 99,984 triangles for profiles, 8,039 for quadrature and conditioning. No 22,825-triangle work. Instrumented profiles excluded from rankings. ASM profile worker uses 1e-11 for both internal and physical thresholds; ranked solves use physical 1e-10."
+  },
+  "profiles": [
+    {
+      "case": "cellular7_high",
+      "candidate": "asm_d24",
+      "family": "asm_pp",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "kind": "profile",
+        "configuration": {
+          "preconditioner": "asm_poly",
+          "operator": "raw_fused",
+          "application": "fused",
+          "local_solver": "cublas_inverse",
+          "polynomial_degree": 24,
+          "orthogonalization": "cgs2",
+          "restart": 75,
+          "polynomial_orthogonalization": "cgs2"
+        },
+        "environment": {
+          "python": "3.12.3",
+          "numpy": "2.5.3",
+          "scipy": "1.18.1",
+          "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+          "pid": 1453910,
+          "thread_env": {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1"
+          },
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "total_vram_bytes": 50728861696,
+          "device": 0,
+          "cupy": "14.2.0",
+          "cuda_runtime": 13020,
+          "driver": 13000
+        },
+        "units": "milliseconds (CUDA events)",
+        "operator": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.43382400274276733,
+            "median_ms": 0.4456000030040741,
+            "mean_ms": 0.4461664021015167,
+            "standard_deviation_ms": 0.007860609086187895,
+            "p90_ms": 0.4551136076450348
+          },
+          "gather": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "dense_product": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "estimated_flops": 73037440,
+          "matrix_bytes": 292149760,
+          "vector_bytes": 16694272,
+          "median_gflops": 163.908077889605
+        },
+        "base_preconditioner": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4215039908885956,
+            "median_ms": 0.4286720007658005,
+            "mean_ms": 0.4295935988426208,
+            "standard_deviation_ms": 0.007003509742205404,
+            "p90_ms": 0.43400001227855683
+          },
+          "restriction": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "local_solve": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.40508800745010376,
+            "median_ms": 0.4091999977827072,
+            "mean_ms": 0.4096767991781235,
+            "standard_deviation_ms": 0.005054623502763822,
+            "p90_ms": 0.4125024080276489
+          },
+          "prolongation": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.01500799972563982,
+            "median_ms": 0.01601599995046854,
+            "mean_ms": 0.01674880012869835,
+            "standard_deviation_ms": 0.0023458071493196253,
+            "p90_ms": 0.017369600199162956
+          }
+        },
+        "complete_preconditioner": {
+          "warmup": 3,
+          "repeats": 10,
+          "minimum_ms": 21.520063400268555,
+          "median_ms": 21.56070327758789,
+          "mean_ms": 21.574780464172363,
+          "standard_deviation_ms": 0.049341826717151836,
+          "p90_ms": 21.635193061828613,
+          "samples_ms": [
+            21.603679656982422,
+            21.523616790771484,
+            21.520063400268555,
+            21.5328311920166,
+            21.53011131286621,
+            21.630144119262695,
+            21.536287307739258,
+            21.63324737548828,
+            21.585119247436523,
+            21.6527042388916
+          ]
+        },
+        "instrumented_wall_ms": 1728.8311299635097,
+        "gmres": {
+          "operations": [
+            {
+              "category": "axpy",
+              "count": 2,
+              "gpu_time_ms": 0.01974399946630001,
+              "host_wall_time_ms": 0.028354930691421032,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.009871999733150005,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_correction",
+              "count": 146,
+              "gpu_time_ms": 37.67651208676398,
+              "host_wall_time_ms": 1.6799611039459705,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.2580583019641368,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_projection",
+              "count": 146,
+              "gpu_time_ms": 41.03897593356669,
+              "host_wall_time_ms": 2.7471843641251326,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.2810888762573061,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_update",
+              "count": 1,
+              "gpu_time_ms": 0.5339199900627136,
+              "host_wall_time_ms": 0.01487403642386198,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.5339199900627136,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "coefficient_h2d",
+              "count": 1,
+              "gpu_time_ms": 0.014592000283300877,
+              "host_wall_time_ms": 0.013854936696588993,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.014592000283300877,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "copy",
+              "count": 76,
+              "gpu_time_ms": 1.507519993931055,
+              "host_wall_time_ms": 1.066052122041583,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.019835789393829673,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "matvec",
+              "count": 75,
+              "gpu_time_ms": 34.16291204094887,
+              "host_wall_time_ms": 1.3943673111498356,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.4555054938793182,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "norm",
+              "count": 77,
+              "gpu_time_ms": 7.233824022114277,
+              "host_wall_time_ms": 29.177340446040034,
+              "synchronizing_host_time_ms": 29.177340446040034,
+              "mean_gpu_time_ms": 0.09394576652096463,
+              "estimated_host_sync_overhead_ms": 21.943516423925757
+            },
+            {
+              "category": "orthogonalization_d2h",
+              "count": 146,
+              "gpu_time_ms": 1.4499840042553842,
+              "host_wall_time_ms": 1620.8938095951453,
+              "synchronizing_host_time_ms": 1620.8938095951453,
+              "mean_gpu_time_ms": 0.00993139728942044,
+              "estimated_host_sync_overhead_ms": 1619.44382559089
+            },
+            {
+              "category": "preconditioner",
+              "count": 74,
+              "gpu_time_ms": 1596.7301692962646,
+              "host_wall_time_ms": 58.13966819550842,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 21.57743472021979,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "scal",
+              "count": 74,
+              "gpu_time_ms": 1.1066240034997463,
+              "host_wall_time_ms": 0.6365673616528511,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.014954378425672248,
+              "estimated_host_sync_overhead_ms": 0.0
+            }
+          ],
+          "cpu_times_ms": {
+            "back_substitution": 0.3310039173811674,
+            "hessenberg_givens": 1.9918425241485238
+          },
+          "total_gpu_operation_ms": 1721.474777371157,
+          "total_cpu_small_system_ms": 2.322846441529691
+        },
+        "instrumented_converged": true,
+        "warning": "Instrumented timings are diagnostics and never used for ranking; zero substage times denote fusion.",
+        "validation": {
+          "passed": true,
+          "true_residual_norm": 4.7630069307804054e-11,
+          "true_relative_residual": 5.151848882723249e-13,
+          "l2_error": 4.300552622722393e-11,
+          "trace_reference_error": null,
+          "l2_bound": null,
+          "validation_reconstruction_ms": 3564.4120710203424
+        }
+      }
+    },
+    {
+      "case": "cellular7_weak",
+      "candidate": "asm_d24",
+      "family": "asm_pp",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "kind": "profile",
+        "configuration": {
+          "preconditioner": "asm_poly",
+          "operator": "raw_fused",
+          "application": "fused",
+          "local_solver": "cublas_inverse",
+          "polynomial_degree": 24,
+          "orthogonalization": "cgs2",
+          "restart": 75,
+          "polynomial_orthogonalization": "cgs2"
+        },
+        "environment": {
+          "python": "3.12.3",
+          "numpy": "2.5.3",
+          "scipy": "1.18.1",
+          "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+          "pid": 1454075,
+          "thread_env": {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1"
+          },
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "total_vram_bytes": 50728861696,
+          "device": 0,
+          "cupy": "14.2.0",
+          "cuda_runtime": 13020,
+          "driver": 13000
+        },
+        "units": "milliseconds (CUDA events)",
+        "operator": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4357439875602722,
+            "median_ms": 0.44200000166893005,
+            "mean_ms": 0.44370879530906676,
+            "standard_deviation_ms": 0.007007716178764506,
+            "p90_ms": 0.45286719501018524
+          },
+          "gather": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "dense_product": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "estimated_flops": 73037440,
+          "matrix_bytes": 292149760,
+          "vector_bytes": 16694272,
+          "median_gflops": 165.24307629914222
+        },
+        "base_preconditioner": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4215039908885956,
+            "median_ms": 0.42815999686717987,
+            "mean_ms": 0.42838079631328585,
+            "standard_deviation_ms": 0.005534211116301946,
+            "p90_ms": 0.4328128069639206
+          },
+          "restriction": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "local_solve": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4031040072441101,
+            "median_ms": 0.41126400232315063,
+            "mean_ms": 0.41108799576759336,
+            "standard_deviation_ms": 0.005397655140863604,
+            "p90_ms": 0.4168447881937027
+          },
+          "prolongation": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.012223999947309494,
+            "median_ms": 0.012816000264137983,
+            "mean_ms": 0.013641600031405687,
+            "standard_deviation_ms": 0.0026764724383116067,
+            "p90_ms": 0.014220799691975114
+          }
+        },
+        "complete_preconditioner": {
+          "warmup": 3,
+          "repeats": 10,
+          "minimum_ms": 21.453632354736328,
+          "median_ms": 21.535856246948242,
+          "mean_ms": 21.53371524810791,
+          "standard_deviation_ms": 0.03816366061686484,
+          "p90_ms": 21.57318058013916,
+          "samples_ms": [
+            21.490272521972656,
+            21.53321647644043,
+            21.558752059936523,
+            21.52195167541504,
+            21.558847427368164,
+            21.59071922302246,
+            21.571231842041016,
+            21.52003288269043,
+            21.538496017456055,
+            21.453632354736328
+          ]
+        },
+        "instrumented_wall_ms": 12401.746257091872,
+        "gmres": {
+          "operations": [
+            {
+              "category": "axpy",
+              "count": 8,
+              "gpu_time_ms": 0.0790719985961914,
+              "host_wall_time_ms": 0.1189501490443945,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.009883999824523926,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_correction",
+              "count": 1050,
+              "gpu_time_ms": 278.60371147841215,
+              "host_wall_time_ms": 12.212718836963177,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.26533686807467827,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_projection",
+              "count": 1050,
+              "gpu_time_ms": 302.73494410328567,
+              "host_wall_time_ms": 18.483474850654602,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.2883189943840816,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_update",
+              "count": 7,
+              "gpu_time_ms": 3.8555519580841064,
+              "host_wall_time_ms": 0.12872100342065096,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.5507931368691581,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "coefficient_h2d",
+              "count": 7,
+              "gpu_time_ms": 0.1264639999717474,
+              "host_wall_time_ms": 0.11808809358626604,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.018066285710249628,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "copy",
+              "count": 540,
+              "gpu_time_ms": 11.482464008964598,
+              "host_wall_time_ms": 8.208234794437885,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.02126382223882333,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "matvec",
+              "count": 533,
+              "gpu_time_ms": 243.23897564411163,
+              "host_wall_time_ms": 9.682705625891685,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.45635830327225446,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "norm",
+              "count": 541,
+              "gpu_time_ms": 50.6288638561964,
+              "host_wall_time_ms": 202.08178379107267,
+              "synchronizing_host_time_ms": 202.08178379107267,
+              "mean_gpu_time_ms": 0.09358385185988245,
+              "estimated_host_sync_overhead_ms": 151.45291993487626
+            },
+            {
+              "category": "orthogonalization_d2h",
+              "count": 1050,
+              "gpu_time_ms": 10.496095995884389,
+              "host_wall_time_ms": 11681.863920181058,
+              "synchronizing_host_time_ms": 11681.863920181058,
+              "mean_gpu_time_ms": 0.009996281900842275,
+              "estimated_host_sync_overhead_ms": 11671.367824185174
+            },
+            {
+              "category": "preconditioner",
+              "count": 532,
+              "gpu_time_ms": 11442.42088508606,
+              "host_wall_time_ms": 374.38267411198467,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 21.508309934372292,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "scal",
+              "count": 532,
+              "gpu_time_ms": 7.781536000780761,
+              "host_wall_time_ms": 4.440779448486865,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.014626947369888649,
+              "estimated_host_sync_overhead_ms": 0.0
+            }
+          ],
+          "cpu_times_ms": {
+            "back_substitution": 2.5598021456971765,
+            "hessenberg_givens": 13.928649481385946
+          },
+          "total_gpu_operation_ms": 12351.448564130347,
+          "total_cpu_small_system_ms": 16.488451627083123
+        },
+        "instrumented_converged": true,
+        "warning": "Instrumented timings are diagnostics and never used for ranking; zero substage times denote fusion.",
+        "validation": {
+          "passed": true,
+          "true_residual_norm": 1.0372287197805836e-13,
+          "true_relative_residual": 7.891229479816879e-13,
+          "l2_error": 1.2140030648431943e-09,
+          "trace_reference_error": null,
+          "l2_bound": null,
+          "validation_reconstruction_ms": 3544.915006030351
+        }
+      }
+    },
+    {
+      "case": "cellular7_directional",
+      "candidate": "asm_d48",
+      "family": "asm_pp",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "kind": "profile",
+        "configuration": {
+          "preconditioner": "asm_poly",
+          "operator": "raw_fused",
+          "application": "fused",
+          "local_solver": "cublas_inverse",
+          "polynomial_degree": 48,
+          "orthogonalization": "cgs2",
+          "restart": 75,
+          "polynomial_orthogonalization": "cgs2"
+        },
+        "environment": {
+          "python": "3.12.3",
+          "numpy": "2.5.3",
+          "scipy": "1.18.1",
+          "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+          "pid": 1454747,
+          "thread_env": {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1"
+          },
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "total_vram_bytes": 50728861696,
+          "device": 0,
+          "cupy": "14.2.0",
+          "cuda_runtime": 13020,
+          "driver": 13000
+        },
+        "units": "milliseconds (CUDA events)",
+        "operator": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4379200041294098,
+            "median_ms": 0.44286400079727173,
+            "mean_ms": 0.44498880207538605,
+            "standard_deviation_ms": 0.005618882858021216,
+            "p90_ms": 0.45442240238189696
+          },
+          "gather": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "dense_product": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "estimated_flops": 73037440,
+          "matrix_bytes": 292149760,
+          "vector_bytes": 16694272,
+          "median_gflops": 164.92069770519478
+        },
+        "base_preconditioner": {
+          "total": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4214720129966736,
+            "median_ms": 0.43003199994564056,
+            "mean_ms": 0.42987520098686216,
+            "standard_deviation_ms": 0.00475609141521553,
+            "p90_ms": 0.4326848089694977
+          },
+          "restriction": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.0,
+            "median_ms": 0.0,
+            "mean_ms": 0.0,
+            "standard_deviation_ms": 0.0,
+            "p90_ms": 0.0
+          },
+          "local_solve": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.4010240137577057,
+            "median_ms": 0.4102399945259094,
+            "mean_ms": 0.41108799874782564,
+            "standard_deviation_ms": 0.006588382343270676,
+            "p90_ms": 0.41963520348072053
+          },
+          "prolongation": {
+            "warmup": 3,
+            "repeats": 10,
+            "minimum_ms": 0.014399999752640724,
+            "median_ms": 0.016448000445961952,
+            "mean_ms": 0.017696000076830386,
+            "standard_deviation_ms": 0.003066160995702611,
+            "p90_ms": 0.019555200077593322
+          }
+        },
+        "complete_preconditioner": {
+          "warmup": 3,
+          "repeats": 10,
+          "minimum_ms": 42.521217346191406,
+          "median_ms": 42.577903747558594,
+          "mean_ms": 42.614390182495114,
+          "standard_deviation_ms": 0.13128457436956892,
+          "p90_ms": 42.67385559082031,
+          "samples_ms": [
+            42.992671966552734,
+            42.57894515991211,
+            42.54012680053711,
+            42.602622985839844,
+            42.638431549072266,
+            42.53590393066406,
+            42.61699295043945,
+            42.57686233520508,
+            42.54012680053711,
+            42.521217346191406
+          ]
+        },
+        "instrumented_wall_ms": 6749.1835210239515,
+        "gmres": {
+          "operations": [
+            {
+              "category": "axpy",
+              "count": 3,
+              "gpu_time_ms": 0.02963199932128191,
+              "host_wall_time_ms": 0.04155293572694063,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.00987733310709397,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_correction",
+              "count": 300,
+              "gpu_time_ms": 79.59913600236177,
+              "host_wall_time_ms": 3.718986175954342,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.2653304533412059,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_projection",
+              "count": 300,
+              "gpu_time_ms": 86.83315194956958,
+              "host_wall_time_ms": 5.623975885100663,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.2894438398318986,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_update",
+              "count": 2,
+              "gpu_time_ms": 1.096992015838623,
+              "host_wall_time_ms": 0.03323389682918787,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.5484960079193115,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "coefficient_h2d",
+              "count": 2,
+              "gpu_time_ms": 0.031103999353945255,
+              "host_wall_time_ms": 0.029665068723261356,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.015551999676972628,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "copy",
+              "count": 155,
+              "gpu_time_ms": 3.095232014544308,
+              "host_wall_time_ms": 2.2149053402245045,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.019969238803511667,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "matvec",
+              "count": 153,
+              "gpu_time_ms": 70.0149759054184,
+              "host_wall_time_ms": 2.891545300371945,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.4576142216040418,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "norm",
+              "count": 156,
+              "gpu_time_ms": 14.728960007429123,
+              "host_wall_time_ms": 99.35360704548657,
+              "synchronizing_host_time_ms": 99.35360704548657,
+              "mean_gpu_time_ms": 0.09441641030403283,
+              "estimated_host_sync_overhead_ms": 84.62464703805745
+            },
+            {
+              "category": "orthogonalization_d2h",
+              "count": 300,
+              "gpu_time_ms": 3.0417599924840033,
+              "host_wall_time_ms": 6396.7278831405565,
+              "synchronizing_host_time_ms": 6396.7278831405565,
+              "mean_gpu_time_ms": 0.010139199974946677,
+              "estimated_host_sync_overhead_ms": 6393.6861231480725
+            },
+            {
+              "category": "preconditioner",
+              "count": 152,
+              "gpu_time_ms": 6473.500522613525,
+              "host_wall_time_ms": 210.49377578310668,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 42.58881922772056,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "scal",
+              "count": 152,
+              "gpu_time_ms": 2.290208007209003,
+              "host_wall_time_ms": 1.3344042235985398,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.015067157942164493,
+              "estimated_host_sync_overhead_ms": 0.0
+            }
+          ],
+          "cpu_times_ms": {
+            "back_substitution": 0.6668049609288573,
+            "hessenberg_givens": 4.051890806294978
+          },
+          "total_gpu_operation_ms": 6734.261674507055,
+          "total_cpu_small_system_ms": 4.718695767223835
+        },
+        "instrumented_converged": true,
+        "warning": "Instrumented timings are diagnostics and never used for ranking; zero substage times denote fusion.",
+        "validation": {
+          "passed": true,
+          "true_residual_norm": 1.6583256937400395e-13,
+          "true_relative_residual": 3.3935962891590574e-15,
+          "l2_error": 6.201330401940033e-12,
+          "trace_reference_error": null,
+          "l2_bound": null,
+          "validation_reconstruction_ms": 3602.004677988589
+        }
+      }
+    },
+    {
+      "case": "cellular7_high",
+      "candidate": "native_hp",
+      "family": "native_hp",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "family": "native_hp",
+        "candidate": "native_hp",
+        "case": "cellular7_high",
+        "n": 224,
+        "p": 6,
+        "rtol": 1e-10,
+        "internal_rtol": 1e-11,
+        "samples": [
+          {
+            "setup_ms": 1259.6387999365106,
+            "solves": [
+              {
+                "solve_ms": 124.37437102198601,
+                "iterations": 32,
+                "matvec_count": 34,
+                "preconditioner_applications": 33,
+                "passed": true,
+                "true_relative_residual": 5.26016724414288e-12,
+                "l2_error": 1.2449170950598775e-11,
+                "trace_reference_error": null
+              },
+              {
+                "solve_ms": 124.39026299398392,
+                "iterations": 32,
+                "matvec_count": 34,
+                "preconditioner_applications": 33,
+                "passed": true,
+                "true_relative_residual": 5.26016724414288e-12,
+                "l2_error": 1.2449170950598775e-11,
+                "trace_reference_error": null
+              }
+            ],
+            "fresh_setup_solve_ms": 1384.0131709584966,
+            "amortized_ms": 754.2017169762403,
+            "amgx_memory": {
+              "live_bytes": 53084160,
+              "reserved_bytes": 268435456,
+              "peak_live_bytes": 99835904,
+              "peak_reserved_bytes": 268435456
+            }
+          }
+        ],
+        "warmups": [
+          {
+            "setup_ms": 1561.5537229459733,
+            "solves": [
+              {
+                "solve_ms": 146.78379008546472,
+                "iterations": 32,
+                "matvec_count": 34,
+                "preconditioner_applications": 33,
+                "passed": true,
+                "true_relative_residual": 5.26016724414288e-12,
+                "l2_error": 1.2449170950598775e-11,
+                "trace_reference_error": null
+              },
+              {
+                "solve_ms": 124.81431604828686,
+                "iterations": 32,
+                "matvec_count": 34,
+                "preconditioner_applications": 33,
+                "passed": true,
+                "true_relative_residual": 5.26016724414288e-12,
+                "l2_error": 1.2449170950598775e-11,
+                "trace_reference_error": null
+              }
+            ],
+            "fresh_setup_solve_ms": 1708.337513031438,
+            "amortized_ms": 916.5759145398624,
+            "amgx_memory": {
+              "live_bytes": 53084160,
+              "reserved_bytes": 268435456,
+              "peak_live_bytes": 99835904,
+              "peak_reserved_bytes": 268435456
+            }
+          }
+        ],
+        "note": "Master native hp-BSR hierarchy on symmetric part, Bernstein coordinate transforms, GMRES on unchanged full ADR operator; not native PCGF on ADR.",
+        "operator_sha256": "86742703a56451704aafe9edeab05fa66e3714baa863bc9000fbc88305bac0ba",
+        "worker_sha256": "f1451b93d33168d0261717a613c3b2e8170b7c7155929b14fecebe92ff88b5d4",
+        "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target99458_p6",
+        "matrix_format": "bsr",
+        "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
+        "complete_preconditioner": {
+          "warmup": 3,
+          "repeats": 10,
+          "minimum_ms": 2.5749759674072266,
+          "median_ms": 2.587264060974121,
+          "mean_ms": 2.5888416290283205,
+          "standard_deviation_ms": 0.009923277674055713,
+          "p90_ms": 2.604915165901184,
+          "samples_ms": [
+            2.6071040630340576,
+            2.5882880687713623,
+            2.58624005317688,
+            2.6046719551086426,
+            2.5893120765686035,
+            2.5934081077575684,
+            2.57807993888855,
+            2.5831680297851562,
+            2.5831680297851562,
+            2.5749759674072266
+          ]
+        },
+        "gmres_profile": {
+          "operations": [
+            {
+              "category": "axpy",
+              "count": 2,
+              "gpu_time_ms": 0.0197759997099638,
+              "host_wall_time_ms": 0.030336901545524597,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.0098879998549819,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_correction",
+              "count": 64,
+              "gpu_time_ms": 6.916192011907697,
+              "host_wall_time_ms": 0.9192600846290588,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.10806550018605776,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_projection",
+              "count": 64,
+              "gpu_time_ms": 8.041376002132893,
+              "host_wall_time_ms": 1.420982531271875,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.12564650003332645,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "basis_update",
+              "count": 1,
+              "gpu_time_ms": 0.25145599246025085,
+              "host_wall_time_ms": 0.017610029317438602,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.25145599246025085,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "coefficient_h2d",
+              "count": 1,
+              "gpu_time_ms": 0.015807999297976494,
+              "host_wall_time_ms": 0.015113037079572678,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.015807999297976494,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "copy",
+              "count": 35,
+              "gpu_time_ms": 0.8359360005706549,
+              "host_wall_time_ms": 0.6613845471292734,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.023883885730590138,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "matvec",
+              "count": 34,
+              "gpu_time_ms": 15.606176048517227,
+              "host_wall_time_ms": 0.7623964920639992,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.4590051778975655,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "norm",
+              "count": 36,
+              "gpu_time_ms": 3.4962239861488342,
+              "host_wall_time_ms": 5.448511335998774,
+              "synchronizing_host_time_ms": 5.448511335998774,
+              "mean_gpu_time_ms": 0.09711733294857873,
+              "estimated_host_sync_overhead_ms": 1.9522873498499393
+            },
+            {
+              "category": "orthogonalization_d2h",
+              "count": 64,
+              "gpu_time_ms": 0.6518719950690866,
+              "host_wall_time_ms": 43.62150456290692,
+              "synchronizing_host_time_ms": 43.62150456290692,
+              "mean_gpu_time_ms": 0.010185499922954477,
+              "estimated_host_sync_overhead_ms": 42.969632567837834
+            },
+            {
+              "category": "preconditioner",
+              "count": 33,
+              "gpu_time_ms": 86.58585572242737,
+              "host_wall_time_ms": 66.63916842080653,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 2.6238138097705264,
+              "estimated_host_sync_overhead_ms": 0.0
+            },
+            {
+              "category": "scal",
+              "count": 33,
+              "gpu_time_ms": 0.542432002723217,
+              "host_wall_time_ms": 0.3447956405580044,
+              "synchronizing_host_time_ms": 0.0,
+              "mean_gpu_time_ms": 0.01643733341585506,
+              "estimated_host_sync_overhead_ms": 0.0
+            }
+          ],
+          "cpu_times_ms": {
+            "back_substitution": 0.18803204875439405,
+            "hessenberg_givens": 0.5967107135802507
+          },
+          "total_gpu_operation_ms": 122.96310376096517,
+          "total_cpu_small_system_ms": 0.7847427623346448
+        },
+        "profile_validation": {
+          "passed": true,
+          "true_relative_residual": 5.26016724414288e-12,
+          "l2_error": 1.2449170950598775e-11,
+          "trace_reference_error": null
+        },
+        "profile_note": "Separate instrumented diagnostic; never used for ranking.",
+        "setup_median_ms": 1259.6387999365106,
+        "fresh_setup_solve_median_ms": 1384.0131709584966,
+        "amortized_median_ms": 754.2017169762403,
+        "hot_solve_median_ms": 124.39026299398392,
+        "peak_process_rss_kib": 10017688
+      }
+    },
+    {
+      "case": "cellular7_high",
+      "candidate": "amg_fgmres",
+      "family": "amgx",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "case": "cellular7_high",
+        "candidate": "amg_fgmres",
+        "native_event_preconditioner_calls": 116,
+        "solve_count": 2,
+        "preconditioner_call_mean_ms": 4.026743448275862,
+        "preconditioner_call_median_ms": 3.920675,
+        "preconditioner_total_ms": 467.10224,
+        "iterations": [
+          58,
+          58
+        ],
+        "note": "Immediate native preconditioner only; CUDA-event times with synchronization per call. Includes both instrumented zero-guess solves and their first application. No ranking uses these times. Callback records native application count, not internal level SpMV counts."
+      }
+    },
+    {
+      "case": "cellular7_weak",
+      "candidate": "amg_fgmres",
+      "family": "amgx",
+      "triangles": 99984,
+      "trace_dofs": 1043392,
+      "result": {
+        "status": "passed",
+        "case": "cellular7_weak",
+        "candidate": "amg_fgmres",
+        "native_event_preconditioner_calls": 1896,
+        "solve_count": 2,
+        "preconditioner_call_mean_ms": 15.944854852320676,
+        "preconditioner_call_median_ms": 15.926800000000002,
+        "preconditioner_total_ms": 30231.4448,
+        "iterations": [
+          948,
+          948
+        ],
+        "note": "Immediate native preconditioner only; CUDA-event times with synchronization per call. Includes both instrumented zero-guess solves and their first application. No ranking uses these times. Callback records native application count, not internal level SpMV counts."
+      }
+    }
+  ],
+  "application_summary": [
+    {
+      "case": "cellular7_high",
+      "candidate": "asm_d24",
+      "family": "asm_pp",
+      "mean_application_ms": 21.574780464172363,
+      "calls_per_profiled_solve": 74,
+      "attributed_gpu_percent": 92.7536197616913
+    },
+    {
+      "case": "cellular7_weak",
+      "candidate": "asm_d24",
+      "family": "asm_pp",
+      "mean_application_ms": 21.53371524810791,
+      "calls_per_profiled_solve": 532,
+      "attributed_gpu_percent": 92.64031522841636
+    },
+    {
+      "case": "cellular7_directional",
+      "candidate": "asm_d48",
+      "family": "asm_pp",
+      "mean_application_ms": 42.614390182495114,
+      "calls_per_profiled_solve": 152,
+      "attributed_gpu_percent": 96.12784348905454
+    },
+    {
+      "case": "cellular7_high",
+      "candidate": "native_hp",
+      "family": "native_hp",
+      "mean_application_ms": 2.5888416290283205,
+      "calls_per_profiled_solve": 33,
+      "attributed_gpu_percent": 70.41612733747063
+    },
+    {
+      "case": "cellular7_high",
+      "candidate": "amg_fgmres",
+      "family": "amgx",
+      "mean_application_ms": 4.026743448275862,
+      "calls_per_profiled_solve": 58.0,
+      "attributed_gpu_percent": null
+    },
+    {
+      "case": "cellular7_weak",
+      "candidate": "amg_fgmres",
+      "family": "amgx",
+      "mean_application_ms": 15.944854852320676,
+      "calls_per_profiled_solve": 948.0,
+      "attributed_gpu_percent": null
+    },
+    {
+      "case": "cellular7_directional",
+      "candidate": "native_hp",
+      "family": "native_hp",
+      "mean_application_ms": 2.8861567974090576,
+      "calls_per_profiled_solve": 380,
+      "attributed_gpu_percent": 60.68730092094539
+    }
+  ],
+  "quadrature": [
+    {
+      "case": "cellular7_high",
+      "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
+      "volume_points_1d": [
+        14,
+        28
+      ],
+      "edge_points_1d": [
+        14,
+        28
+      ],
+      "matrix_relative_change": 2.064623277031406e-08,
+      "rhs_relative_change": 1.7922690423659475e-08,
+      "primal_l2_difference": 3.8880475862900425e-11,
+      "original_l2_error_high_quadrature": 1.045027978089582e-07,
+      "refined_l2_error": 1.0450352484593178e-07,
+      "difference_over_original_error": 0.00037205200892303293,
+      "status": "passed",
+      "criterion": "Primal-field change below 5% of the original discretization error; both errors evaluated at the higher volume quadrature. This does not assert matrix coefficients agree to roundoff."
+    },
+    {
+      "case": "cellular7_directional",
+      "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
+      "volume_points_1d": [
+        14,
+        28
+      ],
+      "edge_points_1d": [
+        14,
+        28
+      ],
+      "matrix_relative_change": 5.522807128594874e-07,
+      "rhs_relative_change": 3.498438568458153e-07,
+      "primal_l2_difference": 2.571530009760853e-11,
+      "original_l2_error_high_quadrature": 8.74048785248135e-08,
+      "refined_l2_error": 8.740522218063813e-08,
+      "difference_over_original_error": 0.0002942089793112426,
+      "status": "passed",
+      "criterion": "Primal-field change below 5% of the original discretization error; both errors evaluated at the higher volume quadrature. This does not assert matrix coefficients agree to roundoff."
+    }
+  ],
+  "matrix_diagnostics": [
+    {
+      "case": "cellular7_high",
+      "n": 64,
+      "p": 6,
+      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
+      "trace_dofs": 82495,
+      "matrix_sha256": "a3f0ed254eb3315cc9e78fc6de1c31bda7fc8f72b565ff64ce52bbdc0ee20f76",
+      "norm1": 20.787596997650553,
+      "inverse_norm1_lower_estimate": 1612.7836784989515,
+      "condition1_lower_estimate": 33525.89715302462,
+      "relative_asymmetry_frobenius": 0.0021008566893254725,
+      "normalized_commutator_frobenius": 6.964318047964393e-06,
+      "block_offdiag_to_diag_median": 1.3159373111466197,
+      "block_offdiag_to_diag_max": 1.412905853089102,
+      "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+    },
+    {
+      "case": "cellular7_weak",
+      "n": 64,
+      "p": 6,
+      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
+      "trace_dofs": 82495,
+      "matrix_sha256": "5932412428246a12f44890e025f8084465c869da8dad700e16969d75ff0cf5e6",
+      "norm1": 0.05296334886175356,
+      "inverse_norm1_lower_estimate": 6215148.010528874,
+      "condition1_lower_estimate": 329175.0523090743,
+      "relative_asymmetry_frobenius": 0.9466214287300382,
+      "normalized_commutator_frobenius": 0.0032703766208238357,
+      "block_offdiag_to_diag_median": 1.1803562617033576,
+      "block_offdiag_to_diag_max": 2.00379280793577,
+      "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+    },
+    {
+      "case": "cellular7_directional",
+      "n": 64,
+      "p": 6,
+      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
+      "trace_dofs": 82495,
+      "matrix_sha256": "1d1d22ccffd0f88e29fa50d561c63d9a149b5dd8419d6acb65e63a37b64a0375",
+      "norm1": 17.711308128614505,
+      "inverse_norm1_lower_estimate": 297551.01856680517,
+      "condition1_lower_estimate": 5270017.773819782,
+      "relative_asymmetry_frobenius": 0.008024899919322013,
+      "normalized_commutator_frobenius": 4.5346494439256515e-05,
+      "block_offdiag_to_diag_median": 1.5176593113824064,
+      "block_offdiag_to_diag_max": 3.087376499949249,
+      "note": "Condition estimate uses sparse LU and onenormest(t=4,itmax=8,seed=1729); this is a lower estimate, not exact kappa_2. Coupling metrics are in unchanged Bernstein trace coordinates."
+    }
+  ],
+  "smoother_probes": [
+    {
+      "status": "numerical_failure",
+      "family": "amgx",
+      "candidate": "amg_dilu_fgmres",
+      "case": "cellular7_directional",
+      "n": 64,
+      "p": 6,
+      "rtol": 1e-10,
+      "internal_rtol": 1e-11,
+      "environment": {
+        "python": "3.12.3",
+        "numpy": "2.5.3",
+        "scipy": "1.18.1",
+        "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+        "pid": 1420500,
+        "thread_env": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+        "total_vram_bytes": 50728861696,
+        "device": 0,
+        "cupy": "14.2.0",
+        "cuda_runtime": 13020,
+        "driver": 13000
+      },
+      "samples": [],
+      "warmups": [
+        {
+          "setup_ms": 187.6886460231617,
+          "setup_stages": {
+            "csr_conversion_ms": 16.841063974425197,
+            "hierarchy_setup_ms": 130.7998700067401
+          },
+          "solves": [
+            {
+              "solve_ms": 4513.898968929425,
+              "iterations": 1000,
+              "status": "not_converged",
+              "outer_matvec_count": null,
+              "preconditioner_applications": null,
+              "counter_note": "AMGX public bindings do not expose exact application counts.",
+              "passed": false,
+              "true_residual_norm": 4.593624744992359,
+              "true_relative_residual": 0.9683276265490347,
+              "l2_error": 1.0060448912574398,
+              "trace_reference_error": 1.2898923450274944,
+              "l2_bound": null,
+              "validation_reconstruction_ms": 278.78693700768054
+            }
+          ],
+          "fresh_setup_solve_ms": 4701.587614952587,
+          "amortized_ms": 4701.587614952587,
+          "passed": false,
+          "cupy_pool_used_bytes": 0,
+          "cupy_pool_reserved_bytes": 1536,
+          "amgx_memory": {
+            "live_bytes": 239251456,
+            "reserved_bytes": 268435456,
+            "peak_live_bytes": 239251456,
+            "peak_reserved_bytes": 268435456
+          }
+        }
+      ],
+      "requested_repeats": 1,
+      "solves_per_setup": 2,
+      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
+      "matrix_format": "bsr",
+      "worker_sha256": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
+      "operator_sha256": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",
+      "configuration": {
+        "config_version": 2,
+        "solver": {
+          "preconditioner": {
+            "solver": "AMG",
+            "algorithm": "CLASSICAL",
+            "classical_bsr_hierarchy": "block_graph_dense",
+            "bsr_spmv_backend": "cusparse_generic",
+            "selector": "PMIS",
+            "strength": "AHAT",
+            "strength_threshold": 0.25,
+            "interpolator": "D2",
+            "aggressive_interpolator": "D2",
+            "cycle": "V",
+            "presweeps": 1,
+            "postsweeps": 1,
+            "smoother": {
+              "solver": "MULTICOLOR_DILU",
+              "max_iters": 1,
+              "relaxation_factor": 1.0
+            },
+            "coarse_solver": "DENSE_LU_SOLVER",
+            "max_iters": 1,
+            "max_levels": 100,
+            "print_grid_stats": 0,
+            "dense_lu_num_rows": 2048,
+            "dense_lu_max_rows": 4096,
+            "coarsest_sweeps": 2,
+            "aggressive_levels": 0,
+            "interp_max_elements": 4,
+            "error_scaling": 3,
+            "block_graph_dense_smoothing_weight": 0.6666666666666666,
+            "block_graph_dense_pivot_tolerance": 1e-12,
+            "block_graph_dense_constraint_tolerance": 1e-08,
+            "block_graph_dense_smoothing_steps": 1,
+            "block_graph_dense_constraint_mode": "additive"
+          },
+          "solver": "FGMRES",
+          "tolerance": 1e-13,
+          "max_iters": 300,
+          "convergence": "ABSOLUTE",
+          "norm": "L2",
+          "print_solve_stats": 0,
+          "monitor_residual": 1,
+          "store_res_history": 1,
+          "obtain_timings": 0,
+          "use_scalar_norm": 1,
+          "bsr_spmv_backend": "cusparse_generic"
+        },
+        "exception_handling": 1,
+        "determinism_flag": 1
+      },
+      "effective_amgx_config": {
+        "config_version": 2,
+        "solver": {
+          "preconditioner": {
+            "solver": "AMG",
+            "algorithm": "CLASSICAL",
+            "classical_bsr_hierarchy": "block_graph_dense",
+            "bsr_spmv_backend": "cusparse_generic",
+            "selector": "PMIS",
+            "strength": "AHAT",
+            "strength_threshold": 0.25,
+            "interpolator": "D2",
+            "aggressive_interpolator": "D2",
+            "cycle": "V",
+            "presweeps": 1,
+            "postsweeps": 1,
+            "smoother": {
+              "solver": "MULTICOLOR_DILU",
+              "max_iters": 1,
+              "relaxation_factor": 1.0
+            },
+            "coarse_solver": "DENSE_LU_SOLVER",
+            "max_iters": 1,
+            "max_levels": 100,
+            "print_grid_stats": 0,
+            "dense_lu_num_rows": 2048,
+            "dense_lu_max_rows": 4096,
+            "coarsest_sweeps": 2,
+            "aggressive_levels": 0,
+            "interp_max_elements": 4,
+            "error_scaling": 3,
+            "block_graph_dense_smoothing_weight": 0.6666666666666666,
+            "block_graph_dense_pivot_tolerance": 1e-12,
+            "block_graph_dense_constraint_tolerance": 1e-08,
+            "block_graph_dense_smoothing_steps": 1,
+            "block_graph_dense_constraint_mode": "additive"
+          },
+          "solver": "FGMRES",
+          "tolerance": 4.7438745100801314e-11,
+          "max_iters": 1000,
+          "convergence": "ABSOLUTE",
+          "norm": "L2",
+          "print_solve_stats": 0,
+          "monitor_residual": 1,
+          "store_res_history": 1,
+          "obtain_timings": 0,
+          "use_scalar_norm": 1,
+          "bsr_spmv_backend": "cusparse_generic",
+          "gmres_n_restart": 75
+        },
+        "exception_handling": 1,
+        "determinism_flag": 1
+      },
+      "amgx_internal_rtol": 1e-11
+    },
+    {
+      "status": "numerical_failure",
+      "family": "amgx",
+      "candidate": "amg_dilu_pbicgstab",
+      "case": "cellular7_directional",
+      "n": 64,
+      "p": 6,
+      "rtol": 1e-10,
+      "internal_rtol": 1e-11,
+      "environment": {
+        "python": "3.12.3",
+        "numpy": "2.5.3",
+        "scipy": "1.18.1",
+        "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+        "pid": 1420788,
+        "thread_env": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+        "total_vram_bytes": 50728861696,
+        "device": 0,
+        "cupy": "14.2.0",
+        "cuda_runtime": 13020,
+        "driver": 13000
+      },
+      "samples": [],
+      "warmups": [
+        {
+          "setup_ms": 181.12248892430216,
+          "setup_stages": {
+            "csr_conversion_ms": 16.04597398545593,
+            "hierarchy_setup_ms": 128.61178803723305
+          },
+          "solves": [
+            {
+              "solve_ms": 6986.384734977037,
+              "iterations": 1000,
+              "status": "not_converged",
+              "outer_matvec_count": null,
+              "preconditioner_applications": null,
+              "counter_note": "AMGX public bindings do not expose exact application counts.",
+              "passed": false,
+              "true_residual_norm": 50.064084821893815,
+              "true_relative_residual": 10.553416772622038,
+              "l2_error": 1.630153260931342,
+              "trace_reference_error": 34.06495804900049,
+              "l2_bound": null,
+              "validation_reconstruction_ms": 256.49618497118354
+            }
+          ],
+          "fresh_setup_solve_ms": 7167.507223901339,
+          "amortized_ms": 7167.507223901339,
+          "passed": false,
+          "cupy_pool_used_bytes": 0,
+          "cupy_pool_reserved_bytes": 1536,
+          "amgx_memory": {
+            "live_bytes": 138698752,
+            "reserved_bytes": 268435456,
+            "peak_live_bytes": 188354560,
+            "peak_reserved_bytes": 268435456
+          }
+        }
+      ],
+      "requested_repeats": 1,
+      "solves_per_setup": 2,
+      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
+      "matrix_format": "bsr",
+      "worker_sha256": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
+      "operator_sha256": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",
+      "configuration": {
+        "config_version": 2,
+        "solver": {
+          "preconditioner": {
+            "solver": "AMG",
+            "algorithm": "CLASSICAL",
+            "classical_bsr_hierarchy": "block_graph_dense",
+            "bsr_spmv_backend": "cusparse_generic",
+            "selector": "PMIS",
+            "strength": "AHAT",
+            "strength_threshold": 0.25,
+            "interpolator": "D2",
+            "aggressive_interpolator": "D2",
+            "cycle": "V",
+            "presweeps": 1,
+            "postsweeps": 1,
+            "smoother": {
+              "solver": "MULTICOLOR_DILU",
+              "max_iters": 1,
+              "relaxation_factor": 1.0
+            },
+            "coarse_solver": "DENSE_LU_SOLVER",
+            "max_iters": 1,
+            "max_levels": 100,
+            "print_grid_stats": 0,
+            "dense_lu_num_rows": 2048,
+            "dense_lu_max_rows": 4096,
+            "coarsest_sweeps": 2,
+            "aggressive_levels": 0,
+            "interp_max_elements": 4,
+            "error_scaling": 3,
+            "block_graph_dense_smoothing_weight": 0.6666666666666666,
+            "block_graph_dense_pivot_tolerance": 1e-12,
+            "block_graph_dense_constraint_tolerance": 1e-08,
+            "block_graph_dense_smoothing_steps": 1,
+            "block_graph_dense_constraint_mode": "additive"
+          },
+          "solver": "PBICGSTAB",
+          "tolerance": 1e-13,
+          "max_iters": 300,
+          "convergence": "ABSOLUTE",
+          "norm": "L2",
+          "print_solve_stats": 0,
+          "monitor_residual": 1,
+          "store_res_history": 1,
+          "obtain_timings": 0,
+          "use_scalar_norm": 1,
+          "bsr_spmv_backend": "cusparse_generic"
+        },
+        "exception_handling": 1,
+        "determinism_flag": 1
+      },
+      "effective_amgx_config": {
+        "config_version": 2,
+        "solver": {
+          "preconditioner": {
+            "solver": "AMG",
+            "algorithm": "CLASSICAL",
+            "classical_bsr_hierarchy": "block_graph_dense",
+            "bsr_spmv_backend": "cusparse_generic",
+            "selector": "PMIS",
+            "strength": "AHAT",
+            "strength_threshold": 0.25,
+            "interpolator": "D2",
+            "aggressive_interpolator": "D2",
+            "cycle": "V",
+            "presweeps": 1,
+            "postsweeps": 1,
+            "smoother": {
+              "solver": "MULTICOLOR_DILU",
+              "max_iters": 1,
+              "relaxation_factor": 1.0
+            },
+            "coarse_solver": "DENSE_LU_SOLVER",
+            "max_iters": 1,
+            "max_levels": 100,
+            "print_grid_stats": 0,
+            "dense_lu_num_rows": 2048,
+            "dense_lu_max_rows": 4096,
+            "coarsest_sweeps": 2,
+            "aggressive_levels": 0,
+            "interp_max_elements": 4,
+            "error_scaling": 3,
+            "block_graph_dense_smoothing_weight": 0.6666666666666666,
+            "block_graph_dense_pivot_tolerance": 1e-12,
+            "block_graph_dense_constraint_tolerance": 1e-08,
+            "block_graph_dense_smoothing_steps": 1,
+            "block_graph_dense_constraint_mode": "additive"
+          },
+          "solver": "PBICGSTAB",
+          "tolerance": 4.7438745100801314e-11,
+          "max_iters": 1000,
+          "convergence": "ABSOLUTE",
+          "norm": "L2",
+          "print_solve_stats": 0,
+          "monitor_residual": 1,
+          "store_res_history": 1,
+          "obtain_timings": 0,
+          "use_scalar_norm": 1,
+          "bsr_spmv_backend": "cusparse_generic"
+        },
+        "exception_handling": 1,
+        "determinism_flag": 1
+      },
+      "amgx_internal_rtol": 1e-11
+    }
+  ]
+}

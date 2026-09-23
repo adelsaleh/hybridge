@@ -6,15 +6,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.guiding_center.guiding_center_cases import case_definition_by_key
-from scripts.guiding_center.guiding_center_presets import preset_by_key
-from scripts.guiding_center.run_guiding_center_cases import (
-    _average_boundary_data,
-    _make_transport_options,
-    _validate_config,
-    run_guiding_center_case,
-)
-from scripts.guiding_center.run_guiding_center_temporal_convergence import (
+from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
+from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
+from scripts.guiding_center.time_schemes.predictor_corrector import _average_boundary_data
+from scripts.guiding_center.runtime.configuration import _make_transport_options, _validate_config
+from scripts.guiding_center.runtime.runner import run_guiding_center_case
+from scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence import (
     _pairwise_rates,
     _selected_schemes,
     plot_convergence,
@@ -124,21 +121,22 @@ def test_robust_transport_policy_builds_defect_correction_retries() -> None:
 
     assert retries is not None
     assert [retry["label"] for retry in retries] == [
-        "primary-zero",
+        "pbicgstab-l1-zero",
+        "pbicgstab-block-jacobi-zero",
         "robust-zero-scaled",
         "robust-correction-1",
         "robust-correction-2",
     ]
-    assert retries[1]["scale_system"] is config.transport_scale_system
-    assert retries[1]["use_initial_guess"] is False
-    assert retries[1]["config"]["solver"]["convergence"] == "ABSOLUTE"
-    assert retries[1]["config"]["solver"]["tolerance"] == config.transport_solver_atol
     assert retries[2]["scale_system"] is config.transport_scale_system
     assert retries[2]["use_initial_guess"] is False
-    assert retries[2]["use_best_solution"] is True
-    assert retries[2]["residual_correction"] is True
+    assert retries[2]["config"]["solver"]["convergence"] == "ABSOLUTE"
+    assert retries[2]["config"]["solver"]["tolerance"] == config.transport_solver_atol
+    assert retries[3]["scale_system"] is config.transport_scale_system
+    assert retries[3]["use_initial_guess"] is False
     assert retries[3]["use_best_solution"] is True
     assert retries[3]["residual_correction"] is True
+    assert retries[4]["use_best_solution"] is True
+    assert retries[4]["residual_correction"] is True
 
 
 def test_convergence_scheme_selection_rates_and_plot(tmp_path: Path, monkeypatch) -> None:

@@ -1,0 +1,10 @@
+\providecommand{\PLU}[1]{\mathrm{P\!-\!LU}_{#1}}
+CPU PyPardiso LU supplies the robust baseline, denoted $\PLU{n}$ for
+$n$ MKL threads. All 107 saved systems pass the same $10^{-10}$ physical
+residual target. Per-system thread choices from $1,2,4,6,8,12,16,24$
+were selected separately for fresh and reused cost, then independently
+confirmed over five setups. Fresh cost includes CSR conversion,
+factorization and first solve; reused cost retains the LU factors and
+includes the wrapper's reuse checks. Plotted LU points give $n$; LU has
+no Krylov iteration count. CPU and GPU measurements use the same saved
+operators and right-hand sides on the same host, in separate campaigns.

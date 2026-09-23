@@ -1,0 +1,18 @@
+{
+  "config_version": 2,
+  "determinism_flag": 1,
+  "exception_handling": 1,
+  "solver": {
+    "solver": "FGMRES",
+    "bsr_spmv_backend": "cusparse_generic",
+    "monitor_residual": 1,
+    "convergence": "RELATIVE_INI_CORE",
+    "tolerance": 0.005,
+    "max_iters": 300,
+    "gmres_n_restart": 50,
+    "print_solve_stats": 0,
+    "obtain_timings": 0,
+    "norm": "L2",
+    "preconditioner": "NOSOLVER"
+  }
+}

@@ -1,0 +1,5 @@
+# Positive guiding-center turbulence in the supplied ITER.geo wall: 11,520 blobs.
+# 300k minimum triangles; DG p=6, h=0.014, SI-BDF2 dt=0.005 to T=50.
+# Positivity is checked initially and every 10 accepted endpoints; no limiter.
+# Robust Poisson: PCGF-first native/hybrid/CSR ladder, then one FGMRES/DILU try.
+--preset positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr

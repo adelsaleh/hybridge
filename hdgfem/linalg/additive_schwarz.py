@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.sparse import bsr_matrix, csr_matrix, isspmatrix_bsr
 
 from ..assembly.face_dense import FaceDenseSystem
 
@@ -414,9 +415,288 @@ def build_face_additive_schwarz_preconditioner(
         block_size=local.block_size,
     )
 
+
+
+def _validate_bsr_patch_inputs(
+    matrix: bsr_matrix,
+    patches: np.ndarray,
+    *,
+    num_local_faces: int | None = None,
+) -> np.ndarray:
+    """Validate reduced face maps for either element or wider Schwarz patches."""
+    if not isspmatrix_bsr(matrix):
+        raise TypeError("matrix must be a SciPy BSR matrix")
+    block_size, block_columns = matrix.blocksize
+    if matrix.shape[0] != matrix.shape[1] or block_size != block_columns:
+        raise ValueError("matrix and its BSR blocks must be square")
+    if not matrix.has_canonical_format:
+        raise ValueError("matrix must have sorted BSR indices without duplicates")
+    if matrix.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise TypeError("matrix must contain real float32 or float64 values")
+    _require_finite_patch_values(matrix.data, "matrix contains non-finite values")
+    faces = np.asarray(patches)
+    if faces.ndim != 2 or not all(faces.shape):
+        raise ValueError("patches must have nonempty shape (num_patches, width)")
+    if num_local_faces is not None and faces.shape[1] != num_local_faces:
+        raise ValueError(f"element_system_faces must have nonempty shape (NE, {num_local_faces})")
+    if not np.issubdtype(faces.dtype, np.integer):
+        raise TypeError("element_system_faces must contain integer face indices")
+    num_faces = matrix.shape[0] // block_size
+    if np.any(faces < -1) or np.any(faces >= num_faces):
+        raise ValueError("element_system_faces contains an invalid system face")
+    faces = np.ascontiguousarray(faces, dtype=np.int64)
+    for row in range(faces.shape[1]):
+        for column in range(row):
+            if np.any((faces[:, row] >= 0) & (faces[:, row] == faces[:, column])):
+                raise ValueError("a patch cannot repeat an active system face")
+    if np.any(np.bincount(faces[faces >= 0], minlength=num_faces) == 0):
+        raise ValueError("patches must cover every matrix face row")
+    return faces
+
+
+def _require_finite_patch_values(values: np.ndarray, message: str) -> None:
+    """Bound temporary finiteness masks even for nine-face inverse tensors."""
+    values_per_item = int(np.prod(values.shape[1:], dtype=np.int64))
+    batch_size = max(1, (1 << 22) // max(1, values_per_item))
+    for start in range(0, values.shape[0], batch_size):
+        if not np.all(np.isfinite(values[start : start + batch_size])):
+            raise ValueError(message)
+
+
+def _bsr_patch_positions(
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    faces: np.ndarray,
+    *,
+    allow_missing: bool = False,
+    require_covered: bool = False,
+) -> np.ndarray:
+    """Look up patch face pairs using only a block-level sparse graph."""
+    width = faces.shape[1]
+    positions = np.full((faces.shape[0], width, width), -1, dtype=np.int64)
+    covered = np.zeros(indices.size, dtype=bool) if require_covered else None
+    for row in range(width):
+        for column in range(width):
+            active = (faces[:, row] >= 0) & (faces[:, column] >= 0)
+            if not np.any(active):
+                continue
+            row_faces = faces[active, row]
+            column_faces = faces[active, column]
+            left = indptr[row_faces].astype(np.int64)
+            end = indptr[row_faces + 1].astype(np.int64)
+            right = end.copy()
+            # Batched lower_bound within each short face row. Only O(Npatch)
+            # integer workspace is needed, even for millions of BSR blocks.
+            while np.any(left < right):
+                searching = left < right
+                middle = left[searching] + (right[searching] - left[searching]) // 2
+                below = indices[middle] < column_faces[searching]
+                left[searching] = np.where(below, middle + 1, left[searching])
+                right[searching] = np.where(below, right[searching], middle)
+            found = left < end
+            found[found] &= indices[left[found]] == column_faces[found]
+            if (not allow_missing or row == column) and not np.all(found):
+                missing = int(np.flatnonzero(~found)[0])
+                raise ValueError(
+                    "matrix pattern is missing an active element face pair: "
+                    f"row={row_faces[missing]}, column={column_faces[missing]}"
+                )
+            positions[active, row, column] = np.where(found, left, -1)
+            if covered is not None:
+                covered[left[found]] = True
+    if covered is not None and not np.all(covered):
+        raise ValueError("matrix pattern contains blocks outside the element face pairs")
+    return positions
+
+
+def _gather_bsr_patch_matrices(
+    matrix: bsr_matrix, faces: np.ndarray, positions: np.ndarray
+) -> FaceAdditiveSchwarzLocalMatrices:
+    block_size = matrix.blocksize[0]
+    width = faces.shape[1]
+    local_size = width * block_size
+    local_matrices = np.zeros((faces.shape[0], local_size, local_size), dtype=np.float64)
+    identity = np.eye(block_size, dtype=np.float64)
+    for start in range(0, faces.shape[0], 65536):
+        stop = min(start + 65536, faces.shape[0])
+        for row in range(width):
+            row_slice = slice(row * block_size, (row + 1) * block_size)
+            for column in range(width):
+                column_slice = slice(column * block_size, (column + 1) * block_size)
+                local_block = local_matrices[start:stop, row_slice, column_slice]
+                slots = positions[start:stop, row, column]
+                present = slots >= 0
+                local_block[present] = matrix.data[slots[present]]
+                if row == column:
+                    local_block[faces[start:stop, row] < 0] = identity
+    return FaceAdditiveSchwarzLocalMatrices(
+        local_matrices=local_matrices,
+        element_system_faces=faces,
+        block_size=block_size,
+    )
+
+
+def _assemble_bsr_patch_correction(
+    matrix: bsr_matrix,
+    local: FaceAdditiveSchwarzLocalMatrices,
+    inverse_matrices: np.ndarray,
+    positions: np.ndarray,
+    indices: np.ndarray,
+    indptr: np.ndarray,
+) -> bsr_matrix:
+    block_size = matrix.blocksize[0]
+    if local.block_size != block_size:
+        raise ValueError("local block size does not match the matrix")
+    faces = local.element_system_faces
+    width = faces.shape[1]
+    inverse_matrices = np.asarray(inverse_matrices)
+    expected = (faces.shape[0], width * block_size, width * block_size)
+    if inverse_matrices.shape != expected:
+        raise ValueError(f"inverse_matrices must have shape {expected}")
+    if inverse_matrices.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise TypeError("inverse_matrices must contain real float32 or float64 values")
+    _require_finite_patch_values(
+        inverse_matrices, "inverse_matrices contains non-finite values"
+    )
+    values = np.zeros(
+        (indices.size, block_size, block_size),
+        dtype=np.result_type(matrix.dtype, inverse_matrices.dtype),
+    )
+    for start in range(0, faces.shape[0], 65536):
+        stop = min(start + 65536, faces.shape[0])
+        inverse_batch = inverse_matrices[start:stop]
+        for row in range(width):
+            row_slice = slice(row * block_size, (row + 1) * block_size)
+            for column in range(width):
+                column_slice = slice(column * block_size, (column + 1) * block_size)
+                slots = positions[start:stop, row, column]
+                active = slots >= 0
+                np.add.at(
+                    values,
+                    slots[active],
+                    inverse_batch[:, row_slice, column_slice][active],
+                )
+    return bsr_matrix(
+        (values, indices.copy(), indptr.copy()), shape=matrix.shape
+    )
+
+
+def build_bsr_face_additive_schwarz_local_matrices(
+    matrix: bsr_matrix,
+    element_system_faces: np.ndarray,
+) -> FaceAdditiveSchwarzLocalMatrices:
+    """Gather exact three-face principal patches from an assembled BSR matrix.
+
+    element_system_faces contains reduced face indices in the same order as
+    matrix rows; use global_to_free[mesh.loc2glob_edge] after boundary
+    elimination. Eliminated faces are -1 and receive decoupled identity blocks.
+    All active blocks, including global diagonals, are copied once.
+
+    The input must use sorted, duplicate-free BSR storage. Its block pattern
+    must equal the union of active element face pairs, including structural
+    zeros. The returned FP64 matrices can be inverted separately in batches.
+    """
+    faces = _validate_bsr_patch_inputs(
+        matrix, element_system_faces, num_local_faces=3
+    )
+    positions = _bsr_patch_positions(
+        matrix.indptr, matrix.indices, faces, require_covered=True
+    )
+    return _gather_bsr_patch_matrices(matrix, faces, positions)
+
+
+def assemble_bsr_face_additive_schwarz_correction(
+    matrix: bsr_matrix,
+    local: FaceAdditiveSchwarzLocalMatrices,
+    inverse_matrices: np.ndarray,
+) -> bsr_matrix:
+    """Assemble element ASM while preserving exactly the original BSR pattern.
+
+    This applies the same unweighted restriction/prolongation as
+    FaceAdditiveSchwarzPreconditioner.apply once during setup. The input block
+    pattern must equal the union of three-face element cliques. Eliminated
+    identity-padded faces never contribute. Numeric accumulation is bounded
+    and uses np.add.at as in assemble_global_face_blocks.
+    """
+    if not isinstance(local, FaceAdditiveSchwarzLocalMatrices):
+        raise TypeError("local must be FaceAdditiveSchwarzLocalMatrices")
+    faces = _validate_bsr_patch_inputs(
+        matrix, local.element_system_faces, num_local_faces=3
+    )
+    positions = _bsr_patch_positions(
+        matrix.indptr, matrix.indices, faces, require_covered=True
+    )
+    return _assemble_bsr_patch_correction(
+        matrix, local, inverse_matrices, positions, matrix.indices, matrix.indptr
+    )
+
+
+def build_bsr_additive_schwarz_local_matrices(
+    matrix: bsr_matrix,
+    patches: np.ndarray,
+) -> FaceAdditiveSchwarzLocalMatrices:
+    """Gather exact principal matrices for arbitrary fixed-width face patches.
+
+    patches has shape (num_patches, width) with reduced matrix face indices.
+    Active indices must be distinct within each patch; -1 denotes padding.
+    Every matrix face must occur in at least one patch. The returned existing
+    local-matrix container uses element_system_faces for this patch map and
+    num_elements for the number of patches.
+
+    Missing off-diagonal BSR entries are zero in the principal matrix. Missing
+    active diagonals are rejected. Padded faces receive decoupled identities.
+    For an SPD input, the active principal matrices are SPD; this routine does
+    not perform factorization or an independent global SPD test.
+    """
+    faces = _validate_bsr_patch_inputs(matrix, patches)
+    positions = _bsr_patch_positions(
+        matrix.indptr, matrix.indices, faces, allow_missing=True
+    )
+    return _gather_bsr_patch_matrices(matrix, faces, positions)
+
+
+def assemble_bsr_additive_schwarz_correction(
+    matrix: bsr_matrix,
+    local: FaceAdditiveSchwarzLocalMatrices,
+    inverse_matrices: np.ndarray,
+) -> bsr_matrix:
+    """Assemble wider-patch ASM, including inverse fill, as a BSR correction.
+
+    The result is sum_p R_p.T @ inverse_matrices[p] @ R_p with the same block
+    size as matrix. Its block graph is the union of patch cliques, so fill
+    absent from the original A is retained. The symbolic incidence product
+    operates only on face indices, never on expanded scalar coefficients.
+    Numeric values are accumulated in bounded batches with the same helper
+    used for the strict three-face element correction.
+    """
+    if not isinstance(local, FaceAdditiveSchwarzLocalMatrices):
+        raise TypeError("local must be FaceAdditiveSchwarzLocalMatrices")
+    faces = _validate_bsr_patch_inputs(matrix, local.element_system_faces)
+    num_faces = matrix.shape[0] // matrix.blocksize[0]
+    active = faces >= 0
+    patch_rows = np.broadcast_to(
+        np.arange(faces.shape[0], dtype=np.int64)[:, None], faces.shape
+    )
+    incidence = csr_matrix(
+        (np.ones(np.count_nonzero(active), dtype=bool),
+         (patch_rows[active], faces[active])),
+        shape=(faces.shape[0], num_faces),
+    )
+    graph = (incidence.T @ incidence).tocsr()
+    graph.sort_indices()
+    positions = _bsr_patch_positions(graph.indptr, graph.indices, faces)
+    return _assemble_bsr_patch_correction(
+        matrix, local, inverse_matrices, positions, graph.indices, graph.indptr
+    )
+
+
 __all__ = [
     "FaceAdditiveSchwarzLocalMatrices",
     "FaceAdditiveSchwarzPreconditioner",
     "build_face_additive_schwarz_local_matrices",
     "build_face_additive_schwarz_preconditioner",
+    "build_bsr_face_additive_schwarz_local_matrices",
+    "assemble_bsr_face_additive_schwarz_correction",
+    "build_bsr_additive_schwarz_local_matrices",
+    "assemble_bsr_additive_schwarz_correction",
 ]

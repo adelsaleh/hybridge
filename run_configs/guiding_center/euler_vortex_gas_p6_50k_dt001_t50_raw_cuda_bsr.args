@@ -1,0 +1,5 @@
+# Density is signed Euler vorticity: 360 Gaussian vortices throughout the disk.
+# Counts 192/96/48/24 at sigma 0.008/0.016/0.032/0.064; fixed random seed 17.
+# Typical isolated peak magnitude 4; circulation balanced separately at each scale.
+# p=6, 50k+ triangles, semi-implicit Euler dt=0.01 to T=50.
+--preset euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr

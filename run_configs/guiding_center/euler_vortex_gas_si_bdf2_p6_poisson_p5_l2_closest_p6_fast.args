@@ -1,0 +1,3 @@
+# Quiet L2-closest run at h=0.0068, p=6, dt=0.05, T=50.
+# No field diagnostics, timing files, plots or AMGX residual history.
+euler_vortex_gas_si_bdf2_p6_poisson_p5_l2_closest_p6_fast

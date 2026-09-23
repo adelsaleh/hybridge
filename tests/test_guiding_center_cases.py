@@ -11,26 +11,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.guiding_center.guiding_center_cases import (
+from scripts.guiding_center.cases.guiding_center_cases import (
     CASE_DEFINITIONS,
     case_definition_by_key,
     rho_eq_annular_band,
     rho_eq_gaussian_annulus,
     rho_eq_super_gaussian_annulus,
 )
-from scripts.guiding_center.guiding_center_presets import preset_by_key
+from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from hdgfem.core.field_ops import project_callable_to_trace
-from scripts.guiding_center.run_guiding_center_cases import (
-    GuidingCenterPyVistaPanels,
-    _fixed_operator_trace_predictor,
-    _make_transport_options,
-    _poisson_postprocess_overrides,
-    _print_linear_step_summary,
-    _print_step_summary,
-    _solver_verbosity,
-    _validate_config,
-    run_guiding_center_case,
-)
+from scripts.guiding_center.runtime.plotting import GuidingCenterPyVistaPanels
+from scripts.guiding_center.time_schemes.stage_support import _fixed_operator_trace_predictor
+from scripts.guiding_center.runtime.configuration import _make_transport_options, _poisson_postprocess_overrides, _solver_verbosity, _validate_config
+from scripts.guiding_center.runtime.reporting import _print_linear_step_summary, _print_step_summary
+from scripts.guiding_center.runtime.runner import run_guiding_center_case
 
 
 def test_terminal_log_tee_captures_python_and_native_streams(
@@ -41,7 +35,7 @@ def test_terminal_log_tee_captures_python_and_native_streams(
         [
             "import os",
             "import sys",
-            "from scripts.guiding_center.run_guiding_center_cases import _TerminalLogTee",
+            "from scripts.guiding_center.runtime.terminal_log import _TerminalLogTee",
             "with _TerminalLogTee(sys.argv[1]):",
             "    print('python stdout', flush=True)",
             "    print('python stderr', file=sys.stderr, flush=True)",
@@ -172,7 +166,11 @@ def test_pyvista_panel_uses_render_not_x_events_for_headless_updates() -> None:
 
 
 def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
-    assert tuple(CASE_DEFINITIONS) == ("diocotron_gaussian_annulus", "diocotron_k", "rho_helm_wave")
+    assert tuple(CASE_DEFINITIONS) == (
+        "diocotron_gaussian_annulus", "diocotron_k", "euler_vortex_gas",
+        "positive_turbulence", "euler_star_vortex_gas", "euler_shaped_vortex_gas",
+        "spiral_sheet", "rho_helm_wave",
+    )
 
 
 def test_fixed_operator_trace_predictor_uses_constant_linear_then_quadratic_history() -> None:
@@ -733,7 +731,7 @@ def test_guiding_center_cli_accepts_response_file(tmp_path: Path) -> None:
     assert "Preset: diocotron_gaussian_annulus_host_smoke" in completed.stdout
     assert "num_steps: 0" in completed.stdout
 def test_guiding_center_runner_uses_only_public_solver_classes_for_gpu_paths() -> None:
-    path = Path("scripts/guiding_center/run_guiding_center_cases.py")
+    path = Path("scripts/guiding_center/runtime/runner.py")
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported_modules = {
         node.module or ""
@@ -853,26 +851,42 @@ def test_linear_step_summary_is_balanced_and_compact(capsys) -> None:
     assert len(output.rstrip().splitlines()) == 4
 
 
-def test_robust_transport_fgmres_retries_remain_scaled() -> None:
-    config = preset_by_key("diocotron_k50_p6_150k_raw_cuda_bsr_plot30")
+@pytest.mark.parametrize("preset,atol,primary_tolerance", (
+    ("diocotron_k50_p6_150k_raw_cuda_bsr_plot30", 5.0e-9, 1.0e-8),
+    ("euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr", 1.0e-12, 1.0e-11),
+))
+def test_robust_transport_uses_bsr_preconditioners_before_scaled_fgmres(
+    preset, atol, primary_tolerance
+) -> None:
+    config = preset_by_key(preset)
     options = _make_transport_options(config, boundary_mode="zero-flux")
 
     assert options.scale_system is True
     assert options.solver_rtol == pytest.approx(1.0e-11)
-    assert options.solver_atol == pytest.approx(5.0e-9)
+    assert options.solver_atol == pytest.approx(atol)
     assert options.amgx_config["solver"]["solver"] == "BICGSTAB"
-    assert options.amgx_config["solver"]["tolerance"] == pytest.approx(1.0e-8)
+    assert options.amgx_config["solver"]["tolerance"] == pytest.approx(primary_tolerance)
     assert "preconditioner" not in options.amgx_config["solver"]
     assert options.amgx_retry_attempts is not None
-    assert all(
-        attempt["scale_system"] is True
-        for attempt in options.amgx_retry_attempts
-    )
-    assert options.amgx_retry_attempts[0]["config"]["solver"]["tolerance"] == pytest.approx(
-        1.0e-8
-    )
-    assert options.amgx_retry_attempts[1]["label"] == "robust-zero-scaled"
-    for attempt in options.amgx_retry_attempts[1:]:
+    for attempt, preconditioner in zip(
+        options.amgx_retry_attempts[:2], ("JACOBI_L1", "BLOCK_JACOBI"), strict=True
+    ):
+        solver = attempt["config"]["solver"]
+        assert solver["solver"] == "PBICGSTAB"
+        assert solver["preconditioner"]["solver"] == preconditioner
+        assert solver["preconditioner"]["max_iters"] == 1
+        assert solver["preconditioner"]["relaxation_factor"] == 1.0
+        assert solver["bsr_spmv_backend"] == "cusparse_generic"
+        assert solver["tolerance"] == config.transport_solver_rtol
+        assert attempt["scale_system"] is False
+        assert attempt["scalarize_bsr"] is False
+        assert attempt["reuse_preconditioner"] is False
+        assert attempt["use_initial_guess"] is False
+    l1 = options.amgx_retry_attempts[0]["config"]["solver"]["preconditioner"]
+    assert l1["jacobi_l1_scalar_rows_for_blocks"] == 1
+    assert options.amgx_retry_attempts[2]["label"] == "robust-zero-scaled"
+    for attempt in options.amgx_retry_attempts[2:]:
+        assert attempt["scale_system"] is True
         solver = attempt["config"]["solver"]
         assert attempt["scalarize_bsr"] is True
         assert attempt["reuse_preconditioner"] is True

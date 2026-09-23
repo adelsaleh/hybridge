@@ -1,0 +1,5 @@
+# Quiet ITER positive turbulence: 11,520 blobs, h=0.014, 300k+ triangles.
+# SI-BDF2, dt=0.005 to T=50; density DG(6), Poisson DG(5), RT recovery into DG(6).
+# Conflict-averaged upwind active; robust Poisson/transport retries retained.
+# No positivity/field diagnostics, plots, timing files or AMGX residual history.
+--preset positive_turbulence_iter_si_bdf2_p6_poisson_p5_rt_p6_fast
