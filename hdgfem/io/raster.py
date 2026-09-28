@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..precision import REAL_DTYPE
+from .live import expanding_color_limits
 
 
 @dataclass(frozen=True)
@@ -157,11 +158,15 @@ class DeviceRasterSampler:
         coefficients = as_cupy_coefficients(field, self.cspace, copy=False)
         return self.matrix @ coefficients.reshape(-1)
 
-    def image(self, field, *, symmetric: bool = False, limits=None):
+    def image(self, field, *, symmetric: bool = False, limits=None, expand_limits=False):
         """Return R32 indices into a 256-entry LUT and device scalar limits."""
         cp = self.cp
         values = self.sample(field)
-        if limits is None:
+        if expand_limits:
+            inside = values[self.valid]
+            limits = expanding_color_limits(cp.min(inside), cp.max(inside), limits=limits,
+                                            symmetric=symmetric, xp=cp)
+        elif limits is None:
             inside = values[self.valid]
             if symmetric:
                 extent = cp.maximum(cp.max(cp.abs(inside)), 1.e-30)

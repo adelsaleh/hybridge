@@ -113,6 +113,25 @@ backend selection, CLI configuration, and explicit saving behavior.
 
 ## Window focus and workspace switching
 
+For a small moving scene that uses the same GPU field sampler and viewer, run:
+
+```bash
+env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 CUDA_PATH=/usr/local/cuda-13.0 \
+  .venv/bin/python -B scripts/guiding_center/diagnostics/animate_holoviz.py \
+  --duration 60 --fps 20 --size 512
+```
+
+This animates seeded moving blobs and waves on a small DG mesh, without solving
+a PDE. It uploads synthetic coefficients and samples/renders them on the GPU.
+The scene follows wall-clock time, with a time/frame counter and periodic
+rendered-FPS reports; late updates are skipped instead of building a backlog.
+Compare `--fps 10` and `--fps 30`, or `--size 256` and `--size 1024`, to assess
+motion and window interaction. Close the window or press Ctrl-C to stop early.
+The printed completion times are renderer acknowledgments, not measured
+end-to-end client display latency. This uses the current `DISPLAY`, so select
+the working desktop or SSH compatibility display before running it. As with
+the static check, new compilation is disabled by default.
+
 The source ticks independently of simulation updates. It re-presents the last
 completed GPU image while the solver is busy and retries an unacknowledged
 image if Holoviz skipped rendering while minimized. Holoviz returns without a
@@ -202,3 +221,49 @@ simulation time `t`, time-step size `dt`, and accepted iteration `n/N`. The coun
 is the integration step, not the number of rendered frames. Use `--plot-both`
 to show Density and Potential side by side with either plotting backend.
 Holoviz frame-specific captions use the SDK [dynamic input specifications](https://docs.nvidia.com/holoscan/sdk-user-guide/operators/visualization).
+
+## Holoviz over SSH: session-local compatibility launcher
+
+From a live `ssh -Y` terminal, preserve the original SSH `DISPLAY` and
+`XAUTHORITY` and launch the command through:
+
+```bash
+.venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \
+  --verbosity 3 --plot-backend holoviz --plot-every 1
+```
+
+The launcher checks the upstream display and its authorization before starting
+the command, then creates an authenticated loopback proxy that hides only the
+`NV-GLX` extension query. This enables the Holoviz presentation path verified in
+our SSH session while retaining GPU rendering on the server. It also raises
+the stack soft limit to 32 MiB when the hard limit permits. The proxy and its
+private authorization file are removed when the command exits. Server tools
+`xdpyinfo` (`x11-utils`) and `xauth` are required.
+
+Do not reuse an old `DISPLAY=localhost:99` or temporary `XAUTHORITY` path:
+an SSH reconnect can change the upstream display number, leaving an old proxy
+pointing at a closed port. This produces GLFW initialization failures before
+Vulkan device selection. Start from a fresh SSH terminal if the launcher says
+the original display cannot be opened.
+
+Optional movie capture uses Holoviz's rendered framebuffer output and streams
+RGBA images into H.264 MP4 via `imageio-ffmpeg` (included in the `holoviz` extra).
+`GuidingCenterHolovizPanels(movie_path=..., movie_fps=20)` enables it; `None`
+keeps display-only updates free of framebuffer downloads and encoder processes.
+Frames are acknowledged after encoding submission, preventing queue growth and
+avoiding duplicate frames from idle redraws. No intermediate PNGs are needed.
+The movie includes all panels and overlays. H.264 B-frames are disabled so decoding and presentation order agree. Normal
+`close()` drains the encoder and writes a standard fast-start MP4 index for
+player compatibility. An abrupt process kill before finalization can leave an
+unplayable file.
+The runner exposes `--save-movie` / `--no-save-movie`, `--movie-path`, and
+`--movie-fps`. Movie capture requires Holoviz and a positive plotting cadence.
+
+Holoviz color ranges start with 10% padding and remain unchanged while all
+sampled field values fit. An exceeded bound expands with fresh padding; ranges
+never shrink. Density and potential track independent ranges, and signed
+vorticity retains a symmetric range around zero. The shared
+`hdgfem.io.live.expanding_color_limits` helper supports NumPy and CuPy; Holoviz
+keeps extrema and range updates on the device without copying field coefficients.

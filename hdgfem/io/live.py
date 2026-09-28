@@ -14,12 +14,43 @@ from .plot import (
 )
 
 
+def expanding_color_limits(minimum, maximum, *, limits=None, symmetric=False,
+                           padding=0.1, xp=np):
+    """Pad initial extrema; expand only exceeded bounds and never shrink.
+
+    Accept NumPy or CuPy as ``xp`` to keep scalar range updates on the device.
+    Symmetric ranges expand both sides together to keep zero at the midpoint.
+    """
+    if not np.isfinite(padding) or padding <= 0:
+        raise ValueError("color range padding must be finite and positive")
+    extent = xp.maximum(xp.maximum(xp.abs(minimum), xp.abs(maximum)), 1.e-30)
+    if symmetric:
+        padded = extent * (1.0 + padding)
+        if limits is not None:
+            previous = xp.maximum(xp.abs(limits[0]), xp.abs(limits[1]))
+            padded = xp.where(extent > previous, padded, previous)
+        return -padded, padded
+    margin = padding * xp.maximum(maximum - minimum, extent)
+    lo, hi = minimum - margin, maximum + margin
+    if limits is not None:
+        lo = xp.where(minimum < limits[0], lo, limits[0])
+        hi = xp.where(maximum > limits[1], hi, limits[1])
+    return lo, hi
+
+
 def simulation_frame_label(*, step, time_value, time_step=None, total_steps=None):
     """Describe the displayed state, independently of the preview cadence."""
     iteration = str(int(step))
     if total_steps is not None:
         iteration += f"/{int(total_steps)}"
-    parts = [f"t = {float(time_value):.6g}"]
+    time_value = float(time_value)
+    time_text = f"{time_value:.6g}"
+    # Repeated dt additions rarely land on an exact binary integer. Apply
+    # the decimal rule after display rounding, not with float.is_integer().
+    mantissa, exponent_marker, exponent = time_text.partition("e")
+    if np.isfinite(time_value) and "." not in mantissa:
+        time_text = mantissa + ".0" + exponent_marker + exponent
+    parts = [f"t = {time_text}"]
     if time_step is not None:
         parts.append(f"dt = {float(time_step):.6g}")
     parts.append(f"iteration {iteration}")

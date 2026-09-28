@@ -1,7 +1,7 @@
 """Optional Holoviz panels for GPU-resident guiding-center fields.
 
 Holoscan is imported only when a viewer is constructed. Live updates have no
-device-to-host readback. PNG saving is the sole image download path. A bounded
+device-to-host readback. PNG and movie saving are the only image download paths. A bounded
 queue and CUDA completion events own images until the renderer has consumed
 them; the numerical solver never lends mutable coefficients to the viewer.
 """
@@ -119,6 +119,8 @@ def _make_application(owner):
                     )
                     _save_framebuffer(owner.cp, message["frame"], path)
                     owner.saved_paths.append(path)
+                if owner._movie is not None and not frame.done.is_set():
+                    owner._movie.append(owner.cp.asnumpy(owner.cp.asarray(message["frame"])))
             owner._complete_frame(frame)
 
     class ViewerApplication(Application):
@@ -163,7 +165,7 @@ def _make_application(owner):
             visualizer.metadata_policy = MetadataPolicy.UPDATE
             sink = Sink(self, name="plot_sink", cuda_stream_pool=pool)
             self.add_flow(source, visualizer, {("out", "receivers"), ("input_specs", "input_specs")})
-            if owner.screenshot_dir is None:
+            if not owner._capture_enabled:
                 # Python represents a GXF VideoBuffer as an opaque/None value.
                 # Its attached CUDA stream is sufficient for completion. No
                 # tensor conversion or host framebuffer is needed for display.
@@ -198,7 +200,7 @@ class GuidingCenterHolovizPanels:
         title="Guiding center", show_mesh=True, off_screen=False,
         screenshot_dir=None, screenshot_prefix="guiding_center",
         include_potential=False, density_is_vorticity=False, max_fps=10.0,
-        time_step=None, total_steps=None,
+        time_step=None, total_steps=None, movie_path=None, movie_fps=20.,
     ):
         """Prepare fixed sampling maps and start the asynchronous viewer."""
         from ..backends.cupy import require_cupy
@@ -218,6 +220,10 @@ class GuidingCenterHolovizPanels:
         self.density_is_vorticity = bool(density_is_vorticity)
         self.max_fps = float(max_fps)
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
+        self._movie = None
+        if movie_path is not None:
+            from .movie import MovieWriter
+            self._movie = MovieWriter(movie_path, fps=movie_fps)
         self.screenshot_prefix = screenshot_prefix
         if self.screenshot_dir is not None:
             self.screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -229,6 +235,7 @@ class GuidingCenterHolovizPanels:
         self.last_frame_latency = 0.0
         self.saved_paths = []
         self._density_limits = None
+        self._potential_limits = None
         self._static_tensors, self._specs = {}, []
         self._samplers = []
         fields = [density_field] + ([potential_field] if include_potential else [])
@@ -245,6 +252,10 @@ class GuidingCenterHolovizPanels:
             self._add_panel(index, sampler.geometry, scalar_field.space.mesh, show_mesh)
         self._app = _make_application(self)
         self._future = self._app.run_async()
+
+    @property
+    def _capture_enabled(self):
+        return self.screenshot_dir is not None or self._movie is not None
 
     def _add_panel(self, index, geometry, mesh, show_mesh):
         """Add the scalar image, static outside mask, mesh, and panel label."""
@@ -325,24 +336,25 @@ class GuidingCenterHolovizPanels:
             return False
         now = time.perf_counter()
         with self._condition:
-            if self.screenshot_dir is None and (
+            if not self._capture_enabled and (
                 self._pending is not None or now - self._last_submit < 1. / self.max_fps
             ):
                 self.frames_skipped += 1
                 return False
-        if self.screenshot_dir is not None:
+        if self._capture_enabled:
             self.flush()
         with self.cp.cuda.Device(self.device_id):
             tensors = dict(self._static_tensors)
             image, limits = self._samplers[0].image(
                 density_field, symmetric=self.density_is_vorticity,
-                limits=self._density_limits if self.density_is_vorticity else None,
+                limits=self._density_limits, expand_limits=True,
             )
-            if self.density_is_vorticity:
-                self._density_limits = limits
+            self._density_limits = limits
             tensors["field_0"] = image
             if self.include_potential:
-                tensors["field_1"], _ = self._samplers[1].image(potential_field)
+                tensors["field_1"], self._potential_limits = self._samplers[1].image(
+                    potential_field, limits=self._potential_limits, expand_limits=True,
+                )
             ready = self.cp.cuda.Event()
             ready.record()
         frame = _Frame(tensors, ready, int(step), float(time_value))
@@ -353,7 +365,7 @@ class GuidingCenterHolovizPanels:
             self._condition.notify_all()
         # Check initialization synchronously so configuration/driver failures
         # are reported at the first plot, not much later during a long solve.
-        if self.frames_submitted == 1 or self.screenshot_dir is not None:
+        if self.frames_submitted == 1 or self._capture_enabled:
             self.flush()
         return True
 
@@ -391,5 +403,9 @@ class GuidingCenterHolovizPanels:
                     self._app.stop_execution()
                 self._future.result(timeout=30.)
             finally:
-                self._app.shutdown_async_executor(wait=self._future.done())
-                self._closed = True
+                try:
+                    self._app.shutdown_async_executor(wait=self._future.done())
+                finally:
+                    if self._movie is not None:
+                        self._movie.close()
+                    self._closed = True

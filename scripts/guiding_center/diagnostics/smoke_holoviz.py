@@ -44,6 +44,7 @@ def check_saved_frames(paths, geometry, space, coefficients):
     import numpy as np
     from matplotlib import colormaps
     from PIL import Image
+    from hdgfem.io.live import expanding_color_limits
 
     matrix = geometry.sampling_matrix(space)
     forward = matrix @ coefficients.ravel()
@@ -58,7 +59,8 @@ def check_saved_frames(paths, geometry, space, coefficients):
         images.append(actual)
         fields = (forward, reverse) if step % 2 == 0 else (reverse, forward)
         for panel, values in enumerate(fields):
-            lo, hi = (-extent, extent) if panel == 0 else (values[valid].min(), values[valid].max())
+            lo, hi = expanding_color_limits(values[valid].min(), values[valid].max(),
+                                             symmetric=panel == 0)
             indices = np.floor(np.clip((values - lo) / max(hi - lo, 1.e-30) * 255., 0., 255.)).astype(int)
             expected = lut[indices, :3]
             pixels = actual[:, panel * geometry.width:(panel + 1) * geometry.width, :3].reshape(-1, 3)
@@ -70,12 +72,15 @@ def check_saved_frames(paths, geometry, space, coefficients):
         changed = np.any(images[0] != images[1], axis=2)
         assert np.mean(changed) > .5, "new coefficients did not change the rendered field"
     if len(images) >= 3:
-        np.testing.assert_array_equal(images[0], images[2])
+        # The field repeats, but the time/iteration overlay intentionally changes.
+        below_caption = int(0.2 * geometry.height)
+        np.testing.assert_array_equal(images[0][below_caption:], images[2][below_caption:])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--save-dir", type=Path)
+    parser.add_argument("--movie-path", type=Path)
     parser.add_argument("--window", action="store_true", help="open a window instead of rendering headlessly")
     parser.add_argument("--width", type=int, default=128)
     parser.add_argument("--height", type=int, default=128)
@@ -109,6 +114,8 @@ def main():
         preset_by_key("diocotron_gaussian_annulus_host_smoke"), plot_backend="holoviz",
         plot_width=args.width, plot_height=args.height, plot_potential=True,
         plot_max_fps=1000., plot_show_mesh=True,
+        save_movie=args.movie_path is not None,
+        movie_path=None if args.movie_path is None else str(args.movie_path),
     )
     original_download = DGField._download_device_coefficients
     original_asnumpy = cp.asnumpy
@@ -117,7 +124,7 @@ def main():
         raise AssertionError("plotting tried to download field coefficients")
 
     def checked_asnumpy(array, *a, **kw):
-        if args.save_dir is None or array.dtype != cp.uint8 or array.ndim != 3 or array.shape[-1] != 4:
+        if (args.save_dir is None and args.movie_path is None) or array.dtype != cp.uint8 or array.ndim != 3 or array.shape[-1] != 4:
             raise AssertionError("only an explicitly saved RGBA framebuffer may be downloaded")
         return original_asnumpy(array, *a, **kw)
 

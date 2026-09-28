@@ -182,3 +182,67 @@ def test_idle_redraw_does_not_add_frames_or_prevent_shutdown():
     viewer.off_screen = False
     viewer._closing = True
     assert viewer._frame_for_tick() is None
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_movie_toggle_reaches_only_selected_capture(monkeypatch, enabled):
+    import hdgfem.io.holoviz as holoviz
+    config = replace(preset_by_key("diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast"),
+                     save_movie=enabled)
+    monkeypatch.setattr(holoviz, "GuidingCenterHolovizPanels", lambda *args, **kw: kw)
+    options = plotting._make_plotter(config, None, None, title="test", off_screen=True,
+                                    screenshot_dir=None, screenshot_prefix="test", density_is_vorticity=True)
+    assert options["movie_path"] == (config.movie_path if enabled else None)
+    assert options["movie_fps"] == 20
+
+
+def test_color_limits_keep_padding_until_exceeded_and_never_shrink():
+    from hdgfem.io.live import expanding_color_limits
+    limits = expanding_color_limits(-2., 8.)
+    np.testing.assert_allclose(limits, (-3., 9.))
+    for bounds in [(-1., 5.), (-2.9, 8.9), (-3., 9.)]:
+        np.testing.assert_allclose(expanding_color_limits(*bounds, limits=limits), limits)
+    expanded = expanding_color_limits(-4., 8., limits=limits)
+    assert expanded[0] < -4. and expanded[1] == limits[1]
+    again = expanding_color_limits(-2., 10., limits=expanded)
+    assert again[0] == expanded[0] and again[1] > 10.
+    np.testing.assert_allclose(expanding_color_limits(0., 1., limits=again), again)
+
+
+def test_symmetric_color_limits_expand_both_sides_only_on_exceedance():
+    from hdgfem.io.live import expanding_color_limits
+    limits = expanding_color_limits(-2., 8., symmetric=True)
+    np.testing.assert_allclose(limits, (-8.8, 8.8))
+    np.testing.assert_allclose(expanding_color_limits(-8.5, 2., limits=limits, symmetric=True), limits)
+    limits = expanding_color_limits(-9., 2., limits=limits, symmetric=True)
+    np.testing.assert_allclose(limits, (-9.9, 9.9))
+    lo, hi = expanding_color_limits(0., 0.)
+    assert lo < 0 < hi
+
+
+def test_sampler_keeps_same_value_same_color_until_range_is_exceeded():
+    sampler = DeviceRasterSampler.__new__(DeviceRasterSampler)
+    sampler.cp = np
+    sampler.valid = np.array([True, True, True, False])
+    sampler.geometry = SimpleNamespace(width=2, height=2)
+    sampler.sample = lambda values: np.asarray(values, dtype=float)
+    first, limits = sampler.image([0., 5., 10., 1000.], expand_limits=True)
+    second, kept = sampler.image([2., 5., 8., -1000.], limits=limits, expand_limits=True)
+    np.testing.assert_allclose(kept, limits)
+    assert first.ravel()[1] == second.ravel()[1]
+    _, expanded = sampler.image([-2., 5., 10., 0.], limits=kept, expand_limits=True)
+    assert expanded[0] < -2. and expanded[1] == kept[1]
+
+
+def test_time_labels_keep_decimal_after_accumulated_timestep_rounding():
+    from hdgfem.io.live import simulation_frame_label
+    time_value = 0.
+    for step in range(1, 31):
+        time_value += .1
+        if step % 10 == 0:
+            label = simulation_frame_label(step=step, time_value=time_value, time_step=.1)
+            assert label.startswith(f"t = {step // 10}.0 |")
+    for value, expected in [(0., "0.0"), (1., "1.0"), (1.5, "1.5"),
+                            (.05, "0.05"), (2.9999999999999996, "3.0"),
+                            (1e6, "1.0e+06")]:
+        assert simulation_frame_label(step=0, time_value=value).startswith(f"t = {expected} |")
