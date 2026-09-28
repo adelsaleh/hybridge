@@ -16,7 +16,7 @@ y = np.linspace(-1.0, 1.0, Ny)
 X, Y = np.meshgrid(x, y, indexing="xy")
 
 T0, Tf = 0.0, 2.0 * np.pi
-nframes = 240
+nframes = 200
 times = np.linspace(T0, Tf, nframes)
 
 
