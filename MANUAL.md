@@ -71,7 +71,8 @@ Important module groups:
   helpers shared by solver implementations.
 - `hdgfem.backends.numba`: projected advection-reaction trace assembly,
   boundary-eliminated assembly, optional ordered block-COO emission, and Numba
-  reconstruction helpers.
+  reconstruction helpers. Identity-diffusion host assembly also supports persistent
+  Schur-LU/Cholesky factors; see the [host cache guide](docs/backends/numba_diffusion.md).
 - `hdgfem.backends.cupy`: CuPy/Cupyx import guards, device mirrors of mesh and
   reference data, host/device sparse conversion, Cupyx Krylov wrappers, device
   ILU(1), host-ILU export to device triangular solves, and PyAMGX CSR handoff.
@@ -602,8 +603,10 @@ evaluation on device unless host materialization is explicitly requested.
 The diffusion runner is likewise a thin `DiffusionReactionHDGSolver` front end.
 It selects CuPy or raw-CUDA assembly and AMGX, while package code owns scaling,
 device CSR handoff, reconstruction, error evaluation, timings, and plotting
-samples. CuPy supports optional primal HDG postprocessing; raw-CUDA requires
-direct CSR and currently rejects solver-call HDG postprocessing.
+samples. CuPy supports optional primal HDG postprocessing. The raw-CUDA solver
+supports device-resident flux-only recovery with `RT_projection` or
+`l2_closest`; its compatible recovery cache survives scalar tau-only retries.
+See the [recovery cache contract](docs/backends/raw_cuda.md#flux-only-recovery-and-scalar-tau-retries).
 
 [The AMGX guide](configs/amgx/README.md) contains current presets. The
 [July 2026 advection solver study](docs/research/solver_studies/advection_reaction_2026_07.md)
@@ -1641,7 +1644,7 @@ Important CLI controls:
 --transport-*                       transport assembly, solver, AMGX, zero-flux, raw-CSR options
 --transport-initial-guess MODE      solver-default or initial-density-trace
 --transport-retry-policy POLICY     none or amgx-robust
---diagnostics-every N               materialize/record every N accepted steps
+--diagnostics-every N               reduce/record diagnostics every N accepted steps
 --backend-profile host|device|hybrid shorthand defaults, with explicit flags taking precedence
 --plot-every N                      offer a plot every N accepted steps; 0 disables plotting
 --plot-backend pyvista|holoviz       select visualization backend (default: pyvista)
@@ -1661,6 +1664,14 @@ absolute and relative residuals, AMGX setup/solve timings, raw-kernel timings,
 host/device transfer accounting, plot time, diocotron equilibrium drift, and
 manufactured `rho`/`phi` errors when exact fields are available.
 
+Device diagnostic records download compact reductions while keeping DG
+coefficients resident. The standalone `azimuthal_mode_diagnostics` helper
+also selects the device path automatically for resident fields. Scalar
+error reports download plotting samples only when explicitly requested;
+the guiding-center runner requests metrics only. See the
+[device diagnostic contract](docs/reference/device_diagnostics.md) for the
+per-call transfer counts and tested scope.
+
 The raw-CUDA full-device diocotron preset uses raw-CUDA direct CSR for Poisson
 and transport assembly, device AMGX solves, raw-CUDA reconstruction, density-only
 PyVista plotting by default, and an absolute Poisson AMGX config.  Poisson setup
@@ -1668,8 +1679,8 @@ is cached after the first step when scaling is disabled and the operator is
 fixed; transport setup is rebuilt because the matrix changes with `beta`.
 Both production trace bases, `legacy-lagrange` and `legendre-modal`, are wired
 through the bounded raw-CUDA diffusion and advection paths used by this driver.
-Raw-CUDA diffusion remains limited to identity diffusion, zero reaction, scalar
-stabilization, and no solver-call HDG postprocessing.
+Raw-CUDA diffusion remains limited to identity diffusion, zero reaction, and
+scalar stabilization; optional flux-only recovery stays device-resident.
 
 Every time stage passes an explicit trace guess through the solver-class
 `initial_guess` argument. Raw-CUDA runs keep current, predicted, midpoint, and
@@ -1986,3 +1997,12 @@ python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
   --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
   --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```
+
+### Stationary ADR device recovery
+
+Raw-CUDA ADR selects CuPy postprocessing by default for both `l2_closest` and
+`RT_projection` total-flux recovery and coupled primal recovery. Set
+`materialize_host_solution=False` to keep trace/local-unknown arrays and all
+returned field coefficients on device; field `.coeffs` access explicitly
+downloads that field. See the [ADR device postprocessing contract](docs/backends/adr_device_postprocessing.md)
+for supported combinations, transfer accounting and small-mesh parity evidence.

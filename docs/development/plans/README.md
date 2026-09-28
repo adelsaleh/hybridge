@@ -6,6 +6,10 @@ algorithm, API, backend, or release contracts.
 
 ## Plans
 
+- [`raw_cuda_adr_tensor.md`](raw_cuda_adr_tensor.md): bounded cooperative tensor
+  ADR assembly/reconstruction, spatial face stabilization, qualification and
+  deferred postprocessing.
+
 - [`face_block_hp_multigrid.md`](face_block_hp_multigrid.md): direct face-BSR,
   nested Legendre p-coarsening to a scalar face operator, classical h-AMG, and
   a symmetric PCG production path for repeated HDG Poisson solves.
@@ -18,6 +22,10 @@ algorithm, API, backend, or release contracts.
 - [`unsteady_solver_validation.md`](unsteady_solver_validation.md):
   manufactured transient problems and acceptance priorities for reusable
   diffusion-reaction and advection-reaction solver classes.
+- [`n_gamma_d_bdf2.md`](n_gamma_d_bdf2.md): decoupled axisymmetric n-Gamma
+  BDF2 with Euler startup and four manufactured-solution studies; implementation
+  follows validation of raw-CUDA variable-tensor ADR assembly, reconstruction,
+  and post-processing.
 
 ## Ownership And Lifecycle
 

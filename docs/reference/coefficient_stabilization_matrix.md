@@ -29,7 +29,13 @@ valid assembly, solve, and reconstruction combinations.
 | Diffusion-reaction | diffusion | Positive scalar, supported tensor forms, or supported callable tensor components | Identity production subset | Identity or adapter-projected inverse tensor | Identity production subset |
 | ADR | source, reaction | Callable or DG input accepted by common preparation | No standalone CuPy assembly path | Common host preparation lowers the accepted input to tables | Common host preparation lowers the accepted input to device tables |
 | ADR | beta | Pair of formulas or VectorDGField; common preparation owns sampling | No standalone CuPy assembly path | Common preparation supplies sampled vector data | Common preparation supplies sampled device data |
-| ADR | diffusion | Positive constant scalar | CuPy postprocessing only | Positive constant scalar | Positive constant scalar |
+| ADR | diffusion | Positive scalar or elliptic tensor; constants, callables, DG fields | CuPy postprocessing only | Same inputs as NumPy, with exact per-element structural specialization | Same tensor inputs; FP64 p=0--6 assembly/reconstruction with hdg_postprocess="none" |
+
+For variable/tensor ADR diffusion, the default stabilization uses the maximum
+sampled `n^T K n` independently on each element-face incidence, divided by the
+global physical length. Raw CUDA requires `hdg_postprocess="none"`; NumPy/Numba
+permit `"none"` or `"flux"`. Tensor primal
+postprocessing is unsupported. See the [Numba ADR guide](../backends/numba_adr.md).
 
 Boundary conditions are solver-specific. Current diffusion-reaction and ADR
 Dirichlet APIs accept scalar or callable trace data and project it internally.
@@ -56,7 +62,7 @@ capturing NumPy-only operations.
 | Advection-reaction raw CUDA | Default upwind until its explicit prepared-table TODO lands | Not applicable |
 | Diffusion-reaction NumPy/Numba | Not applicable | Default GlobalLengthDiffusion; positive scalar, shape (K,), or shape (K,3) explicit inputs |
 | Diffusion-reaction CuPy/raw CUDA | Not applicable | Default GlobalLengthDiffusion resolved before dispatch, or an explicit positive scalar |
-| ADR NumPy/Numba/raw CUDA | None for sidewise abs(beta.n), or a supported prepared input | Default GlobalLengthDiffusion; positive scalar, shape (K,), shape (K,3), or explicit legacy inverse-h |
+| ADR NumPy/Numba/raw CUDA | None for sidewise abs(beta.n), or a supported prepared input | Default GlobalLengthDiffusion; positive scalar, shape (K,), shape (K,3), same-mesh DGField, geometry/incidence callable, or face quadrature samples; explicit legacy inverse-h remains supported |
 
 ADR keeps the advective and diffusive stabilization separate through
 preparation and adds them only in the numerical flux. Every element/local-face

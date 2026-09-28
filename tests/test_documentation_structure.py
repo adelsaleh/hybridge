@@ -54,6 +54,8 @@ DEVELOPMENT_PLAN_CONTENTS = {
     "diffusion_stabilization_global_scales.md",
     "unrelated_mesh_transfer.md",
     "unsteady_solver_validation.md",
+    "n_gamma_d_bdf2.md",
+    "raw_cuda_adr_tensor.md",
 }
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(

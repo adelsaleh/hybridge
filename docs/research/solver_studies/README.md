@@ -3,6 +3,25 @@
 These documents preserve dated measurements and conclusions. They support
 reproducibility but do not define current solver defaults or backend support.
 
+- [Raw CUDA ADR tensor assembly and reconstruction](raw_cuda_adr_tensor_2026_09_28.md):
+  FP64 parity, native stationary CSR/BSR solves and matched assembly timings.
+
+- [Numba ADR tensor specialization](numba_adr_tensor_2026_09_25.md):
+  variable scalar/tensor parity, manufactured convergence and 42 warmed
+  comparisons with coupled LU.
+
+- [Host Numba diffusion Schur caches](numba_diffusion_schur_2026_09_25.md):
+  LU/Cholesky parity, cache invalidation and 108 warmed phase/thread benchmarks.
+
+- [Repeated ITER Poisson solves](iter_repeated_poisson_2026_09_24.md):
+  matched fixed-source p=6 measurements, a faster native multigrid policy,
+  and dense-inverse/sparse-LU feasibility checks.
+
+- [Temporary SciPy LU to GPU experiment](iter_scipy_lu_gpu_experiment.md):
+  saved explicit factors, retained SpSV/SpSM analysis, CUDA graphs, and live
+  output; GPU LU wins on 2,095 ITER triangles, while pMG-AMG wins on 80,843
+  triangles at p=6 despite the factors fitting comfortably in device memory.
+
 - [hp-AMG hierarchy choices and literature](../../algorithms/hp_amg/hierarchies.md):
   the Poisson design review is maintained with the shared hp-AMG solver
   formalism; covers transfers, smoothers, h/p levels, and BSR mapping.
@@ -32,6 +51,9 @@ reproducibility but do not define current solver defaults or backend support.
 
 - [`advection_reaction_2026_07.md`](advection_reaction_2026_07.md): upwind-SCC,
   upwind block-GS, Cupyx Krylov/ILU, and AMGX comparisons.
+- [Discontinuous advection trace diagnosis](discontinuous_advection_trace_2026_09_25.md):
+  the original double-outflow fixture, positive-reaction and boundary controls,
+  and verification of the existing averaging policy in all four assembly backends.
 - [`diffusion_assembly_2026_07.md`](diffusion_assembly_2026_07.md): NumPy
   materialization versus fused Numba host assembly timing and memory study.
 - [`diffusion_amgx_2026_07.md`](diffusion_amgx_2026_07.md): modal-trace matrix
@@ -70,3 +92,7 @@ Guiding-center study artifacts are under
 
 - [`diocotron_high_modes_2026_09.md`](diocotron_high_modes_2026_09.md): m=64/128
   Gaussian annuli, analytical/smooth spectra, growth screening and control limitations.
+
+- [Raw assembly shared-memory investigation](raw_assembly_shared_memory_2026_09_25.md): capture commands, bounded timings, and outstanding hardware-counter evidence.
+
+- [Fused tensor Schur and FP32 assembly comparison](tensor_schur_prototype_2026_09_25.md): degree-dependent block sweeps, accuracy checks, and instruction evidence.

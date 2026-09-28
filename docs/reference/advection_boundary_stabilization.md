@@ -127,3 +127,11 @@ enabled, including its degree-six fused/split reconstruction comparisons.
 Performance measurements and time-integration comparisons remain separate
 user-authorized work. These small-matrix checks establish no performance or
 long-time stability claim.
+
+The [discontinuous-fixture diagnosis](../research/solver_studies/discontinuous_advection_trace_2026_09_25.md)
+isolates the original GPU parity fixture's four zero p=3 trace columns and
+verifies that this existing policy restores rank in NumPy, Numba, CuPy, and
+raw CUDA. The policy must be selected explicitly; positive volume reaction
+alone does not restore missing face inflow. Zero-reaction tangent cases still
+require a separate uniqueness condition before matrix parity becomes solve
+evidence.

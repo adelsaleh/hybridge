@@ -53,18 +53,33 @@ and the full-space flux recovery remain host Numba. The compatibility spellings
 `full-p-plus-1` and `rt-p` remain accepted.
 
 Stationary combined ADR
+supports variable scalar and elliptic tensor diffusion with NumPy, Numba, and FP64 raw CUDA (p=0--6; tensor postprocessing disabled)
+assembly/reconstruction. Numba reports per-element structural path counts in
+`diffusion_structure`; raw CUDA reports these counts too. For raw CUDA tensors
+select `hdg_postprocess="none"`; NumPy/Numba additionally permit `"flux"`.
+Primal postprocessing still requires constant isotropic diffusion.
+The [Numba ADR guide](../backends/numba_adr.md) documents exact structural
+dispatch and the incidence-wise sampled normal-diffusivity stabilization.
+Stationary combined ADR
 currently supports full-boundary Dirichlet elimination; its default
 stabilizations are `abs(beta.n)` for upwind advection and
 `kappa/L_Omega` for positive constant scalar diffusion. The old
 `(p+1)^2*kappa/h_F` rule is an explicit legacy comparison mode. ADR assembly and reconstruction
 are independently selectable across the available host paths; Raw CUDA assembly
 currently requires Raw CUDA reconstruction. The default total-flux postprocessor is selected by
-`flux_postprocess_space="l2_closest"` and uses the host-Numba full
+`flux_postprocess_space="l2_closest"` and uses the full
 `[P_{p+1}]^2` constrained minimum-distance method.
 `flux_postprocess_space="RT_projection"` selects the Raviart--Thomas moment
-reconstruction, with `postprocessing_backend="numba"|"cupy"`; coupled primal
-recovery remains host Numba, and current Raw CUDA orchestration materializes
-host reconstruction data before optional CuPy re-upload. Legacy
+reconstruction. Both total-flux variants and coupled primal recovery support
+`postprocessing_backend="numba"|"cupy"`. `auto` selects CuPy after Raw CUDA
+reconstruction and Numba after host reconstruction. With Raw CUDA,
+`materialize_host_solution=False` retains the trace and mixed solution as CuPy
+arrays and all returned fields as lazy device-backed `DGField` objects, including
+raw/total flux and degree-`p+1` recovery. Accessing a field's `.coeffs` explicitly
+downloads it. The default `True` eagerly materializes returned host results.
+Explicit Numba postprocessing requires host materialization and is rejected with
+`False` before assembly. See the [ADR device recovery contract](../backends/adr_device_postprocessing.md)
+for tested scope and transfer accounting. Legacy
 `full-p-plus-1` and `rt-p` spellings remain compatibility aliases. The ADR
 host default is nonsymmetric `pypardiso`. The linear-solve result, status,
 exceptions, and dispatcher are also available from `hdgfem.linalg`.
@@ -128,10 +143,25 @@ occur no earlier than the following release.
   with eliminated boundaries and operator caching enabled, diffusion source and
   boundary updates retain the eligible operator and clear only RHS/solution
   state.
+- Diffusion `with_options(stabilization=<finite real scalar>)`, with no other
+  overrides, retains compatible raw-CUDA flux-recovery references and device
+  geometry factors. The DGSpace, trace space, recovery variant, and active CUDA
+  device must match. Tau-dependent operators, local diffusion factors, solver
+  hierarchies, and solution state still reset. Explicit `clear_cache()` and
+  other option updates discard this recovery cache. See the
+  [recovery cache contract](../backends/raw_cuda.md#flux-only-recovery-and-scalar-tau-retries)
+  for validation commands and scope.
 - Contract tests construct every advertised solve-capability row. Actual
   NumPy/Numba advection and diffusion solves additionally exercise per-call warm
   starts and original-system residual acceptance; optional backend execution is
   qualified only by its dedicated runtime lane.
+
+Numba diffusion supports persistent `cache_local_factors="schur-lu"` and
+`"schur-cholesky"` with identity diffusion, eliminated boundaries, and operator
+caching enabled. These policies use the reusable solver's existing source,
+boundary, reaction, options and space invalidation contract. See the
+[host Schur cache guide](../backends/numba_diffusion.md) for supported scope,
+checks, storage and timings. The default remains `"none"`.
 
 ## Results And Functional Compatibility
 
@@ -176,6 +206,13 @@ residuals must meet their targets. Rejected solves return a normalized
 `raise_on_nonconvergence`; the exception carries that result in `.result`.
 `backend_info` preserves the native status while `info` remains the normalized
 integer compatibility field.
+
+AMGX/CUDA out-of-memory errors instead raise `LinearSolveCapacityError`,
+regardless of `raise_on_nonconvergence`. They stop the retry sequence, close
+failed owned native resources, and expose the failed phase and available
+memory counters. See the
+[capacity failure contract](solver_convergence_contract.md#amgx-capacity-failures)
+for the fields, cleanup rules, and tested scope.
 
 ## Alpha Change Policy
 

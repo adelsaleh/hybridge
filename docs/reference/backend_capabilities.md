@@ -23,6 +23,7 @@ The Python source of truth is
 is checked by `tests/test_backend_capabilities.py`.
 
 <!-- BEGIN GENERATED CAPABILITY MATRIX -->
+
 | Equation | Operation | Assembly | Sparse solve | Assembly residency | Solve residency | Reconstruction | Boundary modes | Trace bases | Notes |
 |---|---|---|---|---|---|---|---|---|---|
 | advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | - |
@@ -49,17 +50,17 @@ is checked by `tests/test_backend_capabilities.py`.
 | advection-reaction | solve | raw-cuda | petsc | device -> host | host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
 | advection-reaction | solve | raw-cuda | cupyx | device -> host | host -> device -> host | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | The reduced matrix is downloaded before non-AMGX solves. |
 | advection-reaction | solve | raw-cuda | amgx | device | device | device (optional host copy) | eliminate, zero-flux | legacy-lagrange, legendre-modal | Direct device AMGX and compatible CuPy-to-Cupyx solves are fully device-resident. |
-| advection-diffusion-reaction | solve | numpy | scipy | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numpy | pypardiso | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numpy | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numpy | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numpy | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numba | scipy | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numba | pypardiso | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numba | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy. |
-| advection-diffusion-reaction | solve | raw-cuda | amgx | device | device | device (postprocessing currently materializes host fields) | eliminate | legacy-lagrange, legendre-modal | Positive constant scalar diffusion; device COO-to-CSR, direct AMGX, incidence-wise face stabilization masses; RT_p CuPy postprocessing currently follows host materialization and re-upload. |
+| advection-diffusion-reaction | solve | numpy | scipy | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numpy | pypardiso | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numpy | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numpy | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numpy | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numba | scipy | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numba | pypardiso | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numba | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
+| advection-diffusion-reaction | solve | raw-cuda | amgx | device | device | device (optional host materialization) | eliminate | legacy-lagrange, legendre-modal | Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; tensor coefficients require hdg_postprocess='none'. Scalar CuPy postprocessing remains supported; materialize_host_solution controls result downloads. |
 | diffusion-reaction | assemble | numpy | none | host | none | none | eliminate | legacy-lagrange, legendre-modal, bernstein | - |
 | diffusion-reaction | assemble | numba | none | host | none | none | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
@@ -77,6 +78,7 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | solve | cupy | amgx | device | device | device (optional host copy) | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host. |
 | diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Requires CSR or face BSR, identity diffusion, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data. |
 | diffusion-reaction | solve | raw-cuda | fb-hp-mg-pcg | device | device | device (flux postprocessing materializes only on request) | eliminate | legendre-modal | Native face-BSR PCG with direct p-to-zero modal multigrid for p=4..6 and one reusable scalar-AMGX coarse hierarchy. |
+
 <!-- END GENERATED CAPABILITY MATRIX -->
 
 ## Enforcement
@@ -122,13 +124,15 @@ runtime.
   `"split3"`. TSLE-BSR additionally requires cooperative LU and face BSR;
   p=1--7 is qualified and p=8--9 is experimental.
 - Raw-CUDA diffusion full solves are exposed through
-  `DiffusionReactionHDGSolver`, require direct CSR-to-AMGX, and do not support
-  HDG postprocessing in the solver call.
+  `DiffusionReactionHDGSolver` with direct device CSR/BSR solver handoff.
+  Flux-only `RT_projection` and `l2_closest` recovery can keep local fields and
+  traces resident; compatible recovery data survive scalar tau-only retries.
+  See the [recovery cache contract](../backends/raw_cuda.md#flux-only-recovery-and-scalar-tau-retries).
 - Diffusion flux postprocessing offers host-Numba
   `l2_closest` and `RT_projection` paths plus batched CuPy
   `RT_projection`. CuPy RT recovery currently materializes reconstructed
-  element data on the host and uploads its moment batches; it is not yet a
-  device-resident raw-CUDA postprocessor.
+  element data on the host and uploads its moment batches. The dedicated
+  raw-CUDA flux-only path uses resident data and cached reference lifts.
 - Diffusion `assemble_global_matrix()` always returns host arrays, including
   when CuPy or raw-CUDA performed the assembly.
 - Numba diffusion uses eliminated boundary trace degrees of freedom. Request
@@ -139,3 +143,9 @@ runtime.
   Bernstein is not a beta production requirement, so no Numba or raw-CUDA
   expansion is planned for beta; the existing bounded NumPy contract remains
   supported and broader work can be reconsidered from user demand.
+
+The low-level tensor ADR operator additionally exposes assembly-only COO/direct
+CSR/direct BSR and full-trace reconstruction, with graph metadata and phase
+timings. Complete raw-CUDA tensor solves require `hdg_postprocess="none"`;
+`raw_matrix_format="bsr"` keeps face blocks through the native AMGX solve.
+See [raw CUDA tensor ADR](../backends/raw_cuda.md#tensor-adr-assembly-and-reconstruction).

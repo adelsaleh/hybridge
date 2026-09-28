@@ -14,3 +14,5 @@
   reconstruction, and residency support matrix.
 - [`solver_convergence_contract.md`](solver_convergence_contract.md): normalized
   convergence and physical-residual acceptance.
+- [`device_diagnostics.md`](device_diagnostics.md): guiding-center device
+  reductions, transfer counts, sampling semantics, and validation scope.

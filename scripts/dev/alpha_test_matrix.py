@@ -43,6 +43,8 @@ HOST_FAST_TARGETS = (
     "tests/test_documented_examples.py",
     "tests/test_documentation_structure.py",
     "tests/test_diffusion_reaction_solver.py",
+    "tests/test_diffusion_recovery_cache.py",
+    "tests/test_discontinuous_advection_trace.py",
     "tests/test_diffusion_reaction_test7_fused_experiment.py",
     "tests/test_face_dense.py",
     "tests/test_guiding_center_cases.py",
@@ -55,11 +57,16 @@ HOST_FAST_TARGETS = (
     "tests/test_raw_cuda_policy.py",
     "tests/test_solver_api_contract.py",
     "tests/test_solver_convergence_contract.py",
+    "tests/test_amgx_capacity.py",
+    "tests/test_diagnostics.py::test_diagnostic_packing_rejects_unreduced_arrays_before_download",
+    "tests/test_diagnostics.py::test_azimuthal_host_override_preserves_explicit_backend_choice",
     "tests/test_space.py",
     "tests/test_symmetric_triangle_quadrature_host.py",
 )
 
 CPU_PARITY_TARGETS = (
+    "tests/test_adr_tensor_numba.py",
+    "tests/test_numba_diffusion_schur_cache.py",
     "tests/test_advection_reaction_numba.py::test_numba_solve_matches_numpy_projected_coefficients",
     "tests/test_advection_reaction_numba.py::test_numba_zero_flux_trace_system_matches_numpy_zeroed_boundary_flux",
     "tests/test_diffusion_reaction_solver.py::test_diffusion_reaction_numba_solve_matches_numpy_for_production_trace_bases",
@@ -67,6 +74,11 @@ CPU_PARITY_TARGETS = (
 )
 
 GPU_SMOKE_TARGETS = (
+    "tests/test_adr_device_postprocessing.py",
+    "tests/test_numba_diffusion_schur_cache_cuda.py",
+    "tests/test_device_diagnostics.py",
+    "tests/test_diffusion_recovery_cache_cuda.py",
+    "tests/test_discontinuous_advection_trace_cuda.py",
     "tests/test_pyamgx_logging.py::test_amgx_bicgstab_iteration_log_reports_changing_residuals",
     "tests/test_cupy_backend.py::test_advection_reaction_modal_trace_all_backends_match_numpy",
     "tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_zero_flux_matches_numba",
@@ -115,7 +127,7 @@ ALPHA_TEST_LANES = (
         cadence="opt-in on GPU changes; required before release tag",
         release_blocking=True,
         runtime="CUDA, CuPy/Cupyx, PyAMGX, Numba",
-        coverage="CuPy/raw-CUDA parity, explicit Cupyx transfers, zero-flux advection, direct CSR AMGX solves, and device diffusion postprocessing",
+        coverage="CuPy/raw-CUDA parity, explicit Cupyx transfers, zero-flux advection, direct CSR AMGX solves, device diffusion/ADR postprocessing, and guiding-center diagnostic reductions",
         commands=(_pytest_command(GPU_SMOKE_TARGETS),),
         trace_bases=PRODUCTION_TRACE_BASES,
         requires_gpu=True,

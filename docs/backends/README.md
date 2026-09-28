@@ -7,6 +7,11 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 
 ## Guides
 
+- [`numba_adr.md`](numba_adr.md): variable scalar and tensor ADR diffusion,
+  structural fast paths and normal-diffusivity stabilization.
+- [`numba_diffusion.md`](numba_diffusion.md): fused host diffusion assembly,
+  persistent Schur-LU/Cholesky factors, cache contracts and phase benchmarks.
+
 - [`holoviz.md`](holoviz.md): optional GPU plotting for guiding-center runs,
   device sampling, explicit image saving, and static smoke checks.
 - [`cuda_execution.md`](cuda_execution.md): CUDA runner entry points, matrix
@@ -44,6 +49,7 @@ Backend modules remain implementation details unless exported from `hdgfem`.
 | `hdgfem.backends.numpy` | NumPy assembly and reconstruction adapters. |
 | `hdgfem.backends.numba` | Table-driven Numba host assembly and reconstruction. |
 | `hdgfem.backends.cupy` | Generic CuPy mirrors, Cupyx sparse solves, device ILU, and PyAMGX resource adapters. |
+| `hdgfem.backends.amgx_errors` | Shared AMGX/CUDA capacity classification, memory diagnostics, and native-object cleanup. |
 | `hdgfem.backends.raw_cuda` | Shared raw-CUDA launch policy and validation. |
 | `hdgfem.backends.advection_cuda` | CUDA advection orchestration, reconstruction, and direct device-CSR-to-AMGX solve. |
 | `hdgfem.backends.advection_raw_cuda` | Raw-CUDA advection assembly and reconstruction kernels. |
@@ -69,3 +75,5 @@ hard-coded fused tensor Test 7 adapter and kernels now live under
   transfer instrumentation.
 - Keep dated performance conclusions in [`../research/`](../research/), not in
   maintained backend guidance.
+
+- [ADR device postprocessing](adr_device_postprocessing.md): CuPy recovery, optional host materialization, and transfer-accounted parity.

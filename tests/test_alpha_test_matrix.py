@@ -48,10 +48,16 @@ def test_host_fast_lane_cannot_collect_device_suites() -> None:
     command = ALPHA_TEST_LANES_BY_NAME["host-fast"].commands[0]
     targets = "\n".join(command)
     assert "test_solver_convergence_contract.py" in targets
+    assert "test_amgx_capacity.py" in targets
+    assert "tests/test_diffusion_recovery_cache.py" in targets
+    assert "tests/test_discontinuous_advection_trace.py" in targets
     assert "test_documented_examples.py" in targets
     assert "test_cupy_scaling.py" not in targets
     assert "test_diffusion_reaction_assembly_parity.py" not in targets
     assert "test_cupy_backend.py" not in targets
+    assert "test_device_diagnostics.py" not in targets
+    assert "test_diffusion_recovery_cache_cuda.py" not in targets
+    assert "test_discontinuous_advection_trace_cuda.py" not in targets
     assert not ALPHA_TEST_LANES_BY_NAME["host-fast"].requires_gpu
 
 
@@ -64,7 +70,12 @@ def test_install_smoke_lane_builds_and_installs_a_wheel() -> None:
 
 def test_cpu_and_gpu_parity_lanes_cover_both_production_trace_bases() -> None:
     assert ALPHA_TEST_LANES_BY_NAME["cpu-parity"].trace_bases == PRODUCTION_TRACE_BASES
+    assert "tests/test_numba_diffusion_schur_cache.py" in ALPHA_TEST_LANES_BY_NAME["cpu-parity"].commands[0]
+    assert "tests/test_numba_diffusion_schur_cache_cuda.py" in ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].commands[0]
     assert ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].trace_bases == PRODUCTION_TRACE_BASES
+    assert "tests/test_device_diagnostics.py" in ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].commands[0]
+    assert "tests/test_diffusion_recovery_cache_cuda.py" in ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].commands[0]
+    assert "tests/test_discontinuous_advection_trace_cuda.py" in ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].commands[0]
 
 
 def test_checked_in_alpha_matrix_matches_executable_manifest() -> None:

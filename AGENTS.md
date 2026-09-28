@@ -11,7 +11,8 @@
   the goal is a self-contained package. Put shared plotting, sampling, rendering,
   and figure-output behavior in `hdgfem/io`, leaving case-specific labels,
   diagnostic choices, and orchestration in scripts.
-- Preserve the workspace rules in the parent AGENTS.md: do not run builds,
-  compilation, install scripts, simulations, or time integration without the
-  user's explicit authorization. Diagnostic and small-matrix checks are allowed
-  provided they do not compile code.
+- Preserve the workspace rules in the parent AGENTS.md: AMGX compilation,
+  rebuilds, and build/install scripts require explicit user authorization.
+  Other compilation, including Numba `njit` and CuPy/CUDA runtime JIT, is allowed
+  during authorized work. Diagnostic and small-matrix checks are allowed;
+  simulations and time integration still require explicit authorization.
