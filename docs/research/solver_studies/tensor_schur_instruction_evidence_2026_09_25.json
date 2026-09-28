@@ -1,0 +1,48 @@
+[
+  {
+    "mode": "tf32",
+    "source_sha256": "04636e8c6c2fd0e95e8757484be24b1792668730c136cf19169afd5b3f668748",
+    "cached_binary_sha256": "c3ccba267ace19e970a45ea7a1f99d75f801bf977b82d220b62e4d59bed261d1",
+    "cache_header_bytes": 40,
+    "elf_trailing_zero_padding_for_disassembler": 1,
+    "static_instruction_counts": {
+      "DFMA": 549,
+      "FFMA": 16,
+      "HMMA.1684.F32.TF32": 32
+    }
+  },
+  {
+    "mode": "fp64",
+    "source_sha256": "a3d3db3d849ca0f22c569c5c50e497b62bf74d23425026343861a465f3f4f926",
+    "cached_binary_sha256": "6abe6c621d7047c900ea98bb62edd957e25de98ecae01f758e8baed43a525524",
+    "cache_header_bytes": 40,
+    "elf_trailing_zero_padding_for_disassembler": 1,
+    "static_instruction_counts": {
+      "DFMA": 591,
+      "FFMA": 16
+    }
+  },
+  {
+    "mode": "tf32x3",
+    "source_sha256": "30a643684ebff4d15e96f6c4d09eac1fdbd78b299508ff4ab50d246988042487",
+    "cached_binary_sha256": "cd81608e9aa55a59e06051e846d82b303fd6bda95500d06e413aa989193babbf",
+    "cache_header_bytes": 40,
+    "elf_trailing_zero_padding_for_disassembler": 1,
+    "static_instruction_counts": {
+      "DFMA": 549,
+      "FFMA": 16,
+      "HMMA.1684.F32.TF32": 24
+    }
+  },
+  {
+    "mode": "fp32",
+    "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301",
+    "cached_binary_sha256": "acee4c27828bb3ec5f9c81caa325ea4de46db8bfa925dfe54abf533388a7b716",
+    "cache_header_bytes": 40,
+    "elf_trailing_zero_padding_for_disassembler": 1,
+    "static_instruction_counts": {
+      "FFMA": 88,
+      "FFMA.FTZ": 452
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "scope": "FP64 tensor ADR assembly/reconstruction and bounded stationary native solves; no tensor postprocessing",
+  "source_sha256": {
+    "hdgfem/assembly/advection_diffusion_reaction.py": "cebfba6b1daf16f70208d56d96205eb3f2296324174e6de31b7390f014bfe8f0",
+    "hdgfem/assembly/matrices_numpy.py": "1722841801769e12558c25318ff7c42ef4566c08cdebdc48c93c0aa721c96da8",
+    "hdgfem/assembly/diffusion_coefficients.py": "7fc631e8c1e850cfed7d4b13a043b965c467608b41ee0674b6e2cbb0fa968a4a",
+    "hdgfem/backends/adr_tensor_raw_cuda.py": "cafb1f763da51b8924018127419ddad3ba7b5d3a3c980771a93de43a3860d161",
+    "hdgfem/backends/advection_diffusion_reaction_raw_cuda.py": "e482e9663c1cc94f12ec3c7950e7b4236841b80062a03bd597ba8243de1f0733",
+    "hdgfem/backends/raw_cuda_local.py": "4fd6e5d1de562779143505b41992e92e50485f5436ef78d7fb4838b54ba3d805",
+    "hdgfem/backends/diffusion_raw_cuda.py": "38fcf902ff973ab5a8042a237d19092d54bcda90724ea08864783f47dc589e8b",
+    "scripts/advection_diffusion_reaction/benchmark_tensor_raw_cuda.py": "f07f5665cb0044ee7561f136146d5ef8777c5689c000ca0a82852a9238f4f76d"
+  },
+  "diffusion_before_sha256": "271ea91f79754da0a1da7a3704ec55591f0483e97693d1cdadab8ef795e06e17",
+  "diffusion_cooperative_source_sha256": "137134456c6a477c0d82a07c21bf54ce99976706efd4adf1ab0c06b5195ae28b",
+  "adr_configurations": 324,
+  "diffusion_paired_configurations": 36
+}

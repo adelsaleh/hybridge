@@ -1,0 +1,187 @@
+{
+  "provenance_note": "Historical Nsight reports, not a fresh worktree capture. The 48896-block grid is consistent with 32768 triangles: fused emission launches max(num_tri, num_interior_edges), and a 128x128 rectangle has 48896 interior edges.",
+  "reports": [
+    {
+      "case": "poisson",
+      "path": "/tmp/hdgfem_raw_assembly_20260922/poisson.ncu-rep",
+      "sha256": "65b05bfc0690125ff57a6d070e986d573f8d577a02e0a5a6842864be0c180353",
+      "kernel": "assemble_diffusion_raw_coop_bsr",
+      "block": "(128, 1, 1)",
+      "grid": "(48896, 1, 1)",
+      "metrics": {
+        "dram__bytes.sum.per_second": {
+          "value": "4.328656",
+          "unit": "Gbyte/s"
+        },
+        "gpu__time_duration.avg": {
+          "value": "67.798368",
+          "unit": "ms"
+        },
+        "launch__occupancy_limit_barriers": {
+          "value": "24.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_blocks": {
+          "value": "24.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_registers": {
+          "value": "7.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_shared_mem": {
+          "value": "3.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_warps": {
+          "value": "12.000000",
+          "unit": "block"
+        },
+        "launch__registers_per_thread": {
+          "value": "71",
+          "unit": "register/thread"
+        },
+        "launch__registers_per_thread_allocated": {
+          "value": "72.000000",
+          "unit": "register/thread"
+        },
+        "launch__shared_mem_config_size": {
+          "value": "102.400000",
+          "unit": "Kbyte"
+        },
+        "launch__shared_mem_per_block": {
+          "value": "33.256000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_allocated": {
+          "value": "33.280000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_driver": {
+          "value": "1.024000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_dynamic": {
+          "value": "32.232000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_static": {
+          "value": "0",
+          "unit": "byte/block"
+        },
+        "sm__maximum_warps_avg_per_active_cycle": {
+          "value": "12.000000",
+          "unit": "warp"
+        },
+        "sm__maximum_warps_per_active_cycle_pct": {
+          "value": "25.000000",
+          "unit": "%"
+        },
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_active": {
+          "value": "73.411560",
+          "unit": "%"
+        },
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": {
+          "value": "73.057115",
+          "unit": "%"
+        }
+      },
+      "missing_counter_groups": [
+        "shared bank conflicts and wavefronts",
+        "warp-stall breakdown",
+        "eligible warps and achieved occupancy"
+      ]
+    },
+    {
+      "case": "transport",
+      "path": "/tmp/hdgfem_raw_assembly_20260922/transport.ncu-rep",
+      "sha256": "e3998ae4a1b196eb726b6e05b9ed73fda2a02f2f70c743d08af0c10d64602058",
+      "kernel": "assemble_advection_raw_fused_bsr",
+      "block": "(128, 1, 1)",
+      "grid": "(48896, 1, 1)",
+      "metrics": {
+        "dram__bytes.sum.per_second": {
+          "value": "4.949561",
+          "unit": "Gbyte/s"
+        },
+        "gpu__time_duration.avg": {
+          "value": "41.489280",
+          "unit": "ms"
+        },
+        "launch__occupancy_limit_barriers": {
+          "value": "24.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_blocks": {
+          "value": "24.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_registers": {
+          "value": "3.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_shared_mem": {
+          "value": "6.000000",
+          "unit": "block"
+        },
+        "launch__occupancy_limit_warps": {
+          "value": "12.000000",
+          "unit": "block"
+        },
+        "launch__registers_per_thread": {
+          "value": "168",
+          "unit": "register/thread"
+        },
+        "launch__registers_per_thread_allocated": {
+          "value": "168.000000",
+          "unit": "register/thread"
+        },
+        "launch__shared_mem_config_size": {
+          "value": "102.400000",
+          "unit": "Kbyte"
+        },
+        "launch__shared_mem_per_block": {
+          "value": "16.096000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_allocated": {
+          "value": "16.128000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_driver": {
+          "value": "1.024000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_dynamic": {
+          "value": "15.072000",
+          "unit": "Kbyte/block"
+        },
+        "launch__shared_mem_per_block_static": {
+          "value": "0",
+          "unit": "byte/block"
+        },
+        "sm__maximum_warps_avg_per_active_cycle": {
+          "value": "12.000000",
+          "unit": "warp"
+        },
+        "sm__maximum_warps_per_active_cycle_pct": {
+          "value": "25.000000",
+          "unit": "%"
+        },
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_active": {
+          "value": "78.209526",
+          "unit": "%"
+        },
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": {
+          "value": "78.086959",
+          "unit": "%"
+        }
+      },
+      "missing_counter_groups": [
+        "shared bank conflicts and wavefronts",
+        "warp-stall breakdown",
+        "eligible warps and achieved occupancy"
+      ]
+    }
+  ]
+}

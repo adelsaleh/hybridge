@@ -1,0 +1,192 @@
+{
+  "scope": "Unchanged fused BSR kernel specialized to FP32, including CUDA-core LU and triangular solves; errors use separately generated FP64 references.",
+  "configuration": {
+    "order": 6,
+    "nx": 500,
+    "ny": 300,
+    "blocks": [
+      32,
+      64,
+      128
+    ],
+    "modes": [
+      "fp32"
+    ],
+    "basis": "legendre-modal",
+    "repeats": 7,
+    "output": "/tmp/fp32-p6-300k",
+    "reference_dir": "/tmp/fp64-ref-p6-300k",
+    "reference_only": false
+  },
+  "process_precision": "fp32",
+  "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+  "cuda_runtime": 13020,
+  "cupy": "14.2.0",
+  "triangles": 300000,
+  "runs": [
+    {
+      "mode": "fp32",
+      "block": 32,
+      "small_sheared_errors": {
+        "matrix_relative": 5.392545597258895e-07,
+        "rhs_relative": 7.016126273199816e-07,
+        "trace_relative": 7.24777384732758e-06,
+        "original_physical_residual": 6.289328713681382e-06
+      },
+      "large_structured_errors": {
+        "matrix_data_relative": 2.9032088382813052e-06,
+        "rhs_relative": 4.613178479072938e-06
+      },
+      "kernel_ms": [
+        80.53033447265625,
+        82.89094543457031,
+        82.84957122802734,
+        80.82246398925781,
+        83.23983764648438,
+        83.37654113769531,
+        77.58550262451172
+      ],
+      "kernel_median_ms": 82.84957122802734,
+      "kernel_stdev_ms": 2.118835192198329,
+      "wrapper_ms": [
+        122.03627987764776,
+        124.17873297818005,
+        126.6056860331446,
+        124.20723610557616,
+        124.21089597046375,
+        125.73005398735404,
+        119.15790103375912
+      ],
+      "resources": {
+        "kernel_attributes": {
+          "max_threads_per_block": 896,
+          "shared_size_bytes": 0,
+          "const_size_bytes": 0,
+          "local_size_bytes": 0,
+          "num_regs": 72,
+          "ptx_version": 120,
+          "binary_version": 120,
+          "cache_mode_ca": 0,
+          "max_dynamic_shared_size_bytes": 16300,
+          "preferred_shared_memory_carveout": -1
+        },
+        "dynamic_shared_bytes": 16300,
+        "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+      },
+      "accuracy_gate_1e_minus_9": false
+    },
+    {
+      "mode": "fp32",
+      "block": 64,
+      "small_sheared_errors": {
+        "matrix_relative": 5.392545597258895e-07,
+        "rhs_relative": 7.016126273199816e-07,
+        "trace_relative": 7.24777384732758e-06,
+        "original_physical_residual": 6.289328713681382e-06
+      },
+      "large_structured_errors": {
+        "matrix_data_relative": 2.903208010147146e-06,
+        "rhs_relative": 4.613178479072938e-06
+      },
+      "kernel_ms": [
+        63.79846572875976,
+        64.26534271240234,
+        66.53314971923828,
+        66.28377532958984,
+        66.81549072265625,
+        68.1968994140625,
+        68.75270080566406
+      ],
+      "kernel_median_ms": 66.53314971923828,
+      "kernel_stdev_ms": 1.838897528327836,
+      "wrapper_ms": [
+        104.6488881111145,
+        106.38967296108603,
+        108.11602394096553,
+        107.97800892032683,
+        107.73624386638403,
+        111.63988593034446,
+        110.0828389171511
+      ],
+      "resources": {
+        "kernel_attributes": {
+          "max_threads_per_block": 896,
+          "shared_size_bytes": 0,
+          "const_size_bytes": 0,
+          "local_size_bytes": 0,
+          "num_regs": 72,
+          "ptx_version": 120,
+          "binary_version": 120,
+          "cache_mode_ca": 0,
+          "max_dynamic_shared_size_bytes": 16300,
+          "preferred_shared_memory_carveout": -1
+        },
+        "dynamic_shared_bytes": 16300,
+        "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+      },
+      "accuracy_gate_1e_minus_9": false
+    },
+    {
+      "mode": "fp32",
+      "block": 128,
+      "small_sheared_errors": {
+        "matrix_relative": 5.392545597258895e-07,
+        "rhs_relative": 7.016126273199816e-07,
+        "trace_relative": 7.24777384732758e-06,
+        "original_physical_residual": 6.289328713681382e-06
+      },
+      "large_structured_errors": {
+        "matrix_data_relative": 2.903207558829267e-06,
+        "rhs_relative": 4.613178479072938e-06
+      },
+      "kernel_ms": [
+        60.22819137573242,
+        61.12307357788086,
+        64.64262390136719,
+        60.43939208984375,
+        62.001953125,
+        58.91980743408203,
+        60.47328186035156
+      ],
+      "kernel_median_ms": 60.47328186035156,
+      "kernel_stdev_ms": 1.8121971868116828,
+      "wrapper_ms": [
+        103.70740480720997,
+        102.70629404112697,
+        106.35859705507755,
+        102.44381194934249,
+        105.10596400126815,
+        99.85634288750589,
+        104.42081093788147
+      ],
+      "resources": {
+        "kernel_attributes": {
+          "max_threads_per_block": 896,
+          "shared_size_bytes": 0,
+          "const_size_bytes": 0,
+          "local_size_bytes": 0,
+          "num_regs": 72,
+          "ptx_version": 120,
+          "binary_version": 120,
+          "cache_mode_ca": 0,
+          "max_dynamic_shared_size_bytes": 16300,
+          "preferred_shared_memory_carveout": -1
+        },
+        "dynamic_shared_bytes": 16300,
+        "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+      },
+      "accuracy_gate_1e_minus_9": false
+    }
+  ],
+  "prototype_selection": {
+    "key": {
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "order": 6,
+      "basis": "legendre-modal",
+      "phase": "uncached fused BSR assembly",
+      "triangles": 300000
+    },
+    "selection": null,
+    "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+  }
+}

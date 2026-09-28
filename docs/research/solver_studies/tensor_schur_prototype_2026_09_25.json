@@ -1,0 +1,2168 @@
+{
+  "reports": [
+    {
+      "scope": "Only two dense Schur products replaced inside fused BSR assembly; all LU and triangular solves remain original FP64 CUDA-core code.",
+      "configuration": {
+        "order": 2,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp64",
+          "tf32",
+          "tf32x3"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-tensor-p2"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp64",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.030751528524142e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 9.985902133912014e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            2.2393600940704346,
+            2.242111921310425,
+            2.2435200214385986,
+            2.244863986968994,
+            2.2401280403137207,
+            2.2396159172058105,
+            3.5034561157226562
+          ],
+          "kernel_median_ms": 2.242111921310425,
+          "kernel_stdev_ms": 0.47694127735745295,
+          "wrapper_ms": [
+            5.374840926378965,
+            8.304615039378405,
+            5.591361783444881,
+            5.99173316732049,
+            5.808572983369231,
+            5.367603152990341,
+            6.711455062031746
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "5a775f5659c773c7a5b83b3f967a17da976e57b406155f3b13fd258dcd6ae9c7"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 0.00031120436192312746,
+            "rhs_relative": 0.000237751702644859,
+            "trace_relative": 0.0037423511556430866,
+            "original_physical_residual": 0.0035890846247798825
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00011573745289893729,
+            "rhs_relative": 8.69450139237947e-05
+          },
+          "kernel_ms": [
+            2.2449920177459717,
+            2.2459518909454346,
+            2.243648052215576,
+            2.2443840503692627,
+            2.246880054473877,
+            2.2540159225463867,
+            2.753567934036255
+          ],
+          "kernel_median_ms": 2.2459518909454346,
+          "kernel_stdev_ms": 0.1916299133565837,
+          "wrapper_ms": [
+            6.1684888787567616,
+            5.987626034766436,
+            8.92164814285934,
+            5.7894038036465645,
+            5.978412926197052,
+            6.030964897945523,
+            6.538566900417209
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "b332fba8609d38920b8418310d129832ef40549f561615993336f00a8ebf5db3"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 7.438064605476748e-08,
+            "rhs_relative": 4.516089097118659e-08,
+            "trace_relative": 9.942922895639736e-07,
+            "original_physical_residual": 8.8553635916131e-07
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.825843812058743e-08,
+            "rhs_relative": 2.1225039348633013e-08
+          },
+          "kernel_ms": [
+            2.565216064453125,
+            2.573215961456299,
+            2.563391923904419,
+            2.5621440410614014,
+            2.546976089477539,
+            2.5615360736846924,
+            2.5598080158233643
+          ],
+          "kernel_median_ms": 2.5621440410614014,
+          "kernel_stdev_ms": 0.007836010340928677,
+          "wrapper_ms": [
+            6.993480026721954,
+            6.1633228324353695,
+            6.183746038004756,
+            6.518531125038862,
+            9.34061617590487,
+            6.057344144210219,
+            5.825948901474476
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "d25051d8f67f3b777714d95655d0b5ac6996ab242644ee54ab205b4a33357867"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.030751528524142e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 4.3363765319289034e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            2.0727360248565674,
+            2.075808048248291,
+            2.0781118869781494,
+            2.0748159885406494,
+            2.0768001079559326,
+            2.065920114517212,
+            2.075551986694336
+          ],
+          "kernel_median_ms": 2.075551986694336,
+          "kernel_stdev_ms": 0.00403194238464681,
+          "wrapper_ms": [
+            7.180636981502175,
+            5.67226018756628,
+            5.648887017741799,
+            5.646557779982686,
+            5.492854164913297,
+            5.873505026102066,
+            7.390200858935714
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "5a775f5659c773c7a5b83b3f967a17da976e57b406155f3b13fd258dcd6ae9c7"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 0.00031120436192312746,
+            "rhs_relative": 0.000237751702644859,
+            "trace_relative": 0.0037423511556430866,
+            "original_physical_residual": 0.0035890846247798825
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00011573745289893807,
+            "rhs_relative": 8.69450139237947e-05
+          },
+          "kernel_ms": [
+            2.1070399284362793,
+            2.0930559635162354,
+            2.108191967010498,
+            2.1186559200286865,
+            2.109760046005249,
+            2.108191967010498,
+            2.1072959899902344
+          ],
+          "kernel_median_ms": 2.108191967010498,
+          "kernel_stdev_ms": 0.007520969585107652,
+          "wrapper_ms": [
+            5.857971031218767,
+            6.780422059819102,
+            6.491618929430842,
+            5.903714802116156,
+            5.919218063354492,
+            5.810013972222805,
+            9.025467094033957
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "b332fba8609d38920b8418310d129832ef40549f561615993336f00a8ebf5db3"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 7.438064605476748e-08,
+            "rhs_relative": 4.516089097118659e-08,
+            "trace_relative": 9.942922895639736e-07,
+            "original_physical_residual": 8.8553635916131e-07
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.82584381206116e-08,
+            "rhs_relative": 2.1225039348633013e-08
+          },
+          "kernel_ms": [
+            2.4195199012756348,
+            3.752415895462036,
+            2.4223999977111816,
+            2.4195520877838135,
+            2.427680015563965,
+            2.420703887939453,
+            2.405888080596924
+          ],
+          "kernel_median_ms": 2.420703887939453,
+          "kernel_stdev_ms": 0.5039172718184382,
+          "wrapper_ms": [
+            5.984381074085832,
+            7.944917073473334,
+            6.756905000656843,
+            5.970514845103025,
+            5.875864997506142,
+            5.984152900055051,
+            8.723024977371097
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "d25051d8f67f3b777714d95655d0b5ac6996ab242644ee54ab205b4a33357867"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.030751528524142e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.157638208515489e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            2.2575039863586426,
+            2.2567360401153564,
+            2.2747840881347656,
+            2.2675840854644775,
+            2.2568960189819336,
+            2.257280111312866,
+            2.254879951477051
+          ],
+          "kernel_median_ms": 2.257280111312866,
+          "kernel_stdev_ms": 0.007434548638884081,
+          "wrapper_ms": [
+            5.872701993212104,
+            5.510824965313077,
+            7.240643026307225,
+            5.597938084974885,
+            5.402300041168928,
+            5.557551980018616,
+            5.363228963688016
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "5a775f5659c773c7a5b83b3f967a17da976e57b406155f3b13fd258dcd6ae9c7"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 0.00031120436192312746,
+            "rhs_relative": 0.000237751702644859,
+            "trace_relative": 0.0037423511556430866,
+            "original_physical_residual": 0.0035890846247798825
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00011573745289893829,
+            "rhs_relative": 8.69450139237947e-05
+          },
+          "kernel_ms": [
+            2.299999952316284,
+            2.303584098815918,
+            2.301568031311035,
+            2.33404803276062,
+            2.303328037261963,
+            2.3005759716033936,
+            2.3032000064849854
+          ],
+          "kernel_median_ms": 2.3032000064849854,
+          "kernel_stdev_ms": 0.012178701120220885,
+          "wrapper_ms": [
+            5.495124030858278,
+            5.841825855895877,
+            5.839155986905098,
+            8.278159890323877,
+            5.777392070740461,
+            5.543176084756851,
+            6.037068087607622
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "b332fba8609d38920b8418310d129832ef40549f561615993336f00a8ebf5db3"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 7.438064605476748e-08,
+            "rhs_relative": 4.516089097118659e-08,
+            "trace_relative": 9.942922895639736e-07,
+            "original_physical_residual": 8.8553635916131e-07
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.82584381206128e-08,
+            "rhs_relative": 2.1225039348633013e-08
+          },
+          "kernel_ms": [
+            2.6524159908294678,
+            2.653343915939331,
+            2.654848098754883,
+            2.978656053543091,
+            2.6763839721679688,
+            2.6549758911132812,
+            2.863744020462036
+          ],
+          "kernel_median_ms": 2.6549758911132812,
+          "kernel_stdev_ms": 0.13271460934399812,
+          "wrapper_ms": [
+            6.223346805199981,
+            6.138488184660673,
+            6.126327207311988,
+            6.379804108291864,
+            8.985535940155387,
+            6.253058090806007,
+            6.324144080281258
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": false,
+            "additional_static_shared_bytes": 1024,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "52141e374fc8c2f1a4e892eab222c850bf3c98ef907872f0f6bd64287daed50b",
+            "kernel_attributes": {
+              "max_threads_per_block": 640,
+              "shared_size_bytes": 1024,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 81,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 2440,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 2440,
+            "source_sha256": "d25051d8f67f3b777714d95655d0b5ac6996ab242644ee54ab205b4a33357867"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ],
+      "prototype_selection": {
+        "key": {
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "order": 2,
+          "basis": "legendre-modal",
+          "phase": "uncached fused BSR assembly",
+          "triangles": 32768
+        },
+        "selection": {
+          "mode": "fp64",
+          "block": 64
+        },
+        "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+      }
+    },
+    {
+      "scope": "Unchanged fused BSR kernel specialized to FP32, including CUDA-core LU and triangular solves; errors use separately generated FP64 references.",
+      "configuration": {
+        "order": 2,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp32"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-fp32-final-p2",
+        "reference_dir": "/tmp/hdgfem-fp64-ref-p2",
+        "reference_only": false
+      },
+      "process_precision": "fp32",
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 1.533520168174661e-07,
+            "rhs_relative": 1.8057167945805192e-07,
+            "trace_relative": 6.676543594263056e-07,
+            "original_physical_residual": 1.2071815392464096e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 1.69829864075804e-07,
+            "rhs_relative": 1.0225946325617438e-07
+          },
+          "kernel_ms": [
+            0.3424319922924042,
+            0.3454720079898834,
+            0.34249600768089294,
+            0.34137600660324097,
+            0.346560001373291,
+            0.317984014749527,
+            0.3421440124511719
+          ],
+          "kernel_median_ms": 0.3424319922924042,
+          "kernel_stdev_ms": 0.009797770980098857,
+          "wrapper_ms": [
+            8.217046037316322,
+            7.955654989928007,
+            7.467714138329029,
+            7.867333013564348,
+            10.52380702458322,
+            7.909831125289202,
+            7.848007138818502
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 1360,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 1360,
+            "source_sha256": "f357380842d9878260747ac8f779a7b2fee8a6391c07d2b8918b6516fbf800bd"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 1.533520168174661e-07,
+            "rhs_relative": 1.8057167945805192e-07,
+            "trace_relative": 6.676543594263056e-07,
+            "original_physical_residual": 1.2071815392464096e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 1.697564803022816e-07,
+            "rhs_relative": 1.0225946325617438e-07
+          },
+          "kernel_ms": [
+            0.36563199758529663,
+            0.3410879969596863,
+            0.33961600065231323,
+            0.3662079870700836,
+            0.36899200081825256,
+            0.3704639971256256,
+            0.365119993686676
+          ],
+          "kernel_median_ms": 0.36563199758529663,
+          "kernel_stdev_ms": 0.013284141565632042,
+          "wrapper_ms": [
+            7.6402900740504265,
+            11.209282092750072,
+            8.827961049973965,
+            8.481003809720278,
+            8.575423154979944,
+            12.467097956687212,
+            8.711641188710928
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 1360,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 1360,
+            "source_sha256": "f357380842d9878260747ac8f779a7b2fee8a6391c07d2b8918b6516fbf800bd"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 1.533520168174661e-07,
+            "rhs_relative": 1.8057167945805192e-07,
+            "trace_relative": 6.676543594263056e-07,
+            "original_physical_residual": 1.2071815392464096e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 1.69758601136718e-07,
+            "rhs_relative": 1.0225946325617438e-07
+          },
+          "kernel_ms": [
+            0.5277439951896667,
+            0.49769601225852966,
+            0.5023360252380371,
+            0.5257920026779175,
+            0.5226560235023499,
+            0.4960640072822571,
+            0.5021439790725708
+          ],
+          "kernel_median_ms": 0.5023360252380371,
+          "kernel_stdev_ms": 0.014069228121989465,
+          "wrapper_ms": [
+            8.001592941582203,
+            8.105248911306262,
+            10.040255961939692,
+            8.607509080320597,
+            8.622117806226015,
+            9.54633392393589,
+            8.846733020618558
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 1360,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 1360,
+            "source_sha256": "f357380842d9878260747ac8f779a7b2fee8a6391c07d2b8918b6516fbf800bd"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ],
+      "prototype_selection": {
+        "key": {
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "order": 2,
+          "basis": "legendre-modal",
+          "phase": "uncached fused BSR assembly",
+          "triangles": 32768
+        },
+        "selection": null,
+        "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+      }
+    },
+    {
+      "scope": "Only two dense Schur products replaced inside fused BSR assembly; all LU and triangular solves remain original FP64 CUDA-core code.",
+      "configuration": {
+        "order": 4,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp64",
+          "tf32",
+          "tf32x3"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-tensor-p4"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp64",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.6120911960470601e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 3.4569027565400308e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            16.876127243041992,
+            14.50915241241455,
+            18.171968460083008,
+            14.51968002319336,
+            14.317279815673828,
+            17.91654396057129,
+            14.526335716247559
+          ],
+          "kernel_median_ms": 14.526335716247559,
+          "kernel_stdev_ms": 1.7503427791976764,
+          "wrapper_ms": [
+            21.02721482515335,
+            18.879642011597753,
+            22.213445976376534,
+            18.583641154691577,
+            19.697670126333833,
+            22.028988925740123,
+            18.607255071401596
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 66,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "328662d655864c92bb739972c03df57db7225cf6bacae6cf52e514bbf6bb9889"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0003037239973638092,
+            "rhs_relative": 0.0005502854304493181,
+            "trace_relative": 0.006267631106973314,
+            "original_physical_residual": 0.005843666012530404
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00027430237892672515,
+            "rhs_relative": 0.0003566823825797373
+          },
+          "kernel_ms": [
+            14.273407936096191,
+            17.083776473999023,
+            15.8820161819458,
+            14.282431602478027,
+            16.608991622924805,
+            14.073535919189453,
+            16.55308723449707
+          ],
+          "kernel_median_ms": 15.8820161819458,
+          "kernel_stdev_ms": 1.2913485444086878,
+          "wrapper_ms": [
+            19.734014989808202,
+            21.709382999688387,
+            20.45628591440618,
+            22.034466033801436,
+            21.207043901085854,
+            18.565587932243943,
+            21.011449862271547
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "91269af8a9da210ed9d5cd487a2993a11f43d5fd0077419692da8ff9511aa5b7"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 2.0471204039573808e-07,
+            "rhs_relative": 2.440136039354953e-07,
+            "trace_relative": 4.79093236882322e-06,
+            "original_physical_residual": 3.558018002591079e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 8.092487138543632e-08,
+            "rhs_relative": 1.2679267985973878e-07
+          },
+          "kernel_ms": [
+            18.957855224609375,
+            15.01193618774414,
+            14.808608055114746,
+            17.368288040161133,
+            14.82579231262207,
+            18.785696029663086,
+            18.75775909423828
+          ],
+          "kernel_median_ms": 17.368288040161133,
+          "kernel_stdev_ms": 1.9872745914356493,
+          "wrapper_ms": [
+            23.57269311323762,
+            19.585613859817386,
+            21.168316015973687,
+            21.840578876435757,
+            19.297184888273478,
+            23.335626116022468,
+            23.838629014790058
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "5cf4a5104ae0acc800dcd75ce05fda3aedf573315c86a3538a4e37523a893dc6"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.6120911960470601e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.5093996554065938e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            16.05945587158203,
+            14.454527854919434,
+            18.429536819458008,
+            15.839327812194826,
+            14.240703582763672,
+            17.316448211669922,
+            14.441568374633789
+          ],
+          "kernel_median_ms": 15.839327812194826,
+          "kernel_stdev_ms": 1.6002744863746778,
+          "wrapper_ms": [
+            20.43362380936742,
+            18.883839948102832,
+            22.822024999186397,
+            20.228766137734056,
+            18.739107996225357,
+            21.68455603532493,
+            18.80943402647972
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 66,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "328662d655864c92bb739972c03df57db7225cf6bacae6cf52e514bbf6bb9889"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0003037239973638092,
+            "rhs_relative": 0.0005502854304493181,
+            "trace_relative": 0.006267631106973314,
+            "original_physical_residual": 0.005843666012530404
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00027430237892672515,
+            "rhs_relative": 0.0003566823825797373
+          },
+          "kernel_ms": [
+            14.027615547180176,
+            14.23100757598877,
+            14.031135559082031,
+            14.034912109375,
+            17.638559341430664,
+            15.790944099426271,
+            14.231391906738281
+          ],
+          "kernel_median_ms": 14.23100757598877,
+          "kernel_stdev_ms": 1.3807189743065527,
+          "wrapper_ms": [
+            18.454390112310648,
+            18.882983131334186,
+            18.472380004823208,
+            18.64085393026471,
+            23.48280302248895,
+            21.269549150019884,
+            22.760110907256603
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "91269af8a9da210ed9d5cd487a2993a11f43d5fd0077419692da8ff9511aa5b7"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 2.0471204039573808e-07,
+            "rhs_relative": 2.440136039354953e-07,
+            "trace_relative": 4.79093236882322e-06,
+            "original_physical_residual": 3.558018002591079e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 8.092487138544258e-08,
+            "rhs_relative": 1.2679267985973878e-07
+          },
+          "kernel_ms": [
+            14.96451187133789,
+            19.0482234954834,
+            14.967904090881348,
+            14.961343765258789,
+            15.134271621704102,
+            18.642112731933594,
+            18.74060821533203
+          ],
+          "kernel_median_ms": 15.134271621704102,
+          "kernel_stdev_ms": 2.0375130848977507,
+          "wrapper_ms": [
+            19.519480178132653,
+            23.573553888127208,
+            19.49639990925789,
+            22.05768320709467,
+            19.629837945103645,
+            23.15228316001594,
+            23.364254040643573
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "5cf4a5104ae0acc800dcd75ce05fda3aedf573315c86a3538a4e37523a893dc6"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0,
+            "rhs_relative": 0.0,
+            "trace_relative": 0.0,
+            "original_physical_residual": 1.6120911960470601e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.429448445224821e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            14.409631729125977,
+            17.178144454956055,
+            14.19871997833252,
+            16.170623779296875,
+            16.7926082611084,
+            14.178175926208496,
+            18.479167938232422
+          ],
+          "kernel_median_ms": 16.170623779296875,
+          "kernel_stdev_ms": 1.6948126199146685,
+          "wrapper_ms": [
+            19.758733920753002,
+            21.539324894547462,
+            18.739334074780345,
+            24.784991052001715,
+            21.21962304227054,
+            18.99587013758719,
+            22.88282406516373
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 66,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "328662d655864c92bb739972c03df57db7225cf6bacae6cf52e514bbf6bb9889"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0003037239973638092,
+            "rhs_relative": 0.0005502854304493181,
+            "trace_relative": 0.006267631106973314,
+            "original_physical_residual": 0.005843666012530404
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00027430237892672515,
+            "rhs_relative": 0.0003566823825797373
+          },
+          "kernel_ms": [
+            14.224479675292969,
+            14.001248359680176,
+            14.233183860778809,
+            17.985088348388672,
+            14.002240180969238,
+            14.222175598144531,
+            15.83190441131592
+          ],
+          "kernel_median_ms": 14.224479675292969,
+          "kernel_stdev_ms": 1.4919019144633647,
+          "wrapper_ms": [
+            21.033973898738623,
+            18.438207916915417,
+            21.888313116505742,
+            22.48432580381632,
+            18.45231093466282,
+            19.602584885433316,
+            20.3204529825598
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "91269af8a9da210ed9d5cd487a2993a11f43d5fd0077419692da8ff9511aa5b7"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 2.0471204039573808e-07,
+            "rhs_relative": 2.440136039354953e-07,
+            "trace_relative": 4.79093236882322e-06,
+            "original_physical_residual": 3.558018002591079e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 8.092487138543766e-08,
+            "rhs_relative": 1.2679267985973878e-07
+          },
+          "kernel_ms": [
+            18.674911499023438,
+            16.516864776611328,
+            14.742752075195312,
+            18.12678337097168,
+            14.959232330322266,
+            17.642559051513672,
+            18.921375274658203
+          ],
+          "kernel_median_ms": 17.642559051513672,
+          "kernel_stdev_ms": 1.713867592896393,
+          "wrapper_ms": [
+            23.620337015017867,
+            21.04498096741736,
+            21.12577180378139,
+            22.59716298431158,
+            19.42342589609325,
+            23.444189922884107,
+            23.356284946203232
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "1f7e1d5899fa2edb5c9d6fa1245a5c3c9b6c4559473f5a9a6d8d47dce7f537cc",
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 12916,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 12916,
+            "source_sha256": "5cf4a5104ae0acc800dcd75ce05fda3aedf573315c86a3538a4e37523a893dc6"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ],
+      "prototype_selection": {
+        "key": {
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "order": 4,
+          "basis": "legendre-modal",
+          "phase": "uncached fused BSR assembly",
+          "triangles": 32768
+        },
+        "selection": {
+          "mode": "fp64",
+          "block": 32
+        },
+        "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+      }
+    },
+    {
+      "scope": "Unchanged fused BSR kernel specialized to FP32, including CUDA-core LU and triangular solves; errors use separately generated FP64 references.",
+      "configuration": {
+        "order": 4,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp32"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-fp32-final-p4",
+        "reference_dir": "/tmp/hdgfem-fp64-ref-p4",
+        "reference_only": false
+      },
+      "process_precision": "fp32",
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 3.288337257995887e-07,
+            "rhs_relative": 2.1578697151987317e-07,
+            "trace_relative": 1.378831787164986e-06,
+            "original_physical_residual": 4.011262621254793e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 3.2294207560779364e-07,
+            "rhs_relative": 2.9460503754864025e-07
+          },
+          "kernel_ms": [
+            1.9337600469589233,
+            1.928063988685608,
+            1.9258559942245483,
+            1.92467200756073,
+            1.9382400512695312,
+            1.931391954421997,
+            1.9072959423065186
+          ],
+          "kernel_median_ms": 1.928063988685608,
+          "kernel_stdev_ms": 0.009894656064107641,
+          "wrapper_ms": [
+            11.133239138871431,
+            13.87391216121614,
+            11.091791093349457,
+            11.075241025537252,
+            14.288502046838403,
+            11.070531094446778,
+            14.536537928506732
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 6616,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 6616,
+            "source_sha256": "ade8f3f70ea0a69969fc69b2b3d3f7c9ff53f800c6b9cbfb01f87255faa9b41e"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 3.288337257995887e-07,
+            "rhs_relative": 2.1578697151987317e-07,
+            "trace_relative": 1.378831787164986e-06,
+            "original_physical_residual": 4.011262621254793e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 3.229414166019518e-07,
+            "rhs_relative": 2.9460503754864025e-07
+          },
+          "kernel_ms": [
+            1.901792049407959,
+            1.8721920251846313,
+            1.9013439416885376,
+            1.9013439416885376,
+            1.8993279933929443,
+            1.9003839492797852,
+            1.8743360042572021
+          ],
+          "kernel_median_ms": 1.9003839492797852,
+          "kernel_stdev_ms": 0.013493297171422301,
+          "wrapper_ms": [
+            11.053106980398297,
+            12.837331974878907,
+            11.109247105196118,
+            11.108268052339554,
+            13.323665130883455,
+            11.056312127038836,
+            11.238954961299896
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 6616,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 6616,
+            "source_sha256": "ade8f3f70ea0a69969fc69b2b3d3f7c9ff53f800c6b9cbfb01f87255faa9b41e"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 3.288337257995887e-07,
+            "rhs_relative": 2.1578697151987317e-07,
+            "trace_relative": 1.378831787164986e-06,
+            "original_physical_residual": 4.011262621254793e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 3.2288705399108324e-07,
+            "rhs_relative": 2.9460503754864025e-07
+          },
+          "kernel_ms": [
+            2.0404160022735596,
+            2.039423942565918,
+            2.045759916305542,
+            2.041088104248047,
+            2.0392000675201416,
+            2.0433599948883057,
+            2.0448639392852783
+          ],
+          "kernel_median_ms": 2.041088104248047,
+          "kernel_stdev_ms": 0.002645852429085328,
+          "wrapper_ms": [
+            11.262232903391123,
+            11.160155991092324,
+            13.806545175611973,
+            11.191722936928272,
+            11.150849051773548,
+            13.80099100060761,
+            11.178756831213832
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 1024,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 64,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 6616,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 6616,
+            "source_sha256": "ade8f3f70ea0a69969fc69b2b3d3f7c9ff53f800c6b9cbfb01f87255faa9b41e"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ],
+      "prototype_selection": {
+        "key": {
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "order": 4,
+          "basis": "legendre-modal",
+          "phase": "uncached fused BSR assembly",
+          "triangles": 32768
+        },
+        "selection": null,
+        "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+      }
+    },
+    {
+      "scope": "Only two dense Schur products replaced inside fused BSR assembly; all LU and triangular solves remain original FP64 CUDA-core code.",
+      "configuration": {
+        "order": 6,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp64",
+          "tf32",
+          "tf32x3"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-tensor-p6"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp64",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 1.806418710836097e-18,
+            "rhs_relative": 0.0,
+            "trace_relative": 1.264093789400068e-19,
+            "original_physical_residual": 2.568284451663347e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 1.5534687117611015e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            68.4881591796875,
+            68.60896301269531,
+            72.99465942382812,
+            68.33625793457031,
+            65.55999755859375,
+            68.30611419677734,
+            62.0711669921875
+          ],
+          "kernel_median_ms": 68.33625793457031,
+          "kernel_stdev_ms": 3.328800222673154,
+          "wrapper_ms": [
+            74.94988106191158,
+            75.15920884907246,
+            79.4985219836235,
+            74.65401594527066,
+            71.7195391189307,
+            77.17588311061263,
+            68.02667421288788
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "a3d3db3d849ca0f22c569c5c50e497b62bf74d23425026343861a465f3f4f926"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 0.0003696829846241922,
+            "rhs_relative": 0.0005249687991514294,
+            "trace_relative": 0.004561215725013999,
+            "original_physical_residual": 0.005609876886658039
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.0004553692335988452,
+            "rhs_relative": 0.00026419417918175855
+          },
+          "kernel_ms": [
+            69.37760162353516,
+            66.4721908569336,
+            65.14335632324219,
+            66.44723510742188,
+            66.86681365966797,
+            63.61894226074219,
+            65.7784652709961
+          ],
+          "kernel_median_ms": 66.44723510742188,
+          "kernel_stdev_ms": 1.7616184386724962,
+          "wrapper_ms": [
+            75.72083710692823,
+            72.71088007837534,
+            71.24125002883375,
+            73.09327088296413,
+            73.00829002633691,
+            71.96343503892422,
+            74.12100187502801
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "04636e8c6c2fd0e95e8757484be24b1792668730c136cf19169afd5b3f668748"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 5.967003254662957e-07,
+            "rhs_relative": 1.813124295481649e-07,
+            "trace_relative": 1.4077571658644447e-05,
+            "original_physical_residual": 9.797589087286243e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.5964377070947515e-07,
+            "rhs_relative": 2.1640550396840717e-07
+          },
+          "kernel_ms": [
+            75.68911743164062,
+            79.28006744384766,
+            76.18873596191406,
+            78.33760070800781,
+            76.09827423095703,
+            76.78838348388672,
+            79.97452545166016
+          ],
+          "kernel_median_ms": 76.78838348388672,
+          "kernel_stdev_ms": 1.7058966435273257,
+          "wrapper_ms": [
+            82.00814109295607,
+            85.42728796601295,
+            82.32263987883925,
+            84.69525608234107,
+            82.4605100788176,
+            82.97254401259124,
+            86.07267797924578
+          ],
+          "resources": {
+            "scratch_bytes": 1024,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "30a643684ebff4d15e96f6c4d09eac1fdbd78b299508ff4ab50d246988042487"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 2.03158674758438e-18,
+            "rhs_relative": 0.0,
+            "trace_relative": 1.264093789400068e-19,
+            "original_physical_residual": 2.568284451663347e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.6438314073132885e-18,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            49.20403289794922,
+            48.360321044921875,
+            52.09791946411133,
+            49.144351959228516,
+            54.76243209838867,
+            52.1874885559082,
+            48.75680160522461
+          ],
+          "kernel_median_ms": 49.20403289794922,
+          "kernel_stdev_ms": 2.3998914713783464,
+          "wrapper_ms": [
+            55.209764977917075,
+            56.5002029761672,
+            57.929172879084945,
+            54.97569311410189,
+            61.03837885893881,
+            58.25247289612889,
+            54.757014848291874
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "a3d3db3d849ca0f22c569c5c50e497b62bf74d23425026343861a465f3f4f926"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 0.00036968298462419243,
+            "rhs_relative": 0.0005249687991514294,
+            "trace_relative": 0.004561215725014173,
+            "original_physical_residual": 0.005609876886658543
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.00045536923359884514,
+            "rhs_relative": 0.00026419417918175855
+          },
+          "kernel_ms": [
+            43.780033111572266,
+            52.339263916015625,
+            47.22358322143555,
+            47.85398483276367,
+            50.26665496826172,
+            47.8105583190918,
+            44.31651306152344
+          ],
+          "kernel_median_ms": 47.8105583190918,
+          "kernel_stdev_ms": 3.0324314462643702,
+          "wrapper_ms": [
+            49.91907090879977,
+            59.53245214186609,
+            53.81064512766898,
+            54.37222495675087,
+            56.67306715622544,
+            54.11038198508322,
+            51.696632988750935
+          ],
+          "resources": {
+            "scratch_bytes": 2048,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "04636e8c6c2fd0e95e8757484be24b1792668730c136cf19169afd5b3f668748"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 5.967003254662921e-07,
+            "rhs_relative": 1.813124295481649e-07,
+            "trace_relative": 1.4077571658643426e-05,
+            "original_physical_residual": 9.79758908725692e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.596437707094872e-07,
+            "rhs_relative": 2.1640550396840717e-07
+          },
+          "kernel_ms": [
+            56.311744689941406,
+            53.474273681640625,
+            53.1607666015625,
+            52.87615966796875,
+            55.095489501953125,
+            53.43443298339844,
+            56.029056549072266
+          ],
+          "kernel_median_ms": 53.474273681640625,
+          "kernel_stdev_ms": 1.4384254477679854,
+          "wrapper_ms": [
+            62.476067105308175,
+            59.499837923794985,
+            61.24454503878951,
+            60.42017205618322,
+            61.563000082969666,
+            60.43782620690763,
+            64.81078080832958
+          ],
+          "resources": {
+            "scratch_bytes": 2048,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "30a643684ebff4d15e96f6c4d09eac1fdbd78b299508ff4ab50d246988042487"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp64",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 2.03158674758438e-18,
+            "rhs_relative": 0.0,
+            "trace_relative": 1.264093789400068e-19,
+            "original_physical_residual": 2.568284451663347e-15
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 8.665096979902297e-19,
+            "rhs_relative": 0.0
+          },
+          "kernel_ms": [
+            50.07231903076172,
+            53.11225509643555,
+            52.929344177246094,
+            49.984256744384766,
+            52.94063949584961,
+            50.06428909301758,
+            52.7426872253418
+          ],
+          "kernel_median_ms": 52.7426872253418,
+          "kernel_stdev_ms": 1.5492140585771992,
+          "wrapper_ms": [
+            59.58974803797901,
+            59.95275918394327,
+            59.25740813836455,
+            56.21669488027692,
+            59.89782093092799,
+            56.06981785967946,
+            58.69204085320234
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "a3d3db3d849ca0f22c569c5c50e497b62bf74d23425026343861a465f3f4f926"
+          },
+          "accuracy_gate_1e_minus_9": true
+        },
+        {
+          "mode": "tf32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 0.00036968298462419243,
+            "rhs_relative": 0.0005249687991514294,
+            "trace_relative": 0.004561215725014173,
+            "original_physical_residual": 0.005609876886658543
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 0.0004553692335988452,
+            "rhs_relative": 0.00026419417918175855
+          },
+          "kernel_ms": [
+            48.54079818725586,
+            47.93494415283203,
+            48.72496032714844,
+            51.9640007019043,
+            50.18409729003906,
+            44.6800651550293,
+            44.487518310546875
+          ],
+          "kernel_median_ms": 48.54079818725586,
+          "kernel_stdev_ms": 2.7272466801307624,
+          "wrapper_ms": [
+            54.54067210666835,
+            53.920908132568,
+            54.590896936133504,
+            57.821685913950205,
+            58.31948900595307,
+            50.90877506881952,
+            50.65241502597928
+          ],
+          "resources": {
+            "scratch_bytes": 4096,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 1,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "04636e8c6c2fd0e95e8757484be24b1792668730c136cf19169afd5b3f668748"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "tf32x3",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 5.967003254662921e-07,
+            "rhs_relative": 1.813124295481649e-07,
+            "trace_relative": 1.4077571658643426e-05,
+            "original_physical_residual": 9.79758908725692e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 2.596437707094763e-07,
+            "rhs_relative": 2.1640550396840717e-07
+          },
+          "kernel_ms": [
+            53.46694564819336,
+            59.02182388305664,
+            52.86592102050781,
+            53.28755187988281,
+            52.9213752746582,
+            57.05449676513672,
+            53.407039642333984
+          ],
+          "kernel_median_ms": 53.407039642333984,
+          "kernel_stdev_ms": 2.4435974521146555,
+          "wrapper_ms": [
+            62.53396300598979,
+            65.20102918148041,
+            59.29723987355828,
+            62.140929978340864,
+            62.44253902696073,
+            62.9576719366014,
+            59.27809909917414
+          ],
+          "resources": {
+            "scratch_bytes": 4096,
+            "scratch_reuses_column_workspace": true,
+            "additional_static_shared_bytes": 0,
+            "tensor_products_per_element": 2,
+            "terms_per_product": 3,
+            "fp64_factor_and_triangular_source_sha256": "06276e9f7b12cbfeea784073e6178d84f1b7f9401457508cdb4ae5db753423eb",
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 71,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 32232,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 32232,
+            "source_sha256": "30a643684ebff4d15e96f6c4d09eac1fdbd78b299508ff4ab50d246988042487"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ]
+    },
+    {
+      "scope": "Unchanged fused BSR kernel specialized to FP32, including CUDA-core LU and triangular solves; errors use separately generated FP64 references.",
+      "configuration": {
+        "order": 6,
+        "nx": 128,
+        "blocks": [
+          32,
+          64,
+          128
+        ],
+        "modes": [
+          "fp32"
+        ],
+        "basis": "legendre-modal",
+        "repeats": 7,
+        "output": "/tmp/hdgfem-fp32-final-p6",
+        "reference_dir": "/tmp/hdgfem-fp64-ref-p6",
+        "reference_only": false
+      },
+      "process_precision": "fp32",
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "cuda_runtime": 13020,
+      "cupy": "14.2.0",
+      "triangles": 32768,
+      "runs": [
+        {
+          "mode": "fp32",
+          "block": 32,
+          "small_sheared_errors": {
+            "matrix_relative": 5.392545597258892e-07,
+            "rhs_relative": 7.016126273199816e-07,
+            "trace_relative": 7.24777384732758e-06,
+            "original_physical_residual": 6.289328713681382e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 6.638232441966919e-07,
+            "rhs_relative": 7.105143042045197e-07
+          },
+          "kernel_ms": [
+            7.985343933105469,
+            8.090911865234375,
+            10.727775573730469,
+            8.277664184570312,
+            8.118656158447266,
+            9.393823623657227,
+            8.193504333496094
+          ],
+          "kernel_median_ms": 8.193504333496094,
+          "kernel_stdev_ms": 1.0202981954777206,
+          "wrapper_ms": [
+            18.129481934010983,
+            19.741485128179193,
+            20.828976994380355,
+            18.626170000061393,
+            20.925635006278753,
+            19.440636038780212,
+            18.294171895831823
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 72,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 16300,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 16300,
+            "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 64,
+          "small_sheared_errors": {
+            "matrix_relative": 5.392545597258892e-07,
+            "rhs_relative": 7.016126273199816e-07,
+            "trace_relative": 7.24777384732758e-06,
+            "original_physical_residual": 6.289328713681382e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 6.638004848164118e-07,
+            "rhs_relative": 7.105143042045197e-07
+          },
+          "kernel_ms": [
+            6.6875200271606445,
+            9.646495819091797,
+            6.71292781829834,
+            6.504415988922119,
+            6.466815948486328,
+            6.521279811859131,
+            6.518976211547852
+          ],
+          "kernel_median_ms": 6.521279811859131,
+          "kernel_stdev_ms": 1.1671869451182053,
+          "wrapper_ms": [
+            16.78751315921545,
+            20.26460599154234,
+            16.706500900909305,
+            19.22900089994073,
+            16.715565929189324,
+            19.073536852374673,
+            17.457224894315004
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 72,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 16300,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 16300,
+            "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+          },
+          "accuracy_gate_1e_minus_9": false
+        },
+        {
+          "mode": "fp32",
+          "block": 128,
+          "small_sheared_errors": {
+            "matrix_relative": 5.392545597258892e-07,
+            "rhs_relative": 7.016126273199816e-07,
+            "trace_relative": 7.24777384732758e-06,
+            "original_physical_residual": 6.289328713681382e-06
+          },
+          "large_structured_errors": {
+            "matrix_data_relative": 6.637832410406793e-07,
+            "rhs_relative": 7.105143042045197e-07
+          },
+          "kernel_ms": [
+            5.967072010040283,
+            6.01200008392334,
+            5.997407913208008,
+            5.994847774505615,
+            6.305056095123291,
+            6.0128960609436035,
+            5.9958720207214355
+          ],
+          "kernel_median_ms": 5.997407913208008,
+          "kernel_stdev_ms": 0.11753590952200149,
+          "wrapper_ms": [
+            16.014494001865387,
+            17.04777916893363,
+            16.029672930017114,
+            17.057117074728012,
+            16.31080498918891,
+            17.09091500379145,
+            16.07868098653853
+          ],
+          "resources": {
+            "kernel_attributes": {
+              "max_threads_per_block": 896,
+              "shared_size_bytes": 0,
+              "const_size_bytes": 0,
+              "local_size_bytes": 0,
+              "num_regs": 72,
+              "ptx_version": 120,
+              "binary_version": 120,
+              "cache_mode_ca": 0,
+              "max_dynamic_shared_size_bytes": 16300,
+              "preferred_shared_memory_carveout": -1
+            },
+            "dynamic_shared_bytes": 16300,
+            "source_sha256": "3a4249503b91d9b4c269cbe8dec97c957bbc39d5e1b8413b9c983d7ccc4f3301"
+          },
+          "accuracy_gate_1e_minus_9": false
+        }
+      ],
+      "prototype_selection": {
+        "key": {
+          "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+          "order": 6,
+          "basis": "legendre-modal",
+          "phase": "uncached fused BSR assembly",
+          "triangles": 32768
+        },
+        "selection": null,
+        "policy": "fastest measured candidate passing the small-sheared and structured accuracy gates; experimental evidence only"
+      }
+    }
+  ]
+}

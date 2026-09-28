@@ -8,3 +8,7 @@ installed with `hdgfem` and are not part of the supported solver API.
 - `test7_fused.py`, `test7_fused_backend.py`, and `test7_fused_kernels.py`
   implement the hard-coded tensor-diffusion Test 7 fused Numba experiment. Its
   focused parity test is `tests/test_diffusion_reaction_test7_fused_experiment.py`.
+
+- `tensor_schur.py` compares in-kernel TF32 Schur products with the original
+  FP64 and FP32 fused assembly kernels; see the
+  [measured study](../../../docs/research/solver_studies/tensor_schur_prototype_2026_09_25.md).
