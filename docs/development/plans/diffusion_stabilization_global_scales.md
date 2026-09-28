@@ -393,7 +393,7 @@ Diffusion stabilization:
 Run the host reference study from the repository root with:
 
 ```bash
-python -m scripts.advection_diffusion_reaction.study_diffusion_stabilization \
+python -m scripts.advection_diffusion_reaction.studies.study_diffusion_stabilization \
   --mesh-sizes 0.4,0.3,0.2,0.15 \
   --orders 2,3 \
   --gammas 0.5,1,2 \

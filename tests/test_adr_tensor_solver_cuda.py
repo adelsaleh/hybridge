@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
+from scripts.advection_diffusion_reaction.cases.tensor_cases import manufactured_raw_tensor
 
 
 @pytest.fixture(scope='module')
@@ -23,10 +24,8 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
     monkeypatch.setattr(advection_cuda,'_scalarize_device_bsr_matrix',forbidden)
     space=DGSpace(rectangle_mesh(2,2),order,basis_type='dub_orth')
     beta=(space*space).field((space.constant(.7),space.constant(-.2)))
-    diffusion=(lambda x,y: 2.+.1*x,lambda x,y: .3+.02*y,
-               lambda x,y: -.1+.01*x,lambda x,y: 1.+.05*y)
-    exact=lambda x,y: 1.+x-.3*y
-    source=lambda x,y: .675+.3*exact(x,y)
+    problem, exact, flux = manufactured_raw_tensor('affine')
+    diffusion, source = problem['diffusion'], problem['source']
     opts=dict(diffusion=diffusion,hdg_postprocess='none',trace_basis=basis,
               diffusion_stabilization=lambda x,y: 1.+.05*x+.02*y,
               scale_system=True,verbose=False)
@@ -45,7 +44,7 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
     np.testing.assert_allclose(cp.asnumpy(actual.local_unknowns),reference.local_unknowns,rtol=2e-8,atol=2e-8)
     np.testing.assert_allclose(cp.asnumpy(actual.trace),reference.trace,rtol=2e-9,atol=2e-9)
     assert actual.field.l2_error(exact)<2e-9
-    assert actual.flux.l2_error(lambda x,y: (-1.91-.1*x+.006*y, .4-.01*x+.015*y))<2e-8
+    assert actual.flux.l2_error(flux)<2e-8
     assert not getattr(actual.global_solve_result,'amgx_bsr_scalarized',False)
 
 
@@ -59,16 +58,8 @@ def test_tensor_postprocessing_gate_remains():
 
 @pytest.mark.parametrize('order',[1,2])
 def test_stationary_tensor_manufactured_convergence(cp,order):
-    pi=np.pi
-    exact=lambda x,y: np.sin(pi*x)*np.sin(pi*y)
-    diffusion=(lambda x,y: 2.+.1*x,lambda x,y: .3+.02*y,
-               lambda x,y: -.1+.01*x,lambda x,y: 1.+.05*y)
-    def source(x,y):
-        ux=pi*np.cos(pi*x)*np.sin(pi*y)
-        uy=pi*np.sin(pi*x)*np.cos(pi*y)
-        uxy=pi*pi*np.cos(pi*x)*np.cos(pi*y)
-        return (.7-.1)*ux+(-.2-.05)*uy+(3.+.1*x+.05*y)*pi*pi*exact(x,y) \
-               -(.2+.02*y+.01*x)*uxy+.3*exact(x,y)
+    problem, exact, _ = manufactured_raw_tensor('sine')
+    diffusion, source = problem['diffusion'], problem['source']
     errors=[]
     for n in (2,4,8):
         space=DGSpace(rectangle_mesh(n,n,xlim=(0.,1.),ylim=(0.,1.)),order,basis_type='dub_orth',volume_quad_1d=order+4)

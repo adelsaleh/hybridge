@@ -12,9 +12,8 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).parents[1]
-sys.path.insert(0, str(ROOT/'scripts/advection_diffusion_reaction'))
-import run_adr_unified_campaign as runner
-from adr_unified_worker import check_loaded_cuda_runtime, compatibility
+from scripts.advection_diffusion_reaction.campaigns.unified import run_adr_unified_campaign as runner
+from scripts.advection_diffusion_reaction.campaigns.unified.adr_unified_worker import check_loaded_cuda_runtime, compatibility
 
 
 class Common:
@@ -155,7 +154,7 @@ class RunnerTests(unittest.TestCase):
         for backend in ('cusparse_generic', 'legacy'):
             output = self.args.output/backend
             completed = subprocess.run([
-                sys.executable, '-B', str(ROOT/'scripts/advection_diffusion_reaction/run_adr_unified_campaign.py'),
+                sys.executable, '-B', str(ROOT/'scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py'),
                 '--output', str(output), '--branch-root', '/missing/branch/tree',
                 '--amgx-backend', backend,
             ], env=dict(os.environ, CUDA_VISIBLE_DEVICES=''), capture_output=True, text=True, timeout=30)

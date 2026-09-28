@@ -1,7 +1,7 @@
 """Read-only planning checks for direct-check mesh selection; no solver/JIT."""
 import pytest
 
-from scripts.advection_diffusion_reaction import run_closed_loop_stress as runner
+from scripts.advection_diffusion_reaction.campaigns.stress import run_closed_loop_stress as runner
 from test_closed_loop_stress import planning_args
 
 

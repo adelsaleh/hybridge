@@ -408,7 +408,7 @@ def _write_csv(path, rows, *, domain, triangles, order, trace_dofs, tau):
 def _replay_worker(args):
     """Use production package solvers on one hash-verified physical system."""
     from scipy import sparse
-    from scripts.advection_diffusion_reaction.check_cached_adr_pardiso import write_json
+    from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import write_json
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
     source = REPLAY_PRESETS[args.preset]
     report = dict(status="running", candidate=args.replay_worker, warmups=[], samples=[])
@@ -653,7 +653,7 @@ def _replay_worker(args):
 
 def _run_replay_preset(args):
     """Bounded isolated pilots and independent confirmation, no assembly/JIT."""
-    from scripts.advection_diffusion_reaction.check_cached_adr_pardiso import monitor, write_json, physical_threads
+    from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import monitor, write_json, physical_threads
     if args.output is None or args.warmup < 1 or args.repeats < 1:
         raise ValueError("Replay requires --output and positive warmup/repeats")
     if not args.threads or min(args.threads) < 1 or max(args.threads) > physical_threads():

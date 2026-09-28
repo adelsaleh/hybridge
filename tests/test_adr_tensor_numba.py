@@ -7,19 +7,23 @@ from hdgfem import DGSpace, DGMesh, rectangle_mesh, solve_advection_diffusion_re
 from hdgfem.assembly.diffusion_coefficients import prepare_diffusion, normal_diffusivity_on_faces
 from hdgfem.solvers.stabilization import GlobalLengthDiffusion
 from hdgfem.backends.capabilities import UnsupportedBackendConfigurationError
+from scripts.advection_diffusion_reaction.cases.tensor_cases import (
+    diffusion_cases as coefficient_cases, manufactured_tensor, raw_cuda_coefficient,
+)
 
 
 def diffusion_cases():
     """Exercise every structural path, including nonsymmetric elliptic tensors."""
+    coefficients = coefficient_cases()
     return [
-        pytest.param(2., 'constant-isotropic', id='scalar'),
+        pytest.param(coefficients['constant_isotropic'], 'constant-isotropic', id='scalar'),
         pytest.param(np.diag([2., 1.]), 'constant-diagonal', id='diagonal'),
-        pytest.param((2., .2, 1.), 'constant-full', id='symmetric-constant'),
-        pytest.param((2., .3, -.1, 1.), 'constant-full', id='general-constant'),
-        pytest.param(lambda x,y: 2. + .1*x, 'variable-isotropic', id='variable-scalar'),
-        pytest.param((lambda x,y: 2.+.1*x, 0., lambda x,y: 1.+.1*y), 'variable-diagonal', id='variable-diagonal'),
-        pytest.param((lambda x,y: 2.+.1*x, lambda x,y: .2+.03*y, lambda x,y: 1.+.1*y), 'variable-symmetric', id='variable-symmetric'),
-        pytest.param((lambda x,y: 2.+.1*x, lambda x,y: .3+.02*y, lambda x,y: -.1+.01*x, 1.), 'variable-full', id='variable-general'),
+        pytest.param(coefficients['constant_full'], 'constant-full', id='symmetric-constant'),
+        pytest.param(raw_cuda_coefficient('constant-full'), 'constant-full', id='general-constant'),
+        pytest.param(coefficients['variable_isotropic'], 'variable-isotropic', id='variable-scalar'),
+        pytest.param(coefficients['variable_diagonal'], 'variable-diagonal', id='variable-diagonal'),
+        pytest.param(coefficients['variable_symmetric'], 'variable-symmetric', id='variable-symmetric'),
+        pytest.param(coefficients['variable_full'], 'variable-full', id='variable-general'),
     ]
 
 
@@ -84,38 +88,8 @@ def test_normal_diffusivity_keeps_both_incidences():
 @pytest.mark.parametrize('kind', ['scalar','diagonal','symmetric','general'])
 @pytest.mark.parametrize('order', [1,2])
 def test_manufactured_tensor_convergence(kind,order):
-    pi=np.pi
-    def exact(x,y):
-        """Smooth manufactured primal field."""
-        return np.sin(pi*x)*np.sin(pi*y)
-    def components(x,y):
-        """Smooth elliptic scalar, diagonal, symmetric or general tensor."""
-        a=1.+.2*x
-        if kind=='scalar':
-            return a,0.*x,0.*x,a
-        d=2.+.1*y
-        if kind=='diagonal':
-            return a,0.*x,0.*x,d
-        b=.15+.03*x
-        c=b if kind=='symmetric' else -.05+.02*y
-        return a,b,c,d
-    diffusion=tuple((lambda x,y,j=j: components(x,y)[j]) for j in range(4))
-    def derivatives(x,y):
-        """Return analytic gradient and Hessian entries."""
-        return (pi*np.cos(pi*x)*np.sin(pi*y),pi*np.sin(pi*x)*np.cos(pi*y),
-                -pi*pi*exact(x,y),pi*pi*np.cos(pi*x)*np.cos(pi*y))
-    def source(x,y):
-        """div(beta*u-kappa*grad(u)) + reaction*u with analytic derivatives."""
-        ux,uy,uxx,uxy=derivatives(x,y)
-        a,b,c,d=components(x,y)
-        divx=.22 if kind=='general' else .2
-        divy=0. if kind=='scalar' else (.1 if kind=='diagonal' else .13)
-        return .7*ux-.2*uy-(a+d)*uxx-(b+c)*uxy-divx*ux-divy*uy+.5*exact(x,y)
-    def flux(x,y):
-        """Conservative physical diffusive flux."""
-        ux,uy,_,_=derivatives(x,y)
-        a,b,c,d=components(x,y)
-        return -a*ux-b*uy,-c*ux-d*uy
+    problem, exact, flux = manufactured_tensor(kind)
+    source, diffusion = problem['source'], problem['diffusion']
     errors=[]
     for n in [2,4,8]:
         space=DGSpace(rectangle_mesh(n,n,xlim=(0.,1.),ylim=(0.,1.)),order,

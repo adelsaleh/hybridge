@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 import scipy.sparse
 
+from scripts.advection_diffusion_reaction.cases import scalar_case
+
 from hdgfem import (
     AdvectionDiffusionReactionHDGOptions,
     AdvectionDiffusionReactionHDGSolver,
@@ -148,10 +150,11 @@ def test_affine_manufactured_solution_and_postprocessing(
         flux_postprocess_space,
 ):
     space = DGSpace(rectangle_mesh(2, 2), 1, basis_type="dub_orth")
-    exact = lambda x, y: 1.0 + x + y
-    beta = (space * space).field((space.constant(0.7), space.constant(-0.2)))
-    reaction = space.constant(0.3)
-    source = space.project_callable(lambda x, y: 0.5 + 0.3 * exact(x, y))
+    problem = scalar_case('affine')
+    exact = problem.exact
+    beta = (space * space).field(tuple(space.constant(value) for value in problem.beta))
+    reaction = space.constant(problem.reaction)
+    source = space.project_callable(problem.source)
     result = solve_advection_diffusion_reaction_hdg(
         source,
         beta,
@@ -314,32 +317,16 @@ def test_flux_postprocessing_has_optimal_rates_with_h_independent_tau(
         flux_postprocess_space,
 ):
     """Recover order p+1 total flux and p+2 primal rates for p=3."""
-    pi = np.pi
-    kappa = 0.1
-    beta_x = 1.0
-    beta_y = 0.3
-    reaction = 0.5
-
-    def exact(x, y):
-        return np.sin(pi * x) * np.sin(pi * y)
-
-    def source(x, y):
-        value = exact(x, y)
-        return (
-            beta_x * pi * np.cos(pi * x) * np.sin(pi * y)
-            + beta_y * pi * np.sin(pi * x) * np.cos(pi * y)
-            + 2.0 * kappa * pi**2 * value
-            + reaction * value
-        )
+    problem = scalar_case('sine')
+    kappa = problem.diffusion
+    beta_x, beta_y = problem.beta
+    reaction = problem.reaction
+    exact, source = problem.exact, problem.source
 
     def exact_total_flux(x, y):
+        qx, qy = problem.exact_flux(x, y)
         value = exact(x, y)
-        return (
-            -kappa * pi * np.cos(pi * x) * np.sin(pi * y)
-            + beta_x * value,
-            -kappa * pi * np.sin(pi * x) * np.cos(pi * y)
-            + beta_y * value,
-        )
+        return qx + beta_x * value, qy + beta_y * value
 
     errors = []
     for subdivisions in (4, 8, 16):

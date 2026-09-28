@@ -20,22 +20,22 @@ import platform
 import statistics
 import sys
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction import adr_pardiso_inventory as archive
-from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
-from scripts.advection_diffusion_reaction.check_cached_adr_pardiso import (
+from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_inventory as archive
+from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
+from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import (
     memory_kib, monitor, physical_threads, write_json,
 )
-from scripts.advection_diffusion_reaction.closed_loop_stress_logging import event
+from scripts.advection_diffusion_reaction.campaigns.logging import event
 
 DEFAULT_OUTPUT = archive.STUDY / 'pardiso_all_2026_09_22'
 SOURCE_FILES = (
     Path(__file__), Path(archive.__file__), Path(tuning.__file__),
-    ROOT/'scripts/advection_diffusion_reaction/adr_pardiso_worker.py',
-    ROOT/'scripts/advection_diffusion_reaction/check_cached_adr_pardiso.py',
+    ROOT/'scripts/advection_diffusion_reaction/campaigns/pardiso/adr_pardiso_worker.py',
+    ROOT/'scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py',
     ROOT/'hdgfem/linalg/pardiso_diagnostics.py', ROOT/'hdgfem/linalg/system.py',
     ROOT/'hdgfem/linalg/bsr.py', ROOT/'hdgfem/assembly/face_dense.py', ROOT/'hdgfem/precision.py',
 )
@@ -300,7 +300,7 @@ def execute(plan, args):
 def main(argv=None):
     args = parser().parse_args(argv)
     if args.worker_spec:
-        from scripts.advection_diffusion_reaction.adr_pardiso_worker import run
+        from scripts.advection_diffusion_reaction.campaigns.pardiso.adr_pardiso_worker import run
         return run(args.worker_spec, args.output)
     if args.status:
         data = archive.read(args.output/'summary.json')

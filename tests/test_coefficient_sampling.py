@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction import closed_loop_stress_cases as reference
-from scripts.advection_diffusion_reaction.closed_loop_stress_sampling import StressCoefficientSampler
+from scripts.advection_diffusion_reaction.cases import closed_loop_stress_cases as reference
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_sampling import StressCoefficientSampler
 
 
 ROOT = Path(__file__).resolve().parents[1]

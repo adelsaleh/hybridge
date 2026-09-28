@@ -9,7 +9,7 @@ import pytest
 
 from hdgfem.assembly.face_dense import face_dense_matvec
 from hdgfem.linalg.bsr import face_dense_to_bsr
-from scripts.advection_diffusion_reaction import check_cached_adr_pardiso as diagnostic
+from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostic
 
 
 @pytest.fixture

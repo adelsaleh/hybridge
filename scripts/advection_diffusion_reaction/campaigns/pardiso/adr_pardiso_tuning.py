@@ -9,7 +9,7 @@ import hashlib
 import json
 import random
 
-from scripts.advection_diffusion_reaction.adr_pardiso_inventory import timing_metrics
+from scripts.advection_diffusion_reaction.campaigns.pardiso.adr_pardiso_inventory import timing_metrics
 
 OBJECTIVES = {'fresh': 'fresh_median_ms', 'reused': 'reused_mean_ms'}
 

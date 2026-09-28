@@ -18,10 +18,15 @@ import subprocess
 import sys
 import time
 
-from adr_unified_plan import AMGX_BACKENDS, build_plan, fingerprint, memory_estimate, read_inventory
-from adr_unified_worker import load_file
+ROOT = Path(__file__).resolve().parents[4]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-ROOT = Path(__file__).resolve().parents[2]
+from scripts.advection_diffusion_reaction.campaigns.unified.adr_unified_plan import (
+    AMGX_BACKENDS, build_plan, fingerprint, memory_estimate, read_inventory,
+)
+from scripts.advection_diffusion_reaction.campaigns.unified.adr_unified_worker import load_file
+
 GMRES_ROOT = ROOT/'vendor/adr_gmres'
 WORKER = Path(__file__).with_name('adr_unified_worker.py')
 RETRYABLE = {'running', 'interrupted', 'process_error'}
@@ -156,7 +161,7 @@ def source_hashes(branch):
         paths = list((root/'hdgfem').rglob('*.py'))
         paths += list((root/'scripts').glob('*adr*.py'))
         paths += list((root/'scripts').glob('*adv_diff_rea*.py'))
-        paths += list((root/'scripts/advection_diffusion_reaction').glob('*.py'))
+        paths += list((root/'scripts/advection_diffusion_reaction').rglob('*.py'))
         for path in sorted(set(paths)):
             sources[f'{label}/{path.relative_to(root)}'] = hashlib.sha256(path.read_bytes()).hexdigest()
     return sources

@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).parents[1]
-spec = importlib.util.spec_from_file_location('adr_unified_plan', ROOT/'scripts/advection_diffusion_reaction/adr_unified_plan.py')
+spec = importlib.util.spec_from_file_location('adr_unified_plan', ROOT/'scripts/advection_diffusion_reaction/campaigns/unified/adr_unified_plan.py')
 plan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(plan)
 

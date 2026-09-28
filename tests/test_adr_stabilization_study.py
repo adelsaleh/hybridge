@@ -7,7 +7,7 @@ import json
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction.study_diffusion_stabilization import (
+from scripts.advection_diffusion_reaction.studies.study_diffusion_stabilization import (
     ERROR_KEYS,
     add_pairwise_rates,
     parse_choices,

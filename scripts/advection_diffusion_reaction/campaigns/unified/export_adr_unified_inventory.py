@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 import shutil
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 STUDY = ROOT / 'run_outputs/solver_studies/adr_scaling_2026_09_17'
 COMMON_KEYS = ('case', 'n', 'p', 'volume_quad_1d', 'edge_quad_1d',
                'stress_parameters', 'velocity_normalization', 'normalization_record')

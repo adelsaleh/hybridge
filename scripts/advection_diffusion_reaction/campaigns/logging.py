@@ -18,7 +18,7 @@ from time import monotonic
 def _recorder():
     # Loading this I/O module directly keeps hdgfem's numerical __init__ out of
     # the planning/status process, as with the campaign's pure common helpers.
-    path = Path(__file__).resolve().parents[2]/"hdgfem/io/records.py"
+    path = Path(__file__).resolve().parents[3]/"hdgfem/io/records.py"
     spec = importlib.util.spec_from_file_location("_stress_event_records", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

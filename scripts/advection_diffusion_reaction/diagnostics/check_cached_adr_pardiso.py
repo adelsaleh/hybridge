@@ -20,16 +20,16 @@ import sys
 import time
 import traceback
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction.closed_loop_stress_logging import event
+from scripts.advection_diffusion_reaction.campaigns.logging import event
 
 
 def write_json(path, value):
     # Reuse campaign persistence without importing the branch's numerical code.
-    from scripts.advection_diffusion_reaction.run_closed_loop_stress import load_common
+    from scripts.advection_diffusion_reaction.campaigns.stress.run_closed_loop_stress import load_common
     common = load_common(ROOT/'vendor/adr_gmres')
     common.atomic_json(path, value)
 
@@ -169,10 +169,19 @@ def monitor(command, env, output, args):
     failure = None
     peak_rss = peak_hwm = 0.0
     minimum_available = float('inf')
-    with (output/'worker.log').open('x') as log:
+    live_output = getattr(args, 'live_output', False)
+    heartbeat_seconds = getattr(args, 'heartbeat_seconds', 30.)
+    with (output/'worker.log').open('x') as log, (output/'worker.log').open(errors='replace') as reader:
+        def forward_output():
+            if live_output:
+                text = reader.read()
+                if text:
+                    print(text, end='', flush=True)
+
         process = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT)
         try:
             while process.poll() is None:
+                forward_output()
                 now = time.monotonic()
                 try:
                     rss = memory_kib(f'/proc/{process.pid}/status', 'VmRSS')/1024**2
@@ -193,15 +202,27 @@ def monitor(command, env, output, args):
                     except subprocess.TimeoutExpired:
                         process.kill()
                     break
-                if now-last >= 30:
+                if now-last >= heartbeat_seconds:
                     event(output, 'heartbeat', message=f"{getattr(args, 'monitor_label', 'PARDISO')} wall={now-start:.1f}s RSS={rss:.2f} GiB",
                           wall_seconds=now-start, rss_gib=rss, available_gib=free)
                     last = now
                 time.sleep(getattr(args, 'poll_seconds', 0.5))
+        except KeyboardInterrupt as error:
+            failure = 'interrupted'
+            event(output, 'interrupted', message=f'{output.name}: monitor interrupted',
+                  error=f'{type(error).__name__}: {error}')
+            raise
         finally:
             if process.poll() is None:
                 process.kill()
             process.wait()
+            forward_output()
+            if failure == 'interrupted':
+                path = output/'result.json'
+                result = json.loads(path.read_text()) if path.exists() else {}
+                result.update(status='interrupted', returncode=process.returncode,
+                              worker_wall_seconds=time.monotonic()-start)
+                write_json(path, result)
     result_path = output/'result.json'
     result = json.loads(result_path.read_text()) if result_path.exists() else {}
     if failure or process.returncode != 0 and result.get('status') in (None, 'running', 'passed'):
@@ -211,8 +232,12 @@ def monitor(command, env, output, args):
                   minimum_available_gib=minimum_available if math.isfinite(minimum_available) else None,
                   memory_poll_seconds=getattr(args, 'poll_seconds', 0.5))
     write_json(result_path, result)
-    print(f"{output.name}: {result['status']} relres={result.get('face_relative_residual')} "
-          f"setup_solve_ms={result.get('timings_ms', {}).get('setup_solve')} log={output/'worker.log'}", flush=True)
+    details = ''
+    if 'face_relative_residual' in result:
+        details += f" relres={result['face_relative_residual']}"
+    if 'setup_solve' in result.get('timings_ms', {}):
+        details += f" setup_solve_ms={result['timings_ms']['setup_solve']}"
+    print(f"{output.name}: {result['status']}{details} log={output/'worker.log'}", flush=True)
     return result
 
 

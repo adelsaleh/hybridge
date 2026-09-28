@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.advection_diffusion_reaction.closed_loop_stress_cases import VARIANTS, unscaled_velocity
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import VARIANTS, unscaled_velocity
 
 
 def background_sizes(parameters, bulk_size, neck_elements):

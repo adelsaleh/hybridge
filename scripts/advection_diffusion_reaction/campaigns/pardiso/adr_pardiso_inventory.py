@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 import statistics
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 STUDY = ROOT / "run_outputs/solver_studies/adr_scaling_2026_09_17"
 NATIVE = STUDY / "native_hp_completion_2026_09_21"
 STRESS = ROOT / "run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k"

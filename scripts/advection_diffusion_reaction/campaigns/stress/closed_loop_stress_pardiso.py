@@ -8,8 +8,8 @@ import os
 import sys
 from time import monotonic
 
-from scripts.advection_diffusion_reaction import check_cached_adr_pardiso as diagnostic
-from scripts.advection_diffusion_reaction.closed_loop_stress_logging import event, read_json
+from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostic
+from scripts.advection_diffusion_reaction.campaigns.logging import event, read_json
 
 
 def run_coarse_check(key, args, common):

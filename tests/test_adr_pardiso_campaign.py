@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 
 from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
-from scripts.advection_diffusion_reaction import adr_pardiso_inventory as inventory
-from scripts.advection_diffusion_reaction import adr_pardiso_worker as worker
-from scripts.advection_diffusion_reaction import run_adr_pardiso_campaign as campaign
+from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_inventory as inventory
+from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_worker as worker
+from scripts.advection_diffusion_reaction.campaigns.pardiso import run_adr_pardiso_campaign as campaign
 
 
 def passing_row():
@@ -255,7 +255,7 @@ def test_tiny_isolated_worker_entrypoint_and_monitor(tiny_spec, tmp_path):
 
 @pytest.mark.parametrize('failure', ['timeout', 'memory_budget_exceeded'])
 def test_monitor_stops_worker_and_preserves_memory(failure, tmp_path, monkeypatch):
-    from scripts.advection_diffusion_reaction import check_cached_adr_pardiso as diagnostic
+    from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostic
     class Process:
         pid = 123
         returncode = None
@@ -293,7 +293,7 @@ def thread_row(threads, fresh, reused, *, phase='tuning', system_id='abc'):
 
 
 def test_thread_grid_includes_serial_and_caps_default_at_physical_cores():
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     assert tuning.default_candidates(24) == [1,2,4,6,8,12,16,24]
     assert tuning.default_candidates(3) == [1,2,3]
     assert tuning.default_candidates(1) == [1]
@@ -302,7 +302,7 @@ def test_thread_grid_includes_serial_and_caps_default_at_physical_cores():
 
 
 def test_thread_order_is_reproducible_and_not_always_increasing():
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     expected = list(range(1,25))
     order = tuning.candidate_order('abc', expected, 77)
     assert order == tuning.candidate_order('abc', list(reversed(expected)), 77)
@@ -311,7 +311,7 @@ def test_thread_order_is_reproducible_and_not_always_increasing():
 
 
 def test_fresh_and_reused_threads_selected_separately_with_serial_winner():
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     rows = [thread_row(1, 5, 4), thread_row(24, 20, 1)]
     selected = tuning.select_threads('abc', rows)
     assert selected['selected_threads'] == {'fresh':1, 'reused':24}
@@ -320,7 +320,7 @@ def test_fresh_and_reused_threads_selected_separately_with_serial_winner():
 
 
 def test_thread_selection_rejects_failure_and_incomplete_pilots():
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     rows = [thread_row(1, 5, 4), thread_row(2, 2, 1), thread_row(4, 3, 2)]
     rows[1]['status'] = 'numerical_failure'
     rows[2]['samples'].pop()
@@ -333,13 +333,13 @@ def test_thread_selection_rejects_failure_and_incomplete_pilots():
 
 
 def test_thread_selection_exact_ties_prefer_fewer_threads():
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     assert tuning.select_threads('abc', [thread_row(24, 5, 4), thread_row(1, 5, 4)])['selected_threads'] == {'fresh':1,'reused':1}
 
 
 @pytest.mark.parametrize('bad', ['confirmation', 'foreign_system', 'duplicate'])
 def test_selection_does_not_use_confirmation_or_other_system(bad):
-    from scripts.advection_diffusion_reaction import adr_pardiso_tuning as tuning
+    from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
     rows = [thread_row(1, 5, 4)]
     if bad == 'confirmation': rows[0]['measurement_phase'] = 'confirmation'
     if bad == 'foreign_system': rows[0]['system_id'] = 'different'

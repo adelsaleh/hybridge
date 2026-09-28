@@ -10,7 +10,7 @@ solver comparisons or certify convergence of a user's numerical campaign.
 From `/home/adelsaleh/src/hdgfem`, inspect the default plan:
 
 ```bash
-.venv/bin/python -B scripts/advection_diffusion_reaction/run_closed_loop_stress.py \
+.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main
 ```
 
@@ -27,7 +27,7 @@ HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/run_closed_loop_stress.py \
+  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --execute
 ```
 
@@ -71,7 +71,7 @@ HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/run_closed_loop_stress.py \
+  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --geometry square \
   --output run_outputs/solver_studies/adr_square_stress_strong_numba_h150k_pardiso_all \
   --solver-strength strong --maxiter 2000 --orders 6 \
@@ -195,7 +195,7 @@ HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/run_closed_loop_stress.py \
+  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k \
   --solver-strength strong --maxiter 2000 \
   --triangles 100000 150000 --max-triangles 175000 \
@@ -317,7 +317,7 @@ overwritten by a fresh execution.
 Inspect an existing campaign, including one still running:
 
 ```bash
-.venv/bin/python -B scripts/advection_diffusion_reaction/run_closed_loop_stress.py \
+.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --status
 ```
 
@@ -393,7 +393,7 @@ run this **after the active campaign finishes**, so CPU timing is uncontended:
 
 ```bash
 cd /home/adelsaleh/src/hdgfem
-.venv/bin/python -B scripts/advection_diffusion_reaction/check_cached_adr_pardiso.py \
+.venv/bin/python -B scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py \
   --spec run_outputs/solver_studies/adr_closed_loop_stress_main_v2/specs/assemble_stress_main_trap_t50000_p6.json \
   --output run_outputs/solver_studies/adr_pardiso_coarse_50k \
   --threads 24 --execute

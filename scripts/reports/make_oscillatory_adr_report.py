@@ -149,7 +149,7 @@ def portable_bundle(out, figures):
         for name in ('audit_oscillatory_adr_study.py','check_oscillatory_adr_quadrature.py',
                      'diagnose_oscillatory_adr_matrix.py'):
             archive.write(BRANCH/'scripts'/name,'source/'+name)
-        archive.write(ROOT/'scripts/advection_diffusion_reaction/make_oscillatory_geometry.py',
+        archive.write(ROOT/'scripts/advection_diffusion_reaction/meshes/make_oscillatory_geometry.py',
                       'source/make_oscillatory_geometry.py')
     return destination
 

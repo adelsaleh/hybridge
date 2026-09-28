@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k"
 CASE = "stress_main_orthogonal_t150000_p6"
 CANDIDATES = (

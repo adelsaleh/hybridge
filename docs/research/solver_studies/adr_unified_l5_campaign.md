@@ -35,7 +35,7 @@ not execute numerical kernels or establish numerical/build compatibility.
 From the HDGFEM repository, create a plan without CUDA, meshes or solves:
 
 ```sh
-.venv/bin/python -B scripts/advection_diffusion_reaction/run_adr_unified_campaign.py \
+.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
   --output run_outputs/solver_studies/adr_unified_l5 \
   --l5-triangles 400000
 ```
@@ -44,7 +44,7 @@ Only on a compatible CUDA-13.0-Update-1+ GPU with the patched libraries already
 built and activated, the full-run command is:
 
 ```sh
-.venv/bin/python -B scripts/advection_diffusion_reaction/run_adr_unified_campaign.py \
+.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
   --branch-root vendor/adr_gmres \
   --output run_outputs/solver_studies/adr_unified_l5 \
   --l5-triangles 400000 --maxiter 2000 \
@@ -236,7 +236,7 @@ export LD_LIBRARY_PATH="$HDGFEM_AMGX_V100_BUILD:$HDGFEM_CUDA12_ROOT/lib64${LD_LI
 export PYTHONPATH="$HDGFEM_PYAMGX_V100_BUILD${PYTHONPATH:+:$PYTHONPATH}"
 cd "$HDGFEM_SRC"
 
-"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/run_adr_unified_campaign.py \
+"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
   --branch-root "$HDGFEM_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --preflight
@@ -245,7 +245,7 @@ cd "$HDGFEM_SRC"
 After preflight passes, launch:
 
 ```sh
-"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/run_adr_unified_campaign.py \
+"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
   --branch-root "$HDGFEM_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --maxiter 2000 \

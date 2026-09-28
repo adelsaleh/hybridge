@@ -6,7 +6,7 @@ import pytest
 from scipy import sparse
 
 from scripts.diffusion_reaction import compare_cuda_bsr_csr as benchmark
-from scripts.advection_diffusion_reaction import check_cached_adr_pardiso as diagnostics
+from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostics
 
 
 def test_replay_plan_has_no_output_or_solver_work(tmp_path, monkeypatch):
@@ -120,7 +120,10 @@ def test_original_matrix_refinement_with_nearly_symmetric_factor():
     assert count == 0
 
 
-def test_pmg_constructor_forwards_fixed_work_tuning(monkeypatch):
+@pytest.mark.parametrize("policy, tuning", [
+    ("standard", {"chebyshev_order": 1}), ("fast", None),
+])
+def test_pmg_constructor_forwards_fixed_work_tuning(monkeypatch, policy, tuning):
     from hdgfem.linalg import face_hp_multigrid as mg
     captured = {}
 
@@ -137,7 +140,7 @@ def test_pmg_constructor_forwards_fixed_work_tuning(monkeypatch):
     with pytest.raises(StopBeforeDeviceWork):
         mg.FaceBlockHpMgPcgSolver(indptr=np.array([0, 1]), indices=np.array([0]),
             data=np.eye(7)[None], degree=6, diagonal_positions=np.array([0]),
-            preconditioner_tuning={"chebyshev_order": 1})
+            preconditioner_policy=policy, preconditioner_tuning=tuning)
     assert captured["chebyshev_order"] == 1
     assert captured["schedule"] == "direct-to-zero"
     assert captured["presweeps"] == captured["postsweeps"] == 1

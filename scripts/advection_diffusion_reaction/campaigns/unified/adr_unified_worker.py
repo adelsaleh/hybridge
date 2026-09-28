@@ -16,7 +16,7 @@ import threading
 from time import perf_counter
 import traceback
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 class BudgetExceeded(RuntimeError):
@@ -106,8 +106,8 @@ def mesh(spec, common):
     directory.mkdir(parents=True, exist_ok=True)
     definition = system['mesh']
     if definition.get('generator') == 'stress':
-        from scripts.advection_diffusion_reaction.closed_loop_stress_mesh import prepare_mesh
-        from scripts.advection_diffusion_reaction.closed_loop_stress_cases import StressParameters
+        from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import prepare_mesh
+        from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import StressParameters
         path, info = prepare_mesh(StressParameters(**system['problem']['stress_parameters']),
                                  definition['target_triangles'], directory,
                                  boundary_points=definition['boundary_points'], neck_elements=definition['neck_elements'],
@@ -148,10 +148,11 @@ def run_numerical(spec, common):
     sys.path.insert(0, spec['branch_root'])
     if 'stress_parameters' in spec:
         from scripts.adv_diff_rea_cases import register_case
-        from closed_loop_stress_cases import StressParameters, make_case
-        params = StressParameters(**spec['stress_parameters'])
-        register_case(spec['case'], lambda: make_case(params, spec['velocity_normalization']))
-    from closed_loop_stress_worker import operator_hash
+        cases = load_file('_adr_stress_cases', ROOT/'scripts/advection_diffusion_reaction/cases/closed_loop_stress_cases.py')
+        params = cases.StressParameters(**spec['stress_parameters'])
+        register_case(spec['case'], lambda: cases.make_case(params, spec['velocity_normalization']))
+    stress_worker = load_file('_adr_stress_worker', ROOT/'scripts/advection_diffusion_reaction/campaigns/stress/closed_loop_stress_worker.py')
+    operator_hash = stress_worker.operator_hash
     if spec.get('mesh_path'):
         if hashlib.sha256(Path(spec['mesh_path']).read_bytes()).hexdigest() != spec['mesh_sha256']:
             raise ValueError('Mesh changed after preparation')

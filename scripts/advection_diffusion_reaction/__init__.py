@@ -1,1 +1,1 @@
-"""Stationary advection-diffusion-reaction manufactured drivers."""
+"""Stationary ADR catalogue, presets and runners; see this directory's README.md."""

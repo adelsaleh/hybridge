@@ -12,10 +12,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction import closed_loop_stress_cases as cases
-from scripts.advection_diffusion_reaction import closed_loop_stress_logging as reporting
-from scripts.advection_diffusion_reaction import run_closed_loop_stress as runner
-from scripts.advection_diffusion_reaction.closed_loop_stress_mesh import background_sizes
+from scripts.advection_diffusion_reaction.cases import closed_loop_stress_cases as cases
+from scripts.advection_diffusion_reaction.campaigns import logging as reporting
+from scripts.advection_diffusion_reaction.campaigns.stress import run_closed_loop_stress as runner
+from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import background_sizes
 
 
 def test_numba_cpu_controls(tmp_path):
@@ -251,7 +251,7 @@ def test_nonzero_process_cannot_leave_a_passing_result(tmp_path, monkeypatch):
 
 
 def test_campaign_retains_assembly_and_solver_failures_and_profiles_separately(tmp_path, monkeypatch):
-    from scripts.advection_diffusion_reaction import closed_loop_stress_mesh as mesh_module
+    from scripts.advection_diffusion_reaction.meshes import closed_loop_stress_mesh as mesh_module
 
     args, common = planning_args(tmp_path, "--variants", "trap", "cross", "--triangles", "50000",
                                  "--candidates", "asm_pp", "native_hp_standard")
@@ -309,7 +309,7 @@ def test_failure_report_keeps_warmup_timings_out_of_measured_results():
 
 @pytest.mark.parametrize("maxiter", [2000, 4000])
 def test_iteration_cap_propagates_to_every_comparison_and_profile(tmp_path, monkeypatch, maxiter):
-    from scripts.advection_diffusion_reaction import closed_loop_stress_mesh as mesh_module
+    from scripts.advection_diffusion_reaction.meshes import closed_loop_stress_mesh as mesh_module
 
     args, common = planning_args(tmp_path, "--variants", "trap", "--triangles", "50000", "--maxiter", str(maxiter))
     monkeypatch.setattr(runner, "source_hashes", lambda root: {})
@@ -494,7 +494,7 @@ def test_native_policy_rejects_invalid_overrides_without_numerical_imports(tunin
 
 
 def test_large_mesh_and_tuning_options_reach_comparisons_and_profiles(tmp_path, monkeypatch):
-    from scripts.advection_diffusion_reaction import closed_loop_stress_mesh as mesh_module
+    from scripts.advection_diffusion_reaction.meshes import closed_loop_stress_mesh as mesh_module
     args, common = planning_args(tmp_path, "--solver-strength", "strong", "--variants", "trap",
                                  "--triangles", "150000", "--max-triangles", "175000", "--assembly-backend", "numpy",
                                  "--neck-elements", "12", "--boundary-points", "3600", "--require-neck-screen")
@@ -522,7 +522,7 @@ def test_large_mesh_and_tuning_options_reach_comparisons_and_profiles(tmp_path, 
 
 
 def test_required_neck_screen_stops_before_assembly(tmp_path, monkeypatch):
-    from scripts.advection_diffusion_reaction import closed_loop_stress_mesh as mesh_module
+    from scripts.advection_diffusion_reaction.meshes import closed_loop_stress_mesh as mesh_module
     args, common = planning_args(tmp_path, "--require-neck-screen")
     monkeypatch.setattr(runner, "source_hashes", lambda root: {})
     monkeypatch.setattr(runner, "estimate_normalization", lambda *a, **kw: dict(value=2.0, converged=True))
@@ -537,7 +537,7 @@ def test_required_neck_screen_stops_before_assembly(tmp_path, monkeypatch):
 
 def test_cached_large_mesh_obeys_current_budget_without_importing_gmsh(tmp_path):
     import hashlib
-    from scripts.advection_diffusion_reaction.closed_loop_stress_mesh import prepare_mesh
+    from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import prepare_mesh
     path = tmp_path/"trial.npz"
     path.write_bytes(b"read-only mesh fingerprint check")
     record = dict(file=path.name, triangles=151000, target_triangles=150000, hole_radius=.63,

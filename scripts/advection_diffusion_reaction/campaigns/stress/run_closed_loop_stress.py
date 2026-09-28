@@ -20,15 +20,15 @@ import threading
 from time import monotonic
 import traceback
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 GMRES_ROOT = ROOT / "vendor/adr_gmres"
 if __package__ in {None, ""}:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction.closed_loop_stress_cases import (
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import (
     GEOMETRIES, LEVELS, VARIANTS, StressParameters, estimate_normalization,
 )
-from scripts.advection_diffusion_reaction.closed_loop_stress_logging import (
+from scripts.advection_diffusion_reaction.campaigns.logging import (
     artifact_details, campaign_status, event, print_details, read_json,
     result_details, timed_phase,
 )
@@ -126,8 +126,7 @@ def sha256(path):
 
 def source_hashes(branch_root):
     """Fingerprint both implementations; refuse changed-code campaign resumes."""
-    paths = list(Path(__file__).parent.glob("*closed_loop_stress*.py"))
-    paths.append(Path(__file__).with_name("check_cached_adr_pardiso.py"))
+    paths = list((ROOT/"scripts/advection_diffusion_reaction").rglob("*.py"))
     paths += list((ROOT/"hdgfem").rglob("*.py"))
     paths += list((branch_root/"hdgfem").rglob("*.py"))
     paths += [branch_root/"scripts"/name for name in (
@@ -149,7 +148,7 @@ def build_plan(args, common):
     if args.geometry == "square" and (args.require_neck_screen or args.neck_width is not None):
         raise ValueError("Square geometry has no neck; omit --require-neck-screen and --neck-width")
     if args.pardiso_coarse or args.pardiso_all:
-        from scripts.advection_diffusion_reaction.check_cached_adr_pardiso import physical_threads
+        from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import physical_threads
         if args.pardiso_threads is None:
             args.pardiso_threads = physical_threads()
         if not 1 <= args.pardiso_threads <= len(os.sched_getaffinity(0)):
@@ -311,7 +310,7 @@ def run_job(spec, kind, key, args, common):
 
 def execute(plan, args, common):
     os.environ["HDGFEM_PRECISION"] = "float64"
-    from scripts.advection_diffusion_reaction.closed_loop_stress_mesh import prepare_mesh
+    from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import prepare_mesh
 
     out = args.output
     path = out/"manifest.json"
@@ -393,7 +392,7 @@ def execute(plan, args, common):
             common.atomic_json(out/"assemblies.json", assemblies)
             if target in pardiso_targets(args):
                 if assembled["status"] == "passed":
-                    from scripts.advection_diffusion_reaction.closed_loop_stress_pardiso import run_coarse_check
+                    from scripts.advection_diffusion_reaction.campaigns.stress.closed_loop_stress_pardiso import run_coarse_check
                     check = run_coarse_check(key, args, common)
                 else:
                     check = dict(status="assembly_failed", assembly_status=assembled["status"])

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction.closed_loop_stress_cases import StressParameters, exact_data, polar_points, diffusion_data, make_case
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import StressParameters, exact_data, polar_points, diffusion_data, make_case
 from scripts.reports import make_closed_loop_stress_figures as figures
 
 ROOT = Path(__file__).resolve().parents[1]

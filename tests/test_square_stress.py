@@ -8,11 +8,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction import closed_loop_stress_cases as cases
-from scripts.advection_diffusion_reaction import closed_loop_stress_mesh as meshes
-from scripts.advection_diffusion_reaction import closed_loop_stress_pardiso as direct
-from scripts.advection_diffusion_reaction import run_closed_loop_stress as runner
-from scripts.advection_diffusion_reaction.closed_loop_stress_sampling import StressCoefficientSampler
+from scripts.advection_diffusion_reaction.cases import closed_loop_stress_cases as cases
+from scripts.advection_diffusion_reaction.meshes import closed_loop_stress_mesh as meshes
+from scripts.advection_diffusion_reaction.campaigns.stress import closed_loop_stress_pardiso as direct
+from scripts.advection_diffusion_reaction.campaigns.stress import run_closed_loop_stress as runner
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_sampling import StressCoefficientSampler
 from test_closed_loop_stress import derivative, planning_args
 
 
@@ -238,7 +238,7 @@ def test_coarse_direct_adapter_limits_resume_and_interrupted_attempts(tmp_path, 
 
 
 def test_status_includes_running_and_finished_direct_checks(tmp_path, capsys):
-    from scripts.advection_diffusion_reaction import closed_loop_stress_logging as logs
+    from scripts.advection_diffusion_reaction.campaigns import logging as logs
     (tmp_path/"manifest.json").write_text("{}")
     (tmp_path/"jobs").mkdir()
     output = tmp_path/"direct"

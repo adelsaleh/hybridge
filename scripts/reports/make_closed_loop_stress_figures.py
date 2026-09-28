@@ -17,7 +17,7 @@ DEFAULT_MESH_RECORD = ROOT/"run_outputs/solver_studies/adr_closed_loop_stress_st
 DEFAULT_NORMALIZATION_DIR = DEFAULT_MESH_RECORD.parents[3]/"normalizations"
 NECK_VIEW = (-.70, -.59, -.06, .06)
 sys.path.insert(0, str(ROOT))
-from scripts.advection_diffusion_reaction.closed_loop_stress_cases import (
+from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import (
     StressParameters, exact_data, polar_points, diffusion_data, unscaled_velocity, VARIANTS,
 )
 
@@ -225,7 +225,7 @@ def render(output, *, angular_points=1800, radial_intervals=192, mesh_record=DEF
         paths.extend(save_publication_figure(fig, Path(output)/"operator_terms"))
         plt.close(fig)
 
-    source = ROOT/"scripts/advection_diffusion_reaction/closed_loop_stress_cases.py"
+    source = ROOT/"scripts/advection_diffusion_reaction/cases/closed_loop_stress_cases.py"
     metadata = dict(
         status="analytic operator terms and saved campaign mesh; not numerical solution fields", level="main",
         mesh=mesh_metadata, exact_solution_shared=True,

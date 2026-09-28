@@ -1,6 +1,6 @@
 # Full archived ADR PyPardiso campaign
 
-Entry point: `scripts/advection_diffusion_reaction/run_adr_pardiso_campaign.py`.
+Entry point: `scripts/advection_diffusion_reaction/campaigns/pardiso/run_adr_pardiso_campaign.py`.
 This is a separate, CPU-only campaign. It does not edit either manuscript,
 rerun iterative solvers, regenerate meshes, evaluate coefficients, or change
 the archived matrices or reference solutions. Run it **after the other campaign
@@ -32,7 +32,7 @@ starting a solver:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
-  .venv/bin/python -B scripts/advection_diffusion_reaction/run_adr_pardiso_campaign.py \
+  .venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/pardiso/run_adr_pardiso_campaign.py \
   --autotune-threads --threads 1 2 4 6 8 12 16 24 --tuning-repeats 3 --repeats 5
 ```
 
@@ -40,7 +40,7 @@ Launch after the current campaign finishes; **no CUDA wrapper is required**:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
-  .venv/bin/python -u -B scripts/advection_diffusion_reaction/run_adr_pardiso_campaign.py \
+  .venv/bin/python -u -B scripts/advection_diffusion_reaction/campaigns/pardiso/run_adr_pardiso_campaign.py \
   --output run_outputs/solver_studies/adr_scaling_2026_09_17/pardiso_tuned_2026_09_22 \
   --autotune-threads --threads 1 2 4 6 8 12 16 24 \
   --tuning-repeats 3 --warmup 1 --repeats 5 \

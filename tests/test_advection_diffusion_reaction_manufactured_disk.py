@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from scripts.advection_diffusion_reaction.manufactured_disk import (
+from scripts.advection_diffusion_reaction.studies.manufactured_disk import (
     build_arg_parser,
     manufactured_adr_disk,
     run_manufactured_adr_disk,
