@@ -122,7 +122,7 @@ class PoissonTauRecovery:
                 print(f"\n[gc:poisson-retry] {reason}; tau={old:g}", flush=True)
             raise failure.error from failure
         # This clears numerical factors, matrix and native/AMGX hierarchies;
-        # existing mesh, reference and device-space caches remain available.
+        # Compatible tau-independent raw flux recovery data also remain cached.
         solver.with_options(stabilization=new)
         event["status"] = "retry"
         self.events.append(event)

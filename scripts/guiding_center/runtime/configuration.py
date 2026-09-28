@@ -307,6 +307,9 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "plot_width": args.plot_width,
         "plot_height": args.plot_height,
         "plot_max_fps": args.plot_max_fps,
+        "save_movie": args.save_movie,
+        "movie_path": None if args.movie_path is None else str(args.movie_path),
+        "movie_fps": args.movie_fps,
         "plot_resolution": args.plot_resolution,
         "plot_potential": True if args.plot_both else None,
         "screenshot_dir": None if args.screenshot_dir is None else str(args.screenshot_dir),
@@ -319,6 +322,8 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "diocotron_angular_points": getattr(args, "diocotron_angular_points", None),
         "diagnostics_every": args.diagnostics_every,
         "record_timings": getattr(args, "record_timings", None),
+        "poisson_true_residual_every": getattr(args, "poisson_true_residual_every", None),
+        "poisson_residual_history": getattr(args, "poisson_residual_history", None),
         "amgx_residual_history": getattr(args, "amgx_residual_history", None),
     }
     for key, value in direct_updates.items():
@@ -433,6 +438,13 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("diocotron_radial_points must be at least 2")
     if config.diocotron_angular_points is not None and config.diocotron_angular_points < 2:
         raise ValueError("diocotron_angular_points must be at least 2")
+    if not math.isfinite(config.movie_fps) or config.movie_fps <= 0:
+        raise ValueError("movie_fps must be finite and positive")
+    if config.save_movie:
+        if config.plot_backend != "holoviz" or config.plot_every <= 0:
+            raise ValueError("movie recording requires Holoviz with plot_every > 0")
+        if config.movie_path is None or not str(config.movie_path).lower().endswith(".mp4"):
+            raise ValueError("movie_path must end in .mp4")
     if config.plot_backend not in {"pyvista", "holoviz"}:
         raise ValueError("plot_backend must be 'pyvista' or 'holoviz'")
     if config.plot_every < 0:
@@ -470,6 +482,8 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             raise ValueError("IMEX-ARK3 raw-cuda transport requires fused local assembly")
         if config.transport_trace_ordering != "none" or config.transport_reuse_first_preconditioner:
             raise ValueError("IMEX-ARK3 manages per-step operator reuse; use no trace ordering or first-preconditioner override")
+    if config.poisson_true_residual_every < 0:
+        raise ValueError("poisson_true_residual_every must be nonnegative")
     if config.diagnostics_every < 0:
         raise ValueError("diagnostics_every must be nonnegative (0 disables field diagnostics)")
     if config.diagnostics_every == 0 and (
@@ -483,18 +497,21 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("transport_retry_policy must be 'none' or 'amgx-robust'")
     if config.poisson_retry_policy not in {"none", "amgx-robust"}:
         raise ValueError("poisson_retry_policy must be 'none' or 'amgx-robust'")
-    if config.poisson_fb_hp_mg_preconditioner_policy not in {"standard", "robust"}:
+    if config.poisson_fb_hp_mg_preconditioner_policy not in {"standard", "fast", "robust"}:
         raise ValueError(
-            "poisson_fb_hp_mg_preconditioner_policy must be 'standard' or 'robust'"
+            "poisson_fb_hp_mg_preconditioner_policy must be 'standard', 'fast' or 'robust'"
         )
     poisson_is_native = (
         str(config.poisson_solver).replace("_", "-").lower() == "fb-hp-mg-pcg"
     )
     if (
-        config.poisson_fb_hp_mg_preconditioner_policy == "robust"
+        config.poisson_fb_hp_mg_preconditioner_policy != "standard"
         and not poisson_is_native
     ):
-        raise ValueError("robust FB-HP-MG conditioning requires fb-hp-mg-pcg Poisson")
+        raise ValueError(
+            f"{config.poisson_fb_hp_mg_preconditioner_policy} FB-HP-MG conditioning "
+            "requires fb-hp-mg-pcg Poisson"
+        )
     if config.poisson_retry_policy == "amgx-robust" and (
         config.poisson_assembly_backend != "raw-cuda"
         or not (_is_amgx_solver(config.poisson_solver) or poisson_is_native)
@@ -672,6 +689,8 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
         cupyx_solver=config.poisson_cupyx_solver,
         amgx_config=primary_config,
         amgx_retry_attempts=retry_attempts,
+        fb_hp_mg_true_residual_every=config.poisson_true_residual_every,
+        fb_hp_mg_residual_history=config.poisson_residual_history,
         fb_hp_mg_preconditioner_policy=(
             config.poisson_fb_hp_mg_preconditioner_policy
         ),

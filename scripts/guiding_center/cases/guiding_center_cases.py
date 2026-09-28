@@ -449,6 +449,7 @@ def positive_turbulence(
         wall_gap: float = 0.04,
         geometry: str = "disc",
         geometry_params: dict | None = None,
+        fft_grid_shape: tuple[int, int] | list[int] | None = None,
 ) -> GuidingCenterCase:
     r"""Nonnegative multiscale guiding-center density / Euler vorticity.
 
@@ -460,6 +461,10 @@ def positive_turbulence(
     nonnegative everywhere and has no vortex cores or tails at the wall. Up to
     the sign convention in the Poisson equation, the same scalar is one-signed
     Euler vorticity. The seed fixes the same field on every mesh.
+
+    ``fft_grid_shape=(nx, ny)`` selects an approximate FFT-convolved field
+    with smooth nonnegative grid reconstruction. Additional center clearance
+    preserves the requested zero-density wall band after grid spreading.
     """
     from hdgfem.core.geometry import DiskDomain, shaped_domain
     from hdgfem.core.profiles import sample_gaussian_blob_field
@@ -481,6 +486,7 @@ def positive_turbulence(
         cutoff=cutoff,
         wall_clearance=wall_gap,
         strength_mode="positive",
+        fft_grid_shape=fft_grid_shape,
     )
     return GuidingCenterCase(
         key="positive_turbulence",
@@ -488,6 +494,8 @@ def positive_turbulence(
             "Nonnegative multiscale Gaussian guiding-center density (equivalently, "
             f"one-signed Euler vorticity) in the {domain_label}, with compact "
             "support away from the wall."
+            + (" Uses FFT convolution and cubic B-spline reconstruction."
+               if fft_grid_shape is not None else "")
         ),
         initial_density=density,
         potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
@@ -504,6 +512,11 @@ def positive_turbulence(
             "wall_gap": float(wall_gap),
             "geometry": geometry_params,
             "geometry_name": geometry,
+            **({"initial_profile": "fft_gaussian",
+                "fft_grid_shape": density.grid_shape,
+                "fft_grid_spacing": tuple(float(value) for value in density.spacing),
+                "fft_support_padding": density.support_padding}
+               if fft_grid_shape is not None else {}),
         },
     )
 

@@ -1,10 +1,18 @@
-"""Reusable analytic field profiles with matching NumPy and CuPy evaluation."""
+"""Reusable field profiles with matching NumPy and CuPy evaluation."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from hdgfem.precision import REAL_DTYPE
+
+
+def _array_module(x, y):
+    """Choose the array backend without importing CuPy for host coordinates."""
+    if any(hasattr(value, "__cuda_array_interface__") for value in (x, y)):
+        from hdgfem.backends.cupy import require_cupy
+        return require_cupy()
+    return np
 
 
 class GaussianBlobField:
@@ -68,10 +76,7 @@ class GaussianBlobField:
         return self._device_groups[device]
 
     def __call__(self, x, y):
-        xp = np
-        if any(hasattr(value, "__cuda_array_interface__") for value in (x, y)):
-            from hdgfem.backends.cupy import require_cupy
-            xp = require_cupy()
+        xp = _array_module(x, y)
         x, y = xp.broadcast_arrays(xp.asarray(x, dtype=REAL_DTYPE), xp.asarray(y, dtype=REAL_DTYPE))
         shape = x.shape
         x, y = x.ravel(), y.ravel()
@@ -95,10 +100,146 @@ class GaussianBlobField:
         return values.reshape(shape)
 
 
+def _fft_grid_geometry(bounds, grid_shape):
+    """Validate Cartesian profile geometry shared by sampling and evaluation."""
+    bounds = np.array(bounds, dtype=np.float64, copy=True)
+    shape = np.asarray(grid_shape)
+    if (bounds.shape != (2, 2) or not np.all(np.isfinite(bounds))
+            or np.any(bounds[1] <= bounds[0])):
+        raise ValueError("bounds must contain finite lower and upper (x, y) corners")
+    if (shape.shape != (2,) or not np.all(np.isfinite(shape))
+            or np.any(shape < 4) or np.any(shape != np.floor(shape))):
+        raise ValueError("fft_grid_shape must contain two integers >= 4 in (nx, ny) order")
+    shape = tuple(int(value) for value in shape)
+    spacing = (bounds[1] - bounds[0]) / (np.asarray(shape) - 1)
+    bounds.setflags(write=False)
+    spacing.setflags(write=False)
+    return bounds, shape, spacing
+
+
+class FFTGaussianBlobField:
+    """Positive Gaussian blobs approximated by a reusable Cartesian FFT grid.
+
+    Positive cloud-in-cell deposition is followed by zero-padded linear
+    convolution, separately for each width. Sampled radial kernels retain
+    ``source.cutoff`` and are normalized to each Gaussian's continuous mass.
+    An integer occupancy convolution removes FFT roundoff outside the compact
+    supports; negative roundoff inside is set to zero.
+
+    Evaluation uses nonnegative cubic B-spline weights *without* a spline
+    prefilter. This is a smooth, slightly broadened reconstruction, not cubic
+    interpolating splines. Its support extends at most two grid diagonals;
+    deposition extends it by one more. The sampler below accounts for all
+    three when placing centers away from the wall.
+
+    ``grid_shape`` is (nx, ny); stored grids are (ny, nx). Grids are built
+    lazily with SciPy on the host or CuPy on the calling device and cached
+    separately. Device evaluation never materializes the density on the host.
+    """
+
+    def __init__(self, source: GaussianBlobField, *, bounds, grid_shape,
+                 chunk_size: int = 2097152):
+        if not isinstance(source, GaussianBlobField):
+            raise TypeError("source must be a GaussianBlobField")
+        if np.any(source.strengths < 0):
+            raise ValueError("FFT Gaussian reconstruction requires nonnegative strengths")
+        if int(chunk_size) != chunk_size or chunk_size < 1:
+            raise ValueError("chunk_size must be a positive integer")
+        self.bounds, self.grid_shape, self.spacing = _fft_grid_geometry(bounds, grid_shape)
+        if np.max(self.spacing) > np.min(source.sigmas) / 2:
+            raise ValueError("FFT grid spacing must be at most half the smallest sigma; increase fft_grid_shape")
+        if np.any(source.centers < self.bounds[0]) or np.any(source.centers > self.bounds[1]):
+            raise ValueError("blob centers must lie inside the FFT grid bounds")
+        self.source = source
+        self.centers, self.sigmas, self.strengths = source.centers, source.sigmas, source.strengths
+        self.cutoff, self.chunk_size = source.cutoff, int(chunk_size)
+        self.support_padding = 3 * float(np.linalg.norm(self.spacing))
+        self._host_grid = None
+        self._device_grids = {}
+
+    def _build_grid(self, xp):
+        if xp is np:
+            from scipy.signal import fftconvolve
+        else:
+            from cupyx.scipy.signal import fftconvolve
+
+        nx, ny = self.grid_shape
+        grid = xp.zeros((ny, nx), dtype=REAL_DTYPE)
+        dx, dy = self.spacing
+        for width in np.unique(self.sigmas):
+            selected = self.sigmas == width
+            coordinates = (self.centers[selected] - self.bounds[0]) / self.spacing
+            cells = np.minimum(np.floor(coordinates).astype(np.int64), (nx-2, ny-2))
+            fraction = coordinates - cells
+            # Small host deposition tables keep seeded placement identical on
+            # both backends; only the FFT arrays live on the selected backend.
+            columns, rows, weights = [], [], []
+            for row in (0, 1):
+                for col in (0, 1):
+                    columns.append(cells[:, 0] + col)
+                    rows.append(cells[:, 1] + row)
+                    weights.append(self.strengths[selected]
+                                   * (fraction[:, 0] if col else 1-fraction[:, 0])
+                                   * (fraction[:, 1] if row else 1-fraction[:, 1]))
+            impulses = xp.zeros_like(grid)
+            indices, inverse = np.unique(np.concatenate(rows)*nx + np.concatenate(columns),
+                                         return_inverse=True)
+            deposited = np.zeros(len(indices), dtype=REAL_DTYPE)
+            np.add.at(deposited, inverse, np.asarray(np.concatenate(weights), dtype=REAL_DTYPE))
+            # Aggregate the small source table first: no device float64 atomic
+            # scatter is needed, and both backends use identical sums.
+            impulses.ravel()[xp.asarray(indices)] = xp.asarray(deposited)
+            rx, ry = np.ceil(self.cutoff * width / self.spacing).astype(int)
+            xx = xp.arange(-rx, rx+1, dtype=REAL_DTYPE) * REAL_DTYPE(dx / width)
+            yy = xp.arange(-ry, ry+1, dtype=REAL_DTYPE) * REAL_DTYPE(dy / width)
+            radius_sq = yy[:, None]**2 + xx[None, :]**2
+            support = (radius_sq <= self.cutoff**2).astype(REAL_DTYPE)
+            kernel = xp.exp(-REAL_DTYPE(0.5)*radius_sq) * support
+            mass = 2*np.pi*width**2 * (-np.expm1(-0.5*self.cutoff**2))
+            kernel *= REAL_DTYPE(mass / (dx*dy)) / kernel.sum()
+            sampled = fftconvolve(impulses, kernel, mode="same")
+            # Occupancy counts are integers before FFT roundoff, so 0.5
+            # separates uncovered cells reliably, including in float32.
+            coverage = fftconvolve((impulses > 0).astype(REAL_DTYPE), support, mode="same")
+            grid += xp.where(coverage > 0.5, xp.maximum(sampled, 0), 0)
+        return xp.ascontiguousarray(grid, dtype=REAL_DTYPE)
+
+    def _grid_for(self, xp):
+        if xp is np:
+            if self._host_grid is None:
+                self._host_grid = self._build_grid(xp)
+            return self._host_grid
+        device = int(xp.cuda.Device().id)
+        if device not in self._device_grids:
+            self._device_grids[device] = self._build_grid(xp)
+        return self._device_grids[device]
+
+    def __call__(self, x, y):
+        xp = _array_module(x, y)
+        if xp is np:
+            from scipy.ndimage import map_coordinates
+        else:
+            from cupyx.scipy.ndimage import map_coordinates
+        x, y = xp.broadcast_arrays(xp.asarray(x, dtype=REAL_DTYPE), xp.asarray(y, dtype=REAL_DTYPE))
+        shape = x.shape
+        x, y = x.ravel(), y.ravel()
+        values = xp.empty(x.shape, dtype=REAL_DTYPE)
+        if not x.size:
+            return values.reshape(shape)
+        grid = self._grid_for(xp)
+        for start in range(0, x.size, self.chunk_size):
+            stop = min(start + self.chunk_size, x.size)
+            coordinates = xp.stack(((y[start:stop]-REAL_DTYPE(self.bounds[0, 1]))/REAL_DTYPE(self.spacing[1]),
+                                    (x[start:stop]-REAL_DTYPE(self.bounds[0, 0]))/REAL_DTYPE(self.spacing[0])))
+            values[start:stop] = map_coordinates(grid, coordinates, order=3,
+                                                 prefilter=False, mode="constant", cval=0.0)
+        return values.reshape(shape)
+
+
 def sample_gaussian_blob_field(
     domain, counts, sigmas, *, amplitude=4.0, seed=17, cutoff=8.0,
-    wall_clearance=0.0, strength_mode="balanced",
-) -> GaussianBlobField:
+    wall_clearance=0.0, strength_mode="balanced", fft_grid_shape=None,
+) -> GaussianBlobField | FFTGaussianBlobField:
     """Sample an area-uniform multiscale Gaussian-blob field.
 
     Centers are independent; no reflection or rotational symmetry is imposed.
@@ -107,6 +248,10 @@ def sample_gaussian_blob_field(
     counts and zero continuous integral before discretization;
     ``strength_mode='positive'`` gives every blob a positive strength. The
     cutoff is solely an initial-profile definition.
+
+    ``fft_grid_shape=(nx, ny)`` opts positive fields into FFT convolution and
+    smooth nonnegative grid reconstruction. Extra sampling clearance covers
+    grid spreading; this changes seeded centers compared with the direct field.
     """
     counts, sigmas = tuple(counts), tuple(sigmas)
     if not counts or len(counts) != len(sigmas):
@@ -125,12 +270,20 @@ def sample_gaussian_blob_field(
         raise ValueError("wall_clearance must be finite and nonnegative")
     if not np.isfinite(seed) or int(seed) != seed or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
+    support_padding = 0.0
+    if fft_grid_shape is not None:
+        if strength_mode != "positive":
+            raise ValueError("fft_grid_shape requires strength_mode='positive'")
+        bounds, fft_grid_shape, spacing = _fft_grid_geometry(domain.bounds, fft_grid_shape)
+        if np.max(spacing) > min(sigmas)/2:
+            raise ValueError("FFT grid spacing must be at most half the smallest sigma; increase fft_grid_shape")
+        support_padding = 3 * float(np.linalg.norm(spacing))
     rng = np.random.default_rng(int(seed))
     centers, widths, strengths = [], [], []
     for count, width in zip(counts, sigmas):
         count, width = int(count), float(width)
         centers.append(domain.sample_uniform(
-            count, rng, clearance=float(wall_clearance) + cutoff * width,
+            count, rng, clearance=float(wall_clearance) + cutoff * width + support_padding,
         ))
         levels = float(amplitude)*rng.uniform(0.8, 1.2, count)
         if strength_mode == "balanced":
@@ -140,8 +293,11 @@ def sample_gaussian_blob_field(
             levels[negative] *= -levels[positive].sum()/levels[negative].sum()
         widths.append(np.full(count, width))
         strengths.append(levels)
-    return GaussianBlobField(np.concatenate(centers), np.concatenate(widths),
-                             np.concatenate(strengths), cutoff=cutoff)
+    field = GaussianBlobField(np.concatenate(centers), np.concatenate(widths),
+                              np.concatenate(strengths), cutoff=cutoff)
+    if fft_grid_shape is not None:
+        return FFTGaussianBlobField(field, bounds=bounds, grid_shape=fft_grid_shape)
+    return field
 
 
-__all__ = ["GaussianBlobField", "sample_gaussian_blob_field"]
+__all__ = ["GaussianBlobField", "FFTGaussianBlobField", "sample_gaussian_blob_field"]

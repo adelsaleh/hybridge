@@ -149,7 +149,7 @@ def _report_projection_timings(config, details, total, *, label, prefix):
 
 def _solve_transport_stage(
         solver, *, initial_guess, beta, step, time_value, stage, beta_scale,
-        failure_path: Path,
+        failure_path: Path, diagnostics_enabled: bool = True,
 ):
     """Preserve diagnostics of the actual failed stage, then re-raise its error."""
     from hdgfem.linalg.system import LinearSolveConvergenceError
@@ -157,6 +157,8 @@ def _solve_transport_stage(
     try:
         return solver.solve(initial_guess=initial_guess)
     except LinearSolveConvergenceError as error:
+        if not diagnostics_enabled:
+            raise
         report = {
             "step": int(step), "time": float(time_value), "stage": stage,
             "beta_scale": float(beta_scale), "error": str(error),
@@ -252,10 +254,16 @@ def run_guiding_center_case(
             (config.domain != "auto" and config.domain != "disc")):
         raise ValueError("diocotron modal diagnostics require diocotron_k on the disk")
     projection_backend = _initial_projection_backend(config)
+    projection_label = projection_backend
+    if case.parameters.get("initial_profile") == "fft_gaussian":
+        nx, ny = case.parameters["fft_grid_shape"]
+        projection_label += f", FFT grid {nx}x{ny}"
+    elif case.key == "positive_turbulence":
+        projection_label += ", direct Gaussian blobs"
     initial_projection_timings = {} if _detail_verbosity(config) else None
     equilibrium_projection_timings = {} if _detail_verbosity(config) else None
     rho_field, initial_density_projection_time = timed_call(
-        f"[gc:init] projecting initial density ({projection_backend})",
+        f"[gc:init] projecting initial density ({projection_label})",
         _detail_verbosity(config),
         lambda: _project_initial_field(config, space, case.initial_density_at(), name="rho_h",
                                        timings=initial_projection_timings),
@@ -585,6 +593,7 @@ def run_guiding_center_case(
                 result = _solve_transport_stage(
                     transport_solver, initial_guess=guess, beta=beta, step=step,
                     time_value=stage_time, stage=stage or config.time_scheme, beta_scale=scale,
+                    diagnostics_enabled=diagnostics_enabled,
                     failure_path=Path(config.diagnostics_dir) / f"{output_stem}_transport_failure.json",
                 )
                 if config.transport_reuse_first_preconditioner and not transport_preconditioner_reused:
@@ -837,4 +846,3 @@ def run_guiding_center_case(
                           f"recorded data: {recorder.jsonl_path}", flush=True)
 
     return result
-

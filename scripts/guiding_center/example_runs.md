@@ -149,15 +149,39 @@ these user-run turbulence cases, not a new mesh/time-step qualification.
   --verbosity 3
 ```
 
-### ITER — SI-BDF2, h=0.014, dt=0.005, T=50
+### ITER — FFT-generated positive blobs, SI-BDF2
+
+11,520 positive blobs on a cached `2048 x 4096` FFT grid, with DG p=6,
+`h=0.014`, `dt=0.005`, and `T=50`. The approximate initializer preserves the
+empty wall band; GPU speedup remains unmeasured.
 
 ```bash
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
-  @run_configs/guiding_center/positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr.args \
+  @run_configs/guiding_center/positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr.args \
   --positivity-diagnostics \
   --diagnostics-every 10 --plot-diagnostics \
-  --plot-every 100 \
-  --diagnostics-prefix positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50 \
+  --plot-every 1 \
+  --diagnostics-prefix positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50 \
+  --verbosity 3
+```
+
+### ITER — FFT blobs, SI-BDF2 with Holoviz over SSH X11 forwarding
+
+Run from your current `ssh -Y` terminal with its original `DISPLAY` and
+`XAUTHORITY`. The launcher creates and checks a fresh `NV-GLX` compatibility
+proxy, raises the stack limit to 32 MiB, and removes the proxy when the run exits.
+
+```bash
+env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/usr/local/cuda-13.0 \
+  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr.args \
+  --positivity-diagnostics \
+  --diagnostics-every 10 --plot-diagnostics \
+  --plot-backend holoviz \
+  --plot-every 1 \
+  --diagnostics-prefix positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50 \
   --verbosity 3
 ```
 
@@ -170,6 +194,24 @@ these user-run turbulence cases, not a new mesh/time-step qualification.
   @run_configs/guiding_center/diocotron_gaussian_m64_ark3_p6_h008_dt005_t70.args \
   --verbosity 3 --dt 0.5 --num-steps 800 \
   --mesh-size 0.0068 --minimum-triangles 150000
+```
+
+### m=64 — IMEX-ARK3 with Holoviz over SSH X11 forwarding
+
+Uses a fresh `NV-GLX` compatibility proxy from the current `ssh -Y` session.
+Keep the original SSH `DISPLAY` and `XAUTHORITY`. The run retains `dt=0.5`,
+`T=400`, and `h=0.0068`.
+
+```bash
+env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/usr/local/cuda-13.0 \
+  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/diocotron_gaussian_m64_ark3_p6_h008_dt005_t70.args \
+  --verbosity 3 --dt 0.5 --num-steps 800 \
+  --mesh-size 0.0068 --minimum-triangles 150000 \
+  --plot-backend holoviz \
+  --plot-every 1
 ```
 
 ### m=64 — SI Euler, dt=0.5, T=400
@@ -193,6 +235,25 @@ these user-run turbulence cases, not a new mesh/time-step qualification.
   @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args
 ```
 
+### m=64 — SI-BDF2 with Holoviz over SSH X11 forwarding
+
+Uses a fresh `NV-GLX` compatibility proxy from the current `ssh -Y` session.
+Keep the original SSH `DISPLAY` and `XAUTHORITY`. The run retains `dt=0.5`,
+`T=400`, and `h=0.0068`. This preset selects the `fast` Poisson policy:
+`p=6 -> p=0`, order-1 smoothing, and one scalar AMG V-cycle per application.
+Residual tolerances and robust recovery remain enabled.
+
+```bash
+env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/usr/local/cuda-13.0 \
+  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \
+  --verbosity 3 --mesh-size 0.0068 --dt 0.1 \
+  --plot-backend holoviz \
+  --plot-every 5
+```
+
 ### m=128 — IMEX-ARK3, dt=0.025, T=20
 
 ```bash
@@ -201,3 +262,52 @@ these user-run turbulence cases, not a new mesh/time-step qualification.
   --verbosity 3 --dt 0.025 --num-steps 800 \
   --mesh-size 0.0068 --minimum-triangles 150000
 ```
+
+### m=64 — quiet SI-BDF2, plots every 5 steps
+
+```bash
+python scripts/guiding_center/run_guiding_center_cases.py \
+  @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast.args
+```
+
+Derived from the existing m=64 SI-BDF2 preset with the same mesh,
+orders, tolerances, fast Poisson preconditioner and retry policies, using dt=0.1
+and 4,000 steps to T=400. Disables
+field/positivity/modal diagnostics, diagnostic plots, timing files, solver
+iteration histories and routine solver output. Density/potential plotting keeps
+its existing settings and updates every 5 steps. Native Poisson periodic
+true-residual refreshes are disabled; initial, convergence-candidate and final
+checks remain, as does independent physical acceptance. Krylov stopping norms
+remain active in both solvers. This is minimal optional checking, not an
+unchecked fixed-iteration solve. Removing periodic refreshes can affect iteration
+counts or recovery behavior; throughput has not been benchmarked.
+
+Use `--poisson-true-residual-every 10 --poisson-residual-history` to restore native
+Poisson monitoring, `--amgx-residual-history` for AMGX histories, and
+`--diagnostics-every 10 --diocotron-diagnostics --positivity-diagnostics` to request
+field diagnostics. `--verbosity 3 --record-timings` restores detailed output.
+
+The local AMGX source audit used `AMGX-hdg-cuda13`, as selected by
+`AMGX-build-cuda13/CMakeCache.txt`. In `src/solvers/solver.cu`, memory usage queries
+and residual table formatting are guarded by `print_solve_stats`; CUDA timing
+events/synchronization by `obtain_timings`; history copies by `store_res_history`.
+All are off in this preset and its retries. The divergence guard uses existing
+host residual scalars and performs an extra matrix action only on suspected
+failure. In `bicgstab_solver.cu`, `pbicgstab_solver.cu` and `pcgf_solver.cu`, the
+remaining norms implement stopping checks; the BiCGStab early-exit path also
+refreshes the final residual. These are retained. No AMGX source change or rebuild
+is required. The CLI retains its terminal capture for errors; field diagnostics
+and timing files are not created. Plot frames may still be saved in headless mode.
+
+The quiet `dt01_t400_fast` preset now selects Holoviz and records a compressed
+H.264 MP4 at 20 playback fps to
+`outputs/movies/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast.mp4`
+(relative to the working directory). It records the initial display and every
+5th step, including the displayed labels, without intermediate PNG files.
+Recording is optional: append `--no-save-movie` to retain only the live display;
+`--save-movie` enables it again. Override the destination with
+`--movie-path outputs/movies/my_run.mp4` and playback speed with `--movie-fps 30`.
+The destination is replaced on a new run. Closing the viewer stops capture;
+normal viewer cleanup finalizes the encoder. Recording retains every requested
+frame and adds framebuffer readback and CPU H.264 encoding work, but does not
+enable field diagnostics. Install the `holoviz` extra for the bundled encoder.

@@ -106,7 +106,8 @@ def test_bdf2_has_second_order_local_consistency_with_coupled_velocity():
 ])
 @pytest.mark.parametrize("diagnostics_enabled", [True, False])
 @pytest.mark.parametrize("record_timings", [True, False])
-def test_runner_uses_accepted_history_with_canned_solver_results(monkeypatch, tmp_path, scheme, stages, recovered, diagnostics_enabled, record_timings):
+@pytest.mark.parametrize("plot_every", [0, 2])
+def test_runner_uses_accepted_history_with_canned_solver_results(monkeypatch, tmp_path, scheme, stages, recovered, diagnostics_enabled, record_timings, plot_every):
     """Exercise control flow only: every numerical solve returns a canned state."""
     import hdgfem.core.space as space_module
     import hdgfem.solvers.advection_reaction as advection
@@ -119,7 +120,7 @@ def test_runner_uses_accepted_history_with_canned_solver_results(monkeypatch, tm
         poisson_order_offset=-1 if recovered else 0,
         poisson_hdg_postprocess="flux" if recovered else "none",
         transport_electric_field="postprocessed" if recovered else "raw",
-        diagnostics_dir=str(tmp_path), diagnostics_prefix="canned", verbosity=0, plot_every=0,
+        diagnostics_dir=str(tmp_path), diagnostics_prefix="canned", verbosity=0, plot_every=plot_every,
     )
     mesh = SimpleNamespace(num_tri=8, triangulation=object(), num_edg=1, int_edges_inds=[0])
     transport_calls = []
@@ -195,10 +196,14 @@ def test_runner_uses_accepted_history_with_canned_solver_results(monkeypatch, tm
         monkeypatch.setattr(runner, "_compute_diagnostics", unexpected_diagnostic)
         if not record_timings:
             monkeypatch.setattr(runner, "solver_result_metrics", unexpected_diagnostic)
+    plotted_steps = []
+    monkeypatch.setattr(runner, "_make_plotter", lambda *args, **kwargs: SimpleNamespace(
+        update=lambda *args, **kwargs: plotted_steps.append(kwargs["step"]), close=lambda: None))
     snapshots = []
     outcome = runner.run_guiding_center_case(
         config, step_observer=snapshots.append,
     )
+    assert plotted_steps == ([0, 2] if plot_every else [])
     assert outcome.final_density.space.order == config.order
     assert outcome.final_potential.space.order == config.order + config.poisson_order_offset
     if recovered:

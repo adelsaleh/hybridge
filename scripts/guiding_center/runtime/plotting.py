@@ -57,7 +57,8 @@ def _make_plotter(
         from hdgfem.io.holoviz import GuidingCenterHolovizPanels
         return GuidingCenterHolovizPanels(
             density_field, potential_field, width=config.plot_width, height=config.plot_height,
-            max_fps=config.plot_max_fps, **options,
+            max_fps=config.plot_max_fps, movie_path=config.movie_path if config.save_movie else None,
+            movie_fps=config.movie_fps, **options,
         )
     return GuidingCenterPyVistaPanels(
         density_field, potential_field, resolution=config.plot_resolution, **options,

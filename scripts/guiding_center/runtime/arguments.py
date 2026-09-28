@@ -40,7 +40,7 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--poisson-retry-amgx-config", type=Path, default=None)
     parser.add_argument(
         "--poisson-fb-hp-mg-preconditioner-policy",
-        choices=("standard", "robust"),
+        choices=("standard", "fast", "robust"),
         default=None,
     )
     parser.add_argument("--poisson-ilu-drop-tol", type=float, default=None)
@@ -201,6 +201,9 @@ def build_parser() -> GuidingCenterArgumentParser:
     parser.add_argument("--plot-both", action="store_true", help="plot density and potential; default plotting shows density only")
     parser.add_argument("--plot-off-screen", action="store_true")
     parser.add_argument("--no-plot-mesh", action="store_true")
+    parser.add_argument("--save-movie", action=BooleanOptionalAction, default=None, help="enable/disable Holoviz movie recording")
+    parser.add_argument("--movie-path", type=Path, default=None, help="Holoviz H.264 MP4 output path")
+    parser.add_argument("--movie-fps", type=float, default=None, help="movie playback FPS (default 20)")
     parser.add_argument("--screenshot-dir", type=Path, default=None)
     parser.add_argument("--diagnostics-dir", type=Path, default=None)
     parser.add_argument("--diagnostics-prefix", default=None)
@@ -218,6 +221,10 @@ def build_parser() -> GuidingCenterArgumentParser:
     parser.add_argument("--diagnostics-every", type=int, default=None, help="materialize and record diagnostics every N accepted steps; 0 disables all field diagnostics")
     parser.add_argument("--record-timings", action=BooleanOptionalAction, default=None,
                         help="write every-step solver timing CSV/JSONL files")
+    parser.add_argument("--poisson-true-residual-every", type=int, default=None,
+                        help="native Poisson residual refresh interval; 0 checks only at convergence/endpoints")
+    parser.add_argument("--poisson-residual-history", action=BooleanOptionalAction, default=None,
+                        help="retain native Poisson iteration residual history")
     parser.add_argument("--amgx-residual-history", action=BooleanOptionalAction, default=None,
                         help="store/download AMGX residual history; convergence monitoring stays enabled")
     return parser

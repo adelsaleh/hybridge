@@ -81,7 +81,7 @@ class DiocotronModeDiagnostics:
         moment=xp.sum(modes[:,self.mode]*self.weights)
         extras=xp.stack((xp.sqrt(squared[0]),xp.sqrt(squared[1:].sum()),xp.angle(moment)))
         packed=xp.concatenate((amplitudes,extras))
-        packed=packed.get() if self.backend=="device" else packed
+        packed=xp.asnumpy(packed) if self.backend=="device" else packed
         result={f"diocotron_phi_mode_{mode}_l2":float(value) for mode,value in zip(self.modes,packed)}
         result.update(diocotron_phi_axisymmetric_l2=float(packed[-3]),
             diocotron_phi_nonaxisymmetric_l2=float(packed[-2]),

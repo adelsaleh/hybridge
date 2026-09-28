@@ -114,6 +114,8 @@ class GuidingCenterRunPreset:
     diocotron_angular_points: int | None = None
     diagnostics_every: int = 1  # Zero disables field diagnostics, including endpoints.
     record_timings: bool = True
+    poisson_true_residual_every: int = 10
+    poisson_residual_history: bool = True
     amgx_residual_history: bool = True
     verbosity: int = 1
     plot_diagnostics: bool = False
@@ -127,6 +129,9 @@ class GuidingCenterRunPreset:
     plot_off_screen: bool = False
     plot_show_mesh: bool = True
     plot_potential: bool = False
+    save_movie: bool = False
+    movie_path: str | None = None
+    movie_fps: float = 20.0
     screenshot_dir: str | None = None
     diagnostics_dir: str = "run_outputs/guiding_center"
     diagnostics_prefix: str = "guiding_center"
@@ -809,7 +814,8 @@ PRESETS["positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr"] = re
         "Positive guiding-center turbulence in the supplied ITER wall with "
         "SI-BDF2 and one SI-Euler startup step: 11,520 compact Gaussian blobs, "
         "h=0.014, 300k+ triangles, p=6 and dt=0.005 to T=50. Positivity is "
-        "measured initially and every 10 accepted endpoints; no limiter is applied."
+        "measured initially and every 10 accepted endpoints; no limiter is applied. "
+        "Fast native Poisson cycles with robust solver retries."
     ),
     case_params={
         "counts": (6144, 3072, 1536, 768),
@@ -822,7 +828,27 @@ PRESETS["positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr"] = re
     },
     mesh_size=0.014,
     minimum_triangles=300000,
+    # Fixed-operator ITER diagnostics favor direct p6 -> p0 and order-1
+    # smoothing. Keep the independently checked residual and robust retries.
+    poisson_fb_hp_mg_preconditioner_policy="fast",
     diagnostics_prefix="positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr",
+)
+
+_ITER_FFT_KEY = "positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr"
+PRESETS[_ITER_FFT_KEY] = replace(
+    PRESETS["positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr"],
+    description=(
+        "ITER positive turbulence with FFT convolution on a 2048 x 4096 grid, "
+        "nonnegative cubic B-spline reconstruction and a width-0.04 empty wall band. "
+        "11,520 blobs at four scales; SI-BDF2, p=6, h=0.014, dt=0.005 to T=50. "
+        "Approximate initial profile with extra center clearance; GPU startup "
+        "performance and grid refinement remain user-run checks."
+    ),
+    case_params={
+        **PRESETS["positive_turbulence_iter_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr"].case_params,
+        "fft_grid_shape": (2048, 4096),
+    },
+    diagnostics_prefix=_ITER_FFT_KEY,
 )
 
 # Additional user-run geometries share the existing ARK3 device solver stack.
@@ -1159,6 +1185,15 @@ for _case_name, _source_key, _dt, _steps, _time_suffix in (
         )
 
 
+# Use the lighter fixed-work cycle for the requested m=64 BDF2 run.
+# Residual tolerances and the inherited robust recovery ladder remain active.
+_DIOCOTRON_BDF2_FAST_KEY = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"
+PRESETS[_DIOCOTRON_BDF2_FAST_KEY] = replace(
+    PRESETS[_DIOCOTRON_BDF2_FAST_KEY],
+    poisson_fb_hp_mg_preconditioner_policy="fast",
+)
+
+
 # Restore the previously qualified Poisson tuning only for signed Euler gas
 # on the disk (including localized and h=0.0068 variants). Apply this after
 # deriving other cases so positive turbulence, ITER and other shaped geometries
@@ -1222,6 +1257,8 @@ PRESETS[_ITER_RT_FAST_KEY] = replace(
         "robust Poisson/transport retries and convergence checks retained."
     ),
     poisson_order_offset=-1,
+    # The p=5 recovered-field operator was not part of the p=6 tuning study.
+    poisson_fb_hp_mg_preconditioner_policy="robust",
     transport_electric_field="postprocessed",
     poisson_hdg_postprocess="flux",
     poisson_flux_postprocess_space="RT_projection",
@@ -1230,6 +1267,24 @@ PRESETS[_ITER_RT_FAST_KEY] = replace(
     transport_advection_stabilization="conflict-averaged-upwind",
     **_FAST_OUTPUT_OPTIONS,
     diagnostics_prefix=_ITER_RT_FAST_KEY,
+)
+
+# Same m=64 BDF2 spatial settings, dt=0.1 to T=400, and essential convergence checks.
+_DIOCOTRON_QUIET_KEY = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast"
+PRESETS[_DIOCOTRON_QUIET_KEY] = replace(
+    PRESETS[_DIOCOTRON_BDF2_FAST_KEY],
+    dt=0.1,
+    num_steps=4000,
+    plot_backend="holoviz",
+    save_movie=True,
+    movie_path=f"outputs/movies/{_DIOCOTRON_QUIET_KEY}.mp4",
+    **{**_FAST_OUTPUT_OPTIONS, "plot_every": 5},
+    poisson_true_residual_every=0,
+    poisson_residual_history=False,
+    description=("Quiet m=64 SI-BDF2, dt=0.1 to T=400; plot every 5 steps, no field diagnostics or timing files. "
+                 "No periodic Poisson true-residual refreshes or solver histories; "
+                 "convergence and final acceptance checks retained."),
+    diagnostics_prefix=_DIOCOTRON_QUIET_KEY,
 )
 
 DEFAULT_PRESET = "diocotron_gaussian_annulus_host_smoke"

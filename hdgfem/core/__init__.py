@@ -36,12 +36,13 @@ from .trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coe
 from .space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
 from .geometry import DiskDomain, PolygonDomain, shaped_domain
-from .profiles import GaussianBlobField, sample_gaussian_blob_field
+from .profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
 
 __all__ = [
     "PolygonDomain",
     "DiskDomain",
     "GaussianBlobField",
+    "FFTGaussianBlobField",
     "shaped_domain",
     "sample_gaussian_blob_field",
     "DGCoefficientLayout",

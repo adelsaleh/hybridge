@@ -69,12 +69,12 @@ def _compute_diagnostics(
     rho_report = (
         None
         if exact_density is None
-        else evaluate_scalar_error(rho_field, exact_density, backend="auto")
+        else evaluate_scalar_error(rho_field, exact_density, backend="auto", include_samples=False)
     )
     phi_report = (
         None
         if exact_potential is None
-        else evaluate_scalar_error(phi_field, exact_potential, backend="auto")
+        else evaluate_scalar_error(phi_field, exact_potential, backend="auto", include_samples=False)
     )
     rho_l2_error = None if rho_report is None else rho_report.metrics.l2
     rho_linf_error = None if rho_report is None else rho_report.metrics.linf
@@ -163,4 +163,3 @@ def _compute_diagnostics(
         row.update(extra)
     row["diagnostics_time"] = time.perf_counter() - start
     return row
-

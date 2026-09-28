@@ -221,3 +221,64 @@ def test_final_residual_reuse_keeps_independent_acceptance(monkeypatch, matrix_f
     assert result.physical_residual_target_met == (error == 0.)
     assert result.converged == (error == 0.)
     assert result.physical_residual_norm == pytest.approx(2*error)
+
+
+def test_m64_fast_preserves_numerics_and_disables_optional_work():
+    base = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"
+    key = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast"
+    original = preset_by_key(base)
+    args = build_parser().parse_args([f"@run_configs/guiding_center/{key}.args"])
+    actual = _runtime_config(preset_by_key(key), args)
+    _validate_config(actual)
+    changes = {k for k, v in asdict(original).items() if v != asdict(actual)[k]}
+    assert changes <= {
+        "plot_backend", "movie_path", "save_movie", "dt", "num_steps", "description", "verbosity", "diagnostics_every", "record_timings",
+        "amgx_residual_history", "poisson_residual_history", "poisson_true_residual_every",
+        "positivity_diagnostics", "diocotron_diagnostics", "plot_every",
+        "plot_diagnostics", "save_diagnostics", "screenshot_dir", "diagnostics_prefix",
+    }
+    assert actual.save_movie and actual.plot_backend == "holoviz"
+    assert actual.movie_path.endswith(key + ".mp4")
+    disabled = _runtime_config(preset_by_key(key), build_parser().parse_args([key, "--no-save-movie"]))
+    _validate_config(disabled)
+    assert not disabled.save_movie
+    assert (actual.dt, actual.num_steps) == (0.1, 4000)
+    assert actual.case_params["k"] == 64
+    assert actual.plot_every == 5
+    assert actual.verbosity == actual.diagnostics_every == actual.poisson_true_residual_every == 0
+    assert not any((actual.record_timings, actual.positivity_diagnostics,
+                    actual.diocotron_diagnostics, actual.plot_diagnostics, actual.save_diagnostics,
+                    actual.amgx_residual_history, actual.poisson_residual_history))
+    poisson = _make_poisson_options(actual)
+    assert poisson.fb_hp_mg_true_residual_every == 0
+    assert not poisson.fb_hp_mg_residual_history
+    for options in (poisson, _make_transport_options(actual, "zero-flux")):
+        assert options.verbose == 0
+        configs = [options.amgx_config] + [a["config"] for a in options.amgx_retry_attempts or () if "config" in a]
+        for config in configs:
+            solver = cuda._amgx_config_for_solve(config=config, verbose=0)["solver"]
+            assert solver["monitor_residual"] == 1
+            assert solver["store_res_history"] == 0
+            assert solver.get("print_solve_stats", 0) == solver.get("obtain_timings", 0) == 0
+    overrides = build_parser().parse_args([key, "--poisson-true-residual-every", "20", "--poisson-residual-history"])
+    restored = _runtime_config(preset_by_key(key), overrides)
+    assert restored.poisson_true_residual_every == 20 and restored.poisson_residual_history
+
+
+def test_quiet_failure_skips_field_diagnostics_and_snapshot(monkeypatch, tmp_path):
+    from hdgfem.linalg.system import LinearSolveConvergenceError
+    from scripts.guiding_center.runtime import runner
+    error = LinearSolveConvergenceError("canned failure", result=None)
+    def unexpected(*args, **kwargs):
+        pytest.fail("unrequested failure diagnostics")
+    error.save_transport_snapshot = unexpected
+    monkeypatch.setattr(runner, "transport_velocity_diagnostics", unexpected)
+    def fail(**kwargs):
+        raise error
+    with pytest.raises(LinearSolveConvergenceError, match="canned failure"):
+        runner._solve_transport_stage(
+            SimpleNamespace(solve=fail), initial_guess=None, beta=None, step=1,
+            time_value=.5, stage="bdf2", beta_scale=.5,
+            failure_path=tmp_path / "failure.json", diagnostics_enabled=False,
+        )
+    assert not list(tmp_path.iterdir())

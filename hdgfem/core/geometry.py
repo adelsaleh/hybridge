@@ -28,6 +28,12 @@ class DiskDomain:
     def area(self) -> float:
         return float(np.pi * self.radius**2)
 
+    @property
+    def bounds(self) -> np.ndarray:
+        """Return the lower and upper Cartesian corners, in (x, y) order."""
+        center = np.asarray(self.center)
+        return np.array((center - self.radius, center + self.radius))
+
     def _relative_points(self, points) -> np.ndarray:
         points = np.asarray(points, dtype=np.float64)
         if points.ndim == 0 or points.shape[-1] != 2:
@@ -90,6 +96,11 @@ class PolygonDomain:
         vertices = self.vertices
         following = np.roll(vertices, -1, axis=0)
         return float(np.sum(vertices[:, 0]*following[:, 1] - vertices[:, 1]*following[:, 0])/2)
+
+    @property
+    def bounds(self) -> np.ndarray:
+        """Return the lower and upper Cartesian corners, in (x, y) order."""
+        return np.array((self.vertices.min(axis=0), self.vertices.max(axis=0)))
 
     def contains(self, points) -> np.ndarray:
         """Return the odd-crossing interior test; boundary membership is unspecified."""

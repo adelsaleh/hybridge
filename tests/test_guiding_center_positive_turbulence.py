@@ -171,7 +171,9 @@ def test_positive_turbulence_bdf2_presets_and_response_files(preset, expected) -
     assert config.positivity_diagnostics and config.diagnostics_every == 10
     assert config.plot_every == 100 and config.initial_projection_quad_1d == 16
     assert config.poisson_retry_policy == "amgx-robust"
-    assert config.poisson_fb_hp_mg_preconditioner_policy == "robust"
+    assert config.poisson_fb_hp_mg_preconditioner_policy == (
+        "fast" if expected["geometry"] == "iter" else "robust"
+    )
     assert sum(config.case_params["counts"]) == expected["count"]
     assert config.case_params.get("geometry", "disc") == expected["geometry"]
 
@@ -189,7 +191,9 @@ def test_positive_turbulence_bdf2_presets_and_response_files(preset, expected) -
 def test_positive_turbulence_poisson_retry_order_and_conditioning(preset) -> None:
     options = _make_poisson_options(preset_by_key(preset))
 
-    assert options.fb_hp_mg_preconditioner_policy == "robust"
+    assert options.fb_hp_mg_preconditioner_policy == (
+        "fast" if BDF2_PRESETS[preset]["geometry"] == "iter" else "robust"
+    )
     primary = options.amgx_config["solver"]
     primary_amg = primary["preconditioner"]
     assert primary["solver"] == "PCGF"

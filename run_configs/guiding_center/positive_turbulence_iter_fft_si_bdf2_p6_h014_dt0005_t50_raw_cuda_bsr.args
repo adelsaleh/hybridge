@@ -1,0 +1,4 @@
+# ITER positive turbulence using four-scale FFT convolution on a 2048 x 4096 grid.
+# Smooth nonnegative grid reconstruction; extra center clearance preserves the wall gap.
+# Same mesh, SI-BDF2 timestep, projection quadrature and solvers as the direct-blob preset.
+--preset positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr
