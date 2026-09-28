@@ -16,8 +16,8 @@ from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgResult
 from hdgfem.solvers import diffusion_reaction
 
 
-@pytest.fixture
-def poisson_handoff(monkeypatch):
+@pytest.fixture(params=("standard", "fast"))
+def poisson_handoff(monkeypatch, request):
     matrix = np.diag([2.0, 4.0])
     rhs = np.array([2.0, 8.0])
     exact_solution = np.array([1.0, 2.0])
@@ -26,6 +26,7 @@ def poisson_handoff(monkeypatch):
         scale_system=False, boundary_mode="eliminate",
         trace_basis="legendre-modal", raw_matrix_format="bsr",
         raw_block_size=128, verbose=False,
+        fb_hp_mg_preconditioner_policy=request.param,
     )
     space = SimpleNamespace(
         order=1, el_dof=1, mesh=SimpleNamespace(num_tri=1, num_edg=1),
@@ -58,7 +59,7 @@ def poisson_handoff(monkeypatch):
     solver._raw_cuda_last_trace_reduced = None
     solver._raw_cuda_fb_hp_mg_failed_key = None
     solver._raw_cuda_fb_hp_mg_solver = native_solver
-    solver._raw_cuda_fb_hp_mg_solver_key = (operator_key, rhs.size, "standard")
+    solver._raw_cuda_fb_hp_mg_solver_key = (operator_key, rhs.size, request.param)
     solver._raw_cuda_amgx_solver = None
     solver._raw_cuda_amgx_retry_solver_cache = {}
 

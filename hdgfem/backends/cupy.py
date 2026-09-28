@@ -1747,34 +1747,51 @@ def solve_pyamgx_csr(
         return_info: bool = False,
 ):
     """Solve a CuPy CSR system with PyAMGX and optionally return native diagnostics."""
+    from .amgx_errors import as_amgx_capacity_error, destroy_amgx_objects
+
     cupy = require_cupy()
     amgx = initialize_pyamgx_once()
-    rhs_cp = cupy.asarray(rhs, dtype=REAL_DTYPE)
-    if initial_guess is None:
-        x_cp = cupy.zeros_like(rhs_cp)
-    else:
-        x_cp = cupy.asarray(initial_guess, dtype=REAL_DTYPE).copy()
-        if x_cp.shape != rhs_cp.shape:
-            raise ValueError(f"initial_guess must have shape {rhs_cp.shape}; got {x_cp.shape}")
-
     amgx_config = default_pyamgx_config(tolerance=tolerance, maxiter=maxiter, verbose=verbose)
     if config is not None:
         amgx_config = dict(config)
 
     info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
     cfg = rsrc = mat = vec_b = vec_x = solver = None
+    failed = True
+    failure_phase = "solution allocation"
     try:
-        cfg = amgx.Config().create_from_dict(amgx_config)
-        rsrc = amgx.Resources().create_simple(cfg)
-        mat = amgx.Matrix().create(rsrc, mode=AMGX_MODE)
-        vec_b = amgx.Vector().create(rsrc, mode=AMGX_MODE)
-        vec_x = amgx.Vector().create(rsrc, mode=AMGX_MODE)
+        rhs_cp = cupy.asarray(rhs, dtype=REAL_DTYPE)
+        if initial_guess is None:
+            x_cp = cupy.zeros_like(rhs_cp)
+        else:
+            x_cp = cupy.asarray(initial_guess, dtype=REAL_DTYPE).copy()
+            if x_cp.shape != rhs_cp.shape:
+                raise ValueError(f"initial_guess must have shape {rhs_cp.shape}; got {x_cp.shape}")
+        failure_phase = "configuration creation"
+        cfg = amgx.Config()
+        cfg.create_from_dict(amgx_config)
+        failure_phase = "resource acquisition"
+        rsrc = amgx.Resources()
+        rsrc.create_simple(cfg)
+        failure_phase = "solver-object creation"
+        mat = amgx.Matrix()
+        mat.create(rsrc, mode=AMGX_MODE)
+        vec_b = amgx.Vector()
+        vec_b.create(rsrc, mode=AMGX_MODE)
+        vec_x = amgx.Vector()
+        vec_x.create(rsrc, mode=AMGX_MODE)
+        solver = amgx.Solver()
+        solver.create(rsrc, cfg, mode=AMGX_MODE)
+        failure_phase = "matrix upload"
         mat.upload_CSR(matrix)
+        failure_phase = "vector upload"
         vec_b.upload_raw(rhs_cp.data.ptr, rhs_cp.size)
         vec_x.upload_raw(x_cp.data.ptr, x_cp.size)
-        solver = amgx.Solver().create(rsrc, cfg, mode=AMGX_MODE)
+        failure_phase = "solver setup"
         solver.setup(mat)
+        failure_phase = "solver iteration"
         solver.solve(vec_b, vec_x)
+        failure_phase = "solution download"
         vec_x.download_raw(x_cp.data.ptr)
         cupy.cuda.get_current_stream().synchronize()
 
@@ -1799,13 +1816,18 @@ def solve_pyamgx_csr(
                     history = []
                     break
             info["residual_history"] = tuple(history)
+        failed = False
+    except Exception as exc:
+        capacity_error = as_amgx_capacity_error(
+            exc, phase=failure_phase, cp=cupy, pyamgx=amgx
+        )
+        if capacity_error is not None and capacity_error is not exc:
+            raise capacity_error from exc
+        raise
     finally:
-        for obj in (solver, mat, vec_x, vec_b, rsrc, cfg):
-            if obj is not None:
-                try:
-                    obj.destroy()
-                except AttributeError:
-                    pass
+        destroy_amgx_objects(
+            (solver, vec_x, vec_b, mat, rsrc, cfg), suppress_errors=failed
+        )
     return (x_cp, info) if return_info else x_cp
 
 

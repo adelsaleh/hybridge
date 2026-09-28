@@ -11,6 +11,9 @@ from hdgfem.precision import REAL_DTYPE
 from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
 from scripts.advection_reaction.cases import CASE_DEFINITIONS, test2 as adv_rea_test2
+from scripts.advection_reaction.diagnose_discontinuous_trace import (
+    discontinuous_advection_fields as _discontinuous_advection_fields,
+)
 
 
 def _cupy_runtime_available():
@@ -96,29 +99,6 @@ def _projected_test2_fields(space: DGSpace):
         beta_h,
         space.project_callable(reaction, name="reaction_h"),
         exact,
-    )
-
-
-def _discontinuous_advection_fields(space: DGSpace):
-    beta_x = lambda x, y: np.where(x < 0.0, 2.0, -1.0) + 0.2 * y
-    beta_y = lambda x, y: 0.1 + 0.05 * x
-    source = lambda x, y: 1.0 + 0.2 * x - 0.1 * y
-    reaction = lambda x, y: 2.0 + 0.01 * x * y
-    boundary = lambda x, y: 0.5 * x + 0.75 * y
-    beta_h = VectorDGField(
-        (
-            space.project_callable(beta_x, name="beta_x_h"),
-            space.project_callable(beta_y, name="beta_y_h"),
-        ),
-        name="beta_h",
-    )
-    return (
-        source,
-        reaction,
-        space.project_callable(source, name="source_h"),
-        space.project_callable(reaction, name="reaction_h"),
-        beta_h,
-        boundary,
     )
 
 

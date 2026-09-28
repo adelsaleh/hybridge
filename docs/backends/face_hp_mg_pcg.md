@@ -19,6 +19,20 @@ guiding-center policy uses `p -> floor(p/2) -> ... -> 0`, order-4 Chebyshev,
 2+2 pre/post sweeps, and a stronger fixed scalar coarse cycle. Standard policy
 retains the original preconditioner tuning described above.
 
+The `fast` policy uses direct `p -> 0`, order-1 Chebyshev and balanced 1+1
+fine/coarse sweeps. The p=6 ITER positive-turbulence preset selects it based on
+fixed-operator diagnostics; other presets keep their existing policy, including
+the p=5 ITER recovered-field preset. Select a policy explicitly with
+`--poisson-fb-hp-mg-preconditioner-policy fast` (or `standard`, `robust`).
+All policies retain the same original-matrix residual acceptance and fallback
+checks. See the [ITER repeated-solve study](../research/solver_studies/iter_repeated_poisson_2026_09_24.md).
+
+The scalar coarse application explicitly requests `fixed_amg_cycles=1` from
+the shared AMGX wrapper. Inner residual stopping and history collection are
+disabled; outer PCGF still performs its normal convergence checks. This both
+avoids unnecessary coarse reductions and preserves fixed work for arbitrarily
+small nonzero RHS vectors.
+
 Standalone fixed-work tuning is available through
 `FaceBlockHpMgPcgSolver(..., preconditioner_policy="standard",
 preconditioner_tuning={"chebyshev_order": 3})`. The shared policy resolver

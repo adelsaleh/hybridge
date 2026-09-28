@@ -250,6 +250,7 @@ class AmgxScalarVcycle:
             maxiter=1,
             verbose=verbose,
             reusable=True,
+            fixed_amg_cycles=1,
         )
         self.setup_seconds = float(self.solver.setup(operator))
         self.apply_count = 0
@@ -860,6 +861,7 @@ class FaceBlockHpMgPcgSolver:
             self, rhs, *, initial_guess=None, rtol: float = 1.0e-8,
             atol: float = 0.0, maxiter: int = 500,
             true_residual_every: int = 10,
+            store_residual_history: bool = True,
             residual_gap_restart: float = 0.1,
             stagnation_checks: int = 6,
             assembly_matvec: Callable[[Any], Any] | None = None,
@@ -870,6 +872,9 @@ class FaceBlockHpMgPcgSolver:
         the search direction. Six true checks without 1% improvement in the
         best norm end an unproductive attempt, without relaxing the tolerance.
         ``stagnation_checks=0`` disables that safeguard.
+        ``true_residual_every=0`` omits periodic refreshes but keeps initial,
+        convergence-candidate and terminal checks. ``store_residual_history=False``
+        omits the returned iteration history without changing stopping tests.
 
         ``assembly_matvec(x)`` optionally applies the original assembled matrix
         to an assembly-basis vector. Every true check (including convergence and
@@ -884,6 +889,8 @@ class FaceBlockHpMgPcgSolver:
             raise ValueError(f"rhs must have shape ({size},)")
         if not np.isfinite(rtol) or not np.isfinite(atol) or rtol < 0.0 or atol < 0.0:
             raise ValueError("rtol and atol must be finite and nonnegative")
+        if int(true_residual_every) != true_residual_every or true_residual_every < 0:
+            raise ValueError("true_residual_every must be a nonnegative integer")
         if not np.isfinite(residual_gap_restart) or residual_gap_restart <= 0.0:
             raise ValueError("residual_gap_restart must be finite and positive")
         if int(stagnation_checks) != stagnation_checks or (stagnation_checks != 0 and stagnation_checks < 2):
@@ -918,7 +925,7 @@ class FaceBlockHpMgPcgSolver:
             ).get()
         )
         target = max(float(atol), float(rtol) * rhs_norm)
-        history = [initial_norm]
+        history = [initial_norm] if store_residual_history else []
         if not np.isfinite(rhs_norm) or not np.isfinite(initial_norm):
             raise ValueError("FB-HP-MG requires finite RHS and initial residual norms")
         best_residual_norm = initial_norm
@@ -997,7 +1004,8 @@ class FaceBlockHpMgPcgSolver:
                     for value in cp.stack(check_scalars).get()
                 )
                 residual_norm, curvature_value, rho_value = checked_values[:3]
-                history.append(residual_norm)
+                if store_residual_history:
+                    history.append(residual_norm)
                 iterations = iteration
                 restart_direction = False
                 if is_true:
@@ -1013,7 +1021,8 @@ class FaceBlockHpMgPcgSolver:
                         rhs, assembly_matvec=assembly_matvec, out=self._residual,
                     ).get())
                     true_residual_check_count += 1
-                    history[-1] = residual_norm
+                    if store_residual_history:
+                        history[-1] = residual_norm
                     is_true = True
                     restart_direction = residual_norm > target
                 if self.verbose >= 3:

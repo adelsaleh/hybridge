@@ -40,6 +40,11 @@ from .cupy import (
     symmetric_scale_cupy_csr_in_place,
 )
 from .raw_cuda import RawCudaBlockSize
+from .amgx_errors import (
+    as_amgx_capacity_error as _as_amgx_capacity_error,
+    destroy_amgx_objects,
+    is_amgx_capacity_error as _is_amgx_capacity_error,
+)
 from .advection_raw_cuda import (
     RawAdvectionAssemblyResult,
     assemble_projected_advection_trace_system_eliminated_raw_cuda,
@@ -1575,26 +1580,36 @@ class _PyAMGXSharedResourceManager:
         initialize_pyamgx_once()
         if self.rsrc is None:
             self.pyamgx = pyamgx
-            self.resource_cfg = pyamgx.Config().create_from_dict(copy.deepcopy(resource_config))
-            self.rsrc = pyamgx.Resources().create_simple(self.resource_cfg)
+            try:
+                self.resource_cfg = pyamgx.Config()
+                self.resource_cfg.create_from_dict(copy.deepcopy(resource_config))
+                self.rsrc = pyamgx.Resources()
+                self.rsrc.create_simple(self.resource_cfg)
+            except Exception as exc:
+                capacity_error = _as_amgx_capacity_error(
+                    exc, phase="resource acquisition", cp=require_cupy(), pyamgx=pyamgx
+                )
+                self.release(suppress_errors=True)
+                if capacity_error is not None and capacity_error is not exc:
+                    raise capacity_error from exc
+                raise
         self.refcount += 1
         return self.rsrc
 
-    def release(self) -> None:
+    def release(self, *, suppress_errors: bool = False) -> None:
         """Release one owner and destroy shared AMGX resources when unused."""
         if self.refcount > 0:
             self.refcount -= 1
         if self.refcount != 0:
             return
-        for obj in (self.rsrc, self.resource_cfg):
-            if obj is not None:
-                try:
-                    obj.destroy()
-                except AttributeError:
-                    pass
-        self.rsrc = None
-        self.resource_cfg = None
-        self.pyamgx = None
+        try:
+            destroy_amgx_objects(
+                (self.rsrc, self.resource_cfg), suppress_errors=suppress_errors
+            )
+        finally:
+            self.rsrc = None
+            self.resource_cfg = None
+            self.pyamgx = None
 
 
 _AMGX_SHARED_RESOURCES = _PyAMGXSharedResourceManager()
@@ -1648,9 +1663,6 @@ def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: in
     return amgx_config
 
 
-_AMGX_NO_MEMORY_CODE = 7
-
-
 def _amgx_relative_residual_check_rtol(config, fallback: float) -> float:
     """Return the configured relative solver-system validation tolerance."""
     solver = {} if config is None else config.get("solver", {})
@@ -1660,90 +1672,6 @@ def _amgx_relative_residual_check_rtol(config, fallback: float) -> float:
         if np.isfinite(value) and value >= 0.0:
             return value
     return float(fallback)
-
-
-def _is_amgx_capacity_error(exc: BaseException) -> bool:
-    """Return whether an exception chain denotes exhausted device capacity."""
-    pending = [exc]
-    seen = set()
-    while pending:
-        current = pending.pop()
-        if id(current) in seen:
-            continue
-        seen.add(id(current))
-        if isinstance(current, LinearSolveCapacityError):
-            return True
-        code = getattr(current, "error_code", None)
-        try:
-            if code is not None and int(code) == _AMGX_NO_MEMORY_CODE:
-                return True
-        except (TypeError, ValueError):
-            if getattr(code, "name", None) == "NO_MEMORY":
-                return True
-        kind = type(current).__name__.replace("_", "").lower()
-        message = str(current).lower()
-        if (
-            "outofmemory" in kind
-            or "out of memory" in message
-            or "not enough memory" in message
-            or "memory allocation" in message
-        ):
-            return True
-        pending.extend(
-            nested
-            for nested in (
-                getattr(current, "__cause__", None),
-                getattr(current, "__context__", None),
-            )
-            if nested is not None
-        )
-    return False
-
-
-def _as_amgx_capacity_error(exc, *, phase: str, cp, pyamgx):
-    """Convert a classified backend exception into a terminal HDG failure."""
-    if isinstance(exc, LinearSolveCapacityError):
-        return exc
-    if not _is_amgx_capacity_error(exc):
-        return None
-    memory: dict[str, Any] = {}
-    get_stats = getattr(pyamgx, "get_device_memory_stats", None)
-    if get_stats is not None:
-        try:
-            memory["amgx"] = {key: int(value) for key, value in get_stats().items()}
-        except Exception as stats_exc:
-            memory["amgx_error"] = f"{type(stats_exc).__name__}: {stats_exc}"
-    try:
-        free_bytes, total_bytes = cp.cuda.runtime.memGetInfo()
-        memory["device"] = {
-            "free_bytes": int(free_bytes),
-            "used_bytes": int(total_bytes) - int(free_bytes),
-            "total_bytes": int(total_bytes),
-        }
-    except Exception as stats_exc:
-        memory["device_error"] = f"{type(stats_exc).__name__}: {stats_exc}"
-    gib = 1024.0 ** 3
-    amgx = memory.get("amgx")
-    device = memory.get("device")
-    amgx_text = (
-        "unavailable"
-        if amgx is None
-        else f"live/reserved={amgx['live_bytes']/gib:.3f}/{amgx['reserved_bytes']/gib:.3f} GiB"
-    )
-    device_text = (
-        "unavailable"
-        if device is None
-        else "used/free/total="
-        f"{device['used_bytes']/gib:.3f}/{device['free_bytes']/gib:.3f}/"
-        f"{device['total_bytes']/gib:.3f} GiB"
-    )
-    return LinearSolveCapacityError(
-        f"pyamgx-device capacity failure during {phase}: {exc}; "
-        f"AMGX memory {amgx_text}; device memory {device_text}",
-        backend="pyamgx-device",
-        phase=phase,
-        memory=memory,
-    )
 
 
 def _validate_amgx_block_configuration(config, block_dim: int) -> None:
@@ -1814,12 +1742,17 @@ class PyAMGXCsrDeviceSolver:
             self.rsrc = _AMGX_SHARED_RESOURCES.acquire(self.pyamgx, self.config_dict)
             self._shared_resources_acquired = True
             failure_phase = "configuration creation"
-            self.cfg = self.pyamgx.Config().create_from_dict(self.config_dict)
+            self.cfg = self.pyamgx.Config()
+            self.cfg.create_from_dict(self.config_dict)
             failure_phase = "solver-object creation"
-            self.mat = self.pyamgx.Matrix().create(self.rsrc, mode=AMGX_MODE)
-            self.vec_b = self.pyamgx.Vector().create(self.rsrc, mode=AMGX_MODE)
-            self.vec_x = self.pyamgx.Vector().create(self.rsrc, mode=AMGX_MODE)
-            self.solver = self.pyamgx.Solver().create(self.rsrc, self.cfg, mode=AMGX_MODE)
+            self.mat = self.pyamgx.Matrix()
+            self.mat.create(self.rsrc, mode=AMGX_MODE)
+            self.vec_b = self.pyamgx.Vector()
+            self.vec_b.create(self.rsrc, mode=AMGX_MODE)
+            self.vec_x = self.pyamgx.Vector()
+            self.vec_x.create(self.rsrc, mode=AMGX_MODE)
+            self.solver = self.pyamgx.Solver()
+            self.solver.create(self.rsrc, self.cfg, mode=AMGX_MODE)
             if self.reusable:
                 _AMGX_REUSABLE_SOLVERS.append(self)
         except Exception as exc:
@@ -1827,7 +1760,7 @@ class PyAMGXCsrDeviceSolver:
                 exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
             )
             self.close(suppress_errors=True)
-            if capacity_error is not None:
+            if capacity_error is not None and capacity_error is not exc:
                 raise capacity_error from exc
             raise
 
@@ -1878,7 +1811,7 @@ class PyAMGXCsrDeviceSolver:
                 exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
             )
             self.close(suppress_errors=True)
-            if capacity_error is not None:
+            if capacity_error is not None and capacity_error is not exc:
                 raise capacity_error from exc
             raise
         return time.perf_counter() - setup_start
@@ -1900,8 +1833,17 @@ class PyAMGXCsrDeviceSolver:
                 "replacement matrix nonzero count does not match the cached AMGX pattern"
             )
         started = time.perf_counter()
-        self.mat.replace_coefficients(matrix.data)
-        self.cp.cuda.get_current_stream().synchronize()
+        try:
+            self.mat.replace_coefficients(matrix.data)
+            self.cp.cuda.get_current_stream().synchronize()
+        except Exception as exc:
+            capacity_error = _as_amgx_capacity_error(
+                exc, phase="coefficient replacement", cp=self.cp, pyamgx=self.pyamgx
+            )
+            self.close(suppress_errors=True)
+            if capacity_error is not None and capacity_error is not exc:
+                raise capacity_error from exc
+            raise
         elapsed = time.perf_counter() - started
         self.last_coefficients_replace_elapsed_seconds = elapsed
         self.last_matrix_upload_elapsed_seconds = elapsed
@@ -1915,20 +1857,21 @@ class PyAMGXCsrDeviceSolver:
             raise RuntimeError("PyAMGXCsrDeviceSolver must be set up before solve()")
         if tuple(rhs.shape) != (self.size,):
             raise ValueError(f"rhs must have shape ({self.size},); got {rhs.shape}")
-        if initial_guess is None:
-            x = self.cp.zeros_like(rhs)
-            zero_initial_guess = True
-        else:
-            x = self.cp.asarray(initial_guess, dtype=REAL_DTYPE).copy()
-            if tuple(x.shape) != tuple(rhs.shape):
-                raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
-            zero_initial_guess = False
         info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
         if self.verbose_level == 2 or self.verbose_level >= 4:
             print(format_amgx_configuration(self.config_dict), flush=True)
         solve_start = time.perf_counter()
-        failure_phase = "vector upload"
+        failure_phase = "solution allocation"
         try:
+            if initial_guess is None:
+                x = self.cp.zeros_like(rhs)
+                zero_initial_guess = True
+            else:
+                x = self.cp.asarray(initial_guess, dtype=REAL_DTYPE).copy()
+                if tuple(x.shape) != tuple(rhs.shape):
+                    raise ValueError(f"initial_guess must have shape {rhs.shape}; got {x.shape}")
+                zero_initial_guess = False
+            failure_phase = "vector upload"
             audit_arrays('amgx-vector-upload', rhs, x)
             self.vec_b.upload_raw(rhs.data.ptr, self.block_rows, self.block_dim)
             self.vec_x.upload_raw(x.data.ptr, self.block_rows, self.block_dim)
@@ -1941,8 +1884,15 @@ class PyAMGXCsrDeviceSolver:
             capacity_error = _as_amgx_capacity_error(
                 exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
             )
+            if (
+                failure_phase == "solution allocation"
+                and capacity_error is None
+                and isinstance(exc, (TypeError, ValueError))
+            ):
+                # Malformed guesses do not invalidate a healthy hierarchy.
+                raise
             self.close(suppress_errors=True)
-            if capacity_error is not None:
+            if capacity_error is not None and capacity_error is not exc:
                 raise capacity_error from exc
             raise
         solve_elapsed = time.perf_counter() - solve_start
@@ -1976,15 +1926,10 @@ class PyAMGXCsrDeviceSolver:
         if self.closed:
             return
         first_error = None
-        for obj in (self.solver, self.vec_x, self.vec_b, self.mat, self.cfg):
-            if obj is not None:
-                try:
-                    obj.destroy()
-                except AttributeError:
-                    pass
-                except Exception as exc:
-                    if first_error is None:
-                        first_error = exc
+        try:
+            destroy_amgx_objects((self.solver, self.vec_x, self.vec_b, self.mat, self.cfg))
+        except Exception as exc:
+            first_error = exc
         if self._shared_resources_acquired:
             try:
                 _AMGX_SHARED_RESOURCES.release()
@@ -1994,6 +1939,7 @@ class PyAMGXCsrDeviceSolver:
             self._shared_resources_acquired = False
         self.solver = self.mat = self.vec_x = self.vec_b = self.rsrc = self.cfg = None
         self._hdgfem_fixed_operator = None
+        self.is_setup = False
         self.closed = True
         if first_error is not None and not suppress_errors:
             raise first_error
@@ -2229,8 +2175,15 @@ def _solve_reduced_system_amgx_device_once(
         if inverse_sqrt_diagonal is not None:
             x_cp = inverse_sqrt_diagonal * solver_x_cp
         amgx_call_elapsed = time.perf_counter() - amgx_call_start
-    except BaseException:
-        restore_scaled_matrix()
+    except BaseException as exc:
+        try:
+            restore_scaled_matrix()
+        except Exception as restore_exc:
+            if not isinstance(exc, LinearSolveCapacityError):
+                raise
+            # A depleted or failed CUDA runtime can also reject restoration.
+            # Preserve the terminal native phase and its pre-cleanup counters.
+            exc.matrix_restore_error = f"{type(restore_exc).__name__}: {restore_exc}"
         raise
 
     try:

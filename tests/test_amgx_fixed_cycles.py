@@ -27,3 +27,28 @@ def test_fixed_cycles_reject_invalid_count(cycles):
 def test_fixed_cycles_reject_a_krylov_solver():
     with pytest.raises(ValueError, match='requires an AMG solver'):
         _amgx_config_for_solve(config={'solver': {'solver': 'PCGF'}}, fixed_amg_cycles=1)
+
+
+def test_native_coarse_cycle_enforces_fixed_work(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from hdgfem.backends import advection_cuda
+    from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle
+    from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
+
+    device = Mock()
+    device.setup.return_value = 0.1
+    constructor = Mock(return_value=device)
+    monkeypatch.setattr(advection_cuda, 'PyAMGXCsrDeviceSolver', constructor)
+    source = scalar_p0_amgx_config()
+    before = copy.deepcopy(source)
+    cycle = AmgxScalarVcycle(SimpleNamespace(block_size=1), config=source)
+    controls = constructor.call_args.kwargs
+    effective = _amgx_config_for_solve(**{
+        key: value for key, value in controls.items() if key != 'reusable'
+    })['solver']
+    assert effective['max_iters'] == 1
+    assert effective['monitor_residual'] == effective['store_res_history'] == 0
+    assert source == before
+    cycle.close()
+    device.close.assert_called_once()

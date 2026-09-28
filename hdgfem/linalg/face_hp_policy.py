@@ -21,8 +21,10 @@ def scalar_p0_amgx_config() -> dict:
         "dense_lu_num_rows": 128, "dense_lu_max_rows": 256, "coarsest_sweeps": 2,
         "aggressive_levels": 0, "interp_max_elements": 4, "error_scaling": 0,
         "tolerance": 1.0e-30, "convergence": "ABSOLUTE", "norm": "L2",
-        # The reusable solver records residual history even for a fixed cycle.
-        "monitor_residual": 1, "print_solve_stats": 0, "obtain_timings": 0,
+        # A preconditioner applies fixed work; only the outer solver monitors
+        # convergence. AmgxScalarVcycle enforces this via fixed_amg_cycles.
+        "monitor_residual": 0, "store_res_history": 0,
+        "print_solve_stats": 0, "obtain_timings": 0,
     }
     return {"config_version": 2, "solver": amg}
 
@@ -38,17 +40,18 @@ def face_hp_mg_preconditioner_parameters(policy: str = "standard", *, overrides=
     """Resolve a policy plus optional fixed-work tuning, without device imports.
 
     Overrides preserve the degree schedule and balanced pre/post smoothing.
-    They do not modify either baseline policy or introduce adaptive inner solves.
+    They do not modify the baseline policies or introduce adaptive inner solves.
     """
     normalized = str(policy).replace("_", "-").lower()
-    if normalized == "standard":
-        parameters = dict(schedule="direct-to-zero", chebyshev_order=2,
+    if normalized in {"standard", "fast"}:
+        parameters = dict(schedule="direct-to-zero",
+                          chebyshev_order=1 if normalized == "fast" else 2,
                           presweeps=1, postsweeps=1, coarse_config=scalar_p0_amgx_config())
     elif normalized == "robust":
         parameters = dict(schedule="halve", chebyshev_order=4,
                           presweeps=2, postsweeps=2, coarse_config=robust_scalar_p0_amgx_config())
     else:
-        raise ValueError("FB-HP-MG preconditioner policy must be 'standard' or 'robust'")
+        raise ValueError("FB-HP-MG preconditioner policy must be 'standard', 'fast' or 'robust'")
     tuning = copy.deepcopy(overrides or {})
     unknown = set(tuning)-{"chebyshev_order", "sweeps", "coarse_sweeps", "coarse_cycle"}
     if unknown:

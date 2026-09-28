@@ -32,7 +32,8 @@ def native_solver():
     return solver, device
 
 
-def test_native_pcg_restarts_after_false_recursive_convergence(monkeypatch, native_solver):
+@pytest.mark.parametrize("store_history", [True, False])
+def test_native_pcg_restarts_after_false_recursive_convergence(monkeypatch, native_solver, store_history):
     solver, device = native_solver
     original_matvec = solver.fine_operator.matvec
     direction_calls=0
@@ -51,7 +52,7 @@ def test_native_pcg_restarts_after_false_recursive_convergence(monkeypatch, nati
             return device(0.)
         return actual_norm(v)
     monkeypatch.setattr(solver,'_assembly_norm_device',monitored_norm)
-    result=solver.solve(device([1.,1.]),rtol=0.,atol=1e-12,maxiter=10,true_residual_every=0)
+    result=solver.solve(device([1.,1.]),rtol=0.,atol=1e-12,maxiter=10,true_residual_every=0, store_residual_history=store_history)
     assert injected and result.converged
     assert result.iterations>1
     np.testing.assert_allclose(result.solution,[1.,.5],rtol=0.,atol=1e-12)
@@ -367,3 +368,14 @@ def test_terminal_best_checkpoint_is_ranked_by_original_matrix_residual(native_s
     np.testing.assert_array_equal(result.solution, [0., 0.])
     assert result.residual_norm == pytest.approx(np.linalg.norm(rhs))
     assert result.terminal_residual_norm == pytest.approx(np.linalg.norm(rhs - 4. * terminal))
+
+
+def test_minimal_checks_omit_history_but_verify_convergence(native_solver):
+    solver, device = native_solver
+    result = solver.solve(device([1., 1.]), rtol=0., atol=1e-12, maxiter=10,
+                          true_residual_every=0, store_residual_history=False)
+    assert result.converged
+    assert result.history == ()
+    # Initial, convergence candidate and terminal checks, no periodic matvecs.
+    assert result.true_residual_check_count == 3
+    np.testing.assert_allclose(result.solution, [1., .5], atol=1e-12)
