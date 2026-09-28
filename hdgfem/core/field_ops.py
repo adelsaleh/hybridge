@@ -42,8 +42,9 @@ def solution_trace(result, space: DGSpace, *, reduced: bool = False, prefer_devi
 
     A device result normally stores only the reduced interior trace. When
     ``prefer_device`` is true that array is returned without materialization,
-    irrespective of ``reduced``. Otherwise a host full trace is used and may
-    be restricted to interior edges.
+    irrespective of ``reduced``. Otherwise the full trace may be restricted
+    to interior edges. A full device trace stays on device unless
+    ``prefer_device=False`` explicitly requests a download.
     """
     device_trace = getattr(result, "trace_reduced_device", None)
     if prefer_device and device_trace is not None:
@@ -51,6 +52,15 @@ def solution_trace(result, space: DGSpace, *, reduced: bool = False, prefer_devi
     trace = getattr(result, "trace", None)
     if trace is None:
         return device_trace
+    if hasattr(trace, "__cuda_array_interface__"):
+        from ..backends.cupy import as_cupy_space, require_cupy
+        cp = require_cupy()
+        trace_array = cp.asarray(trace, dtype=REAL_DTYPE)
+        if reduced:
+            indices = as_cupy_space(space).mesh.int_edges_inds
+            trace_array = trace_array.reshape(space.mesh.num_edg, -1)[indices]
+        trace_array = cp.ascontiguousarray(trace_array.reshape(-1))
+        return trace_array if prefer_device else cp.asnumpy(trace_array)
     trace_array = np.asarray(trace, dtype=REAL_DTYPE)
     if reduced:
         trace_array = trace_array.reshape(space.mesh.num_edg, -1)[space.mesh.int_edges_inds]

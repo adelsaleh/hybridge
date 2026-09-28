@@ -124,10 +124,11 @@ def test_global_length_policy_accepts_constant_isotropic_tensor_encodings() -> N
 
 
 def test_global_length_policy_rejects_unsupported_or_nonpositive_inputs() -> None:
-    """Reject invalid scales and deferred anisotropic face-normal diffusion."""
+    """Resolve anisotropic normals and reject invalid physical scales."""
     space = DGSpace(rectangle_mesh(1, 1), 1, basis_type="dub_orth")
-    with pytest.raises(NotImplementedError, match="anisotropic"):
-        GlobalLengthDiffusion().resolve(np.diag((1.0, 2.0)), space)
+    normals = space.mesh.normals
+    expected = (normals[..., 0]**2 + 2.*normals[..., 1]**2) / automatic_domain_length(space)
+    np.testing.assert_allclose(GlobalLengthDiffusion().resolve(np.diag((1., 2.)), space), expected)
     with pytest.raises(ValueError, match="normal diffusivity"):
         GlobalLengthDiffusion().resolve(0.0, space)
     with pytest.raises(ValueError, match="gamma_d"):

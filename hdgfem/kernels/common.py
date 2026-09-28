@@ -109,7 +109,61 @@ def lu_solve_inplace(lu_matrix, pivots, rhs):
             rhs[i, column] = value / lu_matrix[i, i]
 
 
+@njit(cache=True)
+def cholesky_factor_inplace(matrix, symmetry_rtol=1e-10):
+    """Factor a finite symmetric positive-definite block; return zero on success.
+
+    A negative status denotes nonfinite/asymmetric input; a positive status is
+    the one-based failed pivot. Status returns permit safe use inside prange.
+    Only the lower triangle contains the resulting factor.
+    """
+    n = matrix.shape[0]
+    scale = 0.0
+    error = 0.0
+    for i in range(n):
+        for j in range(n):
+            value = matrix[i, j]
+            if not (-float('inf') < value < float('inf')):
+                return -1
+            scale = max(scale, abs(value))
+            error = max(error, abs(value - matrix[j, i]))
+    if error > symmetry_rtol * scale:
+        return -1
+    for i in range(n):
+        for j in range(i + 1):
+            value = 0.5 * (matrix[i, j] + matrix[j, i])
+            for k in range(j):
+                value -= matrix[i, k] * matrix[j, k]
+            if i == j:
+                if value <= 0.0:
+                    return i + 1
+                matrix[i, j] = value ** 0.5
+            else:
+                matrix[i, j] = value / matrix[j, j]
+    return 0
+
+
+@njit(cache=True)
+def cholesky_solve_inplace(factor, rhs):
+    """Solve from a lower Cholesky factor in-place for one or more RHS columns."""
+    n = factor.shape[0]
+    for i in range(n):
+        for column in range(rhs.shape[1]):
+            value = rhs[i, column]
+            for j in range(i):
+                value -= factor[i, j] * rhs[j, column]
+            rhs[i, column] = value / factor[i, i]
+    for i in range(n - 1, -1, -1):
+        for column in range(rhs.shape[1]):
+            value = rhs[i, column]
+            for j in range(i + 1, n):
+                value -= factor[j, i] * rhs[j, column]
+            rhs[i, column] = value / factor[i, i]
+
+
 __all__ = [
+    "cholesky_factor_inplace",
+    "cholesky_solve_inplace",
     "NUMBA_AVAILABLE",
     "lu_factor_inplace",
     "lu_solve_inplace",

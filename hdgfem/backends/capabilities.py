@@ -227,7 +227,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
-        "Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space postprocessing uses host Numba and experimental RT_p total-flux reconstruction may use Numba or CuPy.",
+        "Conservative stationary ADR; source, reaction, and beta may use different DG spaces on the same mesh; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy.",
     ),
     *_solve_capabilities(
         "advection-diffusion-reaction",
@@ -243,7 +243,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
-        "Fused prange assembly/reconstruction; positive constant scalar diffusion; sampled coefficient adapters permit different DG spaces; experimental RT_p total-flux reconstruction may use Numba or CuPy.",
+        "Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy.",
     ),
     BackendCapability(
         equation="advection-diffusion-reaction",
@@ -252,10 +252,10 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         solver_backend="amgx",
         assembly_residency="device",
         solve_residency="device",
-        reconstruction_residency="device (postprocessing currently materializes host fields)",
+        reconstruction_residency="device (optional host materialization)",
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes="Positive constant scalar diffusion; device COO-to-CSR, direct AMGX, incidence-wise face stabilization masses; RT_p CuPy postprocessing currently follows host materialization and re-upload.",
+        notes="Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; tensor coefficients require hdg_postprocess='none'. Scalar CuPy postprocessing remains supported; materialize_host_solution controls result downloads.",
     ),
     _assembly_capability(
         "diffusion-reaction",
@@ -609,10 +609,16 @@ def validate_advection_diffusion_backend_configuration(
             "advection-diffusion-reaction", operation, backend, solver_backend,
             f"trace_basis={basis!r} is unsupported; choose one of {capability.trace_bases!r}",
         )
-    if backend in {"numba", "raw-cuda"} and not scalar_diffusion:
+    if not scalar_diffusion and postprocess_mode in {"primal", "both"}:
         _unsupported(
             "advection-diffusion-reaction", operation, backend, solver_backend,
-            "fused Numba and Raw CUDA currently require positive constant scalar diffusion",
+            "ADR primal postprocessing requires positive constant scalar diffusion; "
+            "select hdg_postprocess='none' or 'flux' for variable/tensor diffusion",
+        )
+    if backend == "raw-cuda" and not scalar_diffusion and postprocess_mode != "none":
+        _unsupported(
+            "advection-diffusion-reaction", operation, backend, solver_backend,
+            "Raw CUDA tensor postprocessing is not qualified; select hdg_postprocess='none'",
         )
     return capability
 

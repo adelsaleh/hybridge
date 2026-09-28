@@ -9,6 +9,7 @@ import numpy as np
 
 from ..assembly import hdg
 from ..assembly.advection_diffusion_reaction import ADRPreparedData
+from ..assembly.diffusion_coefficients import PreparedDiffusion, prepare_diffusion
 from ..core.space import DGSpace, DGTraceSpace
 from ..kernels import NUMBA_AVAILABLE
 from ..kernels.advection_diffusion_reaction_fused import (
@@ -39,15 +40,20 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         space: DGSpace,
         *,
         trace_space: DGTraceSpace | None = None,
-        diffusion: float = 1.0,
+        diffusion=1.0,
+        diffusion_data: PreparedDiffusion | None = None,
 ) -> NumbaADRTraceAssembly:
     """Assemble the all-Dirichlet reduced ADR trace system with ``prange``."""
+    if prepared.element_boundary is None:
+        raise ValueError("Numba ADR requires dense_local_matrices=True during preparation")
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
     timings: dict[str, float] = {}
     start = time.perf_counter()
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     orientation_mode = _trace_orientation_mode(trace_ref)
+    tensor = prepare_diffusion(diffusion, space) if diffusion_data is None else diffusion_data
+    status = np.zeros(space.mesh.num_tri, dtype=np.int64)
     boundary_trace = hdg.boundary_trace_coefficients(
         boundary_condition, space, trace_space=trace_ref
     )
@@ -105,14 +111,17 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         prepared.source_rhs,
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
         int(orientation_mode),
-        float(diffusion),
+        tensor.kinds, tensor.constants, tensor.inverse_values, status,
     )
+    if np.any(status):
+        raise ValueError("ADR inverse-diffusion mass factorization failed on elements " + str(np.flatnonzero(status)))
     timings["kernel"] = time.perf_counter() - start
     start = time.perf_counter()
     rhs = np.zeros(free_edges.size * ntr, dtype=np.float64)
     np.add.at(rhs, rhs_indices, rhs_values)
     timings["rhs_finalization"] = time.perf_counter() - start
     timings["total"] = sum(timings.values())
+    timings.update({f"diffusion.{name}.elements": float(count) for name, count in tensor.counts.items()})
     reduction = _reduction_with_system(reduction_template, rows, cols, data, rhs)
     return NumbaADRTraceAssembly(
         trace_system=hdg.TraceSystem(rows, cols, data, rhs, boundary_trace),
@@ -127,13 +136,16 @@ def reconstruct_projected_adr_local_unknowns_numba(
         space: DGSpace,
         *,
         trace_space: DGTraceSpace | None = None,
-        diffusion: float = 1.0,
+        diffusion=1.0,
+        diffusion_data: PreparedDiffusion | None = None,
 ) -> np.ndarray:
     """Reconstruct mixed ADR element fields in the fused host kernel."""
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     orientation_mode = _trace_orientation_mode(trace_ref)
+    tensor = prepare_diffusion(diffusion, space) if diffusion_data is None else diffusion_data
+    status = np.zeros(space.mesh.num_tri, dtype=np.int64)
     mesh = space.mesh
     out = np.empty((mesh.num_tri, 3 * space.el_dof), dtype=np.float64)
     reconstruct_projected_adr_local_unknowns_kernel(
@@ -159,8 +171,10 @@ def reconstruct_projected_adr_local_unknowns_numba(
         prepared.element_boundary,
         prepared.source_rhs,
         int(orientation_mode),
-        float(diffusion),
+        tensor.kinds, tensor.constants, tensor.inverse_values, status,
     )
+    if np.any(status):
+        raise ValueError("ADR inverse-diffusion mass factorization failed on elements " + str(np.flatnonzero(status)))
     return np.ascontiguousarray(out)
 
 

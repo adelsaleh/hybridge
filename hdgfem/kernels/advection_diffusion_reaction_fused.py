@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
     prange = range
 
 from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
+from .diffusion_mass import factor_diffusion_mass, apply_inverse_diffusion_mass
 
 
 @njit(cache=True, inline="always")
@@ -192,7 +193,7 @@ def _solve_columns(
 
 
 @njit(cache=True, inline="always", fastmath=True)
-def _build_element_columns(
+def _build_scalar_element_columns(
         local_columns,
         element,
         aff_mats,
@@ -263,6 +264,98 @@ def _build_element_columns(
     )
 
 
+@njit(cache=True, inline="never")
+def _build_element_columns(
+        local_columns, element, aff_mats, aff_jacs, jacs_el_fc, normals,
+        mass_inverse, basis, gradients, weights, reaction_values, beta_values,
+        u_boundary_mass, normal_mass_x, normal_mass_y, d0_reference, d1_reference,
+        element_boundary, source_rhs, diffusion_kinds, diffusion_constants,
+        inverse_diffusion, status):
+    """Dispatch by exact tensor structure while retaining scalar Schur algebra."""
+    kind = diffusion_kinds[element]
+    constant_index = np.int64(0) if diffusion_constants.shape[0] == 1 else np.int64(element)
+    if kind == 0:
+        _build_scalar_element_columns(
+            local_columns, element, aff_mats, aff_jacs, jacs_el_fc, normals,
+            mass_inverse, basis, gradients, weights, reaction_values, beta_values,
+            u_boundary_mass, normal_mass_x, normal_mass_y, d0_reference, d1_reference,
+            element_boundary, source_rhs, diffusion_constants[constant_index, 0])
+        status[element] = 0
+        return
+    n = basis.shape[0]
+    ncols = local_columns.shape[1]
+    schur = np.empty((n, n), dtype=np.float64)
+    dx = np.empty((n, n), dtype=np.float64)
+    dy = np.empty((n, n), dtype=np.float64)
+    nx = np.empty((n, n), dtype=np.float64)
+    ny = np.empty((n, n), dtype=np.float64)
+    # The shared volume builder only uses its first three output arrays.
+    _build_local_operator(
+        schur, dx, dy, nx, ny, nx, ny, element, aff_mats, aff_jacs,
+        jacs_el_fc, normals, mass_inverse, basis, gradients, weights,
+        reaction_values, beta_values, u_boundary_mass, d0_reference, d1_reference)
+    for i in range(n):
+        for j in range(n):
+            nx[i, j] = normal_mass_x[element, i, j] - dx[i, j]
+            ny[i, j] = normal_mass_y[element, i, j] - dy[i, j]
+    rows = 0 if kind <= 2 else (n if kind <= 4 else 2*n)
+    columns = 0 if kind <= 2 else (n if kind == 3 else 2*n)
+    factor = np.empty((rows, columns), dtype=np.float64)
+    flux_pivots = np.empty(2*n if kind == 6 else 0, dtype=np.int64)
+    status[element] = 0
+    if kind >= 3:
+        status[element] = factor_diffusion_mass(
+            factor, flux_pivots, inverse_diffusion[element], kind, basis,
+            weights, aff_jacs[element])
+        if status[element] != 0:
+            local_columns[:, :] = np.nan
+            return
+    derivative = np.empty((2*n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(n):
+            derivative[i, j] = dx[i, j]
+            derivative[n+i, j] = dy[i, j]
+    work = np.empty_like(derivative)
+    apply_inverse_diffusion_mass(derivative, work, kind, factor, flux_pivots,
+                                diffusion_constants[constant_index], mass_inverse, aff_jacs[element])
+    for i in range(n):
+        for j in range(n):
+            value = 0.0
+            for k in range(n):
+                value += nx[i, k]*derivative[k, j] + ny[i, k]*derivative[n+k, j]
+            schur[i, j] += value
+    flux_rhs = np.empty((2*n, ncols), dtype=np.float64)
+    red = np.empty((n, ncols), dtype=np.float64)
+    for i in range(n):
+        for col in range(ncols-1):
+            red[i, col] = element_boundary[element, i, col]
+            flux_rhs[i, col] = element_boundary[element, n+i, col]
+            flux_rhs[n+i, col] = element_boundary[element, 2*n+i, col]
+        red[i, ncols-1] = source_rhs[element, i]
+        flux_rhs[i, ncols-1] = 0.0
+        flux_rhs[n+i, ncols-1] = 0.0
+    work_rhs = np.empty_like(flux_rhs)
+    apply_inverse_diffusion_mass(flux_rhs, work_rhs, kind, factor, flux_pivots,
+                                diffusion_constants[constant_index], mass_inverse, aff_jacs[element])
+    for i in range(n):
+        for col in range(ncols):
+            for k in range(n):
+                red[i, col] += nx[i, k]*flux_rhs[k, col] + ny[i, k]*flux_rhs[n+k, col]
+    pivots = np.empty(n, dtype=np.int64)
+    lu_factor_inplace(schur, pivots)
+    lu_solve_inplace(schur, pivots, red)
+    for i in range(n):
+        for col in range(ncols):
+            local_columns[i, col] = red[i, col]
+            x = -flux_rhs[i, col]
+            y = -flux_rhs[n+i, col]
+            for j in range(n):
+                x += derivative[i, j]*red[j, col]
+                y += derivative[n+i, j]*red[j, col]
+            local_columns[n+i, col] = x
+            local_columns[2*n+i, col] = y
+
+
 @njit(cache=True, inline="always", fastmath=True)
 def _lift_dot(trace_lift, local_columns, element, face, row_dof, column):
     """Apply one total-flux transmission row to a local response column."""
@@ -305,7 +398,7 @@ def assemble_projected_adr_trace_system_eliminated_kernel(
         source_rhs,
         boundary_trace,
         trace_orientation_mode,
-        diffusion,
+        diffusion_kinds, diffusion_constants, inverse_diffusion, status,
 ):
     """Assemble the all-Dirichlet reduced stationary ADR trace system."""
     num_elements = loc2glob_edge.shape[0]
@@ -320,7 +413,8 @@ def assemble_projected_adr_trace_system_eliminated_kernel(
             local_columns, element, aff_mats, aff_jacs, jacs_el_fc, normals,
             mass_inverse, basis, gradients, weights, reaction_values, beta_values,
             u_boundary_mass, normal_mass_x, normal_mass_y,
-            d0_reference, d1_reference, element_boundary, source_rhs, diffusion,
+            d0_reference, d1_reference, element_boundary, source_rhs,
+            diffusion_kinds, diffusion_constants, inverse_diffusion, status,
         )
         for row_face in range(3):
             rhs_base = (element * 3 + row_face) * ntr
@@ -403,7 +497,7 @@ def reconstruct_projected_adr_local_unknowns_kernel(
         element_boundary,
         source_rhs,
         trace_orientation_mode,
-        diffusion,
+        diffusion_kinds, diffusion_constants, inverse_diffusion, status,
 ):
     """Reconstruct ``[u_h,q_x,q_y]`` from the full trace."""
     num_elements = loc2glob_edge.shape[0]
@@ -415,7 +509,8 @@ def reconstruct_projected_adr_local_unknowns_kernel(
             columns, element, aff_mats, aff_jacs, jacs_el_fc, normals,
             mass_inverse, basis, gradients, weights, reaction_values, beta_values,
             u_boundary_mass, normal_mass_x, normal_mass_y,
-            d0_reference, d1_reference, element_boundary, source_rhs, diffusion,
+            d0_reference, d1_reference, element_boundary, source_rhs,
+            diffusion_kinds, diffusion_constants, inverse_diffusion, status,
         )
         source_col = 3 * ntr
         for i in range(3 * nel):

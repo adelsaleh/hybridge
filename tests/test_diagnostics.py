@@ -137,6 +137,37 @@ def test_scalar_field_integral_and_min_max_are_field_operations() -> None:
     assert field.min_max() == (2.5, 2.5)
 
 
+def test_diagnostic_packing_rejects_unreduced_arrays_before_download() -> None:
+    from types import SimpleNamespace
+    import pytest
+    from hdgfem.diagnostics import _diagnostic_scalars
+
+    calls = []
+    namespace = SimpleNamespace(asarray=np.asarray, stack=np.stack,
+                                asnumpy=lambda array: calls.append(array.copy()) or array)
+    with pytest.raises(ValueError, match="scalar reductions"):
+        _diagnostic_scalars({"mass": 2.0, "unreduced": np.ones((4, 8))}, namespace)
+    assert calls == []
+    assert _diagnostic_scalars({"mass": 2.0, "energy": 3.0}, namespace) == {"mass": 2.0, "energy": 3.0}
+    assert len(calls) == 1 and calls[0].shape == (2,)
+
+
+def test_azimuthal_host_override_preserves_explicit_backend_choice() -> None:
+    import pytest
+    from hdgfem.diagnostics import azimuthal_mode_diagnostics
+
+    space = _space(2)
+    equilibrium = space.project_callable(lambda x, y: 1.0 + 0.1*x)
+    density = space.project_callable(lambda x, y: 1.0 + 0.1*x + 0.02*(x*x-y*y))
+    expected = azimuthal_mode_diagnostics(density, equilibrium, 2)
+    # Existing host coefficients remain authoritative for an explicit host call.
+    density._device_coeffs = {0: object()}
+    assert azimuthal_mode_diagnostics(density, equilibrium, 2, backend="host") == expected
+    assert azimuthal_mode_diagnostics(density, equilibrium, 0) == {}
+    with pytest.raises(ValueError, match="backend"):
+        azimuthal_mode_diagnostics(density, equilibrium, 2, backend="invalid")
+
+
 def test_solution_trace_prefers_device_and_reduces_host_trace() -> None:
     from types import SimpleNamespace
 

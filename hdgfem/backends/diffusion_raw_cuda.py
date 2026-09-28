@@ -105,30 +105,10 @@ def _validate_local_schur_factors(cached_raw, *, num_elements: int, nel: int, lo
     return schur_lu, schur_pivots
 
 
-_RAW_TRACE_ORIENTATION_HELPERS = r"""
-__device__ __forceinline__ int raw_trace_local_dof(
-        const bool positive,
-        const int dof,
-        const int edge_dof)
-{
-#if TRACE_ORIENTATION_MODE == 1
-    return dof;
-#else
-    return positive ? dof : (edge_dof - 1 - dof);
-#endif
-}
-
-__device__ __forceinline__ double raw_trace_orientation_sign(
-        const bool positive,
-        const int dof)
-{
-#if TRACE_ORIENTATION_MODE == 1
-    return ((!positive) && ((dof & 1) == 1)) ? -1.0 : 1.0;
-#else
-    return 1.0;
-#endif
-}
-"""
+from .raw_cuda_local import (
+    RAW_TRACE_ORIENTATION_HELPERS as _RAW_TRACE_ORIENTATION_HELPERS,
+    RAW_COOPERATIVE_SOLVES,
+)
 
 _RAW_ASSEMBLY_TEMPLATE = r"""
 // Solve one condensed element column against an already-factorized scalar Schur
@@ -573,125 +553,7 @@ _RAW_ASSEMBLY_COOP_TEMPLATE = r"""
 #define RAW_BATCH_COLS 8
 #endif
 
-__device__ __forceinline__ void factor_diffusion_schur_lu_coop_raw(
-        double* __restrict__ schur_lu,
-        int* __restrict__ pivots)
-{
-    const int tid = threadIdx.x;
-    for (int k = 0; k < NEL; ++k) {
-        if (tid == 0) {
-            int pivot = k;
-            double max_value = fabs(schur_lu[k * NEL + k]);
-            for (int i = k + 1; i < NEL; ++i) {
-                const double value = fabs(schur_lu[i * NEL + k]);
-                if (value > max_value) {
-                    max_value = value;
-                    pivot = i;
-                }
-            }
-            pivots[k] = pivot;
-            if (pivot != k) {
-                for (int j = 0; j < NEL; ++j) {
-                    const double tmp = schur_lu[k * NEL + j];
-                    schur_lu[k * NEL + j] = schur_lu[pivot * NEL + j];
-                    schur_lu[pivot * NEL + j] = tmp;
-                }
-            }
-            double diagonal = schur_lu[k * NEL + k];
-            if (fabs(diagonal) < 1.0e-30) {
-                diagonal = diagonal >= 0.0 ? 1.0e-30 : -1.0e-30;
-                schur_lu[k * NEL + k] = diagonal;
-            }
-            for (int i = k + 1; i < NEL; ++i) {
-                schur_lu[i * NEL + k] /= diagonal;
-            }
-        }
-        __syncthreads();
-
-        const int width = NEL - k - 1;
-        for (int idx = tid; idx < width * width; idx += blockDim.x) {
-            const int i = k + 1 + idx / width;
-            const int j = k + 1 + idx - (idx / width) * width;
-            schur_lu[i * NEL + j] -= schur_lu[i * NEL + k] * schur_lu[k * NEL + j];
-        }
-        __syncthreads();
-    }
-}
-
-__device__ __forceinline__ void solve_diffusion_all_columns_coop_raw(
-        const double* __restrict__ schur_lu,
-        const int* __restrict__ pivots,
-        double* __restrict__ columns)
-{
-    const int tid = threadIdx.x;
-    // Columns are independent after the shared LU factorization.  Let each
-    // thread carry its columns through pivoting and both triangular solves so
-    // dependencies remain thread-local.  The previous row-wise formulation
-    // imposed 3 * NEL block barriers even though no column consumed another
-    // column's values.
-    for (int col = tid; col < NCOLS; col += blockDim.x) {
-        for (int k = 0; k < NEL; ++k) {
-            const int pivot = pivots[k];
-            if (pivot != k) {
-                const double tmp = columns[k * NCOLS + col];
-                columns[k * NCOLS + col] = columns[pivot * NCOLS + col];
-                columns[pivot * NCOLS + col] = tmp;
-            }
-        }
-
-        for (int i = 0; i < NEL; ++i) {
-            double value = columns[i * NCOLS + col];
-            for (int j = 0; j < i; ++j) {
-                value -= schur_lu[i * NEL + j] * columns[j * NCOLS + col];
-            }
-            columns[i * NCOLS + col] = value;
-        }
-        for (int i = NEL - 1; i >= 0; --i) {
-            double value = columns[i * NCOLS + col];
-            for (int j = i + 1; j < NEL; ++j) {
-                value -= schur_lu[i * NEL + j] * columns[j * NCOLS + col];
-            }
-            columns[i * NCOLS + col] = value / schur_lu[i * NEL + i];
-        }
-    }
-    __syncthreads();
-}
-
-__device__ __forceinline__ void solve_diffusion_column_batch_coop_raw(
-        const double* __restrict__ schur_lu,
-        const int* __restrict__ pivots,
-        double* __restrict__ columns,
-        const int batch_cols)
-{
-    const int tid = threadIdx.x;
-    for (int col = tid; col < batch_cols; col += blockDim.x) {
-        for (int k = 0; k < NEL; ++k) {
-            const int pivot = pivots[k];
-            if (pivot != k) {
-                const double tmp = columns[k * RAW_BATCH_COLS + col];
-                columns[k * RAW_BATCH_COLS + col] = columns[pivot * RAW_BATCH_COLS + col];
-                columns[pivot * RAW_BATCH_COLS + col] = tmp;
-            }
-        }
-        for (int i = 0; i < NEL; ++i) {
-            double value = columns[i * RAW_BATCH_COLS + col];
-            for (int j = 0; j < i; ++j) {
-                value -= schur_lu[i * NEL + j] * columns[j * RAW_BATCH_COLS + col];
-            }
-            columns[i * RAW_BATCH_COLS + col] = value;
-        }
-        for (int i = NEL - 1; i >= 0; --i) {
-            double value = columns[i * RAW_BATCH_COLS + col];
-            for (int j = i + 1; j < NEL; ++j) {
-                value -= schur_lu[i * NEL + j] * columns[j * RAW_BATCH_COLS + col];
-            }
-            columns[i * RAW_BATCH_COLS + col] = value / schur_lu[i * NEL + i];
-        }
-    }
-    __syncthreads();
-}
-
-extern "C" __global__ void assemble_diffusion_raw_coop(
+""" + RAW_COOPERATIVE_SOLVES + r"""extern "C" __global__ void assemble_diffusion_raw_coop(
         long long* __restrict__ rows,
         long long* __restrict__ cols,
         const int* __restrict__ csr_indptr,

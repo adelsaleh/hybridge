@@ -207,13 +207,72 @@ from 234.358 ms to 259.794 ms. Reusing dead local-LU shared storage for trace
 lifts also regressed the measured p=6 kernel, so the cache-efficient per-thread
 lift array remains active.
 
-The diffusion `RT_projection` flux recovery has a dedicated raw-CUDA kernel in
-`hdgfem.backends.diffusion_rt_postprocess_raw_cuda`. One block per element
-assembles the `RT_p` face-normal and interior moment equations, solves the
-pivoted dense system in shared memory, and projects the recovered field into
-the degree-p+1 DG representation. It runs only when flux postprocessing is
-explicitly requested; the ordinary repeated Poisson path does not materialize
-postprocessing inputs.
+## Flux-Only Recovery And Scalar Tau Retries
+
+Diffusion `hdg_postprocess="flux"` with raw-CUDA recovery uses
+`hdgfem.backends.diffusion_flux_recovery_raw_cuda` for both `RT_projection`
+and `l2_closest`. It applies cached reference lifts to resident local fields
+and full traces. L2-closest recovery additionally uses per-element geometry
+Cholesky factors. The current stabilization enters the dynamic flux jump;
+the reference maps, uploaded tables, geometry, and factors are tau-independent.
+
+`DiffusionReactionHDGSolver.with_options(stabilization=<finite real scalar>)`
+preserves these recovery data when stabilization is the only override and
+flux-only raw-CUDA recovery remains active. `postprocessing_backend="auto"`
+is supported when it resolves to raw CUDA. The retained cache must match the
+DGSpace identity, trace-space identity/basis, recovery variant, and active CUDA
+device. A retry from a built-in scalar stabilization policy such as
+`global_length` to its increased scalar value follows the same rule.
+
+| State after a scalar tau retry | Behavior |
+|---|---|
+| Recovery reference maps, postprocessing space, uploaded tables, geometry and L2 metric factors | Retained with the same object/buffer identities |
+| Diffusion operators, Schur-LU/Schur-Cholesky assembly factors, native and AMGX hierarchies | Invalidated; owned solver contexts are closed |
+| Accepted solution, traces, RHS and exposed assembly artifacts | Cleared |
+| Other host postprocessing factors | Discarded |
+
+Other option updates, non-scalar stabilization updates, explicit `clear_cache()`
+or `close()`, and space/mesh or reaction replacement clear the solver-owned
+recovery cache. Source and boundary setters continue to preserve it when
+operator caching with eliminated boundaries is enabled. Mesh geometry is
+treated as fixed during reuse; in-place geometry mutation is outside this
+contract. Device mismatch checks are tested with controlled device IDs;
+numerical GPU parity is scoped to one active CUDA device.
+
+The focused host command exercises metadata compatibility, repeated tau
+updates, native/AMGX resource cleanup, the guiding-center retry controller,
+and the existing small-matrix recovery reference:
+
+```bash
+NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -q \
+  tests/test_diffusion_recovery_cache.py tests/test_diffusion_flux_recovery_maps.py \
+  -k 'not test_cuda_recovery'
+```
+
+On 2026-09-25 this command passed 48 checks, with the 6 opt-in CUDA cases
+deselected. The new host cache tests are included in `host-fast`.
+Another 16 focused option/cache and test-manifest checks passed; changed
+documentation links, Python syntax parsing, and `git diff --check` also passed.
+
+The GPU checks compare solver-owned recovery after two scalar tau
+changes against fresh device recovery and the host reference, using changed
+local fields and traces on skew triangles. Degrees 0, 2, and 5, both production
+trace bases, and both recovery variants are covered. During reuse, the checks
+reject host uploads/downloads and reference/geometry-factor rebuilding, verify
+device-buffer identity, and require device-only recovered fields. These tests
+are included in `gpu-smoke`.
+
+```bash
+HDGFEM_RUN_CUDA_RECOVERY_TESTS=1 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 \
+  .venv/bin/python -B -m pytest -q tests/test_diffusion_recovery_cache_cuda.py \
+  tests/test_diffusion_flux_recovery_maps.py::test_cuda_recovery_matches_host_and_reuses_geometry
+```
+
+On 2026-09-25 all 18 GPU checks passed in 5.38 seconds with no skips or
+warnings. CuPy runtime compilation was explicitly authorized; CPU Numba JIT
+remained disabled. The checks used prescribed fields without PDE solves or
+time integration. Whole-driver retry replay, performance sweeps, and
+multi-device execution remain outside this cache-lifetime contract.
 
 ## Failure And Validation Policy
 
@@ -224,3 +283,36 @@ format, or convergence requirements.
 
 The required parity and smoke lanes are documented in
 [`../development/alpha_test_matrix.md`](../development/alpha_test_matrix.md).
+
+## Tensor ADR assembly and reconstruction
+
+Stationary ADR supports FP64 elliptic tensor diffusion at p=0--6 with both
+`legacy-lagrange` and `legendre-modal` traces. Select `assembly_backend="raw-cuda"`,
+`solver="amgx"`, and `hdg_postprocess="none"` for tensors. `raw_matrix_format`
+accepts COO, direct CSR (default), and native face BSR; `raw_block_size="auto"`
+selects 32/64/128 threads at p<=2/4/6. No BSR scalarization is needed.
+
+For assembly without a sparse solve, use
+`prepare_adr_data(..., dense_local_matrices=False)` followed by
+`assemble_projected_adr_trace_operator_raw_cuda(..., matrix_format="bsr")` in
+`hdgfem.backends.advection_diffusion_reaction_raw_cuda`. The returned operator
+contains compressed graph metadata, exact per-element diffusion classifications,
+and preparation/upload/graph/JIT/kernel timings. Its `assembly` contains the
+device sparse arrays and RHS. `reconstruct_projected_adr_local_unknowns_raw_cuda`
+accepts this operator and a full device trace, including boundary coefficients,
+and returns device `[u,qx,qy]` coefficients plus timings.
+
+The seven exact tensor paths share Numba's classifications. Constant tensors use
+reference mass inverses; variable isotropic/diagonal tensors use scalar
+Cholesky; coupled symmetric/general tensors use Cholesky/pivoted LU. Shared
+storage never exceeds 48 KiB, and local failures are checked before returning.
+Reconstruction retains coefficient uploads and rebuilds local factors with the
+same algebra. Diffusion's extracted cooperative helpers preserve its generated
+source and launch/workspace choices.
+
+`tau_diff` may vary along a face, including through a same-mesh DG field or
+`tau(x,y,*,element,local_face,normal,t=None)` law. Both incidences are sampled
+independently. Original laws are retained; recovery never interpolates an
+incompatible quadrature-only table. Tensor postprocessing remains unsupported
+in raw CUDA. See the [implementation plan](../development/plans/raw_cuda_adr_tensor.md)
+and [qualification report](../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md).

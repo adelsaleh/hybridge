@@ -53,19 +53,26 @@ class AdvectionDiffusionReactionTimings:
 
 @dataclass(frozen=True)
 class AdvectionDiffusionReactionResult:
-    """Fields, trace system, diagnostics, and optional post-processing."""
+    """Fields, trace system, diagnostics, and optional post-processing.
+
+    Raw-CUDA results retain CuPy ``trace`` and ``local_unknowns`` arrays and
+    lazy device-backed fields when ``materialize_host_solution=False``.
+    """
 
     field: DGField
     flux: VectorDGField
-    trace: np.ndarray
+    trace: Any
     timings: AdvectionDiffusionReactionTimings
     total_flux: VectorDGField | None = None
     postprocessed_field: DGField | None = None
     postprocessed_flux: VectorDGField | None = None
-    local_unknowns: np.ndarray | None = None
+    local_unknowns: Any = None
     matrix_rows: Any = None
     matrix_cols: Any = None
     matrix_data: Any = None
+    matrix_indptr: Any = None
+    matrix_indices: Any = None
+    matrix_format: str = "coo"
     rhs: Any = None
     boundary_trace: Any = None
     reduction: KnownDofReduction | None = None
@@ -74,6 +81,7 @@ class AdvectionDiffusionReactionResult:
     tau_advection: np.ndarray | None = None
     tau_diffusion: np.ndarray | None = None
     beta_dot_normal: np.ndarray | None = None
+    diffusion_structure: dict[str, int] | None = None
     assembly_backend: AssemblyBackend = "numpy"
     reconstruction_backend: str = "numpy"
     postprocessing_backend: str = "numba"
@@ -92,7 +100,9 @@ class AdvectionDiffusionReactionHDGOptions:
     NumPy/Numba assembly and reconstruction stages may be selected independently.
     Raw CUDA assembly requires Raw CUDA reconstruction. Total-flux
     postprocessing uses public choices ``l2_closest`` and ``RT_projection``;
-    legacy spellings remain accepted. Coupled primal recovery remains host Numba.
+    legacy spellings remain accepted. CuPy performs both recoveries on device.
+    ``materialize_host_solution=False`` retains raw-CUDA results on device;
+    accessing a returned field's ``coeffs`` explicitly downloads that field.
     """
 
     diffusion: Any = 1.0
@@ -117,7 +127,8 @@ class AdvectionDiffusionReactionHDGOptions:
     postprocessing_backend: PostprocessingBackend = "auto"
     boundary_mode: Literal["eliminate"] = "eliminate"
     trace_basis: Literal["legacy-lagrange", "legendre-modal"] = "legacy-lagrange"
-    raw_matrix_format: Literal["coo", "csr"] = "csr"
+    raw_matrix_format: Literal["coo", "csr", "bsr"] = "csr"
+    raw_block_size: int | Literal["auto"] = "auto"
     hdg_postprocess: PostprocessMode = "both"
     flux_postprocess_space: FluxPostprocessSpace = "l2_closest"
     materialize_host_solution: bool = True
@@ -157,7 +168,7 @@ def _resolve_stage_backends(
     if postprocessing == "auto":
         postprocessing = (
             "cupy"
-            if assembly_backend == "raw-cuda" and flux_postprocess_space == "RT_projection"
+            if assembly_backend == "raw-cuda"
             else "numba"
         )
     if postprocessing not in {"numba", "cupy"}:
@@ -165,34 +176,24 @@ def _resolve_stage_backends(
             "ADR supports postprocessing_backend='numba' or 'cupy' "
             "('auto' selects one of them)"
         )
-    if (
-        postprocess_mode != "none"
-        and postprocessing == "cupy"
-        and flux_postprocess_space != "RT_projection"
-    ):
-        raise NotImplementedError(
-            "postprocessing_backend='cupy' currently supports only "
-            "flux_postprocess_space='RT_projection'"
-        )
     if postprocess_mode == "none":
         postprocessing = "none"
     return reconstruction, postprocessing
 
 
 def _reported_postprocessing_backend(backend: str, mode: str) -> str:
-    """Describe mixed CuPy total-flux and Numba primal postprocessing."""
-    if backend == "cupy" and mode in {"primal", "both"}:
-        return "cupy+numba"
+    """Report the execution backend shared by both recovery stages."""
     return backend
 
 
 def _positive_scalar_diffusion(diffusion) -> bool:
-    """Return whether diffusion is a finite positive scalar constant."""
-    return bool(
-        np.isscalar(diffusion)
-        and np.isfinite(float(diffusion))
-        and float(diffusion) > 0.0
-    )
+    """Return whether diffusion is an exactly isotropic positive constant."""
+    from .stabilization import constant_isotropic_diffusivity
+    try:
+        value = constant_isotropic_diffusivity(diffusion)
+    except (NotImplementedError, TypeError, ValueError):
+        return False
+    return bool(np.isfinite(value) and value > 0.0)
 
 
 def _beta_field(beta, space: DGSpace) -> VectorDGField:
@@ -208,60 +209,66 @@ def _adr_postprocess_samples(
         space: DGSpace,
         post_space: DGSpace,
         advection_stabilization,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        *, xp=np,
+) -> tuple[Any, Any, Any]:
     """Sample beta and total stabilization on degree-p+1 quadrature rules."""
+    if xp is np:
+        coefficients = lambda field: field.coeffs
+    else:
+        from ..backends.cupy import as_cupy_coefficients, as_cupy_space
+        coefficients = lambda field: as_cupy_coefficients(field, as_cupy_space(field.space))
     qpost = post_space.quad_data
     nqf = qpost.weights_JGL.size
     face_points = qpost.pts_fc.reshape(-1, 2)
     beta_h = _beta_field(beta, space)
-    beta_volume = np.empty((space.mesh.num_tri, qpost.Krf_w.size, 2), dtype=np.float64)
-    beta_face = np.empty((space.mesh.num_tri, 3, nqf, 2), dtype=np.float64)
+    beta_volume = xp.empty((space.mesh.num_tri, qpost.Krf_w.size, 2), dtype=xp.float64)
+    beta_face = xp.empty((space.mesh.num_tri, 3, nqf, 2), dtype=xp.float64)
     for component, field in enumerate(beta_h.components):
-        volume_basis = field.space.basis_at(qpost.Krf_quads)
-        face_basis = field.space.basis_at(face_points).reshape(
+        volume_basis = xp.asarray(field.space.basis_at(qpost.Krf_quads))
+        face_basis = xp.asarray(field.space.basis_at(face_points)).reshape(
             nqf, 3, field.space.el_dof
         ).transpose(1, 2, 0)
-        beta_volume[..., component] = field.coeffs @ volume_basis.T
-        beta_face[..., component] = np.einsum(
-            "Ki,fiq->Kfq", field.coeffs, face_basis, optimize=True
+        beta_volume[..., component] = coefficients(field) @ volume_basis.T
+        beta_face[..., component] = xp.einsum(
+            "Ki,fiq->Kfq", coefficients(field), face_basis, optimize=True
         )
 
-    normals = space.mesh.normals
+    normals = xp.asarray(space.mesh.normals)
     beta_n = (
         beta_face[..., 0] * normals[..., 0, None]
         + beta_face[..., 1] * normals[..., 1, None]
     )
     if advection_stabilization is None:
-        tau_adv = np.abs(beta_n)
+        tau_adv = xp.abs(beta_n)
     elif np.isscalar(advection_stabilization):
-        tau_adv = np.full_like(beta_n, float(advection_stabilization))
+        tau_adv = xp.full_like(beta_n, float(advection_stabilization))
     elif isinstance(advection_stabilization, DGField):
-        tau_basis = advection_stabilization.space.basis_at(face_points).reshape(
+        tau_basis = xp.asarray(advection_stabilization.space.basis_at(face_points)).reshape(
             nqf, 3, advection_stabilization.space.el_dof
         ).transpose(1, 2, 0)
-        tau_adv = np.einsum(
-            "Ki,fiq->Kfq", advection_stabilization.coeffs, tau_basis, optimize=True
+        tau_adv = xp.einsum(
+            "Ki,fiq->Kfq", coefficients(advection_stabilization), tau_basis, optimize=True
         )
     elif callable(advection_stabilization):
-        mapped = space.mesh.map_reference_points(face_points)
-        raw = np.asarray(
-            advection_stabilization(mapped[..., 0], mapped[..., 1]), dtype=np.float64
+        mapped = xp.asarray(space.mesh.map_reference_points(face_points))
+        raw = xp.asarray(
+            advection_stabilization(mapped[..., 0], mapped[..., 1]), dtype=xp.float64
         )
         if raw.ndim == 0:
-            tau_adv = np.full_like(beta_n, float(raw))
+            tau_adv = xp.broadcast_to(raw, beta_n.shape)
         else:
-            tau_adv = np.broadcast_to(raw, (space.mesh.num_tri, 3 * nqf)).reshape(
+            tau_adv = xp.broadcast_to(raw, (space.mesh.num_tri, 3 * nqf)).reshape(
                 space.mesh.num_tri, nqf, 3
             ).transpose(0, 2, 1).copy()
     else:
-        raw = np.asarray(advection_stabilization, dtype=np.float64)
+        raw = xp.asarray(advection_stabilization, dtype=xp.float64)
         if raw.shape == space.shape:
-            tau_basis = space.basis_at(face_points).reshape(
+            tau_basis = xp.asarray(space.basis_at(face_points)).reshape(
                 nqf, 3, space.el_dof
             ).transpose(1, 2, 0)
-            tau_adv = np.einsum("Ki,fiq->Kfq", raw, tau_basis, optimize=True)
+            tau_adv = xp.einsum("Ki,fiq->Kfq", raw, tau_basis, optimize=True)
         elif raw.shape == (space.mesh.num_tri, 3):
-            tau_adv = np.broadcast_to(raw[:, :, None], beta_n.shape)
+            tau_adv = xp.broadcast_to(raw[:, :, None], beta_n.shape)
         elif raw.shape == beta_n.shape:
             tau_adv = raw
         else:
@@ -270,13 +277,16 @@ def _adr_postprocess_samples(
                 "callable, DGField, DG coefficients, per-face constants, or values "
                 "on its degree-p+1 face quadrature"
             )
-    tau_total = tau_adv + prepared.tau_diffusion[:, :, None]
-    if np.any(~np.isfinite(tau_total)):
+    from ..assembly.advection_diffusion_reaction import diffusion_stabilization_on_trace
+    tau_diff = diffusion_stabilization_on_trace(
+        prepared, space, post_space.trace_space("bernstein"))
+    tau_total = tau_adv + xp.asarray(tau_diff)
+    if xp.any(~xp.isfinite(tau_total)):
         raise ValueError("ADR postprocessing stabilization must be finite")
     return (
-        np.ascontiguousarray(beta_volume),
-        np.ascontiguousarray(beta_face),
-        np.ascontiguousarray(tau_total),
+        xp.ascontiguousarray(beta_volume),
+        xp.ascontiguousarray(beta_face),
+        xp.ascontiguousarray(tau_total),
     )
 
 
@@ -286,15 +296,25 @@ def _project_total_flux(
         space: DGSpace,
 ) -> VectorDGField:
     """Project q_h plus beta_h u_h into the degree-p vector DG space."""
+    xp = np
+    if hasattr(local_unknowns, "__cuda_array_interface__"):
+        from ..backends.cupy import require_cupy, field_from_cupy_coefficients
+        xp = require_cupy()
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
-    basis = space.quad_data.bas_of_quads
+    basis = xp.asarray(space.quad_data.bas_of_quads)
+    beta_values = xp.asarray(prepared.beta_values)
+    weighted_phi = xp.asarray(space.quad_data.weighted_phi)
+    mass_inverse = xp.asarray(space.quad_data.MKrf_inv)
     u = blocks[:, 0] @ basis
     qx = blocks[:, 1] @ basis
     qy = blocks[:, 2] @ basis
-    values_x = qx + prepared.beta_values[..., 0] * u
-    values_y = qy + prepared.beta_values[..., 1] * u
-    coeffs_x = (values_x @ space.quad_data.weighted_phi) @ space.quad_data.MKrf_inv
-    coeffs_y = (values_y @ space.quad_data.weighted_phi) @ space.quad_data.MKrf_inv
+    values_x = qx + beta_values[..., 0] * u
+    values_y = qy + beta_values[..., 1] * u
+    coeffs_x = (values_x @ weighted_phi) @ mass_inverse
+    coeffs_y = (values_y @ weighted_phi) @ mass_inverse
+    if xp is not np:
+        return VectorDGField(tuple(field_from_cupy_coefficients(space, c, name="q_h_plus_beta_u_h")
+                                   for c in (coeffs_x, coeffs_y)), name="q_h_plus_beta_u_h")
     return (space * space).field((coeffs_x, coeffs_y), name="q_h_plus_beta_u_h")
 
 
@@ -315,15 +335,20 @@ def _postprocess_total_flux(
     )
     from .diffusion_reaction import _trace_basis_at
 
+    xp = np
+    if postprocessing_backend == "cupy":
+        from ..backends.cupy import require_cupy
+        xp = require_cupy()
+    local_unknowns = xp.asarray(local_unknowns)
     flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
     cache = _build_hdg_postprocess_cache(
         space,
         trace_ref,
         want_primal=False,
-        want_flux=flux_space == "l2_closest",
+        want_flux=flux_space == "l2_closest" and xp is np,
         cache=None,
     )
-    if flux_space == "l2_closest" and (
+    if flux_space == "l2_closest" and xp is np and (
         cache.flux_ainv_constraint_t is None or cache.flux_schur_lu is None
     ):
         raise RuntimeError("ADR total-flux postprocess factorization is unavailable")
@@ -331,29 +356,33 @@ def _postprocess_total_flux(
     qpost = post.quad_data
     nqf = qpost.weights_JGL.size
     face_points = qpost.pts_fc.reshape(-1, 2)
-    base_face = space.basis_at(face_points).reshape(
+    base_face = xp.asarray(space.basis_at(face_points)).reshape(
         nqf, 3, space.el_dof
     ).transpose(1, 2, 0)
-    post_face = qpost.bas_of_bd_quads
-    trace_basis = _trace_basis_at(trace_ref, qpost.quads_JGL)
-    local_trace = trace_ref.element_coefficients(trace).reshape(
-        space.mesh.num_tri, 3, trace_ref.edg_dof
-    )
+    post_face = xp.asarray(qpost.bas_of_bd_quads)
+    trace_basis = xp.asarray(_trace_basis_at(trace_ref, qpost.quads_JGL))
+    if xp is np:
+        local_trace = trace_ref.element_coefficients(trace).reshape(
+            space.mesh.num_tri, 3, trace_ref.edg_dof)
+    else:
+        from ..backends.cupy import element_traces_cupy
+        local_trace = element_traces_cupy(trace, space, trace_space=trace_ref).reshape(
+            space.mesh.num_tri, 3, trace_ref.edg_dof)
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
-    u_face = np.einsum("Ki,fiq->Kfq", blocks[:, 0], base_face, optimize=True)
-    qx_face = np.einsum("Ki,fiq->Kfq", blocks[:, 1], base_face, optimize=True)
-    qy_face = np.einsum("Ki,fiq->Kfq", blocks[:, 2], base_face, optimize=True)
-    hat_face = np.einsum("Kfa,aq->Kfq", local_trace, trace_basis, optimize=True)
+    u_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 0], base_face, optimize=True)
+    qx_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 1], base_face, optimize=True)
+    qy_face = xp.einsum("Ki,fiq->Kfq", blocks[:, 2], base_face, optimize=True)
+    hat_face = xp.einsum("Kfa,aq->Kfq", local_trace, trace_basis, optimize=True)
 
     beta_volume, beta_face, tau_total = _adr_postprocess_samples(
-        beta, prepared, space, post, advection_stabilization
+        beta, prepared, space, post, advection_stabilization, xp=xp
     )
-    base_volume = np.ascontiguousarray(space.basis_at(qpost.Krf_quads))
+    base_volume = xp.asarray(space.basis_at(qpost.Krf_quads))
     u_volume = blocks[:, 0] @ base_volume.T
     qx_volume = blocks[:, 1] @ base_volume.T
     qy_volume = blocks[:, 2] @ base_volume.T
-    total_volume_values = np.ascontiguousarray(
-        np.stack(
+    total_volume_values = xp.ascontiguousarray(
+        xp.stack(
             (
                 qx_volume + beta_volume[..., 0] * u_volume,
                 qy_volume + beta_volume[..., 1] * u_volume,
@@ -361,7 +390,7 @@ def _postprocess_total_flux(
             axis=0,
         )
     )
-    normals = space.mesh.normals
+    normals = xp.asarray(space.mesh.normals)
     beta_n = (
         beta_face[..., 0] * normals[..., 0, None]
         + beta_face[..., 1] * normals[..., 1, None]
@@ -381,7 +410,12 @@ def _postprocess_total_flux(
             post,
             backend=postprocessing_backend,
             name="total_flux_h_star_rt_p",
+            materialize_host=postprocessing_backend != "cupy",
         )
+
+    if xp is not np:
+        from ..backends.advection_diffusion_reaction_cupy import postprocess_total_flux_l2_cupy
+        return postprocess_total_flux_l2_cupy(total_volume_values, numerical, space, cache)
 
     base_weighted = qpost.Krf_w[:, None] * base_volume
     base_coeffs = np.empty(
@@ -396,10 +430,10 @@ def _postprocess_total_flux(
 
     q0x = base_coeffs[0] @ cache.base_to_post_mass.T @ qpost.MKrf_inv
     q0y = base_coeffs[1] @ cache.base_to_post_mass.T @ qpost.MKrf_inv
-    q0x_face = np.einsum("Ki,fiq->Kfq", q0x, post_face, optimize=True)
-    q0y_face = np.einsum("Ki,fiq->Kfq", q0y, post_face, optimize=True)
+    q0x_face = xp.einsum("Ki,fiq->Kfq", q0x, post_face, optimize=True)
+    q0y_face = xp.einsum("Ki,fiq->Kfq", q0y, post_face, optimize=True)
     current = normals[..., 0, None] * q0x_face + normals[..., 1, None] * q0y_face
-    gap = np.einsum(
+    gap = xp.einsum(
         "Kf,Kfq,aq,q->Kfa",
         space.mesh.jacs_el_fc,
         numerical - current,
@@ -410,10 +444,10 @@ def _postprocess_total_flux(
     coeffs = np.empty((2, space.mesh.num_tri, post.el_dof), dtype=np.float64)
     solve_adr_total_flux_postprocess_kernel(
         coeffs,
-        np.ascontiguousarray(base_coeffs),
-        np.ascontiguousarray(gap),
-        np.ascontiguousarray(space.mesh.aff_jacs),
-        np.ascontiguousarray(qpost.MKrf_inv),
+        xp.ascontiguousarray(base_coeffs),
+        xp.ascontiguousarray(gap),
+        xp.ascontiguousarray(space.mesh.aff_jacs),
+        xp.ascontiguousarray(qpost.MKrf_inv),
         cache.base_to_post_mass,
         cache.interior_low_to_base,
         cache.interior_low_to_post,
@@ -433,6 +467,7 @@ def _postprocess_primal_from_total_flux(
         trace_ref,
         advection_stabilization,
         diffusion,
+        postprocessing_backend="numba",
 ) -> DGField:
     """Recover u_h^* through the coupled ADR local Neumann HDG problem."""
     from ..kernels.advection_diffusion_reaction_fused import (
@@ -448,6 +483,13 @@ def _postprocess_primal_from_total_flux(
     )
     post = cache.post_space
     qpost = post.quad_data
+    if postprocessing_backend == "cupy":
+        from ..backends.advection_diffusion_reaction_cupy import postprocess_primal_cupy
+        from ..backends.cupy import require_cupy
+        samples = _adr_postprocess_samples(
+            beta, prepared, space, post, advection_stabilization, xp=require_cupy())
+        return postprocess_primal_cupy(local_unknowns, total_flux_star, space, cache,
+                                      samples, float(diffusion))
     beta_volume, beta_face, tau_total = _adr_postprocess_samples(
         beta, prepared, space, post, advection_stabilization
     )
@@ -517,7 +559,15 @@ def solve_advection_diffusion_reaction_hdg(
         post_mode,
         flux_postprocess_space,
     )
+    if (backend == "raw-cuda" and not opts.materialize_host_solution
+            and postprocessing_backend == "numba" and post_mode != "none"):
+        raise ValueError("materialize_host_solution=False requires CuPy ADR postprocessing; "
+                         "select postprocessing_backend='auto' or 'cupy'")
+
     scalar_diffusion = _positive_scalar_diffusion(opts.diffusion)
+    if scalar_diffusion and not np.isscalar(opts.diffusion):
+        from .stabilization import constant_isotropic_diffusivity
+        opts = opts.with_overrides(diffusion=constant_isotropic_diffusivity(opts.diffusion))
     from ..backends.capabilities import validate_advection_diffusion_backend_configuration
 
     validate_advection_diffusion_backend_configuration(
@@ -543,7 +593,12 @@ def solve_advection_diffusion_reaction_hdg(
         diffusion_stabilization=opts.diffusion_stabilization,
         diffusion_penalty_constant=opts.diffusion_penalty_constant,
         trace_space=trace_ref,
+        dense_local_matrices=backend != "raw-cuda",
     )
+    diffusion_data = None
+    if backend == "numba" or reconstruction_backend == "numba":
+        from ..assembly.diffusion_coefficients import prepare_diffusion
+        diffusion_data = prepare_diffusion(opts.diffusion, space)
     preparation = time.perf_counter() - start
 
     local_solver = None
@@ -561,8 +616,6 @@ def solve_advection_diffusion_reaction_hdg(
         reduction = assembled.reduction
         local_solver = assembled.local_solver
     elif backend == "numba":
-        if not scalar_diffusion:
-            raise NotImplementedError("fused Numba ADR currently requires positive constant scalar diffusion")
         from ..backends.advection_diffusion_reaction_numba import (
             assemble_projected_adr_trace_system_eliminated_numba,
         )
@@ -571,7 +624,8 @@ def solve_advection_diffusion_reaction_hdg(
             boundary_condition,
             space,
             trace_space=trace_ref,
-            diffusion=float(opts.diffusion),
+            diffusion=opts.diffusion,
+            diffusion_data=diffusion_data,
         )
         trace_system = assembled.trace_system
         reduction = assembled.reduction
@@ -625,8 +679,6 @@ def solve_advection_diffusion_reaction_hdg(
 
     start = time.perf_counter()
     if reconstruction_backend == "numba":
-        if not scalar_diffusion:
-            raise NotImplementedError("Numba ADR reconstruction requires positive constant scalar diffusion")
         from ..backends.advection_diffusion_reaction_numba import (
             reconstruct_projected_adr_local_unknowns_numba,
         )
@@ -635,7 +687,8 @@ def solve_advection_diffusion_reaction_hdg(
             prepared,
             space,
             trace_space=trace_ref,
-            diffusion=float(opts.diffusion),
+            diffusion=opts.diffusion,
+            diffusion_data=diffusion_data,
         )
     else:
         if local_solver is None:
@@ -668,6 +721,7 @@ def solve_advection_diffusion_reaction_hdg(
             trace_ref,
             opts.advection_stabilization,
             flux_postprocess_space,
+            postprocessing_backend,
         )
     if post_mode in {"primal", "both"}:
         post_field = _postprocess_primal_from_total_flux(
@@ -679,9 +733,17 @@ def solve_advection_diffusion_reaction_hdg(
             trace_ref,
             opts.advection_stabilization,
             opts.diffusion,
+            postprocessing_backend,
         )
     if post_mode in {"flux", "both"}:
         post_flux = total_flux_star
+    if postprocessing_backend == "cupy":
+        from ..backends.cupy import require_cupy
+        if opts.materialize_host_solution:
+            for output in (post_field, *(post_flux.components if post_flux is not None else ())):
+                if output is not None:
+                    _ = output.coeffs
+        require_cupy().cuda.get_current_stream().synchronize()
     postprocessing = time.perf_counter() - start
     timings = AdvectionDiffusionReactionTimings(
         preparation=preparation,
@@ -711,6 +773,7 @@ def solve_advection_diffusion_reaction_hdg(
         element_boundary_mats=prepared.element_boundary,
         tau_advection=prepared.tau_advection,
         tau_diffusion=prepared.tau_diffusion,
+        diffusion_structure=None if diffusion_data is None else diffusion_data.counts,
         beta_dot_normal=prepared.beta_dot_normal,
         assembly_backend=backend,
         reconstruction_backend=reconstruction_backend,

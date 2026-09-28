@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..core.space import DGSpace
+from ..core.space import DGSpace, DGField
 
 
 DomainLength = float | Literal["auto"] | None
@@ -76,9 +76,9 @@ class GlobalLengthDiffusion:
     r"""Mesh- and degree-independent policy :math:`\tau_d=\gamma_d\kappa/L_\Omega`.
 
     ``domain_length=None`` and ``"auto"`` both select
-    :func:`automatic_domain_length`. The current implementation accepts a
-    positive scalar or constant isotropic tensor diffusion coefficient; variable
-    and anisotropic face-normal diffusivity remain separate qualification steps.
+    :func:`automatic_domain_length`. A positive scalar or constant isotropic
+    tensor uses a scalar tau. Other
+    elliptic tensors use the maximum sampled normal diffusivity per incidence.
     """
 
     gamma_d: float = 1.0
@@ -101,9 +101,14 @@ class GlobalLengthDiffusion:
             raise ValueError("domain_length must be finite and positive or 'auto'")
         return length
 
-    def resolve(self, diffusion: Any, space: DGSpace) -> float:
-        """Resolve this policy for positive constant isotropic diffusion."""
-        kappa = constant_isotropic_diffusivity(diffusion)
+    def resolve(self, diffusion: Any, space: DGSpace) -> float | np.ndarray:
+        """Resolve scalar or sidewise normal-diffusivity stabilization."""
+        try:
+            kappa = constant_isotropic_diffusivity(diffusion)
+        except NotImplementedError:
+            from ..assembly.diffusion_coefficients import normal_diffusivity_on_faces
+            scale = geometric_diffusion_tau(1., self.resolved_domain_length(space), self.gamma_d)
+            return scale * normal_diffusivity_on_faces(diffusion, space)
         return geometric_diffusion_tau(
             kappa,
             self.resolved_domain_length(space),
@@ -115,34 +120,39 @@ def constant_isotropic_diffusivity(diffusion: Any) -> float:
     """Return scalar kappa from scalar or constant isotropic tensor data."""
     if np.isscalar(diffusion):
         return float(diffusion)
+    if isinstance(diffusion, DGField):
+        if diffusion.constant_value is not None:
+            return float(diffusion.constant_value)
+        raise NotImplementedError("diffusion is not constant isotropic")
     try:
         values = np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError) as exc:
         raise NotImplementedError(
             "global-length stabilization requires constant isotropic diffusion"
         ) from exc
+    if values.ndim == 0:
+        return float(values)
     if values.shape == (3,):
         kappa_00, kappa_01, kappa_11 = (float(value) for value in values)
         matrix = np.array(
             ((kappa_00, kappa_01), (kappa_01, kappa_11)),
             dtype=REAL_DTYPE,
         )
+    elif values.shape == (4,):
+        matrix = values.reshape(2, 2)
     elif values.shape == (2, 2):
         matrix = values
     else:
         raise NotImplementedError(
             "global-length stabilization requires constant isotropic diffusion"
         )
-    scale = max(1.0, float(np.max(np.abs(matrix))))
-    tolerance = 64.0 * np.finfo(REAL_DTYPE).eps * scale
     if (
-        abs(float(matrix[0, 1])) > tolerance
-        or abs(float(matrix[1, 0])) > tolerance
-        or abs(float(matrix[0, 0] - matrix[1, 1])) > tolerance
+        float(matrix[0, 1]) != 0.0
+        or float(matrix[1, 0]) != 0.0
+        or float(matrix[0, 0]) != float(matrix[1, 1])
     ):
         raise NotImplementedError(
-            "global-length stabilization for anisotropic diffusion requires "
-            "the deferred face-normal diffusivity policy"
+            "diffusion is anisotropic; use incidence normal diffusivity"
         )
     return float(0.5 * (matrix[0, 0] + matrix[1, 1]))
 

@@ -264,8 +264,72 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
     return row
 
 
-def azimuthal_mode_diagnostics(field: DGField, equilibrium: DGField, mode: int) -> dict[str, float]:
-    """Return normalized base, second, and third azimuthal harmonic amplitudes."""
+def _diagnostic_scalars(pending, xp) -> dict[str, float]:
+    """Download one compact vector after verifying every metric is scalar."""
+    if not pending:
+        return {}
+    scalars = [xp.asarray(value) for value in pending.values()]
+    if any(value.ndim != 0 for value in scalars):
+        raise ValueError("diagnostic outputs must be scalar reductions")
+    packed = xp.stack(scalars)
+    values = packed if xp is np else xp.asnumpy(packed)
+    return {key: float(value) for key, value in zip(pending, values, strict=True)}
+
+
+def _azimuthal_reductions(theta, perturbation, weights, equilibrium_integral, mode, xp):
+    """Reduce three density harmonics in the selected array namespace."""
+    normalization = xp.maximum(xp.abs(equilibrium_integral), xp.finfo(REAL_DTYPE).tiny)
+    amplitudes = []
+    for harmonic in (1, 2, 3):
+        angle = float(harmonic * int(mode)) * theta
+        cosine = xp.sum(perturbation * xp.cos(angle) * weights)
+        sine = xp.sum(perturbation * xp.sin(angle) * weights)
+        amplitudes.append(2.0 * xp.hypot(cosine, sine) / normalization)
+    return {
+        "diocotron_mode_base": xp.asarray(float(mode), dtype=REAL_DTYPE),
+        "diocotron_mode_1k_amplitude": amplitudes[0],
+        "diocotron_mode_2k_amplitude": amplitudes[1],
+        "diocotron_mode_3k_amplitude": amplitudes[2],
+        "diocotron_harmonic_ratio": amplitudes[1] / xp.maximum(amplitudes[0], xp.finfo(REAL_DTYPE).tiny),
+    }
+
+
+def _device_azimuthal_reductions(cspace, difference, equilibrium_integral, mode, cp):
+    """Form density-mode moments using resident geometry and DG coefficients."""
+    reference_points = cspace.quad_data.Krf_quads
+    x = (
+        cspace.mesh.aff_mats[:, 0, 0, None] * reference_points[None, :, 0]
+        + cspace.mesh.aff_mats[:, 0, 1, None] * reference_points[None, :, 1]
+        + cspace.mesh.aff_vecs[:, 0, None]
+    )
+    y = (
+        cspace.mesh.aff_mats[:, 1, 0, None] * reference_points[None, :, 0]
+        + cspace.mesh.aff_mats[:, 1, 1, None] * reference_points[None, :, 1]
+        + cspace.mesh.aff_vecs[:, 1, None]
+    )
+    theta = cp.arctan2(y, x)
+    del x, y
+    perturbation = difference @ cspace.quad_data.bas_of_quads
+    weights = cspace.mesh.aff_jacs[:, None] * cspace.quad_data.Krf_w[None, :]
+    return _azimuthal_reductions(theta, perturbation, weights, equilibrium_integral, mode, cp)
+
+
+def azimuthal_mode_diagnostics(
+        field: DGField,
+        equilibrium: DGField,
+        mode: int,
+        *,
+        backend: Literal["auto", "host", "device"] = "auto",
+) -> dict[str, float]:
+    """Return density harmonics, downloading only five scalars on the device path.
+
+    ``auto`` uses device reductions when either field has resident coefficients.
+    Device equilibrium and density must use the same DGSpace. ``host`` permits
+    explicit host materialization, matching the other diagnostic helpers.
+    """
+    normalized = str(backend).lower()
+    if normalized not in {"auto", "host", "device"}:
+        raise ValueError("backend must be 'auto', 'host', or 'device'")
     if int(mode) <= 0:
         return {}
     if hasattr(field.space, "assert_same_mesh"):
@@ -273,24 +337,34 @@ def azimuthal_mode_diagnostics(field: DGField, equilibrium: DGField, mode: int) 
     elif field.space is not equilibrium.space:
         raise ValueError("field and equilibrium must share the same diagnostic space")
     space = field.space
+    use_device = normalized == "device" or (
+        normalized == "auto"
+        and any(isinstance(value, DGField) and value.device_coefficients_materialized()
+                for value in (field, equilibrium))
+    )
+    if use_device:
+        from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+
+        if equilibrium.space is not space:
+            raise ValueError("device equilibrium density must use the scalar DGSpace")
+        cp = require_cupy()
+        cspace = as_cupy_space(space)
+        coefficients = as_cupy_coefficients(field, cspace)
+        equilibrium_coefficients = as_cupy_coefficients(equilibrium, cspace)
+        moments = cp.sum(cspace.quad_data.weighted_phi, axis=0)
+        integral = cp.sum(cspace.mesh.aff_jacs * (equilibrium_coefficients @ moments))
+        pending = _device_azimuthal_reductions(
+            cspace, coefficients - equilibrium_coefficients, integral, mode, cp
+        )
+        return _diagnostic_scalars(pending, cp)
     points = space.mapped_quads()
     theta = np.arctan2(points[:, :, 1], points[:, :, 0])
     perturbation = np.asarray(field.values() - equilibrium.values(), dtype=REAL_DTYPE)
     weights = space.mesh.aff_jacs[:, None] * space.quad_data.Krf_w[None, :]
-    normalization = max(abs(float(np.sum(equilibrium.values() * weights))), np.finfo(REAL_DTYPE).tiny)
-    amplitudes = []
-    for harmonic in (1, 2, 3):
-        angle = float(harmonic * int(mode)) * theta
-        cosine = float(np.sum(perturbation * np.cos(angle) * weights))
-        sine = float(np.sum(perturbation * np.sin(angle) * weights))
-        amplitudes.append(2.0 * float(np.hypot(cosine, sine)) / normalization)
-    return {
-        "diocotron_mode_base": float(mode),
-        "diocotron_mode_1k_amplitude": amplitudes[0],
-        "diocotron_mode_2k_amplitude": amplitudes[1],
-        "diocotron_mode_3k_amplitude": amplitudes[2],
-        "diocotron_harmonic_ratio": amplitudes[1] / max(amplitudes[0], np.finfo(REAL_DTYPE).tiny),
-    }
+    integral = np.sum(equilibrium.values() * weights)
+    return _diagnostic_scalars(
+        _azimuthal_reductions(theta, perturbation, weights, integral, mode, np), np
+    )
 
 
 
@@ -364,7 +438,7 @@ class ScalarPositivityDiagnostics:
                 negative_l2 += xp.sum(negative*negative*weight)
             packed = xp.stack([low, high, lower, upper, mean_low, negative_mass,
                                xp.sqrt(negative_l2), negative_cells])
-            values = packed.get() if self.workspace.cspace is not None else packed
+            values = xp.asnumpy(packed) if self.workspace.cspace is not None else packed
         keys = ("rho_min_checked", "rho_max_checked", "rho_bernstein_lower_bound",
                 "rho_bernstein_upper_bound", "rho_cell_average_min",
                 "rho_negative_mass_quadrature", "rho_negative_l2_quadrature", "rho_negative_cells_sampled")
@@ -446,7 +520,7 @@ def guiding_center_field_diagnostics(
                 ),
                 "diocotron_rho_eq_reference_l2": equilibrium_density.l2_norm(),
             })
-            result.update(azimuthal_mode_diagnostics(density, equilibrium_density, mode))
+            result.update(azimuthal_mode_diagnostics(density, equilibrium_density, mode, backend="host"))
         return result
 
     from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
@@ -533,43 +607,12 @@ def guiding_center_field_diagnostics(
             cp.maximum(l2_squared(equilibrium_rho_coeffs, cspace), 0.0)
         )
         if int(mode) > 0:
-            reference_points = cspace.quad_data.Krf_quads
-            x = (
-                cspace.mesh.aff_mats[:, 0, 0, None] * reference_points[None, :, 0]
-                + cspace.mesh.aff_mats[:, 0, 1, None] * reference_points[None, :, 1]
-                + cspace.mesh.aff_vecs[:, 0, None]
-            )
-            y = (
-                cspace.mesh.aff_mats[:, 1, 0, None] * reference_points[None, :, 0]
-                + cspace.mesh.aff_mats[:, 1, 1, None] * reference_points[None, :, 1]
-                + cspace.mesh.aff_vecs[:, 1, None]
-            )
-            theta = cp.arctan2(y, x)
-            del x, y
-            perturbation = rho_difference @ cspace.quad_data.bas_of_quads
-            weights = jacobians[:, None] * cspace.quad_data.Krf_w[None, :]
-            normalization = cp.maximum(
-                cp.abs(equilibrium_integral), cp.finfo(REAL_DTYPE).tiny
-            )
-            amplitudes = []
-            for harmonic in (1, 2, 3):
-                angle = float(harmonic * int(mode)) * theta
-                cosine = cp.sum(perturbation * cp.cos(angle) * weights)
-                sine = cp.sum(perturbation * cp.sin(angle) * weights)
-                amplitudes.append(2.0 * cp.hypot(cosine, sine) / normalization)
-            pending["diocotron_mode_base"] = cp.asarray(float(mode), dtype=REAL_DTYPE)
-            pending["diocotron_mode_1k_amplitude"] = amplitudes[0]
-            pending["diocotron_mode_2k_amplitude"] = amplitudes[1]
-            pending["diocotron_mode_3k_amplitude"] = amplitudes[2]
-            pending["diocotron_harmonic_ratio"] = amplitudes[1] / cp.maximum(
-                amplitudes[0], cp.finfo(REAL_DTYPE).tiny
-            )
+            pending.update(_device_azimuthal_reductions(
+                cspace, rho_difference, equilibrium_integral, mode, cp
+            ))
 
     audit_arrays('diagnostic-reductions', pending, cspace)
-    keys = tuple(pending)
-    packed = cp.stack([pending[key] for key in keys])
-    values = cp.asnumpy(packed)
-    result = {key: float(value) for key, value in zip(keys, values, strict=True)}
+    result = _diagnostic_scalars(pending, cp)
     result["diagnostics_backend"] = "cuda"
     return result
 
@@ -658,10 +701,7 @@ def transport_velocity_diagnostics(
         "velocity_speed_linf": xp.max(cell_speed),
         "velocity_max_speed_over_min_edge": xp.max(cell_speed / min_edge_length),
     }
-    values = xp.stack(tuple(pending.values()))
-    if use_device:
-        values = xp.asnumpy(values)
-    result = {key: float(value) for key, value in zip(pending, values, strict=True)}
+    result = _diagnostic_scalars(pending, xp)
     result["velocity_diagnostics_backend"] = "cuda" if use_device else "host"
     return result
 
@@ -752,8 +792,8 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
     element_maximum = cp.max(cp.abs(sampled_numerical - sampled_exact), axis=1)
     # One compact transfer after the reductions; retain full samples only
     # when explicitly requested by the caller.
-    packed = cp.stack((l2, cp.max(element_maximum), cp.mean(element_maximum),
-                       cp.argmax(element_maximum).astype(cp.float64))).get()
+    packed = cp.asnumpy(cp.stack((l2, cp.max(element_maximum), cp.mean(element_maximum),
+                                 cp.argmax(element_maximum).astype(cp.float64))))
     metrics = ScalarErrorMetrics(
         l2=float(packed[0]),
         linf=float(packed[1]),

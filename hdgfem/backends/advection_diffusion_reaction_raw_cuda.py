@@ -1,8 +1,10 @@
-"""Raw CUDA stationary ADR assembly and reconstruction baseline."""
+"""Raw CUDA stationary tensor ADR assembly, solve, and reconstruction."""
 
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -35,7 +37,7 @@ __device__ __forceinline__ double orientation_sign(bool positive, int dof) {{
 #endif
 }}
 
-__device__ __forceinline__ void factor(double* a, int* pivots) {{
+__device__ __forceinline__ int factor(double* a, int* pivots) {{
     for (int k = 0; k < NEL; ++k) {{
         int pivot = k;
         double largest = fabs(a[k*NEL+k]);
@@ -48,13 +50,14 @@ __device__ __forceinline__ void factor(double* a, int* pivots) {{
             double tmp = a[k*NEL+j]; a[k*NEL+j] = a[pivot*NEL+j]; a[pivot*NEL+j] = tmp;
         }}
         double diagonal = a[k*NEL+k];
-        if (fabs(diagonal) < 1.e-30) {{ diagonal = diagonal < 0.0 ? -1.e-30 : 1.e-30; a[k*NEL+k] = diagonal; }}
+        if (!isfinite(diagonal) || fabs(diagonal) < 1.e-30) return k+1;
         for (int i = k+1; i < NEL; ++i) {{
             a[i*NEL+k] /= diagonal;
             double multiplier = a[i*NEL+k];
             for (int j = k+1; j < NEL; ++j) a[i*NEL+j] -= multiplier*a[k*NEL+j];
         }}
     }}
+    return 0;
 }}
 
 __device__ __forceinline__ void solve(
@@ -100,7 +103,7 @@ __device__ __forceinline__ double lift_value(
     return value;
 }}
 
-__device__ __forceinline__ void build_factor(
+__device__ __forceinline__ int build_factor(
         long long element, double diffusion, const double* aff_mats, const double* aff_jacs,
         const double* mass_inverse, const double* basis, const double* gradients,
         const double* weights, const double* reaction_values, const double* beta_values,
@@ -134,7 +137,7 @@ __device__ __forceinline__ void build_factor(
         double x=0.0,y=0.0;for(int k=0;k<NEL;++k){{x+=mn0[i*NEL+k]*kd0[k*NEL+j];y+=mn1[i*NEL+k]*kd1[k*NEL+j];}}
         schur[i*NEL+j]+=jac_inv*(x+y);
     }}
-    factor(schur,pivots);
+    return factor(schur,pivots);
 }}
 
 extern "C" __global__ void assemble_adr_raw(
@@ -147,12 +150,13 @@ extern "C" __global__ void assemble_adr_raw(
         const double* normal_mass_x,const double* normal_mass_y,const double* d0_reference,
         const double* d1_reference,const double* element_boundary,const double* trace_lift,
         const double* gamma_mass,const double* source_rhs,const double* boundary_trace,
-        long long num_elements,long long mass_offset,double diffusion) {{
+        long long num_elements,long long mass_offset,double diffusion,int* statuses) {{
     long long element=blockIdx.x;
     if(element>=num_elements||threadIdx.x!=0)return;
     double schur[NEL*NEL],d0[NEL*NEL],d1[NEL*NEL],mn0[NEL*NEL],mn1[NEL*NEL],kd0[NEL*NEL],kd1[NEL*NEL];
     double rhs0[NEL],rhs1[NEL],rhs2[NEL],u[NEL],qx[NEL],qy[NEL],work0[NEL],work1[NEL];int pivots[NEL];
-    build_factor(element,diffusion,aff_mats,aff_jacs,mass_inverse,basis,gradients,weights,reaction_values,beta_values,u_boundary_mass,normal_mass_x,normal_mass_y,d0_reference,d1_reference,schur,d0,d1,mn0,mn1,kd0,kd1,pivots);
+    int failure=build_factor(element,diffusion,aff_mats,aff_jacs,mass_inverse,basis,gradients,weights,reaction_values,beta_values,u_boundary_mass,normal_mass_x,normal_mass_y,d0_reference,d1_reference,schur,d0,d1,mn0,mn1,kd0,kd1,pivots);
+    if(failure) {{ statuses[element]=failure; return; }}
     double jac_inv=diffusion/aff_jacs[element];
     for(int i=0;i<NEL;++i){{rhs0[i]=source_rhs[element*NEL+i];rhs1[i]=0.0;rhs2[i]=0.0;}}
     solve(schur,pivots,mass_inverse,d0,d1,mn0,mn1,rhs0,rhs1,rhs2,u,qx,qy,work0,work1,jac_inv);
@@ -188,11 +192,12 @@ extern "C" __global__ void reconstruct_adr_raw(
         const double* gradients,const double* weights,const double* reaction_values,const double* beta_values,
         const double* u_boundary_mass,const double* normal_mass_x,const double* normal_mass_y,
         const double* d0_reference,const double* d1_reference,const double* element_boundary,
-        const double* source_rhs,long long num_elements,double diffusion) {{
+        const double* source_rhs,long long num_elements,double diffusion,int* statuses) {{
     long long element=blockIdx.x;if(element>=num_elements||threadIdx.x!=0)return;
     double schur[NEL*NEL],d0[NEL*NEL],d1[NEL*NEL],mn0[NEL*NEL],mn1[NEL*NEL],kd0[NEL*NEL],kd1[NEL*NEL];
     double rhs0[NEL],rhs1[NEL],rhs2[NEL],u[NEL],qx[NEL],qy[NEL],work0[NEL],work1[NEL];int pivots[NEL];
-    build_factor(element,diffusion,aff_mats,aff_jacs,mass_inverse,basis,gradients,weights,reaction_values,beta_values,u_boundary_mass,normal_mass_x,normal_mass_y,d0_reference,d1_reference,schur,d0,d1,mn0,mn1,kd0,kd1,pivots);
+    int failure=build_factor(element,diffusion,aff_mats,aff_jacs,mass_inverse,basis,gradients,weights,reaction_values,beta_values,u_boundary_mass,normal_mass_x,normal_mass_y,d0_reference,d1_reference,schur,d0,d1,mn0,mn1,kd0,kd1,pivots);
+    if(failure) {{ statuses[element]=failure; return; }}
     for(int i=0;i<NEL;++i){{rhs0[i]=source_rhs[element*NEL+i];rhs1[i]=0.0;rhs2[i]=0.0;}}
     for(int f=0;f<3;++f){{long long edge=loc2glob[element*3+f];bool positive=orientations[element*3+f];for(int d=0;d<NTR;++d){{int ld=local_dof(positive,d);double value=orientation_sign(positive,d)*trace[edge*NTR+d];int col=f*NTR+ld;for(int i=0;i<NEL;++i){{rhs0[i]+=element_boundary[(element*3*NEL+i)*3*NTR+col]*value;rhs1[i]+=element_boundary[(element*3*NEL+NEL+i)*3*NTR+col]*value;rhs2[i]+=element_boundary[(element*3*NEL+2*NEL+i)*3*NTR+col]*value;}}}}}}
     solve(schur,pivots,mass_inverse,d0,d1,mn0,mn1,rhs0,rhs1,rhs2,u,qx,qy,work0,work1,diffusion/aff_jacs[element]);
@@ -214,18 +219,66 @@ def _device_inputs(cp, prepared: ADRPreparedData, space: DGSpace):
     return tuple(cp.ascontiguousarray(cp.asarray(value)) for value in arrays)
 
 
-def assemble_projected_adr_trace_system_eliminated_raw_cuda(
-        source, beta, reaction, boundary_condition, space: DGSpace, *, prepared: ADRPreparedData,
-        options, trace_space: DGTraceSpace, preparation_seconds: float, total_start: float,
-):
-    """Assemble, solve, and reconstruct the identity-diffusion ADR system on CUDA."""
-    if not np.isscalar(options.diffusion) or not np.isfinite(float(options.diffusion)) or float(options.diffusion) <= 0.0:
+@dataclass(frozen=True)
+class RawADRTraceOperator:
+    """Device trace operator and local data retained for ADR reconstruction."""
+
+    assembly: Any
+    module: Any
+    device_inputs: tuple[Any, ...]
+    boundary_trace: Any
+    csr_pattern: Any = None
+    diffusion_structure: dict[str, int] | None = None
+    diffusion_kinds: Any = None
+    reconstruction_data: Any = None
+
+
+def assemble_projected_adr_trace_operator_raw_cuda(
+        prepared: ADRPreparedData, boundary_condition, space: DGSpace, *,
+        diffusion=1.0, trace_space: DGTraceSpace,
+        matrix_format="csr", block_size="auto",
+) -> RawADRTraceOperator:
+    """Assemble FP64 tensor ADR in COO, direct CSR, or face-block BSR.
+
+    Tensor assembly and reconstruction share the same local algebra.
+    ``block_size=1`` retains the original scalar serial diagnostic path (CSR).
+    Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/6.
+    """
+    from .raw_cuda import resolve_raw_cuda_block_size
+    from .adr_tensor_raw_cuda import assemble_tensor_operator
+    if space.order > 6 or trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
+        raise ValueError("raw CUDA tensor ADR supports p=0--6 and legacy-lagrange/legendre-modal traces")
+    if trace_space.space is not space:
+        raise ValueError("trace_space must belong to the ADR space")
+    matrix_format = str(matrix_format).lower()
+    if matrix_format not in {"coo", "csr", "bsr"}:
+        raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
+    block_size = resolve_raw_cuda_block_size(block_size, equation="diffusion-reaction", order=space.order)
+    if (block_size == 1 and matrix_format == "csr" and prepared.element_boundary is not None
+            and np.isscalar(diffusion)):
+        return _assemble_scalar_serial_operator(prepared, boundary_condition, space,
+                                                 diffusion=diffusion, trace_space=trace_space)
+    return assemble_tensor_operator(prepared, boundary_condition, space, diffusion=diffusion,
+                                    trace_space=trace_space, matrix_format=matrix_format,
+                                    block_size=block_size)
+
+
+def reconstruct_projected_adr_local_unknowns_raw_cuda(operator, trace, *, block_size="auto"):
+    """Return device mixed local unknowns and timings from a full trace."""
+    from .adr_tensor_raw_cuda import reconstruct_tensor_operator
+    return reconstruct_tensor_operator(operator, trace, block_size=block_size)
+
+
+def _assemble_scalar_serial_operator(
+        prepared: ADRPreparedData, boundary_condition, space: DGSpace, *,
+        diffusion: float = 1.0, trace_space: DGTraceSpace,
+) -> RawADRTraceOperator:
+    """Assemble raw ADR COO then device CSR without a global solve or recovery."""
+    if not np.isscalar(diffusion) or not np.isfinite(float(diffusion)) or float(diffusion) <= 0.0:
         raise NotImplementedError("raw CUDA ADR currently requires positive constant scalar diffusion")
-    if str(options.solver).lower() not in {"amgx", "pyamgx"}:
-        raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx'")
     cp = require_cupy()
     from cupyx.scipy import sparse
-    from .advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space, reconstruct_trace_cupy, solve_reduced_system_amgx_device
+    from .advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(trace_space)
     mesh = space.mesh
@@ -241,13 +294,56 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     rows=cp.empty(nnz,dtype=cp.int64);cols=cp.empty(nnz,dtype=cp.int64);data=cp.empty(nnz,dtype=cp.float64)
     rhs=cp.zeros(free_edges.size*ntr,dtype=cp.float64)
     boundary=cp.asarray(boundary_host,dtype=cp.float64)
+    for name in ("source_rhs", "reaction_values", "beta_values", "tau_total", "gamma"):
+        if not np.all(np.isfinite(getattr(prepared, name))):
+            raise ValueError(f"ADR {name} samples must be finite")
+    statuses=cp.zeros(mesh.num_tri,dtype=cp.int32)
     device_inputs=_device_inputs(cp,prepared,space)
     source_code=_RAW_ADR_TEMPLATE.format(nel=space.el_dof,ntr=ntr,nq=space.quad_data.Krf_w.size,orientation_mode=_trace_orientation_mode(trace_space))
     compile_start=time.perf_counter(); module=cp.RawModule(code=source_code,options=("--std=c++11",)); kernel=module.get_function("assemble_adr_raw");compile_seconds=time.perf_counter()-compile_start
-    args=(rows,cols,data,rhs,cp.asarray(mesh.loc2glob_edge),cp.asarray(mesh.orientations),cp.asarray(side_index),cp.asarray(edge_to_solve),cp.asarray(offsets),*device_inputs[:15],device_inputs[15],device_inputs[16],boundary.reshape(-1),np.int64(mesh.num_tri),np.int64(nflux),np.float64(options.diffusion))
-    start=time.perf_counter();kernel((mesh.num_tri,),(1,),args);cp.cuda.get_current_stream().synchronize();assembly_seconds=time.perf_counter()-start
+    args=(rows,cols,data,rhs,cp.asarray(mesh.loc2glob_edge),cp.asarray(mesh.orientations),cp.asarray(side_index),cp.asarray(edge_to_solve),cp.asarray(offsets),*device_inputs[:15],device_inputs[15],device_inputs[16],boundary.reshape(-1),np.int64(mesh.num_tri),np.int64(nflux),np.float64(diffusion),statuses)
+    start_event, end_event = cp.cuda.Event(), cp.cuda.Event()
+    start=time.perf_counter()
+    start_event.record()
+    kernel((mesh.num_tri,),(1,),args)
+    end_event.record()
+    end_event.synchronize()
+    assembly_seconds=time.perf_counter()-start
+    device_seconds=cp.cuda.get_elapsed_time(start_event, end_event)/1000.0
+    if bool(cp.any(statuses)):
+        failures=cp.asnumpy(statuses)
+        raise np.linalg.LinAlgError(f"ADR scalar Schur factorization failed in element {int(np.flatnonzero(failures)[0])}")
+    if not bool(cp.all(cp.isfinite(data))) or not bool(cp.all(cp.isfinite(rhs))):
+        raise np.linalg.LinAlgError("ADR serial condensation produced nonfinite values")
+    conversion_start=time.perf_counter()
     coo=sparse.coo_matrix((data,(rows,cols)),shape=(rhs.size,rhs.size));csr=coo.tocsr();csr.sum_duplicates()
-    assembly=CudaAdvectionAssembly(None,None,csr.data,rhs,None,None,device_inputs[16],boundary[mesh.bnd_edges_inds],None,cspace,trace_ref,indptr=csr.indptr,indices=csr.indices,matrix_format="csr",timings={"raw.kernel.jit":compile_seconds,"raw.kernel.wall":assembly_seconds})
+    cp.cuda.get_current_stream().synchronize()
+    conversion_seconds=time.perf_counter()-conversion_start
+    assembly=CudaAdvectionAssembly(None,None,csr.data,rhs,None,None,device_inputs[16],boundary[mesh.bnd_edges_inds],None,cspace,trace_ref,indptr=csr.indptr,indices=csr.indices,matrix_format="csr",timings={"raw.kernel.jit":compile_seconds,"raw.kernel.wall":assembly_seconds,"raw.kernel.device":device_seconds,"raw.coo_to_csr.wall":conversion_seconds})
+    from ..assembly.diffusion_coefficients import DIFFUSION_KINDS
+    counts={name: mesh.num_tri if i==0 else 0 for i,name in enumerate(DIFFUSION_KINDS)}
+    return RawADRTraceOperator(assembly, module, device_inputs, boundary,
+                               diffusion_structure=counts, diffusion_kinds=np.zeros(mesh.num_tri,dtype=np.int64))
+
+
+def assemble_projected_adr_trace_system_eliminated_raw_cuda(
+        source, beta, reaction, boundary_condition, space: DGSpace, *, prepared: ADRPreparedData,
+        options, trace_space: DGTraceSpace, preparation_seconds: float, total_start: float,
+):
+    """Assemble, solve, and reconstruct an elliptic tensor ADR system on CUDA."""
+    if str(options.solver).lower() not in {"amgx", "pyamgx"}:
+        raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx'")
+    cp = require_cupy()
+    from .advection_cuda import reconstruct_trace_cupy, solve_reduced_system_amgx_device
+    operator = assemble_projected_adr_trace_operator_raw_cuda(
+        prepared, boundary_condition, space, diffusion=options.diffusion, trace_space=trace_space,
+        matrix_format=options.raw_matrix_format, block_size=options.raw_block_size)
+    assembly = operator.assembly
+    module, device_inputs, boundary = operator.module, operator.device_inputs, operator.boundary_trace
+    cspace, mesh = assembly.cspace, space.mesh
+    rhs = assembly.rhs
+    compile_seconds = assembly.timings["raw.kernel.jit"]
+    assembly_seconds = assembly.timings["raw.kernel.wall"]
     amgx_config = options.amgx_config
     if amgx_config is None:
         amgx_config = {
@@ -257,7 +353,7 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
             "solver": {
                 "solver": "FGMRES",
                 "monitor_residual": 1,
-                "convergence": "ABSOLUTE",
+                "convergence": "RELATIVE_INI_CORE",
                 "tolerance": float(options.solver_rtol),
                 "max_iters": 500 if options.maxiter is None else int(options.maxiter),
                 "gmres_n_restart": 100,
@@ -268,20 +364,49 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
         }
     start=time.perf_counter();solve_result,reduced=solve_reduced_system_amgx_device(assembly,config=amgx_config,tolerance=options.solver_rtol,atol=options.solver_atol,maxiter=options.maxiter,initial_guess=options.initial_guess,scale_system=options.scale_system,materialize_host_solution=options.materialize_host_solution,verbose=options.verbose);solve_seconds=time.perf_counter()-start
     trace_device=reconstruct_trace_cupy(reduced,assembly.boundary_trace,cspace)
-    reconstruct_kernel=module.get_function("reconstruct_adr_raw");unknowns=cp.empty((mesh.num_tri,3*space.el_dof),dtype=cp.float64)
-    rargs=(unknowns,trace_device,cp.asarray(mesh.loc2glob_edge),cp.asarray(mesh.orientations),*device_inputs[:14],device_inputs[16],np.int64(mesh.num_tri),np.float64(options.diffusion))
-    start=time.perf_counter();reconstruct_kernel((mesh.num_tri,),(1,),rargs);cp.cuda.get_current_stream().synchronize();reconstruction=time.perf_counter()-start
-    trace=cp.asnumpy(trace_device);local_unknowns=cp.asnumpy(unknowns)
-    from ..solvers.advection_diffusion_reaction import AdvectionDiffusionReactionResult,AdvectionDiffusionReactionTimings,_postprocess_primal_from_total_flux,_postprocess_total_flux,_project_total_flux,_reported_postprocessing_backend
-    from ..solvers.diffusion_reaction import _normalize_hdg_postprocess_mode,split_diffusion_unknowns
-    field,flux=split_diffusion_unknowns(local_unknowns,space);total_flux=_project_total_flux(local_unknowns,prepared,space)
-    post_mode=_normalize_hdg_postprocess_mode(options.hdg_postprocess);post_field=post_flux=total_flux_star=None;post_start=time.perf_counter()
-    if post_mode != "none": total_flux_star=_postprocess_total_flux(local_unknowns,trace,beta,prepared,space,trace_space,options.advection_stabilization,options.flux_postprocess_space,options.postprocessing_backend)
-    if post_mode in {"primal","both"}: post_field=_postprocess_primal_from_total_flux(local_unknowns,total_flux_star,beta,prepared,space,trace_space,options.advection_stabilization,options.diffusion)
-    if post_mode in {"flux","both"}: post_flux=total_flux_star
+    start=time.perf_counter()
+    unknowns, reconstruction_timings = reconstruct_projected_adr_local_unknowns_raw_cuda(
+        operator, trace_device, block_size=options.raw_block_size)
+    reconstruction=time.perf_counter()-start
+    from ..solvers.advection_diffusion_reaction import (
+        AdvectionDiffusionReactionResult, AdvectionDiffusionReactionTimings,
+        _postprocess_primal_from_total_flux, _postprocess_total_flux,
+        _reported_postprocessing_backend, _project_total_flux,
+    )
+    from ..solvers.diffusion_reaction import _normalize_hdg_postprocess_mode, split_diffusion_unknowns
+
+    field, flux = split_diffusion_unknowns(unknowns, space)
+    total_flux = _project_total_flux(unknowns, prepared, space)
+    post_mode = _normalize_hdg_postprocess_mode(options.hdg_postprocess)
+    post_field = post_flux = total_flux_star = None
+    post_start = time.perf_counter()
+    local_unknowns, trace = unknowns, trace_device
+    if post_mode != "none" and options.postprocessing_backend == "numba":
+        local_unknowns, trace = cp.asnumpy(unknowns), cp.asnumpy(trace_device)
+    if post_mode != "none":
+        total_flux_star = _postprocess_total_flux(
+            local_unknowns, trace, beta, prepared, space, trace_space,
+            options.advection_stabilization, options.flux_postprocess_space,
+            options.postprocessing_backend)
+    if post_mode in {"primal", "both"}:
+        post_field = _postprocess_primal_from_total_flux(
+            local_unknowns, total_flux_star, beta, prepared, space, trace_space,
+            options.advection_stabilization, options.diffusion, options.postprocessing_backend)
+    if post_mode in {"flux", "both"}:
+        post_flux = total_flux_star
+    if options.materialize_host_solution:
+        if isinstance(local_unknowns, cp.ndarray):
+            local_unknowns = cp.asnumpy(local_unknowns)
+        if isinstance(trace, cp.ndarray):
+            trace = cp.asnumpy(trace)
+        for output in (field, *flux.components, *total_flux.components,
+                       post_field, *(post_flux.components if post_flux is not None else ())):
+            if output is not None:
+                _ = output.coeffs
+    cp.cuda.get_current_stream().synchronize()
     post_seconds=time.perf_counter()-post_start
-    timings=AdvectionDiffusionReactionTimings(preparation=preparation_seconds,trace_assembly=assembly_seconds,solve=solve_seconds,reconstruction=reconstruction,postprocessing=post_seconds,total=time.perf_counter()-total_start,details={"raw.kernel.jit":compile_seconds,"raw.kernel.wall":assembly_seconds})
-    return AdvectionDiffusionReactionResult(field=field,flux=flux,total_flux=total_flux,trace=trace,timings=timings,postprocessed_field=post_field,postprocessed_flux=post_flux,local_unknowns=local_unknowns,matrix_data=csr.data,rhs=rhs,boundary_trace=boundary,reduction=None,element_boundary_mats=prepared.element_boundary,tau_advection=prepared.tau_advection,tau_diffusion=prepared.tau_diffusion,beta_dot_normal=prepared.beta_dot_normal,assembly_backend="raw-cuda",reconstruction_backend="raw-cuda",postprocessing_backend=("none" if post_mode == "none" else _reported_postprocessing_backend(options.postprocessing_backend,post_mode)),global_solve_result=solve_result)
+    timings=AdvectionDiffusionReactionTimings(preparation=preparation_seconds,trace_assembly=assembly_seconds,solve=solve_seconds,reconstruction=reconstruction,postprocessing=post_seconds,total=time.perf_counter()-total_start,details={**assembly.timings, **reconstruction_timings})
+    return AdvectionDiffusionReactionResult(field=field,flux=flux,total_flux=total_flux,trace=trace,timings=timings,postprocessed_field=post_field,postprocessed_flux=post_flux,local_unknowns=local_unknowns,matrix_rows=assembly.rows,matrix_cols=assembly.cols,matrix_data=assembly.data,matrix_indptr=assembly.indptr,matrix_indices=assembly.indices,matrix_format=assembly.matrix_format,diffusion_structure=operator.diffusion_structure,rhs=rhs,boundary_trace=boundary,reduction=None,element_boundary_mats=prepared.element_boundary,tau_advection=prepared.tau_advection,tau_diffusion=prepared.tau_diffusion,beta_dot_normal=prepared.beta_dot_normal,assembly_backend="raw-cuda",reconstruction_backend="raw-cuda",postprocessing_backend=("none" if post_mode == "none" else _reported_postprocessing_backend(options.postprocessing_backend,post_mode)),global_solve_result=solve_result)
 
 
-__all__=["assemble_projected_adr_trace_system_eliminated_raw_cuda"]
+__all__=["RawADRTraceOperator", "reconstruct_projected_adr_local_unknowns_raw_cuda", "assemble_projected_adr_trace_operator_raw_cuda", "assemble_projected_adr_trace_system_eliminated_raw_cuda"]

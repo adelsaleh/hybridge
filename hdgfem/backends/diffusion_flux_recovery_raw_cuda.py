@@ -113,12 +113,20 @@ extern "C" __global__ void recover_flux(
 
 @dataclass
 class FluxRecoveryDeviceCache:
+    """Reference lifts and geometry factors independent of the current tau."""
+
     key: tuple
     reference: object
     cspace: object
     arrays: tuple
     cholesky: object
     kernel: object
+
+    def is_compatible(self, space, trace_space, flux_space, *, device=None):
+        """Check space, trace, recovery variant, and active-device ownership."""
+        if device is None:
+            device = int(require_cupy().cuda.runtime.getDevice())
+        return self.key == (id(space), id(trace_space), flux_space, int(device))
 
 
 def recover_diffusion_flux_raw_cuda(local_unknowns, trace, space, trace_space,
@@ -136,7 +144,7 @@ def recover_diffusion_flux_raw_cuda(local_unknowns, trace, space, trace_space,
     cp = require_cupy()
     device = int(cp.cuda.runtime.getDevice())
     key = (id(space), id(trace_space), flux_space, device)
-    if cache is None or cache.key != key:
+    if cache is None or not cache.is_compatible(space, trace_space, flux_space, device=device):
         ref = build_flux_recovery_reference(space, trace_space, l2_closest=flux_space=='l2_closest')
         cspace = as_cupy_space(space, device=device)
         n, b, e = ref.post_space.el_dof, space.el_dof, trace_space.edg_dof

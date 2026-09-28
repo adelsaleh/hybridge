@@ -26,6 +26,7 @@ _PRIMARY_SOLVER_EXPORTS = {
     "DiffusionReactionResult",
     "DiffusionReactionTimings",
     "GlobalLengthDiffusion",
+    "ScaledUpwind",
     "automatic_domain_length",
     "compute_domain_length",
     "geometric_diffusion_tau",
@@ -568,7 +569,7 @@ def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_
         cache_local_factors="schur-lu",
         verbose=False,
     )
-    with pytest.raises(ValueError, match="assembly_backend='raw-cuda'"):
+    with pytest.raises(ValueError, match="assembly_backend='numba' or 'raw-cuda'"):
         solver.solve()
 
     with pytest.raises(ValueError, match="stateful DiffusionReactionHDGSolver"):
@@ -592,7 +593,7 @@ def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_
         cache_local_factors="schur-cholesky",
         verbose=False,
     )
-    with pytest.raises(ValueError, match="requires assembly_backend='cupy' or 'raw-cuda'"):
+    with pytest.raises(ValueError, match="requires assembly_backend='numba', 'cupy' or 'raw-cuda'"):
         raw_cholesky.solve()
 
 

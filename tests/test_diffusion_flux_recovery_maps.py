@@ -176,7 +176,3 @@ def test_solver_hands_device_buffers_to_recovery_and_reuses_cache_on_rhs_updates
         assert recovered.trace_device is recovered.local_unknowns_device is None
         assert solver._hdg_postprocess_cache is cache
     assert calls == [None, cache, cache]
-    # Current exceptional path: tau changes clear the cache along with the operator.
-    # Preserving tau-independent raw recovery data here is tracked in TODO.md.
-    solver.with_options(stabilization=2*options.stabilization)
-    assert solver._hdg_postprocess_cache is None

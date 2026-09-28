@@ -418,17 +418,11 @@ def test_stage_backend_preflight_rejects_unavailable_paths():
             source, beta, reaction, boundary, space,
             assembly_backend="numpy", reconstruction_backend="raw-cuda", **common,
         )
-    with pytest.raises(NotImplementedError, match="supports only.*RT_projection"):
+    with pytest.raises(ValueError, match="requires CuPy ADR postprocessing"):
         solve_advection_diffusion_reaction_hdg(
-            source,
-            beta,
-            reaction,
-            boundary,
-            space,
-            assembly_backend="numpy",
-            postprocessing_backend="cupy",
-            flux_postprocess_space="full-p-plus-1",
-            **common,
+            source, beta, reaction, boundary, space,
+            assembly_backend="raw-cuda", postprocessing_backend="numba",
+            materialize_host_solution=False, **common,
         )
 
 
@@ -509,9 +503,10 @@ def _raw_cuda_runtime_available():
 @pytest.mark.parametrize(
     "flux_postprocess_space", ("full-p-plus-1", "rt-p")
 )
+@pytest.mark.parametrize("postprocessing_backend", ("auto", "numba"))
 @pytest.mark.skipif(not _raw_cuda_runtime_available(), reason="Raw CUDA/PyAMGX runtime unavailable")
 def test_raw_cuda_matches_numpy_with_asymmetric_side_stabilization(
-        flux_postprocess_space,
+        flux_postprocess_space, postprocessing_backend,
 ):
     from hdgfem.io.config import load_amgx_config
 
@@ -538,7 +533,7 @@ def test_raw_cuda_matches_numpy_with_asymmetric_side_stabilization(
     device = solve_advection_diffusion_reaction_hdg(
         source, beta, reaction, boundary, space,
         assembly_backend="raw-cuda", solver="amgx", amgx_config=config,
-        solver_rtol=1e-11, **common,
+        solver_rtol=1e-11, postprocessing_backend=postprocessing_backend, **common,
     )
     np.testing.assert_allclose(device.trace, reference.trace, rtol=2e-11, atol=2e-12)
     np.testing.assert_allclose(

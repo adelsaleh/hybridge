@@ -24,14 +24,16 @@ def solve_adr_rt_total_flux_postprocess_cupy(
         radial_face: np.ndarray,
         low_volume_basis: np.ndarray,
         face_test_basis: np.ndarray,
+        *, materialize_host: bool = True,
 ) -> np.ndarray:
     r"""Reconstruct ``RT_p`` total fluxes with batched device dense solves.
 
     This is the CuPy mirror of
     ``solve_adr_rt_total_flux_postprocess_kernel``. Static reference and mesh
     tables are uploaded once per call, all element moment matrices are formed
-    and solved in batches on the active CUDA device, and only the final
-    degree-``p+1`` component coefficients are materialized on the host.
+    and solved in batches on the active CUDA device. Final degree-``p+1``
+    coefficients stay on device when ``materialize_host=False``; the default
+    preserves the host-returning helper contract.
     """
     cp = require_cupy()
     total_values = cp.asarray(total_flux_values)
@@ -162,7 +164,111 @@ def solve_adr_rt_total_flux_postprocess_cupy(
     post_coeffs = cp.einsum(
         "Kai,ij->Kaj", post_moments, post_mass_inv, optimize=True
     )
-    return cp.asnumpy(post_coeffs.transpose(1, 0, 2))
+    result = cp.ascontiguousarray(post_coeffs.transpose(1, 0, 2))
+    return cp.asnumpy(result) if materialize_host else result
 
 
 __all__ = ["solve_adr_rt_total_flux_postprocess_cupy"]
+
+
+def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
+    """Apply the host-equivalent constrained minimum-distance flux recovery."""
+    from .cupy import field_from_cupy_coefficients
+    from ..core.space import VectorDGField
+
+    cp = require_cupy()
+    post = cache.post_space
+    q = post.quad_data
+    n, d = space.mesh.num_tri, post.el_dof
+    jac = cp.asarray(space.mesh.aff_jacs)
+    normals = cp.asarray(space.mesh.normals)
+    face_jac = cp.asarray(space.mesh.jacs_el_fc)
+    mass_inv = cp.asarray(q.MKrf_inv)
+    base_basis = cp.asarray(space.basis_at(q.Krf_quads))
+    base = total_values @ (cp.asarray(q.Krf_w)[:, None] * base_basis) @ cp.asarray(space.quad_data.MKrf_inv)
+    initial = base @ cp.asarray(cache.base_to_post_mass).T @ mass_inv
+    face_moments = cp.asarray(q.face_element_test_trace_trial)
+    face_constraints = cp.einsum('Kf,Kfc,fia->Kfaci', face_jac, normals, face_moments).reshape(n, -1, 2*d)
+    low = cp.asarray(cache.interior_low_to_post)
+    low_base = cp.asarray(cache.interior_low_to_base)
+    low_dof = low.shape[0]
+    interior = cp.zeros((n, 2*low_dof, 2*d))
+    interior[:, :low_dof, :d] = jac[:, None, None] * low
+    interior[:, low_dof:, d:] = jac[:, None, None] * low
+    constraints = cp.concatenate((face_constraints, interior), axis=1)
+    face_target = cp.einsum('Kf,Kfq,aq,q->Kfa', face_jac, numerical,
+                            cp.asarray(q.bas1d_of_ref_edg_qds), cp.asarray(q.weights_JGL)).reshape(n, -1)
+    interior_target = (base @ low_base.T).transpose(1, 0, 2).reshape(n, -1) * jac[:, None]
+    target = cp.concatenate((face_target, interior_target), axis=1)
+    initial = initial.transpose(1, 0, 2).reshape(n, 2*d)
+    lift = cp.concatenate((mass_inv @ constraints[:, :, :d].transpose(0, 2, 1),
+                           mass_inv @ constraints[:, :, d:].transpose(0, 2, 1)), axis=1) / jac[:, None, None]
+    gap = target - (constraints @ initial[..., None])[..., 0]
+    correction = cp.linalg.solve(constraints @ lift, gap[..., None])
+    result = (initial + (lift @ correction)[..., 0]).reshape(n, 2, d)
+    return VectorDGField(tuple(field_from_cupy_coefficients(post, result[:, c], name='total_flux_h_star')
+                               for c in range(2)), name='total_flux_h_star')
+
+
+def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, diffusion):
+    """Solve the coupled ADR Neumann recovery with device batched algebra.
+
+    Volume, face and mean equations match the Numba reference, including the
+    total numerical flux and the scalar Neumann multiplier.
+    """
+    from .cupy import as_cupy_coefficients, as_cupy_space, field_from_cupy_coefficients
+
+    cp = require_cupy()
+    post = cache.post_space
+    q = post.quad_data
+    n, d, e = space.mesh.num_tri, post.el_dof, q.edg_dof
+    offset, rows = 3*d, 3*d + 3*e + 1
+    matrix = cp.zeros((n, rows, rows))
+    rhs = cp.zeros((n, rows))
+    jac = cp.asarray(space.mesh.aff_jacs)
+    normal = cp.asarray(space.mesh.normals)
+    face_jac = cp.asarray(space.mesh.jacs_el_fc)
+    phi, weights = cp.asarray(q.phi), cp.asarray(q.Krf_w)
+    gradient = cp.einsum('Kab,qib->Kqia', cp.asarray(space.mesh.inv_aff_mats_t), cp.asarray(q.gphi))
+    beta_volume, beta_face, tau = samples
+    flux = cp.stack([as_cupy_coefficients(f, as_cupy_space(f.space)) for f in total_flux.components], axis=1)
+    values = flux @ phi.T
+    mass = jac[:, None, None] * cp.einsum('q,qi,qj->ij', weights, phi, phi) / diffusion
+    for c in range(2):
+        constitutive = slice(c*d, (c+1)*d)
+        flux_columns = slice((c+1)*d, (c+2)*d)
+        grad_mass = cp.einsum('K,q,Kqi,qj->Kij', jac, weights, gradient[..., c], phi)
+        matrix[:, constitutive, :d] = -grad_mass
+        matrix[:, constitutive, flux_columns] = mass
+        matrix[:, 2*d:3*d, flux_columns] = -grad_mass
+    matrix[:, 2*d:3*d, :d] = -cp.einsum('K,q,Kqia,Kqa,qj->Kij', jac, weights, gradient, beta_volume, phi)
+    rhs[:, 2*d:3*d] = -cp.einsum('K,q,Kqia,Kaq->Ki', jac, weights, gradient, values)
+    mean = jac[:, None] * (weights @ phi)
+    matrix[:, 2*d:3*d, -1] = mean
+    matrix[:, -1, :d] = mean
+    base = cp.asarray(local_unknowns).reshape(n, 3, space.el_dof)[:, 0]
+    rhs[:, -1] = jac * (base @ cp.asarray(cache.mean_base))
+    face_phi = cp.asarray(q.bas_of_bd_quads)
+    trace_phi = cp.asarray(q.bas1d_of_ref_edg_qds)
+    face_weights = cp.asarray(q.weights_JGL)
+    for face in range(3):
+        p = face_phi[face]
+        scale = face_jac[:, face, None] * face_weights
+        bn = cp.einsum('Kqa,Ka->Kq', beta_face[:, face], normal[:, face])
+        normal_flux = cp.einsum('Kai,Ka,iq->Kq', flux, normal[:, face], p)
+        trace_slice = slice(offset + face*e, offset + (face+1)*e)
+        mass_face = cp.einsum('Kq,iq,jq->Kij', scale, p, p)
+        cross = cp.einsum('Kq,iq,aq->Kia', scale, p, trace_phi)
+        matrix[:, 2*d:3*d, :d] += cp.einsum('Kq,Kq,iq,jq->Kij', scale, tau[:, face], p, p)
+        matrix[:, 2*d:3*d, trace_slice] += cp.einsum('Kq,Kq,iq,aq->Kia', scale, bn-tau[:, face], p, trace_phi)
+        matrix[:, trace_slice, :d] += cp.einsum('Kq,Kq,aq,iq->Kai', scale, tau[:, face], trace_phi, p)
+        matrix[:, trace_slice, trace_slice] += cp.einsum('Kq,Kq,aq,bq->Kab', scale, bn-tau[:, face], trace_phi, trace_phi)
+        for c in range(2):
+            nc = normal[:, face, c, None, None]
+            matrix[:, c*d:(c+1)*d, trace_slice] += nc * cross
+            matrix[:, 2*d:3*d, (c+1)*d:(c+2)*d] += nc * mass_face
+            matrix[:, trace_slice, (c+1)*d:(c+2)*d] += nc * cross.transpose(0, 2, 1)
+        rhs[:, 2*d:3*d] += cp.einsum('Kq,Kq,iq->Ki', scale, normal_flux, p)
+        rhs[:, trace_slice] += cp.einsum('Kq,Kq,aq->Ka', scale, normal_flux, trace_phi)
+    result = cp.linalg.solve(matrix, rhs[..., None])[:, :d, 0]
+    return field_from_cupy_coefficients(post, result, name='u_h_star')

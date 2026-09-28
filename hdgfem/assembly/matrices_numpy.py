@@ -147,35 +147,32 @@ def dg_field_values_on_trace_faces(
     return np.ascontiguousarray(np.einsum("Ki,fiq->Kfq", field.coeffs, basis, optimize=True))
 
 
-def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: int) -> np.ndarray:
-    """Evaluate tau(x, y) or context-aware tau(x, y, K, e)."""
-    x = mapped_points[:, :, 0]
-    y = mapped_points[:, :, 1]
-    use_context = False
-    try:
-        callable_signature = inspect.signature(values)
-        try:
-            callable_signature.bind(x, y)
-        except TypeError:
-            callable_signature.bind(
-                x,
-                y,
-                np.empty_like(x, dtype=np.int64),
-                np.empty_like(x, dtype=np.int64),
-            )
-            use_context = True
-    except (TypeError, ValueError):
-        pass
+def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: int,
+                            *, normals=None, t=None) -> np.ndarray:
+    """Evaluate geometry, keyword incidence/normal, or legacy positional laws.
 
-    if not use_context:
+    Bind before calling so a TypeError inside a user law is never mistaken for
+    an unsupported signature. Points are flattened in quadrature/face order.
+    """
+    x, y = mapped_points[..., 0], mapped_points[..., 1]
+    element = np.broadcast_to(np.arange(x.shape[0])[:, None], x.shape)
+    local_face = np.broadcast_to(np.tile(np.arange(3), num_face_quads), x.shape)
+    normal = None if normals is None else normals[element, local_face]
+    try:
+        signature = inspect.signature(values)
+    except (TypeError, ValueError):
         return values(x, y)
-    num_elements = mapped_points.shape[0]
-    element_ids = np.broadcast_to(np.arange(num_elements, dtype=np.int64)[:, None], x.shape)
-    face_ids = np.broadcast_to(
-        np.tile(np.arange(3, dtype=np.int64), num_face_quads)[None, :],
-        x.shape,
-    )
-    return values(x, y, element_ids, face_ids)
+    context = dict(element=element, local_face=local_face, normal=normal)
+    candidates = [((x, y), dict(context, t=t)), ((x, y), context),
+                  ((x, y), {}), ((x, y, element, local_face), {})]
+    for args, kwargs in candidates:
+        try:
+            signature.bind(*args, **kwargs)
+        except TypeError:
+            continue
+        return values(*args, **kwargs)
+    raise TypeError("face callable must accept (x, y), (x, y, K, e), or "
+                    "(x, y, *, element, local_face, normal, t=None)")
 
 
 def _face_quadrature_values_from_scalar_input(
@@ -184,6 +181,7 @@ def _face_quadrature_values_from_scalar_input(
         label: str,
         *,
         trace_space: DGTraceSpace | None = None,
+    t=None,
 ) -> np.ndarray:
     """Normalize scalar face data to ``(num_elements, 3, num_face_quads)``.
 
@@ -205,7 +203,7 @@ def _face_quadrature_values_from_scalar_input(
         face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
         mapped_points = mesh.map_reference_points(face_points)
         flat_values = _normalize_callable_values(
-            _evaluate_face_callable(values, mapped_points, num_face_quads),
+            _evaluate_face_callable(values, mapped_points, num_face_quads, normals=mesh.normals, t=t),
             mesh.num_tri,
             face_points.shape[0],
         )
@@ -215,6 +213,8 @@ def _face_quadrature_values_from_scalar_input(
         )
 
     array = np.asarray(values, dtype=REAL_DTYPE)
+    if array.shape == (mesh.num_tri,):
+        return np.ascontiguousarray(np.broadcast_to(array[:, None, None], (mesh.num_tri, 3, num_face_quads)))
     if array.shape == (mesh.num_tri, 3, num_face_quads):
         return np.ascontiguousarray(array)
     if array.shape == (mesh.num_tri, 3):

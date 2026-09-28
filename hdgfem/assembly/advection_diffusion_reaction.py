@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 
 import numpy as np
 
@@ -32,14 +33,18 @@ class ADRPreparedData:
     tau_diffusion: np.ndarray
     tau_total: np.ndarray
     gamma: np.ndarray
-    u_boundary_mass: np.ndarray
-    normal_mass_x: np.ndarray
-    normal_mass_y: np.ndarray
-    element_boundary: np.ndarray
-    trace_lift: np.ndarray
-    interior_gamma_mass: np.ndarray
+    u_boundary_mass: np.ndarray | None
+    normal_mass_x: np.ndarray | None
+    normal_mass_y: np.ndarray | None
+    element_boundary: np.ndarray | None
+    trace_lift: np.ndarray | None
+    interior_gamma_mass: np.ndarray | None
     d0_reference: np.ndarray
     d1_reference: np.ndarray
+    diffusion_stabilization_law: object = None
+    face_quadrature: np.ndarray | None = None
+    sample_time: float | None = None
+    preparation_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -60,18 +65,12 @@ def recommended_diffusion_stabilization(
 ) -> np.ndarray:
     r"""Return :math:`C_\tau(p+1)^2\kappa_n/h_F` on element sides.
 
-    The first implementation supports the identity or a positive scalar
-    diffusion coefficient.  ``h_F`` is the element altitude normal to the
+    Normal diffusivity is the maximum sampled value of n^T kappa n on
+    each element-side incidence; it preserves discontinuous coefficients.  ``h_F`` is the element altitude normal to the
     side, namely ``2*det(J_K)/J_F`` in the mesh's reference scaling.
     """
-    if not np.isscalar(diffusion):
-        raise NotImplementedError(
-            "automatic ADR diffusion stabilization currently requires scalar diffusion; "
-            "provide diffusion_stabilization explicitly for tensor diffusion"
-        )
-    kappa = float(diffusion)
-    if not np.isfinite(kappa) or kappa <= 0.0:
-        raise ValueError("diffusion must be finite and positive")
+    from .diffusion_coefficients import normal_diffusivity_on_faces
+    kappa = normal_diffusivity_on_faces(diffusion, space)
     constant = float(penalty_constant)
     if not np.isfinite(constant) or constant <= 0.0:
         raise ValueError("diffusion_penalty_constant must be finite and positive")
@@ -86,8 +85,10 @@ def normalize_diffusion_stabilization(
         *,
         diffusion=1.0,
         penalty_constant: float = 1.0,
+        trace_space: DGTraceSpace | None = None,
+        t=None,
 ) -> np.ndarray:
-    """Return positive sidewise diffusion stabilization constants."""
+    """Return positive incidence constants or spatial face samples."""
     stabilization = resolve_diffusion_stabilization(stabilization, diffusion, space)
     legacy_inverse_h = stabilization is None or (
         isinstance(stabilization, str)
@@ -98,21 +99,32 @@ def normalize_diffusion_stabilization(
         tau = recommended_diffusion_stabilization(
             space, diffusion, penalty_constant=penalty_constant
         )
-    elif np.isscalar(stabilization):
-        tau = np.full((space.mesh.num_tri, 3), float(stabilization), dtype=np.float64)
     else:
-        tau = np.asarray(stabilization, dtype=np.float64)
-        if tau.shape == (space.mesh.num_tri,):
-            tau = np.broadcast_to(tau[:, None], (space.mesh.num_tri, 3)).copy()
-        elif tau.shape != (space.mesh.num_tri, 3):
-            raise ValueError(
-                "diffusion_stabilization must be scalar, 'global_length', "
-                "'inverse-h', or have shape "
-                f"({space.mesh.num_tri}, 3); got {tau.shape}"
-            )
+        tau = matrices._face_quadrature_values_from_scalar_input(
+            stabilization, space, "diffusion_stabilization", trace_space=trace_space, t=t)
+        # Preserve the established public shape for incidence-constant inputs.
+        if not callable(stabilization) and not hasattr(stabilization, "space"):
+            if np.asarray(stabilization).ndim < 3:
+                tau = tau[:, :, 0]
     if np.any(~np.isfinite(tau)) or np.any(tau <= 0.0):
         raise ValueError("diffusion stabilization must be finite and strictly positive")
     return np.ascontiguousarray(tau)
+
+
+def diffusion_stabilization_on_trace(prepared, space, trace_space):
+    """Resample the retained spatial law; never interpolate quadrature tables."""
+    law = prepared.diffusion_stabilization_law
+    if law is None:
+        law = prepared.tau_diffusion
+    if isinstance(law, np.ndarray) and law.ndim == 3:
+        if prepared.face_quadrature is None or not np.array_equal(
+                prepared.face_quadrature, trace_space.quads):
+            raise ValueError("diffusion stabilization quadrature table is incompatible with recovery quadrature; supply a spatial law")
+    values = matrices._face_quadrature_values_from_scalar_input(
+        law, space, "diffusion_stabilization", trace_space=trace_space, t=prepared.sample_time)
+    if np.any(~np.isfinite(values)) or np.any(values <= 0.):
+        raise ValueError("diffusion stabilization must be finite and strictly positive")
+    return values
 
 
 def _normal_flux(beta, space: DGSpace, trace_space: DGTraceSpace) -> np.ndarray:
@@ -136,8 +148,11 @@ def prepare_adr_data(
         diffusion_stabilization="global_length",
         diffusion_penalty_constant: float = 1.0,
         trace_space: DGTraceSpace | None = None,
+        dense_local_matrices: bool = True,
+        t=None,
 ) -> ADRPreparedData:
     """Sample coefficients and assemble the common ADR face moment tables."""
+    preparation_start = time.perf_counter()
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     beta_dot_normal = _normal_flux(beta, space, trace_ref)
     tau_advection = matrices.advection_trace_stabilization_values(
@@ -150,9 +165,10 @@ def prepare_adr_data(
         diffusion_stabilization,
         space,
         diffusion=diffusion,
-        penalty_constant=diffusion_penalty_constant,
+        penalty_constant=diffusion_penalty_constant, trace_space=trace_ref, t=t,
     )
-    tau_total = np.ascontiguousarray(tau_advection + tau_diffusion[:, :, None])
+    tau_samples = tau_diffusion[:, :, None] if tau_diffusion.ndim == 2 else tau_diffusion
+    tau_total = np.ascontiguousarray(tau_advection + tau_samples)
     gamma = np.ascontiguousarray(tau_total - beta_dot_normal)
 
     source_rhs = hdg.source_moments(source, space)
@@ -160,27 +176,31 @@ def prepare_adr_data(
     beta_field = beta if isinstance(beta, VectorDGField) else hdg.as_vector_field(beta, space)
     beta_samples = beta_values_on_volume(beta_field, None, space)
 
-    u_boundary_mass = matrices.boundary_mass_from_trace_stabilization(
-        space, tau_total, trace_space=trace_ref
-    )
-    _d0, _d1, _zero, normal_mass_x, normal_mass_y, _jinv = _local_solver_pre_mats(
-        0.0, 0.0, space
-    )
-    diffusion_boundary = diffusion_element_boundary_mats(
-        0.0, space, trace_space=trace_ref
-    )
-    element_boundary = diffusion_boundary.copy()
-    element_boundary[:, :space.el_dof] = matrices.element_boundary_mats_from_trace_weight(
-        space, gamma, trace_space=trace_ref
-    )
+    if dense_local_matrices:
+        u_boundary_mass = matrices.boundary_mass_from_trace_stabilization(
+            space, tau_total, trace_space=trace_ref
+        )
+        _d0, _d1, _zero, normal_mass_x, normal_mass_y, _jinv = _local_solver_pre_mats(
+            0.0, 0.0, space
+        )
+        diffusion_boundary = diffusion_element_boundary_mats(
+            0.0, space, trace_space=trace_ref
+        )
+        element_boundary = diffusion_boundary.copy()
+        element_boundary[:, :space.el_dof] = matrices.element_boundary_mats_from_trace_weight(
+            space, gamma, trace_space=trace_ref
+        )
 
-    trace_lift = diffusion_trace_lift(0.0, space, trace_space=trace_ref)
-    trace_lift[..., :space.el_dof] = matrices.advection_trace_lift_from_stabilization(
-        space, tau_total, trace_space=trace_ref
-    )
-    interior_gamma_mass = matrices.advection_interior_trace_mass_blocks_from_weight(
-        space, gamma, trace_space=trace_ref
-    )
+        trace_lift = diffusion_trace_lift(0.0, space, trace_space=trace_ref)
+        trace_lift[..., :space.el_dof] = matrices.advection_trace_lift_from_stabilization(
+            space, tau_total, trace_space=trace_ref
+        )
+        interior_gamma_mass = matrices.advection_interior_trace_mass_blocks_from_weight(
+            space, gamma, trace_space=trace_ref
+        )
+    else:
+        u_boundary_mass = normal_mass_x = normal_mass_y = None
+        element_boundary = trace_lift = interior_gamma_mass = None
     from ..solvers.diffusion_reaction import _reference_derivative_matrices
 
     d0_reference, d1_reference = _reference_derivative_matrices(space)
@@ -193,14 +213,19 @@ def prepare_adr_data(
         tau_diffusion=np.ascontiguousarray(tau_diffusion),
         tau_total=tau_total,
         gamma=gamma,
-        u_boundary_mass=np.ascontiguousarray(u_boundary_mass),
-        normal_mass_x=np.ascontiguousarray(normal_mass_x),
-        normal_mass_y=np.ascontiguousarray(normal_mass_y),
-        element_boundary=np.ascontiguousarray(element_boundary),
-        trace_lift=np.ascontiguousarray(trace_lift),
-        interior_gamma_mass=np.ascontiguousarray(interior_gamma_mass),
+        u_boundary_mass=None if u_boundary_mass is None else np.ascontiguousarray(u_boundary_mass),
+        normal_mass_x=None if normal_mass_x is None else np.ascontiguousarray(normal_mass_x),
+        normal_mass_y=None if normal_mass_y is None else np.ascontiguousarray(normal_mass_y),
+        element_boundary=None if element_boundary is None else np.ascontiguousarray(element_boundary),
+        trace_lift=None if trace_lift is None else np.ascontiguousarray(trace_lift),
+        interior_gamma_mass=None if interior_gamma_mass is None else np.ascontiguousarray(interior_gamma_mass),
         d0_reference=np.ascontiguousarray(d0_reference),
         d1_reference=np.ascontiguousarray(d1_reference),
+        diffusion_stabilization_law=(diffusion_stabilization
+                                    if callable(diffusion_stabilization) or hasattr(diffusion_stabilization, "space")
+                                    else tau_diffusion),
+        face_quadrature=trace_ref.quads.copy(), sample_time=t,
+        preparation_seconds=time.perf_counter() - preparation_start,
     )
 
 
@@ -211,6 +236,8 @@ def local_solvers_numpy(
         diffusion=1.0,
 ) -> np.ndarray:
     """Build dense mixed ADR local inverses as the reference implementation."""
+    if prepared.u_boundary_mass is None:
+        raise ValueError("NumPy ADR requires dense_local_matrices=True during preparation")
     q = space.quad_data
     nel = space.el_dof
     jac = space.mesh.aff_jacs
