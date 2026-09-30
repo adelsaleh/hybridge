@@ -390,3 +390,6 @@ def _inverse_diffusion_values(diffusion, space: DGSpace) -> tuple[np.ndarray, np
         np.ascontiguousarray(-k10 / det),
         np.ascontiguousarray(k00 / det),
     )
+
+
+_diffusion_is_identity = is_identity_diffusion

@@ -19,9 +19,10 @@ from hdgfem.hdg.numba_common import (
     lu_factor_inplace,
     lu_solve_inplace,
     cholesky_factor_inplace,
-    cholesky_solve_inplace,
 )
 from hdgfem.runtime.optional import njit
+from hdgfem.mixed.numba_common import _finish_diffusion_condensation, _solve_mixed_columns
+
 from hdgfem.hdg.numba_common import _trace_local_dof, _trace_orientation_sign
 
 
@@ -91,25 +92,9 @@ def _build_projected_diffusion_operator(
     if not build_schur:
         return
 
-    for i in range(nel):
-        for j in range(nel):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mass_inverse[i, k] * d0[k, j]
-                value1 += mass_inverse[i, k] * d1[k, j]
-            k_d0[i, j] = value0
-            k_d1[i, j] = value1
-
-    jac_inverse = 1.0 / jac
-    for i in range(nel):
-        for j in range(nel):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mn0[i, k] * k_d0[k, j]
-                value1 += mn1[i, k] * k_d1[k, j]
-            schur_matrix[i, j] += jac_inverse * (value0 + value1)
+    _finish_diffusion_condensation(
+        schur_matrix, d0, d1, mn0, mn1, k_d0, k_d1, mass_inverse, jac, 1.0,
+    )
 
 
 @njit(cache=True, inline="always", fastmath=True)
@@ -166,87 +151,6 @@ def _build_projected_diffusion_rhs_columns(
                 rhs0[i, column] = tau[element, face] * coupling
                 rhs1[i, column] = normal_x * coupling
                 rhs2[i, column] = normal_y * coupling
-
-
-@njit(cache=True, inline="always", fastmath=True)
-def _solve_projected_diffusion_columns(
-        local_columns,
-        schur_matrix,
-        d0,
-        d1,
-        mn0,
-        mn1,
-        rhs0,
-        rhs1,
-        rhs2,
-        red_rhs,
-        tmp1,
-        tmp2,
-        pivots,
-        mass_inverse,
-        aff_jac,
-        factor_kind=0,
-        cached_factor=None,
-        cached_pivots=None,
-        factor_element=0,
-):
-    """Apply the mixed diffusion local inverse to all RHS columns."""
-    nel = mass_inverse.shape[0]
-    ncols = rhs0.shape[1]
-    jac_inverse = 1.0 / aff_jac
-
-    for i in range(nel):
-        for column in range(ncols):
-            value1 = 0.0
-            value2 = 0.0
-            for k in range(nel):
-                value1 += mass_inverse[i, k] * rhs1[k, column]
-                value2 += mass_inverse[i, k] * rhs2[k, column]
-            tmp1[i, column] = value1
-            tmp2[i, column] = value2
-
-    for i in range(nel):
-        for column in range(ncols):
-            value = rhs0[i, column]
-            acc0 = 0.0
-            acc1 = 0.0
-            for k in range(nel):
-                acc0 += mn0[i, k] * tmp1[k, column]
-                acc1 += mn1[i, k] * tmp2[k, column]
-            red_rhs[i, column] = value + jac_inverse * (acc0 + acc1)
-
-    if cached_factor is None:
-        lu_factor_inplace(schur_matrix, pivots)
-        lu_solve_inplace(schur_matrix, pivots, red_rhs)
-    elif factor_kind == 2:
-        cholesky_solve_inplace(cached_factor[factor_element], red_rhs)
-    elif cached_pivots is not None:
-        lu_solve_inplace(cached_factor[factor_element], cached_pivots[factor_element], red_rhs)
-
-    for i in range(nel):
-        for column in range(ncols):
-            u_value = red_rhs[i, column]
-            local_columns[i, column] = u_value
-
-    for i in range(nel):
-        for column in range(ncols):
-            value0 = 0.0
-            value1 = 0.0
-            for j in range(nel):
-                value0 += d0[i, j] * red_rhs[j, column]
-                value1 += d1[i, j] * red_rhs[j, column]
-            tmp1[i, column] = value0 - rhs1[i, column]
-            tmp2[i, column] = value1 - rhs2[i, column]
-
-    for i in range(nel):
-        for column in range(ncols):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mass_inverse[i, k] * tmp1[k, column]
-                value1 += mass_inverse[i, k] * tmp2[k, column]
-            local_columns[nel + i, column] = jac_inverse * value0
-            local_columns[2 * nel + i, column] = jac_inverse * value1
 
 
 @njit(cache=True, inline="always", fastmath=True)
@@ -331,7 +235,7 @@ def _assemble_projected_diffusion_local_columns(
         source_coeffs,
         source_kind,
     )
-    _solve_projected_diffusion_columns(
+    _solve_mixed_columns(
         local_columns,
         schur_matrix,
         d0,
@@ -1162,7 +1066,7 @@ def _solve_projected_diffusion_element_rhs(
         source_kind,
         trace_orientation_mode,
     )
-    _solve_projected_diffusion_columns(
+    _solve_mixed_columns(
         local_columns,
         schur_matrix,
         d0,

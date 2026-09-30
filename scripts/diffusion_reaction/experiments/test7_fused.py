@@ -28,7 +28,7 @@ from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionTimings,
 )
 from hdgfem.mixed.local_numpy import split_diffusion_unknowns
-from hdgfem.mixed.postprocess.flux import _diffusion_is_identity
+from hdgfem.mixed.coefficients import _diffusion_is_identity
 from hdgfem.runtime.logging import _format_seconds, _timed_call, _verbosity_level
 
 

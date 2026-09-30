@@ -14,7 +14,7 @@ from collections.abc import Callable
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from typing import Literal
 from hdgfem.runtime.precision import REAL_DTYPE
-from hdgfem.mixed.postprocess.flux import _diffusion_is_identity
+from hdgfem.mixed.coefficients import _diffusion_is_identity
 from hdgfem.hdg.reference import _reference_derivative_matrices
 from hdgfem.runtime.logging import _timed_call, _verbosity_level
 from hdgfem.hdg import condensation as hdg_assembly
@@ -273,15 +273,33 @@ def hdg_residual(
     return np.concatenate((local.reshape(-1), interior_trace))
 
 
-def local_solvers_numpy(reaction, stabilization, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
-    """Build local mixed diffusion-reaction solvers with vectorized NumPy."""
-    q = space.quad_data
-    d0, d1, m_tau, m_n0, m_n1, jacs_inv = _local_solver_pre_mats(reaction, stabilization, space)
+def mixed_local_inverse(u_block, d0, d1, m_n0, m_n1, jacs_inv, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
+    r"""Invert the mixed HDG local operator shared by DR and ADR.
+
+    The local unknowns are ``[u, q_x, q_y]`` with ``q = -kappa grad u`` and the
+    block operator
+
+    .. math::
+        \begin{bmatrix} U & M_{n_x} - D_0 & M_{n_y} - D_1 \\
+        D_0 & -G_{00} & -G_{01} \\ D_1 & -G_{10} & -G_{11} \end{bmatrix},
+
+    where ``G`` is the mass matrix of ``kappa^{-1}``. ``u_block`` is ``U``:
+    the reaction mass plus the tau boundary mass for DR, and additionally minus
+    the advection matrix with ``tau_total`` for ADR. For identity ``kappa`` the
+    inverse uses the closed-form scalar Schur complement; otherwise the dense
+    block matrix is inverted.
+    """
     if not _diffusion_is_identity(diffusion):
         g00, g01, g10, g11 = diffusion_inverse_mass_blocks(diffusion, space)
-        return _local_solver_tensor_blocks_numpy(d0, d1, m_tau, m_n0, m_n1, g00, g01, g10, g11, space)
-    e = _local_solver_scalar_inverse(d0, d1, m_tau, m_n0, m_n1, jacs_inv, space)
+        return _local_solver_tensor_blocks_numpy(d0, d1, u_block, m_n0, m_n1, g00, g01, g10, g11, space)
+    e = _local_solver_scalar_inverse(d0, d1, u_block, m_n0, m_n1, jacs_inv, space)
     return _local_solver_blocks_numpy(e, d0, d1, m_n0, m_n1, jacs_inv, space)
+
+
+def local_solvers_numpy(reaction, stabilization, space: DGSpace, *, diffusion=1.0) -> np.ndarray:
+    """Build local mixed diffusion-reaction solvers with vectorized NumPy."""
+    d0, d1, m_tau, m_n0, m_n1, jacs_inv = _local_solver_pre_mats(reaction, stabilization, space)
+    return mixed_local_inverse(m_tau, d0, d1, m_n0, m_n1, jacs_inv, space, diffusion=diffusion)
 
 
 def _local_solver_tensor_blocks_numpy(
@@ -451,6 +469,75 @@ def interior_stabilization_mass_blocks(
     )
 
 
+def assemble_mixed_trace_system(
+        local_solver: np.ndarray,
+        element_boundary_mats: np.ndarray,
+        trace_lift: np.ndarray,
+        interior_mass_blocks: np.ndarray,
+        source_rhs: np.ndarray,
+        boundary_condition,
+        space: DGSpace,
+        *,
+        boundary_penalty: float = 1e20,
+        verbosity: bool | int = 0,
+        trace_space: DGTraceSpace | None = None,
+) -> hdg_assembly.TraceSystem:
+    """Assemble the global mixed HDG trace system (DR and ADR NumPy reference).
+
+    ``trace_lift`` and ``interior_mass_blocks`` carry the equation: tau for DR,
+    ``tau_total`` and ``gamma = tau_total - beta.n`` for ADR. Boundary rows use
+    ``boundary_penalty``; callers that eliminate the Dirichlet trace afterwards
+    may pass any value.
+    """
+    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+    trace_blocks, _ = _timed_call(
+        "forming element trace Schur blocks",
+        verbosity,
+        lambda: hdg_assembly.element_to_trace_matrix_from_lift(
+            trace_lift,
+            local_solver,
+            element_boundary_mats,
+            space,
+            trace_space=trace_ref,
+        ),
+        level=2,
+    )
+    (rows, cols), _ = _timed_call(
+        "building global COO index arrays",
+        verbosity,
+        lambda: hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face", trace_space=trace_ref),
+        level=2,
+    )
+    data, _ = _timed_call(
+        "assembling global COO data",
+        verbosity,
+        lambda: hdg_assembly.trace_matrix_data(
+            trace_blocks,
+            space,
+            boundary_penalty,
+            interior_mass_mode="face",
+            interior_mass_blocks=interior_mass_blocks,
+            trace_space=trace_ref,
+        ),
+        level=2,
+    )
+    (rhs, boundary_trace), _ = _timed_call(
+        "assembling global RHS",
+        verbosity,
+        lambda: hdg_assembly.trace_rhs_from_lift(
+            trace_lift,
+            source_rhs,
+            local_solver,
+            boundary_condition,
+            space,
+            boundary_penalty,
+            trace_space=trace_ref,
+        ),
+        level=2,
+    )
+    return hdg_assembly.TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
+
+
 def assemble_diffusion_trace_system(
         local_solver: np.ndarray,
         element_boundary_mats: np.ndarray,
@@ -471,57 +558,24 @@ def assemble_diffusion_trace_system(
         lambda: diffusion_trace_lift(stabilization, space, trace_space=trace_ref),
         level=2,
     )
-    trace_blocks, _ = _timed_call(
-        "forming element trace Schur blocks",
-        verbosity,
-        lambda: hdg_assembly.element_to_trace_matrix_from_lift(
-            trace_lift,
-            local_solver,
-            element_boundary_mats,
-            space,
-            trace_space=trace_ref,
-        ),
-        level=2,
-    )
-    (rows, cols), _ = _timed_call(
-        "building global COO index arrays",
-        verbosity,
-        lambda: hdg_assembly.trace_matrix_indices(space, interior_mass_mode="face"),
-        level=2,
-    )
     interior_mass_blocks, _ = _timed_call(
         "assembling interior stabilization trace masses",
         verbosity,
         lambda: interior_stabilization_mass_blocks(stabilization, space, trace_space=trace_ref),
         level=2,
     )
-    data, _ = _timed_call(
-        "assembling global COO data",
-        verbosity,
-        lambda: hdg_assembly.trace_matrix_data(
-            trace_blocks,
-            space,
-            boundary_penalty,
-            interior_mass_mode="face",
-            interior_mass_blocks=interior_mass_blocks,
-        ),
-        level=2,
+    return assemble_mixed_trace_system(
+        local_solver,
+        element_boundary_mats,
+        trace_lift,
+        interior_mass_blocks,
+        source_rhs,
+        boundary_condition,
+        space,
+        boundary_penalty=boundary_penalty,
+        verbosity=verbosity,
+        trace_space=trace_ref,
     )
-    (rhs, boundary_trace), _ = _timed_call(
-        "assembling global RHS",
-        verbosity,
-        lambda: hdg_assembly.trace_rhs_from_lift(
-            trace_lift,
-            source_rhs,
-            local_solver,
-            boundary_condition,
-            space,
-            boundary_penalty,
-            trace_space=trace_ref,
-        ),
-        level=2,
-    )
-    return hdg_assembly.TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
 
 
 def split_diffusion_unknowns(local_unknowns: np.ndarray, space: DGSpace) -> tuple[DGField, VectorDGField]:

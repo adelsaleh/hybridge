@@ -51,11 +51,11 @@ from hdgfem.mixed.postprocess.flux import (
     FluxPostprocessSpace,
     HDGPostprocessMode,
     _HDGPostprocessCache,
-    _diffusion_is_identity,
     _normalize_flux_postprocess_space,
     _normalize_hdg_postprocess_mode,
     _postprocess_diffusion_solution,
 )
+from hdgfem.mixed.coefficients import _diffusion_is_identity
 from hdgfem.mixed.local_numpy import (
     _build_res_numba,
     LocalSolverBackend,

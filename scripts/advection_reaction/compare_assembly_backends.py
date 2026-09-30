@@ -139,7 +139,7 @@ def _load_hdgfem() -> None:
         from hdgfem.linalg.reduction import (
                     eliminate_known_dofs as _eliminate_known_dofs,
                 )
-        from hdgfem.mixed.postprocess.flux import _diffusion_is_identity
+        from hdgfem.mixed.coefficients import _diffusion_is_identity
         from hdgfem.mixed.local_numpy import _local_solver_blocks_numpy
         from hdgfem.mixed.local_numpy import _local_solver_pre_mats
         from hdgfem.mixed.local_numpy import _local_solver_scalar_inverse

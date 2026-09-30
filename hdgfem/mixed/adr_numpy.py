@@ -1,4 +1,4 @@
-"""hdgfem.mixed.adr_numpy."""
+"""ADR NumPy reference: the shared mixed local inverse and assembler with advection terms."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from hdgfem.core.space import DGSpace, DGTraceSpace
 from hdgfem.linalg.reduction import KnownDofReduction, eliminate_known_dofs
 from hdgfem.mixed.local_numpy import (
     _local_solver_pre_mats,
-    diffusion_inverse_mass_blocks,
+    assemble_mixed_trace_system,
+    mixed_local_inverse,
 )
 from dataclasses import dataclass
 from hdgfem.hdg import condensation as hdg
@@ -62,20 +63,9 @@ def local_solvers_numpy(
         optimize=True,
     )
 
-    d0, d1, _zero, normal_x, normal_y, _jinv = _local_solver_pre_mats(0.0, 0.0, space)
-    g00, g01, g10, g11 = diffusion_inverse_mass_blocks(diffusion, space)
-    local = np.zeros((space.mesh.num_tri, 3 * nel, 3 * nel), dtype=np.float64)
-    blocks = local.reshape(space.mesh.num_tri, 3, nel, 3, nel)
-    blocks[:, 0, :, 0, :] = reaction_mass - advection + prepared.u_boundary_mass
-    blocks[:, 0, :, 1, :] = normal_x - d0
-    blocks[:, 0, :, 2, :] = normal_y - d1
-    blocks[:, 1, :, 0, :] = d0
-    blocks[:, 1, :, 1, :] = -g00
-    blocks[:, 1, :, 2, :] = -g01
-    blocks[:, 2, :, 0, :] = d1
-    blocks[:, 2, :, 1, :] = -g10
-    blocks[:, 2, :, 2, :] = -g11
-    return np.ascontiguousarray(np.linalg.inv(local))
+    d0, d1, _zero, normal_x, normal_y, jacs_inv = _local_solver_pre_mats(0.0, 0.0, space)
+    u_block = reaction_mass - advection + prepared.u_boundary_mass
+    return mixed_local_inverse(u_block, d0, d1, normal_x, normal_y, jacs_inv, space, diffusion=diffusion)
 
 
 def _reduce_all_dirichlet(
@@ -115,33 +105,17 @@ def assemble_numpy(
     local_solver = local_solvers_numpy(prepared, space, diffusion=diffusion)
     source_block = np.zeros((space.mesh.num_tri, 3 * space.el_dof), dtype=np.float64)
     source_block[:, :space.el_dof] = prepared.source_rhs
-    trace_blocks = hdg.element_to_trace_matrix_from_lift(
-        prepared.trace_lift,
+    # Boundary rows are eliminated below, so their penalty value is irrelevant.
+    full = assemble_mixed_trace_system(
         local_solver,
         prepared.element_boundary,
-        space,
-        trace_space=trace_ref,
-    )
-    rows, cols = hdg.trace_matrix_indices(
-        space, interior_mass_mode="face", trace_space=trace_ref
-    )
-    data = hdg.trace_matrix_data(
-        trace_blocks,
-        space,
-        1.0,
-        interior_mass_mode="face",
-        interior_mass_blocks=prepared.interior_gamma_mass,
-        trace_space=trace_ref,
-    )
-    rhs, boundary_trace = hdg.trace_rhs_from_lift(
         prepared.trace_lift,
+        prepared.interior_gamma_mass,
         source_block,
-        local_solver,
         boundary_condition,
         space,
-        1.0,
+        boundary_penalty=1.0,
         trace_space=trace_ref,
     )
-    full = hdg.TraceSystem(rows=rows, cols=cols, data=data, rhs=rhs, boundary_trace=boundary_trace)
     reduced, reduction = _reduce_all_dirichlet(full, space, trace_ref)
     return ADRNumpyAssembly(reduced, reduction, local_solver, prepared)

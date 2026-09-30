@@ -819,6 +819,22 @@ Execution protocol (approved 2026-09-29):
   - ADR: unchanged within noise;
   - a first attempt that split the DR kernel into gap and solve passes was
     ~10% slower and was not kept.
+
+  6.2 and 6.3 done 2026-09-30:
+  - NumPy: one `mixed_local_inverse(u_block, …)` for DR and ADR, so ADR also
+    gains the identity-κ closed-form Schur inverse, and one
+    `assemble_mixed_trace_system`. DR passes `M_τ`; ADR passes
+    `reaction − advection + τ_total` boundary mass.
+  - Numba: the diffusion condensation and column solve exist once, in
+    `mixed/numba_common.py` (`_finish_diffusion_condensation`,
+    `_solve_mixed_columns` with optional cached LU/Cholesky factors). DR keeps
+    its exact projected u-row construction; ADR keeps its sampled one.
+  - Results are unchanged to 12 digits.
+  - Numba assembly and reconstruction at p = 5, K = 18,432: DR 59.6–73.5 ms
+    after vs 69.6–76.5 ms before (min); ADR unchanged within noise.
+  - A wholesale replacement of the DR kernels by ADR kernels is not done: DR's
+    projected tables and cached Schur factors are the fast path, and only the
+    u-row construction differs.
 - [ ] Phase 7: create `diagnostics/` and `cases/`, split
   `solvers/diffusion_reaction.py`, and remove or keep dead and test-only code
   per the decision above. Update CODEMAP and `docs/backends/README.md` to the

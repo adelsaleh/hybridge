@@ -8,7 +8,6 @@ from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.runtime.precision import REAL_DTYPE
 from hdgfem.mixed.coefficients import (
     _inverse_diffusion_values,
-    is_identity_diffusion,
     normalize_diffusion_stabilization,
 )
 from dataclasses import dataclass
@@ -18,15 +17,13 @@ try:  # pragma: no cover - availability depends on the runtime environment.
 except ImportError:  # pragma: no cover
     njit = None
     prange = range
+from hdgfem.mixed.coefficients import _diffusion_is_identity
 
 
 HDGPostprocessMode = Literal["none", "primal", "flux", "both"]
 
 
 FluxPostprocessSpace = Literal["l2_closest", "RT_projection"]
-
-
-_diffusion_is_identity = is_identity_diffusion
 
 
 @dataclass

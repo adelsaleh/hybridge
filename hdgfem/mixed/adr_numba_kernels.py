@@ -26,6 +26,8 @@ from hdgfem.hdg.numba_common import (
     lu_solve_inplace,
 )
 from hdgfem.runtime.optional import njit
+from hdgfem.mixed.numba_common import _finish_diffusion_condensation, _solve_mixed_columns
+
 from hdgfem.mixed.numba_diffusion_mass import (
     factor_diffusion_mass,
     apply_inverse_diffusion_mass,
@@ -98,99 +100,6 @@ def _build_local_operator(
 
 
 @njit(cache=True, inline="always", fastmath=True)
-def _finish_diffusion_condensation(
-        schur, d0, d1, mn0, mn1, kd0, kd1, mass_inverse, jac, diffusion,
-):
-    """Add the mixed diffusive contribution to the scalar Schur block."""
-    nel = schur.shape[0]
-    for i in range(nel):
-        for j in range(nel):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mass_inverse[i, k] * d0[k, j]
-                value1 += mass_inverse[i, k] * d1[k, j]
-            kd0[i, j] = value0
-            kd1[i, j] = value1
-    jac_inv = diffusion / jac
-    for i in range(nel):
-        for j in range(nel):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mn0[i, k] * kd0[k, j]
-                value1 += mn1[i, k] * kd1[k, j]
-            schur[i, j] += jac_inv * (value0 + value1)
-
-
-@njit(cache=True, inline="always", fastmath=True)
-def _solve_columns(
-        local_columns,
-        schur,
-        d0,
-        d1,
-        mn0,
-        mn1,
-        rhs0,
-        rhs1,
-        rhs2,
-        reduced_rhs,
-        tmp1,
-        tmp2,
-        pivots,
-        mass_inverse,
-        jac,
-        diffusion,
-):
-    """Solve all local trace/source columns and recover the mixed flux."""
-    nel = schur.shape[0]
-    ncols = rhs0.shape[1]
-    jac_inv = diffusion / jac
-    for i in range(nel):
-        for col in range(ncols):
-            x = 0.0
-            y = 0.0
-            for k in range(nel):
-                x += mass_inverse[i, k] * rhs1[k, col]
-                y += mass_inverse[i, k] * rhs2[k, col]
-            tmp1[i, col] = x
-            tmp2[i, col] = y
-    for i in range(nel):
-        for col in range(ncols):
-            x = 0.0
-            y = 0.0
-            for k in range(nel):
-                x += mn0[i, k] * tmp1[k, col]
-                y += mn1[i, k] * tmp2[k, col]
-            reduced_rhs[i, col] = rhs0[i, col] + jac_inv * (x + y)
-
-    lu_factor_inplace(schur, pivots)
-    lu_solve_inplace(schur, pivots, reduced_rhs)
-    for i in range(nel):
-        for col in range(ncols):
-            u = reduced_rhs[i, col]
-            local_columns[i, col] = u
-    for i in range(nel):
-        for col in range(ncols):
-            value0 = 0.0
-            value1 = 0.0
-            for j in range(nel):
-                value0 += d0[i, j] * reduced_rhs[j, col]
-                value1 += d1[i, j] * reduced_rhs[j, col]
-            tmp1[i, col] = value0 - rhs1[i, col]
-            tmp2[i, col] = value1 - rhs2[i, col]
-    for i in range(nel):
-        for col in range(ncols):
-            value0 = 0.0
-            value1 = 0.0
-            for k in range(nel):
-                value0 += mass_inverse[i, k] * tmp1[k, col]
-                value1 += mass_inverse[i, k] * tmp2[k, col]
-            local_columns[nel + i, col] = jac_inv * value0
-            local_columns[2 * nel + i, col] = jac_inv * value1
-
-
-@njit(cache=True, inline="always", fastmath=True)
 def _build_scalar_element_columns(
         local_columns,
         element,
@@ -255,10 +164,10 @@ def _build_scalar_element_columns(
         rhs0[i, trace_cols] = source_rhs[element, i]
         rhs1[i, trace_cols] = 0.0
         rhs2[i, trace_cols] = 0.0
-    _solve_columns(
+    _solve_mixed_columns(
         local_columns, schur, d0, d1, mn0, mn1,
         rhs0, rhs1, rhs2, reduced_rhs, tmp1, tmp2, pivots,
-        mass_inverse, aff_jacs[element], diffusion,
+        mass_inverse, aff_jacs[element], diffusion=diffusion,
     )
 
 
