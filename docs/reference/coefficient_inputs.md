@@ -42,6 +42,42 @@ and primal postprocessing. The raw-CUDA path calls the function with
 are deliberately not callable, so they are never mistaken for `(x, y)` laws.
 Other solver families do not accept them yet.
 
+### Compiled pointwise coefficients (host Numba)
+
+`pointwise_coefficient(function, mesh_or_space, *, fields=(), gradients=(),
+params=(), time=0., name=...)` compiles `function` (or a tuple of component
+functions) with Numba `cfunc` and returns a `PointwiseCoefficient`, an
+`ElementCoefficient` that every ADR consumer above accepts. The function takes
+`(x, y, t)`, or `(x, y, t, v)` where `v` holds the values of `fields`, then the
+`(d/dx, d/dy)` pair of each field in `gradients`, then `params`. Sampling runs
+in the parallel kernels of `hdgfem/kernels/pointwise.py`, which are compiled
+once per signature and cached on disk, so new functions never recompile them;
+each function is itself cached when it is defined in a file (closures over
+numbers included, keyed by their captured values). `at_time(t)` rebinds the
+time and `bind(fields=..., gradients=..., params=..., time=...)` the point data
+without recompiling, as long as the layout of `v` stays the same; a time
+stepper compiles once and rebinds every step.
+
+`pointwise_law(function, *, params=(), time=0., name=...)` compiles the same
+kind of function into a `PointwiseLaw`, a plain `(x, y)` callable accepted
+wherever a coefficient law is, for example the components of a diffusion
+tensor (`v` then holds only `params`).
+
+A compiled function may call other compiled functions only through module
+globals: define them at module level with `@njit(cache=True)`. A closure that
+captures a compiled function misses Numba's cache in every process, so it
+recompiles each run and the cache keeps growing.
+
+Only NumPy and `math` code compiles. SciPy functions, Python objects and other
+libraries raise `TypeError` asking to project the coefficient first
+(`space.project_callable(...)`), or to pass the plain callable, which is
+sampled with NumPy on the host. Functions reading numeric or array module
+globals (other than `math`/NumPy constants such as `pi`) raise `ValueError`:
+Numba freezes globals and its cache does not notice later changes, so pass such
+values through `params`, `fields`, `t` or a closure over numbers. Functions defined outside a
+file (REPL, notebook, `exec`) compile with a warning and without the disk cache.
+Evaluation is host-only; the raw-CUDA path needs projected coefficients.
+
 Precomputed device arrays are also accepted on the raw-CUDA ADR path: a CuPy
 source of shape `(K, el_dof)` is taken as element moments and `(K, nq)` as
 volume-quadrature values (moments win when both shapes coincide, for example

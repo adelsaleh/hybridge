@@ -21,6 +21,7 @@ from .core.mesh import (
 )
 from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 from .core.element_coefficients import ElementCoefficient
+from .core.pointwise import PointwiseCoefficient, PointwiseLaw, pointwise_coefficient, pointwise_law
 from .core.field_ops import (
     coefficient_field,
     field_gradient_at_ref,
@@ -140,6 +141,8 @@ __all__ = [
     "DGMesh",
     "DGSpace",
     "ElementCoefficient",
+    "PointwiseCoefficient",
+    "PointwiseLaw",
     "LinearSolveCapacityError",
     "LinearSolveConvergenceError",
     "LinearSolveError",
@@ -180,6 +183,8 @@ __all__ = [
     "gmsh_triangle_mesh",
     "rectangle_mesh",
     "perpendicular_vector_field",
+    "pointwise_coefficient",
+    "pointwise_law",
     "project_callable_to_trace",
     "project_field_to_trace",
     "prolong_trace_coefficients",

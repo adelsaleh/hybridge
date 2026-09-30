@@ -2,8 +2,10 @@
 
 Fused host Numba assembly and local reconstruction support variable scalar and
 elliptic tensor diffusion in `q = -K grad(u)`. Coefficients are sampled through
-the shared NumPy/DG preparation helpers before entering compiled kernels. The
-kernels build each element's face tables (boundary and normal masses, element-boundary
+the shared NumPy/DG preparation helpers before entering compiled kernels, or by
+the compiled kernels of `pointwise_coefficient` (see
+[`coefficient_inputs.md`](../reference/coefficient_inputs.md)). The kernels
+build each element's face tables (boundary and normal masses, element-boundary
 coupling, trace lift, interior trace masses) from the `tau_total`/`gamma` face
 samples, so preparation holds no per-element dense table.
 Use `assembly_backend='numba'` and `hdg_postprocess='none'` for the raw solution.

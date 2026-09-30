@@ -21,6 +21,8 @@ import time
 
 import numpy as np
 
+from .host_threads import for_element_chunks
+
 
 _MESH_CACHE_VERSION = 2
 _MESH_CACHE_MAGIC = b"HDGFEM_MESH_CACHE_V2\n"
@@ -563,9 +565,18 @@ class DGMesh:
         points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points.ndim != 2 or points.shape[1] != 2:
             raise ValueError(f"reference_points must have shape (num_points, 2); got {points.shape}")
-        mapped = np.einsum("Krc,qc->Kqr", self.aff_mats, points, optimize=True)
-        mapped += self.aff_vecs[:, None, :]
-        return np.ascontiguousarray(mapped, dtype=REAL_DTYPE)
+        mapped = np.empty((self.num_tri, points.shape[0], 2), dtype=REAL_DTYPE)
+
+        def map_chunk(start, stop):
+            matrices, vectors = self.aff_mats[start:stop], self.aff_vecs[start:stop]
+            for row in range(2):
+                out = mapped[start:stop, :, row]
+                np.multiply(matrices[:, row, 0, None], points[None, :, 0], out=out)
+                out += matrices[:, row, 1, None]*points[None, :, 1]
+                out += vectors[:, row, None]
+
+        for_element_chunks(map_chunk, self.num_tri)
+        return mapped
 
     def flatten_mapped_reference_points(self, reference_points: np.ndarray) -> np.ndarray:
         """Return mapped reference points as ``(num_elements*num_points, 2)``."""

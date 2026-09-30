@@ -10,6 +10,7 @@ import numpy as np
 from . import hdg
 from . import matrices_numpy as matrices
 from ..core.element_coefficients import ElementCoefficient
+from ..core.host_threads import parallel_copy
 from ..core.space import DGSpace, DGTraceSpace, VectorDGField
 from ..linalg.system import KnownDofReduction, eliminate_known_dofs
 from ..solvers.diffusion_reaction import (
@@ -283,13 +284,13 @@ def prepare_adr_data(
             "normal_mass", lambda: _local_solver_pre_mats(0.0, 0.0, space)[3:5])
         diffusion_boundary = cached(
             "diffusion_boundary", lambda: diffusion_element_boundary_mats(0.0, space, trace_space=trace_ref))
-        element_boundary = diffusion_boundary.copy()
+        element_boundary = parallel_copy(diffusion_boundary)
         element_boundary[:, :space.el_dof] = matrices.element_boundary_mats_from_trace_weight(
             space, gamma, trace_space=trace_ref
         )
 
-        trace_lift = cached("diffusion_trace_lift",
-                            lambda: diffusion_trace_lift(0.0, space, trace_space=trace_ref)).copy()
+        trace_lift = parallel_copy(cached("diffusion_trace_lift",
+                                          lambda: diffusion_trace_lift(0.0, space, trace_space=trace_ref)))
         trace_lift[..., :space.el_dof] = matrices.advection_trace_lift_from_stabilization(
             space, tau_total, trace_space=trace_ref
         )

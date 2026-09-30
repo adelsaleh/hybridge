@@ -15,6 +15,7 @@ from typing import Callable
 
 import numpy as np
 
+from ..core.host_threads import for_element_chunks
 from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField, _normalize_callable_values
 from .projection import scalar_moments_from_values
 
@@ -304,6 +305,11 @@ def _oriented_trace_basis_on_element_sides(
     mesh = space.mesh
     trace_ref = _trace_ref(space, trace_space)
     return np.ascontiguousarray(trace_ref.oriented_basis_table[(~mesh.orientations).astype(np.int32)])
+
+
+def _oriented_trace_rows(mesh, trace_ref: DGTraceSpace, start: int, stop: int) -> np.ndarray:
+    """Rows ``start:stop`` of :func:`_oriented_trace_basis_on_element_sides`."""
+    return trace_ref.oriented_basis_table[(~mesh.orientations[start:stop]).astype(np.int32)]
 
 
 def _assemble_weighted_mass_from_values(weight_values: np.ndarray, space: DGSpace) -> np.ndarray:
@@ -700,14 +706,22 @@ def boundary_mass_from_trace_stabilization(
     """
     trace_ref = _trace_ref(test_space, trace_space)
     tau_face = _require_normal_flux(tau_face, test_space, trace_space=trace_ref)
-    return np.einsum(
-        "Kf,Kfq,fiq,fjq->Kij",
-        test_space.mesh.jacs_el_fc,
-        tau_face,
-        trace_ref.bas_of_bd_quads,
-        trace_ref.weighted_bas_of_bd_quads,
-        optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
-    )
+    jacobians = test_space.mesh.jacs_el_fc
+    result = np.empty(_local_matrix_shape(test_space), dtype=REAL_DTYPE)
+
+    def build(start, stop):
+        np.einsum(
+            "Kf,Kfq,fiq,fjq->Kij",
+            jacobians[start:stop],
+            tau_face[start:stop],
+            trace_ref.bas_of_bd_quads,
+            trace_ref.weighted_bas_of_bd_quads,
+            out=result[start:stop],
+            optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
+        )
+
+    for_element_chunks(build, test_space.mesh.num_tri)
+    return result
 
 
 def boundary_mass_from_normal_flux(
@@ -785,18 +799,22 @@ def element_boundary_mats_from_trace_weight(
     """
     trace_ref = _trace_ref(test_space, trace_space)
     gamma_face = _require_normal_flux(gamma_face, test_space, trace_space=trace_ref)
-    result = np.empty(
-        (test_space.mesh.num_tri, test_space.el_dof, 3 * trace_ref.edg_dof),
-        dtype=REAL_DTYPE,
-    )
-    result[:] = np.einsum(
-        "Kf,Kfq,fiq,jq->Kifj",
-        test_space.mesh.jacs_el_fc,
-        gamma_face,
-        trace_ref.bas_of_bd_quads,
-        trace_ref.weighted_bas1d_of_ref_edg_qds,
-        optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
-    ).reshape(test_space.mesh.num_tri, test_space.el_dof, 3 * trace_ref.edg_dof)
+    count = test_space.mesh.num_tri
+    jacobians = test_space.mesh.jacs_el_fc
+    result = np.empty((count, test_space.el_dof, 3 * trace_ref.edg_dof), dtype=REAL_DTYPE)
+    blocks = result.reshape(count, test_space.el_dof, 3, trace_ref.edg_dof)
+
+    def build(start, stop):
+        blocks[start:stop] = np.einsum(
+            "Kf,Kfq,fiq,jq->Kifj",
+            jacobians[start:stop],
+            gamma_face[start:stop],
+            trace_ref.bas_of_bd_quads,
+            trace_ref.weighted_bas1d_of_ref_edg_qds,
+            optimize=["einsum_path", (0, 1), (0, 1), (0, 1)],
+        )
+
+    for_element_chunks(build, count)
     return result
 
 
@@ -834,17 +852,22 @@ def advection_trace_lift_from_stabilization(
     """
     trace_ref = _trace_ref(test_space, trace_space)
     tau_face = _require_normal_flux(tau_face, test_space, trace_space=trace_ref)
-    oriented_trace = _oriented_trace_basis_on_element_sides(test_space, trace_space=trace_ref)
-    result = np.einsum(
-        "Kf,Kfq,Kfaq,fiq,q->Kfai",
-        test_space.mesh.jacs_el_fc,
-        tau_face,
-        oriented_trace,
-        trace_ref.bas_of_bd_quads,
-        trace_ref.weights,
-        optimize=True,
-    )
-    return np.ascontiguousarray(result)
+    mesh = test_space.mesh
+    result = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, test_space.el_dof), dtype=REAL_DTYPE)
+
+    def build(start, stop):
+        result[start:stop] = np.einsum(
+            "Kf,Kfq,Kfaq,fiq,q->Kfai",
+            mesh.jacs_el_fc[start:stop],
+            tau_face[start:stop],
+            _oriented_trace_rows(mesh, trace_ref, start, stop),
+            trace_ref.bas_of_bd_quads,
+            trace_ref.weights,
+            optimize=True,
+        )
+
+    for_element_chunks(build, mesh.num_tri)
+    return result
 
 
 def advection_interior_trace_mass_blocks_from_weight(
@@ -863,16 +886,21 @@ def advection_interior_trace_mass_blocks_from_weight(
     trace_ref = _trace_ref(test_space, trace_space)
     gamma_face = _require_normal_flux(gamma_face, test_space, trace_space=trace_ref)
     mesh = test_space.mesh
-    oriented_trace = _oriented_trace_basis_on_element_sides(test_space, trace_space=trace_ref)
-    side_blocks = np.einsum(
-        "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
-        mesh.jacs_el_fc,
-        gamma_face,
-        oriented_trace,
-        oriented_trace,
-        trace_ref.weights,
-        optimize=True,
-    )
+    side_blocks = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, trace_ref.edg_dof), dtype=REAL_DTYPE)
+
+    def build(start, stop):
+        oriented_trace = _oriented_trace_rows(mesh, trace_ref, start, stop)
+        side_blocks[start:stop] = np.einsum(
+            "Kf,Kfq,Kfaq,Kfbq,q->Kfab",
+            mesh.jacs_el_fc[start:stop],
+            gamma_face[start:stop],
+            oriented_trace,
+            oriented_trace,
+            trace_ref.weights,
+            optimize=True,
+        )
+
+    for_element_chunks(build, mesh.num_tri)
     blocks = np.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if inactive_tau is not None:
         from ..solvers.stabilization import gauge_inactive_advection_trace_blocks
