@@ -167,6 +167,78 @@ def test_workspace_specializations():
             assert sizes[0]<sizes[5]
 
 
+def test_workspace_limit_is_a_clear_configuration_error():
+    from hdgfem.backends.adr_tensor_raw_cuda import (TENSOR_SHARED_MEMORY_LIMIT, TensorWorkspaceError,
+                                                     max_tensor_volume_points, tensor_shared_bytes,
+                                                     tensor_workspace)
+    from hdgfem.backends.capabilities import UnsupportedBackendConfigurationError
+    nel, kind, nfq = 28, 6, 14
+    largest = max_tensor_volume_points(nel, kind, nfq)
+    assert tensor_shared_bytes(nel, kind, largest, nfq, 1)[1] <= TENSOR_SHARED_MEMORY_LIMIT
+    assert tensor_shared_bytes(nel, kind, largest+1, nfq, 1)[1] > TENSOR_SHARED_MEMORY_LIMIT
+    batch, _, size = tensor_workspace(nel, np.array([0, kind]), largest, nfq, order=6)
+    assert batch >= 1 and size <= TENSOR_SHARED_MEMORY_LIMIT
+    with pytest.raises(TensorWorkspaceError, match=rf'p=6, NEL=28, diffusion kind 6 \(variable-full\), '
+                       rf'NQ={largest+1} volume and NFQ=14 .*at most NQ={largest} volume points fit') as info:
+        tensor_workspace(nel, np.array([0, kind]), largest+1, nfq, order=6)
+    assert isinstance(info.value, ValueError)
+    assert isinstance(info.value, UnsupportedBackendConfigurationError)
+    widths = [tensor_workspace(nel, np.array([kind]), nq, nfq)[0] for nq in (33, 81, 121, largest)]
+    assert widths == sorted(widths, reverse=True)
+
+
+@pytest.mark.parametrize('rule', ['duffy-p+5', 'dunavant-14'])
+@pytest.mark.parametrize('order', [4, 6])
+@pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
+@pytest.mark.parametrize('diffusion,kind', diffusion_cases())
+def test_tensor_overintegrated_quadrature(cp, order, basis, diffusion, kind, rule):
+    """Overintegrated volume rules for the n-Gamma D-BDF2 plan: Duffy p+5 points or the
+    42-point degree-14 Dunavant rule; production traces keep 2p+1 GLL face points."""
+    from hdgfem.backends.adr_tensor_raw_cuda import tensor_workspace
+    from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
+    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import reconstruct_projected_adr_local_unknowns_raw_cuda
+    mesh = rectangle_mesh(2, 1)
+    mesh = DGMesh.from_arrays(mesh.node_coords @ np.array([[1.2,.3],[-.1,.8]]), mesh.triangles)
+    quadrature = dict(volume_quad_1d=order+5) if rule == 'duffy-p+5' else dict(volume_degree=14)
+    space = DGSpace(mesh, order, basis_type='dub_orth', **quadrature)
+    trace = space.trace_space(basis)
+    assert space.quad_data.Krf_w.size == ((order+5)**2 if rule == 'duffy-p+5' else 42)
+    assert trace.weights.size == 2*order+1
+    kwargs = dict(diffusion=diffusion, diffusion_stabilization=tau_law, trace_space=trace)
+    source, beta, reaction = (lambda x,y: 1.+.1*x*y), velocity(space), (lambda x,y: .4+.05*x)
+    prepared = prepare_adr_data(source, reaction, beta, space, **kwargs)
+    light = prepare_adr_data(source, reaction, beta, space, dense_local_matrices=False, **kwargs)
+    boundary = lambda x,y: .2+x-.3*y
+    numba = assemble_projected_adr_trace_system_eliminated_numba(
+        prepared, boundary, space, diffusion_data=prepare_diffusion(diffusion, space), trace_space=trace).trace_system
+    operator = assemble_projected_adr_trace_operator_raw_cuda(
+        light, boundary, space, diffusion=diffusion, trace_space=trace, matrix_format='csr')
+    actual = operator.assembly
+    np.testing.assert_allclose(dense_device(cp, actual), dense_host(numba), rtol=2e-10, atol=3e-10)
+    np.testing.assert_allclose(cp.asnumpy(actual.rhs), numba.rhs, rtol=2e-10, atol=3e-10)
+    kinds = prepare_diffusion(diffusion, space).kinds
+    batch, _, shared = tensor_workspace(space.el_dof, kinds, space.quad_data.Krf_w.size, trace.weights.size)
+    assert actual.timings['raw.shared_bytes'] == shared and actual.timings['raw.batch_columns'] == batch
+    trace_values = np.sin(np.arange(mesh.num_edg*(order+1))+.2)
+    reference = reconstruct_projected_adr_local_unknowns_numba(trace_values, prepared, space,
+                                                               trace_space=trace, diffusion=diffusion)
+    unknowns, _ = reconstruct_projected_adr_local_unknowns_raw_cuda(operator, cp.asarray(trace_values))
+    np.testing.assert_allclose(cp.asnumpy(unknowns), reference, rtol=3e-10, atol=3e-10)
+
+
+def test_oversized_quadrature_fails_before_launch(cp):
+    from hdgfem.backends.adr_tensor_raw_cuda import TensorWorkspaceError
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases as coefficient_cases
+    space = DGSpace(rectangle_mesh(1, 1), 6, basis_type='dub_orth', volume_quad_1d=14)
+    trace = space.trace_space('legacy-lagrange')
+    prep = prepare_adr_data(space.constant(1.), .3, velocity(space), space, trace_space=trace,
+                            dense_local_matrices=False)
+    diffusion = coefficient_cases()['variable_full']
+    assert prepare_diffusion(diffusion, space).kinds.max() == 6
+    with pytest.raises(TensorWorkspaceError, match=r'p=6, .*variable-full.*NQ=196'):
+        assemble_projected_adr_trace_operator_raw_cuda(prep, 0., space, trace_space=trace, diffusion=diffusion)
+
+
 def test_scalar_serial_diagnostic_is_retained(cp):
     space=DGSpace(rectangle_mesh(2,1),2)
     trace=space.trace_space('legendre-modal')
@@ -191,3 +263,67 @@ def test_mass_factor_failure_and_trace_validation(cp):
         reconstruct_projected_adr_local_unknowns_raw_cuda(operator,cp.zeros(1))
     with pytest.raises(ValueError,match='finite'):
         reconstruct_projected_adr_local_unknowns_raw_cuda(operator,cp.full(space.mesh.num_edg*2,cp.nan))
+
+
+@pytest.mark.parametrize('diffusion,kind', diffusion_cases())
+@pytest.mark.parametrize('order', [0, 6])
+@pytest.mark.parametrize('cache', ['none', 'schur-lu', 'schur-lu+mass'])
+def test_single_thread_tensor_assembly_and_reconstruction(cp, diffusion, kind, order, cache):
+    """Exercise partial-warp factors and column solves, including 2*NEL > 32."""
+    from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
+    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import reconstruct_projected_adr_local_unknowns_raw_cuda
+
+    space = DGSpace(rectangle_mesh(1, 1), order, basis_type='dub_orth')
+    trace = space.trace_space('legendre-modal')
+    prepared = prepare_adr_data(space.constant(1.), .3, velocity(space), space, diffusion=diffusion,
+                               diffusion_stabilization=2., trace_space=trace,
+                               dense_local_matrices=True)
+    expected = assemble_projected_adr_trace_system_eliminated_numba(
+        prepared, .2, space, diffusion_data=prepare_diffusion(diffusion, space),
+        trace_space=trace).trace_system
+    operator = assemble_projected_adr_trace_operator_raw_cuda(
+        replace(prepared, element_boundary=None), .2, space, diffusion=diffusion, trace_space=trace,
+        block_size=1, cache_local_factors=cache)
+    assert operator.assembly.timings['raw.block_size'] == 1
+    assert operator.diffusion_structure[kind] == space.mesh.num_tri
+    np.testing.assert_allclose(dense_device(cp, operator.assembly), dense_host(expected),
+                               rtol=3e-10, atol=3e-10)
+    np.testing.assert_allclose(cp.asnumpy(operator.assembly.rhs), expected.rhs,
+                               rtol=3e-10, atol=3e-10)
+    trace_values = np.sin(np.arange(space.mesh.num_edg * (order + 1)) + .2)
+    expected_local = reconstruct_projected_adr_local_unknowns_numba(
+        trace_values, prepared, space, trace_space=trace, diffusion=diffusion)
+    actual, _ = reconstruct_projected_adr_local_unknowns_raw_cuda(
+        operator, cp.asarray(trace_values), block_size=1)
+    np.testing.assert_allclose(cp.asnumpy(actual), expected_local, rtol=3e-10, atol=3e-10)
+
+
+def test_reused_mass_factors_reproduce_fresh_assembly(cp):
+    """Reloading the factored variable-tensor mass reproduces a fresh assembly for a changed advection
+    field (to roundoff: the reload kernel is compiled separately, so operation contraction can differ)."""
+    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import reconstruct_projected_adr_local_unknowns_raw_cuda
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases as coefficient_cases
+    space = DGSpace(rectangle_mesh(2, 1), 3, basis_type='dub_orth')
+    trace = space.trace_space('legendre-modal')
+    for name in ('variable_symmetric', 'variable_full'):
+        diffusion = coefficient_cases()[name]
+        operators = []
+        for value in (.7, -.4):
+            prep = prepare_adr_data(space.constant(1.), .3, velocity(space, value, -.2), space, trace_space=trace,
+                                    diffusion=diffusion, dense_local_matrices=False)
+            fresh = assemble_projected_adr_trace_operator_raw_cuda(prep, .2, space, diffusion=diffusion,
+                                                                   trace_space=trace, matrix_format='bsr')
+            operators.append((prep, fresh))
+        (_, first), (prep, fresh) = operators
+        assert first.mass_factors is not None
+        reused = assemble_projected_adr_trace_operator_raw_cuda(
+            prep, .2, space, diffusion=diffusion, trace_space=trace, matrix_format='bsr',
+            mass_factors=first.mass_factors, csr_pattern=first.csr_pattern)
+        assert reused.assembly.timings['raw.mass_factors.cached'] == 1.
+        close = dict(rtol=1e-13, atol=1e-14)
+        np.testing.assert_allclose(cp.asnumpy(reused.assembly.data), cp.asnumpy(fresh.assembly.data), **close)
+        np.testing.assert_allclose(cp.asnumpy(reused.assembly.rhs), cp.asnumpy(fresh.assembly.rhs), **close)
+        trace_values = cp.asarray(np.sin(np.arange(space.mesh.num_edg*4) + .2))
+        np.testing.assert_allclose(
+            cp.asnumpy(reconstruct_projected_adr_local_unknowns_raw_cuda(reused, trace_values)[0]),
+            cp.asnumpy(reconstruct_projected_adr_local_unknowns_raw_cuda(fresh, trace_values)[0]), **close)

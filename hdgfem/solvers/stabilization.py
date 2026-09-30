@@ -101,14 +101,18 @@ class GlobalLengthDiffusion:
             raise ValueError("domain_length must be finite and positive or 'auto'")
         return length
 
-    def resolve(self, diffusion: Any, space: DGSpace) -> float | np.ndarray:
-        """Resolve scalar or sidewise normal-diffusivity stabilization."""
+    def resolve(self, diffusion: Any, space: DGSpace, *, device: bool = False) -> float | np.ndarray:
+        """Resolve scalar or sidewise normal-diffusivity stabilization.
+
+        ``device=True`` samples the sidewise normal diffusivity on the device
+        (CuPy result); the scalar case is unchanged.
+        """
         try:
             kappa = constant_isotropic_diffusivity(diffusion)
         except NotImplementedError:
             from ..assembly.diffusion_coefficients import normal_diffusivity_on_faces
             scale = geometric_diffusion_tau(1., self.resolved_domain_length(space), self.gamma_d)
-            return scale * normal_diffusivity_on_faces(diffusion, space)
+            return scale * normal_diffusivity_on_faces(diffusion, space, device=device)
         return geometric_diffusion_tau(
             kappa,
             self.resolved_domain_length(space),
@@ -168,12 +172,14 @@ def resolve_diffusion_stabilization(
         stabilization: Any,
         diffusion: Any,
         space: DGSpace,
+        *,
+        device: bool = False,
 ) -> Any:
     """Lower a built-in diffusion policy while preserving every explicit input."""
     if isinstance(stabilization, GlobalLengthDiffusion):
-        return stabilization.resolve(diffusion, space)
+        return stabilization.resolve(diffusion, space, device=device)
     if is_global_length_diffusion(stabilization):
-        return GlobalLengthDiffusion().resolve(diffusion, space)
+        return GlobalLengthDiffusion().resolve(diffusion, space, device=device)
     return stabilization
 
 

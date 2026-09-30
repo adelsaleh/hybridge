@@ -210,13 +210,13 @@ def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
                                for c in range(2)), name='total_flux_h_star')
 
 
-def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, diffusion):
-    """Solve the coupled ADR Neumann recovery with device batched algebra.
+def _primal_system_cupy(local_unknowns, total_flux, space, cache, samples, diffusion):
+    """Independent contraction reference for the coupled ADR Neumann system.
 
     Volume, face and mean equations match the Numba reference, including the
     total numerical flux and the scalar Neumann multiplier.
     """
-    from .cupy import as_cupy_coefficients, as_cupy_space, field_from_cupy_coefficients
+    from .cupy import as_cupy_coefficients, as_cupy_space
 
     cp = require_cupy()
     post = cache.post_space
@@ -233,13 +233,16 @@ def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, d
     beta_volume, beta_face, tau = samples
     flux = cp.stack([as_cupy_coefficients(f, as_cupy_space(f.space)) for f in total_flux.components], axis=1)
     values = flux @ phi.T
-    mass = jac[:, None, None] * cp.einsum('q,qi,qj->ij', weights, phi, phi) / diffusion
+    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, post, device=True))
     for c in range(2):
         constitutive = slice(c*d, (c+1)*d)
         flux_columns = slice((c+1)*d, (c+2)*d)
         grad_mass = cp.einsum('K,q,Kqi,qj->Kij', jac, weights, gradient[..., c], phi)
         matrix[:, constitutive, :d] = -grad_mass
-        matrix[:, constitutive, flux_columns] = mass
+        for component in range(2):
+            matrix[:, constitutive, (component+1)*d:(component+2)*d] = cp.einsum(
+                'K,q,Kq,qi,qj->Kij', jac, weights, inverse[..., 2*c+component], phi, phi)
         matrix[:, 2*d:3*d, flux_columns] = -grad_mass
     matrix[:, 2*d:3*d, :d] = -cp.einsum('K,q,Kqia,Kqa,qj->Kij', jac, weights, gradient, beta_volume, phi)
     rhs[:, 2*d:3*d] = -cp.einsum('K,q,Kqia,Kaq->Ki', jac, weights, gradient, values)
@@ -270,5 +273,18 @@ def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, d
             matrix[:, trace_slice, (c+1)*d:(c+2)*d] += nc * cross.transpose(0, 2, 1)
         rhs[:, 2*d:3*d] += cp.einsum('Kq,Kq,iq->Ki', scale, normal_flux, p)
         rhs[:, trace_slice] += cp.einsum('Kq,Kq,aq->Ka', scale, normal_flux, trace_phi)
-    result = cp.linalg.solve(matrix, rhs[..., None])[:, :d, 0]
+    return matrix, rhs
+
+
+def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, diffusion):
+    """Recover tensor ADR primal coefficients using fused assembly and batched LU."""
+    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from .adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
+    from .cupy import field_from_cupy_coefficients
+
+    cp = require_cupy()
+    post = cache.post_space
+    inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, post, device=True))
+    matrix, rhs = primal_system_raw_cuda(local_unknowns, total_flux, space, cache, samples, inverse)
+    result = cp.linalg.solve(matrix, rhs[..., None])[:, :post.el_dof, 0]
     return field_from_cupy_coefficients(post, result, name='u_h_star')

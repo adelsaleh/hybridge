@@ -34,17 +34,25 @@ def _problem(order):
     return space, beta, tau
 
 
+@pytest.mark.parametrize('diffusion_kind', ['constant_isotropic', 'constant_diagonal', 'constant_full', 'variable_isotropic', 'variable_diagonal', 'variable_symmetric', 'variable_full', 'device_field'])
 @pytest.mark.parametrize('order', [0, 1, 3, 6])
 @pytest.mark.parametrize('trace_basis', ['legacy-lagrange', 'legendre-modal'])
 @pytest.mark.parametrize('variant', ['l2_closest', 'RT_projection'])
-def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant):
+def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant, diffusion_kind):
     """Forbid downloads through both CuPy and lazy field access during recovery."""
     cp = _cupy()
     from hdgfem.backends.cupy import field_from_cupy_coefficients
 
     space, beta, tau = _problem(order)
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases
+    diffusion = diffusion_cases().get(diffusion_kind)
+    if diffusion_kind == 'device_field':
+        coefficient_space = DGSpace(space.mesh, 1, basis_type='dub_orth')
+        diffusion = (coefficient_space.project_callable(lambda x, y: 2.+.1*x),
+                     coefficient_space.constant(.3), coefficient_space.constant(-.1),
+                     coefficient_space.project_callable(lambda x, y: 1.+.1*y))
     trace_space = space.trace_space(trace_basis)
-    prepared = prepare_adr_data(space.constant(1.0), space.constant(0.3), beta, space, diffusion=0.2,
+    prepared = prepare_adr_data(space.constant(1.0), space.constant(0.3), beta, space, diffusion=diffusion,
                                advection_stabilization=tau, diffusion_stabilization=0.6,
                                trace_space=trace_space)
     rng = np.random.default_rng(14)
@@ -53,10 +61,13 @@ def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant
     host_flux = _postprocess_total_flux(unknowns, trace, beta, prepared, space,
                                        trace_space, tau, variant, 'numba')
     host_primal = _postprocess_primal_from_total_flux(unknowns, host_flux, beta, prepared,
-                                                     space, trace_space, tau, 0.2)
+                                                     space, trace_space, tau, diffusion)
     device_beta = VectorDGField(tuple(field_from_cupy_coefficients(f.space, cp.asarray(f.coeffs))
                                       for f in beta.components))
     device_unknowns, device_trace = cp.asarray(unknowns), cp.asarray(trace)
+    device_diffusion = diffusion
+    if diffusion_kind == 'device_field':
+        device_diffusion = tuple(field_from_cupy_coefficients(f.space, cp.asarray(f.coeffs)) for f in diffusion)
 
     def forbidden(*args, **kwargs):
         """Reject any hidden download of solution/coefficient arrays."""
@@ -69,7 +80,7 @@ def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant
                                              prepared, space, trace_space, cp.asarray(tau), variant, 'cupy')
         device_primal = _postprocess_primal_from_total_flux(device_unknowns, device_flux,
                                                           device_beta, prepared, space, trace_space,
-                                                          cp.asarray(tau), 0.2, 'cupy')
+                                                          cp.asarray(tau), device_diffusion, 'cupy')
         for f in (*device_flux.components, device_primal):
             assert not f.coefficients_materialized
             assert f.device_coefficients_materialized()
@@ -85,17 +96,20 @@ def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant
                                rtol=2e-10, atol=2e-10)
 
 
+@pytest.mark.parametrize('tensor', [False, True])
 @pytest.mark.parametrize('materialize', [False, True])
 @pytest.mark.parametrize('mode', ['none', 'primal', 'flux', 'both'])
 @pytest.mark.parametrize('variant', ['l2_closest', 'RT_projection'])
 @pytest.mark.parametrize('trace_basis', ['legacy-lagrange', 'legendre-modal'])
-def test_raw_cuda_result_materialization(monkeypatch, materialize, mode, variant, trace_basis):
+def test_raw_cuda_result_materialization(monkeypatch, materialize, mode, variant, trace_basis, tensor):
     """Exercise native AMGX solves and explicit versus lazy result downloads."""
     cp = _cupy()
     pytest.importorskip('pyamgx')
     space, beta, tau = _problem(1)
     boundary = lambda x, y: 0.2 + x - 0.3*y
-    common = dict(diffusion=0.2, advection_stabilization=tau, diffusion_stabilization=0.6,
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
+    diffusion = raw_cuda_coefficient('variable-full') if tensor else 0.2
+    common = dict(diffusion=diffusion, advection_stabilization=tau, diffusion_stabilization=0.6,
                   trace_basis=trace_basis, flux_postprocess_space=variant,
                   hdg_postprocess=mode, scale_system=False, verbose=False)
     reference = solve_advection_diffusion_reaction_hdg(space.constant(1.0), beta, space.constant(0.3), boundary, space,
@@ -173,3 +187,34 @@ def test_device_stabilization_sampling(monkeypatch, kind):
         actual = _adr_postprocess_samples(beta, prepared, space, post, tau, xp=cp)
     for a, b in zip(actual, expected):
         np.testing.assert_allclose(cp.asnumpy(a), b, rtol=2e-13, atol=2e-13)
+
+
+@pytest.mark.parametrize('order', [0, 1, 3, 6])
+def test_fused_primal_system_matches_independent_contractions(order):
+    """Compare every mixed block and RHS, including the nonsymmetric cross terms."""
+    cp = _cupy()
+    from hdgfem.backends.advection_diffusion_reaction_cupy import _primal_system_cupy
+    from hdgfem.backends.adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
+    from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.solvers.diffusion_reaction import _build_hdg_postprocess_cache
+    from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
+
+    space, _, _ = _problem(order)
+    cache = _build_hdg_postprocess_cache(space, space.trace_space('legendre-modal'),
+                                       want_primal=False, want_flux=False)
+    post, n = cache.post_space, space.mesh.num_tri
+    q = post.quad_data
+    rng = np.random.default_rng(17)
+    flux = VectorDGField(tuple(field_from_cupy_coefficients(post, cp.asarray(rng.normal(size=post.shape)))
+                               for _ in range(2)))
+    local = cp.asarray(rng.normal(size=(n, 3*space.el_dof)))
+    samples = (cp.asarray(rng.normal(size=(n, q.Krf_w.size, 2))),
+               cp.asarray(rng.normal(size=(n, 3, q.weights_JGL.size, 2))),
+               cp.asarray(1.+rng.random((n, 3, q.weights_JGL.size))))
+    diffusion = raw_cuda_coefficient('variable-full')
+    inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, post, device=True))
+    expected = _primal_system_cupy(local, flux, space, cache, samples, diffusion)
+    actual = primal_system_raw_cuda(local, flux, space, cache, samples, inverse)
+    for a, b in zip(actual, expected):
+        np.testing.assert_allclose(cp.asnumpy(a), cp.asnumpy(b), atol=2e-12, rtol=2e-12)

@@ -399,8 +399,17 @@ def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np
     return np.ascontiguousarray(values)
 
 
-def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_space=None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Sample tensor components using shared volume or element-side evaluators."""
+def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_space=None,
+                          device=False) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sample tensor components using shared volume or element-side evaluators.
+
+    ``device=True`` returns CuPy samples from the device twins in
+    ``backends.coefficients_cupy`` (same forms and layouts).
+    """
+    xp = np
+    if device:
+        from ..backends.cupy import require_cupy
+        xp = require_cupy()
     num_elements = space.mesh.num_tri
     num_quads = space.quad_data.Krf_w.shape[0]
     shape = (num_elements, num_quads)
@@ -410,35 +419,43 @@ def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_sp
 
     def component_values(component, *, label):
         """Choose the existing volume or incidence-aware face sampler."""
+        if device:
+            from ..backends.coefficients_cupy import face_samples_cupy, volume_samples_cupy
+            if on_faces:
+                return face_samples_cupy(component, space, label=label, trace_space=trace_ref)
+            return volume_samples_cupy(component, space, label=label)
         if on_faces:
             from ..assembly.matrices_numpy import _face_quadrature_values_from_scalar_input
             return _face_quadrature_values_from_scalar_input(
                 component, space, label, trace_space=trace_ref)
         return _component_quadrature_values(component, space, label=label)
 
-    zeros = np.zeros(shape, dtype=REAL_DTYPE)
+    zeros = xp.zeros(shape, dtype=REAL_DTYPE)
     if isinstance(diffusion, DGField) or callable(diffusion):
         diagonal = component_values(diffusion, label="diffusion")
         return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
 
     if np.isscalar(diffusion):
-        diagonal = np.full(shape, float(diffusion), dtype=REAL_DTYPE)
+        diagonal = xp.full(shape, float(diffusion), dtype=REAL_DTYPE)
         return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
 
     try:
-        constant = np.asarray(diffusion, dtype=REAL_DTYPE)
+        # Do not invoke DGField.__array__: device tensor components must stay resident.
+        components_are_fields = isinstance(diffusion, (tuple, list)) and any(
+            isinstance(component, DGField) for component in diffusion)
+        constant = None if components_are_fields else np.asarray(diffusion, dtype=REAL_DTYPE)
     except (TypeError, ValueError):
         constant = None
     if constant is not None and constant.ndim == 0:
-        diagonal = np.full(shape, float(constant), dtype=REAL_DTYPE)
+        diagonal = xp.full(shape, float(constant), dtype=REAL_DTYPE)
         return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
     if constant is not None and constant.shape in {(3,), (4,)}:
         diffusion = tuple(constant)
     if constant is not None and constant.shape == (2, 2):
-        k00 = np.full(shape, constant[0, 0], dtype=REAL_DTYPE)
-        k01 = np.full(shape, constant[0, 1], dtype=REAL_DTYPE)
-        k10 = np.full(shape, constant[1, 0], dtype=REAL_DTYPE)
-        k11 = np.full(shape, constant[1, 1], dtype=REAL_DTYPE)
+        k00 = xp.full(shape, float(constant[0, 0]), dtype=REAL_DTYPE)
+        k01 = xp.full(shape, float(constant[0, 1]), dtype=REAL_DTYPE)
+        k10 = xp.full(shape, float(constant[1, 0]), dtype=REAL_DTYPE)
+        k11 = xp.full(shape, float(constant[1, 1]), dtype=REAL_DTYPE)
         return k00, k01, k10, k11
 
     if isinstance(diffusion, (tuple, list)):

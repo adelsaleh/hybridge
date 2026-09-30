@@ -153,10 +153,14 @@ def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: i
 
     Bind before calling so a TypeError inside a user law is never mistaken for
     an unsupported signature. Points are flattened in quadrature/face order.
+    Device (CuPy) points and normals yield device ``element``/``local_face``
+    context arrays, so the same law can be evaluated on the GPU.
     """
+    from ..backends.cupy import array_module
+    xp = array_module(mapped_points)
     x, y = mapped_points[..., 0], mapped_points[..., 1]
-    element = np.broadcast_to(np.arange(x.shape[0])[:, None], x.shape)
-    local_face = np.broadcast_to(np.tile(np.arange(3), num_face_quads), x.shape)
+    element = xp.broadcast_to(xp.arange(x.shape[0])[:, None], x.shape)
+    local_face = xp.broadcast_to(xp.tile(xp.arange(3), num_face_quads), x.shape)
     normal = None if normals is None else normals[element, local_face]
     try:
         signature = inspect.signature(values)

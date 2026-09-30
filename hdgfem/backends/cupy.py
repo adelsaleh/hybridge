@@ -581,6 +581,13 @@ def initialize_pyamgx_once():
     return amgx
 
 
+def array_module(*values):
+    """Return CuPy if any value is a device array, else NumPy (CuPy is not imported for host data)."""
+    if any(hasattr(value, "__cuda_array_interface__") for value in values):
+        return require_cupy()
+    return np
+
+
 def asnumpy(array) -> np.ndarray:
     """Return ``array`` as a NumPy array without importing CuPy at call sites."""
     cupy = require_cupy()

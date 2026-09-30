@@ -706,18 +706,35 @@ def transport_velocity_diagnostics(
     return result
 
 
-def _error_quadrature(field: DGField, volume_quad_1d: int | None):
-    """Return reference points, weights, and basis values for error integration."""
+def _error_quadrature(field: DGField, volume_quad_1d: int | None, volume_degree: int | None = None):
+    """Return reference points, weights, and basis values for error integration.
+
+    ``volume_quad_1d`` selects a collapsed Gauss rule and ``volume_degree`` a
+    rule of that polynomial exactness (see ``DGSpace``); by default the
+    field's own volume quadrature is used.
+    """
     space = field.space
-    if volume_quad_1d is None:
+    if volume_quad_1d is None and volume_degree is None:
         return space.quad_data.Krf_quads, space.quad_data.Krf_w, space.quad_data.bas_of_quads
     reference = ReferenceElementData.triangle(
         space.order,
         basis_type=space.quad_data.basis_type,
-        volume_quad_1d=int(volume_quad_1d),
+        volume_quad_1d=None if volume_quad_1d is None else int(volume_quad_1d),
         edge_quad_1d=space.quad_data.edge_quad_1d,
+        volume_degree=volume_degree,
     )
     return reference.Krf_quads, reference.Krf_w, reference.bas_of_quads
+
+
+def _weight_values(weight, x, y, xp):
+    """Evaluate an optional spatial weight ``w(x, y)`` on mapped points (ones when absent)."""
+    if weight is None:
+        return None
+    values = xp.asarray(weight(x, y), dtype=REAL_DTYPE)
+    values = xp.broadcast_to(values, x.shape)
+    if not bool(xp.isfinite(values).all()) or bool((values < 0).any()):
+        raise ValueError("error weight must be finite and nonnegative")
+    return values
 
 
 def _sample_reference_points(resolution: int) -> np.ndarray:
@@ -727,15 +744,20 @@ def _sample_reference_points(resolution: int) -> np.ndarray:
     return reference_plot_points(int(resolution))
 
 
-def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_samples):
+def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_samples,
+                   weight=None, volume_degree=None):
     """Evaluate scalar metrics and optional samples with NumPy."""
     space = field.space
-    error_points, weights, basis = _error_quadrature(field, volume_quad_1d)
+    error_points, weights, basis = _error_quadrature(field, volume_quad_1d, volume_degree)
     mapped = space.mesh.map_reference_points(error_points)
     exact_values = np.asarray(exact(mapped[:, :, 0], mapped[:, :, 1]), dtype=REAL_DTYPE)
     numerical_values = field.coeffs @ basis
     diff = numerical_values - exact_values
-    l2 = float(np.sqrt(np.einsum("K,Kq,q->", space.mesh.aff_jacs, diff * diff, weights, optimize=True)))
+    squared = diff * diff
+    spatial = _weight_values(weight, mapped[:, :, 0], mapped[:, :, 1], np)
+    if spatial is not None:
+        squared = squared * spatial
+    l2 = float(np.sqrt(np.einsum("K,Kq,q->", space.mesh.aff_jacs, squared, weights, optimize=True)))
     if sample_resolution is None:
         reference_points, sampled_numerical, sampled_exact = error_points, numerical_values, exact_values
     else:
@@ -758,7 +780,8 @@ def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_s
     return ScalarErrorReport(metrics, samples)
 
 
-def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include_samples):
+def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include_samples,
+                     weight=None, volume_degree=None):
     """Evaluate scalar metrics on the resident CUDA device with CuPy."""
     from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 
@@ -766,12 +789,12 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
     space = field.space
     cspace = as_cupy_space(space)
     coefficients = as_cupy_coefficients(field, cspace)
-    if volume_quad_1d is None:
+    if volume_quad_1d is None and volume_degree is None:
         error_points = cspace.quad_data.Krf_quads
         weights = cspace.quad_data.Krf_w
         basis = cspace.quad_data.bas_of_quads
     else:
-        host_points, host_weights, host_basis = _error_quadrature(field, volume_quad_1d)
+        host_points, host_weights, host_basis = _error_quadrature(field, volume_quad_1d, volume_degree)
         error_points = cp.asarray(host_points, dtype=REAL_DTYPE)
         weights = cp.asarray(host_weights, dtype=REAL_DTYPE)
         basis = cp.asarray(host_basis, dtype=REAL_DTYPE)
@@ -779,7 +802,11 @@ def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include
     exact_values = cp.asarray(exact(mapped[:, 0, :], mapped[:, 1, :]), dtype=REAL_DTYPE)
     numerical_values = coefficients @ basis
     diff = numerical_values - exact_values
-    l2 = cp.sqrt(cp.einsum("K,Kq,q->", cspace.mesh.aff_jacs, diff * diff, weights, optimize=True))
+    squared = diff * diff
+    spatial = _weight_values(weight, mapped[:, 0, :], mapped[:, 1, :], cp)
+    if spatial is not None:
+        squared = squared * spatial
+    l2 = cp.sqrt(cp.einsum("K,Kq,q->", cspace.mesh.aff_jacs, squared, weights, optimize=True))
     if sample_resolution is None:
         reference_points, sampled_numerical, sampled_exact = error_points, numerical_values, exact_values
     else:
@@ -853,8 +880,15 @@ def evaluate_vector_error(
         volume_quad_1d: int | None = None,
         sample_resolution: int | None = None,
         include_samples: bool = False,
+        weight: Callable | None = None,
+        volume_degree: int | None = None,
 ) -> VectorErrorReport:
-    """Evaluate vector L2 error and a sampled Euclidean maximum on the host."""
+    """Evaluate vector L2 error and a sampled Euclidean maximum on the host.
+
+    ``weight(x, y) >= 0`` weights only the L2 integral, for example ``R`` for
+    the axisymmetric norm ``(int |e|^2 R dR dZ)^(1/2)``; sampled maxima stay
+    unweighted.
+    """
     if not isinstance(field, VectorDGField):
         raise TypeError("evaluate_vector_error expects a VectorDGField")
     space = field.components[0].space
@@ -863,8 +897,9 @@ def evaluate_vector_error(
         if component.space is not space:
             raise ValueError("vector components must share one DGSpace object")
 
-    error_points, weights, basis = _error_quadrature(field.components[0], volume_quad_1d)
+    error_points, weights, basis = _error_quadrature(field.components[0], volume_quad_1d, volume_degree)
     mapped = space.mesh.map_reference_points(error_points)
+    spatial = _weight_values(weight, mapped[:, :, 0], mapped[:, :, 1], np)
     exact_values = _exact_vector_values(
         exact,
         mapped[:, :, 0],
@@ -874,17 +909,10 @@ def evaluate_vector_error(
     coefficients = field.as_component_first()
     numerical_values = np.einsum("dKi,iq->dKq", coefficients, basis, optimize=True)
     difference = numerical_values - exact_values
-    l2 = float(
-        np.sqrt(
-            np.einsum(
-                "K,dKq,q->",
-                space.mesh.aff_jacs,
-                difference * difference,
-                weights,
-                optimize=True,
-            )
-        )
-    )
+    squared = difference * difference
+    if spatial is not None:
+        squared = squared * spatial[None]
+    l2 = float(np.sqrt(np.einsum("K,dKq,q->", space.mesh.aff_jacs, squared, weights, optimize=True)))
 
     if sample_resolution is None:
         reference_points = error_points
@@ -935,8 +963,17 @@ def evaluate_scalar_error(
         sample_resolution: int | None = None,
         backend: Literal["auto", "host", "device"] = "auto",
         include_samples: bool = False,
+        weight: Callable | None = None,
+        volume_degree: int | None = None,
 ) -> ScalarErrorReport:
-    """Evaluate scalar errors on the host or the field's resident GPU."""
+    """Evaluate scalar errors on the host or the field's resident GPU.
+
+    ``weight(x, y) >= 0`` weights only the L2 integral, for example ``R`` for
+    the axisymmetric norm ``(int |e|^2 R dR dZ)^(1/2)``; on the device it
+    must accept CuPy arrays. Sampled maxima stay unweighted. ``volume_degree``
+    selects an error rule of that polynomial exactness (exclusive with
+    ``volume_quad_1d``).
+    """
     if not isinstance(field, DGField):
         raise TypeError("evaluate_scalar_error expects a DGField")
     normalized = str(backend).lower()
@@ -952,6 +989,8 @@ def evaluate_scalar_error(
         volume_quad_1d=volume_quad_1d,
         sample_resolution=sample_resolution,
         include_samples=include_samples,
+        weight=weight,
+        volume_degree=volume_degree,
     )
 
 

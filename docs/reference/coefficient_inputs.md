@@ -18,6 +18,37 @@ Callables remain outside `DGField`. Use them when the backend can sample them di
 
 Use projected fields when a backend requires tables, when repeat solves should reuse the same discretized coefficient, or when projected-coefficient semantics are desired intentionally.
 
+### Element-local coefficients
+
+`ElementCoefficient(function, mesh, components=1, name=...)` describes a
+coefficient that is only known elementwise, for example a pointwise quotient of
+DG fields such as `Gamma/max(n, n_floor)` or a term containing the elementwise
+gradient of a DG field. `function(reference_points, *, xp, t=None)` returns the
+values at the same reference-triangle points on every element, shape `(K, n)`
+or `(K, n, components)`, as NumPy (`xp=numpy`) or CuPy (`xp=cupy`) arrays.
+Because the values are element-local, the value an element sees on a face is
+its own value at reference face points: one evaluator supplies volume samples,
+per-incidence face samples (which may jump across a face) and samples on the
+degree-`p+1` postprocessing quadrature, and nothing is projected into the
+solution space. Use `field_values_at_ref(field, points, device=...)` and
+`field_gradient_at_ref(...)` to evaluate DG fields inside such a function
+without host round trips.
+
+ADR accepts `ElementCoefficient` for `source`, `reaction` and the two-component
+`beta` on the NumPy, Numba and raw-CUDA assembly paths and in both total-flux
+and primal postprocessing. The raw-CUDA path calls the function with
+`xp=cupy`, so the samples stay on the device; a function that raises
+`TypeError` for CuPy input falls back to host evaluation and upload. Instances
+are deliberately not callable, so they are never mistaken for `(x, y)` laws.
+Other solver families do not accept them yet.
+
+Precomputed device arrays are also accepted on the raw-CUDA ADR path: a CuPy
+source of shape `(K, el_dof)` is taken as element moments and `(K, nq)` as
+volume-quadrature values (moments win when both shapes coincide, for example
+p=2 with the default 6-point rule, so prefer an `ElementCoefficient` or
+`hdg.source_moments_from_values` for values), and a CuPy reaction of shape
+`(K, nq)` passes through unchanged.
+
 ### Lazy zero and constant DG fields
 
 `space.zeros(...)` and `space.constant(value, ...)` create exact DG fields with metadata but no full coefficient table. Their `constant_value` property is the authoritative fast-path fact. Accessing `.coeffs` or `.asarray()` materializes the full host table.

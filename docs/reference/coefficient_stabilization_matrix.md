@@ -27,15 +27,15 @@ valid assembly, solve, and reconstruction combinations.
 | Advection-reaction | beta | Pair of callables or VectorDGField | Pair of CuPy-compatible callables or VectorDGField | Same-space VectorDGField | Same-space projected VectorDGField |
 | Diffusion-reaction | source, reaction | Vectorized callable, scalar, or DGField | Reusable device path projected/constant subset | Same-space DGField | Same-space projected fields within the raw-kernel subset |
 | Diffusion-reaction | diffusion | Positive scalar, supported tensor forms, or supported callable tensor components | Identity production subset | Identity or adapter-projected inverse tensor | Identity production subset |
-| ADR | source, reaction | Callable or DG input accepted by common preparation | No standalone CuPy assembly path | Common host preparation lowers the accepted input to tables | Common host preparation lowers the accepted input to device tables |
-| ADR | beta | Pair of formulas or VectorDGField; common preparation owns sampling | No standalone CuPy assembly path | Common preparation supplies sampled vector data | Common preparation supplies sampled device data |
-| ADR | diffusion | Positive scalar or elliptic tensor; constants, callables, DG fields | CuPy postprocessing only | Same inputs as NumPy, with exact per-element structural specialization | Same tensor inputs; FP64 p=0--6 assembly/reconstruction with hdg_postprocess="none" |
+| ADR | source, reaction | Callable, DG input or `ElementCoefficient` accepted by common preparation | No standalone CuPy assembly path | Common host preparation lowers the accepted input to tables | Common device preparation lowers the input to device tables; `ElementCoefficient` and CuPy source moments/values and reaction values stay on the device |
+| ADR | beta | Pair of formulas, VectorDGField or two-component `ElementCoefficient` (sampled directly at volume, per-incidence face and recovery points); common preparation owns sampling | No standalone CuPy assembly path | Common preparation supplies sampled vector data | Common preparation supplies sampled device data (`ElementCoefficient` evaluated with `xp=cupy`) |
+| ADR | diffusion | Positive scalar or elliptic tensor; constants, callables, DG fields | CuPy postprocessing only | Same inputs as NumPy, with exact per-element structural specialization | Same tensor inputs; p=0--6 assembly/reconstruction, tensor primal and both total-flux recoveries |
 
 For variable/tensor ADR diffusion, the default stabilization uses the maximum
 sampled `n^T K n` independently on each element-face incidence, divided by the
-global physical length. Raw CUDA requires `hdg_postprocess="none"`; NumPy/Numba
-permit `"none"` or `"flux"`. Tensor primal
-postprocessing is unsupported. See the [Numba ADR guide](../backends/numba_adr.md).
+global physical length. NumPy/Numba and raw CUDA support all four recovery modes.
+Primal recovery samples the inverse tensor at degree-p+1 recovery quadrature;
+CuPy uses fused device assembly and batched pivoted LU. See the [Numba ADR guide](../backends/numba_adr.md).
 
 Boundary conditions are solver-specific. Current diffusion-reaction and ADR
 Dirichlet APIs accept scalar or callable trace data and project it internally.

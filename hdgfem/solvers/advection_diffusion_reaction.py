@@ -16,14 +16,18 @@ from ..assembly.advection_diffusion_reaction import (
     local_solvers_numpy,
     prepare_adr_data,
 )
+from ..core.element_coefficients import ElementCoefficient
 from ..core.space import DGField, DGSpace, VectorDGField
 from ..linalg.system import KnownDofReduction, SolveResult, expand_known_dofs, solve_global_system
 from .diffusion_reaction import (
     FluxPostprocessSpace,
     _build_hdg_postprocess_cache,
+    _format_seconds,
     _normalize_flux_postprocess_space,
     _normalize_hdg_postprocess_mode,
     _postprocess_rt_flux_from_samples,
+    _timed_call,
+    _verbosity_level,
     split_diffusion_unknowns,
 )
 
@@ -103,6 +107,34 @@ class AdvectionDiffusionReactionHDGOptions:
     legacy spellings remain accepted. CuPy performs both recoveries on device.
     ``materialize_host_solution=False`` retains raw-CUDA results on device;
     accessing a returned field's ``coeffs`` explicitly downloads that field.
+    ``cache_local_factors`` (raw CUDA only) keeps local factors from assembly
+    for reconstruction: ``"schur-lu"`` the Schur LU (``NEL*NEL`` reals and
+    ``NEL`` ints per element), ``"schur-lu+mass"`` (default) also the factored
+    variable-tensor mass (up to ``4*NEL*NEL`` reals per element for general
+    kappa, none for constant kappa); ``"none"`` refactors during reconstruction.
+
+    Repeated raw-CUDA solves through :class:`AdvectionDiffusionReactionHDGSolver`
+    can reuse state across calls. ``amgx_reuse="solver"`` keeps the AMGX
+    objects and redoes only the setup for each new matrix (same result, no
+    per-call object creation); ``"preconditioner"`` also keeps the previous
+    setup and replaces the coefficients (a stale preconditioner), refreshing it
+    every ``amgx_refresh_interval`` solves, when iterations exceed
+    ``amgx_refresh_iteration_growth`` times the count after the last refresh,
+    and after a failed solve. ``reuse_static_coefficients`` keeps the prepared
+    diffusion tensor, the diffusion stabilization and the sparsity pattern
+    while ``diffusion`` and ``diffusion_stabilization`` stay the same objects.
+    The one-shot function has no cache, so ``amgx_reuse`` needs the solver class.
+
+    Host (Numba) counterparts: ``numba_reuse_local_columns`` keeps every
+    element's local solution columns from assembly so reconstruction is a
+    contraction with the trace (``3*el_dof*(3*edg_dof+1)`` reals per element;
+    the solver class also keeps that buffer between solves).
+    ``pardiso_reuse_analysis`` (solver class, ``solver="pypardiso"``) keeps one
+    PARDISO instance whose reordering and symbolic analysis are reused while
+    the reduced sparsity pattern is unchanged; only the numerical
+    factorization and solve are repeated. ``pardiso_threads`` scopes the MKL
+    thread count of the PARDISO calls (an integer, ``"all"``, or ``None`` to
+    keep the current setting).
     """
 
     diffusion: Any = 1.0
@@ -129,9 +161,17 @@ class AdvectionDiffusionReactionHDGOptions:
     trace_basis: Literal["legacy-lagrange", "legendre-modal"] = "legacy-lagrange"
     raw_matrix_format: Literal["coo", "csr", "bsr"] = "csr"
     raw_block_size: int | Literal["auto"] = "auto"
+    cache_local_factors: Literal["none", "schur-lu", "schur-lu+mass"] = "schur-lu+mass"
     hdg_postprocess: PostprocessMode = "both"
     flux_postprocess_space: FluxPostprocessSpace = "l2_closest"
     materialize_host_solution: bool = True
+    amgx_reuse: Literal["none", "solver", "preconditioner"] = "none"
+    amgx_refresh_interval: int = 20
+    amgx_refresh_iteration_growth: float = 2.0
+    reuse_static_coefficients: bool = True
+    numba_reuse_local_columns: bool = False
+    pardiso_reuse_analysis: bool = False
+    pardiso_threads: int | str | None = None
     verbose: bool | int = True
 
     def with_overrides(self, **overrides) -> "AdvectionDiffusionReactionHDGOptions":
@@ -181,6 +221,54 @@ def _resolve_stage_backends(
     return reconstruction, postprocessing
 
 
+def _detailed_logging(verbose: bool | int) -> bool:
+    """Return whether ADR backend micro-timings are printed (levels 2 and 3)."""
+    return _verbosity_level(verbose) >= 2
+
+
+def _solver_verbosity(verbose: bool | int) -> int:
+    """Map ADR levels to linear-solver levels.
+
+    Level 3 prints everything: the solver layers print detailed timings only at
+    their level 2 or 4, and iteration tables only from level 3.
+    """
+    level = _verbosity_level(verbose)
+    return 4 if level >= 3 else level
+
+
+def _timed_substep(label: str, verbose: bool | int, function):
+    """Time one indented level-2 substep of a multiline ADR stage."""
+    return _timed_call(f"  {label}", int(_detailed_logging(verbose)), function)
+
+
+_NON_TIME_SUFFIXES = ("block_size", "shared_bytes", "batch_columns", "factor_bytes")
+
+
+def _print_timing_details(title: str, timings: dict[str, float] | None, verbose: bool | int) -> None:
+    """Print a backend timing breakdown and its launch settings at level 2 and above."""
+    if not _detailed_logging(verbose) or not timings:
+        return
+    seconds, settings = [], []
+    for key, value in timings.items():
+        if key.endswith(".elements"):
+            continue
+        if key.endswith(_NON_TIME_SUFFIXES):
+            settings.append(f"{key.rsplit('.', 1)[-1]}={int(value):,}")
+        else:
+            seconds.append(f"{key}={_format_seconds(float(value))}")
+    if seconds:
+        print(f"  {title}: " + ", ".join(seconds), flush=True)
+    if settings:
+        print("  launch settings: " + ", ".join(settings), flush=True)
+
+
+def _print_diffusion_structure(counts: dict[str, int] | None, verbose: bool | int) -> None:
+    """Print the per-element diffusion fast-path classification at level 2."""
+    if _detailed_logging(verbose) and counts:
+        used = ", ".join(f"{name}={int(count):,}" for name, count in counts.items() if count)
+        print(f"  diffusion structure: {used}", flush=True)
+
+
 def _reported_postprocessing_backend(backend: str, mode: str) -> str:
     """Report the execution backend shared by both recovery stages."""
     return backend
@@ -220,18 +308,23 @@ def _adr_postprocess_samples(
     qpost = post_space.quad_data
     nqf = qpost.weights_JGL.size
     face_points = qpost.pts_fc.reshape(-1, 2)
-    beta_h = _beta_field(beta, space)
-    beta_volume = xp.empty((space.mesh.num_tri, qpost.Krf_w.size, 2), dtype=xp.float64)
-    beta_face = xp.empty((space.mesh.num_tri, 3, nqf, 2), dtype=xp.float64)
-    for component, field in enumerate(beta_h.components):
-        volume_basis = xp.asarray(field.space.basis_at(qpost.Krf_quads))
-        face_basis = xp.asarray(field.space.basis_at(face_points)).reshape(
-            nqf, 3, field.space.el_dof
-        ).transpose(1, 2, 0)
-        beta_volume[..., component] = coefficients(field) @ volume_basis.T
-        beta_face[..., component] = xp.einsum(
-            "Ki,fiq->Kfq", coefficients(field), face_basis, optimize=True
-        )
+    if isinstance(beta, ElementCoefficient):
+        # Element-local beta is evaluated directly on the recovery quadrature.
+        beta_volume = beta.values_at_ref(qpost.Krf_quads, xp=xp, t=prepared.sample_time)
+        beta_face = beta.face_values_at_ref(qpost.pts_fc, xp=xp, t=prepared.sample_time)
+    else:
+        beta_h = _beta_field(beta, space)
+        beta_volume = xp.empty((space.mesh.num_tri, qpost.Krf_w.size, 2), dtype=xp.float64)
+        beta_face = xp.empty((space.mesh.num_tri, 3, nqf, 2), dtype=xp.float64)
+        for component, field in enumerate(beta_h.components):
+            volume_basis = xp.asarray(field.space.basis_at(qpost.Krf_quads))
+            face_basis = xp.asarray(field.space.basis_at(face_points)).reshape(
+                nqf, 3, field.space.el_dof
+            ).transpose(1, 2, 0)
+            beta_volume[..., component] = coefficients(field) @ volume_basis.T
+            beta_face[..., component] = xp.einsum(
+                "Ki,fiq->Kfq", coefficients(field), face_basis, optimize=True
+            )
 
     normals = xp.asarray(space.mesh.normals)
     beta_n = (
@@ -279,7 +372,7 @@ def _adr_postprocess_samples(
             )
     from ..assembly.advection_diffusion_reaction import diffusion_stabilization_on_trace
     tau_diff = diffusion_stabilization_on_trace(
-        prepared, space, post_space.trace_space("bernstein"))
+        prepared, space, post_space.trace_space("bernstein"), device=xp is not np)
     tau_total = tau_adv + xp.asarray(tau_diff)
     if xp.any(~xp.isfinite(tau_total)):
         raise ValueError("ADR postprocessing stabilization must be finite")
@@ -318,6 +411,15 @@ def _project_total_flux(
     return (space * space).field((coeffs_x, coeffs_y), name="q_h_plus_beta_u_h")
 
 
+def _adr_recovery_cache(space, trace_ref, *, want_flux=False):
+    """Reuse geometry/reference recovery tables, never PDE coefficient factors."""
+    cache = _build_hdg_postprocess_cache(
+        space, trace_ref, want_primal=False, want_flux=want_flux,
+        cache=getattr(space, '_adr_recovery_cache', None))
+    space._adr_recovery_cache = cache
+    return cache
+
+
 def _postprocess_total_flux(
         local_unknowns: np.ndarray,
         trace: np.ndarray,
@@ -341,12 +443,10 @@ def _postprocess_total_flux(
         xp = require_cupy()
     local_unknowns = xp.asarray(local_unknowns)
     flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
-    cache = _build_hdg_postprocess_cache(
+    cache = _adr_recovery_cache(
         space,
         trace_ref,
-        want_primal=False,
         want_flux=flux_space == "l2_closest" and xp is np,
-        cache=None,
     )
     if flux_space == "l2_closest" and xp is np and (
         cache.flux_ainv_constraint_t is None or cache.flux_schur_lu is None
@@ -474,13 +574,8 @@ def _postprocess_primal_from_total_flux(
         solve_adr_primal_from_total_flux_postprocess_kernel,
     )
 
-    if not _positive_scalar_diffusion(diffusion):
-        raise NotImplementedError(
-            "ADR primal postprocessing currently requires positive constant scalar diffusion"
-        )
-    cache = _build_hdg_postprocess_cache(
-        space, trace_ref, want_primal=False, want_flux=False, cache=None
-    )
+    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    cache = _adr_recovery_cache(space, trace_ref)
     post = cache.post_space
     qpost = post.quad_data
     if postprocessing_backend == "cupy":
@@ -489,7 +584,7 @@ def _postprocess_primal_from_total_flux(
         samples = _adr_postprocess_samples(
             beta, prepared, space, post, advection_stabilization, xp=require_cupy())
         return postprocess_primal_cupy(local_unknowns, total_flux_star, space, cache,
-                                      samples, float(diffusion))
+                                      samples, diffusion)
     beta_volume, beta_face, tau_total = _adr_postprocess_samples(
         beta, prepared, space, post, advection_stabilization
     )
@@ -524,7 +619,7 @@ def _postprocess_primal_from_total_flux(
         beta_face,
         tau_total,
         cache.mean_base,
-        float(diffusion),
+        inverse_diffusion_values(sample_diffusion_tensor(diffusion, post)),
     )
     return post.field(coeffs, name="u_h_star")
 
@@ -537,13 +632,30 @@ def solve_advection_diffusion_reaction_hdg(
         space: DGSpace,
         *,
         options: AdvectionDiffusionReactionHDGOptions | None = None,
+        cache: dict | None = None,
         **option_overrides,
 ) -> AdvectionDiffusionReactionResult:
-    r"""Solve ``div(beta*u + q) + r*u=f``, ``q=-kappa*grad(u)`` by HDG."""
+    r"""Solve ``div(beta*u + q) + r*u=f``, ``q=-kappa*grad(u)`` by HDG.
+
+    ``cache`` is the cross-solve state owned by
+    :class:`AdvectionDiffusionReactionHDGSolver` (raw-CUDA static data and
+    persistent AMGX solvers); one-shot calls leave it ``None``.
+    """
     opts = (options or AdvectionDiffusionReactionHDGOptions()).with_overrides(**option_overrides)
     backend = str(opts.assembly_backend).lower().replace("_", "-")
     if backend not in {"numpy", "numba", "raw-cuda"}:
         raise ValueError("assembly_backend must be 'numpy', 'numba', or 'raw-cuda'")
+    if opts.amgx_reuse not in {"none", "solver", "preconditioner"}:
+        raise ValueError("amgx_reuse must be 'none', 'solver', or 'preconditioner'")
+    if opts.amgx_reuse != "none" and (backend != "raw-cuda" or cache is None):
+        raise ValueError("amgx_reuse needs assembly_backend='raw-cuda' and the reusable "
+                         "AdvectionDiffusionReactionHDGSolver, which owns the cache")
+    if opts.pardiso_reuse_analysis and (backend == "raw-cuda" or cache is None
+                                        or str(opts.solver).lower() != "pypardiso"):
+        raise ValueError("pardiso_reuse_analysis needs a host assembly backend, solver='pypardiso' and the "
+                         "reusable AdvectionDiffusionReactionHDGSolver, which owns the cache")
+    if int(opts.amgx_refresh_interval) < 1 or not float(opts.amgx_refresh_iteration_growth) >= 1.:
+        raise ValueError("amgx_refresh_interval must be >= 1 and amgx_refresh_iteration_growth >= 1")
     if opts.boundary_mode != "eliminate":
         raise ValueError("stationary ADR currently requires boundary_mode='eliminate'")
     if opts.trace_basis not in {"legacy-lagrange", "legendre-modal"}:
@@ -581,56 +693,21 @@ def solve_advection_diffusion_reaction_hdg(
         scalar_diffusion=scalar_diffusion,
     )
     trace_ref = space.trace_space(opts.trace_basis)
+    verbosity = _verbosity_level(opts.verbose)
+    detailed = _detailed_logging(verbosity)
+    if verbosity:
+        print("\n----- DG FEM Advection-Diffusion-Reaction HDG Solve -----", flush=True)
+    if detailed:
+        print(
+            f"  backends: assembly={backend}, reconstruction={reconstruction_backend}, "
+            f"postprocessing={postprocessing_backend}; trace basis={opts.trace_basis}; "
+            f"triangles={space.mesh.num_tri:,}, p={space.order}",
+            flush=True,
+        )
     total_start = time.perf_counter()
-    start = time.perf_counter()
-    prepared = prepare_adr_data(
-        source,
-        reaction,
-        beta,
-        space,
-        diffusion=opts.diffusion,
-        advection_stabilization=opts.advection_stabilization,
-        diffusion_stabilization=opts.diffusion_stabilization,
-        diffusion_penalty_constant=opts.diffusion_penalty_constant,
-        trace_space=trace_ref,
-        dense_local_matrices=backend != "raw-cuda",
-    )
-    diffusion_data = None
-    if backend == "numba" or reconstruction_backend == "numba":
-        from ..assembly.diffusion_coefficients import prepare_diffusion
-        diffusion_data = prepare_diffusion(opts.diffusion, space)
-    preparation = time.perf_counter() - start
-
-    local_solver = None
-    details: dict[str, float] = {}
-    start = time.perf_counter()
-    if backend == "numpy":
-        assembled = assemble_numpy(
-            prepared,
-            boundary_condition,
-            space,
-            diffusion=opts.diffusion,
-            trace_space=trace_ref,
-        )
-        trace_system = assembled.trace_system
-        reduction = assembled.reduction
-        local_solver = assembled.local_solver
-    elif backend == "numba":
-        from ..backends.advection_diffusion_reaction_numba import (
-            assemble_projected_adr_trace_system_eliminated_numba,
-        )
-        assembled = assemble_projected_adr_trace_system_eliminated_numba(
-            prepared,
-            boundary_condition,
-            space,
-            trace_space=trace_ref,
-            diffusion=opts.diffusion,
-            diffusion_data=diffusion_data,
-        )
-        trace_system = assembled.trace_system
-        reduction = assembled.reduction
-        details.update({f"numba.{key}": value for key, value in assembled.timings.items()})
-    else:
+    if backend == "raw-cuda":
+        # Device assembly samples its own coefficients on the GPU, timed as the
+        # first assembly sub-stage; there is no host preparation stage.
         from ..backends.advection_diffusion_reaction_raw_cuda import (
             assemble_projected_adr_trace_system_eliminated_raw_cuda,
         )
@@ -640,111 +717,256 @@ def solve_advection_diffusion_reaction_hdg(
             reaction,
             boundary_condition,
             space,
-            prepared=prepared,
             options=opts.with_overrides(
                 postprocessing_backend=postprocessing_backend,
                 flux_postprocess_space=flux_postprocess_space,
             ),
             trace_space=trace_ref,
-            preparation_seconds=preparation,
             total_start=total_start,
+            cache=cache,
         )
-    trace_assembly = time.perf_counter() - start
 
+    host_static = None
+    host_static_reused = False
+    if cache is not None and opts.reuse_static_coefficients:
+        from ..backends.advection_diffusion_reaction_raw_cuda import _static_cache_key
+        key = ("host",) + _static_cache_key(space, trace_ref, opts)
+        host_static = cache.get("host_static")
+        if host_static is None or host_static.get("key") != key:
+            host_static = cache["host_static"] = {"key": key}
+        host_static_reused = len(host_static) > 1
+
+    def prepare():
+        """Sample coefficients, stabilization and the diffusion classification."""
+        prepared_data, _ = _timed_substep("sampling coefficients and stabilization", verbosity, lambda: prepare_adr_data(
+            source,
+            reaction,
+            beta,
+            space,
+            diffusion=opts.diffusion,
+            advection_stabilization=opts.advection_stabilization,
+            diffusion_stabilization=opts.diffusion_stabilization,
+            diffusion_penalty_constant=opts.diffusion_penalty_constant,
+            trace_space=trace_ref,
+            # The Numba kernels build the face tables per element from tau/gamma samples.
+            dense_local_matrices=backend == "numpy" or reconstruction_backend == "numpy",
+            static=host_static,
+        ))
+        tensor_data = None
+        if backend == "numba" or reconstruction_backend == "numba":
+            from ..assembly.diffusion_coefficients import prepare_diffusion
+            tensor_data = None if host_static is None else host_static.get("diffusion")
+            if tensor_data is None:
+                tensor_data, _ = _timed_substep(
+                    "classifying diffusion tensor", verbosity, lambda: prepare_diffusion(opts.diffusion, space))
+                if host_static is not None:
+                    host_static["diffusion"] = tensor_data
+        return prepared_data, tensor_data
+
+    (prepared, diffusion_data), preparation = _timed_call(
+        "preparing ADR coefficient data", verbosity, prepare, multiline=detailed)
+    _print_diffusion_structure(None if diffusion_data is None else diffusion_data.counts, verbosity)
+
+    local_solver = None
+    numba_columns = None
+    details: dict[str, float] = {"host.static_reused": float(host_static_reused)}
     start = time.perf_counter()
-    solve_result = solve_global_system(
-        trace_system.rows,
-        trace_system.cols,
-        trace_system.data,
-        trace_system.rhs,
-        trace_system.rhs.size,
-        solver=opts.solver,
-        preconditioner=opts.preconditioner,
-        initial_guess=opts.initial_guess,
-        rtol=opts.solver_rtol,
-        atol=opts.solver_atol,
-        maxiter=opts.maxiter,
-        ilu_drop_tol=opts.ilu_drop_tol,
-        ilu_fill_factor=opts.ilu_fill_factor,
-        ilu_failure=opts.ilu_failure,
-        ilu_permc_spec=opts.ilu_permc_spec,
-        cupyx_solver=opts.cupyx_solver,
-        amgx_config=opts.amgx_config,
-        scale_system=opts.scale_system,
-        raise_on_nonconvergence=True,
-        verbose=opts.verbose,
-    )
-    solve_seconds = time.perf_counter() - start
+    if backend == "numpy":
+        assembled, _ = _timed_call("assembling reduced global trace system (numpy)", verbosity, lambda: assemble_numpy(
+            prepared,
+            boundary_condition,
+            space,
+            diffusion=opts.diffusion,
+            trace_space=trace_ref,
+        ))
+        trace_system = assembled.trace_system
+        reduction = assembled.reduction
+        local_solver = assembled.local_solver
+    elif backend == "numba":
+        from ..backends.advection_diffusion_reaction_numba import (
+            assemble_projected_adr_trace_system_eliminated_numba,
+        )
+        column_buffer = None
+        if opts.numba_reuse_local_columns and reconstruction_backend == "numba":
+            shape = (space.mesh.num_tri, 3 * space.el_dof, 3 * trace_ref.edg_dof + 1)
+            column_buffer = None if cache is None else cache.get("numba_columns")
+            if column_buffer is None or column_buffer.shape != shape:
+                column_buffer = np.empty(shape, dtype=np.float64)
+                if cache is not None:
+                    cache["numba_columns"] = column_buffer
+        assembled, _ = _timed_call(
+            "assembling reduced global trace system (numba)",
+            verbosity,
+            lambda: assemble_projected_adr_trace_system_eliminated_numba(
+                prepared,
+                boundary_condition,
+                space,
+                trace_space=trace_ref,
+                diffusion=opts.diffusion,
+                diffusion_data=diffusion_data,
+                local_columns=column_buffer,
+            ),
+        )
+        numba_columns = assembled.local_columns
+        trace_system = assembled.trace_system
+        reduction = assembled.reduction
+        details.update({f"numba.{key}": value for key, value in assembled.timings.items()})
+        _print_timing_details("numba assembly timings", assembled.timings, verbosity)
+    trace_assembly = time.perf_counter() - start
+    if detailed:
+        print(
+            f"  reduced trace system: {trace_system.rhs.size:,} free trace dofs, "
+            f"{trace_system.data.size:,} COO entries",
+            flush=True,
+        )
+
+    use_pardiso_cache = opts.pardiso_reuse_analysis and str(opts.solver).lower() == "pypardiso"
+    pardiso_solver = None
+    if use_pardiso_cache:
+        from ..linalg.pardiso_runtime import ReusablePardisoSolver
+        pardiso_solver = cache.get("pardiso")
+        if pardiso_solver is None:
+            pardiso_solver = cache["pardiso"] = ReusablePardisoSolver()
+        pardiso_solver.threads = opts.pardiso_threads
+
+    def global_solve():
+        """Solve the reduced system, through the cached PARDISO instance when enabled."""
+        if pardiso_solver is not None:
+            return pardiso_solver.solve_coo(trace_system.rows, trace_system.cols, trace_system.data,
+                                            trace_system.rhs, trace_system.rhs.size, rtol=opts.solver_rtol,
+                                            atol=opts.solver_atol, raise_on_nonconvergence=True)
+        from contextlib import nullcontext
+        from ..linalg.pardiso_runtime import pardiso_thread_limit
+        context = (pardiso_thread_limit(opts.pardiso_threads)
+                   if opts.pardiso_threads is not None and str(opts.solver).lower() == "pypardiso" else nullcontext())
+        with context:
+            return solve_global_system(
+                trace_system.rows,
+                trace_system.cols,
+                trace_system.data,
+                trace_system.rhs,
+                trace_system.rhs.size,
+                solver=opts.solver,
+                preconditioner=opts.preconditioner,
+                initial_guess=opts.initial_guess,
+                rtol=opts.solver_rtol,
+                atol=opts.solver_atol,
+                maxiter=opts.maxiter,
+                ilu_drop_tol=opts.ilu_drop_tol,
+                ilu_fill_factor=opts.ilu_fill_factor,
+                ilu_failure=opts.ilu_failure,
+                ilu_permc_spec=opts.ilu_permc_spec,
+                cupyx_solver=opts.cupyx_solver,
+                amgx_config=opts.amgx_config,
+                scale_system=opts.scale_system,
+                raise_on_nonconvergence=True,
+                verbose=_solver_verbosity(verbosity),
+            )
+
+    solve_result, solve_seconds = _timed_call(
+        "solving global system", verbosity, global_solve, multiline=verbosity >= 1)
+    if pardiso_solver is not None:
+        details["host.pardiso_analysis_reused"] = float(solve_result.pardiso_analysis_reused)
+    details["numba.local_columns_reused"] = float(numba_columns is not None)
     trace = expand_known_dofs(solve_result.x, reduction)
 
-    start = time.perf_counter()
-    if reconstruction_backend == "numba":
-        from ..backends.advection_diffusion_reaction_numba import (
-            reconstruct_projected_adr_local_unknowns_numba,
-        )
-        local_unknowns = reconstruct_projected_adr_local_unknowns_numba(
-            trace,
-            prepared,
-            space,
-            trace_space=trace_ref,
-            diffusion=opts.diffusion,
-            diffusion_data=diffusion_data,
-        )
-    else:
-        if local_solver is None:
-            local_solver = local_solvers_numpy(prepared, space, diffusion=opts.diffusion)
-        source_block = np.zeros((space.mesh.num_tri, 3 * space.el_dof), dtype=np.float64)
-        source_block[:, :space.el_dof] = prepared.source_rhs
-        local_unknowns = hdg.reconstruct_local_unknowns(
-            trace,
-            source_block,
-            local_solver,
-            prepared.element_boundary,
-            space,
-            trace_space=trace_ref,
-        )
-    field, flux = split_diffusion_unknowns(local_unknowns, space)
-    total_flux = _project_total_flux(local_unknowns, prepared, space)
-    reconstruction = time.perf_counter() - start
+    def reconstruct():
+        """Recover mixed local fields and project the total flux."""
+        nonlocal local_solver
+        if reconstruction_backend == "numba":
+            from ..backends.advection_diffusion_reaction_numba import (
+                reconstruct_projected_adr_local_unknowns_numba,
+            )
+            unknowns = reconstruct_projected_adr_local_unknowns_numba(
+                trace,
+                prepared,
+                space,
+                trace_space=trace_ref,
+                diffusion=opts.diffusion,
+                diffusion_data=diffusion_data,
+                local_columns=numba_columns,
+            )
+        else:
+            if local_solver is None:
+                local_solver, _ = _timed_substep(
+                    "building dense local solvers (numpy)", verbosity,
+                    lambda: local_solvers_numpy(prepared, space, diffusion=opts.diffusion))
+            source_block = np.zeros((space.mesh.num_tri, 3 * space.el_dof), dtype=np.float64)
+            source_block[:, :space.el_dof] = prepared.source_rhs
+            unknowns = hdg.reconstruct_local_unknowns(
+                trace,
+                source_block,
+                local_solver,
+                prepared.element_boundary,
+                space,
+                trace_space=trace_ref,
+            )
+        primal, diffusive = split_diffusion_unknowns(unknowns, space)
+        total, _ = _timed_substep(
+            "projecting total flux q_h + beta u_h", verbosity,
+            lambda: _project_total_flux(unknowns, prepared, space))
+        return unknowns, primal, diffusive, total
 
-    start = time.perf_counter()
-    post_field = None
-    post_flux = None
-    total_flux_star = None
-    if post_mode != "none":
-        total_flux_star = _postprocess_total_flux(
-            local_unknowns,
-            trace,
-            beta,
-            prepared,
-            space,
-            trace_ref,
-            opts.advection_stabilization,
-            flux_postprocess_space,
-            postprocessing_backend,
-        )
-    if post_mode in {"primal", "both"}:
-        post_field = _postprocess_primal_from_total_flux(
-            local_unknowns,
-            total_flux_star,
-            beta,
-            prepared,
-            space,
-            trace_ref,
-            opts.advection_stabilization,
-            opts.diffusion,
-            postprocessing_backend,
-        )
-    if post_mode in {"flux", "both"}:
-        post_flux = total_flux_star
-    if postprocessing_backend == "cupy":
-        from ..backends.cupy import require_cupy
-        if opts.materialize_host_solution:
-            for output in (post_field, *(post_flux.components if post_flux is not None else ())):
-                if output is not None:
-                    _ = output.coeffs
-        require_cupy().cuda.get_current_stream().synchronize()
-    postprocessing = time.perf_counter() - start
+    (local_unknowns, field, flux, total_flux), reconstruction = _timed_call(
+        f"reconstructing local fields ({reconstruction_backend})", verbosity, reconstruct, multiline=detailed)
+
+    def postprocess():
+        """Recover the requested total flux and primal postprocessed fields."""
+        recovered_flux = recovered_field = None
+        if post_mode != "none":
+            recovered_flux, _ = _timed_substep(
+                f"recovering total flux ({flux_postprocess_space})",
+                verbosity,
+                lambda: _postprocess_total_flux(
+                    local_unknowns,
+                    trace,
+                    beta,
+                    prepared,
+                    space,
+                    trace_ref,
+                    opts.advection_stabilization,
+                    flux_postprocess_space,
+                    postprocessing_backend,
+                ),
+            )
+        if post_mode in {"primal", "both"}:
+            recovered_field, _ = _timed_substep(
+                "recovering primal field",
+                verbosity,
+                lambda: _postprocess_primal_from_total_flux(
+                    local_unknowns,
+                    recovered_flux,
+                    beta,
+                    prepared,
+                    space,
+                    trace_ref,
+                    opts.advection_stabilization,
+                    opts.diffusion,
+                    postprocessing_backend,
+                ),
+            )
+        if postprocessing_backend == "cupy":
+            from ..backends.cupy import require_cupy
+
+            def synchronize():
+                """Materialize requested host outputs and drain the device stream."""
+                if opts.materialize_host_solution:
+                    outputs = (recovered_field, *(recovered_flux.components if post_mode in {"flux", "both"} else ()))
+                    for output in outputs:
+                        if output is not None:
+                            _ = output.coeffs
+                require_cupy().cuda.get_current_stream().synchronize()
+
+            _timed_substep("synchronizing device outputs", verbosity, synchronize)
+        return recovered_flux, recovered_field
+
+    (total_flux_star, post_field), postprocessing = _timed_call(
+        f"postprocessing ({post_mode}, {postprocessing_backend})",
+        verbosity if post_mode != "none" else 0,
+        postprocess,
+        multiline=detailed,
+    )
+    post_flux = total_flux_star if post_mode in {"flux", "both"} else None
     timings = AdvectionDiffusionReactionTimings(
         preparation=preparation,
         trace_assembly=trace_assembly,
@@ -788,7 +1010,13 @@ _UNSET = object()
 
 
 class AdvectionDiffusionReactionHDGSolver:
-    """Reusable public facade for stationary ADR solves."""
+    """Reusable public facade for stationary ADR solves.
+
+    Problem data can change between solves on the same space. On the raw-CUDA
+    path the instance keeps time-independent diffusion data, the sparsity
+    pattern and (with ``amgx_reuse``) persistent AMGX solvers across solves;
+    ``clear_cache``/``close`` release them.
+    """
 
     def __init__(
             self,
@@ -811,6 +1039,7 @@ class AdvectionDiffusionReactionHDGSolver:
             raise ValueError("source, beta, reaction, and boundary_condition must be provided together")
         self.source = self.beta = self.reaction = self.boundary_condition = _UNSET
         self.result: AdvectionDiffusionReactionResult | None = None
+        self._raw_cache: dict = {}
         if all(provided):
             self.set_problem(source, beta, reaction, boundary_condition)
 
@@ -854,9 +1083,22 @@ class AdvectionDiffusionReactionHDGSolver:
         return self
 
     def clear_cache(self):
-        """Discard the stored result."""
+        """Discard the stored result and release cached raw-CUDA data and AMGX solvers."""
+        from ..backends.advection_diffusion_reaction_raw_cuda import close_raw_adr_cache
+        close_raw_adr_cache(getattr(self, "_raw_cache", None))
         self.result = None
         return self
+
+    def close(self) -> None:
+        """Release persistent device solver state owned by this instance."""
+        self.clear_cache()
+
+    def __del__(self):
+        """Best-effort release of persistent AMGX solvers."""
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def solve(self, **option_overrides) -> AdvectionDiffusionReactionResult:
         """Solve the currently stored stationary ADR problem."""
@@ -871,6 +1113,7 @@ class AdvectionDiffusionReactionHDGSolver:
             self.boundary_condition,
             self.space,
             options=self.options,
+            cache=self._raw_cache,
         )
         return self.result
 

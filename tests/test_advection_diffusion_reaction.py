@@ -91,10 +91,11 @@ def test_numba_matches_numpy_with_asymmetric_element_face_stabilization(trace_ba
     )
 
     # This explicitly checks the incidence-wise mass rule: two sides sharing
-    # an edge retain their unequal gamma-weighted contributions.
+    # an edge retain their unequal gamma-weighted contributions. The Numba
+    # kernel builds these blocks itself, so they agree to round-off.
     side_blocks = prepared.interior_gamma_mass
     emitted_mass = numba.trace_system.data[-side_blocks.size:].reshape(side_blocks.shape)
-    np.testing.assert_allclose(emitted_mass, side_blocks, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(emitted_mass, side_blocks, rtol=1e-13, atol=1e-14 * np.abs(side_blocks).max())
     side_edges = space.mesh.loc2glob_edge[
         space.mesh.interior_elements, space.mesh.interior_faces
     ]
@@ -102,6 +103,41 @@ def test_numba_matches_numpy_with_asymmetric_element_face_stabilization(trace_ba
         positions = np.flatnonzero(side_edges == edge)
         assert positions.size == 2
         assert not np.allclose(side_blocks[positions[0]], side_blocks[positions[1]])
+
+
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize("diffusion", (0.3, np.array([[1.0, 0.3], [0.3, 0.5]])))
+def test_numba_builds_face_tables_in_kernel_from_light_preparation(trace_basis, diffusion):
+    from hdgfem.assembly import hdg
+    from hdgfem.assembly.advection_diffusion_reaction import local_solvers_numpy
+    from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
+
+    space = DGSpace(rectangle_mesh(4, 3, xlim=(0.0, 1.3), ylim=(-0.4, 0.7)), 3, basis_type="dub_orth")
+    source, beta, reaction, boundary = _problem(space)
+    trace_space = space.trace_space(trace_basis)
+    options = dict(diffusion=diffusion, trace_space=trace_space)
+    dense = prepare_adr_data(source, reaction, beta, space, **options)
+    light = prepare_adr_data(source, reaction, beta, space, dense_local_matrices=False, **options)
+    assert light.element_boundary is None and light.trace_lift is None
+    numpy = assemble_numpy(dense, boundary, space, diffusion=diffusion, trace_space=trace_space)
+    columns = np.empty((space.mesh.num_tri, 3 * space.el_dof, 3 * trace_space.edg_dof + 1))
+    numba = assemble_projected_adr_trace_system_eliminated_numba(
+        light, boundary, space, trace_space=trace_space, diffusion=diffusion, local_columns=columns)
+    a, b = _csr(numpy.trace_system), _csr(numba.trace_system)
+    np.testing.assert_array_equal(a.indices, b.indices)
+    np.testing.assert_allclose(b.data, a.data, rtol=1e-13, atol=1e-13 * np.abs(a.data).max())
+    np.testing.assert_allclose(numba.trace_system.rhs, numpy.trace_system.rhs, rtol=1e-13, atol=1e-13)
+
+    trace = np.random.default_rng(5).normal(size=space.mesh.num_edg * trace_space.edg_dof)
+    source_block = np.zeros((space.mesh.num_tri, 3 * space.el_dof))
+    source_block[:, :space.el_dof] = dense.source_rhs
+    expected = hdg.reconstruct_local_unknowns(
+        trace, source_block, local_solvers_numpy(dense, space, diffusion=diffusion), dense.element_boundary,
+        space, trace_space=trace_space)
+    for stored in (None, columns):
+        actual = reconstruct_projected_adr_local_unknowns_numba(
+            trace, light, space, trace_space=trace_space, diffusion=diffusion, local_columns=stored)
+        np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12 * np.abs(expected).max())
 
 
 def test_coefficients_may_use_different_dg_spaces_on_same_mesh():

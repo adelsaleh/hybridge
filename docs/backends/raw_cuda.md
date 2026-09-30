@@ -46,6 +46,11 @@ Block size 1 is a serial correctness baseline, not a performance
 recommendation. Orders outside the policy fail explicitly rather than silently
 choosing a launch shape.
 
+Tensor ADR retains single-thread assembly and reconstruction in COO, CSR, and
+BSR: LU/Cholesky reductions use the active lanes, and column solves use a
+serial fallback below one warp. This also supports cached Schur and mass
+factors; full-warp launches keep the warp column solves.
+
 ## Tri-Stage Local Elimination BSR (`split3`)
 
 `raw_local_assembly="split3"` selects **TSLE-BSR**, implemented in
@@ -306,6 +311,15 @@ The seven exact tensor paths share Numba's classifications. Constant tensors use
 reference mass inverses; variable isotropic/diagonal tensors use scalar
 Cholesky; coupled symmetric/general tensors use Cholesky/pivoted LU. Shared
 storage never exceeds 48 KiB, and local failures are checked before returning.
+The batch width (at most 8 columns) shrinks to fit that limit; when one column
+does not fit, `TensorWorkspaceError` (an `UnsupportedBackendConfigurationError`
+and `ValueError`) is raised before upload, compilation or launch and names the
+order, diffusion kind, quadrature sizes and the largest volume rule that fits.
+In FP64 every p<=5 configuration and every kind except p=6 general variable
+tensors (at most 143 volume points) fits the listed default and overintegrated
+rules; see the
+[shared-memory budget record](../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md)
+and `scripts/advection_diffusion_reaction/diagnostics/tensor_shared_memory_budget.py`.
 Reconstruction retains coefficient uploads and rebuilds local factors with the
 same algebra. Diffusion's extracted cooperative helpers preserve its generated
 source and launch/workspace choices.
@@ -313,6 +327,7 @@ source and launch/workspace choices.
 `tau_diff` may vary along a face, including through a same-mesh DG field or
 `tau(x,y,*,element,local_face,normal,t=None)` law. Both incidences are sampled
 independently. Original laws are retained; recovery never interpolates an
-incompatible quadrature-only table. Tensor postprocessing remains unsupported
-in raw CUDA. See the [implementation plan](../development/plans/raw_cuda_adr_tensor.md)
+incompatible quadrature-only table. Tensor primal and both total-flux recoveries
+are supported through CuPy; primal assembly uses a fused CUDA kernel. See the
+[device postprocessing guide](adr_device_postprocessing.md) for qualification. See the [implementation plan](../development/plans/raw_cuda_adr_tensor.md)
 and [qualification report](../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md).

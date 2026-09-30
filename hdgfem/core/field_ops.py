@@ -360,10 +360,60 @@ def _trace_projection_data(space, trace_basis, use_device):
     return cache[key]
 
 
+def _host_reference_points(reference_points) -> np.ndarray:
+    """Return reference points as a host ``(n, 2)`` table (they are small tables)."""
+    if hasattr(reference_points, "__cuda_array_interface__"):
+        from ..backends.cupy import asnumpy
+        reference_points = asnumpy(reference_points)
+    return np.ascontiguousarray(np.asarray(reference_points, dtype=REAL_DTYPE).reshape(-1, 2))
+
+
+def field_values_at_ref(field: DGField, reference_points, *, device: bool = False):
+    """Evaluate ``field`` at the same reference points on every element, shape ``(K, n)``.
+
+    Host evaluation is :meth:`DGField.values_at_ref`. ``device=True`` contracts
+    resident (or uploaded and cached) device coefficients with the reference
+    basis table and returns CuPy values; constant fields fill exactly.
+    """
+    points = _host_reference_points(reference_points)
+    if not device:
+        return field.values_at_ref(points)
+    from ..backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    cp = require_cupy()
+    if field.constant_value is not None:
+        return cp.full((field.space.mesh.num_tri, points.shape[0]), float(field.constant_value), dtype=REAL_DTYPE)
+    table = cp.asarray(field.space.basis_at(points).T, dtype=REAL_DTYPE)
+    return cp.ascontiguousarray(as_cupy_coefficients(field, as_cupy_space(field.space)) @ table)
+
+
+def field_gradient_at_ref(field: DGField, reference_points, *, device: bool = False):
+    """Return the physical elementwise gradient ``(d/dx, d/dy)`` at reference points.
+
+    Each component has shape ``(K, n)``. Host evaluation is
+    :meth:`DGField.grad_at_ref`; ``device=True`` applies the same reference
+    gradients and inverse-transpose affine maps to device coefficients.
+    """
+    points = _host_reference_points(reference_points)
+    if not device:
+        return field.grad_at_ref(points)
+    from ..backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    cp = require_cupy()
+    if field.constant_value is not None:
+        zeros = cp.zeros((field.space.mesh.num_tri, points.shape[0]), dtype=REAL_DTYPE)
+        return zeros, zeros.copy()
+    cspace = as_cupy_space(field.space)
+    grad_basis = cp.asarray(field.space.gradient_basis_at(points), dtype=REAL_DTYPE)
+    reference = cp.einsum("Ki,qid->Kqd", as_cupy_coefficients(field, cspace), grad_basis)
+    physical = cp.einsum("Krd,Kqd->Kqr", cspace.mesh.inv_aff_mats_t, reference)
+    return cp.ascontiguousarray(physical[..., 0]), cp.ascontiguousarray(physical[..., 1])
+
+
 __all__ = [
     "coefficient_field",
+    "field_gradient_at_ref",
     "field_linear_combination",
     "field_l2_norm",
+    "field_values_at_ref",
     "perpendicular_vector_field",
     "project_callable_to_trace",
     "project_field_to_trace",

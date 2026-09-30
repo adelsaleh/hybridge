@@ -48,9 +48,10 @@ returning a usable system or reconstruction.
 
 The complete raw-CUDA solver now supports tensors with `hdg_postprocess="none"`,
 `raw_matrix_format="csr"|"bsr"` (and explicit COO), and `raw_block_size`.
-Tensor postprocessing remains gated. Existing scalar postprocessing is unchanged
-in scope; neither tensor total-flux recovery nor tensor primal recovery is
-claimed by this work.
+The original assembly/reconstruction qualification excluded tensor recovery.
+The subsequent [tensor postprocessing qualification](../../backends/adr_device_postprocessing.md#tensor-qualification-2026-09-29)
+enables primal and both total-flux recoveries, with Numba/CuPy parity and
+bounded manufactured convergence.
 
 ## Qualification and evidence
 
@@ -76,7 +77,7 @@ repeatable slowdown above 5% requires investigation before acceptance.
 
 ## Deferred work
 
-Qualify tensor total-flux recovery (`l2_closest` and `RT_projection`) and tensor
-primal postprocessing separately before relaxing the recovery gates. The
-[n-Gamma plan](n_gamma_d_bdf2.md) still requires its full recovery prerequisites.
+Tensor total-flux recovery (`l2_closest` and `RT_projection`) and tensor primal
+postprocessing are now qualified separately, as linked above. The
+[n-Gamma plan](n_gamma_d_bdf2.md) retains its remaining interface and model work.
 The [main TODO](../../../TODO.md) owns feature status.

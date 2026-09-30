@@ -1,4 +1,4 @@
-"""Bounded stationary tensor ADR solves; no postprocessing or time stepping."""
+"""Bounded stationary tensor ADR solves and recovery checks; no time stepping."""
 import numpy as np
 import pytest
 from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
@@ -48,24 +48,30 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
     assert not getattr(actual.global_solve_result,'amgx_bsr_scalarized',False)
 
 
-def test_tensor_postprocessing_gate_remains():
+@pytest.mark.parametrize('mode', ['flux', 'primal', 'both'])
+def test_tensor_postprocessing_enabled(mode):
+    """The CUDA capability gate accepts qualified tensor recoveries."""
     from hdgfem.backends.capabilities import validate_advection_diffusion_backend_configuration
-    with pytest.raises(NotImplementedError,match='not qualified'):
-        validate_advection_diffusion_backend_configuration(operation='solve',assembly_backend='raw-cuda',
-            solver='amgx',cupyx_solver='bicgstab',boundary_mode='eliminate',trace_basis='legendre-modal',
-            postprocess_mode='flux',scalar_diffusion=False)
+    validate_advection_diffusion_backend_configuration(operation='solve',assembly_backend='raw-cuda',
+        solver='amgx',cupyx_solver='bicgstab',boundary_mode='eliminate',trace_basis='legendre-modal',
+        postprocess_mode=mode,scalar_diffusion=False)
 
 
+@pytest.mark.parametrize('variant', ['l2_closest', 'RT_projection'])
 @pytest.mark.parametrize('order',[1,2])
-def test_stationary_tensor_manufactured_convergence(cp,order):
+def test_stationary_tensor_manufactured_convergence(cp,order,variant):
     problem, exact, _ = manufactured_raw_tensor('sine')
     diffusion, source = problem['diffusion'], problem['source']
     errors=[]
+    recovered=[]
     for n in (2,4,8):
         space=DGSpace(rectangle_mesh(n,n,xlim=(0.,1.),ylim=(0.,1.)),order,basis_type='dub_orth',volume_quad_1d=order+4)
         beta=(space*space).field((space.constant(.7),space.constant(-.2)))
         result=solve_advection_diffusion_reaction_hdg(source,beta,.3,exact,space,
-            diffusion=diffusion,assembly_backend='raw-cuda',solver='amgx',hdg_postprocess='none',
+            diffusion=diffusion,assembly_backend='raw-cuda',solver='amgx',hdg_postprocess='both', flux_postprocess_space=variant,
             raw_matrix_format='bsr',trace_basis='legendre-modal',solver_rtol=1e-10,verbose=False)
         errors.append(result.field.l2_error(exact))
+        recovered.append(result.postprocessed_field.l2_error(exact))
     assert np.log2(errors[-2]/errors[-1])>order+.7, errors
+
+    assert np.log2(recovered[-2]/recovered[-1])>order+1.5, recovered

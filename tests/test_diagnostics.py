@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from hdgfem import DGSpace, evaluate_scalar_error, evaluate_vector_error, rectangle_mesh
 from hdgfem.core.field_ops import (
@@ -184,3 +185,39 @@ def test_solution_trace_prefers_device_and_reduces_host_trace() -> None:
     np.testing.assert_array_equal(
         solution_trace(result, space, reduced=True, prefer_device=False), expected
     )
+
+
+def _weighted_case():
+    """u = x*y on (2,4)x(-1,1): int u^2 R dR dZ = int_2^4 x^3 dx * int_-1^1 y^2 dy = 40."""
+    from hdgfem import DGSpace, rectangle_mesh
+    space = DGSpace(rectangle_mesh(3, 2, xlim=(2., 4.), ylim=(-1., 1.)), 2, basis_type="dub_orth")
+    return space, space.project_callable(lambda x, y: x * y)
+
+
+def test_weighted_scalar_and_vector_l2_are_exact_for_polynomials() -> None:
+    from hdgfem import evaluate_scalar_error, evaluate_vector_error
+    space, field = _weighted_case()
+    zero = lambda x, y: 0. * x
+    radius = lambda x, y: x
+    weighted = evaluate_scalar_error(field, zero, weight=radius, volume_degree=6, backend="host")
+    np.testing.assert_allclose(weighted.metrics.l2, np.sqrt(40.), rtol=1e-13)
+    plain = evaluate_scalar_error(field, zero, volume_degree=6, backend="host")
+    unit = evaluate_scalar_error(field, zero, weight=lambda x, y: 1. + 0. * x, volume_degree=6, backend="host")
+    np.testing.assert_allclose(unit.metrics.l2, plain.metrics.l2, rtol=1e-14)
+    assert weighted.metrics.linf == plain.metrics.linf
+    vector = (space * space).field((field, space.project_callable(lambda x, y: 2. * x * y)))
+    report = evaluate_vector_error(vector, lambda x, y: (0. * x, 0. * x), weight=radius, volume_degree=6)
+    np.testing.assert_allclose(report.metrics.l2, np.sqrt(200.), rtol=1e-13)
+    with pytest.raises(ValueError, match="nonnegative"):
+        evaluate_scalar_error(field, zero, weight=lambda x, y: -x, backend="host")
+
+
+def test_weighted_scalar_l2_on_device_matches_host() -> None:
+    cp = pytest.importorskip("cupy")
+    if cp.cuda.runtime.getDeviceCount() == 0:
+        pytest.skip("No CUDA device")
+    from hdgfem import evaluate_scalar_error
+    space, field = _weighted_case()
+    zero = lambda x, y: 0. * x
+    device = evaluate_scalar_error(field, zero, weight=lambda x, y: x, volume_degree=6, backend="device")
+    np.testing.assert_allclose(device.metrics.l2, np.sqrt(40.), rtol=1e-13)

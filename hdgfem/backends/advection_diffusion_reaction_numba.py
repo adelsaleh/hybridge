@@ -1,4 +1,9 @@
-"""DGSpace adapter for the fused stationary ADR Numba kernels."""
+"""DGSpace adapter for the fused stationary ADR Numba kernels.
+
+The kernels build every element's face tables from the face samples
+``prepared.tau_total`` and ``prepared.gamma`` and small reference tables, so
+``prepare_adr_data(dense_local_matrices=False)`` is sufficient.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ from ..core.space import DGSpace, DGTraceSpace
 from ..kernels import NUMBA_AVAILABLE
 from ..kernels.advection_diffusion_reaction_fused import (
     assemble_projected_adr_trace_system_eliminated_kernel,
+    reconstruct_adr_from_local_columns_kernel,
     reconstruct_projected_adr_local_unknowns_kernel,
 )
 from ..linalg.system import KnownDofReduction
@@ -32,6 +38,7 @@ class NumbaADRTraceAssembly:
     trace_system: hdg.TraceSystem
     reduction: KnownDofReduction
     timings: dict[str, float]
+    local_columns: np.ndarray | None = None
 
 
 def assemble_projected_adr_trace_system_eliminated_numba(
@@ -42,10 +49,15 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         trace_space: DGTraceSpace | None = None,
         diffusion=1.0,
         diffusion_data: PreparedDiffusion | None = None,
+        local_columns: np.ndarray | None = None,
 ) -> NumbaADRTraceAssembly:
-    """Assemble the all-Dirichlet reduced ADR trace system with ``prange``."""
-    if prepared.element_boundary is None:
-        raise ValueError("Numba ADR requires dense_local_matrices=True during preparation")
+    """Assemble the all-Dirichlet reduced ADR trace system with ``prange``.
+
+    ``local_columns`` (shape ``(K, 3*el_dof, 3*edg_dof + 1)``) receives every
+    element's local solution columns, so reconstruction of the same system can
+    use :func:`reconstruct_projected_adr_local_unknowns_numba` with
+    ``local_columns`` instead of rebuilding the local problems.
+    """
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
     timings: dict[str, float] = {}
@@ -100,18 +112,14 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         np.ascontiguousarray(space.quad_data.Krf_w, dtype=np.float64),
         prepared.reaction_values,
         prepared.beta_values,
-        prepared.u_boundary_mass,
-        prepared.normal_mass_x,
-        prepared.normal_mass_y,
+        *_face_table_arguments(prepared, space, trace_ref),
         prepared.d0_reference,
         prepared.d1_reference,
-        prepared.element_boundary,
-        prepared.trace_lift,
-        prepared.interior_gamma_mass,
         prepared.source_rhs,
         np.ascontiguousarray(boundary_trace, dtype=np.float64),
         int(orientation_mode),
         tensor.kinds, tensor.constants, tensor.inverse_values, status,
+        _column_buffer(local_columns, space, ntr), local_columns is not None,
     )
     if np.any(status):
         raise ValueError("ADR inverse-diffusion mass factorization failed on elements " + str(np.flatnonzero(status)))
@@ -127,7 +135,36 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         trace_system=hdg.TraceSystem(rows, cols, data, rhs, boundary_trace),
         reduction=reduction,
         timings=timings,
+        local_columns=local_columns,
     )
+
+
+def _face_table_arguments(prepared: ADRPreparedData, space: DGSpace, trace_ref: DGTraceSpace) -> tuple:
+    """Face samples and reference tables from which the kernels build each element's face tables."""
+    if prepared.face_quadrature is not None and not np.array_equal(prepared.face_quadrature, trace_ref.quads):
+        raise ValueError("prepared ADR face samples use a different trace quadrature than trace_space")
+    contiguous = lambda array: np.ascontiguousarray(array, dtype=np.float64)
+    return (
+        contiguous(prepared.tau_total),
+        contiguous(prepared.gamma),
+        contiguous(trace_ref.bas_of_bd_quads),
+        contiguous(trace_ref.weighted_bas_of_bd_quads),
+        contiguous(trace_ref.weighted_bas1d_of_ref_edg_qds),
+        contiguous(trace_ref.oriented_basis_table),
+        contiguous(trace_ref.weights),
+        contiguous(trace_ref.face_trace_test_element_trial_oriented),
+        contiguous(space.quad_data.face_element_test_element_trial),
+    )
+
+
+def _column_buffer(local_columns, space: DGSpace, ntr: int) -> np.ndarray:
+    """Validate a caller-owned local-column buffer, or return a 1-element placeholder."""
+    if local_columns is None:
+        return np.empty((1, 1, 1), dtype=np.float64)
+    expected = (space.mesh.num_tri, 3 * space.el_dof, 3 * ntr + 1)
+    if local_columns.shape != expected or local_columns.dtype != np.float64 or not local_columns.flags.c_contiguous:
+        raise ValueError(f"local_columns must be a C-contiguous float64 array of shape {expected}")
+    return local_columns
 
 
 def reconstruct_projected_adr_local_unknowns_numba(
@@ -138,12 +175,26 @@ def reconstruct_projected_adr_local_unknowns_numba(
         trace_space: DGTraceSpace | None = None,
         diffusion=1.0,
         diffusion_data: PreparedDiffusion | None = None,
+        local_columns: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Reconstruct mixed ADR element fields in the fused host kernel."""
+    """Reconstruct mixed ADR element fields in the fused host kernel.
+
+    With ``local_columns`` from the assembly of the same prepared system, the
+    fields are a contraction of those columns with the trace; otherwise every
+    local problem is rebuilt and solved.
+    """
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     orientation_mode = _trace_orientation_mode(trace_ref)
+    if local_columns is not None:
+        mesh = space.mesh
+        out = np.empty((mesh.num_tri, 3 * space.el_dof), dtype=np.float64)
+        reconstruct_adr_from_local_columns_kernel(
+            out, np.ascontiguousarray(trace, dtype=np.float64), _column_buffer(local_columns, space, trace_ref.edg_dof),
+            np.ascontiguousarray(mesh.loc2glob_edge, dtype=np.int64),
+            np.ascontiguousarray(mesh.orientations, dtype=np.bool_), int(orientation_mode))
+        return out
     tensor = prepare_diffusion(diffusion, space) if diffusion_data is None else diffusion_data
     status = np.zeros(space.mesh.num_tri, dtype=np.int64)
     mesh = space.mesh
@@ -163,12 +214,9 @@ def reconstruct_projected_adr_local_unknowns_numba(
         np.ascontiguousarray(space.quad_data.Krf_w, dtype=np.float64),
         prepared.reaction_values,
         prepared.beta_values,
-        prepared.u_boundary_mass,
-        prepared.normal_mass_x,
-        prepared.normal_mass_y,
+        *_face_table_arguments(prepared, space, trace_ref),
         prepared.d0_reference,
         prepared.d1_reference,
-        prepared.element_boundary,
         prepared.source_rhs,
         int(orientation_mode),
         tensor.kinds, tensor.constants, tensor.inverse_values, status,

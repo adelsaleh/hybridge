@@ -382,6 +382,14 @@ class DGSpace:
         ``"symmetric"`` (compact Dunavant when available, otherwise generated
         symmetric), or
         ``"duffy"`` (the legacy collapsed tensor-product rule).
+    volume_degree
+        Optional polynomial exactness of the volume rule (default ``2p``), for
+        overintegrating nonpolynomial coefficients. ``"auto"`` uses the
+        smallest compact positive Dunavant rule of at least that degree (even
+        degrees up to 14, for example 42 points for degree 13 or 14) and
+        otherwise the minimal Duffy rule; ``"symmetric"`` falls back to the
+        generated symmetric rule; ``"duffy"`` uses the minimal collapsed rule.
+        Mutually exclusive with ``volume_quad_1d``.
     """
 
     def __init__(
@@ -396,6 +404,7 @@ class DGSpace:
             volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
+            volume_degree: int | None = None,
     ) -> None:
         """Initialize this object."""
         self.mesh = as_dg_mesh(mesh)
@@ -407,6 +416,7 @@ class DGSpace:
             volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
+            volume_degree=volume_degree,
         )
         self.name = str(name)
         self._basis_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
@@ -436,6 +446,7 @@ class DGSpace:
             volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
+            volume_degree: int | None = None,
     ) -> "DGSpace":
         """Build a scalar DG space from a mesh and polynomial degree.
 
@@ -453,6 +464,7 @@ class DGSpace:
             volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
+            volume_degree=volume_degree,
         )
 
     @property

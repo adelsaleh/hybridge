@@ -1,0 +1,2208 @@
+{
+  "trace_basis": "legacy-lagrange",
+  "real_itemsize": 8,
+  "limit_bytes": 49152,
+  "records": [
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "auto (symmetric)",
+      "nq": 3,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "deg:2p+5 (symmetric degree>=5)",
+      "nq": 12,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 680
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1520
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "p+3/default (3/default)",
+      "nq": 9,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 608
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "p+5/p+4 (5/4)",
+      "nq": 25,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 992
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "p+7/p+4 (7/4)",
+      "nq": 49,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1744
+        }
+      }
+    },
+    {
+      "order": 0,
+      "nel": 1,
+      "rule": "2p+2/default (2/default)",
+      "nq": 4,
+      "nfq": 1,
+      "max_nq_variable_full": 1533,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 560
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "auto (symmetric)",
+      "nq": 3,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "deg:2p+5 (symmetric degree>=7)",
+      "nq": 16,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2328
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "p+3/default (4/default)",
+      "nq": 16,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "p+5/p+4 (6/5)",
+      "nq": 36,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2184
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "p+7/p+4 (8/5)",
+      "nq": 64,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 2856
+        }
+      }
+    },
+    {
+      "order": 1,
+      "nel": 3,
+      "rule": "2p+2/default (4/default)",
+      "nq": 16,
+      "nfq": 3,
+      "max_nq_variable_full": 1518,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 1824
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "auto (symmetric)",
+      "nq": 6,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4272
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "deg:2p+5 (symmetric degree>=9)",
+      "nq": 25,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4272
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4056
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4440
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "p+3/default (5/default)",
+      "nq": 25,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3888
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4272
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "p+5/p+4 (7/6)",
+      "nq": 49,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4224
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4608
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "p+7/p+4 (9/6)",
+      "nq": 81,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4992
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 5376
+        }
+      }
+    },
+    {
+      "order": 2,
+      "nel": 6,
+      "rule": "2p+2/default (6/default)",
+      "nq": 36,
+      "nfq": 5,
+      "max_nq_variable_full": 1468,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 3912
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 4296
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "auto (symmetric)",
+      "nq": 12,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7584
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9104
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "deg:2p+5 (symmetric degree>=11)",
+      "nq": 33,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7584
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9104
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7584
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9104
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "p+3/default (6/default)",
+      "nq": 36,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7184
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7584
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9104
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "p+5/p+4 (8/7)",
+      "nq": 64,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7944
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9464
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "p+7/p+4 (10/7)",
+      "nq": 100,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8408
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8408
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8408
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8408
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8408
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 8808
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 10328
+        }
+      }
+    },
+    {
+      "order": 3,
+      "nel": 10,
+      "rule": "2p+2/default (8/default)",
+      "nq": 64,
+      "nfq": 7,
+      "max_nq_variable_full": 1353,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7544
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 7944
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 9464
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "auto (symmetric)",
+      "nq": 16,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14088
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 17568
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "deg:2p+5 (symmetric degree>=13)",
+      "nq": 42,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14088
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 17568
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14088
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 17568
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "p+3/default (7/default)",
+      "nq": 49,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12288
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14088
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 17568
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "p+5/p+4 (9/8)",
+      "nq": 81,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12720
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12720
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12720
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12720
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 12720
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14520
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 18000
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "p+7/p+4 (11/8)",
+      "nq": 121,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13680
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13680
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13680
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13680
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13680
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 15480
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 18960
+        }
+      }
+    },
+    {
+      "order": 4,
+      "nel": 15,
+      "rule": "2p+2/default (10/default)",
+      "nq": 100,
+      "nfq": 9,
+      "max_nq_variable_full": 1131,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13176
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13176
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13176
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13176
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 13176
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 14976
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 18456
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "auto (symmetric)",
+      "nq": 25,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20928
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 24456
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31344
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "deg:2p+5 (duffy degree>=15)",
+      "nq": 81,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20016
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20016
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20016
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20016
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21024
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 24552
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31440
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20928
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 24456
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31344
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "p+3/default (8/default)",
+      "nq": 64,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 19920
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20928
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 24456
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31344
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "p+5/p+4 (10/9)",
+      "nq": 100,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20472
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20472
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20472
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 20472
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21480
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 25008
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31896
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "p+7/p+4 (12/9)",
+      "nq": 144,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 22536
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 26064
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32952
+        }
+      }
+    },
+    {
+      "order": 5,
+      "nel": 21,
+      "rule": "2p+2/default (12/default)",
+      "nq": 144,
+      "nfq": 11,
+      "max_nq_variable_full": 748,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 21528
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 22536
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 26064
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32952
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "auto (symmetric)",
+      "nq": 33,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33856
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 40128
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 4,
+          "shared_bytes": 48512
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "deg:2p+5 (duffy degree>=17)",
+      "nq": 100,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31160
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31160
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31160
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31160
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 34072
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 40344
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 2,
+          "shared_bytes": 48632
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "deg:14 (symmetric degree>=14)",
+      "nq": 42,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33856
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 40128
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 4,
+          "shared_bytes": 48584
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "p+3/default (9/default)",
+      "nq": 81,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 30944
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33856
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 40128
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 3,
+          "shared_bytes": 48848
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "p+5/p+4 (11/10)",
+      "nq": 121,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31664
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31664
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31664
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 31664
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 34576
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 40848
+        },
+        "variable-full": {
+          "fits": true,
+          "batch": 2,
+          "shared_bytes": 49136
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "p+7/p+4 (13/10)",
+      "nq": 169,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32816
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32816
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32816
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 32816
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 35728
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 42000
+        },
+        "variable-full": {
+          "fits": false
+        }
+      }
+    },
+    {
+      "order": 6,
+      "nel": 28,
+      "rule": "2p+2/default (14/default)",
+      "nq": 196,
+      "nfq": 13,
+      "max_nq_variable_full": 143,
+      "kinds": {
+        "constant-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33464
+        },
+        "constant-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33464
+        },
+        "constant-full": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33464
+        },
+        "variable-isotropic": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 33464
+        },
+        "variable-diagonal": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 36376
+        },
+        "variable-symmetric": {
+          "fits": true,
+          "batch": 8,
+          "shared_bytes": 42648
+        },
+        "variable-full": {
+          "fits": false
+        }
+      }
+    }
+  ]
+}

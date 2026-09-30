@@ -2,7 +2,10 @@
 
 Fused host Numba assembly and local reconstruction support variable scalar and
 elliptic tensor diffusion in `q = -K grad(u)`. Coefficients are sampled through
-the shared NumPy/DG preparation helpers before entering compiled kernels.
+the shared NumPy/DG preparation helpers before entering compiled kernels. The
+kernels build each element's face tables (boundary and normal masses, element-boundary
+coupling, trace lift, interior trace masses) from the `tau_total`/`gamma` face
+samples, so preparation holds no per-element dense table.
 Use `assembly_backend='numba'` and `hdg_postprocess='none'` for the raw solution.
 The result's `diffusion_structure` reports element counts for each selected path.
 
@@ -54,9 +57,12 @@ its existing degree/face-length scale. Explicit scalar or incidence stabilizatio
 tables remain available. Volume-only coefficient tables need explicit
 stabilization because they cannot supply face values.
 
-Tensor/variable-diffusion primal postprocessing remains unsupported; select
-`hdg_postprocess='none'` or `'flux'`. Requesting `'primal'` or `'both'` fails
-before preparation. Raw CUDA ADR still requires constant isotropic diffusion.
+Variable scalar and elliptic tensor diffusion support all four postprocessing
+modes. Primal recovery retains the coupled Neumann equations and element mean,
+with all four blocks of the inverse-tensor mass evaluated at degree-p+1
+quadrature. Both total-flux variants are available with Numba or CuPy recovery,
+including raw-CUDA assembly/reconstruction. See the
+[device recovery guide](adr_device_postprocessing.md) for checks and timings.
 
 ## Verification
 

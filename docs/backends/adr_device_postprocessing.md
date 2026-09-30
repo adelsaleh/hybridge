@@ -5,7 +5,19 @@ both degree-`p+1` recovery stages. `auto` selects CuPy with raw-CUDA assembly an
 reconstruction, and Numba with host assembly/reconstruction. CuPy implements
 both `flux_postprocess_space="l2_closest"` and `"RT_projection"`, followed by
 the same coupled local Neumann primal equations as the Numba reference.
-Primal recovery still requires positive constant scalar diffusion.
+Primal recovery supports positive variable scalar and elliptic tensor diffusion,
+including nonsymmetric tensors with positive definite symmetric part. It samples
+and validates K at recovery quadrature, then assembles all four K^-1-weighted
+constitutive blocks. It retains the total numerical flux and element mean.
+For quadrature-only coefficients, samples must match the recovery quadrature;
+use callable or DG components when assembly and recovery points differ.
+
+CuPy primal recovery uses `adr_primal_postprocess_raw_cuda` to assemble its
+matrix and RHS in one launch, tiling matrix entries across blocks and sharing
+quadrature contractions across the nine mixed volume blocks. CuPy/cuBLAS solves
+the batched pivoted systems. The independent contraction-based implementation
+remains a test/benchmark reference. Geometry and reference tables are cached;
+variable PDE coefficients are resampled each call, never cached as factors.
 
 ## Residency and materialization
 
@@ -22,8 +34,9 @@ solution arrays. Device-backed velocity and stabilization fields are sampled in
 their own spaces. Reference quadrature/basis and mesh geometry may originate on
 host and be uploaded. Scalar finiteness checks and global-solver diagnostics can
 synchronize; these are not full-field downloads. Existing ADR coefficient and
-assembly preparation remains host-based: this contract does not promise a
-completely host-free solve from arbitrary device-only PDE input fields.
+assembly preparation uses device sampling for supported inputs; incompatible
+callables can use the documented host fallback. Tensor DG components and retained
+incidence stabilization tables are not downloaded for recovery.
 
 Explicit `postprocessing_backend="numba"` with requested recovery and
 `materialize_host_solution=False` on raw CUDA fails before assembly. Set the
@@ -83,3 +96,85 @@ failures outside this change: diffusion reusable option forwarding
 existing documentation artifacts, links and missing docstrings. The option
 failure also reproduces with the pre-change recovery helpers. No full-suite
 pass is claimed.
+
+
+## Tensor qualification (2026-09-29)
+
+The tensor extension is checked by:
+
+- 128 direct recovery parity/residency cases: seven diffusion structures plus
+  cross-space device DG tensor components, p=0,1,3,6, both trace bases and both
+  total-flux variants. Downloads are forbidden during recovery and every
+  recovered element mean is checked independently.
+- Four full matrix/RHS comparisons of fused primal assembly against independent
+  CuPy contractions, including nonsymmetric off-diagonal tensor blocks.
+- Native raw-CUDA scalar and variable-full-tensor integration checks for all
+  modes, both trace bases, both flux variants and both materialization settings.
+- Continuous sine manufactured convergence on 2x2, 4x4 and 8x8 meshes, p=1,2:
+  variable scalar, diagonal, symmetric and nonsymmetric tensors on the host;
+  native raw-CUDA variable-full tensor recovery with both flux variants.
+  These are bounded stationary checks, without time integration.
+
+Reproduce the qualification with:
+
+```bash
+OMP_NUM_THREADS=16 .venv/bin/python -m pytest -q \
+  tests/test_adr_device_postprocessing.py tests/test_adr_tensor_numba.py \
+  tests/test_adr_tensor_solver_cuda.py tests/test_backend_capabilities.py
+```
+
+Run the local performance/parity diagnostic (no global solve) with an idle GPU:
+
+```bash
+OMP_NUM_THREADS=16 .venv/bin/python -m \
+  scripts.advection_diffusion_reaction.diagnostics.benchmark_tensor_postprocessing \
+  --nx 16 --orders 1 3 4 6 --repeats 5
+```
+
+The benchmark warms both paths and includes tensor sampling, allocations,
+assembly, and batched solution in synchronized wall timings. It excludes
+reference-space creation and reports the individual samples as JSON. The
+reference and production outputs must agree before timings are reported.
+
+
+The final focused run passed **492 checks without skips** (73.95 seconds):
+
+```bash
+OMP_NUM_THREADS=16 .venv/bin/python -m pytest -q \
+  tests/test_adr_device_postprocessing.py tests/test_adr_tensor_numba.py \
+  tests/test_adr_tensor_solver_cuda.py tests/test_advection_diffusion_reaction.py \
+  tests/test_backend_capabilities.py
+```
+
+An additional stabilization/input run passed **23 checks**:
+
+```bash
+OMP_NUM_THREADS=16 .venv/bin/python -m pytest -q \
+  tests/test_adr_face_stabilization.py tests/test_adr_tensor_numba.py \
+  -k 'stabilization or mixed_element or invalid_diffusion'
+```
+
+These checks used the installed CUDA/AMGX runtime; no AMGX rebuild or time
+integration was performed. The recovery qualification is FP64 on affine
+triangles; it is not a blanket performance or accuracy guarantee for all meshes,
+coefficients, precisions, or large-mesh memory sizes.
+
+### Measured primal recovery performance
+
+On an NVIDIA RTX PRO 5000 Blackwell, 512 affine elements, FP64, five warmed
+measurements per path, the final implementation measured:
+
+| p | CuPy contraction reference (ms) | Fused production (ms) | Speedup |
+|---|---:|---:|---:|
+| 1 | 25.740 | 16.036 | 1.61x |
+| 3 | 25.745 | 16.958 | 1.52x |
+| 4 | 29.728 | 20.169 | 1.47x |
+| 6 | 63.967 | 29.817 | 2.15x |
+
+These final timings were collected with another live raw-CUDA test process on
+the same GPU (100% reported utilization, P1, 180 MHz SM clock at measurement
+start). They establish a matched improvement under that load, not uncontended
+latency or peak throughput. Rerun the diagnostic on an idle GPU before using
+these absolute times for capacity planning. The comparison includes tensor
+sampling and the batched solve; it measures primal recovery, not the entire
+ADR solve or the preceding total-flux recovery.

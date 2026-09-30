@@ -255,7 +255,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         reconstruction_residency="device (optional host materialization)",
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes="Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; tensor coefficients require hdg_postprocess='none'. Scalar CuPy postprocessing remains supported; materialize_host_solution controls result downloads.",
+        notes="Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; variable scalar/tensor primal and both total-flux recoveries use Numba or CuPy. CuPy primal assembly is fused CUDA; materialize_host_solution controls result downloads.",
     ),
     _assembly_capability(
         "diffusion-reaction",
@@ -608,17 +608,6 @@ def validate_advection_diffusion_backend_configuration(
         _unsupported(
             "advection-diffusion-reaction", operation, backend, solver_backend,
             f"trace_basis={basis!r} is unsupported; choose one of {capability.trace_bases!r}",
-        )
-    if not scalar_diffusion and postprocess_mode in {"primal", "both"}:
-        _unsupported(
-            "advection-diffusion-reaction", operation, backend, solver_backend,
-            "ADR primal postprocessing requires positive constant scalar diffusion; "
-            "select hdg_postprocess='none' or 'flux' for variable/tensor diffusion",
-        )
-    if backend == "raw-cuda" and not scalar_diffusion and postprocess_mode != "none":
-        _unsupported(
-            "advection-diffusion-reaction", operation, backend, solver_backend,
-            "Raw CUDA tensor postprocessing is not qualified; select hdg_postprocess='none'",
         )
     return capability
 

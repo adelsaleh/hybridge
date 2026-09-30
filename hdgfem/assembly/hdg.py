@@ -117,6 +117,15 @@ def source_moments(source, space: DGSpace) -> np.ndarray:
         else:
             raise TypeError("source must be a DGField, callable, source moments, or quadrature values")
 
+    return source_moments_from_values(values, space)
+
+
+def source_moments_from_values(values, space: DGSpace) -> np.ndarray:
+    r"""Compute :math:`\int_K f\phi_i\,dx` from ``f`` on volume quadrature, shape ``(K, nq)``.
+
+    Unlike :func:`source_moments`, an array whose shape also matches the
+    coefficient layout is never mistaken for precomputed moments.
+    """
     values = np.asarray(values, dtype=REAL_DTYPE)
     if values.ndim == 0:
         values = np.full((space.mesh.num_tri, space.quad_data.Krf_w.shape[0]), float(values))

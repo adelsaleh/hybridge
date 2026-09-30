@@ -104,19 +104,35 @@ def _normalize_volume_quadrature(name: str) -> str:
         raise ValueError("volume_quadrature must be 'auto', 'symmetric', or 'duffy'") from exc
 
 
-def _symmetric_triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return a positive-weight symmetric rule exact for ``P_(2*order)``.
+def _duffy_points_for_degree(exact_degree: int) -> int:
+    """Return the 1D Gauss count making the collapsed rule exact for ``P_exact_degree``.
 
-    Compact Dunavant data is used when available.  At higher orders, a
-    minimally exact ``(order + 1)^2`` Duffy rule is expanded into complete
-    barycentric permutation orbits.  Orbit symmetrization preserves the
-    original rule's polynomial exactness and positivity while providing a
-    fully symmetric rule for arbitrary nonnegative ``order``.
+    The Duffy Jacobian adds one degree in the collapsed direction, so ``n``
+    points are exact when ``2n - 1 >= exact_degree + 1``.
     """
-    exact_degree = max(2, 2 * order)
-    blocks = _DUNAVANT_RULE_BLOCKS.get(exact_degree)
+    return (int(exact_degree) + 3) // 2
+
+
+def _compact_dunavant_degree(exact_degree: int) -> int | None:
+    """Return the smallest tabulated admissible Dunavant degree >= ``exact_degree``."""
+    degrees = [degree for degree in sorted(_DUNAVANT_RULE_BLOCKS) if degree >= exact_degree]
+    return degrees[0] if degrees else None
+
+
+def _symmetric_triangle_quadrature(order: int, exact_degree: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Return a positive-weight symmetric rule exact for ``P_exact_degree`` (default ``2*order``).
+
+    The smallest tabulated compact Dunavant rule of at least that degree is
+    used when available (even degrees up to 14).  Otherwise a minimally exact
+    Duffy rule is expanded into complete barycentric permutation orbits.
+    Orbit symmetrization preserves the original rule's polynomial exactness
+    and positivity while providing a fully symmetric rule for any degree.
+    """
+    exact_degree = max(2, 2 * order) if exact_degree is None else max(1, int(exact_degree))
+    compact = _compact_dunavant_degree(exact_degree)
+    blocks = None if compact is None else _DUNAVANT_RULE_BLOCKS[compact]
     if blocks is None:
-        points, base_weights = _triangle_quadrature(order, order + 1)
+        points, base_weights = _triangle_quadrature(order, _duffy_points_for_degree(exact_degree))
         barycentric = np.column_stack(
             (
                 -0.5 * (points[:, 0] + points[:, 1]),
@@ -149,7 +165,7 @@ def _symmetric_triangle_quadrature(order: int) -> tuple[np.ndarray, np.ndarray]:
     return np.ascontiguousarray(points), np.ascontiguousarray(weights, dtype=REAL_DTYPE)
 
 
-def _automatic_triangle_quadrature(order: int) -> tuple[str, np.ndarray, np.ndarray]:
+def _automatic_triangle_quadrature(order: int, exact_degree: int | None = None) -> tuple[str, np.ndarray, np.ndarray]:
     """Select the default volume rule for one polynomial order.
 
     The automatic policy prefers compact admissible Dunavant data.  Once that
@@ -158,6 +174,13 @@ def _automatic_triangle_quadrature(order: int) -> tuple[str, np.ndarray, np.ndar
     Duffy at high order.  Callers can still force the generated rule with
     ``volume_quadrature="symmetric"``.
     """
+    if exact_degree is not None:
+        # Requested exactness: compact Dunavant when tabulated, else minimal Duffy.
+        if _compact_dunavant_degree(max(1, int(exact_degree))) is not None:
+            points, weights = _symmetric_triangle_quadrature(order, exact_degree)
+            return "symmetric", points, weights
+        points, weights = _triangle_quadrature(order, _duffy_points_for_degree(exact_degree))
+        return "duffy", points, weights
     exact_degree = max(2, 2 * order)
     if exact_degree in _DUNAVANT_RULE_BLOCKS:
         points, weights = _symmetric_triangle_quadrature(order)
@@ -409,6 +432,7 @@ class ReferenceElementData:
     volume_quadrature: str = "auto"
     volume_quad_1d: int | None = None
     edge_quad_1d: int | None = None
+    volume_degree: int | None = None
     el_dof: int = field(init=False)
     edg_dof: int = field(init=False)
     Krf_quads: np.ndarray = field(init=False)
@@ -453,17 +477,26 @@ class ReferenceElementData:
         object.__setattr__(self, "order", order)
         object.__setattr__(self, "basis_type", basis_type)
         volume_quadrature = _normalize_volume_quadrature(self.volume_quadrature)
+        volume_degree = self.volume_degree
+        if volume_degree is not None:
+            volume_degree = int(volume_degree)
+            if volume_degree < 0:
+                raise ValueError("volume_degree must be nonnegative")
+            if self.volume_quad_1d is not None:
+                raise ValueError("choose either volume_degree or volume_quad_1d, not both")
+            object.__setattr__(self, "volume_degree", volume_degree)
         if self.volume_quad_1d is not None:
             volume_quadrature = "duffy"
         object.__setattr__(self, "el_dof", (order + 1) * (order + 2) // 2)
         object.__setattr__(self, "edg_dof", order + 1)
 
         if volume_quadrature == "auto":
-            volume_quadrature, q_points, q_weights = _automatic_triangle_quadrature(order)
+            volume_quadrature, q_points, q_weights = _automatic_triangle_quadrature(order, volume_degree)
         elif volume_quadrature == "symmetric":
-            q_points, q_weights = _symmetric_triangle_quadrature(order)
+            q_points, q_weights = _symmetric_triangle_quadrature(order, volume_degree)
         else:
-            q_points, q_weights = _triangle_quadrature(order, self.volume_quad_1d)
+            count = self.volume_quad_1d if volume_degree is None else _duffy_points_for_degree(volume_degree)
+            q_points, q_weights = _triangle_quadrature(order, count)
         object.__setattr__(self, "volume_quadrature", volume_quadrature)
         basis = _evaluate_basis(basis_type, order, q_points)
         gradients = _evaluate_gradients(basis_type, order, q_points)
@@ -606,6 +639,7 @@ class ReferenceElementData:
             volume_quadrature: str = "auto",
             volume_quad_1d: int | None = None,
             edge_quad_1d: int | None = None,
+            volume_degree: int | None = None,
     ) -> "ReferenceElementData":
         """Build reference data for a triangular DG space.
 
@@ -622,6 +656,7 @@ class ReferenceElementData:
             volume_quadrature=volume_quadrature,
             volume_quad_1d=volume_quad_1d,
             edge_quad_1d=edge_quad_1d,
+            volume_degree=volume_degree,
         )
 
     @property

@@ -60,7 +60,7 @@ is checked by `tests/test_backend_capabilities.py`.
 | advection-diffusion-reaction | solve | numba | petsc | host | host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
 | advection-diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
 | advection-diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | Fused prange assembly/reconstruction; variable scalar and elliptic tensor diffusion with exact structural specialization; sampled coefficient adapters permit different DG spaces; full-space/RT_p total-flux and coupled primal recovery use Numba or CuPy. |
-| advection-diffusion-reaction | solve | raw-cuda | amgx | device | device | device (optional host materialization) | eliminate | legacy-lagrange, legendre-modal | Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; tensor coefficients require hdg_postprocess='none'. Scalar CuPy postprocessing remains supported; materialize_host_solution controls result downloads. |
+| advection-diffusion-reaction | solve | raw-cuda | amgx | device | device | device (optional host materialization) | eliminate | legacy-lagrange, legendre-modal | Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; variable scalar/tensor primal and both total-flux recoveries use Numba or CuPy. CuPy primal assembly is fused CUDA; materialize_host_solution controls result downloads. |
 | diffusion-reaction | assemble | numpy | none | host | none | none | eliminate | legacy-lagrange, legendre-modal, bernstein | - |
 | diffusion-reaction | assemble | numba | none | host | none | none | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
@@ -146,6 +146,6 @@ runtime.
 
 The low-level tensor ADR operator additionally exposes assembly-only COO/direct
 CSR/direct BSR and full-trace reconstruction, with graph metadata and phase
-timings. Complete raw-CUDA tensor solves require `hdg_postprocess="none"`;
+timings. Complete raw-CUDA tensor solves support all four postprocessing modes;
 `raw_matrix_format="bsr"` keeps face blocks through the native AMGX solve.
 See [raw CUDA tensor ADR](../backends/raw_cuda.md#tensor-adr-assembly-and-reconstruction).

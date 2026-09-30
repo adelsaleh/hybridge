@@ -20,9 +20,12 @@ from .core.mesh import (
     rectangle_mesh,
 )
 from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from .core.element_coefficients import ElementCoefficient
 from .core.field_ops import (
     coefficient_field,
+    field_gradient_at_ref,
     field_linear_combination,
+    field_values_at_ref,
     perpendicular_vector_field,
     project_callable_to_trace,
     project_field_to_trace,
@@ -136,6 +139,7 @@ __all__ = [
     "DGField",
     "DGMesh",
     "DGSpace",
+    "ElementCoefficient",
     "LinearSolveCapacityError",
     "LinearSolveConvergenceError",
     "LinearSolveError",
@@ -163,7 +167,9 @@ __all__ = [
     "evaluate_hdg_scalar_error",
     "evaluate_vector_error",
     "guiding_center_field_diagnostics",
+    "field_gradient_at_ref",
     "field_linear_combination",
+    "field_values_at_ref",
     "gmsh_disc_mesh",
     "gmsh_lshape_mesh",
     "gmsh_polygon_mesh",

@@ -385,12 +385,27 @@ def reference_advection_sparse_cupy(
 
 
 def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Assemble element source moments on the device."""
+    """Assemble element source moments on the device.
+
+    ``source`` is a DG field, a CuPy-compatible callable, or a device array of
+    element moments ``(K, el_dof)`` or volume-quadrature values ``(K, nq)``;
+    as in ``hdg.source_moments``, the moment shape wins when both match.
+    """
     cp = require_cupy()
     start = time.perf_counter()
     mesh = cspace.mesh
     q = cspace.quad_data
-    if isinstance(source, DGField):
+    if isinstance(source, cp.ndarray):
+        num_elements, el_dof, num_points = cspace.host.mesh.num_tri, cspace.host.el_dof, q.Krf_w.size
+        values = source.astype(REAL_DTYPE, copy=False)
+        if values.shape == (num_elements, el_dof):
+            rhs = values
+        elif values.shape == (num_elements, num_points):
+            rhs = source_moments_from_values_cupy(values, cspace)
+        else:
+            raise ValueError(f"device source must have shape ({num_elements}, {el_dof}) moments or "
+                             f"({num_elements}, {num_points}) quadrature values; got {values.shape}")
+    elif isinstance(source, DGField):
         source.space.assert_same_mesh(cspace.host)
         constant_value = source.constant_value
         if constant_value is not None:
@@ -402,10 +417,17 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
     else:
         points = mapped_quads_cupy(cspace)
         values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
-        rhs = mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w)
+        rhs = source_moments_from_values_cupy(values, cspace)
     if timings is not None:
         timings["source_moments"] = timings.get("source_moments", 0.0) + sync_elapsed(start)
     return cp.ascontiguousarray(rhs)
+
+
+def source_moments_from_values_cupy(values, cspace: CupyDGSpace):
+    """Element moments from device values on volume quadrature, shape ``(K, nq)``."""
+    cp = require_cupy()
+    q = cspace.quad_data
+    return cspace.mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w)
 
 
 def beta_dot_normal_from_coeffs(beta_coeffs, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
@@ -2420,6 +2442,7 @@ def solve_reduced_system_amgx_device(
     retry_seed_solution=None,
     retry_seed_label: str | None = None,
     cache_fixed_operator: bool = False,
+    reuse_primary_preconditioner: bool = False,
     scale_system: bool | str = True,
     raise_on_nonconvergence: bool = True,
     materialize_host_solution: bool = True,
@@ -2430,6 +2453,11 @@ def solve_reduced_system_amgx_device(
     ``retry_seed_solution`` initializes the wrapper's single best-candidate
     slot from a failed upstream solver.  Its physical residual is evaluated
     here, and no vector history is retained.
+
+    With ``reusable_solver`` and ``reuse_primary_preconditioner=True``, an
+    already set-up solver receives the new matrix through
+    ``replace_coefficients`` and keeps its previous setup (a possibly stale
+    preconditioner); callers force a fresh setup by clearing ``is_setup``.
     """
     def fixed_solver(key, solver_config):
         """Keep native allocations; refresh numeric setup only for a new matrix."""
@@ -2538,6 +2566,9 @@ def solve_reduced_system_amgx_device(
             initial_guess=initial_guess,
             reusable_solver=reusable_solver,
             scale_system=scale_system,
+            replace_reusable_coefficients=bool(
+                reuse_primary_preconditioner and reusable_solver is not None
+                and not reusable_solver.closed and reusable_solver.is_setup),
             raise_on_nonconvergence=raise_on_nonconvergence,
             materialize_host_solution=materialize_host_solution,
             verbose=verbose,
@@ -2633,6 +2664,9 @@ def solve_reduced_system_amgx_device(
                     # objects. Retry with a fresh ephemeral solver in that case.
                     attempt_solver = None
                 replace_coefficients = False
+                if (index == 1 and reuse_primary_preconditioner and attempt_solver is not None
+                        and not attempt_solver.closed):
+                    replace_coefficients = bool(attempt_solver.is_setup)
                 if cache_fixed_operator and attempt["backend"] == "amgx":
                     attempt_solver = fixed_solver("primary" if index == 1 else index-1, attempt["config"])
                 elif (

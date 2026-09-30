@@ -158,13 +158,39 @@ def test_tensor_flux_postprocessing_and_mixed_stages(assembly,reconstruction,flu
         np.testing.assert_allclose(actual.coeffs,expected.coeffs,rtol=1e-9,atol=1e-9)
 
 
-def test_tensor_primal_postprocess_rejected_before_preparation(monkeypatch):
-    import hdgfem.solvers.advection_diffusion_reaction as adr
-    def forbidden(*args,**kwargs):
-        """Preparation must not run for a known unsupported recovery stage."""
-        raise AssertionError('prepared before preflight')
-    monkeypatch.setattr(adr,'prepare_adr_data',forbidden)
+@pytest.mark.parametrize('mode', ['primal', 'both'])
+def test_tensor_primal_postprocess_enabled(mode):
+    """Public recovery accepts elliptic tensors and preserves the element mean."""
     space=DGSpace(rectangle_mesh(1,1),1)
-    with pytest.raises(UnsupportedBackendConfigurationError,match='primal postprocessing'):
-        solve_advection_diffusion_reaction_hdg(1.,(1.,0.),.1,0.,space,
-                                               diffusion=(2.,.2,1.),solver='direct',verbose=False)
+    result=solve_advection_diffusion_reaction_hdg(space.constant(1.),(space.constant(1.),space.zeros()),.1,0.,space,
+        diffusion=(2.,.2,1.),solver='direct',hdg_postprocess=mode,verbose=False)
+    post=result.postprocessed_field
+    q=post.space.quad_data
+    np.testing.assert_allclose(post.coeffs @ (q.Krf_w @ q.phi),
+        result.field.coeffs @ (q.Krf_w @ space.basis_at(q.Krf_quads)), atol=1e-12)
+
+
+@pytest.mark.parametrize('kind', ['scalar', 'diagonal', 'symmetric', 'general'])
+@pytest.mark.parametrize('order', [1, 2])
+@pytest.mark.parametrize('variant', ['l2_closest', 'RT_projection'])
+def test_tensor_primal_manufactured_convergence(kind, order, variant):
+    """Continuous forcing checks convergence of both recovered fields on small meshes."""
+    problem, exact, flux = manufactured_tensor(kind)
+    errors = []
+    for n in [2, 4, 8]:
+        space = DGSpace(rectangle_mesh(n, n, xlim=(0., 1.), ylim=(0., 1.)), order,
+                        basis_type='dub_orth', volume_quad_1d=order+5)
+        beta = (space*space).field((space.constant(.7), space.constant(-.2)))
+        result = solve_advection_diffusion_reaction_hdg(
+            problem['source'], beta, .5, exact, space, diffusion=problem['diffusion'],
+            assembly_backend='numba', solver='direct', hdg_postprocess='both',
+            flux_postprocess_space=variant, trace_basis='legendre-modal', verbose=False)
+        def total_flux(x, y):
+            """Exact conservative total flux, including advection."""
+            qx, qy = flux(x, y)
+            return qx + .7*exact(x, y), qy - .2*exact(x, y)
+        errors.append((result.postprocessed_field.l2_error(exact),
+                       result.postprocessed_flux.l2_error(total_flux)))
+    rates = np.log2(np.asarray(errors[:-1])/np.asarray(errors[1:]))
+    assert rates[-1, 0] > order+1.5, (kind, order, variant, errors, rates)
+    assert rates[-1, 1] > order+.65, (kind, order, variant, errors, rates)
