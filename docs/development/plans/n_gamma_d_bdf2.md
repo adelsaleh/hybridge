@@ -15,6 +15,23 @@ recoveries (`l2_closest` and `RT_projection`); constant-scalar recovery evidence
 alone does not satisfy it. Selecting `hdg_postprocess="none"` for the model does
 not bypass this prerequisite.
 
+**Gate status (2026-09-29): satisfied.** Raw-CUDA tensor assembly and
+reconstruction are qualified in
+[raw_cuda_adr_tensor_2026_09_28.md](../../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md)
+(p=0--6, seven tensor classes, both trace bases, COO/CSR/BSR) and at the
+overintegrated `p+5` volume rule in
+[raw_cuda_adr_tensor_shared_memory_2026_09_29.md](../../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md).
+Primal and both total-flux recoveries are qualified in the
+[tensor post-processing record](../../backends/adr_device_postprocessing.md#tensor-qualification-2026-09-29)
+(recovery parity and download-free residency at p=0,1,3,6; p=1,2 convergence).
+`tests/test_adr_tensor_raw_cuda_convergence.py` adds native raw-CUDA/AMGX
+(`rtol=1e-11`, face BSR, device-resident) convergence on 2x2/4x4/8x8 meshes at
+p=3 and 4 for the variable-symmetric and variable-full classes, both trace
+bases and both flux variants, asserting final rates above `p+0.7` (raw primal),
+`p+1.5` (recovered primal) and `p+0.65` (recovered total flux): 16 passed, no
+skips. Limitations: affine meshes, FP64, bounded mesh sizes, and AMGX FGMRES +
+MULTICOLOR_DILU stalls near a relative residual of `1e-13`.
+
 The shared ADR/CUDA work below describes dependencies to complete and qualify
 before implementing the stepper and running its manufactured studies. Saving
 this plan does not launch implementation, builds, or simulations.
@@ -104,6 +121,28 @@ under the existing diffusion contract.
 
 ## Manufactured Cases And Geometry
 
+A1–A2 and B1–B2 are implemented (2026-09-29). The [data and geometry guide](../../../scripts/n_gamma/README.md) records the evaluator/registry APIs, regeneration commands, polygonal mesh parameters and bounded diagnostic coverage. This qualifies manufactured data and geometry only, not the time scheme or convergence studies.
+
+### Geometry variants and study order (decided 2026-09-29)
+
+The model is posed in a poloidal plane in two variants, run in this order:
+
+1. **Cartesian poloidal plane (first).** \(\Omega_{x,y}\subset\mathbb R^2\)
+   with the plain divergence \(\nabla\cdot\), no \(R\) factors and the
+   unweighted \(L^2\) error. The exact fields below are used unchanged as
+   functions of \((x,y)\), the forcing is regenerated with \(\nabla\cdot\), and
+   the domains are meshed directly in \((x,y)\): baseline \((-1,1)^2\), star
+   centred at the origin with the hole centred at \((0.28,0.10)\).
+2. **Axisymmetric (second).** The \((R,Z)\) formulation below, with the
+   axisymmetric divergence, every equation multiplied by \(R\), and the
+   \(R\)-weighted error.
+
+Both variants keep the non-normalized \(\mathbf b_p\) with \(|\mathbf b_p|<1\), so
+\(P\) stays positive definite. The stepper, coefficient builders and
+diagnostics take an explicit `geometry="cartesian" | "axisymmetric"` (no
+default); only the measure weight \(W\in\{1,R\}\) differs. Everything below that
+mentions \(R\)-weighting refers to the axisymmetric variant.
+
 All quantities are dimensionless. Set
 
 \[
@@ -153,7 +192,9 @@ with the closed disk \((x-0.28)^2+(y-0.10)^2\le0.12^2\) removed.
 
 ### Continuous Forcing
 
-With
+For the Cartesian variant, replace \(\nabla_p\) by \((\partial_x,\partial_y)\) and
+\(\operatorname{div}_{\rm axi}\) by the plain divergence \(\nabla\cdot\) in the
+sources below. For the axisymmetric variant, with
 
 \[
 \nabla_p=(\partial_R,\partial_Z),\qquad
@@ -231,6 +272,10 @@ claim curved-element geometry or true-domain error integration.
 
 ## Validation And Reporting
 
+The runner `scripts/n_gamma/run_d_bdf2.py` implements this section (2026-09-29).
+Its raw-CUDA default uses face BSR with the block-AMG ADR AMGX configuration;
+see the [n–Gamma README](../../../scripts/n_gamma/README.md) for options and outputs.
+
 After the prerequisite is satisfied and the model is implemented, run all four
 cases to \(T=1\), with these configurable starting defaults:
 
@@ -241,7 +286,13 @@ cases to \(T=1\), with these configurable starting defaults:
 | Stress boundaries | Stationary outer/hole vertex counts \(80/20,160/40,320/80\); transient fixed at \(320/80\) |
 
 - Use overintegration: volume `p+5`, faces `p+4`, and error/projection
-  quadrature `p+7`. Check sensitivity to increased quadrature.
+  quadrature `p+7`. Check sensitivity to increased quadrature. The production
+  trace bases fix faces at 2p+1 Gauss--Lobatto points (exact to degree
+  `4p-1`, equal to a `p+4` Gauss rule at p=4), and `edge_quad_1d` does not
+  change them. `DGSpace(volume_degree=14)` selects the 42-point positive
+  Dunavant rule (exact to degree 14) as a cheaper alternative to the 81-point
+  Duffy `p+5` rule (exact to 15) at p=4; the raw-CUDA shared-memory budget for these rules is recorded in
+  [raw_cuda_adr_tensor_shared_memory_2026_09_29.md](../../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md).
 - For stationary studies, halve the timestep on the finest mesh to check
   temporal contamination.
 - For transient studies, compare the finest-timestep result against an

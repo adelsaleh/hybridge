@@ -83,6 +83,20 @@ def test_threaded_face_tables_and_point_maps_match_serial():
     np.testing.assert_allclose(threaded[-1], mapped, rtol=1e-14, atol=1e-15)
 
 
+def test_manufactured_case_evaluations_are_chunked_transparently(four_threads):
+    from scripts.n_gamma.cases import forcing, get_case
+
+    case = get_case("transient_baseline", geometry="cartesian")
+    x, y = np.random.default_rng(4).uniform(-1., 1., (2, 800, 100))
+    np.testing.assert_array_equal(case.density_source(x, y, .3),
+                                  forcing.S_n(x, y, .3, geometry="cartesian"))
+    np.testing.assert_array_equal(case.momentum_source(x, y, .3),
+                                  forcing.S_Gamma(x, y, .3, geometry="cartesian"))
+    b_1, b_2 = case.b_poloidal(x, y)
+    np.testing.assert_array_equal(np.stack((b_1, b_2), -1), forcing.b_p(x, y))
+    assert case.density(.1, .2, .3) == forcing.n_e(.1, .2, .3)
+
+
 def test_chunked_diffusion_tables_match_whole_array_arithmetic(four_threads):
     from hdgfem.assembly import diffusion_coefficients as dc
 

@@ -67,6 +67,8 @@ A compiled function may call other compiled functions only through module
 globals: define them at module level with `@njit(cache=True)`. A closure that
 captures a compiled function misses Numba's cache in every process, so it
 recompiles each run and the cache keeps growing.
+`scripts/n_gamma/compiled.py` shows the pattern: its coefficient functions
+call the generated scalar evaluators of `scripts/n_gamma/cases/forcing_numba.py`.
 
 Only NumPy and `math` code compiles. SciPy functions, Python objects and other
 libraries raise `TypeError` asking to project the coefficient first

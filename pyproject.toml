@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+manufactured = ["sympy>=1.13,<1.15"]
 mesh = ["gmsh"]
 pardiso = ["pypardiso>=0.4.7,<0.5"]
 plot = ["matplotlib", "pyvista"]
