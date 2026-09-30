@@ -331,9 +331,22 @@ def _adr_postprocess_samples(
         beta_face[..., 0] * normals[..., 0, None]
         + beta_face[..., 1] * normals[..., 1, None]
     )
-    if advection_stabilization is None:
-        tau_adv = xp.abs(beta_n)
-    elif np.isscalar(advection_stabilization):
+    # Upwind-family policies (None, ScaledUpwind, "lax-friedrichs",
+    # "conflict-averaged-upwind") use the same rule as ADR assembly:
+    # factor * |beta.n|, with the conflict-averaged interior repair.
+    from hdgfem.solvers.stabilization import effective_advection_normal_flux, upwind_factor
+
+    factor = upwind_factor(advection_stabilization)
+    if factor is not None:
+        if xp is np:
+            mesh = space.mesh
+        else:
+            from hdgfem.backends.cupy import as_cupy_space
+            mesh = as_cupy_space(space).mesh
+        tau_adv = factor * xp.abs(
+            effective_advection_normal_flux(beta_n, mesh, advection_stabilization, xp=xp)
+        )
+    elif np.isscalar(advection_stabilization) and not isinstance(advection_stabilization, str):
         tau_adv = xp.full_like(beta_n, float(advection_stabilization))
     elif isinstance(advection_stabilization, DGField):
         tau_basis = xp.asarray(advection_stabilization.space.basis_at(face_points)).reshape(

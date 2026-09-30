@@ -85,3 +85,40 @@ def test_light_preparation_never_builds_dense_local_operators(monkeypatch):
     result=prepare_adr_data(space.constant(1.),.3,beta,space,dense_local_matrices=False)
     assert result.element_boundary is None and result.trace_lift is None
     assert result.source_rhs.shape==space.shape
+
+
+@pytest.mark.parametrize(
+    ('policy', 'factor'),
+    [(None, 1.), ('conflict-averaged-upwind', 1.), ('lax-friedrichs', 2.), ('scaled', 3.)],
+)
+def test_postprocess_samples_accept_every_upwind_policy(policy, factor):
+    """Postprocessing tau_adv follows the same upwind-family rule as ADR assembly."""
+    from hdgfem.solvers.stabilization import ScaledUpwind
+
+    space, beta = setup()
+    if policy == 'scaled':
+        policy = ScaledUpwind(factor)
+    prep = prepare_adr_data(space.constant(1.), .2, beta, space, diffusion_stabilization=.5,
+                            advection_stabilization=policy, trace_space=space.trace_space('legendre-modal'))
+    post = DGSpace(space.mesh, space.order + 1, basis_type='dub_orth')
+    _, beta_face, total = _adr_postprocess_samples(beta, prep, space, post, policy)
+    normal = np.einsum('Kfqd,Kfd->Kfq', beta_face, space.mesh.normals)
+    # Constant beta has no interior double outflow, so the conflict repair is inactive.
+    np.testing.assert_allclose(total, factor * abs(normal) + .5)
+
+
+def test_lax_friedrichs_flux_postprocess_runs_end_to_end():
+    """An ADR solve with Lax-Friedrichs stabilization recovers the p+1 flux."""
+    from hdgfem import solve_advection_diffusion_reaction_hdg
+    from hdgfem.solvers.stabilization import ScaledUpwind
+
+    space, beta = setup()
+    common = dict(diffusion=.3, assembly_backend='numba', solver='direct', preconditioner=None,
+                  hdg_postprocess='flux', flux_postprocess_space='RT_projection',
+                  postprocessing_backend='numba', verbose=False)
+    lf = solve_advection_diffusion_reaction_hdg(space.constant(1.), beta, .2, 0., space,
+                                                advection_stabilization='lax-friedrichs', **common)
+    scaled = solve_advection_diffusion_reaction_hdg(space.constant(1.), beta, .2, 0., space,
+                                                    advection_stabilization=ScaledUpwind(2.), **common)
+    for a, b in zip(lf.postprocessed_flux.components, scaled.postprocessed_flux.components):
+        np.testing.assert_allclose(a.coeffs, b.coeffs, rtol=1e-12, atol=1e-13)

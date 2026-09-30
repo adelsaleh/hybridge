@@ -687,10 +687,15 @@ Execution protocol (approved 2026-09-29):
     path;
   - symmetric scaling uses the same diagonal estimate;
   - `tests/test_cupy_scaling.py` covers tiny-diagonal and all-zero rows.
-- [ ] A2: make ADR postprocessing accept every τ_adv policy that ADR assembly
+- [x] A2: make ADR postprocessing accept every τ_adv policy that ADR assembly
   accepts. `_adr_postprocess_samples` fails on `"lax-friedrichs"` and
   `ScaledUpwind`. Confirmed by reading, not yet run. Route it through the
-  shared τ evaluator.
+  shared τ evaluator. Done 2026-09-30:
+  - the sampler applies `upwind_factor` and `effective_advection_normal_flux`
+    on the postprocessing quadrature (host mesh or cached device mesh);
+  - `tests/test_adr_face_stabilization.py` covers None, conflict-averaged,
+    Lax-Friedrichs and `ScaledUpwind` samples, plus an end-to-end
+    Lax-Friedrichs RT flux recovery. Four of these failed before the fix.
 - [ ] A3 (watch): ADR builds γ from the raw β·n, without AR's effective flux
   and inactive-face gauge, under `conflict-averaged-upwind`. Decision
   (2026-09-29): keep ADR's semantics, since diffusion is expected to prevent
