@@ -87,8 +87,6 @@ GPU_SMOKE_TARGETS = (
     "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_raw_cuda_csr_amgx_full_solve_stays_device_resident",
     "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_assembly_backends_match_numpy_for_p_le_6[2-rectangle-1x1]",
     "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_modal_assembly_backends_match_numpy_for_p_le_6[2-rectangle-1x1]",
-    "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_device_primal_postprocess_matches_host[3-legacy-lagrange]",
-    "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_device_primal_postprocess_matches_host[3-legendre-modal]",
 )
 
 

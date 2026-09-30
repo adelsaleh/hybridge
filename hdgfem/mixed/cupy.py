@@ -1865,125 +1865,6 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
     )
 
 
-def _postprocess_reference_cache(space, trace_space, cache):
-    """Return host reference tables for primal postprocessing without host solves."""
-    from hdgfem.mixed.postprocess.flux import _new_hdg_postprocess_cache
-
-    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-    if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
-        cache = _new_hdg_postprocess_cache(space, trace_ref)
-    return cache
-
-
-def postprocess_projected_diffusion_primal_cupy(
-        local_unknowns,
-        space,
-        diffusion=1.0,
-        *,
-        trace_space=None,
-        cache=None,
-        name: str = "u_h_star",
-        timings: dict[str, float] | None = None,
-):
-    """Recover the HDG primal postprocessed field on the CUDA device with CuPy.
-
-    The host is used only to build reference tables and sample the optional
-    inverse-diffusion coefficient table.  The per-element matrix assembly, RHS
-    construction, and local solves run on device, and the returned ``DGField``
-    stores its coefficient table on the active CUDA device until host access is
-    requested.
-    """
-    cupy = require_cupy()
-    timings = {} if timings is None else timings
-    cspace = as_cupy_space(space)
-    stream = cupy.cuda.get_current_stream()
-    stream.synchronize()
-    total_start = time.perf_counter()
-
-    setup_start = time.perf_counter()
-    cache = _postprocess_reference_cache(space, trace_space, cache)
-    cpost_space = as_cupy_space(cache.post_space, device=cspace.device_id)
-    local_unknowns = cupy.ascontiguousarray(cupy.asarray(local_unknowns, dtype=REAL_DTYPE))
-    expected_unknowns = (cspace.mesh.num_tri, 3 * cspace.el_dof)
-    if tuple(local_unknowns.shape) != expected_unknowns:
-        raise ValueError(f"local_unknowns must have shape {expected_unknowns}; got {local_unknowns.shape}")
-
-    base_el_dof = int(cspace.el_dof)
-    post_el_dof = int(cache.post_space.el_dof)
-    rows = post_el_dof + 1
-    num_elements = int(cspace.mesh.num_tri)
-    q_post = cpost_space.quad_data
-
-    stiffness_rr = cupy.asarray(cache.primal_stiffness_rr, dtype=REAL_DTYPE)
-    stiffness_rs = cupy.asarray(cache.primal_stiffness_rs, dtype=REAL_DTYPE)
-    stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=REAL_DTYPE)
-    mean_post = cupy.asarray(cache.mean_post, dtype=REAL_DTYPE)
-    mean_base = cupy.asarray(cache.mean_base, dtype=REAL_DTYPE)
-    base_basis_t = cupy.asarray(cache.base_basis_on_post_quads.T, dtype=REAL_DTYPE)
-    weights = q_post.Krf_w
-    post_grad = q_post.gphi
-
-    inverse_constants = _constant_inverse_diffusion_components(diffusion)
-    if inverse_constants is None:
-        from hdgfem.mixed.coefficients import _inverse_diffusion_values
-
-        inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
-        inv00 = cupy.asarray(inv00_h, dtype=REAL_DTYPE)
-        inv01 = cupy.asarray(inv01_h, dtype=REAL_DTYPE)
-        inv10 = cupy.asarray(inv10_h, dtype=REAL_DTYPE)
-        inv11 = cupy.asarray(inv11_h, dtype=REAL_DTYPE)
-    else:
-        inv00, inv01, inv10, inv11 = map(float, inverse_constants)
-    stream.synchronize()
-    timings["postprocess.primal.cupy.setup"] = time.perf_counter() - setup_start
-
-    solve_start = time.perf_counter()
-    inv_t = cspace.mesh.inv_aff_mats_t
-    aff_jacs = cspace.mesh.aff_jacs
-    inv00_geom = inv_t[:, 0, 0]
-    inv01_geom = inv_t[:, 0, 1]
-    inv10_geom = inv_t[:, 1, 0]
-    inv11_geom = inv_t[:, 1, 1]
-    metric_rr = inv00_geom * inv00_geom + inv10_geom * inv10_geom
-    metric_rs = inv00_geom * inv01_geom + inv10_geom * inv11_geom
-    metric_ss = inv01_geom * inv01_geom + inv11_geom * inv11_geom
-
-    matrix = cupy.zeros((num_elements, rows, rows), dtype=REAL_DTYPE)
-    matrix[:, :post_el_dof, :post_el_dof] = aff_jacs[:, None, None] * (
-        metric_rr[:, None, None] * stiffness_rr[None, :, :]
-        + metric_rs[:, None, None] * stiffness_rs[None, :, :]
-        + metric_ss[:, None, None] * stiffness_ss[None, :, :]
-    )
-    mean_rows = aff_jacs[:, None] * mean_post[None, :]
-    matrix[:, :post_el_dof, post_el_dof] = mean_rows
-    matrix[:, post_el_dof, :post_el_dof] = mean_rows
-
-    qx_values = local_unknowns[:, base_el_dof:2 * base_el_dof] @ base_basis_t
-    qy_values = local_unknowns[:, 2 * base_el_dof:3 * base_el_dof] @ base_basis_t
-    cqx_values = inv00 * qx_values + inv01 * qy_values
-    cqy_values = inv10 * qx_values + inv11 * qy_values
-
-    rhs = cupy.zeros((num_elements, rows), dtype=REAL_DTYPE)
-    for quad in range(int(weights.shape[0])):
-        grad_r = post_grad[quad, :, 0]
-        grad_s = post_grad[quad, :, 1]
-        grad_x = inv00_geom[:, None] * grad_r[None, :] + inv01_geom[:, None] * grad_s[None, :]
-        grad_y = inv10_geom[:, None] * grad_r[None, :] + inv11_geom[:, None] * grad_s[None, :]
-        rhs[:, :post_el_dof] += weights[quad] * (
-            cqx_values[:, quad, None] * grad_x
-            + cqy_values[:, quad, None] * grad_y
-        )
-    rhs[:, :post_el_dof] *= -aff_jacs[:, None]
-    rhs[:, post_el_dof] = aff_jacs * (local_unknowns[:, :base_el_dof] @ mean_base)
-
-    solution = cupy.linalg.solve(matrix, rhs[:, :, None]).squeeze(-1)
-    coeffs = cupy.ascontiguousarray(solution[:, :post_el_dof])
-    stream.synchronize()
-    timings["postprocess.primal.cupy.solve"] = time.perf_counter() - solve_start
-    timings["postprocess.primal.cupy.total"] = time.perf_counter() - total_start
-    return cpost_space.field(coeffs, name=name), cache
-
-
 __all__ = [
     "CupyDiffusionTraceAssembly",
     "CupyDiffusionSchurCholeskyCache",
@@ -2003,7 +1884,6 @@ __all__ = [
     "element_boundary_mats_cupy",
     "face_element_mass",
     "reference_derivative_mats",
-    "postprocess_projected_diffusion_primal_cupy",
     "raw_cuda_diffusion_fallback_reason",
     "source_moments_cupy",
     "build_scalar_schur_cholesky_cache_cupy",

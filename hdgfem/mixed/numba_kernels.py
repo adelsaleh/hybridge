@@ -42,21 +42,6 @@ def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode
 
 
 @njit(cache=True, inline="always", fastmath=True)
-def _apply_local_solver_columns(local_columns, local_solver, boundary_mats, source_rhs, element):
-    """Fill local solution columns for trace columns plus one source column."""
-    rows = local_solver.shape[1]
-    trace_cols = boundary_mats.shape[2]
-    source_col = trace_cols
-    for i in range(rows):
-        for col in range(trace_cols + 1):
-            value = 0.0
-            for j in range(rows):
-                rhs_value = source_rhs[element, j] if col == source_col else boundary_mats[element, j, col]
-                value += local_solver[element, i, j] * rhs_value
-            local_columns[i, col] = value
-
-
-@njit(cache=True, inline="always", fastmath=True)
 def _build_projected_diffusion_operator(
         schur_matrix,
         d0,
@@ -671,226 +656,6 @@ def _diffusion_lift_dot(
         value += nx * lift * local_columns[nel + i, column]
         value += ny * lift * local_columns[2 * nel + i, column]
     return value
-
-
-@njit(cache=True, parallel=True, fastmath=True)
-def assemble_diffusion_trace_system_eliminated_kernel(
-        rows,
-        cols,
-        data,
-        rhs_indices,
-        rhs_values,
-        loc2glob_edge,
-        orientations,
-        loc2oriented_face_coupling,
-        interior_side_index,
-        edge_to_solve_edge,
-        valid_elements,
-        valid_faces,
-        side_flux_offsets,
-        jacs_el_fc,
-        normals,
-        tau,
-        edge_mass,
-        oriented_lifts,
-        local_solver,
-        element_boundary_mats,
-        source_rhs,
-        boundary_trace,
-        trace_orientation_mode,
-):
-    r"""Assemble a reduced diffusion-reaction HDG trace system in COO form.
-
-    The emitted matrix contains only free trace dofs.  Couplings from a free
-    row to a prescribed boundary trace column are added to the RHS with the
-    same sign convention as generic known-dof elimination.
-    """
-    num_elements = loc2glob_edge.shape[0]
-    nel = local_solver.shape[1] // 3
-    ntr = edge_mass.shape[0]
-    trace_cols = 3 * ntr
-
-    for element in prange(num_elements):
-        local_columns = np.empty((3 * nel, trace_cols + 1), dtype=np.float64)
-        _apply_local_solver_columns(local_columns, local_solver, element_boundary_mats, source_rhs, element)
-
-        for row_face in range(3):
-            rhs_base = (element * 3 + row_face) * ntr
-            side_id = interior_side_index[element, row_face]
-            row_edge = loc2glob_edge[element, row_face]
-            row_solve_edge = edge_to_solve_edge[row_edge]
-            if side_id < 0 or row_solve_edge < 0:
-                for row_dof in range(ntr):
-                    rhs_indices[rhs_base + row_dof] = 0
-                    rhs_values[rhs_base + row_dof] = 0.0
-                continue
-
-            side_base = side_flux_offsets[side_id]
-            for row_dof in range(ntr):
-                rhs_value = _diffusion_lift_dot(
-                    local_columns,
-                    oriented_lifts,
-                    loc2oriented_face_coupling,
-                    normals,
-                    tau,
-                    jacs_el_fc,
-                    element,
-                    row_face,
-                    row_dof,
-                    trace_cols,
-                    nel,
-                )
-
-                col_block_pos = 0
-                for col_face in range(3):
-                    col_edge = loc2glob_edge[element, col_face]
-                    col_solve_edge = edge_to_solve_edge[col_edge]
-                    col_is_positive = orientations[element, col_face]
-                    if col_solve_edge >= 0:
-                        for col_dof in range(ntr):
-                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
-                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
-                            column = col_face * ntr + local_col_dof
-                            schur_value = col_sign * _diffusion_lift_dot(
-                                local_columns,
-                                oriented_lifts,
-                                loc2oriented_face_coupling,
-                                normals,
-                                tau,
-                                jacs_el_fc,
-                                element,
-                                row_face,
-                                row_dof,
-                                column,
-                                nel,
-                            )
-                            out = side_base + (col_block_pos * ntr + row_dof) * ntr + col_dof
-                            rows[out] = row_solve_edge * ntr + row_dof
-                            cols[out] = col_solve_edge * ntr + col_dof
-                            data[out] = -schur_value
-                        col_block_pos += 1
-                    else:
-                        for col_dof in range(ntr):
-                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
-                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
-                            column = col_face * ntr + local_col_dof
-                            schur_value = col_sign * _diffusion_lift_dot(
-                                local_columns,
-                                oriented_lifts,
-                                loc2oriented_face_coupling,
-                                normals,
-                                tau,
-                                jacs_el_fc,
-                                element,
-                                row_face,
-                                row_dof,
-                                column,
-                                nel,
-                            )
-                            rhs_value += schur_value * boundary_trace[col_edge, col_dof]
-
-                rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
-                rhs_values[rhs_base + row_dof] = rhs_value
-
-    mass_offset = side_flux_offsets[side_flux_offsets.shape[0] - 1]
-    for side_pos in prange(valid_elements.shape[0]):
-        element = valid_elements[side_pos]
-        face = valid_faces[side_pos]
-        edge = loc2glob_edge[element, face]
-        solve_edge = edge_to_solve_edge[edge]
-        scale = tau[element, face] * jacs_el_fc[element, face]
-        base = mass_offset + side_pos * ntr * ntr
-        for i in range(ntr):
-            row = solve_edge * ntr + i
-            for j in range(ntr):
-                out = base + i * ntr + j
-                rows[out] = row
-                cols[out] = solve_edge * ntr + j
-                data[out] = scale * edge_mass[i, j]
-
-
-@njit(cache=True, parallel=True, fastmath=True)
-def assemble_diffusion_trace_rhs_eliminated_kernel(
-        rhs_indices,
-        rhs_values,
-        loc2glob_edge,
-        orientations,
-        loc2oriented_face_coupling,
-        interior_side_index,
-        edge_to_solve_edge,
-        jacs_el_fc,
-        normals,
-        tau,
-        oriented_lifts,
-        local_solver,
-        element_boundary_mats,
-        source_rhs,
-        boundary_trace,
-        trace_orientation_mode,
-):
-    """Assemble only the reduced RHS for a cached diffusion trace matrix."""
-    num_elements = loc2glob_edge.shape[0]
-    nel = local_solver.shape[1] // 3
-    ntr = element_boundary_mats.shape[2] // 3
-    trace_cols = 3 * ntr
-
-    for element in prange(num_elements):
-        local_columns = np.empty((3 * nel, trace_cols + 1), dtype=np.float64)
-        _apply_local_solver_columns(local_columns, local_solver, element_boundary_mats, source_rhs, element)
-
-        for row_face in range(3):
-            rhs_base = (element * 3 + row_face) * ntr
-            side_id = interior_side_index[element, row_face]
-            row_edge = loc2glob_edge[element, row_face]
-            row_solve_edge = edge_to_solve_edge[row_edge]
-            if side_id < 0 or row_solve_edge < 0:
-                for row_dof in range(ntr):
-                    rhs_indices[rhs_base + row_dof] = 0
-                    rhs_values[rhs_base + row_dof] = 0.0
-                continue
-
-            for row_dof in range(ntr):
-                rhs_value = _diffusion_lift_dot(
-                    local_columns,
-                    oriented_lifts,
-                    loc2oriented_face_coupling,
-                    normals,
-                    tau,
-                    jacs_el_fc,
-                    element,
-                    row_face,
-                    row_dof,
-                    trace_cols,
-                    nel,
-                )
-
-                for col_face in range(3):
-                    col_edge = loc2glob_edge[element, col_face]
-                    col_solve_edge = edge_to_solve_edge[col_edge]
-                    if col_solve_edge >= 0:
-                        continue
-                    col_is_positive = orientations[element, col_face]
-                    for col_dof in range(ntr):
-                        local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
-                        col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
-                        column = col_face * ntr + local_col_dof
-                        schur_value = col_sign * _diffusion_lift_dot(
-                            local_columns,
-                            oriented_lifts,
-                            loc2oriented_face_coupling,
-                            normals,
-                            tau,
-                            jacs_el_fc,
-                            element,
-                            row_face,
-                            row_dof,
-                            column,
-                            nel,
-                        )
-                        rhs_value += schur_value * boundary_trace[col_edge, col_dof]
-
-                rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
-                rhs_values[rhs_base + row_dof] = rhs_value
 
 
 @njit(cache=True, parallel=True, fastmath=True)
@@ -1597,47 +1362,6 @@ def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
 
 
 @njit(cache=True, parallel=True, fastmath=True)
-def reconstruct_diffusion_local_unknowns_kernel(
-        local_unknowns,
-        trace,
-        loc2glob_edge,
-        orientations,
-        local_solver,
-        element_boundary_mats,
-        source_rhs,
-        trace_orientation_mode,
-):
-    """Recover mixed local unknowns from a full trace vector."""
-    num_elements = loc2glob_edge.shape[0]
-    rows = local_solver.shape[1]
-    ntr = element_boundary_mats.shape[2] // 3
-
-    for element in prange(num_elements):
-        local_trace = np.empty(3 * ntr, dtype=np.float64)
-        for face in range(3):
-            edge = loc2glob_edge[element, face]
-            is_positive = orientations[element, face]
-            for local_dof in range(ntr):
-                global_dof = edge * ntr + local_dof
-                sign = _trace_orientation_sign(is_positive, local_dof, trace_orientation_mode)
-                local_trace_dof = _trace_local_dof(is_positive, local_dof, ntr, trace_orientation_mode)
-                local_trace[face * ntr + local_trace_dof] = sign * trace[global_dof]
-
-        rhs = np.empty(rows, dtype=np.float64)
-        for i in range(rows):
-            value = source_rhs[element, i]
-            for j in range(3 * ntr):
-                value += element_boundary_mats[element, i, j] * local_trace[j]
-            rhs[i] = value
-
-        for i in range(rows):
-            value = 0.0
-            for j in range(rows):
-                value += local_solver[element, i, j] * rhs[j]
-            local_unknowns[element, i] = value
-
-
-@njit(cache=True, parallel=True, fastmath=True)
 def factor_hdiv_flux_min_distance_postprocess_kernel(
         ainv_constraint_t,
         schur_lu,
@@ -2109,8 +1833,6 @@ def solve_primal_postprocess_kernel(
 
 
 __all__ = [
-    "assemble_diffusion_trace_rhs_eliminated_kernel",
-    "assemble_diffusion_trace_system_eliminated_kernel",
     "assemble_projected_diffusion_trace_rhs_eliminated_kernel",
     "assemble_projected_diffusion_trace_system_eliminated_kernel",
     "assemble_projected_tensor_diffusion_trace_system_eliminated_kernel",
@@ -2118,7 +1840,6 @@ __all__ = [
     "factor_primal_postprocess_kernel",
     "reconstruct_projected_diffusion_local_unknowns_kernel",
     "reconstruct_projected_tensor_diffusion_local_unknowns_kernel",
-    "reconstruct_diffusion_local_unknowns_kernel",
     "solve_hdiv_flux_min_distance_postprocess_kernel",
     "solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel",
     "solve_primal_postprocess_kernel",

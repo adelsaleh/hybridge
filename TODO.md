@@ -815,8 +815,18 @@ Execution protocol (approved 2026-09-29):
   - the AR/DR `_require_same_space_dg_field_for_backend` copies are merged;
   - the layering test passes with **zero** allowed violations.
 
+  Dead code removed 2026-09-30:
+  - the DR primal-postprocess CuPy and raw-CUDA ports and their port-only
+    parity test (also dropped from the gpu-smoke lane);
+  - the unreachable generic Numba DR assembly/RHS/reconstruction adapters and
+    kernels, with the solver branches that called them;
+  - `backends/numpy.py`.
+
+  The Bernstein postprocess branches are kept: they are not dead. Flux
+  recovery supports Bernstein traces, is exercised by tests, and is reachable
+  from the guiding-center runner, which calls flux recovery directly.
+
   Remaining:
-  - dead-code removal;
   - the solver modules are now orchestration only, but still large: the DR
     solver class is ~1.9k lines and the AR functional solver ~1.6k. Splitting
     them into per-backend drivers is logic work, recorded as a follow-up.

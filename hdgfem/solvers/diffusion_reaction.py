@@ -2629,20 +2629,6 @@ def solve_diffusion_reaction_hdg(
                 space,
                 trace_space=trace_space,
             )
-        if effective_backend == "numba":
-            from hdgfem.mixed.numba import (
-                            assemble_diffusion_trace_system_eliminated_numba,
-                        )
-
-            return assemble_diffusion_trace_system_eliminated_numba(
-                local_solver,
-                element_boundary_mats,
-                source_rhs,
-                boundary_condition,
-                tau,
-                space,
-                trace_space=trace_space,
-            )
         return assemble_diffusion_trace_system(
             local_solver,
             element_boundary_mats,
@@ -2660,8 +2646,6 @@ def solve_diffusion_reaction_hdg(
         if projected_numba_identity_diffusion
         else "assembling reduced tensor trace system (numba)"
         if projected_numba_tensor_diffusion
-        else "assembling reduced generic trace system (numba)"
-        if effective_backend == "numba"
         else "assembling global trace system"
     )
     trace_out, trace_assembly = _timed_call(
@@ -2802,17 +2786,6 @@ def solve_diffusion_reaction_hdg(
                 reaction_for_local,
                 diffusion_inverse_for_backend,
                 tau,
-                space,
-                trace_space=trace_space,
-            )
-        elif effective_backend == "numba":
-            from hdgfem.mixed.numba import reconstruct_diffusion_local_unknowns_numba
-
-            unknowns = reconstruct_diffusion_local_unknowns_numba(
-                trace,
-                source_rhs,
-                local_solver,
-                element_boundary_mats,
                 space,
                 trace_space=trace_space,
             )
