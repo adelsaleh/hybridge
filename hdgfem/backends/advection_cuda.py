@@ -38,6 +38,7 @@ from hdgfem.backends.cupy import (
     require_cupyx_sparse,
     require_pyamgx,
     symmetric_scale_cupy_csr_in_place,
+    diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place,
 )
 from hdgfem.backends.raw_cuda import RawCudaBlockSize
 from hdgfem.backends.amgx_errors import (
@@ -1289,69 +1290,6 @@ def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
     return matrix
 
 
-_CSR_ROW_SCALE_SOURCE = r"""
-extern "C" __global__ void diagonal_scale_csr_rows(
-        const int* __restrict__ indptr,
-        const int* __restrict__ indices,
-        double* __restrict__ data,
-        double* __restrict__ rhs,
-        double* __restrict__ row_diagonal,
-        const long long nrows)
-{
-    const long long row = blockIdx.x;
-    if (row >= nrows) {
-        return;
-    }
-    const int start = indptr[row];
-    const int end = indptr[row + 1];
-    __shared__ double row_scale;
-    if (threadIdx.x == 0) {
-        double diagonal = 0.0;
-        double row_max = 0.0;
-        for (int p = start; p < end; ++p) {
-            row_max = fmax(row_max, fabs(data[p]));
-            if (indices[p] == (int)row) {
-                diagonal += data[p];
-            }
-        }
-        double value = diagonal;
-        if (!isfinite(value) || fabs(value) <= 1.0e-10 * row_max) {
-            value = row_max;
-        }
-        if (!isfinite(value) || value == 0.0) {
-            value = 1.0;
-        }
-        row_scale = value;
-        row_diagonal[row] = value;
-        rhs[row] /= value;
-    }
-    __syncthreads();
-    const double inverse = 1.0 / row_scale;
-    for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
-        data[p] *= inverse;
-    }
-}
-"""
-_CSR_ROW_SCALE_KERNELS: dict[int, Any] = {}
-
-
-def _diagonal_scale_csr_rows_in_place(matrix, rhs):
-    """Scale device CSR rows and the RHS by robust diagonal estimates in place."""
-    cp = require_cupy()
-    device_id = int(cp.cuda.runtime.getDevice())
-    kernel = _CSR_ROW_SCALE_KERNELS.get(device_id)
-    if kernel is None:
-        kernel = real_raw_kernel(_CSR_ROW_SCALE_SOURCE, "diagonal_scale_csr_rows")
-        _CSR_ROW_SCALE_KERNELS[device_id] = kernel
-    nrows = int(rhs.size)
-    diagonal = cp.empty(nrows, dtype=REAL_DTYPE)
-    if nrows:
-        kernel(
-            (nrows,),
-            (128,),
-            (matrix.indptr, matrix.indices, matrix.data, rhs, diagonal, np.int64(nrows)),
-        )
-    return diagonal
 
 
 _CSR_ROW_UNSCALE_SOURCE = r"""

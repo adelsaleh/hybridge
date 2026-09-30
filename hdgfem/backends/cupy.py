@@ -1853,23 +1853,29 @@ extern "C" __global__ void diagonal_scale_csr_rows(
     }
     const int start = indptr[row];
     const int end = indptr[row + 1];
-    __shared__ double diagonal;
+    __shared__ double row_scale;
     if (threadIdx.x == 0) {
-        double value = 0.0;
+        double diagonal = 0.0;
+        double row_max = 0.0;
         for (int p = start; p < end; ++p) {
+            row_max = fmax(row_max, fabs(data[p]));
             if (indices[p] == (int)row) {
-                value += data[p];
+                diagonal += data[p];
             }
         }
-        if (value == 0.0) {
+        double value = diagonal;
+        if (!isfinite(value) || fabs(value) <= 1.0e-10 * row_max) {
+            value = row_max;
+        }
+        if (!isfinite(value) || value == 0.0) {
             value = 1.0;
         }
-        diagonal = value;
+        row_scale = value;
         row_diagonal[row] = value;
         rhs[row] /= value;
     }
     __syncthreads();
-    const double inverse = 1.0 / diagonal;
+    const double inverse = 1.0 / row_scale;
     for (int p = start + threadIdx.x; p < end; p += blockDim.x) {
         data[p] *= inverse;
     }
@@ -1879,7 +1885,12 @@ _CSR_ROW_SCALE_KERNELS: dict[int, Any] = {}
 
 
 def diagonal_scale_cupy_csr_rows_in_place(matrix, rhs):
-    """Apply left Jacobi row scaling to a CuPy CSR matrix and RHS in place."""
+    """Apply left Jacobi row scaling to a CuPy CSR matrix and RHS in place.
+
+    Each row is divided by its diagonal entry. A diagonal that is non-finite
+    or at most ``1e-10`` times the row's largest magnitude falls back to that
+    maximum, and an all-zero row is left unscaled. Returns the per-row scale.
+    """
     cupy = require_cupy()
     device_id = int(cupy.cuda.runtime.getDevice())
     kernel = _CSR_ROW_SCALE_KERNELS.get(device_id)
@@ -1919,15 +1930,20 @@ extern "C" __global__ void csr_inverse_sqrt_diagonal(
     const int start = indptr[row];
     const int end = indptr[row + 1];
     double value = 0.0;
+    double row_max = 0.0;
     for (int p = start; p < end; ++p) {
+        row_max = fmax(row_max, fabs(data[p]));
         if (indices[p] == (int)row) {
             value += data[p];
         }
     }
-    if (value < 0.0) {
-        value = -value;
+    value = fabs(value);
+    // Same robust estimate as diagonal_scale_csr_rows: a tiny or non-finite
+    // diagonal falls back to the row maximum, and an empty row to 1.
+    if (!isfinite(value) || value <= 1.0e-10 * row_max) {
+        value = row_max;
     }
-    if (value == 0.0) {
+    if (!isfinite(value) || value == 0.0) {
         value = 1.0;
     }
     inverse_sqrt_diagonal[row] = 1.0 / sqrt(value);

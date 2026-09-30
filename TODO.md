@@ -679,10 +679,14 @@ Execution protocol (approved 2026-09-29):
     and Poisson, scalar-κ and tensor-κ cases, and agree to a norm-relative 1e-12
     (observed ≤ 5e-14).
   - Intra-package imports are absolute and point at defining modules.
-- [ ] A1: give `backends/cupy.py` `diagonal_scale_csr_rows` and
+- [x] A1: give `backends/cupy.py` `diagonal_scale_csr_rows` and
   `csr_inverse_sqrt_diagonal` the tiny/non-finite diagonal fallback already
   used by the `advection_cuda.py` scaling kernels. Confirmed by reading. Add a
-  regression test with a near-zero diagonal row.
+  regression test with a near-zero diagonal row. Done 2026-09-30:
+  - one robust row-scaling kernel, shared by the cupyx handoff and the AMGX
+    path;
+  - symmetric scaling uses the same diagonal estimate;
+  - `tests/test_cupy_scaling.py` covers tiny-diagonal and all-zero rows.
 - [ ] A2: make ADR postprocessing accept every τ_adv policy that ADR assembly
   accepts. `_adr_postprocess_samples` fails on `"lax-friedrichs"` and
   `ScaledUpwind`. Confirmed by reading, not yet run. Route it through the
