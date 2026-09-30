@@ -7,11 +7,11 @@ import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import replace
 from pathlib import Path
-from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
 
 from scripts.advection_reaction.presets import (
     AdvectionReactionRunPreset,
@@ -390,6 +390,11 @@ def _main() -> None:
         config.verbosity,
         lambda: _build_mesh(config, case),
     )
+    if mesh.num_tri < config.minimum_triangles:
+        raise RuntimeError(
+            f"mesh has {mesh.num_tri:,} triangles, below the configured minimum of "
+            f"{config.minimum_triangles:,}; reduce mesh_size"
+        )
     space = DGSpace(
         mesh,
         config.order,

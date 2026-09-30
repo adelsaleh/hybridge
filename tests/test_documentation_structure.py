@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import re
+import subprocess
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
@@ -28,7 +29,6 @@ ALGORITHM_CONTENTS = {
     "advection_reaction": {
         "README.md",
         "upwind_block_gauss_seidel.tex",
-        "upwind_scc_ordering.tex",
     },
     "diffusion_reaction": {
         "README.md",
@@ -38,6 +38,11 @@ ALGORITHM_CONTENTS = {
     "quadrature": {
         "README.md",
         "symmetric_triangle_quadrature.tex",
+    },
+    "upwind_graph_ordering_algorithm": {
+        "README.md",
+        "UPDATE_LEDGER.md",
+        "upwind_graph_ordering_algorithm.tex",
     },
 }
 DEVELOPMENT_PLAN_CONTENTS = {
@@ -51,6 +56,9 @@ MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(
     r"`((?:configs|scripts)/[^`\s*?\[\]]+\.(?:json|py))`"
 )
+
+
+GENERATED_DOC_SUFFIXES = {".aux", ".log", ".out", ".pdf", ".toc"}
 
 
 def _documentation_markdown() -> tuple[Path, ...]:
@@ -89,7 +97,10 @@ def test_algorithm_tree_contains_only_maintained_topics() -> None:
         *ALGORITHM_CONTENTS,
     }
     for topic, expected in ALGORITHM_CONTENTS.items():
-        actual = {path.name for path in (algorithms / topic).iterdir()}
+        actual = {
+            path.name for path in (algorithms / topic).iterdir()
+            if path.suffix not in GENERATED_DOC_SUFFIXES
+        }
         assert actual == expected, topic
 
 
@@ -105,7 +116,14 @@ def test_development_plan_tree_is_indexed_and_linked_from_todo() -> None:
 
 
 def test_generated_pdfs_are_not_tracked_as_documentation() -> None:
-    assert not tuple(DOCS.rglob("*.pdf"))
+    completed = subprocess.run(
+        ("git", "ls-files", "--", "docs/**/*.pdf"),
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert not completed.stdout.strip()
 
 
 def test_local_markdown_links_resolve() -> None:

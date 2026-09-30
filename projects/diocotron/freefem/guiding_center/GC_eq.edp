@@ -1,0 +1,704 @@
+// ================================================================
+// Newton-Raphson for -Delta u = f(u), u=0 on boundary,
+// on a non-convex simply connected domain.
+//
+// f is a smooth logistic/exponential window:
+//
+//	f(s)=sigma(s-c1)-sigma(s-c2)
+//
+// approximating:
+//
+//	1_{c1 < s < c2}.
+//
+// This version:
+//	- uses more forgiving lower thresholds for annular equilibria,
+//	- relaxes the annular-core line-search constraint,
+//	- rejects collapse to the trivial branch u=0,
+//	- resets from torsion if the iterate collapses,
+//	- stops repeated stagnation instead of taking micro-steps forever,
+//	- uses compact logging for debugging.
+// ================================================================
+
+load "gmsh"
+load "iovtk"
+
+// ----------------------------
+// Timing helpers
+// ----------------------------
+real tGlobal = clock();
+real tBlock;
+real tSolve;
+real tPlot;
+real tResidual;
+real tLineSearch;
+
+// ----------------------------
+// Compact logging switches
+// ----------------------------
+int verboseLS = 0;		// 0 = compact; 1 = print every line-search trial
+int plotDuringNewton = 1;	// 0 = faster and cleaner logs
+int plotFinal = 1;		// 1 = show final plots
+
+cout << endl;
+cout << "========== START EQUILIBRIUM NEWTON CODE ==========" << endl;
+
+cout << "LOG_HEADER "
+	<< "ieps epsRatio eps k res nd alpha bt muShift "
+	<< "minU maxU maxRho massRho status"
+	<< endl;
+
+// ----------------------------
+// Parameters
+// ----------------------------
+int N = 260;
+int maxIt = 60;
+
+real tolNewton = 6e-10;
+real tolRes = 1e-8;
+
+real beta = 0.5;
+real armijoC = 1e-6;
+real alphaMin = 1e-7;
+
+int maxBacktrack = 30;
+
+// Boundary label. Change if needed.
+int bLabel = 1;
+
+// ------------------------------------------------------------
+// More forgiving localized annulus parameters.
+//
+// Previous alpha2=0.48 made the branch sit at the imposed coreLevel.
+// Lowering alpha2 makes max(phi)>c2 easier to sustain while preserving
+// a shorter bandwidth than the wide successful case.
+// ------------------------------------------------------------
+real alpha1 = 0.30;
+real alpha2 = 0.44;
+
+// Smoothness continuation.
+// Avoid epsRatio too small until the annular branch is stable.
+int nEpsCont = 5;
+real[int] epsRatioList(nEpsCont);
+epsRatioList[0] = 0.30;
+epsRatioList[1] = 0.22;
+epsRatioList[2] = 0.16;
+epsRatioList[3] = 0.12;
+epsRatioList[4] = 0.08;
+
+// Shifted Newton parameters.
+// Keep muShift away from zero; cap it to avoid over-damping forever.
+real muShift = 3.0;
+real muMin = 0.50;
+real muMax = 25.0;
+
+// Branch-preservation parameters.
+// Smaller mass floor is important for thinner rings.
+real massFloorFraction = 0.03;
+real rhoMaxFloor = 0.05;
+
+// Relaxed annular-core condition.
+// This is now a soft lower requirement near c2, not above c2.
+// Final annularity is checked by maxPhi > c2 in the FINAL line.
+real coreMarginFraction = -0.10;
+
+real c1;
+real c2;
+real eps;
+
+// ----------------------------
+// Domain
+// ----------------------------
+border Gamma(t=0, 2*pi)
+{
+	real r = 1.5 + 0.32*cos(5.0*t);
+	x = r*cos(t);
+	y = r*sin(t);
+	label = bLabel;
+}
+
+// mesh Th = buildmesh(Gamma(N));
+
+tBlock = clock();
+mesh Th = gmshload("iter_wall.mesh");
+cout << "MESH "
+	<< "Th.nt=" << Th.nt << " "
+	<< "loadTime=" << clock()-tBlock
+	<< endl;
+
+// Optional mesh plot
+// plot(Th, wait=true, cmm="Imported mesh");
+
+// ----------------------------
+// FE space
+// ----------------------------
+tBlock = clock();
+
+fespace Vh(Th, P2);
+Vh u, du, v, uTrial, uOld;
+Vh T, rhoTmp, rhoTrial;
+Vh phi, rho;
+
+cout << "SPACE "
+	<< "ndof=" << Vh.ndof << " "
+	<< "allocTime=" << clock()-tBlock
+	<< endl;
+
+// ================================================================
+// Step 1. Solve torsion problem
+// ================================================================
+problem Torsion(T, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		dx(T)*dx(v)
+		+ dy(T)*dy(v)
+	)
+	- int2d(Th)(
+		1.0*v
+	)
+	+ on(bLabel, T=0);
+
+tSolve = clock();
+Torsion;
+real torsionTime = clock()-tSolve;
+
+real MT = T[].max;
+
+cout << "TORSION "
+	<< "MT=" << MT << " "
+	<< "time=" << torsionTime
+	<< endl;
+
+if (MT <= 1e-14)
+{
+	cout << "ERROR maxT_zero likely_wrong_boundary_label bLabel=" << bLabel << endl;
+	exec("exit 1");
+}
+
+// Choose c1,c2 from torsion scale.
+c1 = alpha1*MT;
+c2 = alpha2*MT;
+
+real width = c2-c1;
+
+// For annular initialization, start above c2 so that the initial
+// potential has an inactive core {u > c2}.
+real uTargetMax = c2 + 0.10*width;
+real coreLevel = c2 + coreMarginFraction*width;
+
+cout << "PARAMS "
+	<< "alpha1=" << alpha1 << " "
+	<< "alpha2=" << alpha2 << " "
+	<< "c1=" << c1 << " "
+	<< "c2=" << c2 << " "
+	<< "width=" << width << " "
+	<< "uTargetMax=" << uTargetMax << " "
+	<< "coreLevel=" << coreLevel << " "
+	<< "massFloorFraction=" << massFloorFraction << " "
+	<< "rhoMaxFloor=" << rhoMaxFloor
+	<< endl;
+
+// ----------------------------
+// Smooth logistic/exponential window
+// ----------------------------
+func real sigma(real z)
+{
+	real zz = z/eps;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real sigmap(real z)
+{
+	real S = sigma(z);
+	return S*(1.0-S)/eps;
+}
+
+func real ffun(real s)
+{
+	return sigma(s-c1) - sigma(s-c2);
+}
+
+func real dffun(real s)
+{
+	return sigmap(s-c1) - sigmap(s-c2);
+}
+
+// ================================================================
+// Reset from torsion.
+//
+// Important: never rescale a collapsed Newton iterate.
+// Always reset from T.
+// ================================================================
+macro ResetFromTorsion() {
+	u = T;
+	real umaxReset = u[].max;
+	if (umaxReset > 1e-14)
+	{
+		u = (uTargetMax/umaxReset)*u;
+	}
+} //
+
+// Initial guess
+ResetFromTorsion;
+
+// ----------------------------
+// Residual norm proxy
+// ----------------------------
+varf ResidualForm(unused, v)
+	=
+	int2d(Th)(
+		dx(u)*dx(v)
+		+ dy(u)*dy(v)
+		- ffun(u)*v
+	)
+	+ on(bLabel, unused=0);
+
+func real residualNorm()
+{
+	real[int] r = ResidualForm(0, Vh);
+	return sqrt(r'*r);
+}
+
+// ----------------------------
+// Shifted Newton linearized problem
+//
+// J''(u)(du,v) + muShift*a(du,v) = -J'(u)v
+// ----------------------------
+problem NewtonStep(du, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		(1.0 + muShift)*(dx(du)*dx(v) + dy(du)*dy(v))
+		- dffun(u)*du*v
+	)
+	+ int2d(Th)(
+		dx(u)*dx(v)
+		+ dy(u)*dy(v)
+		- ffun(u)*v
+	)
+	+ on(bLabel, du=0);
+
+// ================================================================
+// Continuation in epsRatio
+// ================================================================
+for (int ieps = 0; ieps < nEpsCont; ieps++)
+{
+	real epsRatio = epsRatioList[ieps];
+	eps = epsRatio*width;
+
+	// Reset muShift at each continuation level.
+	muShift = max(muShift, 3.0);
+
+	rhoTmp = ffun(u);
+
+	real massInitial = int2d(Th)(rhoTmp);
+	real maxRhoInitial = rhoTmp[].max;
+
+	// If input to this continuation step is collapsed,
+	// restart from torsion instead of rescaling collapsed u.
+	if (u[].max < c1 || massInitial < 1e-8 || maxRhoInitial < rhoMaxFloor)
+	{
+		cout << "RESET ieps=" << ieps << " reason=collapsed_input" << endl;
+
+		ResetFromTorsion;
+		rhoTmp = ffun(u);
+
+		massInitial = int2d(Th)(rhoTmp);
+		maxRhoInitial = rhoTmp[].max;
+	}
+
+	real massRef = massInitial;
+	real massFloor = massFloorFraction*massRef;
+
+	cout << "EPS_START "
+		<< ieps << " "
+		<< epsRatio << " "
+		<< eps << " "
+		<< c1 << " "
+		<< c2 << " "
+		<< muShift << " "
+		<< u[].min << " "
+		<< u[].max << " "
+		<< maxRhoInitial << " "
+		<< massInitial << " "
+		<< massFloor
+		<< endl;
+
+	tResidual = clock();
+	real res = residualNorm();
+	cout << "RES_START "
+		<< ieps << " "
+		<< res << " "
+		<< "time=" << clock()-tResidual
+		<< endl;
+
+	int rejectCount = 0;
+	int stagnationCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		// ------------------------------------------------------------
+		// Newton linear solve
+		// ------------------------------------------------------------
+		tSolve = clock();
+		NewtonStep;
+		real timeNewtonSolve = clock()-tSolve;
+
+		// ------------------------------------------------------------
+		// Diagnostics
+		// ------------------------------------------------------------
+		tBlock = clock();
+
+		real nd = sqrt(int2d(Th)(
+			dx(du)^2 + dy(du)^2
+		));
+
+		rhoTmp = ffun(u);
+
+		real maxu = u[].max;
+		real minu = u[].min;
+		real maxrho = rhoTmp[].max;
+		real massrho = int2d(Th)(rhoTmp);
+
+		real timeDiag = clock()-tBlock;
+
+		if (res < tolRes || nd < tolNewton)
+		{
+			cout << "LOG "
+				<< ieps << " "
+				<< epsRatio << " "
+				<< eps << " "
+				<< k << " "
+				<< res << " "
+				<< nd << " "
+				<< 0 << " "
+				<< 0 << " "
+				<< muShift << " "
+				<< minu << " "
+				<< maxu << " "
+				<< maxrho << " "
+				<< massrho << " "
+				<< "CONVERGED"
+				<< endl;
+			break;
+		}
+
+		// If current iterate has already collapsed, reset.
+		if (massrho < massFloor || maxrho < rhoMaxFloor || maxu < c1)
+		{
+			cout << "LOG "
+				<< ieps << " "
+				<< epsRatio << " "
+				<< eps << " "
+				<< k << " "
+				<< res << " "
+				<< nd << " "
+				<< 0 << " "
+				<< 0 << " "
+				<< muShift << " "
+				<< minu << " "
+				<< maxu << " "
+				<< maxrho << " "
+				<< massrho << " "
+				<< "RESET_COLLAPSED"
+				<< endl;
+
+			ResetFromTorsion;
+			muShift = min(muMax, 1.5*muShift);
+			rejectCount++;
+
+			if (rejectCount >= 5)
+			{
+				cout << "EPS_STOP "
+					<< ieps << " "
+					<< "reason=too_many_branch_rejections"
+					<< endl;
+				break;
+			}
+
+			continue;
+		}
+
+		// ------------------------------------------------------------
+		// Branch-aware backtracking line search
+		// ------------------------------------------------------------
+		real alpha = 1.0;
+		real resOld = res;
+		uOld = u;
+
+		bool accepted = false;
+		int nBacktrack = 0;
+
+		tLineSearch = clock();
+
+		while (alpha >= alphaMin && nBacktrack <= maxBacktrack)
+		{
+			uTrial = uOld + alpha*du;
+			u = uTrial;
+
+			rhoTrial = ffun(u);
+
+			real trialMass = int2d(Th)(rhoTrial);
+			real trialMaxRho = rhoTrial[].max;
+			real trialMaxU = u[].max;
+
+			// Relaxed annulus-preserving branch condition:
+			//	- mass and maxRho prevent collapse,
+			//	- trialMaxU >= coreLevel encourages, but does not over-force,
+			//	  existence of an inner core near the upper cutoff.
+			bool branchOK =
+				(trialMass >= massFloor)
+				&& (trialMaxRho >= rhoMaxFloor)
+				&& (trialMaxU >= coreLevel);
+
+			real resNew = residualNorm();
+
+			if (verboseLS == 1)
+			{
+				cout << "LS_TRIAL "
+					<< "ieps=" << ieps
+					<< " epsRatio=" << epsRatio
+					<< " k=" << k
+					<< " alpha=" << alpha
+					<< " resNew=" << resNew
+					<< " resOld=" << resOld
+					<< " mass=" << trialMass
+					<< " maxRho=" << trialMaxRho
+					<< " maxU=" << trialMaxU
+					<< " branchOK=" << branchOK
+					<< endl;
+			}
+
+			if (
+				branchOK
+				&& resNew <= (1.0 - armijoC*alpha)*resOld
+			)
+			{
+				res = resNew;
+				accepted = true;
+
+				cout << "LOG "
+					<< ieps << " "
+					<< epsRatio << " "
+					<< eps << " "
+					<< k << " "
+					<< res << " "
+					<< nd << " "
+					<< alpha << " "
+					<< nBacktrack << " "
+					<< muShift << " "
+					<< u[].min << " "
+					<< u[].max << " "
+					<< trialMaxRho << " "
+					<< trialMass << " "
+					<< "ACCEPT"
+					<< endl;
+
+				break;
+			}
+
+			alpha *= beta;
+			nBacktrack++;
+		}
+
+		if (!accepted)
+		{
+			rhoTmp = ffun(uOld);
+
+			cout << "LOG "
+				<< ieps << " "
+				<< epsRatio << " "
+				<< eps << " "
+				<< k << " "
+				<< resOld << " "
+				<< nd << " "
+				<< alpha << " "
+				<< nBacktrack << " "
+				<< muShift << " "
+				<< uOld[].min << " "
+				<< uOld[].max << " "
+				<< rhoTmp[].max << " "
+				<< int2d(Th)(rhoTmp) << " "
+				<< "FAIL_LS"
+				<< endl;
+
+			u = uOld;
+
+			// Increase shift and retry next Newton iteration.
+			muShift = min(muMax, 3.0*muShift);
+
+			cout << "SHIFT "
+				<< ieps << " "
+				<< k << " "
+				<< "newMu=" << muShift << " "
+				<< "reason=fail_ls"
+				<< endl;
+
+			rejectCount++;
+
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "EPS_STOP "
+					<< ieps << " "
+					<< "reason=too_many_failed_steps"
+					<< endl;
+				break;
+			}
+
+			continue;
+		}
+
+		rejectCount = 0;
+
+		// Adaptive shift.
+		if (nBacktrack <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (nBacktrack >= 8)
+		{
+			muShift = min(muMax, 2.0*muShift);
+		}
+
+		real relDrop = abs(resOld-res)/max(resOld,1e-30);
+
+		if (relDrop < 1e-5)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.5*muShift);
+
+			cout << "SHIFT "
+				<< ieps << " "
+				<< k << " "
+				<< "newMu=" << muShift << " "
+				<< "reason=stagnation"
+				<< endl;
+
+			if (u[].max < c1 + 0.02*width)
+			{
+				cout << "RESET ieps=" << ieps
+					<< " reason=stuck_near_c1_boost_initial_guess"
+					<< endl;
+
+				u = T;
+				real umaxBoost = u[].max;
+				real boostedTarget = c2 + 0.20*width;
+
+				if (umaxBoost > 1e-14)
+				{
+					u = (boostedTarget/umaxBoost)*u;
+				}
+
+				muShift = 3.0;
+			}
+
+			if (stagnationCount >= 4)
+			{
+				cout << "EPS_STOP "
+					<< ieps << " "
+					<< "reason=repeated_stagnation"
+					<< endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+
+		if (plotDuringNewton == 1 && k % 5 == 0)
+		{
+			plot(u, fill=true, value=true, wait=false, nbiso=40,
+				cmm="Newton iterate u");
+
+			rhoTmp = ffun(u);
+
+			plot(rhoTmp, fill=true, value=true, wait=false, nbiso=40,
+				cmm="Newton iterate rho=f(u)");
+		}
+	}
+
+	// End-of-eps diagnostics
+	rhoTmp = ffun(u);
+
+	cout << "EPS_END "
+		<< ieps << " "
+		<< epsRatio << " "
+		<< eps << " "
+		<< u[].min << " "
+		<< u[].max << " "
+		<< rhoTmp[].max << " "
+		<< int2d(Th)(rhoTmp)
+		<< endl;
+
+	if (int2d(Th)(rhoTmp) < massFloor || rhoTmp[].max < rhoMaxFloor)
+	{
+		cout << "RESET ieps=" << ieps << " reason=collapsed_end_step" << endl;
+		ResetFromTorsion;
+	}
+}
+
+// ----------------------------
+// Final density rho=f(u)
+// ----------------------------
+phi = u;
+rho = ffun(phi);
+
+cout << "FINAL "
+	<< "minPhi=" << phi[].min << " "
+	<< "maxPhi=" << phi[].max << " "
+	<< "c1=" << c1 << " "
+	<< "c2=" << c2 << " "
+	<< "eps=" << eps << " "
+	<< "maxRho=" << rho[].max << " "
+	<< "massRho=" << int2d(Th)(rho) << " "
+	<< "annularCheckMaxPhiMinusC2=" << phi[].max-c2
+	<< endl;
+
+if (plotFinal == 1)
+{
+	plot(phi, fill=true, value=true, wait=true, nbiso=40,
+		cmm="Final potential phi", dim=3);
+
+	plot(rho, fill=true, value=true, wait=true, nbiso=40,
+		cmm="Final density rho=f(phi)", dim=3);
+
+	plot(phi, fill=true, value=true, wait=true, nbiso=40,
+		cmm="Final potential phi, 2D");
+
+	plot(rho, fill=true, value=true, wait=true, nbiso=40,
+		cmm="Final density rho=f(phi), 2D");
+}
+
+// ----------------------------
+// Save mesh and FE functions
+// ----------------------------
+savemesh(Th, "equilibrium_mesh.msh");
+
+{
+	ofstream frho("rho_dof.txt");
+	frho << rho[];
+}
+
+{
+	ofstream fphi("phi_dof.txt");
+	fphi << phi[];
+}
+
+savevtk("newton_equilibrium_nonconvex.vtu", Th, phi, rho,
+	dataname="phi rho");
+
+cout << "EXPORT "
+	<< "equilibrium_mesh.msh "
+	<< "rho_dof.txt "
+	<< "phi_dof.txt "
+	<< "newton_equilibrium_nonconvex.vtu"
+	<< endl;
+
+cout << "TIME_TOTAL " << clock()-tGlobal << endl;
+cout << "========== END EQUILIBRIUM NEWTON CODE ==========" << endl;

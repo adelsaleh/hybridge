@@ -26,15 +26,15 @@ is checked by `tests/test_backend_capabilities.py`.
 
 | Equation | Operation | Assembly | Sparse solve | Assembly residency | Solve residency | Reconstruction | Boundary modes | Trace bases | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | - |
+| advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | assemble | numba | none | host | none | none | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | assemble | cupy | none | device (optional host copy) | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | COO values and RHS remain on-device unless host assembly diagnostics are requested. |
 | advection-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate, zero-flux | legacy-lagrange, legendre-modal | Assembly-only diagnostics materialize the reduced system on the host. |
-| advection-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
-| advection-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
-| advection-reaction | solve | numpy | petsc | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
-| advection-reaction | solve | numpy | cupyx | host | host -> device -> host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
-| advection-reaction | solve | numpy | amgx | host | host -> device -> host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
+| advection-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
+| advection-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
+| advection-reaction | solve | numpy | petsc | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
+| advection-reaction | solve | numpy | cupyx | host | host -> device -> host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
+| advection-reaction | solve | numpy | amgx | host | host -> device -> host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numba | scipy | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numba | pypardiso | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numba | petsc | host | host | host | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |

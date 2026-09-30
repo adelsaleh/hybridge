@@ -1,5 +1,7 @@
 # Reference Contracts
 
+- [`equiband.md`](../../projects/diocotron/docs/equiband.md): script-side FEniCSx fixed-threshold equilibrium
+  solver, mathematical definitions, branch guards, examples and restart.
 - [`solver_api_alpha.md`](solver_api_alpha.md): supported solver imports,
   objects, updates, return values, and failure behavior.
 - [`advection_boundary_stabilization.md`](advection_boundary_stabilization.md):

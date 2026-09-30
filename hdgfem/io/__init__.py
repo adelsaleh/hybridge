@@ -4,11 +4,14 @@ from .comparison import plot_sampled_solution_comparison
 from .config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
 from .output import format_elapsed_percent, pretty_print_ncol, timed_call
 from .plot import (
+    ElementGeometryMap,
+    map_element_plot_points,
     contour_levels_for_order,
     plot_field,
     plot_fields,
     plot_solution_comparison,
     refined_field_polydata,
+    reference_element_edge_points,
     resolve_exact_plot_resolution,
     resolve_field_plot_resolution,
     resolve_postprocessed_plot_resolution,
@@ -17,6 +20,8 @@ from .plot import (
 
 __all__ = [
     "contour_levels_for_order",
+    "ElementGeometryMap",
+    "map_element_plot_points",
     "describe_amgx_preconditioner",
     "describe_amgx_solver",
     "format_elapsed_percent",
@@ -28,6 +33,7 @@ __all__ = [
     "pretty_print_ncol",
     "refined_field_polydata",
     "resolve_exact_plot_resolution",
+    "reference_element_edge_points",
     "resolve_field_plot_resolution",
     "resolve_postprocessed_plot_resolution",
     "sample_field_on_elements",

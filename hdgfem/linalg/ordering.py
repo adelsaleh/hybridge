@@ -5,13 +5,13 @@ edge ids and directed graph edges.  They do not change mesh connectivity or HDG
 assembly.  The main use case is to build an experimental trace-DOF permutation
 for advection-dominated HDG systems before calling an incomplete factorization.
 
-The implementation is serial for now.  Numba is used for the graph passes so
-the code remains fast enough for benchmark experiments, but the algorithms are
-kept simple and readable:
+Numba is used for the graph passes and deterministic parallel work is used
+where it pays for its scheduling cost.  The adaptive pipeline is:
 
 1. Build a directed edge graph from element-local inflow/outflow faces.
-2. Compute strongly connected components with Kosaraju's algorithm.
-3. Collapse SCCs to a DAG and topologically order the DAG.
+2. Try a deterministic topological order using only the forward graph.
+3. For cyclic graphs, trim acyclic nodes and run Kosaraju only on the compact
+   residual before topologically ordering the recombined component graph.
 4. Lift the ordered mesh-edge blocks to trace-DOF indices.
 """
 
@@ -24,9 +24,17 @@ from pathlib import Path
 import numpy as np
 
 try:  # pragma: no cover - fallback exists for environments without numba.
-    from numba import njit
+    from numba import njit, prange
 except ImportError:  # pragma: no cover
     njit = None
+    prange = range
+
+
+# Parallel dispatch costs more than a serial loop for the small frontiers that
+# dominate typical transport DAGs.  A 32k-work-item crossover was conservative
+# on the 20-core benchmark workstation and avoids thread-pool overhead on small
+# meshes.  The value is passed into the cached kernels so it remains explicit.
+_PARALLEL_FRONTIER_WORK_THRESHOLD = 32_768
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,8 @@ class GraphOrderingTimings:
     topological_order: float
     dof_permutation: float
     total: float
+    level_diagnostics: float = 0.0
+    node_order: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -66,6 +76,9 @@ class GraphOrderingDiagnostics:
     cyclic_nodes: int
     level_widths: LevelWidthDiagnostics
     timings: GraphOrderingTimings
+    algorithm_path: str = "acyclic-fast"
+    peeled_nodes: int = 0
+    residual_nodes: int = 0
 
 
 @dataclass(frozen=True)
@@ -104,7 +117,7 @@ def _njit(*args, **kwargs):
     return njit(*args, **kwargs)
 
 
-@_njit(cache=True)
+@_njit(cache=True, parallel=True)
 def _build_upwind_edge_pairs_kernel(
         loc2glob_edge: np.ndarray,
         beta_dot_normal: np.ndarray,
@@ -112,27 +125,27 @@ def _build_upwind_edge_pairs_kernel(
         old_to_active: np.ndarray,
         flux_tolerance: float,
 ):
-    """Return active-node directed edges inferred from local inflow/outflow."""
+    """Return deterministic pairs using parallel count and fill passes."""
     num_elements = loc2glob_edge.shape[0]
     num_face_quads = beta_dot_normal.shape[2]
-    max_pairs = num_elements * 6
-    sources = np.empty(max_pairs, dtype=np.int64)
-    targets = np.empty(max_pairs, dtype=np.int64)
-    count = 0
-    face_flux = np.empty(3, dtype=np.float64)
+    face_flux = np.empty((num_elements, 3), dtype=np.float64)
+    pair_counts = np.zeros(num_elements, dtype=np.int64)
 
-    for element in range(num_elements):
+    # Each element owns one count and one row of face_flux, so this pass has no
+    # reductions or thread-dependent writes.
+    for element in prange(num_elements):
         for face in range(3):
             total = 0.0
             for q in range(num_face_quads):
                 total += beta_dot_normal[element, face, q]
-            face_flux[face] = total / num_face_quads
+            face_flux[element, face] = total / num_face_quads
 
+        count = 0
         for source_face in range(3):
             source_edge = loc2glob_edge[element, source_face]
             if not active_edge_mask[source_edge]:
                 continue
-            if face_flux[source_face] >= -flux_tolerance:
+            if face_flux[element, source_face] >= -flux_tolerance:
                 continue
 
             source_node = old_to_active[source_edge]
@@ -142,16 +155,47 @@ def _build_upwind_edge_pairs_kernel(
                 target_edge = loc2glob_edge[element, target_face]
                 if not active_edge_mask[target_edge]:
                     continue
-                if face_flux[target_face] <= flux_tolerance:
+                if face_flux[element, target_face] <= flux_tolerance:
+                    continue
+                if source_node != old_to_active[target_edge]:
+                    count += 1
+        pair_counts[element] = count
+
+    offsets = np.empty(num_elements + 1, dtype=np.int64)
+    offsets[0] = 0
+    for element in range(num_elements):
+        offsets[element + 1] = offsets[element] + pair_counts[element]
+
+    sources = np.empty(offsets[num_elements], dtype=np.int64)
+    targets = np.empty(offsets[num_elements], dtype=np.int64)
+    # Fixed element offsets make the emitted arrays byte-for-byte identical for
+    # every Numba thread count.
+    for element in prange(num_elements):
+        insert_at = offsets[element]
+        for source_face in range(3):
+            source_edge = loc2glob_edge[element, source_face]
+            if not active_edge_mask[source_edge]:
+                continue
+            if face_flux[element, source_face] >= -flux_tolerance:
+                continue
+
+            source_node = old_to_active[source_edge]
+            for target_face in range(3):
+                if target_face == source_face:
+                    continue
+                target_edge = loc2glob_edge[element, target_face]
+                if not active_edge_mask[target_edge]:
+                    continue
+                if face_flux[element, target_face] <= flux_tolerance:
                     continue
 
                 target_node = old_to_active[target_edge]
                 if source_node != target_node:
-                    sources[count] = source_node
-                    targets[count] = target_node
-                    count += 1
+                    sources[insert_at] = source_node
+                    targets[insert_at] = target_node
+                    insert_at += 1
 
-    return sources[:count].copy(), targets[:count].copy()
+    return sources, targets
 
 
 @_njit(cache=True)
@@ -264,36 +308,215 @@ def _component_edges_kernel(
     return comp_sources[:count].copy(), comp_targets[:count].copy()
 
 
-@_njit(cache=True)
-def _topological_order_kernel(num_components: int, indptr: np.ndarray, indices: np.ndarray):
-    """Topologically order the SCC condensation DAG."""
-    indegree = np.zeros(num_components, dtype=np.int64)
-    for edge in range(indices.size):
-        indegree[indices[edge]] += 1
+@_njit(cache=True, parallel=True)
+def _kahn_frontier_kernel(
+        num_nodes: int,
+        indptr: np.ndarray,
+        indices: np.ndarray,
+        active: np.ndarray,
+        parallel_threshold: int,
+):
+    """Return a deterministic Kahn order of the active acyclic prefix.
 
-    queue = np.empty(num_components, dtype=np.int64)
-    head = 0
-    tail = 0
-    for component in range(num_components):
-        if indegree[component] == 0:
-            queue[tail] = component
-            tail += 1
-
-    order = np.empty(num_components, dtype=np.int64)
-    count = 0
-    while head < tail:
-        component = queue[head]
-        head += 1
-        order[count] = component
-        count += 1
-        for pos in range(indptr[component], indptr[component + 1]):
+    Frontiers and their adjacency are copied in parallel only above the
+    measured crossover.  Indegree updates remain in deterministic buffer order
+    and therefore need no atomics.
+    """
+    indegree = np.zeros(num_nodes, dtype=np.int64)
+    active_count = 0
+    for source in range(num_nodes):
+        if not active[source]:
+            continue
+        active_count += 1
+        for pos in range(indptr[source], indptr[source + 1]):
             target = indices[pos]
+            if active[target]:
+                indegree[target] += 1
+
+    frontier = np.empty(num_nodes, dtype=np.int64)
+    next_frontier = np.empty(num_nodes, dtype=np.int64)
+    frontier_size = 0
+    for node in range(num_nodes):
+        if active[node] and indegree[node] == 0:
+            frontier[frontier_size] = node
+            frontier_size += 1
+
+    order = np.empty(active_count, dtype=np.int64)
+    edge_offsets = np.empty(num_nodes + 1, dtype=np.int64)
+    edge_buffer = np.empty(indices.size, dtype=np.int64)
+    count = 0
+
+    while frontier_size:
+        edge_offsets[0] = 0
+        for index in range(frontier_size):
+            node = frontier[index]
+            edge_offsets[index + 1] = (
+                edge_offsets[index] + indptr[node + 1] - indptr[node]
+            )
+        edge_work = edge_offsets[frontier_size]
+        parallel_frontier = frontier_size + edge_work >= parallel_threshold
+
+        if parallel_frontier:
+            for index in prange(frontier_size):
+                order[count + index] = frontier[index]
+                node = frontier[index]
+                destination = edge_offsets[index]
+                for pos in range(indptr[node], indptr[node + 1]):
+                    edge_buffer[destination + pos - indptr[node]] = indices[pos]
+        else:
+            for index in range(frontier_size):
+                order[count + index] = frontier[index]
+                node = frontier[index]
+                destination = edge_offsets[index]
+                for pos in range(indptr[node], indptr[node + 1]):
+                    edge_buffer[destination + pos - indptr[node]] = indices[pos]
+
+        count += frontier_size
+        next_size = 0
+        for pos in range(edge_work):
+            target = edge_buffer[pos]
+            if not active[target]:
+                continue
             indegree[target] -= 1
             if indegree[target] == 0:
-                queue[tail] = target
-                tail += 1
+                next_frontier[next_size] = target
+                next_size += 1
+
+        if next_size > 1:
+            sorted_frontier = np.sort(next_frontier[:next_size])
+            for index in range(next_size):
+                frontier[index] = sorted_frontier[index]
+        else:
+            for index in range(next_size):
+                frontier[index] = next_frontier[index]
+        frontier_size = next_size
 
     return order[:count].copy()
+
+
+@_njit(cache=True)
+def _compact_residual_graph_kernel(
+        active: np.ndarray,
+        sources: np.ndarray,
+        targets: np.ndarray,
+):
+    """Compact active residual nodes and edges to consecutive node ids."""
+    num_nodes = active.size
+    residual_count = 0
+    for node in range(num_nodes):
+        if active[node]:
+            residual_count += 1
+
+    residual_nodes = np.empty(residual_count, dtype=np.int64)
+    node_to_residual = np.full(num_nodes, -1, dtype=np.int64)
+    count = 0
+    for node in range(num_nodes):
+        if active[node]:
+            residual_nodes[count] = node
+            node_to_residual[node] = count
+            count += 1
+
+    edge_count = 0
+    for edge in range(sources.size):
+        if active[sources[edge]] and active[targets[edge]]:
+            edge_count += 1
+    residual_sources = np.empty(edge_count, dtype=np.int64)
+    residual_targets = np.empty(edge_count, dtype=np.int64)
+    count = 0
+    for edge in range(sources.size):
+        source = sources[edge]
+        target = targets[edge]
+        if active[source] and active[target]:
+            residual_sources[count] = node_to_residual[source]
+            residual_targets[count] = node_to_residual[target]
+            count += 1
+    return residual_nodes, residual_sources, residual_targets
+
+
+@_njit(cache=True)
+def _recombine_components_kernel(
+        num_nodes: int,
+        residual_nodes: np.ndarray,
+        residual_component_id: np.ndarray,
+        residual_component_sizes: np.ndarray,
+):
+    """Combine residual SCCs and peeled singleton components deterministically."""
+    node_residual_component = np.full(num_nodes, -1, dtype=np.int64)
+    for residual_node in range(residual_nodes.size):
+        node = residual_nodes[residual_node]
+        node_residual_component[node] = residual_component_id[residual_node]
+
+    residual_to_full = np.full(residual_component_sizes.size, -1, dtype=np.int64)
+    component_id = np.empty(num_nodes, dtype=np.int64)
+    component_sizes = np.empty(num_nodes, dtype=np.int64)
+    component_count = 0
+    for node in range(num_nodes):
+        residual_component = node_residual_component[node]
+        if residual_component == -1:
+            component_id[node] = component_count
+            component_sizes[component_count] = 1
+            component_count += 1
+        else:
+            component = residual_to_full[residual_component]
+            if component == -1:
+                component = component_count
+                residual_to_full[residual_component] = component
+                component_sizes[component] = residual_component_sizes[residual_component]
+                component_count += 1
+            component_id[node] = component
+
+    return component_id, component_sizes[:component_count].copy()
+
+
+@_njit(cache=True)
+def _level_widths_kernel(
+        num_components: int,
+        indptr: np.ndarray,
+        indices: np.ndarray,
+        component_order: np.ndarray,
+        component_sizes: np.ndarray,
+):
+    """Compute levels and all aggregate width diagnostics for a DAG."""
+    if num_components == 0:
+        return np.empty(0, dtype=np.int64), 0, 0.0, 0.0, 0.0
+
+    levels = np.zeros(num_components, dtype=np.int64)
+    for order_index in range(component_order.size):
+        component = component_order[order_index]
+        next_level = levels[component] + 1
+        for pos in range(indptr[component], indptr[component + 1]):
+            target = indices[pos]
+            if levels[target] < next_level:
+                levels[target] = next_level
+
+    num_levels = 0
+    for component in range(num_components):
+        if levels[component] + 1 > num_levels:
+            num_levels = levels[component] + 1
+    widths = np.zeros(num_levels, dtype=np.int64)
+    total_nodes = 0
+    max_width = 0
+    for component in range(num_components):
+        size = component_sizes[component]
+        widths[levels[component]] += size
+        total_nodes += size
+    for level in range(num_levels):
+        if widths[level] > max_width:
+            max_width = widths[level]
+
+    sorted_widths = np.sort(widths)
+    if num_levels % 2:
+        median_width = float(sorted_widths[num_levels // 2])
+    else:
+        middle = num_levels // 2
+        median_width = 0.5 * float(sorted_widths[middle - 1] + sorted_widths[middle])
+    mean_width = float(total_nodes) / float(num_levels)
+    top_count = min(10, num_levels)
+    top_total = 0
+    for index in range(top_count):
+        top_total += sorted_widths[num_levels - 1 - index]
+    top10_fraction = float(top_total) / float(total_nodes) if total_nodes else 0.0
+    return widths, max_width, median_width, mean_width, top10_fraction
 
 
 @_njit(cache=True)
@@ -516,42 +739,172 @@ def _dag_level_width_diagnostics(
         component_order: np.ndarray,
         component_sizes: np.ndarray,
 ) -> LevelWidthDiagnostics:
-    """Compute topological level widths for a condensation DAG."""
-    if num_components == 0:
-        return LevelWidthDiagnostics(
-            num_levels=0,
-            max_width=0,
-            median_width=0.0,
-            mean_width=0.0,
-            top10_width_fraction=0.0,
-            widths=(),
-        )
-
-    levels = np.zeros(num_components, dtype=np.int64)
-    for component in component_order:
-        source_level = levels[component]
-        for pos in range(indptr[component], indptr[component + 1]):
-            target = indices[pos]
-            next_level = source_level + 1
-            if levels[target] < next_level:
-                levels[target] = next_level
-
-    num_levels = int(levels.max()) + 1
-    widths = np.zeros(num_levels, dtype=np.int64)
-    for component in range(num_components):
-        widths[levels[component]] += int(component_sizes[component])
-
-    sorted_widths = np.sort(widths)[::-1]
-    top_count = min(10, sorted_widths.size)
-    total_nodes = int(np.sum(widths))
-    top10_fraction = float(np.sum(sorted_widths[:top_count]) / total_nodes) if total_nodes else 0.0
+    """Compute topological level-width diagnostics in a cached kernel."""
+    widths, max_width, median_width, mean_width, top10_fraction = _level_widths_kernel(
+        num_components,
+        indptr,
+        indices,
+        component_order,
+        component_sizes,
+    )
     return LevelWidthDiagnostics(
-        num_levels=num_levels,
-        max_width=int(widths.max()) if widths.size else 0,
-        median_width=float(np.median(widths)) if widths.size else 0.0,
-        mean_width=float(np.mean(widths)) if widths.size else 0.0,
-        top10_width_fraction=top10_fraction,
-        widths=tuple(int(width) for width in widths),
+        num_levels=int(widths.size),
+        max_width=int(max_width),
+        median_width=float(median_width),
+        mean_width=float(mean_width),
+        top10_width_fraction=float(top10_fraction),
+        widths=tuple(widths.tolist()),
+    )
+
+
+def _adaptive_component_order(num_nodes: int, sources: np.ndarray, targets: np.ndarray):
+    """Run the forward-only DAG path or the compact cyclic-residual path."""
+    timings = {
+        "csr": 0.0,
+        "scc": 0.0,
+        "dag": 0.0,
+        "topological_order": 0.0,
+        "level_diagnostics": 0.0,
+        "node_order": 0.0,
+    }
+
+    start = time.perf_counter()
+    indptr, indices = _build_csr_kernel(num_nodes, sources, targets)
+    timings["csr"] += time.perf_counter() - start
+
+    all_active = np.ones(num_nodes, dtype=np.bool_)
+    start = time.perf_counter()
+    initial_order = _kahn_frontier_kernel(
+        num_nodes,
+        indptr,
+        indices,
+        all_active,
+        _PARALLEL_FRONTIER_WORK_THRESHOLD,
+    )
+    detection_time = time.perf_counter() - start
+
+    if initial_order.size == num_nodes:
+        algorithm_path = "acyclic-fast"
+        peeled_nodes = 0
+        residual_nodes = 0
+        component_id = np.arange(num_nodes, dtype=np.int64)
+        component_sizes = np.ones(num_nodes, dtype=np.int64)
+        component_order = initial_order
+        comp_indptr = indptr
+        comp_indices = indices
+        timings["topological_order"] = detection_time
+    else:
+        algorithm_path = "cyclic-residual"
+        timings["scc"] = detection_time
+
+        residual_active = all_active.copy()
+        residual_active[initial_order] = False
+
+        start = time.perf_counter()
+        reverse_indptr, reverse_indices = _build_csr_kernel(num_nodes, targets, sources)
+        timings["csr"] += time.perf_counter() - start
+
+        start = time.perf_counter()
+        suffix_order = _kahn_frontier_kernel(
+            num_nodes,
+            reverse_indptr,
+            reverse_indices,
+            residual_active,
+            _PARALLEL_FRONTIER_WORK_THRESHOLD,
+        )
+        residual_active[suffix_order] = False
+        timings["scc"] += time.perf_counter() - start
+
+        start = time.perf_counter()
+        residual_node_ids, residual_sources, residual_targets = _compact_residual_graph_kernel(
+            residual_active,
+            sources,
+            targets,
+        )
+        timings["scc"] += time.perf_counter() - start
+        residual_nodes = int(residual_node_ids.size)
+        peeled_nodes = int(initial_order.size + suffix_order.size)
+        if residual_nodes == 0:
+            raise RuntimeError("cyclic graph trimming produced an empty residual")
+
+        start = time.perf_counter()
+        residual_indptr, residual_indices = _build_csr_kernel(
+            residual_nodes,
+            residual_sources,
+            residual_targets,
+        )
+        residual_reverse_indptr, residual_reverse_indices = _build_csr_kernel(
+            residual_nodes,
+            residual_targets,
+            residual_sources,
+        )
+        timings["csr"] += time.perf_counter() - start
+
+        start = time.perf_counter()
+        residual_component_id, residual_component_sizes = _kosaraju_scc_kernel(
+            residual_nodes,
+            residual_indptr,
+            residual_indices,
+            residual_reverse_indptr,
+            residual_reverse_indices,
+        )
+        component_id, component_sizes = _recombine_components_kernel(
+            num_nodes,
+            residual_node_ids,
+            residual_component_id,
+            residual_component_sizes,
+        )
+        timings["scc"] += time.perf_counter() - start
+
+        start = time.perf_counter()
+        comp_sources, comp_targets = _component_edges_kernel(component_id, sources, targets)
+        comp_indptr, comp_indices = _build_csr_kernel(
+            component_sizes.size,
+            comp_sources,
+            comp_targets,
+        )
+        timings["dag"] = time.perf_counter() - start
+
+        start = time.perf_counter()
+        component_order = _kahn_frontier_kernel(
+            component_sizes.size,
+            comp_indptr,
+            comp_indices,
+            np.ones(component_sizes.size, dtype=np.bool_),
+            _PARALLEL_FRONTIER_WORK_THRESHOLD,
+        )
+        timings["topological_order"] = time.perf_counter() - start
+        if component_order.size != component_sizes.size:
+            raise RuntimeError("SCC condensation graph topological ordering failed")
+
+    start = time.perf_counter()
+    level_widths = _dag_level_width_diagnostics(
+        component_sizes.size,
+        comp_indptr,
+        comp_indices,
+        component_order,
+        component_sizes,
+    )
+    timings["level_diagnostics"] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    node_order = _node_order_from_components_kernel(
+        component_id,
+        component_order,
+        component_sizes,
+    )
+    timings["node_order"] = time.perf_counter() - start
+
+    return (
+        node_order,
+        component_id,
+        component_order,
+        component_sizes,
+        level_widths,
+        timings,
+        algorithm_path,
+        peeled_nodes,
+        residual_nodes,
     )
 
 
@@ -560,72 +913,30 @@ def strongly_connected_component_order(
         sources: np.ndarray,
         targets: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, LevelWidthDiagnostics, dict[str, float]]:
-    """Return node and component orders for a directed graph.
+    """Return deterministic adaptive SCC and node orders for a directed graph.
 
-    Parameters
-    ----------
-    num_nodes
-        Number of graph vertices.
-    sources, targets
-        Directed graph edge arrays.  Edge ``k`` points from
-        ``sources[k]`` to ``targets[k]``.  Duplicate edges are accepted.
-
-    Returns
-    -------
-    node_order
-        Vertices ordered by SCC topological order.  Vertices inside one SCC
-        keep their original order.
-    component_id
-        Component id for every vertex.
-    component_order
-        Topological order of SCC ids.
-    component_sizes
-        Number of vertices in each SCC.
-    timings
-        Timings for CSR, SCC, DAG, and topological phases.
+    Duplicate edges and self-loops are accepted.  DAGs take a forward-CSR-only
+    path; cyclic graphs run Kosaraju only on the compact graph left after source
+    and sink trimming.  Vertices inside one SCC keep their original order.
     """
-    sources = np.asarray(sources, dtype=np.int64)
-    targets = np.asarray(targets, dtype=np.int64)
+    sources = np.ascontiguousarray(sources, dtype=np.int64)
+    targets = np.ascontiguousarray(targets, dtype=np.int64)
     if sources.shape != targets.shape:
         raise ValueError("sources and targets must have the same shape")
     if sources.ndim != 1:
         raise ValueError("sources and targets must be one-dimensional")
     if num_nodes < 0:
         raise ValueError("num_nodes must be nonnegative")
-    if sources.size and (sources.min() < 0 or targets.min() < 0 or sources.max() >= num_nodes or targets.max() >= num_nodes):
+    if sources.size and (
+            sources.min() < 0
+            or targets.min() < 0
+            or sources.max() >= num_nodes
+            or targets.max() >= num_nodes
+    ):
         raise ValueError("graph edge arrays contain vertex ids outside num_nodes")
 
-    timings: dict[str, float] = {}
-
-    start = time.perf_counter()
-    indptr, indices = _build_csr_kernel(num_nodes, sources, targets)
-    reverse_indptr, reverse_indices = _build_csr_kernel(num_nodes, targets, sources)
-    timings["csr"] = time.perf_counter() - start
-
-    start = time.perf_counter()
-    component_id, component_sizes = _kosaraju_scc_kernel(num_nodes, indptr, indices, reverse_indptr, reverse_indices)
-    timings["scc"] = time.perf_counter() - start
-
-    start = time.perf_counter()
-    comp_sources, comp_targets = _component_edges_kernel(component_id, sources, targets)
-    comp_indptr, comp_indices = _build_csr_kernel(component_sizes.size, comp_sources, comp_targets)
-    timings["dag"] = time.perf_counter() - start
-
-    start = time.perf_counter()
-    component_order = _topological_order_kernel(component_sizes.size, comp_indptr, comp_indices)
-    if component_order.size != component_sizes.size:
-        raise RuntimeError("SCC condensation graph topological ordering failed")
-    level_widths = _dag_level_width_diagnostics(
-        component_sizes.size,
-        comp_indptr,
-        comp_indices,
-        component_order,
-        component_sizes,
-    )
-    node_order = _node_order_from_components_kernel(component_id, component_order, component_sizes)
-    timings["topological_order"] = time.perf_counter() - start
-
-    return node_order, component_id, component_order, component_sizes, level_widths, timings
+    result = _adaptive_component_order(num_nodes, sources, targets)
+    return result[:6]
 
 
 def upwind_scc_trace_ordering(
@@ -684,7 +995,17 @@ def upwind_scc_trace_ordering(
     )
     graph_pairs_time = time.perf_counter() - start
 
-    node_order, component_id, component_order, component_sizes, level_widths, timings = strongly_connected_component_order(
+    (
+        node_order,
+        component_id,
+        component_order,
+        component_sizes,
+        level_widths,
+        timings,
+        algorithm_path,
+        peeled_nodes,
+        residual_nodes,
+    ) = _adaptive_component_order(
         active_edge_ids.size,
         sources,
         targets,
@@ -697,12 +1018,17 @@ def upwind_scc_trace_ordering(
 
     largest_component = int(component_sizes.max()) if component_sizes.size else 0
     cyclic_mask = component_sizes > 1
+    if sources.size:
+        self_loop_nodes = sources[sources == targets]
+        cyclic_mask[component_id[self_loop_nodes]] = True
     graph_timings = GraphOrderingTimings(
         graph_pairs=graph_pairs_time,
         csr=timings["csr"],
         scc=timings["scc"],
         dag=timings["dag"],
         topological_order=timings["topological_order"],
+        level_diagnostics=timings["level_diagnostics"],
+        node_order=timings["node_order"],
         dof_permutation=dof_permutation_time,
         total=time.perf_counter() - total_start,
     )
@@ -714,6 +1040,9 @@ def upwind_scc_trace_ordering(
         cyclic_components=int(np.count_nonzero(cyclic_mask)),
         cyclic_nodes=int(np.sum(component_sizes[cyclic_mask])) if component_sizes.size else 0,
         level_widths=level_widths,
+        algorithm_path=algorithm_path,
+        peeled_nodes=peeled_nodes,
+        residual_nodes=residual_nodes,
         timings=graph_timings,
     )
     return GraphOrderingResult(

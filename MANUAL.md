@@ -347,7 +347,7 @@ config so `poisson_solver_atol` controls the AMGX stop target directly.
 
 ### DOLFINx
 
-DOLFINx is optional and only used by scripts under `scripts/diocotron_dolfinx/`
+DOLFINx is optional and only used by scripts under `projects/diocotron/dolfinx/`
 for continuous-Galerkin comparison diagnostics on the guiding-center equilibrium
 problem.  Prefer a separate environment so its MPI/PETSc stack does not
 constrain the normal `hdgfem` environment:
@@ -1564,6 +1564,23 @@ Representative raw-CUDA/AMGX run, shortened for testing:
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH   .venv/bin/python scripts/guiding_center/run_guiding_center_cases.py   --preset diocotron_k3_p6_dt01_t50_full_raw_cuda_amgx   --num-steps 10 --plot-every 0 --verbosity 1
 ```
 
+Measured host PyPardiso policy on the 20-core Xeon workstation:
+
+```bash
+env MKL_NUM_THREADS=20 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  NUMBA_NUM_THREADS=20 conda run -n fenicsx-dgfem python \
+  scripts/guiding_center/run_guiding_center_cases.py \
+  --preset diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_auto
+```
+
+This preset always reuses an SPD PyPardiso Poisson factorization. It selects
+nonsymmetric PyPardiso transport through 1,200,000 reduced trace DOFs and uses
+reused medium-ILU BiCGSTAB above that ceiling. Override the ceiling with
+`--transport-pypardiso-max-trace-dofs`, or disable automatic selection with
+`--transport-solver-policy fixed`. See
+`docs/research/solver_studies/guiding_center_pypardiso_cutoff_2026_08.md` for
+the matched 30k--202k measurements and hardware qualifications.
+
 Important CLI controls:
 
 ```text
@@ -1583,7 +1600,7 @@ Important CLI controls:
 
 Diagnostics are written incrementally to JSONL and then to CSV at shutdown.
 They include mass drift, `||q||_L2` drift, field min/max, solver iterations,
-absolute and relative residuals, AMGX setup/solve timings, raw-kernel timings,
+absolute and relative residuals, direct-factorization build/reuse timings, AMGX setup/solve timings, raw-kernel timings,
 host/device transfer accounting, plot time, diocotron equilibrium drift, and
 manufactured `rho`/`phi` errors when exact fields are available.
 
@@ -1632,7 +1649,7 @@ semilinear elliptic equation of the form
 ```
 
 The native HDG runner is
-`scripts/diocotron_hdg/hdg_torsion_initialized_newton.py`.  It uses a
+`projects/diocotron/hdg/equilibrium/newton.py`.  It uses a
 torsion-initialized Newton method: solve torsion design fields, build a density
 window, solve a Poisson initializer `phiDesign`, and then apply damped Newton
 continuation to the semilinear HDG residual.
@@ -1640,7 +1657,7 @@ continuation to the semilinear HDG residual.
 Typical HDG diagnostic run:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m projects.diocotron.hdg.equilibrium.newton \
   --star-n 260 --order 4 --hdg-tau 20 -v 2 \
   --residual-norm euclid --newton-shift-mode none
 ```
@@ -1651,7 +1668,7 @@ Important controls include `--alphaT1`, `--alphaT2`, `--betaPhi1`,
 `--skip-petsc`.  Runs create timestamped output under
 `run_logs/hdg_torsion_initialized_newton/` unless `--run-dir` is provided.
 
-The DOLFINx scripts under `scripts/diocotron_dolfinx/` implement
+The DOLFINx scripts under `projects/diocotron/dolfinx/` implement
 continuous-Galerkin diagnostics for the same semilinear equilibrium problem.
 They can be used to compare CG and HDG on the same mesh, but they are not
 replacements for the HDG package solver path.
@@ -1659,12 +1676,12 @@ replacements for the HDG package solver path.
 Fair CG/HDG comparison workflow:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m projects.diocotron.hdg.equilibrium.newton \
   --run-tag hdg_star260_p2_mumps_clean \
   --star-n 260 --order 2 --hdg-tau 10 \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_newton \
+python -m projects.diocotron.dolfinx.torsion.equilibrium.newton \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
   --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
   --order 2 --linear-solver mumps --terminal-every 1
@@ -1675,8 +1692,8 @@ parameter-study line.  In this repository it refers to the studies and scripts
 around choosing torsion and nonlinear density-window parameters for the same
 semilinear guiding-center equilibrium solve, not to a separate core HDG solver
 family.  The relevant Markdown docs are
-`docs/research/strategy_a_band_parameter_study/strategyA_band_parameter_study.md` and
-`docs/research/strategy_a_band_parameter_study/recommended_strategyA_parameters.md`.
+`projects/diocotron/studies/strategy_a/report/strategyA_band_parameter_study.md` and
+`projects/diocotron/studies/strategy_a/report/recommended_strategyA_parameters.md`.
 
 Two DOLFINx diagnostic variants are worth knowing about:
 
@@ -1686,7 +1703,16 @@ reduced optimization    optimize leakage/missing-area objectives with sensitivit
 ```
 
 Detailed derivations for both variants live under
-[torsion-initialized equilibrium research](docs/research/torsion_initialized_equilibrium/).
+[torsion-initialized equilibrium research](projects/diocotron/docs/torsion).
+
+The fixed-mesh H0-1 projection mode is
+`projects/diocotron/dolfinx/torsion/optimization/h1_projection.py`.
+It minimizes distance to the sharp torsion-design potential while enforcing
+leakage and missing area as inequalities. It uses one strict stiffness-dual
+Newton tolerance for every projected state and contains no inexact-Newton
+path. Its required bounds, complete CLI, diagnostics, and reproducible command
+are documented in the
+[H0-1 projection optimizer guide](projects/diocotron/docs/torsion/h1_projection_optimizer.md).
 
 ## Performance Notes
 
@@ -1781,7 +1807,7 @@ Run a cheap guiding-center HDG smoke test only when that optional path is being
 changed:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m projects.diocotron.hdg.equilibrium.newton \
   --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
   --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```

@@ -290,10 +290,11 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Define a tangent/nearly-tangent advection-reaction boundary mode where the numerical flux on exterior boundary faces is set to zero. In this mode boundary trace values are not required, boundary trace DOFs are omitted/decoupled from the reduced trace solve, and the semantics are distinct from both penalty boundaries and exact Dirichlet boundary elimination. Boundary subsets remain a separate follow-up.
 - [x] Implement the tangent-zero-boundary-flux mode first in the host Numba thread-parallel advection-reaction assembly path. Reuse the current projected/table coefficient inputs, local elimination/reconstruction conventions, and boundary-face loops, but assemble only active interior trace couplings for zero-flux boundary faces.
 - [x] Wire tangent-zero-boundary-flux host assembly through `AdvectionReactionHDGSolver` and `scripts/advection_reaction/run_cases.py`, including `trace_ordering="upwind-scc"`. SCC ordering must be computed on the active trace graph after boundary trace DOFs are removed/decoupled, with diagnostics comparable to the existing upwind-SCC path.
-- [ ] Add broader host correctness tests for tangent-zero-boundary-flux advection-reaction assembly: manufactured tangent or nearly tangent beta fields and higher-order mesh sweeps. Initial Numba matrix/RHS parity, missing-boundary-data, unsupported-backend rejection, SCC ordering, reconstruction parity, and tangent-field conservation smoke tests are in place.
+- [x] Add broader host correctness tests for tangent-zero-boundary-flux advection-reaction assembly: manufactured tangent and nearly tangent beta fields now cover orders 1, 2, and 4, multiple structured meshes, and both production trace bases. Numba matrix/RHS parity against the NumPy reference, missing-boundary-data behavior, unsupported-backend rejection, SCC ordering, reconstruction parity, full NumPy/Numba solve parity, and tangent-field conservation smoke tests are covered by `tests/test_advection_reaction_numba.py` and `tests/test_advection_reaction_conservation.py`.
 - [x] Port tangent-zero-boundary-flux assembly to the preferred raw-CUDA fused cooperative path, including direct CSR emission for AMGX/device solves. Boundary faces now zero the raw-kernel `tau`/`gamma` face weights, do not read boundary trace values, and do not emit boundary trace rows/columns. Initial coverage includes raw-CUDA/Numba zero-flux matrix/RHS/reconstruction parity, raw COO/CSR zero-flux parity, and `scripts/gpu/run_advection_disk_tangent_cuda.py` AMGX smoke runs.
 - [ ] Broaden raw-CUDA tangent-zero-boundary-flux validation: larger disk manufactured sweeps, nodal/modal trace basis convergence checks, direct device AMGX performance runs, and a decision on whether raw-CUDA needs an SCC-compatible device trace ordering path or should keep `trace_ordering="none"`.
-- [ ] Add vectorized NumPy and CuPy tangent-zero-boundary-flux assembly. The mode is already public, so acceptance requires matrix/RHS/reconstruction parity against Numba, missing-boundary-data behavior, modal/nodal coverage, and explicit unsupported-path tests until each backend lands.
+- [x] Add vectorized NumPy tangent-zero-boundary-flux assembly. Production NumPy and Numba reduced matrix/RHS, trace, and reconstructed-field results agree for `legacy-lagrange` and `legendre-modal`; both enforce missing boundary data and reject supplied boundary values. The broader tangent/nearly-tangent order/mesh sweep and backend capability/documentation checks are covered by `tests/test_advection_reaction_numba.py` and `tests/test_backend_capabilities.py`.
+- [ ] Add vectorized CuPy tangent-zero-boundary-flux assembly. Acceptance requires matrix/RHS/reconstruction parity against Numba, missing-boundary-data behavior, modal/nodal coverage, device-residency/transfer accounting, and explicit unsupported-path tests until the backend lands.
 - [x] Document how boundary and stabilization modes interact with trace ownership, active DOF maps, SCC ordering, reconstruction, and device paths. `docs/reference/advection_boundary_stabilization.md` is the public contract and is linked from the manual, reference index, and advection algorithm note. It distinguishes zero flux from homogeneous Dirichlet data, records backend-specific stabilization inputs, and documents full-trace expansion and residency. The contract now records NumPy/CuPy explicit stabilization and DGField reference-table evaluation, Numba projected/table inputs, and raw-CUDA default-only stabilization.
 
 ### Device Assembly Kernel Qualification
@@ -419,6 +420,7 @@ This remains the highest-priority new shared-API design project after the unstea
 ### Driver, Time Integration, And Validation
 
 - [x] Add the fixed-mesh guiding-center cases runner at `scripts/guiding_center/run_guiding_center_cases.py` with `--preset`, `--list-presets`, `--case`, `--case-param`, independent Poisson/transport backend and solver flags, and `--backend-profile host|device|hybrid` shorthands.
+- [ ] Benchmark the PETSc configuration validated by `projects/diocotron/dolfinx/guiding_center/supg.py` in `scripts/guiding_center/run_guiding_center_cases.py`: CG/Hypre BoomerAMG for the fixed Poisson operator and warm-started BiCGStab with block-Jacobi ILU(0) for changing transport operators, using fixed `Mat`/`Vec` storage, symbolic ordering/fill reuse, and iterative-first MUMPS fallback. Compare it against the current matched runner preset on a recorded case, mesh, polynomial order, trace basis, time step, tolerances, and MPI rank count; report setup, assembly, KSP, and total step timings together with iterations, independently checked true residuals, mass/energy drift, and solution parity to quantify the speedup before promoting any default.
 - [x] Add `scripts/guiding_center/guiding_center_cases.py` with exactly three registered cases: legacy Gaussian-annulus `diocotron_gaussian_annulus`, sharp annular-band `diocotron_k`, and the legacy manufactured `rho_helm_wave`/`phi_helm_wave` pair.
 - [x] Add `scripts/guiding_center/guiding_center_presets.py` with curated host and raw-CUDA/AMGX-oriented presets for `diocotron_k3` and `rho_helm_wave` runs.
 - [x] Add first-pass per-step guiding-center diagnostics: CSV/JSONL output, mass and `||q||_L2` energy drift, min/max histories, solver residual/iteration histories, step timings, diocotron equilibrium-potential drift, and manufactured `rho`/`phi` errors.
@@ -449,7 +451,7 @@ This remains the highest-priority new shared-API design project after the unstea
 
 ### Equilibrium Import And Preservation
 
-- [ ] Add a reliable DOLFINx FE-to-`DGField` import path for equilibria generated by `scripts/diocotron_dolfinx/dolfinx_torsion_initialized_window_fit_newton.py`: load FE mesh/function data, map or validate mesh geometry and cell orientation against `DGMesh`, and populate target `DGField` objects by evaluating the FE field on HDG quadrature/plot points and performing the appropriate DG interpolation or L2 projection.
+- [ ] Add a reliable DOLFINx FE-to-`DGField` import path for equilibria generated by `projects/diocotron/dolfinx/torsion/equilibrium/window_fit.py`: load FE mesh/function data, map or validate mesh geometry and cell orientation against `DGMesh`, and populate target `DGField` objects by evaluating the FE field on HDG quadrature/plot points and performing the appropriate DG interpolation or L2 projection.
 - [ ] Use the imported DOLFINx torsion-initialized equilibrium as a fixed-mesh guiding-center preservation benchmark: initialize both HDG density and HDG potential from FE fields, run the new semi-implicit HDG guiding-center model, and measure how well the equilibrium is preserved.
 - [ ] Add equilibrium-preservation diagnostics and tests for the imported DOLFINx case: mass conservation, energy conservation, instability/growth rate, density/potential drift norms, min/max histories, solver residual histories, and host/device parity after the imported fields are materialized or uploaded into `DGField`/`VectorDGField` data.
 
@@ -467,6 +469,11 @@ This remains the highest-priority new shared-API design project after the unstea
 
 ### Documentation And Release Notes
 
+- [ ] Give every script under `scripts/` at least one copy-pasteable example
+  run, including any required environment, optional dependency, backend, and
+  hardware assumptions plus the expected output artifact or diagnostic. Agree
+  later on the canonical location and format for these examples, then keep them
+  synchronized with each script's CLI.
 - [ ] Publish a per-solver/per-backend coefficient and stabilization input matrix covering NumPy, CuPy, Numba, and raw CUDA. The current alpha matrix is published in [`docs/reference/coefficient_stabilization_matrix.md`](docs/reference/coefficient_stabilization_matrix.md); keep this item open for the common incidence-callable adapter and complete adapter-selected lowering diagnostics. For every PDE parameter and `tau_adv`/`tau_diff`, document the user-facing callable/DGField forms separately from internal descriptor/table lowering, the required element/local-face/quadrature axes and normal orientation, direct evaluation versus projection semantics, projection degree/quadrature, cache invalidation, preprocessing cost, residency/transfers, vectorization requirements, piecewise-branch guidance, and rejection behavior. State prominently that users normally provide formulas or DG fields—not quadrature tables—and show the adapter-selected lowering in solver/runner diagnostics. Include examples where two incidences of one interior face intentionally receive different values and verify that assembly preserves both contributions. Keep the reference, backend capability table, help, examples, and contract tests synchronized so users can determine the supported path before a solve starts.
 - [x] Document the current backend support matrix in `README.md` and `MANUAL.md`, including NumPy, Numba, CuPy, raw-CUDA, Cupyx, and PyAMGX responsibilities.
 - [x] Document raw-CUDA diffusion operator/RHS caching, RHS-only source kernels, direct CSR emission, and shared PyAMGX resource management.
@@ -542,5 +549,46 @@ This remains the highest-priority new shared-API design project after the unstea
 - [ ] Use stored boundary geometry in plotting helpers where appropriate, so exact/diagnostic boundary plots can show the intended curved geometry rather than only the piecewise-linear mesh boundary.
 ### Curvilinear Geometry And Adaptivity
 
-- [ ] Add future support for higher-order/curvilinear elements: store high-order element nodes or geometry-map coefficients, evaluate non-affine physical mappings and Jacobians at quadrature/plot points, and update assembly/reconstruction assumptions that currently rely on affine triangles.
+- [x] Add a standalone host/Numba unit-disk experiment comparing affine P1,
+  polynomial P2, and exact rational-P2 geometry without changing the production
+  `DGMesh` contract. `scripts/advection_reaction/experiments/curvilinear_disk_tangent_numba.py`
+  assembles the tangent zero-flux HDG operator from quadrature-dependent maps,
+  Jacobians, normals, and line measures, then reports manufactured-solution L2
+  refinement rates. On the matched `mesh_size=0.7,0.5,0.35`, solution-order
+  `p=1,4` regression, affine geometry does not improve with p, polynomial P2
+  improves by more than two orders of magnitude, and rational P2 is another
+  factor of about six more accurate at the finest mesh with an observed rate
+  above five. Focused tests also cover positive Jacobians, nodal/modal parity,
+  independently checked residuals, and affine matrix/RHS parity with the
+  production NumPy zero-flux assembler. Geometry evaluation, element-local
+  condensation, and reconstruction now use element-parallel Numba kernels;
+  condensation uses the production in-place LU/multi-RHS pattern. The
+  geometry-control builder retains a NumPy reference and a parity-tested
+  element-parallel Numba implementation. For the curved, rational, and
+  nonpolynomial manufactured integrands, the measured default is Duffy
+  `n=max(p+2,5)` (25--64 volume points for `p=1,...,6`), with the actual rule
+  and point counts reported in every run. Do not claim that the compact
+  reference-triangle symmetric rule remains polynomial-exact after a curved or
+  rational pullback; qualify any lower-point policy against a high-order rule.
+  experiment also accepts same-mesh, cross-degree `VectorDGField` velocities
+  and selects PyPardiso when available, with an explicit SciPy fallback. Its
+  runner plots the highest-order finest-mesh solution or error on the actual
+  P1, polynomial-P2, or rational-P2 geometry through the reusable element-map
+  callback in `hdgfem/io/plot.py`. Treat this script as the reference
+  implementation and executable specification for eventual full curvilinear
+  mesh support in `hdgfem`: preserve its affine-P1, polynomial-P2, and
+  rational-P2 maps; quadrature-dependent coordinates, Jacobians, normals, and
+  line measures; element-parallel Numba assembly and reconstruction;
+  cross-degree `VectorDGField` coefficient handling; geometry-aware plotting;
+  and convergence/parity tests as those pieces migrate into the library. This
+  remains experimental evidence rather than production curvilinear support,
+  and the production implementation should demonstrate parity with the
+  reference experiment before the standalone path is retired.
+- [ ] Promote the reference experiment into first-class higher-order/curvilinear
+  element support: store high-order element nodes or geometry-map coefficients,
+  evaluate non-affine physical mappings and Jacobians at quadrature/plot points,
+  and update assembly/reconstruction assumptions that currently rely on affine
+  triangles. Use
+  `scripts/advection_reaction/experiments/curvilinear_disk_tangent_numba.py` as
+  the behavioral and performance reference throughout this migration.
 - [ ] Design adaptivity hooks around the same mesh-geometry metadata so boundary refinement and element refinement can preserve curved boundaries instead of drifting to straight chord approximations.

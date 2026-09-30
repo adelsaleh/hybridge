@@ -1,0 +1,16 @@
+{
+  "active_jaccard": 0.9891552626755908,
+  "active_symmetric_difference": 0.0007704130571732339,
+  "certified_jaccard": 0.9817113207469088,
+  "certified_symmetric_difference": 0.0007945015379358713,
+  "epsilon_ratio_observed": 0.08,
+  "normalized_contour_hausdorff": 0.009634818625333956,
+  "phi_relative_h1": 0.0089241900642395,
+  "phi_relative_l2": 0.0027340671280680516,
+  "relative_h1": 0.0089241900642395,
+  "relative_l2": 0.0027340671280680516,
+  "rho_relative_l2": 0.016304404179738285,
+  "transition_resolution_median": 1.4875616108948877,
+  "transition_resolution_min": 0.35023197680159457,
+  "transition_resolution_p10": 0.3714079794100418
+}

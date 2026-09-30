@@ -13,12 +13,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from math import sqrt
 import os
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial import Delaunay
 
 from ..core.mesh import DGMesh
 from ..core.space import DGField
+
+
+ElementGeometryMap = Callable[[np.ndarray], np.ndarray]
 
 
 def _require_pyvista():
@@ -28,6 +32,38 @@ def _require_pyvista():
     except ImportError as exc:
         raise ImportError("hdgfem plotting helpers require pyvista") from exc
     return pv
+
+
+def map_element_plot_points(
+        mesh: DGMesh,
+        reference_points: np.ndarray,
+        *,
+        geometry_map: ElementGeometryMap | None = None,
+) -> np.ndarray:
+    """Map one reference grid through affine or caller-supplied element geometry.
+
+    A custom ``geometry_map(reference_points)`` must return physical points with
+    shape ``(num_elements, num_points, 2)``. This keeps plotting independent of
+    how polynomial or rational geometry coefficients are stored.
+    """
+    reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
+    if reference_points.ndim != 2 or reference_points.shape[1] != 2:
+        raise ValueError("reference_points must have shape (num_points, 2)")
+    physical_points = (
+        mesh.map_reference_points(reference_points)
+        if geometry_map is None
+        else geometry_map(reference_points)
+    )
+    physical_points = np.asarray(physical_points, dtype=np.float64)
+    expected = (mesh.num_tri, reference_points.shape[0], 2)
+    if physical_points.shape != expected:
+        raise ValueError(
+            "geometry_map must return physical points with shape "
+            f"{expected}; got {physical_points.shape}"
+        )
+    if not np.all(np.isfinite(physical_points)):
+        raise ValueError("geometry_map returned non-finite physical points")
+    return np.ascontiguousarray(physical_points)
 
 
 def _normalize_sample_values(values, num_elements: int, num_points: int) -> np.ndarray:
@@ -121,6 +157,18 @@ def reference_plot_points(resolution: int) -> np.ndarray:
     xx, yy = np.meshgrid(axis, axis, indexing="xy")
     inside = yy <= -xx
     return np.ascontiguousarray(np.column_stack((xx[inside], yy[inside])), dtype=np.float64)
+
+
+def reference_element_edge_points(resolution: int = 20) -> np.ndarray:
+    """Return ordered reference samples on all three triangle edges."""
+    if int(resolution) < 2:
+        raise ValueError("edge resolution must be at least 2")
+    coordinate = np.linspace(-1.0, 1.0, int(resolution))
+    return np.ascontiguousarray(np.stack((
+        np.stack((coordinate, -np.ones_like(coordinate)), axis=1),
+        np.stack((-coordinate, coordinate), axis=1),
+        np.stack((-np.ones_like(coordinate), -coordinate), axis=1),
+    ), axis=0))
 
 
 def resolve_field_plot_resolution(
@@ -254,6 +302,7 @@ def sample_field_on_elements(
         *,
         resolution: int = 20,
         reference_points: np.ndarray | None = None,
+        geometry_map: ElementGeometryMap | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""Sample a scalar DG field on every element.
 
@@ -282,7 +331,11 @@ def sample_field_on_elements(
         reference_points = reference_plot_points(resolution)
     else:
         reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
-    physical_points = field.space.mesh.map_reference_points(reference_points)
+    physical_points = map_element_plot_points(
+        field.space.mesh,
+        reference_points,
+        geometry_map=geometry_map,
+    )
     values = field.values_at_ref(reference_points)
     return reference_points, physical_points, values
 
@@ -293,6 +346,7 @@ def sample_callable_on_elements(
         *,
         resolution: int = 20,
         reference_points: np.ndarray | None = None,
+        geometry_map: ElementGeometryMap | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""Sample a scalar callable on every physical element.
 
@@ -321,7 +375,7 @@ def sample_callable_on_elements(
         reference_points = reference_plot_points(resolution)
     else:
         reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
-    physical_points = mesh.map_reference_points(reference_points)
+    physical_points = map_element_plot_points(mesh, reference_points, geometry_map=geometry_map)
     values = function(physical_points[:, :, 0], physical_points[:, :, 1])
     values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
     return reference_points, physical_points, values
@@ -334,6 +388,7 @@ def refined_field_polydata(
         reference_points: np.ndarray | None = None,
         values: np.ndarray | None = None,
         scalar_name: str | None = None,
+        geometry_map: ElementGeometryMap | None = None,
 ):
     """Build a discontinuous refined :class:`pyvista.PolyData` for a DG field.
 
@@ -360,6 +415,7 @@ def refined_field_polydata(
         reference_points,
         values,
         scalar_name=name,
+        geometry_map=geometry_map,
     )
 
 
@@ -369,6 +425,7 @@ def refined_sample_polydata(
         values: np.ndarray,
         *,
         scalar_name: str,
+        geometry_map: ElementGeometryMap | None = None,
 ):
     """Build refined :class:`pyvista.PolyData` from mesh-only scalar samples.
 
@@ -380,7 +437,7 @@ def refined_sample_polydata(
     pv = _require_pyvista()
     reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
     values = _normalize_sample_values(values, mesh.num_tri, reference_points.shape[0])
-    physical_points = mesh.map_reference_points(reference_points)
+    physical_points = map_element_plot_points(mesh, reference_points, geometry_map=geometry_map)
     reference_triangles = reference_plot_connectivity(reference_points)
     points_per_element = reference_points.shape[0]
     triangle_offsets = np.repeat(
@@ -398,13 +455,37 @@ def refined_sample_polydata(
     return polydata
 
 
-def coarse_mesh_polydata(mesh: DGMesh):
-    """Build a wireframe-ready :class:`pyvista.PolyData` from a :class:`DGMesh`."""
+def coarse_mesh_polydata(
+        mesh: DGMesh,
+        *,
+        geometry_map: ElementGeometryMap | None = None,
+        edge_resolution: int = 20,
+):
+    """Build a wireframe-ready affine or curved :class:`pyvista.PolyData`."""
     pv = _require_pyvista()
-    points = np.zeros((mesh.node_coords.shape[0], 3), dtype=np.float64)
-    points[:, :2] = mesh.node_coords
-    faces = np.insert(mesh.triangles, 0, 3, axis=1).ravel()
-    return pv.PolyData(points, faces)
+    if geometry_map is None:
+        points = np.zeros((mesh.node_coords.shape[0], 3), dtype=np.float64)
+        points[:, :2] = mesh.node_coords
+        faces = np.insert(mesh.triangles, 0, 3, axis=1).ravel()
+        return pv.PolyData(points, faces)
+
+    reference_edges = reference_element_edge_points(edge_resolution)
+    points_per_edge = reference_edges.shape[1]
+    mapped_edges = map_element_plot_points(
+        mesh,
+        reference_edges.reshape(-1, 2),
+        geometry_map=geometry_map,
+    ).reshape(mesh.num_tri, 3, points_per_edge, 2)
+    points = np.zeros((mapped_edges.size // 2, 3), dtype=np.float64)
+    points[:, :2] = mapped_edges.reshape(-1, 2)
+    num_lines = mesh.num_tri * 3
+    starts = np.arange(num_lines, dtype=np.int64)[:, None] * points_per_edge
+    lines = np.empty((num_lines, points_per_edge + 1), dtype=np.int64)
+    lines[:, 0] = points_per_edge
+    lines[:, 1:] = starts + np.arange(points_per_edge, dtype=np.int64)[None, :]
+    polydata = pv.PolyData(points)
+    polydata.lines = lines.ravel()
+    return polydata
 
 
 def add_field_to_plotter(
@@ -418,6 +499,8 @@ def add_field_to_plotter(
         title: str | None = None,
         subplot: tuple[int, int] | None = None,
         show_mesh: bool = True,
+        geometry_map: ElementGeometryMap | None = None,
+        mesh_edge_resolution: int = 20,
         cmap: str = "viridis",
         clim: tuple[float, float] | None = None,
         scalar_bar_args: dict | None = None,
@@ -442,6 +525,7 @@ def add_field_to_plotter(
         reference_points=reference_points,
         values=values,
         scalar_name=scalar,
+        geometry_map=geometry_map,
     )
     scalar_values = refined_mesh.point_data[scalar]
     if clim is None:
@@ -457,10 +541,18 @@ def add_field_to_plotter(
     )
     if show_mesh:
         plotter.add_mesh(
-            coarse_mesh_polydata(field.space.mesh),
+            coarse_mesh_polydata(
+                field.space.mesh,
+                geometry_map=geometry_map,
+                edge_resolution=mesh_edge_resolution,
+            ),
             style="wireframe",
             color=mesh_color,
-            line_width=_mesh_overlay_line_width(field.space.mesh) if mesh_line_width is None else float(mesh_line_width),
+            line_width=(
+                _mesh_overlay_line_width(field.space.mesh)
+                if mesh_line_width is None
+                else float(mesh_line_width)
+            ),
             opacity=mesh_opacity,
         )
     if title:
@@ -481,6 +573,8 @@ def add_samples_to_plotter(
         title: str | None = None,
         subplot: tuple[int, int] | None = None,
         show_mesh: bool = True,
+        geometry_map: ElementGeometryMap | None = None,
+        mesh_edge_resolution: int = 20,
         cmap: str = "viridis",
         clim: tuple[float, float] | None = None,
         scalar_bar_args: dict | None = None,
@@ -503,6 +597,7 @@ def add_samples_to_plotter(
         reference_points,
         values,
         scalar_name=scalar_name,
+        geometry_map=geometry_map,
     )
     scalar_values = refined_mesh.point_data[scalar_name]
     if clim is None:
@@ -518,7 +613,11 @@ def add_samples_to_plotter(
     )
     if show_mesh:
         plotter.add_mesh(
-            coarse_mesh_polydata(mesh),
+            coarse_mesh_polydata(
+                mesh,
+                geometry_map=geometry_map,
+                edge_resolution=mesh_edge_resolution,
+            ),
             style="wireframe",
             color=mesh_color,
             line_width=_mesh_overlay_line_width(mesh) if mesh_line_width is None else float(mesh_line_width),
@@ -538,6 +637,8 @@ def plot_field(
         resolution: int = 20,
         title: str | None = None,
         show_mesh: bool = True,
+        geometry_map: ElementGeometryMap | None = None,
+        mesh_edge_resolution: int = 20,
         show: bool = True,
         off_screen: bool = False,
         window_size: tuple[int, int] = (900, 700),
@@ -561,6 +662,8 @@ def plot_field(
         resolution=resolution,
         title=field.name if title is None else title,
         show_mesh=show_mesh,
+        geometry_map=geometry_map,
+        mesh_edge_resolution=mesh_edge_resolution,
         cmap=cmap,
         clim=clim,
         scalar_name=scalar_name,
@@ -578,6 +681,8 @@ def plot_fields(
         titles: Sequence[str] | None = None,
         shape: tuple[int, int] | None = None,
         show_mesh: bool = True,
+        geometry_map: ElementGeometryMap | None = None,
+        mesh_edge_resolution: int = 20,
         show: bool = True,
         off_screen: bool = False,
         window_size: tuple[int, int] = (1600, 700),
@@ -629,6 +734,8 @@ def plot_fields(
             title=title,
             subplot=(index // columns, index % columns),
             show_mesh=show_mesh,
+            geometry_map=geometry_map,
+            mesh_edge_resolution=mesh_edge_resolution,
             cmap=cmap,
             clim=shared_clim,
             scalar_bar_args=scalar_bar_args,
@@ -640,7 +747,12 @@ def plot_fields(
     return plotter
 
 
-def matplotlib_discontinuous_triangulation(mesh: DGMesh, reference_points: np.ndarray):
+def matplotlib_discontinuous_triangulation(
+        mesh: DGMesh,
+        reference_points: np.ndarray,
+        *,
+        geometry_map: ElementGeometryMap | None = None,
+):
     """Build a Matplotlib triangulation with duplicated vertices per DG element.
 
     The returned triangulation is suitable for DG visualizations because every
@@ -651,7 +763,7 @@ def matplotlib_discontinuous_triangulation(mesh: DGMesh, reference_points: np.nd
     import matplotlib.tri as mtri
 
     reference_points = np.ascontiguousarray(reference_points, dtype=np.float64)
-    physical_points = mesh.map_reference_points(reference_points)
+    physical_points = map_element_plot_points(mesh, reference_points, geometry_map=geometry_map)
     points_per_element = reference_points.shape[0]
     reference_triangles = reference_plot_connectivity(reference_points)
     triangle_offsets = np.repeat(
@@ -663,12 +775,46 @@ def matplotlib_discontinuous_triangulation(mesh: DGMesh, reference_points: np.nd
     return mtri.Triangulation(points[:, 0], points[:, 1], triangles)
 
 
-def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: float = 0.65, alpha: float = 0.55):
-    """Overlay the coarse physical mesh on a Matplotlib axes."""
-    import matplotlib.tri as mtri
+def add_matplotlib_mesh(
+        ax,
+        mesh: DGMesh,
+        *,
+        geometry_map: ElementGeometryMap | None = None,
+        edge_resolution: int = 20,
+        color: str = "black",
+        linewidth: float = 0.65,
+        alpha: float = 0.55,
+):
+    """Overlay affine chords or sampled curved element edges."""
+    if geometry_map is None:
+        import matplotlib.tri as mtri
 
-    coarse = mtri.Triangulation(mesh.node_coords[:, 0], mesh.node_coords[:, 1], mesh.triangles)
-    return ax.triplot(coarse, color=color, linewidth=linewidth, alpha=alpha)
+        coarse = mtri.Triangulation(
+            mesh.node_coords[:, 0],
+            mesh.node_coords[:, 1],
+            mesh.triangles,
+        )
+        return ax.triplot(coarse, color=color, linewidth=linewidth, alpha=alpha)
+
+    from matplotlib.collections import LineCollection
+
+    reference_edges = reference_element_edge_points(edge_resolution)
+    points_per_edge = reference_edges.shape[1]
+    mapped_edges = map_element_plot_points(
+        mesh,
+        reference_edges.reshape(-1, 2),
+        geometry_map=geometry_map,
+    ).reshape(mesh.num_tri, 3, points_per_edge, 2)
+    segments = mapped_edges.reshape(-1, points_per_edge, 2)
+    collection = LineCollection(
+        segments,
+        colors=color,
+        linewidths=linewidth,
+        alpha=alpha,
+    )
+    ax.add_collection(collection)
+    ax.autoscale_view()
+    return collection
 
 
 def _matplotlib_backend_is_noninteractive(backend: str) -> bool:
@@ -719,12 +865,16 @@ def plot_scalar_sample_panels_matplotlib(
         *,
         suptitle: str | None = None,
         show_mesh: bool = True,
+        geometry_map: ElementGeometryMap | None = None,
+        mesh_edge_resolution: int = 20,
         cmap: str = "jet",
         levels: int | Sequence[float] = 64,
         clim: tuple[float, float] | None = None,
         share_clim: bool = True,
         show: bool = True,
         figsize: tuple[float, float] | None = None,
+        output: Path | str | None = None,
+        dpi: int = 180,
 ):
     """Plot scalar per-element samples using Matplotlib discontinuous contours.
 
@@ -733,7 +883,8 @@ def plot_scalar_sample_panels_matplotlib(
     one value per reference point, or an array with shape
     ``(num_elements, num_points)``.  Per-panel ``options`` may set ``cmap``,
     ``levels``, ``clim``, ``extend``, ``show_mesh``, ``robust_percentile``,
-    and ``zero_min``.  Vertices are duplicated per element so discontinuous
+    ``zero_min``, ``geometry_map``, and ``mesh_edge_resolution``. Vertices
+    are duplicated per element so discontinuous
     DG fields are not averaged across element boundaries.
 
     Parameters
@@ -818,12 +969,17 @@ def plot_scalar_sample_panels_matplotlib(
     axes = np.atleast_1d(axes)
     contour = None
     panel_contours = []
-    triangulations: dict[tuple[tuple[int, ...], bytes], object] = {}
+    triangulations: dict[tuple[tuple[int, ...], bytes, int], object] = {}
     for ax, (title, reference_points, values, panel_options) in zip(axes, normalized_panels):
-        key = (reference_points.shape, reference_points.tobytes())
+        panel_geometry_map = panel_options.get("geometry_map", geometry_map)
+        key = (reference_points.shape, reference_points.tobytes(), id(panel_geometry_map))
         triangulation = triangulations.get(key)
         if triangulation is None:
-            triangulation = matplotlib_discontinuous_triangulation(mesh, reference_points)
+            triangulation = matplotlib_discontinuous_triangulation(
+                mesh,
+                reference_points,
+                geometry_map=panel_geometry_map,
+            )
             triangulations[key] = triangulation
         panel_levels = panel_options.get("levels", levels)
         panel_percentile = float(panel_options.get("robust_percentile", 95.0))
@@ -857,7 +1013,12 @@ def plot_scalar_sample_panels_matplotlib(
         contour.set_clim(panel_minimum, panel_maximum)
         panel_contours.append((ax, contour))
         if panel_options.get("show_mesh", show_mesh):
-            add_matplotlib_mesh(ax, mesh)
+            add_matplotlib_mesh(
+                ax,
+                mesh,
+                geometry_map=panel_geometry_map,
+                edge_resolution=int(panel_options.get("mesh_edge_resolution", mesh_edge_resolution)),
+            )
         ax.set_aspect("equal", adjustable="box")
         ax.set_title(title, fontsize=10)
         ax.set_xlabel("x")
@@ -884,6 +1045,10 @@ def plot_scalar_sample_panels_matplotlib(
                 pad=0.035,
                 location="right",
             )
+    if output is not None:
+        output = Path(output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output, dpi=int(dpi))
     if show and not _matplotlib_backend_is_noninteractive(plt.get_backend()):
         plt.show()
     return fig
@@ -1008,17 +1173,20 @@ def plot_solution_comparison(
 
 
 __all__ = [
+    "ElementGeometryMap",
     "add_field_to_plotter",
     "add_matplotlib_mesh",
     "add_samples_to_plotter",
     "coarse_mesh_polydata",
     "contour_levels_for_order",
     "matplotlib_discontinuous_triangulation",
+    "map_element_plot_points",
     "plot_field",
     "plot_fields",
     "plot_scalar_sample_panels_matplotlib",
     "plot_solution_comparison",
     "reference_plot_connectivity",
+    "reference_element_edge_points",
     "reference_plot_points",
     "resolve_exact_plot_resolution",
     "resolve_field_plot_resolution",

@@ -41,6 +41,68 @@ def _elementwise_constant_field(space: DGSpace, values, *, name: str) -> DGField
     return space.field(np.ascontiguousarray(coeffs), name=name)
 
 
+def _project_tangent_beta(space: DGSpace, eps: float) -> VectorDGField:
+    beta_x = lambda x, y: x * (1.0 - x) * (1.0 - 2.0 * y) + eps * (1.0 - y)
+    beta_y = lambda x, y: -(1.0 - 2.0 * x) * y * (1.0 - y) + eps * (1.0 - x)
+    return VectorDGField(
+        (
+            space.project_callable(beta_x, name="beta_x_h"),
+            space.project_callable(beta_y, name="beta_y_h"),
+        ),
+        name="beta_h",
+    )
+
+
+@pytest.mark.parametrize("order", (1, 2, 4))
+@pytest.mark.parametrize("mesh_size", ((1, 1), (2, 1)))
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize("eps", (0.0, 1.0e-6))
+def test_numba_zero_flux_tangent_matrix_matches_numpy_reference(order: int, mesh_size: tuple[int, int], trace_basis: str, eps: float) -> None:
+    mesh = rectangle_mesh(*mesh_size)
+    space = DGSpace(mesh, order, basis_type="dub_orth")
+    beta_h = _project_tangent_beta(space, eps)
+    reaction_h = space.constant(1.5, name="reaction_h")
+    source_h = space.constant(0.25, name="source_h")
+    trace_space = space.trace_space(trace_basis)
+
+    full_trace_system = _numpy_weighted_advection_trace_system(
+        source_h,
+        beta_h,
+        reaction_h,
+        lambda x, y: np.zeros_like(x),
+        space,
+        trace_basis=trace_basis,
+        zero_boundary_flux=True,
+    )
+    generic_reduction = eliminate_known_dofs(
+        full_trace_system.rows,
+        full_trace_system.cols,
+        full_trace_system.data,
+        full_trace_system.rhs,
+        ~hdg_assembly.free_trace_dofs(space, trace_space=trace_space),
+        full_trace_system.boundary_trace.ravel(),
+    )
+
+    zero_flux = assemble_projected_trace_system_zero_flux_numba(
+        source_h,
+        beta_h,
+        reaction_h,
+        space,
+        trace_space=trace_space,
+    )
+    direct_reduction = zero_flux.reduction
+
+    np.testing.assert_array_equal(direct_reduction.free_mask, generic_reduction.free_mask)
+    np.testing.assert_array_equal(direct_reduction.known_mask, generic_reduction.known_mask)
+    np.testing.assert_array_equal(direct_reduction.old_to_new, generic_reduction.old_to_new)
+    np.testing.assert_array_equal(direct_reduction.rows, generic_reduction.rows)
+    np.testing.assert_array_equal(direct_reduction.cols, generic_reduction.cols)
+    np.testing.assert_allclose(direct_reduction.data, generic_reduction.data, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(direct_reduction.rhs, generic_reduction.rhs, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(zero_flux.trace_system.boundary_trace, 0.0)
+    assert "boundary_flux_zeroing" in zero_flux.timings
+
+
 def test_dg_stabilization_uses_field_space_reference_tables(monkeypatch) -> None:
     mesh = rectangle_mesh(1, 1)
     test_space = DGSpace(mesh, 3, basis_type="dub_orth")
@@ -375,7 +437,8 @@ def test_numba_zero_flux_trace_system_matches_numpy_zeroed_boundary_flux(trace_b
     assert "boundary_flux_zeroing" in zero_flux.timings
 
 
-def test_zero_flux_numba_requires_none_boundary_condition() -> None:
+@pytest.mark.parametrize("backend", ("numpy", "numba"))
+def test_zero_flux_requires_none_boundary_condition(backend: str) -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, source_h, _ = _projected_test2_fields(space)
@@ -391,7 +454,7 @@ def test_zero_flux_numba_requires_none_boundary_condition() -> None:
         solver="direct",
         preconditioner=None,
         boundary_mode="zero-flux",
-        assembly_backend="numba",
+        assembly_backend=backend,
         verbose=False,
     )
     missing_boundary = missing_boundary_solver.solve()
@@ -411,7 +474,7 @@ def test_zero_flux_numba_requires_none_boundary_condition() -> None:
                 solver="direct",
                 preconditioner=None,
                 boundary_mode="zero-flux",
-                assembly_backend="numba",
+                assembly_backend=backend,
                 verbose=False,
             )
         with pytest.raises(ValueError, match=match):
@@ -424,7 +487,7 @@ def test_zero_flux_numba_requires_none_boundary_condition() -> None:
                 solver="direct",
                 preconditioner=None,
                 boundary_mode="zero-flux",
-                assembly_backend="numba",
+                assembly_backend=backend,
                 verbose=False,
             )
         with pytest.raises(ValueError, match=match):
@@ -476,7 +539,7 @@ def test_zero_flux_numba_upwind_scc_matches_unordered() -> None:
     np.testing.assert_allclose(ordered.field.coeffs, unordered.field.coeffs, rtol=1e-11, atol=1e-11)
 
 
-@pytest.mark.parametrize("backend", ("numpy", "cupy", "auto"))
+@pytest.mark.parametrize("backend", ("cupy",))
 def test_zero_flux_rejects_backends_without_zero_flux_support(backend: str) -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 1, basis_type="dub_orth")
@@ -500,6 +563,51 @@ def test_zero_flux_rejects_backends_without_zero_flux_support(backend: str) -> N
             assembly_backend=backend,
             verbose=False,
         )
+
+
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+def test_zero_flux_numpy_solution_matches_numba(trace_basis: str) -> None:
+    mesh = rectangle_mesh(2, 2)
+    space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
+    source_h = space.constant(1.0, name="source_h")
+    reaction_h = space.constant(1.5, name="reaction_h")
+    beta_h = (space * space).constant((0.8, -0.2), name="beta_h")
+
+    numpy_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        None,
+        space,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="zero-flux",
+        assembly_backend="numpy",
+        trace_basis=trace_basis,
+        verbose=False,
+    )
+    numba_result = solve_advection_reaction_hdg(
+        source_h,
+        beta_h,
+        reaction_h,
+        None,
+        space,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="zero-flux",
+        assembly_backend="numba",
+        trace_basis=trace_basis,
+        verbose=False,
+    )
+
+    np.testing.assert_array_equal(numpy_result.solve_matrix_rows, numba_result.solve_matrix_rows)
+    np.testing.assert_array_equal(numpy_result.solve_matrix_cols, numba_result.solve_matrix_cols)
+    np.testing.assert_allclose(numpy_result.solve_matrix_data, numba_result.solve_matrix_data, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(numpy_result.solve_rhs, numba_result.solve_rhs, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(numpy_result.trace, numba_result.trace, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(numpy_result.field.coeffs, numba_result.field.coeffs, rtol=1.0e-11, atol=1.0e-11)
+    np.testing.assert_allclose(numpy_result.boundary_trace, 0.0, rtol=1.0e-12, atol=1.0e-12)
+    np.testing.assert_allclose(numba_result.boundary_trace, 0.0, rtol=1.0e-12, atol=1.0e-12)
 
 
 def test_numba_eliminated_block_coo_reconstructs_trace_matrix() -> None:

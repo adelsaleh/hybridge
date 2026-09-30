@@ -26,6 +26,7 @@ def test_alpha_package_metadata_declares_bounded_runtime_and_extras() -> None:
     assert project["requires-python"] == ">=3.10"
     assert set(project["dependencies"]) == {"numba", "numpy", "scipy"}
     extras = project["optional-dependencies"]
+    assert "equiband" not in extras  # FEniCSx workflows belong to the script environment.
     assert {"mesh", "plot", "test", "release", "all"} <= set(extras)
     assert {"pytest", "matplotlib", "tomli; python_version < '3.11'"} <= set(extras["test"])
     assert "tomli; python_version < '3.11'" in extras["all"]
@@ -50,6 +51,7 @@ def test_install_smoke_is_release_blocking_and_host_fast_locks_its_policy() -> N
     assert not lane.requires_gpu
     assert lane.commands == (("{python}", "scripts/dev/clean_install_smoke.py"),)
     assert "tests/test_packaging_contract.py" in HOST_FAST_TARGETS
+    assert "tests/test_dolfinx_script_boundary.py" in HOST_FAST_TARGETS
 
 
 def test_install_smoke_builds_from_a_temporary_staged_source() -> None:

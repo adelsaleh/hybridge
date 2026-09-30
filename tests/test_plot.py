@@ -5,7 +5,14 @@ matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg", force=True)
 
 from hdgfem import rectangle_mesh
-from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib, reference_plot_points
+from hdgfem.io.plot import (
+    coarse_mesh_polydata,
+    map_element_plot_points,
+    matplotlib_discontinuous_triangulation,
+    plot_scalar_sample_panels_matplotlib,
+    reference_plot_points,
+    refined_sample_polydata,
+)
 
 
 def _sample_values(mesh, reference_points, offset=0.0, scale=1.0):
@@ -169,3 +176,87 @@ def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
         )
     finally:
         plt.close(fig)
+
+
+def test_curved_geometry_map_controls_triangulation_overlay_and_output(tmp_path):
+    import matplotlib.pyplot as plt
+
+    mesh = rectangle_mesh(1, 1)
+    reference_points = reference_plot_points(7)
+    affine_points = mesh.map_reference_points(reference_points)
+
+    def curved_map(points):
+        mapped = mesh.map_reference_points(points).copy()
+        mapped[..., 1] += 0.15 * (1.0 - points[:, 0] ** 2)[None, :]
+        return mapped
+
+    physical_points = map_element_plot_points(
+        mesh,
+        reference_points,
+        geometry_map=curved_map,
+    )
+    assert np.max(np.abs(physical_points - affine_points)) > 0.1
+
+    triangulation = matplotlib_discontinuous_triangulation(
+        mesh,
+        reference_points,
+        geometry_map=curved_map,
+    )
+    np.testing.assert_allclose(triangulation.x, physical_points[..., 0].reshape(-1))
+    np.testing.assert_allclose(triangulation.y, physical_points[..., 1].reshape(-1))
+
+    values = physical_points[..., 0] + physical_points[..., 1]
+    output = tmp_path / "curved-elements.png"
+    figure = plot_scalar_sample_panels_matplotlib(
+        mesh,
+        (("curved", reference_points, values, {"geometry_map": curved_map}),),
+        show=False,
+        output=output,
+        mesh_edge_resolution=9,
+    )
+    try:
+        assert output.is_file()
+        assert output.stat().st_size > 0
+        assert len(figure.axes[0].collections) >= 2
+    finally:
+        plt.close(figure)
+
+    with pytest.raises(ValueError, match="geometry_map must return"):
+        map_element_plot_points(
+            mesh,
+            reference_points,
+            geometry_map=lambda points: np.zeros((points.shape[0], 2)),
+        )
+
+
+def test_curved_geometry_map_builds_refined_pyvista_surface_and_wireframe():
+    pytest.importorskip("pyvista")
+
+    mesh = rectangle_mesh(1, 1)
+    reference_points = reference_plot_points(6)
+
+    def curved_map(points):
+        mapped = mesh.map_reference_points(points).copy()
+        mapped[..., 1] += 0.1 * (1.0 - points[:, 0] ** 2)[None, :]
+        return mapped
+
+    physical_points = curved_map(reference_points)
+    values = physical_points[..., 0] - physical_points[..., 1]
+    refined = refined_sample_polydata(
+        mesh,
+        reference_points,
+        values,
+        scalar_name="u",
+        geometry_map=curved_map,
+    )
+    np.testing.assert_allclose(refined.points[:, :2], physical_points.reshape(-1, 2))
+    np.testing.assert_allclose(refined.point_data["u"], values.reshape(-1))
+
+    edge_resolution = 8
+    wireframe = coarse_mesh_polydata(
+        mesh,
+        geometry_map=curved_map,
+        edge_resolution=edge_resolution,
+    )
+    assert wireframe.n_lines == 3 * mesh.num_tri
+    assert wireframe.n_points == 3 * edge_resolution * mesh.num_tri

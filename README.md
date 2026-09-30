@@ -12,11 +12,21 @@ face-block Poisson preconditioners, mesh-independent diffusion stabilization,
 reusable solvers for unsteady runs, and high-order guiding-center/diocotron
 benchmarks.
 
-A separate interested-reader part of the repository studies diocotron-like
-equilibria of the guiding-center model through the semilinear elliptic equation
-`-Delta phi = f(phi)`.  Those scripts are not core package dependencies;
-DOLFINx is used there only as an optional continuous-Galerkin comparison path
-against the native HDG implementation.
+The [diocotron application](projects/diocotron/README.md) studies equilibria of
+the guiding-center model through `-Delta phi = f(phi)` and their time evolution.
+It owns separate DOLFINx, native HDG, and FreeFEM implementations, together with
+their tests, examples, and scientific studies. Its HDG implementation consumes
+this library; its DOLFINx implementation runs independently. Application code
+is outside the installed `hdgfem` package.
+
+The script-side [equiband solver](projects/diocotron/docs/equiband.md), located in
+`projects/diocotron/dolfinx/equiband`, implements
+smooth fixed-threshold-width equilibrium bands with a normalized torsion-flow
+distance target, fold-capable pseudo-arclength continuation, branch guards,
+NumPy/Numba kernels and MPI verification.
+See [the runnable examples](projects/diocotron/examples/equiband/README.md) for commands and
+the separate FEniCSx environment. DOLFINx solvers and checkpoint adapters
+stay outside the installed `hdgfem` package.
 
 The supported early-alpha solver imports and update/failure semantics are
 defined in `docs/reference/solver_api_alpha.md`. Reusable solver classes are the primary
@@ -229,8 +239,8 @@ materialization. Compare both temporal schemes with
 `scripts/guiding_center/run_guiding_center_temporal_convergence.py`.
 
 Optional semilinear diocotron-equilibrium scripts live under
-`scripts/diocotron_hdg/` and `scripts/diocotron_dolfinx/`.  They are documented
-in `MANUAL.md` and the Strategy A notes under `docs/research/strategy_a_band_parameter_study/`.
+`projects/diocotron/hdg/` and `projects/diocotron/dolfinx/`.  They are documented
+in `MANUAL.md` and the Strategy A notes under `projects/diocotron/studies/strategy_a/report/`.
 
 ## Package Map
 

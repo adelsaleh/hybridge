@@ -204,7 +204,7 @@ def _advection_preflight(**overrides):
 @pytest.mark.parametrize(
     "overrides,reason",
     (
-        ({"assembly_backend": "numpy", "boundary_mode": "zero-flux"}, "boundary_mode='zero-flux'"),
+        ({"assembly_backend": "cupy", "boundary_mode": "zero-flux"}, "boundary_mode='zero-flux'"),
         ({"assembly_backend": "raw-cuda", "trace_ordering": "upwind-scc"}, "trace_ordering='none'"),
         (
             {

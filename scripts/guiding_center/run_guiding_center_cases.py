@@ -22,6 +22,7 @@ if __package__ in {None, ""}:
 
 from hdgfem.core.field_ops import (
     field_linear_combination,
+    project_field_to_trace,
     perpendicular_vector_field,
     project_callable_to_trace,
     solution_field,
@@ -609,6 +610,12 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         updates.update(_backend_profile_updates(args.backend_profile))
     direct_updates = {
         "case": args.case,
+        "equilibrium_checkpoint": (
+            None
+            if args.equilibrium_checkpoint is None
+            else str(args.equilibrium_checkpoint)
+        ),
+        "equilibrium_allow_nonconverged": args.allow_nonconverged_equilibrium,
         "domain": args.domain,
         "mesh_size": args.mesh_size,
         "minimum_triangles": args.minimum_triangles,
@@ -646,6 +653,8 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
         "transport_assembly_backend": args.transport_assembly_backend,
         "transport_solver": args.transport_solver,
+        "transport_solver_policy": args.transport_solver_policy,
+        "transport_pypardiso_max_trace_dofs": args.transport_pypardiso_max_trace_dofs,
         "transport_preconditioner": args.transport_preconditioner,
         "transport_solver_rtol": args.transport_solver_rtol,
         "transport_solver_atol": args.transport_solver_atol,
@@ -771,6 +780,17 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("diagnostics_every must be positive")
     if config.transport_retry_policy not in {"none", "amgx-robust"}:
         raise ValueError("transport_retry_policy must be 'none' or 'amgx-robust'")
+    if config.transport_solver_policy not in {"fixed", "pypardiso-cutoff"}:
+        raise ValueError("transport_solver_policy must be 'fixed' or 'pypardiso-cutoff'")
+    if config.transport_pypardiso_max_trace_dofs < 1:
+        raise ValueError("transport_pypardiso_max_trace_dofs must be positive")
+    if (
+        config.transport_solver_policy == "pypardiso-cutoff"
+        and config.transport_assembly_backend not in {"numpy", "numba", "auto"}
+    ):
+        raise ValueError(
+            "transport_solver_policy='pypardiso-cutoff' requires a host assembly backend"
+        )
     if config.transport_reuse_first_preconditioner and config.transport_trace_ordering != "none":
         raise ValueError(
             "transport_reuse_first_preconditioner requires trace_ordering='none' so the "
@@ -960,6 +980,40 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
     )
 
 
+def _transport_trace_system_size(space, boundary_mode: str) -> int:
+    """Return the reduced transport trace-system size for solver selection."""
+    if boundary_mode in {"eliminate", "zero-flux"}:
+        edge_count = len(space.mesh.int_edges_inds)
+    else:
+        edge_count = space.mesh.num_edg
+    return int(edge_count * space.quad_data.edg_dof)
+
+
+def _resolve_transport_solver_config(
+        config: GuidingCenterRunPreset,
+        space,
+        boundary_mode: str,
+) -> tuple[GuidingCenterRunPreset, int, str]:
+    """Resolve the optional measured PyPardiso/iterative transport cutoff."""
+    trace_dofs = _transport_trace_system_size(space, boundary_mode)
+    if config.transport_solver_policy == "fixed":
+        selected = "default" if config.transport_solver is None else str(config.transport_solver)
+        return config, trace_dofs, selected
+    if trace_dofs <= config.transport_pypardiso_max_trace_dofs:
+        direct = replace(
+            config,
+            transport_solver="pypardiso",
+            transport_preconditioner=None,
+            transport_scale_system=False,
+            transport_trace_ordering="none",
+            transport_reuse_first_preconditioner=False,
+            transport_initial_guess="solver-default",
+        )
+        return direct, trace_dofs, "pypardiso"
+    selected = "default" if config.transport_solver is None else str(config.transport_solver)
+    return config, trace_dofs, selected
+
+
 def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
     from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
 
@@ -1115,6 +1169,23 @@ def _print_run_summary(result: GuidingCenterRunResult) -> None:
 
 
 
+def _load_imported_equilibrium(config: GuidingCenterRunPreset):
+    """Load a configured portable equilibrium, or return ``None``."""
+    if config.equilibrium_checkpoint is None:
+        return None
+    from projects.diocotron.comparisons.hdg_projection import load_dolfinx_equilibrium
+
+    checkpoint_path = Path(config.equilibrium_checkpoint).expanduser().resolve()
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(
+            f"equilibrium checkpoint does not exist: {checkpoint_path}"
+        )
+    return load_dolfinx_equilibrium(
+        checkpoint_path,
+        allow_nonconverged=bool(config.equilibrium_allow_nonconverged),
+    )
+
+
 def run_guiding_center_case(
         config: GuidingCenterRunPreset,
         *,
@@ -1134,11 +1205,24 @@ def run_guiding_center_case(
 
     case_definition = case_definition_by_key(config.case)
     case = case_definition.build(**config.case_params)
-    mesh, _ = timed_call(
-        f"generating {case.default_domain if config.domain == 'auto' else config.domain} mesh",
-        _phase_verbosity(config),
-        lambda: _build_mesh(config, case),
-    )
+    equilibrium_source = None
+    if config.equilibrium_checkpoint is not None:
+        equilibrium_source, _ = timed_call(
+            "[gc:init] loading portable DOLFINx equilibrium",
+            _phase_verbosity(config),
+            lambda: _load_imported_equilibrium(config),
+        )
+        mesh, _ = timed_call(
+            "[gc:init] materializing embedded DG mesh",
+            _phase_verbosity(config),
+            equilibrium_source.to_mesh,
+        )
+    else:
+        mesh, _ = timed_call(
+            f"generating {case.default_domain if config.domain == 'auto' else config.domain} mesh",
+            _phase_verbosity(config),
+            lambda: _build_mesh(config, case),
+        )
     if mesh.num_tri < config.minimum_triangles:
         raise RuntimeError(
             f"mesh has {mesh.num_tri:,} triangles, below the configured minimum of "
@@ -1157,11 +1241,48 @@ def run_guiding_center_case(
             edge_quad_1d=config.edge_quad_1d,
         ),
     )
-    rho_field, _ = timed_call(
-        "[gc:init] projecting initial density",
-        _detail_verbosity(config),
-        lambda: space.project_callable(case.initial_density_at(), name="rho_h"),
-    )
+    imported_equilibrium = None
+    equilibrium_import_metrics: dict[str, Any] = {}
+    if equilibrium_source is not None:
+        imported_equilibrium, _ = timed_call(
+            "[gc:init] projecting DOLFINx equilibrium into the DG space",
+            _phase_verbosity(config),
+            lambda: equilibrium_source.project(space),
+        )
+        rho_field = imported_equilibrium.density
+        import_diagnostics = imported_equilibrium.diagnostics
+        reconstruction = import_diagnostics.reconstruction_linf
+        equilibrium_import_metrics = {
+            "equilibrium_checkpoint": str(
+                Path(config.equilibrium_checkpoint).expanduser().resolve()
+            ),
+            "equilibrium_checkpoint_format": imported_equilibrium.metadata.get("format"),
+            "equilibrium_checkpoint_status": imported_equilibrium.metadata.get("final_status"),
+            "equilibrium_source_order": import_diagnostics.source_order,
+            "equilibrium_target_order": import_diagnostics.target_order,
+            "equilibrium_import_matched_cells": import_diagnostics.matched_cells,
+            "equilibrium_import_reordered_cells": import_diagnostics.reordered_cells,
+            "equilibrium_import_orientation_changes": import_diagnostics.orientation_changes,
+            "equilibrium_import_maximum_vertex_distance": (
+                import_diagnostics.maximum_vertex_distance
+            ),
+            "equilibrium_import_rho_reconstruction_linf": reconstruction.get("rho"),
+            "equilibrium_import_phi_reconstruction_linf": reconstruction.get("phi"),
+        }
+        if _phase_verbosity(config):
+            print(
+                "[gc:init] imported equilibrium: "
+                f"source=P{import_diagnostics.source_order} target=P{space.order} "
+                f"cells={import_diagnostics.matched_cells:,} "
+                f"status={imported_equilibrium.metadata.get('final_status')}",
+                flush=True,
+            )
+    else:
+        rho_field, _ = timed_call(
+            "[gc:init] projecting initial density",
+            _detail_verbosity(config),
+            lambda: space.project_callable(case.initial_density_at(), name="rho_h"),
+        )
     solver_data_start = time.perf_counter()
     if _detail_verbosity(config):
         print("[gc:init] preparing solver fields and options ... ", end="", flush=True)
@@ -1175,7 +1296,26 @@ def run_guiding_center_case(
     )
     if case.key == "rho_helm_wave" and transport_boundary_mode != "eliminate":
         raise ValueError("rho_helm_wave requires boundary_mode='eliminate' with exact density data")
-    transport_options = _make_transport_options(config, transport_boundary_mode)
+    transport_config, transport_trace_dofs, transport_solver_selected = _resolve_transport_solver_config(
+        config,
+        space,
+        transport_boundary_mode,
+    )
+    transport_options = _make_transport_options(transport_config, transport_boundary_mode)
+    transport_policy_metrics = {
+        "transport_solver_policy": config.transport_solver_policy,
+        "transport_solver_selected": transport_solver_selected,
+        "transport_trace_dofs": transport_trace_dofs,
+        "transport_pypardiso_max_trace_dofs": config.transport_pypardiso_max_trace_dofs,
+    }
+    transport_policy_metrics.update(equilibrium_import_metrics)
+    if _phase_verbosity(config):
+        print(
+            "[gc:init] transport solver selection: "
+            f"policy={config.transport_solver_policy} trace_dofs={transport_trace_dofs:,} "
+            f"selected={transport_solver_selected}",
+            flush=True,
+        )
     if _detail_verbosity(config):
         print(
             f"done in {time.perf_counter() - solver_data_start:.5f}s",
@@ -1188,7 +1328,46 @@ def run_guiding_center_case(
     equilibrium_density_l2 = None
     poisson_solver = None
     poisson_initial_guess = None
-    if case.equilibrium_density is not None:
+    if imported_equilibrium is not None:
+        equilibrium_density = imported_equilibrium.density
+        equilibrium_potential = imported_equilibrium.potential
+        equilibrium_density_l2, _ = timed_call(
+            "[gc:init] computing imported equilibrium-density norm",
+            _detail_verbosity(config),
+            equilibrium_density.l2_norm,
+        )
+        equilibrium_potential_l2, _ = timed_call(
+            "[gc:init] computing imported equilibrium-potential norm",
+            _detail_verbosity(config),
+            equilibrium_potential.l2_norm,
+        )
+        poisson_initial_guess, _ = timed_call(
+            "[gc:init] projecting imported potential to the HDG trace",
+            _detail_verbosity(config),
+            lambda: project_field_to_trace(
+                equilibrium_potential,
+                trace_basis=config.trace_basis,
+                reduced=False,
+            ),
+        )
+        poisson_solver, _ = timed_call(
+            "[gc:init] constructing imported-equilibrium Poisson solver",
+            _detail_verbosity(config),
+            lambda: DiffusionReactionHDGSolver(
+                space,
+                source=rho_field,
+                reaction=zero_reaction,
+                boundary_condition=case.potential_boundary_at(0.0),
+                options=poisson_options,
+            ),
+        )
+        if _detail_verbosity(config):
+            print(
+                "[gc:init] mesh-to-first-Poisson setup ... "
+                f"done in {time.perf_counter() - post_mesh_start:.5f}s",
+                flush=True,
+            )
+    elif case.equilibrium_density is not None:
         equilibrium_density, _ = timed_call(
             "[gc:init] projecting equilibrium density",
             _detail_verbosity(config),
@@ -1261,14 +1440,25 @@ def run_guiding_center_case(
     transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
     transport_preconditioner_reused = False
 
-    prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
-    density_trace = project_callable_to_trace(
-        space,
-        case.initial_density_at(),
-        trace_basis=config.trace_basis,
-        reduced=True,
-        backend="device" if prefer_device_trace else "host",
+    prefer_device_trace = (
+        transport_config.transport_assembly_backend == "raw-cuda"
+        and _is_amgx_solver(transport_config.transport_solver)
     )
+    if imported_equilibrium is not None:
+        density_trace = project_field_to_trace(
+            rho_field,
+            trace_basis=config.trace_basis,
+            reduced=True,
+            backend="device" if prefer_device_trace else "host",
+        )
+    else:
+        density_trace = project_callable_to_trace(
+            space,
+            case.initial_density_at(),
+            trace_basis=config.trace_basis,
+            reduced=True,
+            backend="device" if prefer_device_trace else "host",
+        )
     potential_trace = solution_trace(poisson_result, space, reduced=False)
     previous_potential_trace = None
     older_potential_trace = None
@@ -1290,6 +1480,7 @@ def run_guiding_center_case(
                 "transport_time": 0.0,
                 "transport_time_total": 0.0,
                 "plot_time": 0.0,
+                **transport_policy_metrics,
             }
         )
         timing_recorder.record({"step": 0, "time": 0.0, **initial_extra})
@@ -1354,7 +1545,7 @@ def run_guiding_center_case(
                 endpoint_density_boundary,
             )
             predictor_transport_result = transport_solver.solve(initial_guess=density_trace)
-            if config.transport_reuse_first_preconditioner and not transport_preconditioner_reused:
+            if transport_config.transport_reuse_first_preconditioner and not transport_preconditioner_reused:
                 global_result = predictor_transport_result.global_solve_result
                 reusable_preconditioner = None if global_result is None else global_result.preconditioner
                 if reusable_preconditioner is None:
@@ -1479,6 +1670,7 @@ def run_guiding_center_case(
                 stage_extra.update(solver_result_metrics("final_poisson", poisson_result))
 
             stage_extra["poisson_predictor_order"] = poisson_predictor_order
+            stage_extra.update(transport_policy_metrics)
             timing_row = solver_result_metrics("poisson", poisson_result)
             timing_row.update(solver_result_metrics("transport", transport_result))
             timing_row.update(stage_extra)
@@ -1633,6 +1825,18 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
 
     parser.add_argument("--transport-assembly-backend", choices=("numpy", "numba", "cupy", "raw-cuda", "auto"), default=None)
     parser.add_argument("--transport-solver", default=None)
+    parser.add_argument(
+        "--transport-solver-policy",
+        choices=("fixed", "pypardiso-cutoff"),
+        default=None,
+        help="select the configured solver, or use PyPardiso through a reduced-trace-DOF cutoff",
+    )
+    parser.add_argument(
+        "--transport-pypardiso-max-trace-dofs",
+        type=int,
+        default=None,
+        help="largest reduced transport system sent to PyPardiso by pypardiso-cutoff policy",
+    )
     parser.add_argument("--transport-preconditioner", default=None)
     parser.add_argument("--transport-solver-rtol", type=float, default=None)
     parser.add_argument("--transport-solver-atol", type=float, default=None)
@@ -1684,6 +1888,17 @@ def _main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--backend-profile", choices=("host", "device", "hybrid"), default=None)
     parser.add_argument("--case", choices=tuple(sorted(CASE_DEFINITIONS)), default=None)
+    parser.add_argument(
+        "--equilibrium-checkpoint",
+        type=Path,
+        default=None,
+        help="override a preset's portable DOLFINx v2 equilibrium checkpoint",
+    )
+    parser.add_argument(
+        "--allow-nonconverged-equilibrium",
+        action="store_true",
+        default=None,
+    )
     parser.add_argument("--case-param", action="append", default=None, help="override case parameter with key=value syntax")
     parser.add_argument("--domain", choices=("auto", "structured-rectangle", "rectangle", "disc", "triangle"), default=None)
     parser.add_argument("--mesh-size", "--lc", type=float, default=None)

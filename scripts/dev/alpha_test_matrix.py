@@ -42,6 +42,7 @@ HOST_FAST_TARGETS = (
     "tests/test_diffusion_reaction_run_presets.py",
     "tests/test_documented_examples.py",
     "tests/test_documentation_structure.py",
+    "tests/test_dolfinx_script_boundary.py",
     "tests/test_diffusion_reaction_solver.py",
     "tests/test_diffusion_reaction_test7_fused_experiment.py",
     "tests/test_face_dense.py",

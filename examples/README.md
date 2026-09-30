@@ -1,5 +1,9 @@
 # Minimal Examples
 
+For the optional FEniCSx fixed-threshold equilibrium solver, see
+[`equiband/`](../projects/diocotron/examples/equiband/README.md). Those examples require the separate
+FEniCSx/PETSc environment described in their guide.
+
 These examples use only the base NumPy/SciPy installation and the public
 package-root API. They are kept small enough to serve as documentation smoke
 tests, not as performance benchmarks.

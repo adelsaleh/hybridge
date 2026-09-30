@@ -167,6 +167,7 @@ class SolveResult:
     total_elapsed_seconds: float | None = None
     scale_elapsed_seconds: float | None = None
     preconditioner_elapsed_seconds: float | None = None
+    factorization_elapsed_seconds: float | None = None
     solve_elapsed_seconds: float | None = None
     global_elapsed_seconds: float | None = None
     matrix_assembly_elapsed_seconds: float | None = None
@@ -233,6 +234,7 @@ class SolveResult:
     # integer compatibility field; ``backend_info`` preserves the native code.
     backend: str | None = None
     backend_info: int | str | None = None
+    factorization_reused: bool | None = None
     status: SolveStatus = "not-converged"
     converged: bool = False
     failure_reason: str | None = None
@@ -2106,18 +2108,38 @@ def solve_pypardiso_system(
 
     pypardiso = _import_pypardiso()
     start = time.perf_counter()
+    factorization_elapsed_seconds = 0.0
+    solve_elapsed_seconds = 0.0
+    factorization_reused = False
     with _PYPARDISO_LOCK:
         active_solver = pypardiso.ps
         try:
-            if pardiso_mtype == 11:
-                x = pypardiso.spsolve(native_matrix, rhs)
-            else:
+            if pardiso_mtype != 11:
                 cache_key = (id(pypardiso), pardiso_mtype)
                 active_solver = _PYPARDISO_SOLVERS.get(cache_key)
                 if active_solver is None:
                     active_solver = pypardiso.PyPardisoSolver(mtype=pardiso_mtype)
                     _PYPARDISO_SOLVERS[cache_key] = active_solver
-                x = pypardiso.spsolve(native_matrix, rhs, solver=active_solver)
+
+            # Make the fixed-operator contract explicit. ``solve`` selects
+            # PARDISO phase 33 for an identical matrix after ``factorize`` has
+            # completed analysis and numeric factorization. The general and
+            # SPD matrix types use separate native solver instances, so a
+            # changing transport operator cannot evict the fixed SPD Poisson
+            # factorization.
+            already_factorized = getattr(active_solver, "_is_already_factorized", None)
+            factorization_reused = bool(
+                already_factorized(native_matrix)
+                if callable(already_factorized)
+                else False
+            )
+            if not factorization_reused:
+                factorization_start = time.perf_counter()
+                active_solver.factorize(native_matrix)
+                factorization_elapsed_seconds = time.perf_counter() - factorization_start
+            solve_start = time.perf_counter()
+            x = active_solver.solve(native_matrix, rhs)
+            solve_elapsed_seconds = time.perf_counter() - solve_start
         except Exception as exc:
             try:
                 active_solver.free_memory(everything=True)
@@ -2126,7 +2148,7 @@ def solve_pypardiso_system(
             if pardiso_mtype != 11:
                 _PYPARDISO_SOLVERS.pop((id(pypardiso), pardiso_mtype), None)
             raise LinearSolveError(f"pypardiso solve failed: {exc}") from exc
-    solve_elapsed_seconds = time.perf_counter() - start
+    total_elapsed_seconds = time.perf_counter() - start
 
     physical_residual = matrix @ x - rhs
     physical_residual_norm = float(np.linalg.norm(physical_residual))
@@ -2160,10 +2182,12 @@ def solve_pypardiso_system(
         atol=atol,
         info=0,
         preconditioner=None,
-        total_elapsed_seconds=solve_elapsed_seconds,
+        total_elapsed_seconds=total_elapsed_seconds,
         scale_elapsed_seconds=0.0,
         preconditioner_elapsed_seconds=0.0,
+        factorization_elapsed_seconds=factorization_elapsed_seconds,
         solve_elapsed_seconds=solve_elapsed_seconds,
+        factorization_reused=factorization_reused,
     )
     return finalize_solve_result(
         result,

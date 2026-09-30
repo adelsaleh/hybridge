@@ -114,7 +114,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "advection-reaction",
         "numpy",
         "host",
-        ("penalty", "eliminate"),
+        ("penalty", "eliminate", "zero-flux"),
         _PRODUCTION_TRACE_BASES,
     ),
     _assembly_capability(
@@ -152,7 +152,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
             "amgx": "host -> device -> host",
         },
         "host",
-        ("penalty", "eliminate"),
+        ("penalty", "eliminate", "zero-flux"),
         _PRODUCTION_TRACE_BASES,
     ),
     *_solve_capabilities(

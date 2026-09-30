@@ -32,9 +32,9 @@ advection conservation and CuPy/raw-CUDA parity tests.
 
 ## Upwind Graph Tools
 
-- [`upwind_scc_ordering.tex`](upwind_scc_ordering.tex) derives the directed
-  edge graph, strongly connected components, condensation DAG, and trace-DOF
-  permutation.
+- [Upwind Graph Ordering Algorithm](../upwind_graph_ordering_algorithm/)
+  derives the directed edge graph, acyclic fast path, residual strongly
+  connected components, and trace-DOF permutation.
 - [`upwind_block_gauss_seidel.tex`](upwind_block_gauss_seidel.tex) derives the
   ordered block-GS preconditioner and its host/device representations.
 

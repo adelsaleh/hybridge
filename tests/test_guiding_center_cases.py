@@ -8,6 +8,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -21,12 +22,139 @@ from scripts.guiding_center.guiding_center_cases import (
 )
 from scripts.guiding_center.guiding_center_presets import preset_by_key
 from hdgfem.core.field_ops import project_callable_to_trace
+from projects.diocotron.comparisons.hdg_projection import (
+    EQUILIBRIUM_FORMAT_V2,
+    checkpoint_array_sha256,
+    dolfinx_lagrange_reference_points,
+)
 from scripts.guiding_center.run_guiding_center_cases import (
     _fixed_operator_trace_predictor,
     _print_step_summary,
+    _resolve_transport_solver_config,
     _validate_config,
     run_guiding_center_case,
 )
+
+
+def _write_linear_equilibrium_checkpoint(path: Path) -> None:
+    """Write a two-cell portable equilibrium for the native-runner smoke test."""
+    nodes = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    triangles = np.asarray([[0, 2, 1], [1, 3, 2]], dtype=np.int64)
+    reference_points = dolfinx_lagrange_reference_points(1)
+    first = 0.5 * (reference_points[:, 0] + 1.0)
+    second = 0.5 * (reference_points[:, 1] + 1.0)
+    vertices = nodes[triangles]
+    physical = (
+        vertices[:, None, 0]
+        + first[None, :, None] * (vertices[:, None, 1] - vertices[:, None, 0])
+        + second[None, :, None] * (vertices[:, None, 2] - vertices[:, None, 0])
+    )
+    samples = np.stack(
+        (
+            1.0 + 0.1 * physical[:, :, 0] - 0.05 * physical[:, :, 1],
+            0.2 * physical[:, :, 0] + 0.3 * physical[:, :, 1],
+        )
+    )
+    coordinates = np.zeros((nodes.shape[0], 3), dtype=np.float64)
+    coordinates[:, :2] = nodes
+    nodal_values = np.stack(
+        (
+            1.0 + 0.1 * nodes[:, 0] - 0.05 * nodes[:, 1],
+            0.2 * nodes[:, 0] + 0.3 * nodes[:, 1],
+        )
+    )
+    arrays = {
+        "mesh_node_coords": nodes,
+        "mesh_triangles": triangles,
+        "reference_points": reference_points,
+        "field_names": np.asarray(("rho", "phi")),
+        "field_samples": samples,
+        "coordinates": coordinates,
+        "nodal_values": nodal_values,
+    }
+    metadata = {
+        "format": EQUILIBRIUM_FORMAT_V2,
+        "version": 2,
+        "source_order": 1,
+        "order": 1,
+        "source_family": "Lagrange",
+        "cell_type": "triangle",
+        "geometry_degree": 1,
+        "field_names": ["rho", "phi"],
+        "num_fields": 2,
+        "num_cells": triangles.shape[0],
+        "num_mesh_nodes": nodes.shape[0],
+        "num_dofs": coordinates.shape[0],
+        "final_status": "CONVERGED",
+        "final_residual": 1.0e-12,
+        "checksums": {
+            key: checkpoint_array_sha256(value) for key, value in arrays.items()
+        },
+    }
+    np.savez_compressed(
+        path,
+        **arrays,
+        rho=nodal_values[0],
+        phi=nodal_values[1],
+        metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
+    )
+
+
+def test_torsion_window_imported_equilibrium_preset_uses_documented_p4_checkpoint() -> None:
+    config = preset_by_key("torsion_window_optimized_h002_p4_imported_equilibrium")
+
+    assert config.equilibrium_checkpoint is not None
+    assert config.equilibrium_checkpoint.endswith(
+        "equilibrium_h002_p4_converged_gridseed_20260820/out/equilibrium_v2.npz"
+    )
+    assert config.equilibrium_allow_nonconverged is False
+    assert config.order == 4
+    assert config.minimum_triangles == 86_112
+    assert config.poisson_solver == "pypardiso-spd"
+    assert config.transport_solver == "pypardiso"
+
+
+def test_imported_equilibrium_initializes_native_mesh_and_dgfield(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "linear-equilibrium.npz"
+    _write_linear_equilibrium_checkpoint(checkpoint)
+    config = replace(
+        preset_by_key("diocotron_gaussian_annulus_host_smoke"),
+        equilibrium_checkpoint=str(checkpoint),
+        equilibrium_allow_nonconverged=False,
+        minimum_triangles=2,
+        order=1,
+        num_steps=0,
+        poisson_assembly_backend="numpy",
+        poisson_local_backend="numpy",
+        poisson_solver="direct",
+        poisson_preconditioner=None,
+        transport_assembly_backend="numpy",
+        transport_solver="direct",
+        diagnostics_dir=str(tmp_path),
+        diagnostics_prefix="imported_equilibrium_runner_smoke",
+        verbosity=0,
+        plot_every=0,
+    )
+
+    result = run_guiding_center_case(config, preset_key="imported_equilibrium_test")
+    initial = result.diagnostics[0]
+
+    assert result.mesh.num_tri == 2
+    assert result.space.order == 1
+    assert result.final_density.space is result.space
+    assert initial["equilibrium_checkpoint_format"] == EQUILIBRIUM_FORMAT_V2
+    assert initial["equilibrium_checkpoint_status"] == "CONVERGED"
+    assert initial["equilibrium_source_order"] == 1
+    assert initial["equilibrium_target_order"] == 1
+    assert initial["equilibrium_import_matched_cells"] == 2
+    assert initial["diocotron_rho_eq_l2"] == pytest.approx(0.0, abs=1.0e-14)
+
+    points = dolfinx_lagrange_reference_points(1)
+    physical = result.mesh.map_reference_points(points)
+    expected = 1.0 + 0.1 * physical[:, :, 0] - 0.05 * physical[:, :, 1]
+    np.testing.assert_allclose(
+        result.final_density.evaluate(points, reference=True), expected, atol=2.0e-13
+    )
 
 
 def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
@@ -235,8 +363,9 @@ def test_gaussian_annulus_k3_p6_numba_pypardiso_lu_upwind_preset() -> None:
     assert config.minimum_triangles == 30_000
     assert config.poisson_assembly_backend == "numba"
     assert config.poisson_local_backend == "numba"
-    assert config.poisson_solver == "pypardiso"
+    assert config.poisson_solver == "pypardiso-spd"
     assert config.poisson_preconditioner is None
+    assert config.poisson_solver_atol == pytest.approx(1.0e-12)
     assert config.poisson_scale_system is False
     assert config.poisson_hdg_postprocess == "none"
     assert config.transport_assembly_backend == "numba"
@@ -258,7 +387,7 @@ def test_gaussian_annulus_k3_p6_numba_pypardiso_lu_upwind_preset() -> None:
         ),
         (
             "diocotron_gaussian_annulus_k3_p6_50k_numba_pypardiso_medium_ilu_upwind",
-            "pypardiso",
+            "pypardiso-spd",
             None,
         ),
     ),
@@ -288,6 +417,45 @@ def test_gaussian_annulus_k3_p6_50k_matched_comparison_presets(
     assert config.transport_ilu_permc_spec == "COLAMD"
     assert config.transport_reuse_first_preconditioner is False
     assert config.transport_initial_guess == "initial-density-trace"
+
+
+def test_pypardiso_auto_preset_resolves_at_reduced_trace_dof_cutoff() -> None:
+    config = preset_by_key(
+        "diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_auto"
+    )
+    assert config.poisson_solver == "pypardiso-spd"
+    assert config.poisson_solver_atol == pytest.approx(1.0e-12)
+    assert config.transport_solver_policy == "pypardiso-cutoff"
+    assert config.transport_pypardiso_max_trace_dofs == 1_200_000
+    assert config.transport_solver == "BICGSTAB"
+    assert config.transport_preconditioner == "ilu"
+
+    small_space = SimpleNamespace(
+        mesh=SimpleNamespace(int_edges_inds=range(100), num_edg=120),
+        quad_data=SimpleNamespace(edg_dof=7),
+    )
+    direct, trace_dofs, selected = _resolve_transport_solver_config(
+        config, small_space, "zero-flux"
+    )
+    assert trace_dofs == 700
+    assert selected == "pypardiso"
+    assert direct.transport_solver == "pypardiso"
+    assert direct.transport_preconditioner is None
+    assert direct.transport_scale_system is False
+    assert direct.transport_reuse_first_preconditioner is False
+
+    large_space = SimpleNamespace(
+        mesh=SimpleNamespace(int_edges_inds=range(200_000), num_edg=200_200),
+        quad_data=SimpleNamespace(edg_dof=7),
+    )
+    iterative, trace_dofs, selected = _resolve_transport_solver_config(
+        config, large_space, "zero-flux"
+    )
+    assert trace_dofs == 1_400_000
+    assert selected == "BICGSTAB"
+    assert iterative is config
+    assert iterative.transport_preconditioner == "ilu"
+    assert iterative.transport_reuse_first_preconditioner is True
 
 
 @pytest.mark.parametrize(
@@ -333,7 +501,7 @@ def test_pypardiso_transport_cache_comparison_presets(
 ) -> None:
     config = preset_by_key(preset_key)
 
-    assert config.poisson_solver == "pypardiso"
+    assert config.poisson_solver == "pypardiso-spd"
     assert config.transport_trace_ordering == ordering
     assert config.transport_ilu_permc_spec == permc_spec
     assert config.transport_reuse_first_preconditioner is reuse

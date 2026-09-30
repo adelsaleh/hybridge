@@ -1,0 +1,33 @@
+# Smooth five-lobed star: r(theta) = 1 + 0.2*sin(5*theta).
+# The affine Gmsh mesh is generated or loaded from the deterministic cache.
+# This is a fixed-mesh smoke test, not a mesh-converged production result.
+# Noncircular geometry uses a source-homotopy seed; see the tested command.
+schema_version = 2
+geometry = "smooth_star"
+geometry_degree = 1
+radius = 1.0
+mesh_size = 0.03
+degree = 2
+torsion_degree = 4
+recovered_gradient_degree = 3
+quadrature_degree = 24
+number_of_rays = 128
+samples_per_ray = 300
+backend = "numba"
+threads = 1
+target_distance = 0.50
+distance_tolerance = 1e-4
+maximum_iterations = 80
+
+[geometry_parameters]
+radius = 1.0
+amplitude = 0.2
+mode = 5
+boundary_points = 200
+
+[band]
+kind = "logistic"
+threshold_width_delta = 0.002
+# Dimensionless ratio: epsilon = relative_epsilon * threshold_width_delta.
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.01

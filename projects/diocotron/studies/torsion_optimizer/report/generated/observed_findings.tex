@@ -1,0 +1,15 @@
+\subsection{Observed behavior}
+
+\paragraph{Homotopy robustness.} For the difficult low-DOF smooth star case at band \((0.45,0.5)\), the measured optimized-iterative fast-search path with window-fit fallback stopped near \(\lambda=0.501\) after 63 accepted and 18 rejected continuation steps, 363 Newton iterations, and \(60.4\,\mathrm{s}\) of logged homotopy work.  The matched all-MUMPS full-search path reached \(\lambda=1\) in 10 accepted and 0 rejected steps, 40 Newton iterations, and \(4.3\,\mathrm{s}\).
+
+\paragraph{Inexact intermediate Newton solves.} For raw \(10^{-5}\), the maxima over 8 completed snapshot-policy records were \(0.000147\) for the state, \(0.0131\) for the sensitivities, \(0.0557\) for the reduced gradient, and \(0.012\) for the threshold step.  For raw \(10^{-3}\), the maxima over 8 completed snapshot-policy records were \(0.00689\) for the state, \(0.436\) for the sensitivities, \(0.519\) for the reduced gradient, and \(0.0752\) for the threshold step.  For one-correction \(10^{-3}\), the maxima over 8 completed snapshot-policy records were \(0.00241\) for the state, \(0.041\) for the sensitivities, \(0.104\) for the reduced gradient, and \(0.00218\) for the threshold step.  The acceptance-agreement rates were raw \(10^{-5}\): 100\%, raw \(10^{-3}\): 100\%, one-correction \(10^{-3}\): 100\%.  The reported agreement refers only to the replay's \emph{model-feasibility proxy}; it is not agreement with a fully corrected nonlinear trial and is not a proof of optimizer acceptance.
+
+\paragraph{Fixed-triangulation polynomial enrichment.} On the identical linear triangulation, P2, 49362 DOFs: \((c_{1,\phi},c_{2,\phi})=(0.0409,0.0472)\), \(35.4\,\mathrm{s}\); P4, 196551 DOFs: \((c_{1,\phi},c_{2,\phi})=(0.0418,0.0484)\), \(80\,\mathrm{s}\); P6, 441568 DOFs: \((c_{1,\phi},c_{2,\phi})=(0.0418,0.0483)\), \(259\,\mathrm{s}\).  The P4 and P6 thresholds agree to within \(2.38\times 10^{-5}\).  The external-reference errors are P2: \((L^2,H^1)=(0.00502,0.0192)\); P4: \((L^2,H^1)=(0.0263,0.0314)\); P6: \((L^2,H^1)=(0.0257,0.0308)\).  Their non-monotonicity mixes discretization error with independent nonlinear-branch selection and stopping; it does not show that higher \(p\) is intrinsically worse.
+
+\paragraph{Non-star storyboard outcomes.} The completed non-star storyboard runs reached their recorded strict final PDE tolerances:
+\begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
+\item Pacman: residual \(9.67\times 10^{-16}\), terminal status MAX\_OPT\_IT, relative leakage/missing \((0.245,0.577)\).
+\item horseshoe: residual \(1.01\times 10^{-14}\), terminal status MAX\_OPT\_IT, relative leakage/missing \((0.0461,1)\).
+\item ITER: residual \(4.87\times 10^{-13}\), terminal status MAX\_OPT\_IT, relative leakage/missing \((0.102,0.809)\).
+\end{itemize}
+These terminal classifications are geometric iteration-limit/plateau or capped-trial failures rather than strict band matches.  PDE residual convergence must therefore be reported separately from geometric success.

@@ -133,6 +133,8 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
             "diagnostic_residual_target": "diagnostic_residual_target",
             "diagnostic_rel_residual": "diagnostic_relative_residual_norm",
             "preconditioner_time": "preconditioner_elapsed_seconds",
+            "factorization_time": "factorization_elapsed_seconds",
+            "factorization_reused": "factorization_reused",
             "krylov_time": "solve_elapsed_seconds",
             "matrix_csr_time": "matrix_assembly_elapsed_seconds",
             "solver_global_time": "global_elapsed_seconds",
@@ -146,6 +148,7 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
             "ilu_permc_spec": "ilu_permc_spec",
             "preconditioner_apply_time": "preconditioner_apply_seconds",
             "preconditioner_factor_nnz": "preconditioner_factor_nnz",
+            "solver_backend": "backend",
         }
         row[f"{prefix}_solver_iterations"] = (
             -1 if global_solve.iteration_count is None else global_solve.iteration_count
@@ -162,6 +165,9 @@ def solver_result_metrics(prefix: str, result) -> dict[str, object]:
             "largest_scc": diagnostics.largest_component_size,
             "cyclic_components": diagnostics.cyclic_components,
             "cyclic_nodes": diagnostics.cyclic_nodes,
+            "algorithm_path": diagnostics.algorithm_path,
+            "peeled_nodes": diagnostics.peeled_nodes,
+            "residual_nodes": diagnostics.residual_nodes,
             "levels": widths.num_levels,
             "max_level_width": widths.max_width,
             "median_level_width": widths.median_width,

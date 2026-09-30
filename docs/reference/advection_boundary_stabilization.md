@@ -10,7 +10,7 @@ remains governed by [`backend_capabilities.md`](backend_capabilities.md).
 |---|---|---|---|---|---|
 | `penalty` | Dirichlet data imposed with the legacy large diagonal penalty | All global edges | Required and sampled | Already full; boundary coefficients are solved under the penalty equation | All trace edges |
 | `eliminate` | Prescribed Dirichlet trace | Interior edges only | Required; nodal traces interpolate and modal traces project the data | Prescribed boundary coefficients are reinserted | Active interior edges only |
-| `zero-flux` | Exterior numerical flux is forced to zero | Interior edges only | Must be `None`; any supplied callable or constant is rejected | Boundary slots are zero placeholders; their values do not enter reconstruction because boundary flux/lift weights are zero | Active interior edges for Numba; raw-CUDA requires `trace_ordering="none"` |
+| `zero-flux` | Exterior numerical flux is forced to zero | Interior edges only | Must be `None`; any supplied callable or constant is rejected | Boundary slots are zero placeholders; their values do not enter reconstruction because boundary flux/lift weights are zero | Active interior edges for NumPy/Numba; raw-CUDA requires `trace_ordering="none"` |
 
 `zero-flux` is a physical numerical-flux choice, not shorthand for homogeneous
 Dirichlet data. Use it only when the intended exterior flux is zero, such as a
@@ -33,7 +33,7 @@ contributions remain distinct; discontinuous advection is not averaged.
 
 | Assembly backend | Boundary modes | Accepted explicit `tau` inputs | Ordering |
 |---|---|---|---|
-| NumPy | `penalty`, `eliminate` | Scalar, callable `tau(x, y)` or `tau(x, y, K, e)`, `DGField`, compatible coefficient arrays, per-face constants, or evaluated face-quadrature tables | `none`, `upwind-scc` |
+| NumPy | `penalty`, `eliminate`, `zero-flux` | Scalar, callable `tau(x, y)` or `tau(x, y, K, e)`, `DGField`, compatible coefficient arrays, per-face constants, or evaluated face-quadrature tables | `none`, `upwind-scc` |
 | Numba | `penalty`, `eliminate`, `zero-flux` | Scalar or same-space projected `DGField`; callable stabilization must be projected first | `none`, `upwind-scc` |
 | CuPy | `penalty`, `eliminate` | Same forms as NumPy | `none`, `upwind-scc` with host graph construction |
 | Raw CUDA | `eliminate`, `zero-flux` | None; explicit stabilization is rejected before device setup | `none` only; zero-flux also requires fused local assembly |

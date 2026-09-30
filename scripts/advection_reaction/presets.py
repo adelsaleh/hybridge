@@ -16,6 +16,7 @@ class AdvectionReactionRunPreset:
     case_params: dict[str, Any] = field(default_factory=dict)
     domain: str = "auto"
     mesh_size: float = 0.03
+    minimum_triangles: int = 0
     nx: int = 8
     ny: int | None = None
     gmsh_verbosity: int = 0
@@ -67,6 +68,7 @@ def _test2_solver_preset(
         description: str,
         solver: str | None,
         mesh_size: float = 0.01,
+        minimum_triangles: int = 0,
         order: int = 6,
         assembly_backend: str = "numba",
         preconditioner: str | None,
@@ -88,6 +90,7 @@ def _test2_solver_preset(
         ilu_fill_factor=ilu_fill_factor,
         maxiter=maxiter,
         mesh_size=mesh_size,
+        minimum_triangles=minimum_triangles,
         order=order,
         petsc_levels=petsc_levels,
         assembly_backend=assembly_backend,
@@ -190,6 +193,32 @@ PRESETS: dict[str, AdvectionReactionRunPreset] = {
         solver="pypardiso",
         preconditioner=None,
         trace_ordering="upwind-scc",
+    ),
+    "test2_legacy_90k_pypardiso_none": _test2_solver_preset(
+        description=(
+            "Legacy test2 on at least 90k triangles with PyPardiso direct solve and "
+            "no trace ordering; baseline for the matched upwind-SCC comparison."
+        ),
+        solver="pypardiso",
+        preconditioner=None,
+        mesh_size=0.01,
+        minimum_triangles=90_000,
+        order=6,
+        trace_ordering="none",
+        scale_system=False,
+    ),
+    "test2_legacy_90k_pypardiso_upwind_scc": _test2_solver_preset(
+        description=(
+            "Legacy test2 on at least 90k triangles with PyPardiso direct solve and "
+            "upwind-SCC trace ordering."
+        ),
+        solver="pypardiso",
+        preconditioner=None,
+        mesh_size=0.01,
+        minimum_triangles=90_000,
+        order=6,
+        trace_ordering="upwind-scc",
+        scale_system=False,
     ),
     "test2_petsc_gmres_ilu": _test2_solver_preset(
         description="test2 with PETSc GMRES and ILU.",

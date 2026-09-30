@@ -1,0 +1,2990 @@
+// ================================================================
+// Mesh-convergence test for Strategy A without adaptivity.
+// Static-fespace version: each mesh has its own mesh/fespace block.
+//
+// This avoids FreeFEM matrix/vector-size errors caused by reassigning
+// a mesh used by an existing fespace and then reusing old FE vectors.
+//
+// Logs exact, unshifted residual metrics for -Delta u = f(u):
+//   resEuclid = sqrt(r'*r)
+//   resHm1    = sqrt(r'*K^{-1}r)
+//   poissonRel = ||u - K^{-1}M f(u)||_{H1_0} / ||K^{-1}M f(u)||_{H1_0}
+// ================================================================
+
+load "iovtk"
+
+// Suppress most FreeFEM/solver chatter. Also run with: FreeFem++ -v 0 this_file.edp
+verbosity = 0;
+
+// ----------------------------
+// Parameters
+// ----------------------------
+int bLabel = 1;
+int plt = 0;
+int plotReference = 0;
+int plotEachMesh = 0;
+int plotInitialPause = 0;
+int plotImprovingIterates = 0;
+int waitImprovementPlots = 0;
+real plotResDropFactor = 0.999999999;
+real rhoPlotFloor = 1e-12; // visualization only, prevents zero-density regions from appearing as blank/white
+int verboseLS = 0;
+
+// Star-shaped geometry.
+real R0 = 1.5;
+real ampStar = 0.32;
+real kStar = 5.0;
+
+// Reference and test meshes.
+int Nref = 320;
+
+// Torsion-designed band parameters.
+real alphaT1 = 0.80;
+real alphaT2 = 0.85;
+real epsTRatio = 0.12;
+real rhoAmp = 1.0;
+
+// Semilinear window parameters from reference phiDesign scale.
+real betaPhi1 = 0.78;
+real betaPhi2 = 0.86;
+real epsPhiRatioFixed = 0.20;
+
+// Newton parameters.
+int maxIt = 80;
+real tolResHm1 = 1e-9;
+real tolPoissonRel = 1e-9;
+real tolNewton = 1e-10;
+real betaLS = 0.5;
+real armijoC = 1e-6;
+real alphaMin = 1e-8;
+int maxBacktrack = 35;
+
+// Shifted Newton stabilization.
+real muShift0 = 2.0;
+real muShift = muShift0;
+real muMin = 0.20;
+real muMax = 30.0;
+
+// Branch preservation.
+real massFloorFraction = 0.01;
+real rhoMaxFloor = 0.02;
+
+// Repeated stagnation stop.
+int maxStagnation = 6;
+real stagnationTol = 1e-7;
+
+// Output names.
+string runTag = "convergence_star_noadapt_static";
+string convLog = "../logs/" + runTag + ".log";       // compact human-readable log
+string csvLog = "../logs/" + runTag + ".csv";       // machine-readable log
+string outRefVTK = "../vtk/convergence_reference_solution.vtk";
+
+// Terminal output controls.
+int terminalEvery = 5;       // print one compact STEP every terminalEvery iterations
+int terminalDetailed = 0;    // 1 restores old long SOLVE lines on terminal
+
+// Timing.
+real tGlobal = clock();
+real tSolve;
+
+border Gamma(t=0, 2*pi)
+{
+	real r = R0 + ampStar*cos(kStar*t);
+	x = r*cos(t);
+	y = r*sin(t);
+	label = bLabel;
+}
+
+cout << endl;
+cout << "========== START STAR NO-ADAPT CONVERGENCE STATIC ==========" << endl;
+cout << "RUN_TAG " << runTag << endl;
+cout << "CSV_LOG " << csvLog << endl;
+cout << "HUMAN_LOG " << convLog << endl;
+cout << "NOTE exact residuals are unshifted: resHm1 and poissonRel correspond to -Delta u=f(u)." << endl;
+
+ofstream flog(convLog);
+ofstream csvlog(csvLog);
+flog.precision(16);
+csvlog.precision(16);
+
+flog << "START " << runTag << endl;
+flog << "REF_HEADER Nref nt ndof Tmax c1T c2T epsT phiDesignMax c1Phi c2Phi epsPhi" << endl;
+flog << "SOLVE_HEADER tag N nt ndof k resEuclid resHm1 relHm1E relHm1Rho poissonRel nd alpha bt muShift minU maxU maxRho massRho activeArea plateauArea status" << endl;
+flog << "CONV_HEADER N nt ndof relL2PhiRef relH1PhiRef relL2RhoRef relL1RhoRef massRho maxRho activeArea plateauArea plateauFrac resHm1 poissonRel" << endl;
+
+csvlog
+	<< "record,tag,N,nt,ndof,k,"
+	<< "Tmax,c1T,c2T,epsT,phiDesignMax,c1Phi,c2Phi,epsPhi,"
+	<< "resEuclid,resHm1,relHm1E,relHm1Rho,poissonRel,nd,alpha,bt,muShift,"
+	<< "minU,maxU,maxRho,massRho,activeArea,plateauArea,plateauFrac,"
+	<< "relL2PhiRef,relH1PhiRef,relL2RhoRef,relL1RhoRef,status"
+	<< endl;
+
+// Fixed parameters, initialized by the reference solve.
+real c1T;
+real c2T;
+real widthT;
+real epsT;
+real c1Phi;
+real c2Phi;
+real widthPhi;
+real epsPhi;
+
+func real sigmaT(real z)
+{
+	real zz = z/epsT;
+	if (zz > 50.0) return 1.0;
+	if (zz < -50.0) return 0.0;
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real gT(real s)
+{
+	return rhoAmp*(sigmaT(s-c1T) - sigmaT(s-c2T));
+}
+
+func real sigmaPhi(real z)
+{
+	real zz = z/epsPhi;
+	if (zz > 50.0) return 1.0;
+	if (zz < -50.0) return 0.0;
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real sigmaPhiP(real z)
+{
+	real S = sigmaPhi(z);
+	return S*(1.0-S)/epsPhi;
+}
+
+func real ffun(real s)
+{
+	return rhoAmp*(sigmaPhi(s-c1Phi) - sigmaPhi(s-c2Phi));
+}
+
+func real dffun(real s)
+{
+	return rhoAmp*(sigmaPhiP(s-c1Phi) - sigmaPhiP(s-c2Phi));
+}
+
+// Reference mesh and fields remain alive for all comparisons.
+// Important FreeFEM scoping rule used here:
+// do not redeclare the same fespace name inside a block. The reference
+// fespace and its FE functions are top-level because later mesh levels
+// interpolate back onto VhRef for comparison.
+mesh ThRef = buildmesh(Gamma(Nref));
+fespace VhRef(ThRef, P2);
+VhRef TRef, phiDesignRef, rhoDesignRef, uRef, rhoRef, duRef, vRef, uTrialRef, uOldRef;
+VhRef rhoFromPhiRef, tmpRef, psiRef, diffRef, activeFinalRef, plateauFinalRef, rhoPlotRef;
+real[int] rrRef(VhRef.ndof), zzRef(VhRef.ndof);
+
+if (plt == 1 && plotInitialPause == 1)
+{
+	plot(ThRef, wait=true, cmm="INITIAL reference star geometry and mesh | Nref=" + Nref + " nt=" + ThRef.nt);
+}
+// ================================================================
+// Solve block Ref: N=320
+// ================================================================
+{
+	int Ncur = 320;
+	string tag = "REF";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	// Use already-declared top-level reference mesh/fespace.
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThRef, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThRef.nt);
+	}
+
+
+	problem TorsionRef(TRef, vRef, solver=sparsesolver)
+		=
+		int2d(ThRef)(
+			dx(TRef)*dx(vRef)
+			+ dy(TRef)*dy(vRef)
+		)
+		- int2d(ThRef)(
+			1.0*vRef
+		)
+		+ on(bLabel, TRef=0);
+
+	varf aRef(uu,vv)
+		=
+		int2d(ThRef)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mRef(uu,vv)
+		=
+		int2d(ThRef)(
+			uu*vv
+		);
+
+	varf ResidualFormRef(unused, vv)
+		=
+		int2d(ThRef)(
+			dx(uRef)*dx(vv)
+			+ dy(uRef)*dy(vv)
+			- ffun(uRef)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepRef(duRef, vRef, solver=sparsesolver)
+		=
+		int2d(ThRef)(
+			(1.0 + muShift)*(dx(duRef)*dx(vRef) + dy(duRef)*dy(vRef))
+			- dffun(uRef)*duRef*vRef
+		)
+		+ int2d(ThRef)(
+			dx(uRef)*dx(vRef)
+			+ dy(uRef)*dy(vRef)
+			- ffun(uRef)*vRef
+		)
+		+ on(bLabel, duRef=0);
+
+	matrix KRef = aRef(VhRef,VhRef);
+	matrix MRef = mRef(VhRef,VhRef);
+
+	tSolve = clock();
+	TorsionRef;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TRef[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	c1T = alphaT1*TmaxCur;
+	c2T = alphaT2*TmaxCur;
+	widthT = c2T-c1T;
+	epsT = epsTRatio*widthT;
+	rhoDesignRef = gT(TRef);
+	tmpRef[] = MRef*rhoDesignRef[];
+	phiDesignRef[] = KRef^-1*tmpRef[];
+	real phiDesignMaxRef = phiDesignRef[].max;
+	if (phiDesignMaxRef <= 1e-14)
+	{
+		cout << "ERROR reference_phiDesignMax_too_small" << endl;
+		exec("exit 1");
+	}
+	c1Phi = betaPhi1*phiDesignMaxRef;
+	c2Phi = betaPhi2*phiDesignMaxRef;
+	widthPhi = c2Phi-c1Phi;
+	epsPhi = epsPhiRatioFixed*widthPhi;
+	cout << "REF "
+		<< Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+		<< TmaxCur << " " << c1T << " " << c2T << " " << epsT << " "
+		<< phiDesignMaxRef << " " << c1Phi << " " << c2Phi << " " << epsPhi
+		<< endl;
+	flog << "REF "
+		<< Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+		<< TmaxCur << " " << c1T << " " << c2T << " " << epsT << " "
+		<< phiDesignMaxRef << " " << c1Phi << " " << c2Phi << " " << epsPhi
+		<< endl;
+	csvlog
+		<< "REF," << tag << "," << Ncur << "," << ThRef.nt << "," << VhRef.ndof << ",NA,"
+		<< TmaxCur << "," << c1T << "," << c2T << "," << epsT << "," << phiDesignMaxRef << "," << c1Phi << "," << c2Phi << "," << epsPhi << ","
+		<< "NA,NA,NA,NA,NA,NA,NA,NA,NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA,"
+		<< "NA,NA,NA,NA,SETUP"
+		<< endl;
+
+	uRef = phiDesignRef;
+	rhoFromPhiRef = ffun(uRef);
+	activeFinalRef = (rhoFromPhiRef > 0.05*rhoAmp);
+	plateauFinalRef = (rhoFromPhiRef > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrRef.resize(VhRef.ndof);
+	zzRef.resize(VhRef.ndof);
+	rrRef = 0.0;
+	zzRef = 0.0;
+	rrRef = ResidualFormRef(0, VhRef);
+	zzRef = KRef^-1*rrRef;
+	resEuclid = sqrt(rrRef'*rrRef);
+	resHm1 = sqrt(abs(rrRef'*zzRef));
+	escale = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	rhoscale = sqrt(int2d(ThRef)(rhoFromPhiRef^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpRef[] = MRef*rhoFromPhiRef[];
+	psiRef[] = KRef^-1*tmpRef[];
+	diffRef = uRef - psiRef;
+	poissonRel = sqrt(int2d(ThRef)(dx(diffRef)^2 + dy(diffRef)^2))
+		/max(sqrt(int2d(ThRef)(dx(psiRef)^2 + dy(psiRef)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThRef)(rhoFromPhiRef)
+		<< " maxRho=" << rhoFromPhiRef[].max
+		<< " activeArea=" << int2d(ThRef)(activeFinalRef)
+		<< " plateauArea=" << int2d(ThRef)(plateauFinalRef)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThRef.nt << "," << VhRef.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uRef[].min << "," << uRef[].max << "," << rhoFromPhiRef[].max << "," << int2d(ThRef)(rhoFromPhiRef) << ","
+		<< int2d(ThRef)(activeFinalRef) << "," << int2d(ThRef)(plateauFinalRef) << "," << int2d(ThRef)(plateauFinalRef)/max(int2d(ThRef)(activeFinalRef), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThRef, TRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TRef[].max);
+
+		rhoPlotRef = rhoDesignRef + rhoPlotFloor;
+		plot(ThRef, rhoPlotRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThRef)(rhoDesignRef) + " max=" + rhoDesignRef[].max);
+
+		plot(ThRef, uRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotRef = rhoFromPhiRef + rhoPlotFloor;
+		plot(ThRef, rhoPlotRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThRef)(rhoFromPhiRef) + " maxRho=" + rhoFromPhiRef[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepRef;
+		real nd = sqrt(int2d(ThRef)(dx(duRef)^2 + dy(duRef)^2));
+		rhoFromPhiRef = ffun(uRef);
+		activeFinalRef = (rhoFromPhiRef > 0.05*rhoAmp);
+		plateauFinalRef = (rhoFromPhiRef > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+				<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+				<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThRef.nt << "," << VhRef.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uRef[].min << "," << uRef[].max << "," << rhoFromPhiRef[].max << "," << int2d(ThRef)(rhoFromPhiRef) << ","
+				<< int2d(ThRef)(activeFinalRef) << "," << int2d(ThRef)(plateauFinalRef) << "," << int2d(ThRef)(plateauFinalRef)/max(int2d(ThRef)(activeFinalRef), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThRef)(rhoFromPhiRef)
+					<< " maxRho=" << rhoFromPhiRef[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldRef = uRef;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialRef = uOldRef + alpha*duRef;
+			uRef = uTrialRef;
+			rhoFromPhiRef = ffun(uRef);
+			real trialMass = int2d(ThRef)(rhoFromPhiRef);
+			real trialMaxRho = rhoFromPhiRef[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThRef)(rhoDesignRef), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrRef.resize(VhRef.ndof);
+			zzRef.resize(VhRef.ndof);
+			rrRef = 0.0;
+			zzRef = 0.0;
+			rrRef = ResidualFormRef(0, VhRef);
+			zzRef = KRef^-1*rrRef;
+			resEuclid = sqrt(rrRef'*rrRef);
+			resHm1 = sqrt(abs(rrRef'*zzRef));
+			escale = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+			rhoscale = sqrt(int2d(ThRef)(rhoFromPhiRef^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpRef[] = MRef*rhoFromPhiRef[];
+			psiRef[] = KRef^-1*tmpRef[];
+			diffRef = uRef - psiRef;
+			poissonRel = sqrt(int2d(ThRef)(dx(diffRef)^2 + dy(diffRef)^2))
+				/max(sqrt(int2d(ThRef)(dx(psiRef)^2 + dy(psiRef)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uRef = uOldRef;
+			rhoFromPhiRef = ffun(uRef);
+			rrRef = 0.0;
+			zzRef = 0.0;
+			rrRef = ResidualFormRef(0, VhRef);
+			zzRef = KRef^-1*rrRef;
+			resEuclid = sqrt(rrRef'*rrRef);
+			resHm1 = sqrt(abs(rrRef'*zzRef));
+			escale = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+			rhoscale = sqrt(int2d(ThRef)(rhoFromPhiRef^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpRef[] = MRef*rhoFromPhiRef[];
+			psiRef[] = KRef^-1*tmpRef[];
+			diffRef = uRef - psiRef;
+			poissonRel = sqrt(int2d(ThRef)(dx(diffRef)^2 + dy(diffRef)^2))
+				/max(sqrt(int2d(ThRef)(dx(psiRef)^2 + dy(psiRef)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+				<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+				<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThRef.nt << "," << VhRef.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uRef[].min << "," << uRef[].max << "," << rhoFromPhiRef[].max << "," << int2d(ThRef)(rhoFromPhiRef) << ","
+				<< int2d(ThRef)(activeFinalRef) << "," << int2d(ThRef)(plateauFinalRef) << "," << int2d(ThRef)(plateauFinalRef)/max(int2d(ThRef)(activeFinalRef), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThRef)(rhoFromPhiRef)
+					<< " maxRho=" << rhoFromPhiRef[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiRef = ffun(uRef);
+		activeFinalRef = (rhoFromPhiRef > 0.05*rhoAmp);
+		plateauFinalRef = (rhoFromPhiRef > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+			<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThRef.nt << " " << VhRef.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uRef[].min << " " << uRef[].max << " " << rhoFromPhiRef[].max << " "
+			<< int2d(ThRef)(rhoFromPhiRef) << " " << int2d(ThRef)(activeFinalRef) << " " << int2d(ThRef)(plateauFinalRef) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThRef.nt << "," << VhRef.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uRef[].min << "," << uRef[].max << "," << rhoFromPhiRef[].max << "," << int2d(ThRef)(rhoFromPhiRef) << ","
+				<< int2d(ThRef)(activeFinalRef) << "," << int2d(ThRef)(plateauFinalRef) << "," << int2d(ThRef)(plateauFinalRef)/max(int2d(ThRef)(activeFinalRef), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThRef)(rhoFromPhiRef)
+					<< " maxRho=" << rhoFromPhiRef[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThRef, uRef, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotRef = rhoFromPhiRef + rhoPlotFloor;
+			plot(ThRef, rhoPlotRef, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThRef)(rhoFromPhiRef) + " maxRho=" + rhoFromPhiRef[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiRef = ffun(uRef);
+	activeFinalRef = (rhoFromPhiRef > 0.05*rhoAmp);
+	plateauFinalRef = (rhoFromPhiRef > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Store reference solution on reference mesh.
+	uRef = uRef;
+	rhoRef = rhoFromPhiRef;
+	savevtk(outRefVTK, ThRef, TRef, rhoDesignRef, phiDesignRef, uRef, rhoFromPhiRef,
+		dataname="T rhoDesign phiDesign phiRef rhoRef");
+	if (plotReference == 1)
+	{
+		plot(ThRef, uRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm="Reference phi | Hm1=" + finalResHm1 + " PoisRel=" + finalPoissonRel);
+		rhoPlotRef = rhoFromPhiRef + rhoPlotFloor;
+		plot(ThRef, rhoPlotRef, fill=true, value=true, wait=true, nbiso=60,
+			cmm="Reference rho+floor | mass=" + int2d(ThRef)(rhoFromPhiRef) + " maxRho=" + rhoFromPhiRef[].max);
+	}
+}
+// ================================================================
+// Solve block L0: N=80
+// ================================================================
+{
+	int Ncur = 80;
+	string tag = "LEVEL0";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	mesh ThL0 = buildmesh(Gamma(Ncur));
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL0, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThL0.nt);
+	}
+
+	fespace VhL0(ThL0, P2);
+	VhL0 TL0, phiDesignL0, rhoDesignL0, uL0, duL0, vL0, uTrialL0, uOldL0;
+	VhL0 rhoFromPhiL0, tmpL0, psiL0, diffL0, activeFinalL0, plateauFinalL0, rhoPlotL0;
+	real[int] rrL0(VhL0.ndof), zzL0(VhL0.ndof);
+
+	problem TorsionL0(TL0, vL0, solver=sparsesolver)
+		=
+		int2d(ThL0)(
+			dx(TL0)*dx(vL0)
+			+ dy(TL0)*dy(vL0)
+		)
+		- int2d(ThL0)(
+			1.0*vL0
+		)
+		+ on(bLabel, TL0=0);
+
+	varf aL0(uu,vv)
+		=
+		int2d(ThL0)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mL0(uu,vv)
+		=
+		int2d(ThL0)(
+			uu*vv
+		);
+
+	varf ResidualFormL0(unused, vv)
+		=
+		int2d(ThL0)(
+			dx(uL0)*dx(vv)
+			+ dy(uL0)*dy(vv)
+			- ffun(uL0)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepL0(duL0, vL0, solver=sparsesolver)
+		=
+		int2d(ThL0)(
+			(1.0 + muShift)*(dx(duL0)*dx(vL0) + dy(duL0)*dy(vL0))
+			- dffun(uL0)*duL0*vL0
+		)
+		+ int2d(ThL0)(
+			dx(uL0)*dx(vL0)
+			+ dy(uL0)*dy(vL0)
+			- ffun(uL0)*vL0
+		)
+		+ on(bLabel, duL0=0);
+
+	matrix KL0 = aL0(VhL0,VhL0);
+	matrix ML0 = mL0(VhL0,VhL0);
+
+	tSolve = clock();
+	TorsionL0;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TL0[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	rhoDesignL0 = gT(TL0);
+	tmpL0[] = ML0*rhoDesignL0[];
+	phiDesignL0[] = KL0^-1*tmpL0[];
+	cout << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+	flog << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+
+	uL0 = phiDesignL0;
+	rhoFromPhiL0 = ffun(uL0);
+	activeFinalL0 = (rhoFromPhiL0 > 0.05*rhoAmp);
+	plateauFinalL0 = (rhoFromPhiL0 > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrL0.resize(VhL0.ndof);
+	zzL0.resize(VhL0.ndof);
+	rrL0 = 0.0;
+	zzL0 = 0.0;
+	rrL0 = ResidualFormL0(0, VhL0);
+	zzL0 = KL0^-1*rrL0;
+	resEuclid = sqrt(rrL0'*rrL0);
+	resHm1 = sqrt(abs(rrL0'*zzL0));
+	escale = sqrt(int2d(ThL0)(dx(uL0)^2 + dy(uL0)^2));
+	rhoscale = sqrt(int2d(ThL0)(rhoFromPhiL0^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpL0[] = ML0*rhoFromPhiL0[];
+	psiL0[] = KL0^-1*tmpL0[];
+	diffL0 = uL0 - psiL0;
+	poissonRel = sqrt(int2d(ThL0)(dx(diffL0)^2 + dy(diffL0)^2))
+		/max(sqrt(int2d(ThL0)(dx(psiL0)^2 + dy(psiL0)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThL0)(rhoFromPhiL0)
+		<< " maxRho=" << rhoFromPhiL0[].max
+		<< " activeArea=" << int2d(ThL0)(activeFinalL0)
+		<< " plateauArea=" << int2d(ThL0)(plateauFinalL0)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThL0.nt << "," << VhL0.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uL0[].min << "," << uL0[].max << "," << rhoFromPhiL0[].max << "," << int2d(ThL0)(rhoFromPhiL0) << ","
+		<< int2d(ThL0)(activeFinalL0) << "," << int2d(ThL0)(plateauFinalL0) << "," << int2d(ThL0)(plateauFinalL0)/max(int2d(ThL0)(activeFinalL0), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL0, TL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TL0[].max);
+
+		rhoPlotL0 = rhoDesignL0 + rhoPlotFloor;
+		plot(ThL0, rhoPlotL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThL0)(rhoDesignL0) + " max=" + rhoDesignL0[].max);
+
+		plot(ThL0, uL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotL0 = rhoFromPhiL0 + rhoPlotFloor;
+		plot(ThL0, rhoPlotL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThL0)(rhoFromPhiL0) + " maxRho=" + rhoFromPhiL0[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepL0;
+		real nd = sqrt(int2d(ThL0)(dx(duL0)^2 + dy(duL0)^2));
+		rhoFromPhiL0 = ffun(uL0);
+		activeFinalL0 = (rhoFromPhiL0 > 0.05*rhoAmp);
+		plateauFinalL0 = (rhoFromPhiL0 > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+				<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+				<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL0.nt << "," << VhL0.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uL0[].min << "," << uL0[].max << "," << rhoFromPhiL0[].max << "," << int2d(ThL0)(rhoFromPhiL0) << ","
+				<< int2d(ThL0)(activeFinalL0) << "," << int2d(ThL0)(plateauFinalL0) << "," << int2d(ThL0)(plateauFinalL0)/max(int2d(ThL0)(activeFinalL0), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL0)(rhoFromPhiL0)
+					<< " maxRho=" << rhoFromPhiL0[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldL0 = uL0;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialL0 = uOldL0 + alpha*duL0;
+			uL0 = uTrialL0;
+			rhoFromPhiL0 = ffun(uL0);
+			real trialMass = int2d(ThL0)(rhoFromPhiL0);
+			real trialMaxRho = rhoFromPhiL0[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThL0)(rhoDesignL0), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrL0.resize(VhL0.ndof);
+			zzL0.resize(VhL0.ndof);
+			rrL0 = 0.0;
+			zzL0 = 0.0;
+			rrL0 = ResidualFormL0(0, VhL0);
+			zzL0 = KL0^-1*rrL0;
+			resEuclid = sqrt(rrL0'*rrL0);
+			resHm1 = sqrt(abs(rrL0'*zzL0));
+			escale = sqrt(int2d(ThL0)(dx(uL0)^2 + dy(uL0)^2));
+			rhoscale = sqrt(int2d(ThL0)(rhoFromPhiL0^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL0[] = ML0*rhoFromPhiL0[];
+			psiL0[] = KL0^-1*tmpL0[];
+			diffL0 = uL0 - psiL0;
+			poissonRel = sqrt(int2d(ThL0)(dx(diffL0)^2 + dy(diffL0)^2))
+				/max(sqrt(int2d(ThL0)(dx(psiL0)^2 + dy(psiL0)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uL0 = uOldL0;
+			rhoFromPhiL0 = ffun(uL0);
+			rrL0 = 0.0;
+			zzL0 = 0.0;
+			rrL0 = ResidualFormL0(0, VhL0);
+			zzL0 = KL0^-1*rrL0;
+			resEuclid = sqrt(rrL0'*rrL0);
+			resHm1 = sqrt(abs(rrL0'*zzL0));
+			escale = sqrt(int2d(ThL0)(dx(uL0)^2 + dy(uL0)^2));
+			rhoscale = sqrt(int2d(ThL0)(rhoFromPhiL0^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL0[] = ML0*rhoFromPhiL0[];
+			psiL0[] = KL0^-1*tmpL0[];
+			diffL0 = uL0 - psiL0;
+			poissonRel = sqrt(int2d(ThL0)(dx(diffL0)^2 + dy(diffL0)^2))
+				/max(sqrt(int2d(ThL0)(dx(psiL0)^2 + dy(psiL0)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+				<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+				<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL0.nt << "," << VhL0.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL0[].min << "," << uL0[].max << "," << rhoFromPhiL0[].max << "," << int2d(ThL0)(rhoFromPhiL0) << ","
+				<< int2d(ThL0)(activeFinalL0) << "," << int2d(ThL0)(plateauFinalL0) << "," << int2d(ThL0)(plateauFinalL0)/max(int2d(ThL0)(activeFinalL0), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL0)(rhoFromPhiL0)
+					<< " maxRho=" << rhoFromPhiL0[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiL0 = ffun(uL0);
+		activeFinalL0 = (rhoFromPhiL0 > 0.05*rhoAmp);
+		plateauFinalL0 = (rhoFromPhiL0 > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+			<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL0[].min << " " << uL0[].max << " " << rhoFromPhiL0[].max << " "
+			<< int2d(ThL0)(rhoFromPhiL0) << " " << int2d(ThL0)(activeFinalL0) << " " << int2d(ThL0)(plateauFinalL0) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL0.nt << "," << VhL0.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL0[].min << "," << uL0[].max << "," << rhoFromPhiL0[].max << "," << int2d(ThL0)(rhoFromPhiL0) << ","
+				<< int2d(ThL0)(activeFinalL0) << "," << int2d(ThL0)(plateauFinalL0) << "," << int2d(ThL0)(plateauFinalL0)/max(int2d(ThL0)(activeFinalL0), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL0)(rhoFromPhiL0)
+					<< " maxRho=" << rhoFromPhiL0[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThL0, uL0, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotL0 = rhoFromPhiL0 + rhoPlotFloor;
+			plot(ThL0, rhoPlotL0, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThL0)(rhoFromPhiL0) + " maxRho=" + rhoFromPhiL0[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiL0 = ffun(uL0);
+	activeFinalL0 = (rhoFromPhiL0 > 0.05*rhoAmp);
+	plateauFinalL0 = (rhoFromPhiL0 > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Compare current solution to reference by interpolation onto ThRef.
+	VhRef uOnRefL0, rhoOnRefL0, ePhiL0, eRhoL0;
+	uOnRefL0 = uL0;
+	rhoOnRefL0 = ffun(uOnRefL0);
+	ePhiL0 = uOnRefL0 - uRef;
+	eRhoL0 = rhoOnRefL0 - rhoRef;
+	real normPhiRefL2L0 = sqrt(int2d(ThRef)(uRef^2));
+	real normPhiRefH1L0 = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	real normRhoRefL2L0 = sqrt(int2d(ThRef)(rhoRef^2));
+	real normRhoRefL1L0 = int2d(ThRef)(abs(rhoRef));
+	real relL2PhiRefL0 = sqrt(int2d(ThRef)(ePhiL0^2))/max(normPhiRefL2L0, 1e-30);
+	real relH1PhiRefL0 = sqrt(int2d(ThRef)(dx(ePhiL0)^2 + dy(ePhiL0)^2))/max(normPhiRefH1L0, 1e-30);
+	real relL2RhoRefL0 = sqrt(int2d(ThRef)(eRhoL0^2))/max(normRhoRefL2L0, 1e-30);
+	real relL1RhoRefL0 = int2d(ThRef)(abs(eRhoL0))/max(normRhoRefL1L0, 1e-30);
+	VhRef activeRefL0, plateauRefL0, rhoPlotRefL0;
+	activeRefL0 = (rhoOnRefL0 > 0.05*rhoAmp);
+	plateauRefL0 = (rhoOnRefL0 > 0.90*rhoAmp);
+	real activeAreaL0 = int2d(ThRef)(activeRefL0);
+	real plateauAreaL0 = int2d(ThRef)(plateauRefL0);
+	real plateauFracL0 = plateauAreaL0/max(activeAreaL0, 1e-30);
+	real massRhoL0 = int2d(ThRef)(rhoOnRefL0);
+	real maxRhoL0 = rhoOnRefL0[].max;
+
+	cout << "CONV "
+		<< Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+		<< relL2PhiRefL0 << " " << relH1PhiRefL0 << " "
+		<< relL2RhoRefL0 << " " << relL1RhoRefL0 << " "
+		<< massRhoL0 << " " << maxRhoL0 << " "
+		<< activeAreaL0 << " " << plateauAreaL0 << " " << plateauFracL0 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	flog << "CONV "
+		<< Ncur << " " << ThL0.nt << " " << VhL0.ndof << " "
+		<< relL2PhiRefL0 << " " << relH1PhiRefL0 << " "
+		<< relL2RhoRefL0 << " " << relL1RhoRefL0 << " "
+		<< massRhoL0 << " " << maxRhoL0 << " "
+		<< activeAreaL0 << " " << plateauAreaL0 << " " << plateauFracL0 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	csvlog
+		<< "CONV," << tag << "," << Ncur << "," << ThL0.nt << "," << VhL0.ndof << ",NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< "NA," << finalResHm1 << ",NA,NA," << finalPoissonRel << ",NA,NA,NA," << muShift << ","
+		<< "NA,NA," << maxRhoL0 << "," << massRhoL0 << ","
+		<< activeAreaL0 << "," << plateauAreaL0 << "," << plateauFracL0 << ","
+		<< relL2PhiRefL0 << "," << relH1PhiRefL0 << "," << relL2RhoRefL0 << "," << relL1RhoRefL0 << ",FINAL"
+		<< endl;
+
+	if (plotEachMesh == 1)
+	{
+		plot(ThRef, uOnRefL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " phi interpolated to reference | relL2=" + relL2PhiRefL0 + " relH1=" + relH1PhiRefL0);
+		rhoPlotRefL0 = rhoOnRefL0 + rhoPlotFloor;
+		plot(ThRef, rhoPlotRefL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho+floor on reference | relL2=" + relL2RhoRefL0 + " mass=" + massRhoL0);
+		plot(ThRef, eRhoL0, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho error vs reference | relL2=" + relL2RhoRefL0 + " relL1=" + relL1RhoRefL0);
+	}
+}
+// ================================================================
+// Solve block L1: N=110
+// ================================================================
+{
+	int Ncur = 110;
+	string tag = "LEVEL1";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	mesh ThL1 = buildmesh(Gamma(Ncur));
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL1, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThL1.nt);
+	}
+
+	fespace VhL1(ThL1, P2);
+	VhL1 TL1, phiDesignL1, rhoDesignL1, uL1, duL1, vL1, uTrialL1, uOldL1;
+	VhL1 rhoFromPhiL1, tmpL1, psiL1, diffL1, activeFinalL1, plateauFinalL1, rhoPlotL1;
+	real[int] rrL1(VhL1.ndof), zzL1(VhL1.ndof);
+
+	problem TorsionL1(TL1, vL1, solver=sparsesolver)
+		=
+		int2d(ThL1)(
+			dx(TL1)*dx(vL1)
+			+ dy(TL1)*dy(vL1)
+		)
+		- int2d(ThL1)(
+			1.0*vL1
+		)
+		+ on(bLabel, TL1=0);
+
+	varf aL1(uu,vv)
+		=
+		int2d(ThL1)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mL1(uu,vv)
+		=
+		int2d(ThL1)(
+			uu*vv
+		);
+
+	varf ResidualFormL1(unused, vv)
+		=
+		int2d(ThL1)(
+			dx(uL1)*dx(vv)
+			+ dy(uL1)*dy(vv)
+			- ffun(uL1)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepL1(duL1, vL1, solver=sparsesolver)
+		=
+		int2d(ThL1)(
+			(1.0 + muShift)*(dx(duL1)*dx(vL1) + dy(duL1)*dy(vL1))
+			- dffun(uL1)*duL1*vL1
+		)
+		+ int2d(ThL1)(
+			dx(uL1)*dx(vL1)
+			+ dy(uL1)*dy(vL1)
+			- ffun(uL1)*vL1
+		)
+		+ on(bLabel, duL1=0);
+
+	matrix KL1 = aL1(VhL1,VhL1);
+	matrix ML1 = mL1(VhL1,VhL1);
+
+	tSolve = clock();
+	TorsionL1;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TL1[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	rhoDesignL1 = gT(TL1);
+	tmpL1[] = ML1*rhoDesignL1[];
+	phiDesignL1[] = KL1^-1*tmpL1[];
+	cout << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+	flog << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+
+	uL1 = phiDesignL1;
+	rhoFromPhiL1 = ffun(uL1);
+	activeFinalL1 = (rhoFromPhiL1 > 0.05*rhoAmp);
+	plateauFinalL1 = (rhoFromPhiL1 > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrL1.resize(VhL1.ndof);
+	zzL1.resize(VhL1.ndof);
+	rrL1 = 0.0;
+	zzL1 = 0.0;
+	rrL1 = ResidualFormL1(0, VhL1);
+	zzL1 = KL1^-1*rrL1;
+	resEuclid = sqrt(rrL1'*rrL1);
+	resHm1 = sqrt(abs(rrL1'*zzL1));
+	escale = sqrt(int2d(ThL1)(dx(uL1)^2 + dy(uL1)^2));
+	rhoscale = sqrt(int2d(ThL1)(rhoFromPhiL1^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpL1[] = ML1*rhoFromPhiL1[];
+	psiL1[] = KL1^-1*tmpL1[];
+	diffL1 = uL1 - psiL1;
+	poissonRel = sqrt(int2d(ThL1)(dx(diffL1)^2 + dy(diffL1)^2))
+		/max(sqrt(int2d(ThL1)(dx(psiL1)^2 + dy(psiL1)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThL1)(rhoFromPhiL1)
+		<< " maxRho=" << rhoFromPhiL1[].max
+		<< " activeArea=" << int2d(ThL1)(activeFinalL1)
+		<< " plateauArea=" << int2d(ThL1)(plateauFinalL1)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThL1.nt << "," << VhL1.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uL1[].min << "," << uL1[].max << "," << rhoFromPhiL1[].max << "," << int2d(ThL1)(rhoFromPhiL1) << ","
+		<< int2d(ThL1)(activeFinalL1) << "," << int2d(ThL1)(plateauFinalL1) << "," << int2d(ThL1)(plateauFinalL1)/max(int2d(ThL1)(activeFinalL1), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL1, TL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TL1[].max);
+
+		rhoPlotL1 = rhoDesignL1 + rhoPlotFloor;
+		plot(ThL1, rhoPlotL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThL1)(rhoDesignL1) + " max=" + rhoDesignL1[].max);
+
+		plot(ThL1, uL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotL1 = rhoFromPhiL1 + rhoPlotFloor;
+		plot(ThL1, rhoPlotL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThL1)(rhoFromPhiL1) + " maxRho=" + rhoFromPhiL1[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepL1;
+		real nd = sqrt(int2d(ThL1)(dx(duL1)^2 + dy(duL1)^2));
+		rhoFromPhiL1 = ffun(uL1);
+		activeFinalL1 = (rhoFromPhiL1 > 0.05*rhoAmp);
+		plateauFinalL1 = (rhoFromPhiL1 > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+				<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+				<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL1.nt << "," << VhL1.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uL1[].min << "," << uL1[].max << "," << rhoFromPhiL1[].max << "," << int2d(ThL1)(rhoFromPhiL1) << ","
+				<< int2d(ThL1)(activeFinalL1) << "," << int2d(ThL1)(plateauFinalL1) << "," << int2d(ThL1)(plateauFinalL1)/max(int2d(ThL1)(activeFinalL1), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL1)(rhoFromPhiL1)
+					<< " maxRho=" << rhoFromPhiL1[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldL1 = uL1;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialL1 = uOldL1 + alpha*duL1;
+			uL1 = uTrialL1;
+			rhoFromPhiL1 = ffun(uL1);
+			real trialMass = int2d(ThL1)(rhoFromPhiL1);
+			real trialMaxRho = rhoFromPhiL1[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThL1)(rhoDesignL1), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrL1.resize(VhL1.ndof);
+			zzL1.resize(VhL1.ndof);
+			rrL1 = 0.0;
+			zzL1 = 0.0;
+			rrL1 = ResidualFormL1(0, VhL1);
+			zzL1 = KL1^-1*rrL1;
+			resEuclid = sqrt(rrL1'*rrL1);
+			resHm1 = sqrt(abs(rrL1'*zzL1));
+			escale = sqrt(int2d(ThL1)(dx(uL1)^2 + dy(uL1)^2));
+			rhoscale = sqrt(int2d(ThL1)(rhoFromPhiL1^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL1[] = ML1*rhoFromPhiL1[];
+			psiL1[] = KL1^-1*tmpL1[];
+			diffL1 = uL1 - psiL1;
+			poissonRel = sqrt(int2d(ThL1)(dx(diffL1)^2 + dy(diffL1)^2))
+				/max(sqrt(int2d(ThL1)(dx(psiL1)^2 + dy(psiL1)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uL1 = uOldL1;
+			rhoFromPhiL1 = ffun(uL1);
+			rrL1 = 0.0;
+			zzL1 = 0.0;
+			rrL1 = ResidualFormL1(0, VhL1);
+			zzL1 = KL1^-1*rrL1;
+			resEuclid = sqrt(rrL1'*rrL1);
+			resHm1 = sqrt(abs(rrL1'*zzL1));
+			escale = sqrt(int2d(ThL1)(dx(uL1)^2 + dy(uL1)^2));
+			rhoscale = sqrt(int2d(ThL1)(rhoFromPhiL1^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL1[] = ML1*rhoFromPhiL1[];
+			psiL1[] = KL1^-1*tmpL1[];
+			diffL1 = uL1 - psiL1;
+			poissonRel = sqrt(int2d(ThL1)(dx(diffL1)^2 + dy(diffL1)^2))
+				/max(sqrt(int2d(ThL1)(dx(psiL1)^2 + dy(psiL1)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+				<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+				<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL1.nt << "," << VhL1.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL1[].min << "," << uL1[].max << "," << rhoFromPhiL1[].max << "," << int2d(ThL1)(rhoFromPhiL1) << ","
+				<< int2d(ThL1)(activeFinalL1) << "," << int2d(ThL1)(plateauFinalL1) << "," << int2d(ThL1)(plateauFinalL1)/max(int2d(ThL1)(activeFinalL1), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL1)(rhoFromPhiL1)
+					<< " maxRho=" << rhoFromPhiL1[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiL1 = ffun(uL1);
+		activeFinalL1 = (rhoFromPhiL1 > 0.05*rhoAmp);
+		plateauFinalL1 = (rhoFromPhiL1 > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+			<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL1[].min << " " << uL1[].max << " " << rhoFromPhiL1[].max << " "
+			<< int2d(ThL1)(rhoFromPhiL1) << " " << int2d(ThL1)(activeFinalL1) << " " << int2d(ThL1)(plateauFinalL1) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL1.nt << "," << VhL1.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL1[].min << "," << uL1[].max << "," << rhoFromPhiL1[].max << "," << int2d(ThL1)(rhoFromPhiL1) << ","
+				<< int2d(ThL1)(activeFinalL1) << "," << int2d(ThL1)(plateauFinalL1) << "," << int2d(ThL1)(plateauFinalL1)/max(int2d(ThL1)(activeFinalL1), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL1)(rhoFromPhiL1)
+					<< " maxRho=" << rhoFromPhiL1[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThL1, uL1, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotL1 = rhoFromPhiL1 + rhoPlotFloor;
+			plot(ThL1, rhoPlotL1, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThL1)(rhoFromPhiL1) + " maxRho=" + rhoFromPhiL1[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiL1 = ffun(uL1);
+	activeFinalL1 = (rhoFromPhiL1 > 0.05*rhoAmp);
+	plateauFinalL1 = (rhoFromPhiL1 > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Compare current solution to reference by interpolation onto ThRef.
+	VhRef uOnRefL1, rhoOnRefL1, ePhiL1, eRhoL1;
+	uOnRefL1 = uL1;
+	rhoOnRefL1 = ffun(uOnRefL1);
+	ePhiL1 = uOnRefL1 - uRef;
+	eRhoL1 = rhoOnRefL1 - rhoRef;
+	real normPhiRefL2L1 = sqrt(int2d(ThRef)(uRef^2));
+	real normPhiRefH1L1 = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	real normRhoRefL2L1 = sqrt(int2d(ThRef)(rhoRef^2));
+	real normRhoRefL1L1 = int2d(ThRef)(abs(rhoRef));
+	real relL2PhiRefL1 = sqrt(int2d(ThRef)(ePhiL1^2))/max(normPhiRefL2L1, 1e-30);
+	real relH1PhiRefL1 = sqrt(int2d(ThRef)(dx(ePhiL1)^2 + dy(ePhiL1)^2))/max(normPhiRefH1L1, 1e-30);
+	real relL2RhoRefL1 = sqrt(int2d(ThRef)(eRhoL1^2))/max(normRhoRefL2L1, 1e-30);
+	real relL1RhoRefL1 = int2d(ThRef)(abs(eRhoL1))/max(normRhoRefL1L1, 1e-30);
+	VhRef activeRefL1, plateauRefL1, rhoPlotRefL1;
+	activeRefL1 = (rhoOnRefL1 > 0.05*rhoAmp);
+	plateauRefL1 = (rhoOnRefL1 > 0.90*rhoAmp);
+	real activeAreaL1 = int2d(ThRef)(activeRefL1);
+	real plateauAreaL1 = int2d(ThRef)(plateauRefL1);
+	real plateauFracL1 = plateauAreaL1/max(activeAreaL1, 1e-30);
+	real massRhoL1 = int2d(ThRef)(rhoOnRefL1);
+	real maxRhoL1 = rhoOnRefL1[].max;
+
+	cout << "CONV "
+		<< Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+		<< relL2PhiRefL1 << " " << relH1PhiRefL1 << " "
+		<< relL2RhoRefL1 << " " << relL1RhoRefL1 << " "
+		<< massRhoL1 << " " << maxRhoL1 << " "
+		<< activeAreaL1 << " " << plateauAreaL1 << " " << plateauFracL1 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	flog << "CONV "
+		<< Ncur << " " << ThL1.nt << " " << VhL1.ndof << " "
+		<< relL2PhiRefL1 << " " << relH1PhiRefL1 << " "
+		<< relL2RhoRefL1 << " " << relL1RhoRefL1 << " "
+		<< massRhoL1 << " " << maxRhoL1 << " "
+		<< activeAreaL1 << " " << plateauAreaL1 << " " << plateauFracL1 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	csvlog
+		<< "CONV," << tag << "," << Ncur << "," << ThL1.nt << "," << VhL1.ndof << ",NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< "NA," << finalResHm1 << ",NA,NA," << finalPoissonRel << ",NA,NA,NA," << muShift << ","
+		<< "NA,NA," << maxRhoL1 << "," << massRhoL1 << ","
+		<< activeAreaL1 << "," << plateauAreaL1 << "," << plateauFracL1 << ","
+		<< relL2PhiRefL1 << "," << relH1PhiRefL1 << "," << relL2RhoRefL1 << "," << relL1RhoRefL1 << ",FINAL"
+		<< endl;
+
+	if (plotEachMesh == 1)
+	{
+		plot(ThRef, uOnRefL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " phi interpolated to reference | relL2=" + relL2PhiRefL1 + " relH1=" + relH1PhiRefL1);
+		rhoPlotRefL1 = rhoOnRefL1 + rhoPlotFloor;
+		plot(ThRef, rhoPlotRefL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho+floor on reference | relL2=" + relL2RhoRefL1 + " mass=" + massRhoL1);
+		plot(ThRef, eRhoL1, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho error vs reference | relL2=" + relL2RhoRefL1 + " relL1=" + relL1RhoRefL1);
+	}
+}
+// ================================================================
+// Solve block L2: N=150
+// ================================================================
+{
+	int Ncur = 150;
+	string tag = "LEVEL2";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	mesh ThL2 = buildmesh(Gamma(Ncur));
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL2, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThL2.nt);
+	}
+
+	fespace VhL2(ThL2, P2);
+	VhL2 TL2, phiDesignL2, rhoDesignL2, uL2, duL2, vL2, uTrialL2, uOldL2;
+	VhL2 rhoFromPhiL2, tmpL2, psiL2, diffL2, activeFinalL2, plateauFinalL2, rhoPlotL2;
+	real[int] rrL2(VhL2.ndof), zzL2(VhL2.ndof);
+
+	problem TorsionL2(TL2, vL2, solver=sparsesolver)
+		=
+		int2d(ThL2)(
+			dx(TL2)*dx(vL2)
+			+ dy(TL2)*dy(vL2)
+		)
+		- int2d(ThL2)(
+			1.0*vL2
+		)
+		+ on(bLabel, TL2=0);
+
+	varf aL2(uu,vv)
+		=
+		int2d(ThL2)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mL2(uu,vv)
+		=
+		int2d(ThL2)(
+			uu*vv
+		);
+
+	varf ResidualFormL2(unused, vv)
+		=
+		int2d(ThL2)(
+			dx(uL2)*dx(vv)
+			+ dy(uL2)*dy(vv)
+			- ffun(uL2)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepL2(duL2, vL2, solver=sparsesolver)
+		=
+		int2d(ThL2)(
+			(1.0 + muShift)*(dx(duL2)*dx(vL2) + dy(duL2)*dy(vL2))
+			- dffun(uL2)*duL2*vL2
+		)
+		+ int2d(ThL2)(
+			dx(uL2)*dx(vL2)
+			+ dy(uL2)*dy(vL2)
+			- ffun(uL2)*vL2
+		)
+		+ on(bLabel, duL2=0);
+
+	matrix KL2 = aL2(VhL2,VhL2);
+	matrix ML2 = mL2(VhL2,VhL2);
+
+	tSolve = clock();
+	TorsionL2;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TL2[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	rhoDesignL2 = gT(TL2);
+	tmpL2[] = ML2*rhoDesignL2[];
+	phiDesignL2[] = KL2^-1*tmpL2[];
+	cout << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+	flog << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+
+	uL2 = phiDesignL2;
+	rhoFromPhiL2 = ffun(uL2);
+	activeFinalL2 = (rhoFromPhiL2 > 0.05*rhoAmp);
+	plateauFinalL2 = (rhoFromPhiL2 > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrL2.resize(VhL2.ndof);
+	zzL2.resize(VhL2.ndof);
+	rrL2 = 0.0;
+	zzL2 = 0.0;
+	rrL2 = ResidualFormL2(0, VhL2);
+	zzL2 = KL2^-1*rrL2;
+	resEuclid = sqrt(rrL2'*rrL2);
+	resHm1 = sqrt(abs(rrL2'*zzL2));
+	escale = sqrt(int2d(ThL2)(dx(uL2)^2 + dy(uL2)^2));
+	rhoscale = sqrt(int2d(ThL2)(rhoFromPhiL2^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpL2[] = ML2*rhoFromPhiL2[];
+	psiL2[] = KL2^-1*tmpL2[];
+	diffL2 = uL2 - psiL2;
+	poissonRel = sqrt(int2d(ThL2)(dx(diffL2)^2 + dy(diffL2)^2))
+		/max(sqrt(int2d(ThL2)(dx(psiL2)^2 + dy(psiL2)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThL2)(rhoFromPhiL2)
+		<< " maxRho=" << rhoFromPhiL2[].max
+		<< " activeArea=" << int2d(ThL2)(activeFinalL2)
+		<< " plateauArea=" << int2d(ThL2)(plateauFinalL2)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThL2.nt << "," << VhL2.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uL2[].min << "," << uL2[].max << "," << rhoFromPhiL2[].max << "," << int2d(ThL2)(rhoFromPhiL2) << ","
+		<< int2d(ThL2)(activeFinalL2) << "," << int2d(ThL2)(plateauFinalL2) << "," << int2d(ThL2)(plateauFinalL2)/max(int2d(ThL2)(activeFinalL2), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL2, TL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TL2[].max);
+
+		rhoPlotL2 = rhoDesignL2 + rhoPlotFloor;
+		plot(ThL2, rhoPlotL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThL2)(rhoDesignL2) + " max=" + rhoDesignL2[].max);
+
+		plot(ThL2, uL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotL2 = rhoFromPhiL2 + rhoPlotFloor;
+		plot(ThL2, rhoPlotL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThL2)(rhoFromPhiL2) + " maxRho=" + rhoFromPhiL2[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepL2;
+		real nd = sqrt(int2d(ThL2)(dx(duL2)^2 + dy(duL2)^2));
+		rhoFromPhiL2 = ffun(uL2);
+		activeFinalL2 = (rhoFromPhiL2 > 0.05*rhoAmp);
+		plateauFinalL2 = (rhoFromPhiL2 > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+				<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+				<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL2.nt << "," << VhL2.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uL2[].min << "," << uL2[].max << "," << rhoFromPhiL2[].max << "," << int2d(ThL2)(rhoFromPhiL2) << ","
+				<< int2d(ThL2)(activeFinalL2) << "," << int2d(ThL2)(plateauFinalL2) << "," << int2d(ThL2)(plateauFinalL2)/max(int2d(ThL2)(activeFinalL2), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL2)(rhoFromPhiL2)
+					<< " maxRho=" << rhoFromPhiL2[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldL2 = uL2;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialL2 = uOldL2 + alpha*duL2;
+			uL2 = uTrialL2;
+			rhoFromPhiL2 = ffun(uL2);
+			real trialMass = int2d(ThL2)(rhoFromPhiL2);
+			real trialMaxRho = rhoFromPhiL2[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThL2)(rhoDesignL2), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrL2.resize(VhL2.ndof);
+			zzL2.resize(VhL2.ndof);
+			rrL2 = 0.0;
+			zzL2 = 0.0;
+			rrL2 = ResidualFormL2(0, VhL2);
+			zzL2 = KL2^-1*rrL2;
+			resEuclid = sqrt(rrL2'*rrL2);
+			resHm1 = sqrt(abs(rrL2'*zzL2));
+			escale = sqrt(int2d(ThL2)(dx(uL2)^2 + dy(uL2)^2));
+			rhoscale = sqrt(int2d(ThL2)(rhoFromPhiL2^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL2[] = ML2*rhoFromPhiL2[];
+			psiL2[] = KL2^-1*tmpL2[];
+			diffL2 = uL2 - psiL2;
+			poissonRel = sqrt(int2d(ThL2)(dx(diffL2)^2 + dy(diffL2)^2))
+				/max(sqrt(int2d(ThL2)(dx(psiL2)^2 + dy(psiL2)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uL2 = uOldL2;
+			rhoFromPhiL2 = ffun(uL2);
+			rrL2 = 0.0;
+			zzL2 = 0.0;
+			rrL2 = ResidualFormL2(0, VhL2);
+			zzL2 = KL2^-1*rrL2;
+			resEuclid = sqrt(rrL2'*rrL2);
+			resHm1 = sqrt(abs(rrL2'*zzL2));
+			escale = sqrt(int2d(ThL2)(dx(uL2)^2 + dy(uL2)^2));
+			rhoscale = sqrt(int2d(ThL2)(rhoFromPhiL2^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL2[] = ML2*rhoFromPhiL2[];
+			psiL2[] = KL2^-1*tmpL2[];
+			diffL2 = uL2 - psiL2;
+			poissonRel = sqrt(int2d(ThL2)(dx(diffL2)^2 + dy(diffL2)^2))
+				/max(sqrt(int2d(ThL2)(dx(psiL2)^2 + dy(psiL2)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+				<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+				<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL2.nt << "," << VhL2.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL2[].min << "," << uL2[].max << "," << rhoFromPhiL2[].max << "," << int2d(ThL2)(rhoFromPhiL2) << ","
+				<< int2d(ThL2)(activeFinalL2) << "," << int2d(ThL2)(plateauFinalL2) << "," << int2d(ThL2)(plateauFinalL2)/max(int2d(ThL2)(activeFinalL2), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL2)(rhoFromPhiL2)
+					<< " maxRho=" << rhoFromPhiL2[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiL2 = ffun(uL2);
+		activeFinalL2 = (rhoFromPhiL2 > 0.05*rhoAmp);
+		plateauFinalL2 = (rhoFromPhiL2 > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+			<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL2[].min << " " << uL2[].max << " " << rhoFromPhiL2[].max << " "
+			<< int2d(ThL2)(rhoFromPhiL2) << " " << int2d(ThL2)(activeFinalL2) << " " << int2d(ThL2)(plateauFinalL2) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL2.nt << "," << VhL2.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL2[].min << "," << uL2[].max << "," << rhoFromPhiL2[].max << "," << int2d(ThL2)(rhoFromPhiL2) << ","
+				<< int2d(ThL2)(activeFinalL2) << "," << int2d(ThL2)(plateauFinalL2) << "," << int2d(ThL2)(plateauFinalL2)/max(int2d(ThL2)(activeFinalL2), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL2)(rhoFromPhiL2)
+					<< " maxRho=" << rhoFromPhiL2[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThL2, uL2, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotL2 = rhoFromPhiL2 + rhoPlotFloor;
+			plot(ThL2, rhoPlotL2, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThL2)(rhoFromPhiL2) + " maxRho=" + rhoFromPhiL2[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiL2 = ffun(uL2);
+	activeFinalL2 = (rhoFromPhiL2 > 0.05*rhoAmp);
+	plateauFinalL2 = (rhoFromPhiL2 > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Compare current solution to reference by interpolation onto ThRef.
+	VhRef uOnRefL2, rhoOnRefL2, ePhiL2, eRhoL2;
+	uOnRefL2 = uL2;
+	rhoOnRefL2 = ffun(uOnRefL2);
+	ePhiL2 = uOnRefL2 - uRef;
+	eRhoL2 = rhoOnRefL2 - rhoRef;
+	real normPhiRefL2L2 = sqrt(int2d(ThRef)(uRef^2));
+	real normPhiRefH1L2 = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	real normRhoRefL2L2 = sqrt(int2d(ThRef)(rhoRef^2));
+	real normRhoRefL1L2 = int2d(ThRef)(abs(rhoRef));
+	real relL2PhiRefL2 = sqrt(int2d(ThRef)(ePhiL2^2))/max(normPhiRefL2L2, 1e-30);
+	real relH1PhiRefL2 = sqrt(int2d(ThRef)(dx(ePhiL2)^2 + dy(ePhiL2)^2))/max(normPhiRefH1L2, 1e-30);
+	real relL2RhoRefL2 = sqrt(int2d(ThRef)(eRhoL2^2))/max(normRhoRefL2L2, 1e-30);
+	real relL1RhoRefL2 = int2d(ThRef)(abs(eRhoL2))/max(normRhoRefL1L2, 1e-30);
+	VhRef activeRefL2, plateauRefL2, rhoPlotRefL2;
+	activeRefL2 = (rhoOnRefL2 > 0.05*rhoAmp);
+	plateauRefL2 = (rhoOnRefL2 > 0.90*rhoAmp);
+	real activeAreaL2 = int2d(ThRef)(activeRefL2);
+	real plateauAreaL2 = int2d(ThRef)(plateauRefL2);
+	real plateauFracL2 = plateauAreaL2/max(activeAreaL2, 1e-30);
+	real massRhoL2 = int2d(ThRef)(rhoOnRefL2);
+	real maxRhoL2 = rhoOnRefL2[].max;
+
+	cout << "CONV "
+		<< Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+		<< relL2PhiRefL2 << " " << relH1PhiRefL2 << " "
+		<< relL2RhoRefL2 << " " << relL1RhoRefL2 << " "
+		<< massRhoL2 << " " << maxRhoL2 << " "
+		<< activeAreaL2 << " " << plateauAreaL2 << " " << plateauFracL2 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	flog << "CONV "
+		<< Ncur << " " << ThL2.nt << " " << VhL2.ndof << " "
+		<< relL2PhiRefL2 << " " << relH1PhiRefL2 << " "
+		<< relL2RhoRefL2 << " " << relL1RhoRefL2 << " "
+		<< massRhoL2 << " " << maxRhoL2 << " "
+		<< activeAreaL2 << " " << plateauAreaL2 << " " << plateauFracL2 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	csvlog
+		<< "CONV," << tag << "," << Ncur << "," << ThL2.nt << "," << VhL2.ndof << ",NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< "NA," << finalResHm1 << ",NA,NA," << finalPoissonRel << ",NA,NA,NA," << muShift << ","
+		<< "NA,NA," << maxRhoL2 << "," << massRhoL2 << ","
+		<< activeAreaL2 << "," << plateauAreaL2 << "," << plateauFracL2 << ","
+		<< relL2PhiRefL2 << "," << relH1PhiRefL2 << "," << relL2RhoRefL2 << "," << relL1RhoRefL2 << ",FINAL"
+		<< endl;
+
+	if (plotEachMesh == 1)
+	{
+		plot(ThRef, uOnRefL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " phi interpolated to reference | relL2=" + relL2PhiRefL2 + " relH1=" + relH1PhiRefL2);
+		rhoPlotRefL2 = rhoOnRefL2 + rhoPlotFloor;
+		plot(ThRef, rhoPlotRefL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho+floor on reference | relL2=" + relL2RhoRefL2 + " mass=" + massRhoL2);
+		plot(ThRef, eRhoL2, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho error vs reference | relL2=" + relL2RhoRefL2 + " relL1=" + relL1RhoRefL2);
+	}
+}
+// ================================================================
+// Solve block L3: N=210
+// ================================================================
+{
+	int Ncur = 210;
+	string tag = "LEVEL3";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	mesh ThL3 = buildmesh(Gamma(Ncur));
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL3, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThL3.nt);
+	}
+
+	fespace VhL3(ThL3, P2);
+	VhL3 TL3, phiDesignL3, rhoDesignL3, uL3, duL3, vL3, uTrialL3, uOldL3;
+	VhL3 rhoFromPhiL3, tmpL3, psiL3, diffL3, activeFinalL3, plateauFinalL3, rhoPlotL3;
+	real[int] rrL3(VhL3.ndof), zzL3(VhL3.ndof);
+
+	problem TorsionL3(TL3, vL3, solver=sparsesolver)
+		=
+		int2d(ThL3)(
+			dx(TL3)*dx(vL3)
+			+ dy(TL3)*dy(vL3)
+		)
+		- int2d(ThL3)(
+			1.0*vL3
+		)
+		+ on(bLabel, TL3=0);
+
+	varf aL3(uu,vv)
+		=
+		int2d(ThL3)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mL3(uu,vv)
+		=
+		int2d(ThL3)(
+			uu*vv
+		);
+
+	varf ResidualFormL3(unused, vv)
+		=
+		int2d(ThL3)(
+			dx(uL3)*dx(vv)
+			+ dy(uL3)*dy(vv)
+			- ffun(uL3)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepL3(duL3, vL3, solver=sparsesolver)
+		=
+		int2d(ThL3)(
+			(1.0 + muShift)*(dx(duL3)*dx(vL3) + dy(duL3)*dy(vL3))
+			- dffun(uL3)*duL3*vL3
+		)
+		+ int2d(ThL3)(
+			dx(uL3)*dx(vL3)
+			+ dy(uL3)*dy(vL3)
+			- ffun(uL3)*vL3
+		)
+		+ on(bLabel, duL3=0);
+
+	matrix KL3 = aL3(VhL3,VhL3);
+	matrix ML3 = mL3(VhL3,VhL3);
+
+	tSolve = clock();
+	TorsionL3;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TL3[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	rhoDesignL3 = gT(TL3);
+	tmpL3[] = ML3*rhoDesignL3[];
+	phiDesignL3[] = KL3^-1*tmpL3[];
+	cout << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+	flog << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+
+	uL3 = phiDesignL3;
+	rhoFromPhiL3 = ffun(uL3);
+	activeFinalL3 = (rhoFromPhiL3 > 0.05*rhoAmp);
+	plateauFinalL3 = (rhoFromPhiL3 > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrL3.resize(VhL3.ndof);
+	zzL3.resize(VhL3.ndof);
+	rrL3 = 0.0;
+	zzL3 = 0.0;
+	rrL3 = ResidualFormL3(0, VhL3);
+	zzL3 = KL3^-1*rrL3;
+	resEuclid = sqrt(rrL3'*rrL3);
+	resHm1 = sqrt(abs(rrL3'*zzL3));
+	escale = sqrt(int2d(ThL3)(dx(uL3)^2 + dy(uL3)^2));
+	rhoscale = sqrt(int2d(ThL3)(rhoFromPhiL3^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpL3[] = ML3*rhoFromPhiL3[];
+	psiL3[] = KL3^-1*tmpL3[];
+	diffL3 = uL3 - psiL3;
+	poissonRel = sqrt(int2d(ThL3)(dx(diffL3)^2 + dy(diffL3)^2))
+		/max(sqrt(int2d(ThL3)(dx(psiL3)^2 + dy(psiL3)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThL3)(rhoFromPhiL3)
+		<< " maxRho=" << rhoFromPhiL3[].max
+		<< " activeArea=" << int2d(ThL3)(activeFinalL3)
+		<< " plateauArea=" << int2d(ThL3)(plateauFinalL3)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThL3.nt << "," << VhL3.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uL3[].min << "," << uL3[].max << "," << rhoFromPhiL3[].max << "," << int2d(ThL3)(rhoFromPhiL3) << ","
+		<< int2d(ThL3)(activeFinalL3) << "," << int2d(ThL3)(plateauFinalL3) << "," << int2d(ThL3)(plateauFinalL3)/max(int2d(ThL3)(activeFinalL3), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL3, TL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TL3[].max);
+
+		rhoPlotL3 = rhoDesignL3 + rhoPlotFloor;
+		plot(ThL3, rhoPlotL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThL3)(rhoDesignL3) + " max=" + rhoDesignL3[].max);
+
+		plot(ThL3, uL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotL3 = rhoFromPhiL3 + rhoPlotFloor;
+		plot(ThL3, rhoPlotL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThL3)(rhoFromPhiL3) + " maxRho=" + rhoFromPhiL3[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepL3;
+		real nd = sqrt(int2d(ThL3)(dx(duL3)^2 + dy(duL3)^2));
+		rhoFromPhiL3 = ffun(uL3);
+		activeFinalL3 = (rhoFromPhiL3 > 0.05*rhoAmp);
+		plateauFinalL3 = (rhoFromPhiL3 > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+				<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+				<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL3.nt << "," << VhL3.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uL3[].min << "," << uL3[].max << "," << rhoFromPhiL3[].max << "," << int2d(ThL3)(rhoFromPhiL3) << ","
+				<< int2d(ThL3)(activeFinalL3) << "," << int2d(ThL3)(plateauFinalL3) << "," << int2d(ThL3)(plateauFinalL3)/max(int2d(ThL3)(activeFinalL3), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL3)(rhoFromPhiL3)
+					<< " maxRho=" << rhoFromPhiL3[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldL3 = uL3;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialL3 = uOldL3 + alpha*duL3;
+			uL3 = uTrialL3;
+			rhoFromPhiL3 = ffun(uL3);
+			real trialMass = int2d(ThL3)(rhoFromPhiL3);
+			real trialMaxRho = rhoFromPhiL3[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThL3)(rhoDesignL3), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrL3.resize(VhL3.ndof);
+			zzL3.resize(VhL3.ndof);
+			rrL3 = 0.0;
+			zzL3 = 0.0;
+			rrL3 = ResidualFormL3(0, VhL3);
+			zzL3 = KL3^-1*rrL3;
+			resEuclid = sqrt(rrL3'*rrL3);
+			resHm1 = sqrt(abs(rrL3'*zzL3));
+			escale = sqrt(int2d(ThL3)(dx(uL3)^2 + dy(uL3)^2));
+			rhoscale = sqrt(int2d(ThL3)(rhoFromPhiL3^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL3[] = ML3*rhoFromPhiL3[];
+			psiL3[] = KL3^-1*tmpL3[];
+			diffL3 = uL3 - psiL3;
+			poissonRel = sqrt(int2d(ThL3)(dx(diffL3)^2 + dy(diffL3)^2))
+				/max(sqrt(int2d(ThL3)(dx(psiL3)^2 + dy(psiL3)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uL3 = uOldL3;
+			rhoFromPhiL3 = ffun(uL3);
+			rrL3 = 0.0;
+			zzL3 = 0.0;
+			rrL3 = ResidualFormL3(0, VhL3);
+			zzL3 = KL3^-1*rrL3;
+			resEuclid = sqrt(rrL3'*rrL3);
+			resHm1 = sqrt(abs(rrL3'*zzL3));
+			escale = sqrt(int2d(ThL3)(dx(uL3)^2 + dy(uL3)^2));
+			rhoscale = sqrt(int2d(ThL3)(rhoFromPhiL3^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL3[] = ML3*rhoFromPhiL3[];
+			psiL3[] = KL3^-1*tmpL3[];
+			diffL3 = uL3 - psiL3;
+			poissonRel = sqrt(int2d(ThL3)(dx(diffL3)^2 + dy(diffL3)^2))
+				/max(sqrt(int2d(ThL3)(dx(psiL3)^2 + dy(psiL3)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+				<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+				<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL3.nt << "," << VhL3.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL3[].min << "," << uL3[].max << "," << rhoFromPhiL3[].max << "," << int2d(ThL3)(rhoFromPhiL3) << ","
+				<< int2d(ThL3)(activeFinalL3) << "," << int2d(ThL3)(plateauFinalL3) << "," << int2d(ThL3)(plateauFinalL3)/max(int2d(ThL3)(activeFinalL3), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL3)(rhoFromPhiL3)
+					<< " maxRho=" << rhoFromPhiL3[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiL3 = ffun(uL3);
+		activeFinalL3 = (rhoFromPhiL3 > 0.05*rhoAmp);
+		plateauFinalL3 = (rhoFromPhiL3 > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+			<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL3[].min << " " << uL3[].max << " " << rhoFromPhiL3[].max << " "
+			<< int2d(ThL3)(rhoFromPhiL3) << " " << int2d(ThL3)(activeFinalL3) << " " << int2d(ThL3)(plateauFinalL3) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL3.nt << "," << VhL3.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL3[].min << "," << uL3[].max << "," << rhoFromPhiL3[].max << "," << int2d(ThL3)(rhoFromPhiL3) << ","
+				<< int2d(ThL3)(activeFinalL3) << "," << int2d(ThL3)(plateauFinalL3) << "," << int2d(ThL3)(plateauFinalL3)/max(int2d(ThL3)(activeFinalL3), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL3)(rhoFromPhiL3)
+					<< " maxRho=" << rhoFromPhiL3[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThL3, uL3, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotL3 = rhoFromPhiL3 + rhoPlotFloor;
+			plot(ThL3, rhoPlotL3, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThL3)(rhoFromPhiL3) + " maxRho=" + rhoFromPhiL3[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiL3 = ffun(uL3);
+	activeFinalL3 = (rhoFromPhiL3 > 0.05*rhoAmp);
+	plateauFinalL3 = (rhoFromPhiL3 > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Compare current solution to reference by interpolation onto ThRef.
+	VhRef uOnRefL3, rhoOnRefL3, ePhiL3, eRhoL3;
+	uOnRefL3 = uL3;
+	rhoOnRefL3 = ffun(uOnRefL3);
+	ePhiL3 = uOnRefL3 - uRef;
+	eRhoL3 = rhoOnRefL3 - rhoRef;
+	real normPhiRefL2L3 = sqrt(int2d(ThRef)(uRef^2));
+	real normPhiRefH1L3 = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	real normRhoRefL2L3 = sqrt(int2d(ThRef)(rhoRef^2));
+	real normRhoRefL1L3 = int2d(ThRef)(abs(rhoRef));
+	real relL2PhiRefL3 = sqrt(int2d(ThRef)(ePhiL3^2))/max(normPhiRefL2L3, 1e-30);
+	real relH1PhiRefL3 = sqrt(int2d(ThRef)(dx(ePhiL3)^2 + dy(ePhiL3)^2))/max(normPhiRefH1L3, 1e-30);
+	real relL2RhoRefL3 = sqrt(int2d(ThRef)(eRhoL3^2))/max(normRhoRefL2L3, 1e-30);
+	real relL1RhoRefL3 = int2d(ThRef)(abs(eRhoL3))/max(normRhoRefL1L3, 1e-30);
+	VhRef activeRefL3, plateauRefL3, rhoPlotRefL3;
+	activeRefL3 = (rhoOnRefL3 > 0.05*rhoAmp);
+	plateauRefL3 = (rhoOnRefL3 > 0.90*rhoAmp);
+	real activeAreaL3 = int2d(ThRef)(activeRefL3);
+	real plateauAreaL3 = int2d(ThRef)(plateauRefL3);
+	real plateauFracL3 = plateauAreaL3/max(activeAreaL3, 1e-30);
+	real massRhoL3 = int2d(ThRef)(rhoOnRefL3);
+	real maxRhoL3 = rhoOnRefL3[].max;
+
+	cout << "CONV "
+		<< Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+		<< relL2PhiRefL3 << " " << relH1PhiRefL3 << " "
+		<< relL2RhoRefL3 << " " << relL1RhoRefL3 << " "
+		<< massRhoL3 << " " << maxRhoL3 << " "
+		<< activeAreaL3 << " " << plateauAreaL3 << " " << plateauFracL3 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	flog << "CONV "
+		<< Ncur << " " << ThL3.nt << " " << VhL3.ndof << " "
+		<< relL2PhiRefL3 << " " << relH1PhiRefL3 << " "
+		<< relL2RhoRefL3 << " " << relL1RhoRefL3 << " "
+		<< massRhoL3 << " " << maxRhoL3 << " "
+		<< activeAreaL3 << " " << plateauAreaL3 << " " << plateauFracL3 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	csvlog
+		<< "CONV," << tag << "," << Ncur << "," << ThL3.nt << "," << VhL3.ndof << ",NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< "NA," << finalResHm1 << ",NA,NA," << finalPoissonRel << ",NA,NA,NA," << muShift << ","
+		<< "NA,NA," << maxRhoL3 << "," << massRhoL3 << ","
+		<< activeAreaL3 << "," << plateauAreaL3 << "," << plateauFracL3 << ","
+		<< relL2PhiRefL3 << "," << relH1PhiRefL3 << "," << relL2RhoRefL3 << "," << relL1RhoRefL3 << ",FINAL"
+		<< endl;
+
+	if (plotEachMesh == 1)
+	{
+		plot(ThRef, uOnRefL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " phi interpolated to reference | relL2=" + relL2PhiRefL3 + " relH1=" + relH1PhiRefL3);
+		rhoPlotRefL3 = rhoOnRefL3 + rhoPlotFloor;
+		plot(ThRef, rhoPlotRefL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho+floor on reference | relL2=" + relL2RhoRefL3 + " mass=" + massRhoL3);
+		plot(ThRef, eRhoL3, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho error vs reference | relL2=" + relL2RhoRefL3 + " relL1=" + relL1RhoRefL3);
+	}
+}
+// ================================================================
+// Solve block L4: N=280
+// ================================================================
+{
+	int Ncur = 280;
+	string tag = "LEVEL4";
+	cout << endl << "---------- " << tag << " N=" << Ncur << " ----------" << endl;
+	flog << "LEVEL_TAG " << tag << " N=" << Ncur << endl;
+
+	mesh ThL4 = buildmesh(Gamma(Ncur));
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL4, wait=true, cmm=tag + " initial mesh | N=" + Ncur + " nt=" + ThL4.nt);
+	}
+
+	fespace VhL4(ThL4, P2);
+	VhL4 TL4, phiDesignL4, rhoDesignL4, uL4, duL4, vL4, uTrialL4, uOldL4;
+	VhL4 rhoFromPhiL4, tmpL4, psiL4, diffL4, activeFinalL4, plateauFinalL4, rhoPlotL4;
+	real[int] rrL4(VhL4.ndof), zzL4(VhL4.ndof);
+
+	problem TorsionL4(TL4, vL4, solver=sparsesolver)
+		=
+		int2d(ThL4)(
+			dx(TL4)*dx(vL4)
+			+ dy(TL4)*dy(vL4)
+		)
+		- int2d(ThL4)(
+			1.0*vL4
+		)
+		+ on(bLabel, TL4=0);
+
+	varf aL4(uu,vv)
+		=
+		int2d(ThL4)(
+			dx(uu)*dx(vv)
+			+ dy(uu)*dy(vv)
+		)
+		+ on(bLabel, uu=0);
+
+	varf mL4(uu,vv)
+		=
+		int2d(ThL4)(
+			uu*vv
+		);
+
+	varf ResidualFormL4(unused, vv)
+		=
+		int2d(ThL4)(
+			dx(uL4)*dx(vv)
+			+ dy(uL4)*dy(vv)
+			- ffun(uL4)*vv
+		)
+		+ on(bLabel, unused=0);
+
+	problem NewtonStepL4(duL4, vL4, solver=sparsesolver)
+		=
+		int2d(ThL4)(
+			(1.0 + muShift)*(dx(duL4)*dx(vL4) + dy(duL4)*dy(vL4))
+			- dffun(uL4)*duL4*vL4
+		)
+		+ int2d(ThL4)(
+			dx(uL4)*dx(vL4)
+			+ dy(uL4)*dy(vL4)
+			- ffun(uL4)*vL4
+		)
+		+ on(bLabel, duL4=0);
+
+	matrix KL4 = aL4(VhL4,VhL4);
+	matrix ML4 = mL4(VhL4,VhL4);
+
+	tSolve = clock();
+	TorsionL4;
+	real torsionTime = clock()-tSolve;
+	real TmaxCur = TL4[].max;
+	if (TmaxCur <= 1e-14)
+	{
+		cout << "ERROR Tmax_too_small tag=" << tag << " bLabel=" << bLabel << endl;
+		exec("exit 1");
+	}
+	rhoDesignL4 = gT(TL4);
+	tmpL4[] = ML4*rhoDesignL4[];
+	phiDesignL4[] = KL4^-1*tmpL4[];
+	cout << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+	flog << "LEVEL_SETUP " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof
+		<< " Tmax=" << TmaxCur << " torsionTime=" << torsionTime << endl;
+
+	uL4 = phiDesignL4;
+	rhoFromPhiL4 = ffun(uL4);
+	activeFinalL4 = (rhoFromPhiL4 > 0.05*rhoAmp);
+	plateauFinalL4 = (rhoFromPhiL4 > 0.90*rhoAmp);
+
+	muShift = muShift0;
+	real resEuclid = 0.0;
+	real resHm1 = 0.0;
+	real relHm1E = 0.0;
+	real relHm1Rho = 0.0;
+	real poissonRel = 0.0;
+	real escale = 0.0;
+	real rhoscale = 0.0;
+
+	rrL4.resize(VhL4.ndof);
+	zzL4.resize(VhL4.ndof);
+	rrL4 = 0.0;
+	zzL4 = 0.0;
+	rrL4 = ResidualFormL4(0, VhL4);
+	zzL4 = KL4^-1*rrL4;
+	resEuclid = sqrt(rrL4'*rrL4);
+	resHm1 = sqrt(abs(rrL4'*zzL4));
+	escale = sqrt(int2d(ThL4)(dx(uL4)^2 + dy(uL4)^2));
+	rhoscale = sqrt(int2d(ThL4)(rhoFromPhiL4^2));
+	relHm1E = resHm1/max(escale, 1e-30);
+	relHm1Rho = resHm1/max(rhoscale, 1e-30);
+	tmpL4[] = ML4*rhoFromPhiL4[];
+	psiL4[] = KL4^-1*tmpL4[];
+	diffL4 = uL4 - psiL4;
+	poissonRel = sqrt(int2d(ThL4)(dx(diffL4)^2 + dy(diffL4)^2))
+		/max(sqrt(int2d(ThL4)(dx(psiL4)^2 + dy(psiL4)^2)), 1e-30);
+
+	cout << "INIT " << tag << " " << Ncur
+		<< " resHm1=" << resHm1
+		<< " poissonRel=" << poissonRel
+		<< " massRho=" << int2d(ThL4)(rhoFromPhiL4)
+		<< " maxRho=" << rhoFromPhiL4[].max
+		<< " activeArea=" << int2d(ThL4)(activeFinalL4)
+		<< " plateauArea=" << int2d(ThL4)(plateauFinalL4)
+		<< endl;
+	csvlog
+		<< "INIT," << tag << "," << Ncur << "," << ThL4.nt << "," << VhL4.ndof << ",-1,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << ","
+		<< "NA,NA,NA," << muShift << ","
+		<< uL4[].min << "," << uL4[].max << "," << rhoFromPhiL4[].max << "," << int2d(ThL4)(rhoFromPhiL4) << ","
+		<< int2d(ThL4)(activeFinalL4) << "," << int2d(ThL4)(plateauFinalL4) << "," << int2d(ThL4)(plateauFinalL4)/max(int2d(ThL4)(activeFinalL4), 1e-30) << ","
+		<< "NA,NA,NA,NA,INIT"
+		<< endl;
+
+	if (plt == 1 && plotInitialPause == 1)
+	{
+		plot(ThL4, TL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial torsion | N=" + Ncur + " Tmax=" + TL4[].max);
+
+		rhoPlotL4 = rhoDesignL4 + rhoPlotFloor;
+		plot(ThL4, rhoPlotL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial rhoDesign+floor | N=" + Ncur + " mass=" + int2d(ThL4)(rhoDesignL4) + " max=" + rhoDesignL4[].max);
+
+		plot(ThL4, uL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial phiDesign | Hm1=" + resHm1 + " PoisRel=" + poissonRel);
+
+		rhoPlotL4 = rhoFromPhiL4 + rhoPlotFloor;
+		plot(ThL4, rhoPlotL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " initial f(phiDesign)+floor | mass=" + int2d(ThL4)(rhoFromPhiL4) + " maxRho=" + rhoFromPhiL4[].max);
+	}
+
+	real bestPlotRes = resHm1;
+	int stagnationCount = 0;
+	int rejectCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		NewtonStepL4;
+		real nd = sqrt(int2d(ThL4)(dx(duL4)^2 + dy(duL4)^2));
+		rhoFromPhiL4 = ffun(uL4);
+		activeFinalL4 = (rhoFromPhiL4 > 0.05*rhoAmp);
+		plateauFinalL4 = (rhoFromPhiL4 > 0.90*rhoAmp);
+
+		if (resHm1 < tolResHm1 || poissonRel < tolPoissonRel || nd < tolNewton)
+		{
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+				<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " CONVERGED" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< 0 << " " << 0 << " " << muShift << " "
+				<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+				<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " CONVERGED" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL4.nt << "," << VhL4.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< 0 << "," << 0 << "," << muShift << ","
+				<< uL4[].min << "," << uL4[].max << "," << rhoFromPhiL4[].max << "," << int2d(ThL4)(rhoFromPhiL4) << ","
+				<< int2d(ThL4)(activeFinalL4) << "," << int2d(ThL4)(plateauFinalL4) << "," << int2d(ThL4)(plateauFinalL4)/max(int2d(ThL4)(activeFinalL4), 1e-30) << ","
+				<< "NA,NA,NA,NA,CONVERGED"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << 0
+					<< " bt=" << 0
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL4)(rhoFromPhiL4)
+					<< " maxRho=" << rhoFromPhiL4[].max
+					<< " status=CONVERGED"
+					<< endl;
+			}
+			break;
+		}
+
+		real alpha = 1.0;
+		real resOld = resHm1;
+		uOldL4 = uL4;
+		bool accepted = false;
+		int bt = 0;
+
+		while (alpha >= alphaMin && bt <= maxBacktrack)
+		{
+			uTrialL4 = uOldL4 + alpha*duL4;
+			uL4 = uTrialL4;
+			rhoFromPhiL4 = ffun(uL4);
+			real trialMass = int2d(ThL4)(rhoFromPhiL4);
+			real trialMaxRho = rhoFromPhiL4[].max;
+			bool branchOK = (trialMass >= massFloorFraction*max(int2d(ThL4)(rhoDesignL4), 1e-30))
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			rrL4.resize(VhL4.ndof);
+			zzL4.resize(VhL4.ndof);
+			rrL4 = 0.0;
+			zzL4 = 0.0;
+			rrL4 = ResidualFormL4(0, VhL4);
+			zzL4 = KL4^-1*rrL4;
+			resEuclid = sqrt(rrL4'*rrL4);
+			resHm1 = sqrt(abs(rrL4'*zzL4));
+			escale = sqrt(int2d(ThL4)(dx(uL4)^2 + dy(uL4)^2));
+			rhoscale = sqrt(int2d(ThL4)(rhoFromPhiL4^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL4[] = ML4*rhoFromPhiL4[];
+			psiL4[] = KL4^-1*tmpL4[];
+			diffL4 = uL4 - psiL4;
+			poissonRel = sqrt(int2d(ThL4)(dx(diffL4)^2 + dy(diffL4)^2))
+				/max(sqrt(int2d(ThL4)(dx(psiL4)^2 + dy(psiL4)^2)), 1e-30);
+
+			if (verboseLS == 1)
+			{
+				cout << "LS " << tag << " " << Ncur << " " << k << " " << alpha
+					<< " " << resHm1 << " " << resOld << " " << poissonRel
+					<< " " << trialMass << " " << trialMaxRho << " " << branchOK << endl;
+			}
+
+			if (branchOK && resHm1 <= (1.0 - armijoC*alpha)*resOld)
+			{
+				accepted = true;
+				break;
+			}
+
+			alpha *= betaLS;
+			bt++;
+		}
+
+		if (!accepted)
+		{
+			uL4 = uOldL4;
+			rhoFromPhiL4 = ffun(uL4);
+			rrL4 = 0.0;
+			zzL4 = 0.0;
+			rrL4 = ResidualFormL4(0, VhL4);
+			zzL4 = KL4^-1*rrL4;
+			resEuclid = sqrt(rrL4'*rrL4);
+			resHm1 = sqrt(abs(rrL4'*zzL4));
+			escale = sqrt(int2d(ThL4)(dx(uL4)^2 + dy(uL4)^2));
+			rhoscale = sqrt(int2d(ThL4)(rhoFromPhiL4^2));
+			relHm1E = resHm1/max(escale, 1e-30);
+			relHm1Rho = resHm1/max(rhoscale, 1e-30);
+			tmpL4[] = ML4*rhoFromPhiL4[];
+			psiL4[] = KL4^-1*tmpL4[];
+			diffL4 = uL4 - psiL4;
+			poissonRel = sqrt(int2d(ThL4)(dx(diffL4)^2 + dy(diffL4)^2))
+				/max(sqrt(int2d(ThL4)(dx(psiL4)^2 + dy(psiL4)^2)), 1e-30);
+			muShift = min(muMax, 2.0*muShift);
+			rejectCount++;
+			if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+				<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " FAIL_LS" << endl;
+			flog << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+				<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+				<< relHm1Rho << " " << poissonRel << " " << nd << " "
+				<< alpha << " " << bt << " " << muShift << " "
+				<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+				<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " FAIL_LS" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL4.nt << "," << VhL4.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL4[].min << "," << uL4[].max << "," << rhoFromPhiL4[].max << "," << int2d(ThL4)(rhoFromPhiL4) << ","
+				<< int2d(ThL4)(activeFinalL4) << "," << int2d(ThL4)(plateauFinalL4) << "," << int2d(ThL4)(plateauFinalL4)/max(int2d(ThL4)(activeFinalL4), 1e-30) << ","
+				<< "NA,NA,NA,NA,FAIL_LS"
+				<< endl;
+
+			if (terminalDetailed == 0)
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL4)(rhoFromPhiL4)
+					<< " maxRho=" << rhoFromPhiL4[].max
+					<< " status=FAIL_LS"
+					<< endl;
+			}
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+			continue;
+		}
+
+		rejectCount = 0;
+		rhoFromPhiL4 = ffun(uL4);
+		activeFinalL4 = (rhoFromPhiL4 > 0.05*rhoAmp);
+		plateauFinalL4 = (rhoFromPhiL4 > 0.90*rhoAmp);
+
+		if (terminalDetailed == 1) cout << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+			<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " ACCEPT" << endl;
+		flog << "SOLVE " << tag << " " << Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+			<< k << " " << resEuclid << " " << resHm1 << " " << relHm1E << " "
+			<< relHm1Rho << " " << poissonRel << " " << nd << " "
+			<< alpha << " " << bt << " " << muShift << " "
+			<< uL4[].min << " " << uL4[].max << " " << rhoFromPhiL4[].max << " "
+			<< int2d(ThL4)(rhoFromPhiL4) << " " << int2d(ThL4)(activeFinalL4) << " " << int2d(ThL4)(plateauFinalL4) << " ACCEPT" << endl;
+			csvlog
+				<< "SOLVE," << tag << "," << Ncur << "," << ThL4.nt << "," << VhL4.ndof << "," << k << ","
+				<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+				<< resEuclid << "," << resHm1 << "," << relHm1E << "," << relHm1Rho << "," << poissonRel << "," << nd << ","
+				<< alpha << "," << bt << "," << muShift << ","
+				<< uL4[].min << "," << uL4[].max << "," << rhoFromPhiL4[].max << "," << int2d(ThL4)(rhoFromPhiL4) << ","
+				<< int2d(ThL4)(activeFinalL4) << "," << int2d(ThL4)(plateauFinalL4) << "," << int2d(ThL4)(plateauFinalL4)/max(int2d(ThL4)(activeFinalL4), 1e-30) << ","
+				<< "NA,NA,NA,NA,ACCEPT"
+				<< endl;
+
+			if (terminalDetailed == 0 && (k % terminalEvery == 0))
+			{
+				cout << "STEP tag=" << tag
+					<< " N=" << Ncur
+					<< " k=" << k
+					<< " resHm1=" << resHm1
+					<< " poissonRel=" << poissonRel
+					<< " alpha=" << alpha
+					<< " bt=" << bt
+					<< " mu=" << muShift
+					<< " mass=" << int2d(ThL4)(rhoFromPhiL4)
+					<< " maxRho=" << rhoFromPhiL4[].max
+					<< " status=ACCEPT"
+					<< endl;
+			}
+
+		if (plt == 1 && plotImprovingIterates == 1 && resHm1 < plotResDropFactor*bestPlotRes)
+		{
+			bestPlotRes = resHm1;
+			plot(ThL4, uL4, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved phi | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " PoisRel=" + poissonRel + " alpha=" + alpha + " bt=" + bt);
+			rhoPlotL4 = rhoFromPhiL4 + rhoPlotFloor;
+			plot(ThL4, rhoPlotL4, fill=true, value=true, wait=waitImprovementPlots, nbiso=60,
+				cmm=tag + " improved rho+floor | N=" + Ncur + " k=" + k + " Hm1=" + resHm1 + " mass=" + int2d(ThL4)(rhoFromPhiL4) + " maxRho=" + rhoFromPhiL4[].max);
+		}
+
+		if (bt <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (bt >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-resHm1)/max(resOld, 1e-30);
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				flog << "SOLVE_STOP " << tag << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+	}
+
+	rhoFromPhiL4 = ffun(uL4);
+	activeFinalL4 = (rhoFromPhiL4 > 0.05*rhoAmp);
+	plateauFinalL4 = (rhoFromPhiL4 > 0.90*rhoAmp);
+	real finalResHm1 = resHm1;
+	real finalPoissonRel = poissonRel;
+	// Compare current solution to reference by interpolation onto ThRef.
+	VhRef uOnRefL4, rhoOnRefL4, ePhiL4, eRhoL4;
+	uOnRefL4 = uL4;
+	rhoOnRefL4 = ffun(uOnRefL4);
+	ePhiL4 = uOnRefL4 - uRef;
+	eRhoL4 = rhoOnRefL4 - rhoRef;
+	real normPhiRefL2L4 = sqrt(int2d(ThRef)(uRef^2));
+	real normPhiRefH1L4 = sqrt(int2d(ThRef)(dx(uRef)^2 + dy(uRef)^2));
+	real normRhoRefL2L4 = sqrt(int2d(ThRef)(rhoRef^2));
+	real normRhoRefL1L4 = int2d(ThRef)(abs(rhoRef));
+	real relL2PhiRefL4 = sqrt(int2d(ThRef)(ePhiL4^2))/max(normPhiRefL2L4, 1e-30);
+	real relH1PhiRefL4 = sqrt(int2d(ThRef)(dx(ePhiL4)^2 + dy(ePhiL4)^2))/max(normPhiRefH1L4, 1e-30);
+	real relL2RhoRefL4 = sqrt(int2d(ThRef)(eRhoL4^2))/max(normRhoRefL2L4, 1e-30);
+	real relL1RhoRefL4 = int2d(ThRef)(abs(eRhoL4))/max(normRhoRefL1L4, 1e-30);
+	VhRef activeRefL4, plateauRefL4, rhoPlotRefL4;
+	activeRefL4 = (rhoOnRefL4 > 0.05*rhoAmp);
+	plateauRefL4 = (rhoOnRefL4 > 0.90*rhoAmp);
+	real activeAreaL4 = int2d(ThRef)(activeRefL4);
+	real plateauAreaL4 = int2d(ThRef)(plateauRefL4);
+	real plateauFracL4 = plateauAreaL4/max(activeAreaL4, 1e-30);
+	real massRhoL4 = int2d(ThRef)(rhoOnRefL4);
+	real maxRhoL4 = rhoOnRefL4[].max;
+
+	cout << "CONV "
+		<< Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+		<< relL2PhiRefL4 << " " << relH1PhiRefL4 << " "
+		<< relL2RhoRefL4 << " " << relL1RhoRefL4 << " "
+		<< massRhoL4 << " " << maxRhoL4 << " "
+		<< activeAreaL4 << " " << plateauAreaL4 << " " << plateauFracL4 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	flog << "CONV "
+		<< Ncur << " " << ThL4.nt << " " << VhL4.ndof << " "
+		<< relL2PhiRefL4 << " " << relH1PhiRefL4 << " "
+		<< relL2RhoRefL4 << " " << relL1RhoRefL4 << " "
+		<< massRhoL4 << " " << maxRhoL4 << " "
+		<< activeAreaL4 << " " << plateauAreaL4 << " " << plateauFracL4 << " "
+		<< finalResHm1 << " " << finalPoissonRel
+		<< endl;
+	csvlog
+		<< "CONV," << tag << "," << Ncur << "," << ThL4.nt << "," << VhL4.ndof << ",NA,"
+		<< "NA,NA,NA,NA,NA,NA,NA," << epsPhi << ","
+		<< "NA," << finalResHm1 << ",NA,NA," << finalPoissonRel << ",NA,NA,NA," << muShift << ","
+		<< "NA,NA," << maxRhoL4 << "," << massRhoL4 << ","
+		<< activeAreaL4 << "," << plateauAreaL4 << "," << plateauFracL4 << ","
+		<< relL2PhiRefL4 << "," << relH1PhiRefL4 << "," << relL2RhoRefL4 << "," << relL1RhoRefL4 << ",FINAL"
+		<< endl;
+
+	if (plotEachMesh == 1)
+	{
+		plot(ThRef, uOnRefL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " phi interpolated to reference | relL2=" + relL2PhiRefL4 + " relH1=" + relH1PhiRefL4);
+		rhoPlotRefL4 = rhoOnRefL4 + rhoPlotFloor;
+		plot(ThRef, rhoPlotRefL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho+floor on reference | relL2=" + relL2RhoRefL4 + " mass=" + massRhoL4);
+		plot(ThRef, eRhoL4, fill=true, value=true, wait=true, nbiso=60,
+			cmm=tag + " rho error vs reference | relL2=" + relL2RhoRefL4 + " relL1=" + relL1RhoRefL4);
+	}
+}
+
+flog << "TIME_TOTAL " << clock()-tGlobal << endl;
+csvlog << "TIME_TOTAL,ALL,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,DONE" << endl;
+cout << "TIME_TOTAL " << clock()-tGlobal << endl;
+cout << "HUMAN_LOG " << convLog << endl;
+cout << "CSV_LOG " << csvLog << endl;
+cout << "EXPORT " << outRefVTK << endl;
+cout << "========== END STAR NO-ADAPT CONVERGENCE STATIC ==========" << endl;

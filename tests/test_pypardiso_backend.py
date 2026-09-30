@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
 import scipy.sparse
@@ -17,12 +15,36 @@ from hdgfem.linalg import (
 
 
 class _FakeNativeSolver:
-    def __init__(self, owner, *, mtype: int):
+    def __init__(self, owner, *, mtype: int, singleton: bool = False):
         self.owner = owner
         self.mtype = mtype
+        self.singleton = singleton
+        self.factorized_A = None
+
+    def _is_already_factorized(self, matrix):
+        stored = self.factorized_A
+        return stored is not None and all(
+            np.array_equal(left, right)
+            for left, right in (
+                (stored.indptr, matrix.indptr),
+                (stored.indices, matrix.indices),
+                (stored.data, matrix.data),
+            )
+        )
+
+    def factorize(self, matrix):
+        self.factorized_A = matrix.copy()
+        self.owner.factorize_calls.append(self.mtype)
+
+    def solve(self, matrix, rhs):
+        return self.owner._solve(matrix, rhs, self.mtype)
 
     def free_memory(self, *, everything: bool):
-        self.owner.solver_cleanup.append((self.mtype, everything))
+        self.factorized_A = None
+        if self.singleton:
+            self.owner.cleanup.append(everything)
+        else:
+            self.owner.solver_cleanup.append((self.mtype, everything))
 
 
 class _FakePardiso:
@@ -32,15 +54,21 @@ class _FakePardiso:
         self.calls = []
         self.cleanup = []
         self.solver_cleanup = []
+        self.factorize_calls = []
         self.created_mtypes = []
-        self.ps = SimpleNamespace(free_memory=self._free_memory)
+        self.ps = _FakeNativeSolver(self, mtype=11, singleton=True)
 
     def PyPardisoSolver(self, *, mtype: int):
         self.created_mtypes.append(mtype)
         return _FakeNativeSolver(self, mtype=mtype)
 
     def spsolve(self, matrix, rhs, *, solver=None):
-        mtype = 11 if solver is None else solver.mtype
+        solver = self.ps if solver is None else solver
+        if not solver._is_already_factorized(matrix):
+            solver.factorize(matrix)
+        return solver.solve(matrix, rhs)
+
+    def _solve(self, matrix, rhs, mtype):
         self.calls.append((matrix.copy(), rhs.copy(), mtype))
         if self.error is not None:
             raise self.error
@@ -51,9 +79,6 @@ class _FakePardiso:
             diagonal = scipy.sparse.diags(matrix.diagonal(), format="csr")
             solve_matrix = (matrix + matrix.T - diagonal).tocsr()
         return scipy.sparse.linalg.spsolve(solve_matrix, rhs)
-
-    def _free_memory(self, *, everything: bool):
-        self.cleanup.append(everything)
 
 
 @pytest.fixture(autouse=True)
@@ -205,7 +230,25 @@ def test_clear_pypardiso_cache_releases_cached_spd_solver(monkeypatch) -> None:
     clear_pypardiso_cache()
 
     assert fake.created_mtypes == [2]
+    assert fake.factorize_calls == [2]
     assert len(fake.calls) == 2
     assert fake.cleanup == [True]
     assert fake.solver_cleanup == [(2, True)]
     assert not system._PYPARDISO_SOLVERS
+
+
+def test_pypardiso_reports_cold_factorization_then_reuse(monkeypatch) -> None:
+    fake = _FakePardiso()
+    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    matrix = scipy.sparse.csr_matrix([[4.0, 1.0], [1.0, 3.0]])
+    rhs = np.ones(2)
+
+    cold = solve_pypardiso_system(matrix, rhs, matrix_type="spd")
+    warm = solve_pypardiso_system(matrix, 2.0 * rhs, matrix_type="spd")
+
+    assert cold.factorization_reused is False
+    assert cold.factorization_elapsed_seconds is not None
+    assert cold.factorization_elapsed_seconds >= 0.0
+    assert warm.factorization_reused is True
+    assert warm.factorization_elapsed_seconds == pytest.approx(0.0)
+    assert fake.factorize_calls == [2]

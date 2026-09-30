@@ -1,0 +1,69 @@
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  /home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  projects/diocotron/dolfinx/torsion/search/adaptive.py run \
+    --transient-output \
+    --handoff-eps-phi 0.003 \
+    --initial-nodes 7 \
+    --adaptive-generations 5 \
+    --max-candidates 180 \
+    --beam-candidates 40 \
+    --grid-newton-tol 1e-6 \
+    --grid-newton-max-it 80 \
+    --grid-newton-soft-cap-chunk 20 \
+    --grid-newton-soft-cap-factor 10 \
+    --grid-newton-soft-cap-window 4 \
+    --grid-newton-soft-cap-contraction 0.98 \
+    --grid-area-weight 0 \
+    --grid-missing-weight 1 \
+    --grid-seed both \
+    --grid-bound-tol 1e-8 \
+    --contour-histogram-bins 512 \
+    --contour-kernel-scale 1.5 \
+    --minimum-practical-containment 0.05 \
+    --minimum-handoff-jaccard 0.4 \
+    --maximum-handoff-normalized-curve-error 2 \
+    --plateau-rtol 0.001 \
+    --plateau-generations 3 \
+    --interactive-candidate-plots \
+    --no-save-candidate-pngs \
+    --ranks-per-candidate 1 \
+    --search-ranks 20 \
+    --optimization-ranks 1 \
+    --available-cores 20 \
+    --python /home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+    -- \
+    --mesh projects/diocotron/runs/torsion_optimizer/meshes/iter-p4-lowdof-h019.msh \
+    --order 4 \
+    --quad-degree 16 \
+    --alphaT1 0.6 \
+    --alphaT2 0.7 \
+    --eps-t-ratio 0 \
+    --eps-mode relative \
+    --eps-ratio 0.02 \
+    --solver-preset optimized \
+    --linear-solver mumps \
+    --tol-res 1e-11 \
+    --inner-newton-tol 1e-10 \
+    --require-inner-newton-convergence \
+    --max-newton-it 1200 \
+    --final-newton-tol-res 1e-12 \
+    --final-newton-max-it 1200 \
+    --trust-radius 0.5 \
+    --max-opt-it 60 \
+    --max-backtrack 40 \
+    --verify-sensitivities \
+    --sensitivity-check-steps 1e-3,3e-4 \
+    --sensitivity-check-newton-tol 1e-11 \
+    --sensitivity-check-max-newton-it 300 \
+    --plot \
+    --plot-mode nonblocking \
+    --plot-fields density \
+    --plot-accepted-states \
+    --no-plot-severe \
+    --no-plot-optimization \
+    --plot-final \
+    --no-plot-mesh-edges \
+    --plot-window-width 1500 \
+    --plot-window-height 1000 \
+    --terminal-every 1 \
+    --verbosity 2

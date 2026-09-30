@@ -8,6 +8,11 @@ from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _AMGX_DIR = _REPO_ROOT / "configs" / "amgx"
+_WELL_RESOLVED_TORSION_EQUILIBRIUM = (
+    _REPO_ROOT
+    / "projects/diocotron/runs/scratch/torsion_reduced_optimization_homotopy"
+    / "equilibrium_h002_p4_converged_gridseed_20260820/out/equilibrium_v2.npz"
+)
 
 
 @dataclass(frozen=True)
@@ -17,6 +22,8 @@ class GuidingCenterRunPreset:
     case: str
     description: str
     case_params: dict[str, Any] = field(default_factory=dict)
+    equilibrium_checkpoint: str | None = None
+    equilibrium_allow_nonconverged: bool = False
     domain: str = "auto"
     mesh_size: float = 0.06
     minimum_triangles: int = 0
@@ -59,6 +66,8 @@ class GuidingCenterRunPreset:
     poisson_hdg_postprocess: str = "none"
     transport_assembly_backend: str = "numpy"
     transport_solver: str | None = "direct"
+    transport_solver_policy: str = "fixed"
+    transport_pypardiso_max_trace_dofs: int = 1_200_000
     transport_preconditioner: str | None = None
     transport_solver_rtol: float = 1.0e-12
     transport_solver_atol: float = 0.0
@@ -126,6 +135,46 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         verbosity=1,
         diagnostics_prefix="diocotron_gaussian_annulus_host_smoke",
     ),
+    "torsion_window_optimized_h002_p4_imported_equilibrium": GuidingCenterRunPreset(
+        case="diocotron_gaussian_annulus",
+        description=(
+            "Native HDG preservation run initialized from the documented h=0.02 P4 "
+            "torsion-window equilibrium (86,112 embedded triangles)."
+        ),
+        case_params={"k": 5, "eps": 0.0},
+        equilibrium_checkpoint=str(_WELL_RESOLVED_TORSION_EQUILIBRIUM),
+        equilibrium_allow_nonconverged=False,
+        domain="auto",
+        minimum_triangles=86_112,
+        basis="dub_orth",
+        trace_basis="legacy-lagrange",
+        order=4,
+        dt=0.025,
+        num_steps=20,
+        poisson_assembly_backend="numba",
+        poisson_local_backend="numba",
+        poisson_solver="pypardiso-spd",
+        poisson_preconditioner=None,
+        poisson_solver_rtol=1.0e-11,
+        poisson_solver_atol=1.0e-12,
+        poisson_scale_system=False,
+        transport_assembly_backend="numba",
+        transport_solver="pypardiso",
+        transport_solver_policy="fixed",
+        transport_preconditioner=None,
+        transport_solver_rtol=1.0e-11,
+        transport_solver_atol=1.0e-12,
+        transport_scale_system=False,
+        transport_boundary_mode="zero-flux",
+        transport_trace_ordering="none",
+        transport_initial_guess="solver-default",
+        diagnostics_every=1,
+        verbosity=1,
+        plot_every=0,
+        plot_resolution=4,
+        plot_show_mesh=False,
+        diagnostics_prefix="torsion_window_optimized_h002_p4_imported_equilibrium",
+    ),
     "diocotron_gaussian_annulus_k3_p6_30k_numba_ilu_upwind": GuidingCenterRunPreset(
         case="diocotron_gaussian_annulus",
         description=(
@@ -172,7 +221,7 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         case="diocotron_gaussian_annulus",
         description=(
             "T=50 Gaussian-annulus diocotron k=3 run on at least 30k triangles with Numba assembly, "
-            "a reusable oneMKL PARDISO Poisson LU/CSR, and freshly rebuilt COLAMD-ILU "
+            "a reusable oneMKL PARDISO SPD factorization/CSR, and freshly rebuilt COLAMD-ILU "
             "BICGSTAB transport with upwind-SCC ordering."
         ),
         case_params={"k": 3, "eps": 0.05, "r0": 0.45, "sigma": 0.03},
@@ -184,10 +233,10 @@ PRESETS: dict[str, GuidingCenterRunPreset] = {
         num_steps=500,
         poisson_assembly_backend="numba",
         poisson_local_backend="numba",
-        poisson_solver="pypardiso",
+        poisson_solver="pypardiso-spd",
         poisson_preconditioner=None,
         poisson_solver_rtol=1.0e-11,
-        poisson_solver_atol=0.0,
+        poisson_solver_atol=1.0e-12,
         poisson_maxiter=None,
         poisson_scale_system=False,
         poisson_hdg_postprocess="none",
@@ -476,7 +525,7 @@ PRESETS.update(
             description=(
                 "Matched Gaussian-annulus diocotron k=3 comparison on at least 50k triangles "
                 "with p=6 and identical medium-ILU upwind-SCC BICGSTAB transport, using a "
-                "reusable oneMKL PARDISO Poisson LU instead of iterative Poisson."
+                "reusable oneMKL PARDISO Poisson SPD factorization instead of iterative Poisson."
             ),
             mesh_size=0.012,
             minimum_triangles=50_000,
@@ -487,6 +536,31 @@ PRESETS.update(
             transport_reuse_first_preconditioner=False,
             transport_initial_guess="initial-density-trace",
             diagnostics_prefix="diocotron_gaussian_annulus_k3_p6_50k_numba_pypardiso_medium_ilu_upwind",
+        ),
+        "diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_auto": replace(
+            _PYPARDISO_LU_BASE,
+            description=(
+                "T=50 Gaussian-annulus diocotron k=3 host run with a fixed reusable SPD "
+                "PARDISO Poisson factorization. Transport selects nonsymmetric PARDISO through "
+                "1,200,000 reduced trace DOFs, then falls back to reused medium COLAMD-ILU "
+                "BICGSTAB above the measured crossover region."
+            ),
+            poisson_solver="pypardiso-spd",
+            poisson_preconditioner=None,
+            poisson_solver_atol=1.0e-12,
+            poisson_scale_system=False,
+            transport_solver="BICGSTAB",
+            transport_solver_policy="pypardiso-cutoff",
+            transport_pypardiso_max_trace_dofs=1_200_000,
+            transport_preconditioner="ilu",
+            transport_scale_system=True,
+            transport_ilu_drop_tol=1.0e-5,
+            transport_ilu_fill_factor=5.0,
+            transport_trace_ordering="none",
+            transport_ilu_permc_spec="COLAMD",
+            transport_reuse_first_preconditioner=True,
+            transport_initial_guess="initial-density-trace",
+            diagnostics_prefix="diocotron_gaussian_annulus_k3_p6_30k_numba_pypardiso_auto",
         ),
         "diocotron_gaussian_annulus_k3_p6_100k_numba_pypardiso_both_3step": replace(
             _PYPARDISO_LU_BASE,
@@ -516,7 +590,7 @@ PRESETS.update(
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_upwind_colamd": replace(
             _PYPARDISO_LU_BASE,
             description=(
-                "Short-list variant with reusable PARDISO Poisson LU and rebuilt COLAMD ILU "
+                "Short-list variant with reusable PARDISO Poisson SPD factorization and rebuilt COLAMD ILU "
                 "under upwind-SCC transport ordering."
             ),
             transport_trace_ordering="upwind-scc",
@@ -526,7 +600,7 @@ PRESETS.update(
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_cached_adv_natural": replace(
             _PYPARDISO_LU_BASE,
             description=(
-                "Reusable PARDISO Poisson LU plus unordered transport that reuses its first "
+                "Reusable PARDISO Poisson SPD factorization plus unordered transport that reuses its first "
                 "NATURAL ILU as a preconditioner for later slowly varying matrices."
             ),
             transport_trace_ordering="none",
@@ -537,7 +611,7 @@ PRESETS.update(
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_cached_adv_colamd": replace(
             _PYPARDISO_LU_BASE,
             description=(
-                "Reusable PARDISO Poisson LU plus unordered transport that reuses its first "
+                "Reusable PARDISO Poisson SPD factorization plus unordered transport that reuses its first "
                 "COLAMD ILU as a preconditioner for later slowly varying matrices."
             ),
             transport_trace_ordering="none",
@@ -548,7 +622,7 @@ PRESETS.update(
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_unordered_colamd": replace(
             _PYPARDISO_LU_BASE,
             description=(
-                "Reusable PARDISO Poisson LU with unordered transport and a freshly rebuilt "
+                "Reusable PARDISO Poisson SPD factorization with unordered transport and a freshly rebuilt "
                 "high-fill COLAMD ILU at every step."
             ),
             transport_trace_ordering="none",
@@ -559,7 +633,7 @@ PRESETS.update(
         "diocotron_gaussian_annulus_k3_p6_30k_pypardiso_upwind_colamd_weak_ilu": replace(
             _PYPARDISO_LU_BASE,
             description=(
-                "Reusable PARDISO Poisson LU with upwind-SCC transport and a freshly rebuilt "
+                "Reusable PARDISO Poisson SPD factorization with upwind-SCC transport and a freshly rebuilt "
                 "lower-fill COLAMD ILU at every step."
             ),
             transport_trace_ordering="upwind-scc",

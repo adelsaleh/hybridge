@@ -1,0 +1,50 @@
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  mpirun --bind-to core --map-by core -n 8 \
+  /home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+  projects/diocotron/dolfinx/torsion/initialization/frozen_frontier_run.py \
+    --run-tag iter_0p6_0p7_frozen_frontier_highdof_interactive \
+    --mesh projects/diocotron/runs/torsion_optimizer/meshes/iter-p4-dof200000.msh \
+    --order 4 \
+    --quad-degree 16 \
+    --alphaT1 0.6 \
+    --alphaT2 0.7 \
+    --frozen-frontier-bins 4096 \
+    --eps-t-ratio 0 \
+    --eps-mode fixed \
+    --eps-phi 0.003 \
+    --c-lower-fraction 0 \
+    --c-upper-fraction 1 \
+    --solver-preset optimized \
+    --linear-solver mumps \
+    --linear-rtol 1e-13 \
+    --linear-atol 1e-15 \
+    --tol-res 1e-12 \
+    --inner-newton-tol 1e-12 \
+    --max-newton-it 1200 \
+    --final-newton-tol-res 1e-12 \
+    --final-newton-max-it 1200 \
+    --tol-step 1e-14 \
+    --max-backtrack 60 \
+    --alpha-min 1e-12 \
+    --trust-radius 0.5 \
+    --max-opt-it 60 \
+    --jaccard-oscillation-min-accepted 6 \
+    --jaccard-oscillation-patience 4 \
+    --plot \
+    --plot-mode nonblocking \
+    --plot-fields density \
+    --plot-initial-candidates \
+    --plot-accepted-states \
+    --no-plot-severe \
+    --no-plot-optimization \
+    --plot-final \
+    --no-plot-mesh-edges \
+    --plot-window-width 1500 \
+    --plot-window-height 1000 \
+    --save-frames \
+    --frame-every 1 \
+    --frame-final \
+    --frame-window-width 2400 \
+    --frame-window-height 1600 \
+    --terminal-every 1 \
+    --verbosity 2

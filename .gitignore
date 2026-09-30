@@ -12,6 +12,11 @@ __pycache__/
 *.log
 *.out
 *.pdf
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.swp
+*.swo
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -38,3 +43,4 @@ docs/**/*.pdf
 2d/out.txt
 cupy_heavy_benchmark.json
 .cache/
+projects/diocotron/runs/

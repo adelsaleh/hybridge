@@ -939,8 +939,8 @@ def solve_advection_reaction_hdg(
         dofs, solves only for free trace dofs, then reconstructs the full trace.
         ``"zero-flux"`` solves the same interior-edge reduced system but sets
         all exterior numerical-flux weights to zero and requires
-        ``boundary_condition=None``.  This mode is implemented for the Numba projected backend
-        and the raw-CUDA fused backend; raw-CUDA currently keeps
+        ``boundary_condition=None``.  This mode is implemented for NumPy,
+        Numba, and raw-CUDA fused backends; raw-CUDA currently keeps
         ``trace_ordering="none"``.
     trace_ordering
         ``"upwind-scc"`` builds an experimental edge-block ordering from the
@@ -1165,6 +1165,8 @@ def solve_advection_reaction_hdg(
         levels = diagnostics.level_widths
         print(
             "  upwind SCC graph: "
+            f"path={diagnostics.algorithm_path}, "
+            f"peeled={diagnostics.peeled_nodes:,}, residual={diagnostics.residual_nodes:,}, "
             f"nodes={diagnostics.num_nodes:,}, edges={diagnostics.num_directed_edges:,}, "
             f"components={diagnostics.num_components:,}, "
             f"largest={diagnostics.largest_component_size:,}, "
@@ -1176,6 +1178,8 @@ def solve_advection_reaction_hdg(
             f"pairs={timings.graph_pairs:.5f}s, csr={timings.csr:.5f}s, "
             f"scc={timings.scc:.5f}s, dag={timings.dag:.5f}s, "
             f"topo={timings.topological_order:.5f}s, "
+            f"levels={timings.level_diagnostics:.5f}s, "
+            f"node_order={timings.node_order:.5f}s, "
             f"dof_perm={timings.dof_permutation:.5f}s, total={timings.total:.5f}s",
             flush=True,
         )
@@ -1204,6 +1208,9 @@ def solve_advection_reaction_hdg(
             "largest_component_size": diagnostics.largest_component_size,
             "cyclic_components": diagnostics.cyclic_components,
             "cyclic_nodes": diagnostics.cyclic_nodes,
+            "algorithm_path": diagnostics.algorithm_path,
+            "peeled_nodes": diagnostics.peeled_nodes,
+            "residual_nodes": diagnostics.residual_nodes,
             "level_widths": {
                 "num_levels": levels.num_levels,
                 "max_width": levels.max_width,
@@ -1219,6 +1226,8 @@ def solve_advection_reaction_hdg(
                 "dag": timings.dag,
                 "topological_order": timings.topological_order,
                 "dof_permutation": timings.dof_permutation,
+                "level_diagnostics": timings.level_diagnostics,
+                "node_order": timings.node_order,
                 "total": timings.total,
             },
         }
@@ -1546,6 +1555,19 @@ def solve_advection_reaction_hdg(
             trace_space=trace_space_host,
         )
 
+        zero_boundary_flux = boundary_mode == "zero-flux"
+        if zero_boundary_flux:
+            boundary_condition_for_rhs = lambda x, y: np.zeros_like(x)
+            edge_is_boundary = np.zeros(space.mesh.num_edg, dtype=bool)
+            edge_is_boundary[space.mesh.bnd_edges_inds] = True
+            boundary_faces = edge_is_boundary[space.mesh.loc2glob_edge]
+            tau_face = tau_face.copy()
+            gamma_face = gamma_face.copy()
+            tau_face[boundary_faces] = 0.0
+            gamma_face[boundary_faces] = 0.0
+        else:
+            boundary_condition_for_rhs = boundary_condition
+
         def assemble_local_mats():
             """Assemble and invert the element-local advection-reaction matrices."""
             local_blocks, _ = _timed_call(
@@ -1658,7 +1680,7 @@ def solve_advection_reaction_hdg(
                     trace_lift,
                     source_data,
                     local_solver,
-                    boundary_condition,
+                    boundary_condition_for_rhs,
                     space,
                     boundary_penalty,
                     trace_space=trace_space_host,
