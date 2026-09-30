@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
-from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
+from hdgfem.mixed.adr_preparation import prepare_adr_data
+from hdgfem.mixed.coefficients import prepare_diffusion
 from scripts.n_gamma import coefficients as nc
 
 FLOOR = 1e-8
@@ -102,7 +102,7 @@ def test_device_coefficients_match_host_and_stay_resident(space):
     cp = pytest.importorskip('cupy')
     if cp.cuda.runtime.getDeviceCount() == 0:
         pytest.skip('No CUDA device')
-    from hdgfem.backends.adr_coefficients_cupy import prepare_adr_data_cupy
+    from hdgfem.mixed.coefficients_device import prepare_adr_data_cupy
     n, gamma = fields(space)
     trace = space.trace_space('legendre-modal')
     source = lambda R, Z: np.cos(R)*Z

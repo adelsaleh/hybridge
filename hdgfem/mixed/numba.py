@@ -15,9 +15,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.kernels import NUMBA_AVAILABLE
+from hdgfem.runtime.optional import NUMBA_AVAILABLE
 from hdgfem.linalg.reduction import KnownDofReduction
-from hdgfem.kernels.diffusion_reaction_fused import (
+from hdgfem.mixed.numba_kernels import (
     factor_projected_diffusion_schur_kernel,
     assemble_diffusion_trace_rhs_eliminated_kernel,
     assemble_diffusion_trace_system_eliminated_kernel,

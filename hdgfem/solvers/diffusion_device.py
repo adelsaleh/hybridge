@@ -15,7 +15,7 @@ def solve_cupy_device_amgx(owner):
     from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import (
+    from hdgfem.mixed.cupy import (
             assemble_projected_diffusion_trace_system_eliminated_cupy,
             assemble_projected_diffusion_trace_rhs_cached_cupy,
             build_trace_reference,
@@ -23,12 +23,11 @@ def solve_cupy_device_amgx(owner):
         )
     from hdgfem.core.space import VectorDGField
     from hdgfem.solvers.diffusion_reaction import (
-        DiffusionReactionResult,
-        DiffusionReactionTimings,
-        _format_seconds,
-        _normalize_hdg_postprocess_mode,
-        _verbosity_level,
-    )
+            DiffusionReactionResult,
+            DiffusionReactionTimings,
+        )
+    from hdgfem.mixed.postprocess.flux import _normalize_hdg_postprocess_mode
+    from hdgfem.runtime.logging import _format_seconds, _verbosity_level
 
     options = owner.options
     normalized_solver = "" if options.solver is None else str(options.solver).lower()

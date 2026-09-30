@@ -3,10 +3,11 @@
 import numpy as np
 import pytest
 
-from hdgfem.backends import diffusion_flux_recovery_raw_cuda as raw
+from hdgfem.mixed.postprocess import flux_recovery_raw_cuda as raw
 from hdgfem.core.mesh import DGMesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers import diffusion_reaction as diffusion
+import hdgfem.mixed.postprocess.flux as postprocess_flux
 
 
 @pytest.fixture
@@ -70,7 +71,7 @@ def test_solver_tau_retries_reuse_device_recovery_without_uploads_or_refactoriza
 
     for tau in (.8, 2.3):
         result, local, trace = prescribed_result()
-        expected = diffusion._postprocess_diffusion_solution(
+        expected = postprocess_flux._postprocess_diffusion_solution(
             local, trace, space, tau, 1., "flux", trace_space=trace_space,
             flux_postprocess_space=variant, postprocessing_backend="numba",
         )[1]
@@ -78,7 +79,7 @@ def test_solver_tau_retries_reuse_device_recovery_without_uploads_or_refactoriza
             result.local_unknowns_device, result.trace_device, space, trace_space, tau, variant)
         assert fresh_cache is not device_cache
         with monkeypatch.context() as guard:
-            guard.setattr(diffusion, "_new_hdg_postprocess_cache", forbid_rebuild)
+            guard.setattr(postprocess_flux, "_new_hdg_postprocess_cache", forbid_rebuild)
             guard.setattr(raw, "build_flux_recovery_reference", forbid_rebuild)
             guard.setattr(raw, "as_cupy_space", forbid_rebuild)
             guard.setattr(cp, "asnumpy", forbid_download)

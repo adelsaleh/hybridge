@@ -27,7 +27,7 @@ from hdgfem.transport.cuda import assemble_reduced_system_cuda
 from hdgfem.core.device import as_cupy_trace_space
 from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.diffusion_cupy import (
+from hdgfem.mixed.cupy import (
     assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
     assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
     assemble_projected_diffusion_trace_rhs_cached_cupy,
@@ -99,7 +99,9 @@ def _make_assembler(case: str, space: DGSpace, args):
 
             return assemble_cholesky_rhs
         if args.phase == "reconstruction":
-            from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
+            from hdgfem.mixed.raw_cuda.identity import (
+                            reconstruct_projected_diffusion_field_raw_cuda,
+                        )
             cp = require_cupy()
             cached = assemble()
             raw = cached.raw_assembly
@@ -139,10 +141,10 @@ def _make_assembler(case: str, space: DGSpace, args):
     beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
 
     if case == "adr":
-        from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
-        from hdgfem.backends.advection_diffusion_reaction_raw_cuda import (
-            assemble_projected_adr_trace_operator_raw_cuda,
-        )
+        from hdgfem.mixed.adr_preparation import prepare_adr_data
+        from hdgfem.mixed.raw_cuda.adr_operator import (
+                    assemble_projected_adr_trace_operator_raw_cuda,
+                )
         host_trace = space.trace_space(args.trace_basis)
         prepared = prepare_adr_data(
             source, reaction, beta, space, diffusion=1.0, trace_space=host_trace,

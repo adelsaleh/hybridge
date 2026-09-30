@@ -37,7 +37,7 @@ SOURCE_FILES = (
     ROOT/'scripts/advection_diffusion_reaction/campaigns/pardiso/adr_pardiso_worker.py',
     ROOT/'scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py',
     ROOT/'hdgfem/linalg/pardiso_diagnostics.py', ROOT/'hdgfem/linalg/system.py',
-    ROOT/'hdgfem/linalg/bsr.py', ROOT/'hdgfem/assembly/face_dense.py', ROOT/'hdgfem/runtime/precision.py',
+    ROOT/'hdgfem/linalg/bsr.py', ROOT/'hdgfem/mixed/face_dense.py', ROOT/'hdgfem/runtime/precision.py',
 )
 
 

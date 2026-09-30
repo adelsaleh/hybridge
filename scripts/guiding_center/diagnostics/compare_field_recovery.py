@@ -16,8 +16,8 @@ from hdgfem.core.field_ops import project_callable_to_trace
 from hdgfem.core.mesh import DGMesh
 from hdgfem.core.space import DGSpace
 from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.solvers.diffusion_reaction import (
-    _postprocess_diffusion_solution,
+from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
+from hdgfem.mixed.local_numpy import (
     diffusion_element_boundary_mats,
     local_solvers_numpy,
     split_diffusion_unknowns,

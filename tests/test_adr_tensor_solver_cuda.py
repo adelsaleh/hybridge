@@ -51,7 +51,9 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
 @pytest.mark.parametrize('mode', ['flux', 'primal', 'both'])
 def test_tensor_postprocessing_enabled(mode):
     """The CUDA capability gate accepts qualified tensor recoveries."""
-    from hdgfem.backends.capabilities import validate_advection_diffusion_backend_configuration
+    from hdgfem.solvers.capabilities import (
+            validate_advection_diffusion_backend_configuration,
+        )
     validate_advection_diffusion_backend_configuration(operation='solve',assembly_backend='raw-cuda',
         solver='amgx',cupyx_solver='bicgstab',boundary_mode='eliminate',trace_basis='legendre-modal',
         postprocess_mode=mode,scalar_diffusion=False)

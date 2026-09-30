@@ -4,8 +4,8 @@ import pytest
 from scipy.sparse import coo_matrix
 
 from hdgfem import DGSpace, DGMesh, rectangle_mesh, solve_advection_diffusion_reaction_hdg
-from hdgfem.assembly.diffusion_coefficients import prepare_diffusion, normal_diffusivity_on_faces
-from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+from hdgfem.mixed.coefficients import prepare_diffusion, normal_diffusivity_on_faces
+from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 from scripts.advection_diffusion_reaction.cases.tensor_cases import (
     diffusion_cases as coefficient_cases, manufactured_tensor, raw_cuda_coefficient,
@@ -106,8 +106,11 @@ def test_manufactured_tensor_convergence(kind,order):
 @pytest.mark.parametrize('cross_space', [False, True])
 def test_mixed_element_paths_and_cross_space_fields(cross_space):
     from dataclasses import replace
-    from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data, assemble_numpy
-    from hdgfem.backends.advection_diffusion_reaction_numba import assemble_projected_adr_trace_system_eliminated_numba
+    from hdgfem.mixed.adr_preparation import prepare_adr_data
+    from hdgfem.mixed.adr_numpy import assemble_numpy
+    from hdgfem.mixed.adr_numba import (
+            assemble_projected_adr_trace_system_eliminated_numba,
+        )
     mesh=rectangle_mesh(2,1,xlim=(-1.,1.))
     space=DGSpace(mesh,3,basis_type='dub_orth')
     coefficient_space=DGSpace(mesh,1,basis_type='dub_orth')

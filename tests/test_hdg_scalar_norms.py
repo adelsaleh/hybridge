@@ -109,7 +109,7 @@ def test_manufactured_driver_reports_hdg_errors_and_rates_from_accepted_traces(m
     def canned(config, **kwargs):
         assert config.poisson_solver == config.transport_solver == "amgx"
         assert config.poisson_assembly_backend == config.transport_assembly_backend == "raw-cuda"
-        from hdgfem.backends.capabilities import validate_diffusion_backend_configuration
+        from hdgfem.solvers.capabilities import validate_diffusion_backend_configuration
         validate_diffusion_backend_configuration(
             operation="solve", assembly_backend=config.poisson_assembly_backend,
             solver=config.poisson_solver, cupyx_solver=config.poisson_cupyx_solver,

@@ -647,7 +647,7 @@ def tensor_workspace(nel, kinds, nq=0, nfq=0, *, order=None):
     ``TensorWorkspaceError`` names the order, kind, quadrature sizes and the
     largest volume rule that would fit.
     """
-    from hdgfem.assembly.diffusion_coefficients import DIFFUSION_KINDS
+    from hdgfem.mixed.coefficients import DIFFUSION_KINDS
 
     maximum = int(kinds.max()) if kinds.size else 0
     for batch in range(TENSOR_MAX_BATCH_COLUMNS, 0, -1):
@@ -717,7 +717,7 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     and the kernel follow the selected precision (``HDGFEM_PRECISION``).
     """
     from hdgfem.hdg import condensation as hdg
-    from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
+    from hdgfem.mixed.coefficients import prepare_diffusion
     from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.device import as_cupy_space
     from hdgfem.hdg.condensation_device import CudaAdvectionAssembly
@@ -728,9 +728,9 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
             _interior_side_index,
             _side_flux_offsets,
         )
-    from hdgfem.backends.diffusion_raw_cuda import validate_raw_cuda_supported
+    from hdgfem.mixed.raw_cuda.identity import validate_raw_cuda_supported
     from hdgfem.hdg.trace_maps import _trace_orientation_mode
-    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import RawADRTraceOperator
+    from hdgfem.mixed.raw_cuda.adr_operator import RawADRTraceOperator
 
     start = time.perf_counter()
     cp = require_cupy()

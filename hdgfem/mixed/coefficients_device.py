@@ -44,7 +44,7 @@ def _beta_samples(cp, beta, space: DGSpace, trace_ref: DGTraceSpace, t=None):
     an ``ElementCoefficient`` is evaluated directly at both point sets.
     """
     from hdgfem.hdg import condensation as hdg
-    from hdgfem.assembly.advection_diffusion_reaction import element_beta_samples
+    from hdgfem.mixed.adr_preparation import element_beta_samples
 
     if isinstance(beta, ElementCoefficient):
         return element_beta_samples(beta, space, trace_ref, xp=cp, t=t)
@@ -139,8 +139,12 @@ def prepare_adr_data_cupy(
     diffusion, law and trace space) skips its time-independent evaluation.
     """
     from hdgfem.hdg import condensation as hdg
-    from hdgfem.assembly.advection_diffusion_reaction import (
-        ADRPreparedData, _normal_flux, element_beta_samples, normalize_diffusion_stabilization)
+    from hdgfem.mixed.adr_preparation import (
+            ADRPreparedData,
+            _normal_flux,
+            element_beta_samples,
+            normalize_diffusion_stabilization,
+        )
     from hdgfem.hdg import matrices
     import hdgfem.hdg.stabilization as hdg_stabilization
     from hdgfem.hdg.reference import _reference_derivative_matrices

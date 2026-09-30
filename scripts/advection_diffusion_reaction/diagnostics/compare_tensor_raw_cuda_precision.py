@@ -63,9 +63,11 @@ def run_worker(args) -> None:
     import cupy as cp
     from hdgfem import DGSpace
     from hdgfem.hdg import condensation as hdg
-    from hdgfem.backends.adr_coefficients_cupy import prepare_adr_data_cupy
-    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import (
-        assemble_projected_adr_trace_operator_raw_cuda, reconstruct_projected_adr_local_unknowns_raw_cuda)
+    from hdgfem.mixed.coefficients_device import prepare_adr_data_cupy
+    from hdgfem.mixed.raw_cuda.adr_operator import (
+            assemble_projected_adr_trace_operator_raw_cuda,
+            reconstruct_projected_adr_local_unknowns_raw_cuda,
+        )
     from hdgfem.runtime.precision import PRECISION
     from scripts.advection_diffusion_reaction.cases import CASE_DEFINITIONS
     from scripts.advection_diffusion_reaction.run_cases import _build_mesh

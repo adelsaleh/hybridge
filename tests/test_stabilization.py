@@ -15,7 +15,7 @@ from hdgfem import (
     mesh_domain_measures,
     rectangle_mesh,
 )
-from hdgfem.assembly.advection_diffusion_reaction import (
+from hdgfem.mixed.adr_preparation import (
     prepare_adr_data,
     recommended_diffusion_stabilization,
 )

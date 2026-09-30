@@ -193,7 +193,7 @@ def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
 @pytest.mark.parametrize('density_order', [1, 3, 6])
 def test_rt_recovery_has_requested_degree_and_conservative_moments(density_order):
     """Postprocess synthetic local coefficients only; no Poisson solve."""
-    from hdgfem.solvers.diffusion_reaction import _postprocess_diffusion_solution
+    from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
     from test_diffusion_reaction_solver import _assert_rt_flux_constraints
     _, poisson_space = spaces(density_order)
     random = np.random.default_rng(41)

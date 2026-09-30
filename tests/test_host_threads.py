@@ -98,7 +98,7 @@ def test_manufactured_case_evaluations_are_chunked_transparently(four_threads):
 
 
 def test_chunked_diffusion_tables_match_whole_array_arithmetic(four_threads):
-    from hdgfem.assembly import diffusion_coefficients as dc
+    from hdgfem.mixed import coefficients as dc
 
     rng = np.random.default_rng(2)
     a, d = 1. + rng.random((700, 9)), 1. + rng.random((700, 9))

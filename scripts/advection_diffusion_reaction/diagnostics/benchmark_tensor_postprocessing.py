@@ -14,15 +14,17 @@ import numpy as np
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.runtime.benchmarking import measure
 from hdgfem.core.space import VectorDGField
-from hdgfem.solvers.diffusion_reaction import _build_hdg_postprocess_cache
+from hdgfem.mixed.postprocess.flux import _build_hdg_postprocess_cache
 
 
 def benchmark(order, nx, repeats):
     """Return synchronized wall timings with sampling, allocations and solution included."""
     import cupy as cp
     from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.backends.advection_diffusion_reaction_cupy import (
-        _primal_system_cupy, postprocess_primal_cupy)
+    from hdgfem.mixed.postprocess.flux_cupy import (
+            _primal_system_cupy,
+            postprocess_primal_cupy,
+        )
     from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
 
     space = DGSpace(rectangle_mesh(nx, nx), order, basis_type='dub_orth')

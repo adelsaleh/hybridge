@@ -31,12 +31,12 @@ _DIFFUSION_EXPORTS = {
     "solve_diffusion_reaction_hdg",
 }
 _STABILIZATION_EXPORTS = {
-    "GlobalLengthDiffusion",
-    "ScaledUpwind",
-    "automatic_domain_length",
-    "compute_domain_length",
-    "geometric_diffusion_tau",
-    "mesh_domain_measures",
+    "GlobalLengthDiffusion": "hdgfem.mixed.stabilization",
+    "ScaledUpwind": "hdgfem.hdg.stabilization",
+    "automatic_domain_length": "hdgfem.mixed.stabilization",
+    "compute_domain_length": "hdgfem.mixed.stabilization",
+    "geometric_diffusion_tau": "hdgfem.mixed.stabilization",
+    "mesh_domain_measures": "hdgfem.mixed.stabilization",
 }
 _CANONICAL_MODULES = {
     "advection_diffusion_reaction": ".advection_diffusion_reaction",
@@ -58,7 +58,7 @@ def __getattr__(name: str):
     elif name in _DIFFUSION_EXPORTS:
         module = import_module(".diffusion_reaction", __name__)
     elif name in _STABILIZATION_EXPORTS:
-        module = import_module("hdgfem.hdg.stabilization")
+        module = import_module(_STABILIZATION_EXPORTS[name])
     elif name in _CANONICAL_MODULES:
         module = import_module(_CANONICAL_MODULES[name], __name__)
         globals()[name] = module

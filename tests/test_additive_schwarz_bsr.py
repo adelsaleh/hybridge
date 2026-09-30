@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from scipy.sparse import bsr_matrix
 
-from hdgfem.assembly.face_dense import (
+from hdgfem.mixed.face_dense import (
     assemble_global_face_blocks,
     build_face_topology,
     eliminate_dirichlet_faces,

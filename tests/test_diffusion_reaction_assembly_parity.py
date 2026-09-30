@@ -638,10 +638,10 @@ def test_diffusion_cupy_schur_cholesky_cache_reuses_factors_rhs_reconstruction_a
 @pytest.mark.parametrize("order", (7, 10))
 def test_diffusion_cupy_schur_cholesky_matches_full_mixed_high_order(order: int) -> None:
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.diffusion_cupy import (
-        assemble_projected_diffusion_trace_system_eliminated_cupy,
-        solve_mixed_from_scalar_cholesky_cupy,
-    )
+    from hdgfem.mixed.cupy import (
+            assemble_projected_diffusion_trace_system_eliminated_cupy,
+            solve_mixed_from_scalar_cholesky_cupy,
+        )
 
     cp = require_cupy()
     space = DGSpace(rectangle_mesh(1, 1), order, basis_type="dub_orth", volume_quad_1d=2 * order + 2)
@@ -813,14 +813,14 @@ def test_diffusion_compact_schur_rhs_and_reconstruction_match_cublas(order: int)
     import cupy as cp
 
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import (
-        assemble_compact_diffusion_rhs_cupy,
-        assemble_projected_diffusion_trace_system_eliminated_cupy,
-        build_trace_reference,
-        compact_schur_cholesky_cache_cupy,
-        reconstruct_compact_diffusion_field_cupy,
-        solve_mixed_from_scalar_cholesky_cupy,
-    )
+    from hdgfem.mixed.cupy import (
+            assemble_compact_diffusion_rhs_cupy,
+            assemble_projected_diffusion_trace_system_eliminated_cupy,
+            build_trace_reference,
+            compact_schur_cholesky_cache_cupy,
+            reconstruct_compact_diffusion_field_cupy,
+            solve_mixed_from_scalar_cholesky_cupy,
+        )
 
     space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
     source_h = space.project_callable(_source, name="source_h")
@@ -877,8 +877,15 @@ def test_diffusion_modal_raw_cuda_reconstruction_matches_numpy(raw_matrix_format
     from scipy.sparse.linalg import spsolve
 
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import build_trace_reference, face_element_mass, reference_derivative_mats, source_moments_cupy
-    from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
+    from hdgfem.mixed.cupy import (
+            build_trace_reference,
+            face_element_mass,
+            reference_derivative_mats,
+            source_moments_cupy,
+        )
+    from hdgfem.mixed.raw_cuda.identity import (
+            reconstruct_projected_diffusion_field_raw_cuda,
+        )
 
     space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
     source_h = space.project_callable(_source, name="source_h")
@@ -934,9 +941,11 @@ def test_diffusion_device_primal_postprocess_matches_host(trace_basis: str, orde
     import cupy as cp
 
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import postprocess_projected_diffusion_primal_cupy
-    from hdgfem.backends.diffusion_raw_cuda import postprocess_projected_diffusion_primal_raw_cuda
-    from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
+    from hdgfem.mixed.cupy import postprocess_projected_diffusion_primal_cupy
+    from hdgfem.mixed.raw_cuda.identity import (
+            postprocess_projected_diffusion_primal_raw_cuda,
+        )
+    from hdgfem.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
     space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
     diffusion, reaction, source, boundary_condition = quadratic_poisson_case()
@@ -1009,9 +1018,16 @@ def test_diffusion_raw_cuda_reconstruction_full_local_unknowns_matches_numba(tra
     from scipy.sparse.linalg import spsolve
 
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import build_trace_reference, face_element_mass, reference_derivative_mats, source_moments_cupy
-    from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
-    from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
+    from hdgfem.mixed.cupy import (
+            build_trace_reference,
+            face_element_mass,
+            reference_derivative_mats,
+            source_moments_cupy,
+        )
+    from hdgfem.mixed.raw_cuda.identity import (
+            reconstruct_projected_diffusion_field_raw_cuda,
+        )
+    from hdgfem.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
     space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
     source_h = space.project_callable(_source, name="source_h")

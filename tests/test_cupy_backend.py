@@ -116,10 +116,10 @@ def test_cupy_constant_source_reaction_helpers_do_not_materialize_fields():
     from hdgfem.hdg.coefficients_device import (
             source_moments_cupy as adv_source_moments_cupy,
         )
-    from hdgfem.backends.diffusion_cupy import (
-        reaction_mass_cupy as diff_reaction_mass_cupy,
-        source_moments_cupy as diff_source_moments_cupy,
-    )
+    from hdgfem.mixed.cupy import (
+            reaction_mass_cupy as diff_reaction_mass_cupy,
+            source_moments_cupy as diff_source_moments_cupy,
+        )
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1)
@@ -1670,7 +1670,7 @@ def test_cuda_bsr_left_scaling_matches_scalar_csr_and_restores_values():
 def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materialization():
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.diffusion_cupy import source_moments_cupy
+    from hdgfem.mixed.cupy import source_moments_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1)

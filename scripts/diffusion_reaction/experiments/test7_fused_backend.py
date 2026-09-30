@@ -8,13 +8,13 @@ import numpy as np
 
 from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.core.space import DGSpace
-from hdgfem.kernels import NUMBA_AVAILABLE
+from hdgfem.runtime.optional import NUMBA_AVAILABLE
 from scripts.diffusion_reaction.experiments.test7_fused_kernels import (
     assemble_test7_tensor_trace_system_eliminated_kernel,
     build_test7_boundary_trace_kernel,
     reconstruct_test7_tensor_local_unknowns_kernel,
 )
-from hdgfem.backends.numba import (
+from hdgfem.mixed.numba import (
     NumbaDiffusionTraceAssembly,
     _interior_side_index,
     _normalize_diffusion_stabilization,

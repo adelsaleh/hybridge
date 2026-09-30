@@ -2,7 +2,7 @@ r"""Numba kernels for advection-reaction HDG local assembly.
 
 These kernels assemble element-local quantities from already prepared geometry,
 reference tables, and coefficient values.  They intentionally do not know about
-``DGSpace`` or ``DGField`` objects; the adapter in :mod:`hdgfem.backends.numba`
+``DGSpace`` or ``DGField`` objects; the adapter in :mod:`hdgfem.mixed.numba`
 owns that conversion.
 """
 

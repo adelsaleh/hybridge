@@ -19,7 +19,7 @@ from hdgfem.linalg.face_dense import (
     face_dense_relative_residual,
     materialize_face_dense_matrix,
 )
-from hdgfem.assembly.face_dense import (
+from hdgfem.mixed.face_dense import (
     FaceTopology,
     assemble_global_face_blocks,
     build_face_topology,
@@ -27,7 +27,7 @@ from hdgfem.assembly.face_dense import (
     make_penalty_system,
 )
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.solvers.diffusion_reaction import (
+from hdgfem.mixed.local_numpy import (
     diffusion_element_boundary_mats,
     diffusion_trace_lift,
     local_solvers,

@@ -3178,7 +3178,7 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     total_start = time.perf_counter()
 
     setup_start = time.perf_counter()
-    from hdgfem.solvers.diffusion_reaction import _new_hdg_postprocess_cache
+    from hdgfem.mixed.postprocess.flux import _new_hdg_postprocess_cache
 
     trace_ref = cspace.host.trace_space('legacy-lagrange') if trace_space is None else trace_space
     if cache is None or cache.base_space is not cspace.host or cache.trace_space is not trace_ref:
@@ -3208,7 +3208,7 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=REAL_DTYPE)
     inverse_constants = _constant_inverse_diffusion_components(diffusion)
     if inverse_constants is None:
-        from hdgfem.solvers.diffusion_reaction import _inverse_diffusion_values
+        from hdgfem.mixed.coefficients import _inverse_diffusion_values
 
         inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
         inverse_mode = np.int32(1)

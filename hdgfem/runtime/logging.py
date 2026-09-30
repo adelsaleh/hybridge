@@ -71,3 +71,46 @@ def sync_elapsed(start: float) -> float:
     cp = require_cupy()
     cp.cuda.get_current_stream().synchronize()
     return time.perf_counter() - start
+
+
+def _format_seconds(seconds: float) -> str:
+    """Format elapsed wall time for concise solver logging."""
+    if seconds >= 100.0:
+        return f"{seconds:.1f}s"
+    if seconds >= 1.0:
+        return f"{seconds:.3f}s"
+    return f"{seconds:.4f}s"
+
+
+def _verbosity_level(verbose: bool | int) -> int:
+    """Normalize bool/int verbosity flags to an integer level."""
+    if isinstance(verbose, bool):
+        return 1 if verbose else 0
+    return max(0, int(verbose))
+
+
+def _detailed_logging(verbose: bool | int) -> bool:
+    """Return whether verbose backend micro-timings should be printed."""
+    level = _verbosity_level(verbose)
+    return level == 2 or level >= 4
+
+
+def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, multiline: bool = False):
+    """Run ``function`` and optionally print one-line timing output."""
+    should_print = (_verbosity_level(verbosity) >= level) if level <= 1 else _detailed_logging(verbosity)
+    if should_print:
+        indent = "  " * (level - 1)
+        label = f"{indent}{label}"
+        if multiline:
+            print(f"{label} ...", flush=True)
+        else:
+            print(f"{label} ... ", end="", flush=True)
+    start = time.perf_counter()
+    result = function()
+    elapsed = time.perf_counter() - start
+    if should_print:
+        if multiline:
+            print(f"{indent}done in {_format_seconds(elapsed)}", flush=True)
+        else:
+            print(f"done in {_format_seconds(elapsed)}", flush=True)
+    return result, elapsed

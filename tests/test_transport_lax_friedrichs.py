@@ -91,7 +91,7 @@ def test_inflow_only_rank_claim_does_not_trigger_lf_poisson_retry():
 
 
 def test_raw_policy_preflight_accepts_scaled_assembly_modes():
-    from hdgfem.backends.capabilities import validate_advection_backend_configuration
+    from hdgfem.solvers.capabilities import validate_advection_backend_configuration
     common=dict(operation='solve',assembly_backend='raw-cuda',solver='amgx',cupyx_solver='bicgstab',
         boundary_mode='zero-flux',trace_basis='legacy-lagrange',trace_ordering='none',
         materialize_host_solution=False,raw_lu_mode='coop',raw_matrix_format='bsr',

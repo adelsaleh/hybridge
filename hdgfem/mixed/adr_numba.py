@@ -13,11 +13,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from hdgfem.hdg import condensation as hdg
-from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
-from hdgfem.assembly.diffusion_coefficients import PreparedDiffusion, prepare_diffusion
+from hdgfem.mixed.adr_preparation import ADRPreparedData
+from hdgfem.mixed.coefficients import PreparedDiffusion, prepare_diffusion
 from hdgfem.core.space import DGSpace, DGTraceSpace
-from hdgfem.kernels import NUMBA_AVAILABLE
-from hdgfem.kernels.advection_diffusion_reaction_fused import (
+from hdgfem.runtime.optional import NUMBA_AVAILABLE
+from hdgfem.mixed.adr_numba_kernels import (
     assemble_projected_adr_trace_system_eliminated_kernel,
     reconstruct_adr_from_local_columns_kernel,
     reconstruct_projected_adr_local_unknowns_kernel,

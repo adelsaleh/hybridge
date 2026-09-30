@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from hdgfem.runtime.precision import REAL_DTYPE, real_raw_kernel
-from hdgfem.assembly.flux_recovery import build_flux_recovery_reference
+from hdgfem.mixed.postprocess.flux_recovery import build_flux_recovery_reference
 from hdgfem.core.space import VectorDGField
 from hdgfem.core.device import as_cupy_space, field_from_cupy_coefficients
 from hdgfem.runtime.optional import require_cupy
@@ -180,7 +180,7 @@ def recover_diffusion_flux_raw_cuda(local_unknowns, trace, space, trace_space,
     if scalar_tau:
         tau_value, tau_faces = REAL_DTYPE(stabilization), cache.arrays[0]
     else:
-        from hdgfem.solvers.diffusion_reaction import normalize_diffusion_stabilization
+        from hdgfem.mixed.coefficients import normalize_diffusion_stabilization
         tau_value = REAL_DTYPE(0.)
         tau_faces = cp.ascontiguousarray(cp.asarray(normalize_diffusion_stabilization(stabilization,space),dtype=REAL_DTYPE))
     mesh, post = cache.cspace.mesh, cache.reference.post_space

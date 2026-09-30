@@ -27,7 +27,10 @@ from hdgfem.hdg.numba_common import (
     map_edge_dof_bool,
 )
 from hdgfem.runtime.optional import njit
-from hdgfem.kernels.diffusion_mass import factor_diffusion_mass, apply_inverse_diffusion_mass
+from hdgfem.mixed.numba_diffusion_mass import (
+    factor_diffusion_mass,
+    apply_inverse_diffusion_mass,
+)
 
 
 @njit(cache=True, inline="always")

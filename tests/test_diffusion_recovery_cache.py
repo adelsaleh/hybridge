@@ -6,13 +6,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.backends import diffusion_flux_recovery_raw_cuda as raw
+from hdgfem.mixed.postprocess import flux_recovery_raw_cuda as raw
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers.diffusion_reaction import (
-    DiffusionReactionHDGOptions, DiffusionReactionHDGSolver,
-    _new_hdg_postprocess_cache,
+    DiffusionReactionHDGOptions,
+    DiffusionReactionHDGSolver,
 )
+from hdgfem.mixed.postprocess.flux import _new_hdg_postprocess_cache
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
 )

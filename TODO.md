@@ -768,7 +768,7 @@ Execution protocol (approved 2026-09-29):
   - `linalg` has no upward imports; the dead `_close_reusable_amgx_solvers`
     is removed;
   - the full suite matches the baseline.
-- [ ] Phase 5: move modules into `transport/` (AR) and `mixed/` (DR, ADR)
+- [x] Phase 5: move modules into `transport/` (AR) and `mixed/` (DR, ADR)
   without behavior changes; keep public solver names.
 
   Progress 2026-09-30, `transport/` done:
@@ -778,6 +778,21 @@ Execution protocol (approved 2026-09-29):
     `hdg/condensation_device.py` and `hdg/coefficients_device.py`;
   - duplicate `_interior_side_index` and `mapped_quads_cupy` copies removed;
   - the full suite matches the baseline.
+
+  `mixed/` done 2026-09-30:
+  - DR and ADR modules live side by side (`coefficients`, `stabilization`,
+    `adr_preparation`, `coefficients_device`, `local_numpy`, `adr_numpy`,
+    `numba` + `numba_kernels`, `adr_numba` + `adr_numba_kernels`, `cupy`,
+    `face_dense`, `raw_cuda/{identity, tensor, adr_operator}`, and
+    `postprocess/{flux, total_flux, flux_cupy, rt_raw_cuda,
+    flux_recovery_raw_cuda, flux_recovery, primal_raw_cuda}`);
+  - the ADR raw pipeline moved to `solvers/advection_diffusion_reaction_device.py`,
+    and the capability contract to `solvers/capabilities.py`;
+  - the solver logging helpers are consolidated in `runtime/logging.py`;
+  - the legacy `backends/`, `kernels/` and `assembly/` packages are removed;
+  - one layering violation remains (`diagnostics → io.plot`);
+  - the full suite matches the baseline, except one GPU hybrid test that failed
+    once under sharding and passed 5 of 5 reruns.
 - [ ] Phase 6: merge DR into the ADR implementations inside `mixed/`, gated by
   the phase 0 parity tests, in this order:
   1. flux postprocessing;

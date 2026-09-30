@@ -18,9 +18,13 @@ import numba
 from scipy.sparse import coo_matrix
 
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
-from hdgfem.assembly.diffusion_coefficients import prepare_diffusion, sample_diffusion_tensor, inverse_diffusion_values
-from hdgfem.backends.advection_diffusion_reaction_numba import (
+from hdgfem.mixed.adr_preparation import prepare_adr_data
+from hdgfem.mixed.coefficients import (
+    prepare_diffusion,
+    sample_diffusion_tensor,
+    inverse_diffusion_values,
+)
+from hdgfem.mixed.adr_numba import (
     assemble_projected_adr_trace_system_eliminated_numba as assemble,
     reconstruct_projected_adr_local_unknowns_numba as reconstruct,
 )

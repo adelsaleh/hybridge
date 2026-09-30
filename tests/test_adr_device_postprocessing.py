@@ -5,10 +5,11 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
-from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
+from hdgfem.mixed.adr_preparation import prepare_adr_data
 from hdgfem.core.space import DGField, VectorDGField
-from hdgfem.solvers.advection_diffusion_reaction import (
-    _postprocess_total_flux, _postprocess_primal_from_total_flux,
+from hdgfem.mixed.postprocess.total_flux import (
+    _postprocess_total_flux,
+    _postprocess_primal_from_total_flux,
 )
 
 
@@ -161,7 +162,7 @@ def test_device_stabilization_sampling(monkeypatch, kind):
     """Preserve supported stabilization inputs without hidden coefficient downloads."""
     cp = _cupy()
     from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.solvers.advection_diffusion_reaction import _adr_postprocess_samples
+    from hdgfem.mixed.postprocess.total_flux import _adr_postprocess_samples
 
     space, beta, _ = _problem(2)
     post = DGSpace(space.mesh, 3, basis_type='dub_orth')
@@ -193,11 +194,14 @@ def test_device_stabilization_sampling(monkeypatch, kind):
 def test_fused_primal_system_matches_independent_contractions(order):
     """Compare every mixed block and RHS, including the nonsymmetric cross terms."""
     cp = _cupy()
-    from hdgfem.backends.advection_diffusion_reaction_cupy import _primal_system_cupy
-    from hdgfem.backends.adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
-    from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from hdgfem.mixed.postprocess.flux_cupy import _primal_system_cupy
+    from hdgfem.mixed.postprocess.primal_raw_cuda import primal_system_raw_cuda
+    from hdgfem.mixed.coefficients import (
+            sample_diffusion_tensor,
+            inverse_diffusion_values,
+        )
     from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.solvers.diffusion_reaction import _build_hdg_postprocess_cache
+    from hdgfem.mixed.postprocess.flux import _build_hdg_postprocess_cache
     from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
 
     space, _, _ = _problem(order)

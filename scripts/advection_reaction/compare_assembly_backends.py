@@ -118,7 +118,7 @@ def _load_hdgfem() -> None:
         import numpy as _np
         from hdgfem.hdg import condensation as _hdg_assembly
         from hdgfem.hdg import matrices as _hdg_mats
-        from hdgfem.backends.numba import (
+        from hdgfem.mixed.numba import (
                     assemble_projected_diffusion_trace_system_eliminated_numba as _assemble_projected_diffusion_trace_system_eliminated_numba,
                 )
         from hdgfem.transport.numba import (
@@ -139,21 +139,19 @@ def _load_hdgfem() -> None:
         from hdgfem.linalg.reduction import (
                     eliminate_known_dofs as _eliminate_known_dofs,
                 )
-        from hdgfem.solvers.diffusion_reaction import (
-            _diffusion_is_identity as _diffusion_is_identity,
-        )
-        from hdgfem.solvers.diffusion_reaction import (
-            _local_solver_blocks_numpy as _local_solver_blocks_numpy,
-        )
-        from hdgfem.solvers.diffusion_reaction import (
-            _local_solver_pre_mats as _local_solver_pre_mats,
-        )
-        from hdgfem.solvers.diffusion_reaction import (
-            _local_solver_scalar_inverse as _local_solver_scalar_inverse,
-        )
-        from hdgfem.solvers.diffusion_reaction import normalize_diffusion_stabilization as _normalize_tau
-        from hdgfem.solvers.diffusion_reaction import assemble_diffusion_trace_system as _assemble_diffusion_trace_system
-        from hdgfem.solvers.diffusion_reaction import diffusion_element_boundary_mats as _diffusion_element_boundary_mats
+        from hdgfem.mixed.postprocess.flux import _diffusion_is_identity
+        from hdgfem.mixed.local_numpy import _local_solver_blocks_numpy
+        from hdgfem.mixed.local_numpy import _local_solver_pre_mats
+        from hdgfem.mixed.local_numpy import _local_solver_scalar_inverse
+        from hdgfem.mixed.coefficients import (
+                    normalize_diffusion_stabilization as _normalize_tau,
+                )
+        from hdgfem.mixed.local_numpy import (
+                    assemble_diffusion_trace_system as _assemble_diffusion_trace_system,
+                )
+        from hdgfem.mixed.local_numpy import (
+                    diffusion_element_boundary_mats as _diffusion_element_boundary_mats,
+                )
         try:
             from scripts.advection_reaction.cases import test2 as _adv_rea_test2
             from scripts.diffusion_reaction.cases import legacy_case_factories as _legacy_case_factories

@@ -34,7 +34,7 @@ from hdgfem.linalg.multigrid.face_hp import (
     symmetric_scalar_amgx_config,
 )
 from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
-from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 
@@ -139,9 +139,9 @@ def _assemble_legendre_bsr(space, problem, tau):
     """Assemble direct raw-CUDA BSR without invoking a global solver."""
     source = space.project_callable(problem.source, name="source_h")
     reaction = space.zeros(name="reaction_h")
-    from hdgfem.backends.diffusion_cupy import (
-        assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
-    )
+    from hdgfem.mixed.cupy import (
+            assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
+        )
 
     assembly = assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         source,

@@ -24,13 +24,11 @@ import numpy as np
 
 from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionResult,
-    LocalSolverBackend,
     ReturnKey,
-    _timed_call,
-    _verbosity_level,
-    impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg as _solve_plain_diffusion_reaction_hdg,
 )
+from hdgfem.mixed.local_numpy import LocalSolverBackend, impose_boundary_trace_on_guess
+from hdgfem.runtime.logging import _timed_call, _verbosity_level
 from hdgfem.core.space import DGSpace
 from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
 

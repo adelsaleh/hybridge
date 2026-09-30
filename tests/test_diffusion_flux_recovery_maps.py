@@ -4,13 +4,13 @@ No PDE solves, time steps, CUDA compilation, or kernel launches are needed.
 """
 import numpy as np
 import pytest
+import hdgfem.mixed.postprocess.flux as postprocess_flux
 import hdgfem.runtime.optional as runtime_optional
-from hdgfem.assembly.flux_recovery import build_flux_recovery_reference
+from hdgfem.mixed.postprocess.flux_recovery import build_flux_recovery_reference
 from hdgfem.core.mesh import DGMesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diffusion_reaction import (
-    _postprocess_diffusion_solution, _resolve_diffusion_postprocessing_backend,
-)
+from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
+from hdgfem.solvers.diffusion_reaction import _resolve_diffusion_postprocessing_backend
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.configuration import _validate_config
 
@@ -81,7 +81,7 @@ def test_disk_bdf2_presets_require_continuous_raw_cuda_recovered_drift(suffix,va
 @pytest.mark.parametrize('variant', ['RT_projection', 'l2_closest'])
 def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, variant):
     from types import SimpleNamespace
-    import hdgfem.backends.diffusion_flux_recovery_raw_cuda as raw
+    import hdgfem.mixed.postprocess.flux_recovery_raw_cuda as raw
     import hdgfem.transport.cupy as cupy_backend
     import hdgfem.solvers.diffusion_reaction as diffusion
     space = DGSpace(rectangle_mesh(1,1),2,basis_type='dub_orth')
@@ -98,6 +98,8 @@ def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, varia
         return sentinel,cached
     monkeypatch.setattr(raw,'recover_diffusion_flux_raw_cuda',recover)
     monkeypatch.setattr(cupy_backend,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
+        get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
+    monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
     monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
@@ -126,7 +128,9 @@ import os
 @pytest.mark.parametrize('variant', ['RT_projection','l2_closest'])
 def test_cuda_recovery_matches_host_and_reuses_geometry(degree,variant,monkeypatch):
     import cupy as cp
-    from hdgfem.backends.diffusion_flux_recovery_raw_cuda import recover_diffusion_flux_raw_cuda
+    from hdgfem.mixed.postprocess.flux_recovery_raw_cuda import (
+            recover_diffusion_flux_raw_cuda,
+        )
     mesh=rectangle_mesh(1,1)
     mesh=DGMesh.from_arrays(mesh.node_coords @ np.array([[1.8,.4],[-.2,.7]]),mesh.triangles)
     space=DGSpace(mesh,degree,basis_type='dub_orth')
@@ -174,6 +178,7 @@ def test_solver_hands_device_buffers_to_recovery_and_reuses_cache_on_rhs_updates
         calls.append(kwargs['cache'])
         return None,flux,cache
     monkeypatch.setattr(diffusion,'_postprocess_diffusion_solution',recover)
+    monkeypatch.setattr(postprocess_flux,'_postprocess_diffusion_solution',recover)
     timings=diffusion.DiffusionReactionTimings(0.,0.,0.,0.,0.,0.,0.)
     for source in (0., 1., 2.):
         solver.set_source(space.constant(source))

@@ -50,8 +50,8 @@ from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,
     flux_coefficients,
-    hdg_residual,
 )
+from hdgfem.mixed.local_numpy import hdg_residual
 
 
 @dataclass

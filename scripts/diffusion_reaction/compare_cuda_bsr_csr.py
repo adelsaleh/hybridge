@@ -64,7 +64,7 @@ from hdgfem.linalg.amgx.config import (
     describe_amgx_solver,
     load_amgx_config,
 )
-from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 

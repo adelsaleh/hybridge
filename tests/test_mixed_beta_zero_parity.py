@@ -241,19 +241,21 @@ def test_raw_cuda_operator_and_reconstruction_match_diffusion_reaction(matrix_fo
     """Raw-CUDA DR (identity kappa, scalar tau, zero reaction) equals raw-CUDA ADR (kind 0, beta=0)."""
     cp = _cuda_float64_runtime()
     from hdgfem import DiffusionReactionHDGSolver
-    from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
-    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import (
-        assemble_projected_adr_trace_operator_raw_cuda,
-        reconstruct_projected_adr_local_unknowns_raw_cuda,
-    )
+    from hdgfem.mixed.adr_preparation import prepare_adr_data
+    from hdgfem.mixed.raw_cuda.adr_operator import (
+            assemble_projected_adr_trace_operator_raw_cuda,
+            reconstruct_projected_adr_local_unknowns_raw_cuda,
+        )
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import (
-        build_trace_reference,
-        face_element_mass,
-        reference_derivative_mats,
-        source_moments_cupy,
-    )
-    from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
+    from hdgfem.mixed.cupy import (
+            build_trace_reference,
+            face_element_mass,
+            reference_derivative_mats,
+            source_moments_cupy,
+        )
+    from hdgfem.mixed.raw_cuda.identity import (
+            reconstruct_projected_diffusion_field_raw_cuda,
+        )
     from hdgfem.linalg import expand_known_dofs
 
     space = _space(order)

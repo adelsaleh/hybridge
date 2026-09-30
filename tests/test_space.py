@@ -47,9 +47,9 @@ from hdgfem.core.mass import (
 from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,
-    impose_boundary_trace_on_guess,
     solve_diffusion_reaction_hdg,
 )
+from hdgfem.mixed.local_numpy import impose_boundary_trace_on_guess
 from hdgfem.core.trace_transfer import prolong_trace_coefficients
 from scripts.diffusion_reaction.experiments.bootstrap_initial_guess import (
     solve_diffusion_reaction_hdg as solve_diffusion_reaction_hdg_with_bootstrap,

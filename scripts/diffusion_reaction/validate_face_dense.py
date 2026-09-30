@@ -19,7 +19,7 @@ from hdgfem.hdg.condensation import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.reduction import eliminate_known_dofs
-from hdgfem.solvers.diffusion_reaction import (
+from hdgfem.mixed.local_numpy import (
     assemble_diffusion_trace_system,
     diffusion_element_boundary_mats,
     local_solvers,

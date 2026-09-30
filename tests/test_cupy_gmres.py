@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from hdgfem.linalg.face_dense import face_dense_relative_residual
-from hdgfem.assembly.face_dense import normalize_penalty_rows
+from hdgfem.mixed.face_dense import normalize_penalty_rows
 from hdgfem.runtime.optional import require_cupy_device
 from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
 from hdgfem.linalg.gpu.gmres import (

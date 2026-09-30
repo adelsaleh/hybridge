@@ -25,9 +25,11 @@ class FluxRecoveryReference:
 
 def build_flux_recovery_reference(space, trace_space, *, l2_closest=False):
     """Build geometry-independent maps; no per-element factors or JIT calls."""
-    from hdgfem.solvers.diffusion_reaction import (
-        _new_hdg_postprocess_cache, _edge_legendre_basis, _trace_basis_at,
-    )
+    from hdgfem.mixed.postprocess.flux import (
+            _new_hdg_postprocess_cache,
+            _edge_legendre_basis,
+            _trace_basis_at,
+        )
     cache = _new_hdg_postprocess_cache(space, trace_space)
     post = cache.post_space
     q = post.quad_data

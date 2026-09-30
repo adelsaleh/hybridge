@@ -26,12 +26,10 @@ from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionResult,
     DiffusionReactionTimings,
-    _diffusion_is_identity,
-    _format_seconds,
-    _timed_call,
-    _verbosity_level,
-    split_diffusion_unknowns,
 )
+from hdgfem.mixed.local_numpy import split_diffusion_unknowns
+from hdgfem.mixed.postprocess.flux import _diffusion_is_identity
+from hdgfem.runtime.logging import _format_seconds, _timed_call, _verbosity_level
 
 
 def _parse_key_value_options(option_strings: Iterable[str] | None) -> dict[str, str]:

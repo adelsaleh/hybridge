@@ -25,7 +25,8 @@ from hdgfem.linalg.amgx.device_solver import (
 from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
 from hdgfem.linalg.amgx.host import initialize_pyamgx_once
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver, _trace_basis_at
+from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+from hdgfem.mixed.postprocess.flux import _trace_basis_at
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import (
     BASE_CONFIG, ROOT, cycle_gate, smoothing_cases,
 )

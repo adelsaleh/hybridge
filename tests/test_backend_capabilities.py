@@ -11,12 +11,9 @@ from hdgfem import (
     DiffusionReactionHDGSolver,
     rectangle_mesh,
 )
-from hdgfem.backends import (
-    BACKEND_CAPABILITIES,
-    UnsupportedBackendConfigurationError,
-    get_backend_capability,
-)
-from hdgfem.backends.capabilities import (
+from hdgfem.solvers.capabilities import BACKEND_CAPABILITIES, get_backend_capability
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
+from hdgfem.solvers.capabilities import (
     normalize_solver_backend,
     render_backend_capability_table,
     validate_advection_backend_configuration,

@@ -10,7 +10,7 @@ import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.core.mass as core_mass
-from hdgfem.backends import UnsupportedBackendConfigurationError
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 from hdgfem.transport.numba import (
     assemble_local_advection_reaction_numba,
     assemble_projected_trace_system_eliminated_numba,

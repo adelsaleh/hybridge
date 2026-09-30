@@ -29,12 +29,12 @@ def worker(args):
     import scipy
     from scipy.sparse import coo_matrix
     from hdgfem import DGSpace, rectangle_mesh
-    from hdgfem.backends.numba import (
-        build_diffusion_schur_cache_numba,
-        assemble_projected_diffusion_trace_system_eliminated_numba as assemble,
-        assemble_projected_diffusion_trace_rhs_eliminated_numba as assemble_rhs,
-        reconstruct_projected_diffusion_local_unknowns_numba as reconstruct,
-    )
+    from hdgfem.mixed.numba import (
+            build_diffusion_schur_cache_numba,
+            assemble_projected_diffusion_trace_system_eliminated_numba as assemble,
+            assemble_projected_diffusion_trace_rhs_eliminated_numba as assemble_rhs,
+            reconstruct_projected_diffusion_local_unknowns_numba as reconstruct,
+        )
     if numba.config.DISABLE_JIT:
         raise RuntimeError('Benchmarks require Numba JIT enabled')
     threads = args.threads[0]

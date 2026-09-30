@@ -15,7 +15,7 @@ from hdgfem.hdg.numba_common import (
     map_edge_dof_bool,
 )
 from hdgfem.runtime.optional import njit, prange
-from hdgfem.kernels.diffusion_reaction_fused import _diffusion_lift_dot
+from hdgfem.mixed.numba_kernels import _diffusion_lift_dot
 
 
 @njit(cache=True, inline="always", fastmath=True)

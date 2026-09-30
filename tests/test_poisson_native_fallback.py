@@ -14,7 +14,8 @@ import pytest
 import hdgfem.hdg.condensation_device as hdg_condensation_device
 import hdgfem.runtime.optional as runtime_optional
 from hdgfem.transport import cuda as advection_cuda, cupy
-from hdgfem.backends import diffusion_cupy, diffusion_raw_cuda
+from hdgfem.mixed import cupy as diffusion_cupy
+from hdgfem.mixed.raw_cuda import identity as diffusion_raw_cuda
 import hdgfem.linalg.gpu.sparse as gpu_sparse
 import hdgfem.runtime.optional as runtime_optional
 import hdgfem.linalg.amgx.device_solver as amgx_device_solver

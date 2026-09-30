@@ -26,10 +26,7 @@ from hdgfem.linalg.gpu.production_gmres import (
 )
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diffusion_reaction import (
-    diffusion_element_boundary_mats,
-    local_solvers,
-)
+from hdgfem.mixed.local_numpy import diffusion_element_boundary_mats, local_solvers
 from hdgfem.solvers.diffusion_face_dense import (
     assemble_diffusion_face_dense_components,
 )

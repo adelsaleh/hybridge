@@ -103,8 +103,10 @@ def _element(space, function, components=1):
 
 
 def test_numba_solve_matches_numpy_element_coefficients_with_one_kernel_signature(space):
-    from hdgfem.kernels.advection_diffusion_reaction_fused import (
-        assemble_projected_adr_trace_system_eliminated_kernel, reconstruct_projected_adr_local_unknowns_kernel)
+    from hdgfem.mixed.adr_numba_kernels import (
+            assemble_projected_adr_trace_system_eliminated_kernel,
+            reconstruct_projected_adr_local_unknowns_kernel,
+        )
     from hdgfem.core.pointwise_kernels import sample_pointwise_xyt_kernel
 
     beta = pointwise_coefficient((lambda x, y, t: .8 + .1*y, lambda x, y, t: -.25 + .07*x), space)
@@ -144,7 +146,7 @@ def test_laws_evaluate_any_shape_with_params_and_time():
 
 
 def test_laws_are_diffusion_tensor_components(space):
-    from hdgfem.assembly.diffusion_coefficients import prepare_diffusion, sample_diffusion_tensor
+    from hdgfem.mixed.coefficients import prepare_diffusion, sample_diffusion_tensor
 
     laws = (pointwise_law(lambda x, y, t: 1. + .1*x), pointwise_law(lambda x, y, t: .2*y),
             pointwise_law(lambda x, y, t: 2. + x*y))

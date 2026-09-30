@@ -13,6 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
+from hdgfem.core.space import DGField, DGSpace
+from hdgfem.runtime.precision import REAL_DTYPE
+from hdgfem.hdg.coefficients import (
+    _component_quadrature_values,
+    _project_quadrature_values,
+)
+
+
 
 DIFFUSION_KINDS = (
     'constant-isotropic', 'constant-diagonal', 'constant-full',
@@ -40,7 +48,6 @@ def sample_diffusion_tensor(diffusion, space, *, on_faces=False, trace_space=Non
     ``device=True`` returns a CuPy array sampled on the device.
     """
     from hdgfem.runtime.optional import array_module
-    from hdgfem.solvers.diffusion_reaction import _diffusion_components
     components = _diffusion_components(diffusion, space, on_faces=on_faces, trace_space=trace_space, device=device)
     xp = array_module(*components)
     if isinstance(components[0], np.ndarray) and components[0].ndim >= 1:
@@ -236,3 +243,150 @@ def _diffusion_kinds(values, xp):
     kinds[constant & diagonal] = 1
     kinds[constant & isotropic] = 0
     return kinds
+
+
+def normalize_diffusion_stabilization(stabilization, space: DGSpace) -> np.ndarray:
+    """Return element-face stabilization parameters with shape ``(K, 3)``."""
+    if np.isscalar(stabilization):
+        return np.full((space.mesh.num_tri, 3), float(stabilization), dtype=REAL_DTYPE)
+    tau = np.asarray(stabilization, dtype=REAL_DTYPE)
+    if tau.shape == (space.mesh.num_tri,):
+        return np.broadcast_to(tau[:, None], (space.mesh.num_tri, 3)).copy()
+    if tau.shape != (space.mesh.num_tri, 3):
+        raise ValueError(f"stabilization must be scalar or have shape ({space.mesh.num_tri}, 3); got {tau.shape}")
+    return np.ascontiguousarray(tau)
+
+
+def is_identity_diffusion(diffusion) -> bool:
+    """Return whether diffusion represents the identity tensor exactly enough."""
+    if np.isscalar(diffusion):
+        return bool(float(diffusion) == 1.0)
+    try:
+        array = np.asarray(diffusion, dtype=REAL_DTYPE)
+    except (TypeError, ValueError):
+        return False
+    if array.shape == (2, 2):
+        return bool(np.allclose(array, np.eye(2), rtol=0.0, atol=0.0))
+    if array.shape == (3,):
+        return bool(np.allclose(array, np.array([1.0, 0.0, 1.0]), rtol=0.0, atol=0.0))
+    if array.shape == (4,):
+        return bool(np.allclose(array, np.array([1.0, 0.0, 0.0, 1.0]), rtol=0.0, atol=0.0))
+    return False
+
+
+def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_space=None,
+                          device=False) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sample tensor components using shared volume or element-side evaluators.
+
+    ``device=True`` returns CuPy samples from the device twins in
+    ``backends.coefficients_cupy`` (same forms and layouts).
+    """
+    xp = np
+    if device:
+        from hdgfem.runtime.optional import require_cupy
+        xp = require_cupy()
+    num_elements = space.mesh.num_tri
+    num_quads = space.quad_data.Krf_w.shape[0]
+    shape = (num_elements, num_quads)
+    if on_faces:
+        trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+        shape = (num_elements, 3, trace_ref.weights.size)
+
+    def component_values(component, *, label):
+        """Choose the existing volume or incidence-aware face sampler."""
+        if device:
+            from hdgfem.hdg.coefficients_device import (
+                            face_samples_cupy,
+                            volume_samples_cupy,
+                        )
+            if on_faces:
+                return face_samples_cupy(component, space, label=label, trace_space=trace_ref)
+            return volume_samples_cupy(component, space, label=label)
+        if on_faces:
+            from hdgfem.hdg.coefficients import (
+                            _face_quadrature_values_from_scalar_input,
+                        )
+            return _face_quadrature_values_from_scalar_input(
+                component, space, label, trace_space=trace_ref)
+        return _component_quadrature_values(component, space, label=label)
+
+    zeros = xp.zeros(shape, dtype=REAL_DTYPE)
+    if isinstance(diffusion, DGField) or callable(diffusion):
+        diagonal = component_values(diffusion, label="diffusion")
+        return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
+
+    if np.isscalar(diffusion):
+        diagonal = xp.full(shape, float(diffusion), dtype=REAL_DTYPE)
+        return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
+
+    try:
+        # Do not invoke DGField.__array__: device tensor components must stay resident.
+        components_are_fields = isinstance(diffusion, (tuple, list)) and any(
+            isinstance(component, DGField) for component in diffusion)
+        constant = None if components_are_fields else np.asarray(diffusion, dtype=REAL_DTYPE)
+    except (TypeError, ValueError):
+        constant = None
+    if constant is not None and constant.ndim == 0:
+        diagonal = xp.full(shape, float(constant), dtype=REAL_DTYPE)
+        return diagonal, zeros.copy(), zeros.copy(), diagonal.copy()
+    if constant is not None and constant.shape in {(3,), (4,)}:
+        diffusion = tuple(constant)
+    if constant is not None and constant.shape == (2, 2):
+        k00 = xp.full(shape, float(constant[0, 0]), dtype=REAL_DTYPE)
+        k01 = xp.full(shape, float(constant[0, 1]), dtype=REAL_DTYPE)
+        k10 = xp.full(shape, float(constant[1, 0]), dtype=REAL_DTYPE)
+        k11 = xp.full(shape, float(constant[1, 1]), dtype=REAL_DTYPE)
+        return k00, k01, k10, k11
+
+    if isinstance(diffusion, (tuple, list)):
+        if len(diffusion) == 3:
+            k00, k01, k11 = diffusion
+            k10 = k01
+        elif len(diffusion) == 4:
+            k00, k01, k10, k11 = diffusion
+        elif (
+            len(diffusion) == 2
+            and all(isinstance(row, (tuple, list)) and len(row) == 2 for row in diffusion)
+        ):
+            k00, k01 = diffusion[0]
+            k10, k11 = diffusion[1]
+        else:
+            raise ValueError("diffusion must be scalar, 2x2 constant, (k00,k01,k11), or (k00,k01,k10,k11)")
+        return (
+            component_values(k00, label="diffusion[0,0]"),
+            component_values(k01, label="diffusion[0,1]"),
+            component_values(k10, label="diffusion[1,0]"),
+            component_values(k11, label="diffusion[1,1]"),
+        )
+
+    raise TypeError("diffusion must be scalar, a constant 2x2 array, or component callables/fields")
+
+
+def _project_inverse_diffusion_for_numba(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    r"""Project :math:`\kappa^{-1}` components for fused tensor Numba kernels."""
+    k00, k01, k10, k11 = _diffusion_components(diffusion, space)
+    det = k00 * k11 - k01 * k10
+    det_min = float(np.min(det))
+    if det_min <= 0.0:
+        raise ValueError(f"diffusion tensor must be pointwise positive definite; minimum determinant is {det_min}")
+    return (
+        _project_quadrature_values(k11 / det, space),
+        _project_quadrature_values(-k01 / det, space),
+        _project_quadrature_values(-k10 / det, space),
+        _project_quadrature_values(k00 / det, space),
+    )
+
+
+def _inverse_diffusion_values(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return pointwise ``kappa^{-1}`` components on ``space`` quadrature."""
+    k00, k01, k10, k11 = _diffusion_components(diffusion, space)
+    det = k00 * k11 - k01 * k10
+    det_min = float(np.min(det))
+    if det_min <= 0.0:
+        raise ValueError(f"diffusion tensor must be pointwise positive definite; minimum determinant is {det_min}")
+    return (
+        np.ascontiguousarray(k11 / det),
+        np.ascontiguousarray(-k01 / det),
+        np.ascontiguousarray(-k10 / det),
+        np.ascontiguousarray(k00 / det),
+    )

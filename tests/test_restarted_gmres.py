@@ -7,7 +7,7 @@ from hdgfem.linalg.face_dense import (
     face_dense_relative_residual,
     materialize_face_dense_matrix,
 )
-from hdgfem.assembly.face_dense import normalize_penalty_rows
+from hdgfem.mixed.face_dense import normalize_penalty_rows
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.gmres import restarted_gmres, solve_face_dense_gmres

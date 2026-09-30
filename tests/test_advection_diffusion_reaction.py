@@ -13,14 +13,12 @@ from hdgfem import (
     rectangle_mesh,
     solve_advection_diffusion_reaction_hdg,
 )
-from hdgfem.assembly.advection_diffusion_reaction import (
-    assemble_numpy,
+from hdgfem.mixed.adr_numpy import assemble_numpy
+from hdgfem.mixed.adr_preparation import (
     prepare_adr_data,
     recommended_diffusion_stabilization,
 )
-from hdgfem.backends.advection_diffusion_reaction_numba import (
-    assemble_projected_adr_trace_system_eliminated_numba,
-)
+from hdgfem.mixed.adr_numba import assemble_projected_adr_trace_system_eliminated_numba
 
 pytest.importorskip("numba")
 
@@ -109,8 +107,8 @@ def test_numba_matches_numpy_with_asymmetric_element_face_stabilization(trace_ba
 @pytest.mark.parametrize("diffusion", (0.3, np.array([[1.0, 0.3], [0.3, 0.5]])))
 def test_numba_builds_face_tables_in_kernel_from_light_preparation(trace_basis, diffusion):
     from hdgfem.hdg import condensation as hdg
-    from hdgfem.assembly.advection_diffusion_reaction import local_solvers_numpy
-    from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
+    from hdgfem.mixed.adr_numpy import local_solvers_numpy
+    from hdgfem.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
 
     space = DGSpace(rectangle_mesh(4, 3, xlim=(0.0, 1.3), ylim=(-0.4, 0.7)), 3, basis_type="dub_orth")
     source, beta, reaction, boundary = _problem(space)
@@ -236,10 +234,7 @@ def test_affine_manufactured_solution_and_postprocessing(
 
 def test_rt_total_flux_satisfies_face_and_interior_moments():
     """Verify the unisolvent RT_p degrees of freedom against HDG targets."""
-    from hdgfem.solvers.diffusion_reaction import (
-        _edge_lagrange_basis,
-        _trace_basis_at,
-    )
+    from hdgfem.mixed.postprocess.flux import _edge_lagrange_basis, _trace_basis_at
 
     space = DGSpace(rectangle_mesh(2, 2), 2, basis_type="dub_orth")
     source, beta, reaction, boundary = _problem(space)

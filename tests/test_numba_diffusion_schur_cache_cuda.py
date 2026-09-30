@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix, csr_matrix
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.backends.numba import (
+from hdgfem.mixed.numba import (
     build_diffusion_schur_cache_numba,
     assemble_projected_diffusion_trace_system_eliminated_numba,
     assemble_projected_diffusion_trace_rhs_eliminated_numba,
@@ -42,13 +42,18 @@ def boundary(x, y):
 @pytest.mark.parametrize('policy', ['none', 'schur-lu', 'schur-cholesky'])
 def test_numba_cached_matches_raw_cuda(cp, order, basis, policy):
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.diffusion_cupy import (
-        assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
-        assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
-        build_trace_reference, face_element_mass, reference_derivative_mats,
-        source_moments_cupy, build_scalar_schur_cholesky_cache_cupy,
-    )
-    from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
+    from hdgfem.mixed.cupy import (
+            assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
+            assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
+            build_trace_reference,
+            face_element_mass,
+            reference_derivative_mats,
+            source_moments_cupy,
+            build_scalar_schur_cholesky_cache_cupy,
+        )
+    from hdgfem.mixed.raw_cuda.identity import (
+            reconstruct_projected_diffusion_field_raw_cuda,
+        )
     space = DGSpace(rectangle_mesh(2, 1, xlim=(-1., 1.), ylim=(-0.4, 0.7)), order)
     source = space.project_callable(lambda x, y: 1. + x * y)
     reaction = space.zeros()

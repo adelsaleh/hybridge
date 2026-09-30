@@ -27,8 +27,10 @@ if str(ROOT) not in sys.path:
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.core.mesh import DGMesh
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends import diffusion_raw_cuda as raw
-from hdgfem.backends.diffusion_cupy import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
+from hdgfem.mixed.raw_cuda import identity as raw
+from hdgfem.mixed.cupy import (
+    assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
+)
 from scripts.diffusion_reaction.experiments.tensor_schur_kernels import specialize_tensor_schur
 
 

@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         volume_quad_1d=args.volume_quad_1d,
         edge_quad_1d=args.edge_quad_1d,
     )
-    from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+    from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 
     stabilization_mode = args.diffusion_stabilization_mode
     if args.tau is not None:

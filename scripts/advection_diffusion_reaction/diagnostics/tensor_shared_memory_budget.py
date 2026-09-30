@@ -74,9 +74,12 @@ def rule_sizes(order: int, rule: str, trace_basis: str) -> tuple[str, int, int]:
 
 def budget(orders, rules, trace_basis="legacy-lagrange") -> list[dict]:
     """Return one record per (order, rule) with per-kind batch and bytes."""
-    from hdgfem.assembly.diffusion_coefficients import DIFFUSION_KINDS
-    from hdgfem.backends.adr_tensor_raw_cuda import (
-        TensorWorkspaceError, max_tensor_volume_points, tensor_workspace)
+    from hdgfem.mixed.coefficients import DIFFUSION_KINDS
+    from hdgfem.mixed.raw_cuda.tensor import (
+            TensorWorkspaceError,
+            max_tensor_volume_points,
+            tensor_workspace,
+        )
 
     records = []
     for order in orders:
@@ -98,7 +101,7 @@ def budget(orders, rules, trace_basis="legacy-lagrange") -> list[dict]:
 
 def markdown(records) -> str:
     """Render the records as one Markdown table (cell = batch/KiB or -)."""
-    from hdgfem.assembly.diffusion_coefficients import DIFFUSION_KINDS
+    from hdgfem.mixed.coefficients import DIFFUSION_KINDS
 
     header = "| p | rule (vol/edge 1D) | NQ | NFQ | " + " | ".join(DIFFUSION_KINDS) + " | max NQ (variable-full) |"
     lines = [header, "|" + "---|" * (len(DIFFUSION_KINDS) + 5)]
@@ -122,7 +125,7 @@ def main(argv=None) -> int:
                         choices=("legacy-lagrange", "legendre-modal", "bernstein"))
     parser.add_argument("--json", type=Path, help="write the records to this JSON file")
     args = parser.parse_args(argv)
-    from hdgfem.backends.adr_tensor_raw_cuda import TENSOR_SHARED_MEMORY_LIMIT
+    from hdgfem.mixed.raw_cuda.tensor import TENSOR_SHARED_MEMORY_LIMIT
     from hdgfem.runtime.precision import REAL_ITEMSIZE
 
     records = budget(args.orders, args.rules, args.trace_basis)

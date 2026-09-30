@@ -24,9 +24,8 @@ def check_field_recovery_order(density_order=3, subdivisions=(2, 4, 8), jitter=0
     from hdgfem.core.mesh import DGMesh, rectangle_mesh
     from hdgfem.core.space import DGSpace
     from hdgfem.core.transfer import project_same_mesh_field
-    from hdgfem.solvers.diffusion_reaction import (
-        _postprocess_diffusion_solution, solve_diffusion_reaction_hdg,
-    )
+    from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
+    from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
 
     p = int(density_order)
     sizes = tuple(int(n) for n in subdivisions)

@@ -43,15 +43,6 @@ SIBLINGS = {"hdgfem.transport", "hdgfem.mixed"}
 
 ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
     {
-        ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.assembly.diffusion_coefficients", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.assembly.flux_recovery", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.advection_diffusion_reaction"),
-        ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.diffusion_cupy", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.diffusion_flux_recovery_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.diffusion_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.core.space", "hdgfem.hdg.matrices"),
         ("hdgfem.diagnostics", "hdgfem.io.plot"),
     }
 )

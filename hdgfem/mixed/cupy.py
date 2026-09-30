@@ -21,7 +21,7 @@ from hdgfem.core.space import DGField
 from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize
-from hdgfem.backends.diffusion_raw_cuda import (
+from hdgfem.mixed.raw_cuda.identity import (
     RawDiffusionAssemblyResult,
     assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda,
     assemble_projected_diffusion_trace_system_eliminated_raw_cuda,
@@ -1867,7 +1867,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
 
 def _postprocess_reference_cache(space, trace_space, cache):
     """Return host reference tables for primal postprocessing without host solves."""
-    from hdgfem.solvers.diffusion_reaction import _new_hdg_postprocess_cache
+    from hdgfem.mixed.postprocess.flux import _new_hdg_postprocess_cache
 
     trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
     if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
@@ -1925,7 +1925,7 @@ def postprocess_projected_diffusion_primal_cupy(
 
     inverse_constants = _constant_inverse_diffusion_components(diffusion)
     if inverse_constants is None:
-        from hdgfem.solvers.diffusion_reaction import _inverse_diffusion_values
+        from hdgfem.mixed.coefficients import _inverse_diffusion_values
 
         inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
         inv00 = cupy.asarray(inv00_h, dtype=REAL_DTYPE)

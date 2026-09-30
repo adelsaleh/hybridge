@@ -497,7 +497,7 @@ def _summarize_solve(
     import numpy as np
     from hdgfem.diagnostics import evaluate_scalar_error
     from hdgfem.io.output import pretty_print_sections
-    from hdgfem.solvers.diffusion_reaction import is_identity_diffusion
+    from hdgfem.mixed.coefficients import is_identity_diffusion
 
     metrics = evaluate_scalar_error(result.field, exact).metrics
     l2_error = metrics.l2
@@ -526,7 +526,7 @@ def _summarize_solve(
         ("trace dofs", result.trace.size, ",d"),
     ]
     if config.diffusion_stabilization_mode == "global-length":
-        from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+        from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 
         policy = GlobalLengthDiffusion(
             gamma_d=config.diffusion_stabilization_gamma,
@@ -790,7 +790,7 @@ def _main() -> None:
     from hdgfem.core.field_ops import coefficient_field
     from hdgfem.core.space import DGSpace
     from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
-    from hdgfem.hdg.stabilization import GlobalLengthDiffusion
+    from hdgfem.mixed.stabilization import GlobalLengthDiffusion
 
     case = case_definition_by_key(config.case)
     problem = case.build(**config.case_params)

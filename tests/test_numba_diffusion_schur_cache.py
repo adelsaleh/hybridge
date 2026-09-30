@@ -4,7 +4,7 @@ import pytest
 from scipy.sparse import coo_matrix
 
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.backends.numba import (
+from hdgfem.mixed.numba import (
     build_diffusion_schur_cache_numba,
     assemble_projected_diffusion_trace_system_eliminated_numba,
     assemble_projected_diffusion_trace_rhs_eliminated_numba,
@@ -81,7 +81,7 @@ def test_cholesky_factor_action_and_rejection():
 @pytest.mark.parametrize('assemble_first', [False, True])
 def test_stateful_solver_numpy_parity_and_invalidation(kind, basis, order, assemble_first):
     from hdgfem import DiffusionReactionHDGSolver, DGMesh
-    from hdgfem.solvers.diffusion_reaction import hdg_residual
+    from hdgfem.mixed.local_numpy import hdg_residual
     mesh = rectangle_mesh(2, 2)
     mesh = DGMesh.from_arrays(mesh.node_coords @ np.array([[1.8, .3], [-.2, .8]]), mesh.triangles)
     space = DGSpace(mesh, order)
@@ -150,7 +150,7 @@ def test_stateful_solver_numpy_parity_and_invalidation(kind, basis, order, assem
 @pytest.mark.parametrize('kind', ['schur-lu', 'schur-cholesky'])
 @pytest.mark.parametrize('order', [1, 3, 6])
 def test_factor_action_against_numpy_schur(kind, order):
-    from hdgfem.solvers.diffusion_reaction import _local_solver_pre_mats
+    from hdgfem.mixed.local_numpy import _local_solver_pre_mats
     from hdgfem.hdg.numba_common import lu_solve_inplace
     space = DGSpace(rectangle_mesh(2, 1, xlim=(-2., 1.), ylim=(-0.3, 0.7)), order)
     reaction = space.project_callable(lambda x, y: 0.1 + x * x)

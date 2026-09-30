@@ -8,7 +8,7 @@ import pytest
 import hdgfem
 import hdgfem.solvers as solver_api
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.backends import UnsupportedBackendConfigurationError
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 
 
 _PRIMARY_SOLVER_EXPORTS = {

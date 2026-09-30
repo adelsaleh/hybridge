@@ -4,9 +4,12 @@ import pytest
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.hdg import matrices
 import hdgfem.hdg.coefficients as hdg_coefficients
-from hdgfem.assembly.advection_diffusion_reaction import (
-    prepare_adr_data, normalize_diffusion_stabilization, diffusion_stabilization_on_trace)
-from hdgfem.solvers.advection_diffusion_reaction import _adr_postprocess_samples
+from hdgfem.mixed.adr_preparation import (
+    prepare_adr_data,
+    normalize_diffusion_stabilization,
+    diffusion_stabilization_on_trace,
+)
+from hdgfem.mixed.postprocess.total_flux import _adr_postprocess_samples
 
 
 def setup():

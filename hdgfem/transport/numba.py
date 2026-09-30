@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.linalg.reduction import KnownDofReduction
-from hdgfem.kernels import NUMBA_AVAILABLE
+from hdgfem.runtime.optional import NUMBA_AVAILABLE
 from hdgfem.hdg.trace_maps import (
     _boundary_reduction_maps,
     _edge_order_to_solve_map,

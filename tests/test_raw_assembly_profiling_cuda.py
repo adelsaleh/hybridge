@@ -28,10 +28,13 @@ def _boundary(x, y):
 def test_adr_assembly_only_matches_numpy(cp, monkeypatch, basis, order):
     """The new shared helper preserves reference algebra without invoking AMGX."""
     from cupyx.scipy.sparse import csr_matrix
-    from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data, assemble_numpy
+    from hdgfem.mixed.adr_preparation import prepare_adr_data
+    from hdgfem.mixed.adr_numpy import assemble_numpy
     from hdgfem.transport import cuda as advection_cuda
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
-    from hdgfem.backends.advection_diffusion_reaction_raw_cuda import assemble_projected_adr_trace_operator_raw_cuda
+    from hdgfem.mixed.raw_cuda.adr_operator import (
+            assemble_projected_adr_trace_operator_raw_cuda,
+        )
 
     def forbidden(*args, **kwargs):
         """Fail if profiling enters a global solve."""
