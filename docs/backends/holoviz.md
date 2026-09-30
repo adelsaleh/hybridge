@@ -1,4 +1,32 @@
-# Holoviz plotting for guiding-center runs
+# Holoviz plotting
+
+`hdgfem.io.holoviz` provides NVIDIA Holoviz panels for any scalar DG field.
+The guiding-center runner uses them for live updates; the static helpers
+mirror the PyVista functions in `hdgfem.io.plot`:
+
+| PyVista (`hdgfem.io.plot`) | Holoviz (`hdgfem.io.holoviz`) |
+|---|---|
+| `plot_field` | `plot_field_holoviz` |
+| `plot_fields` | `plot_fields_holoviz` (`share_clim` supported) |
+| `plot_solution_comparison` | `plot_solution_comparison_holoviz` |
+
+`HolovizScalarPanels(spaces, labels, ...)` is the shared viewer: one panel per
+DG space, `update_fields(...)` or `submit(images, captions=...)` per frame, and
+`wait_until_closed()`/`close()`. The static helpers block until the window is
+closed when `show=True`, or return the open viewer with `show=False`.
+Sampling cost follows `width x height` pixels per panel, not the mesh size,
+which makes these helpers suitable for meshes with hundreds of thousands of
+elements where refined PyVista meshes become slow.
+
+Static-helper limits: one colormap per window (Holoviz applies a single
+colour table), no colour bar — each panel caption shows its value range, which
+downloads two scalars once — and the exact-solution callable is evaluated on
+the host at the owned pixel centers and uploaded once. In the comparison, the
+numerical and exact panels share one range and the error panel starts at zero.
+The ADR runner selects it with `--plot --plot-backend holoviz`
+(`--plot-width`/`--plot-height` per panel).
+
+## Guiding-center runs
 
 The guiding-center runner supports NVIDIA Holoviz through Holoscan's Python
 `HolovizOp`. Select it with `--plot-backend holoviz`; PyVista remains the default.

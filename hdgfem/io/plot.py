@@ -21,12 +21,40 @@ from ..core.mesh import DGMesh
 from ..core.space import DGField
 
 
+_TEXT_BACKEND_SET = False
+
+
+def _use_freetype_text() -> None:
+    """Render VTK text with FreeType instead of Matplotlib mathtext.
+
+    VTK's default text backend detects Matplotlib and lays out every string
+    (scalar-bar labels, captions) through mathtext callbacks into Python. That
+    cost about 5 s per update of six panels (2026-09-29, 30x slower than
+    FreeType) and, because VTK swallows Python errors raised in those
+    callbacks, a Ctrl-C arriving during a render was lost. HDGFEM labels use
+    no LaTeX, so plain FreeType rendering is used.
+    """
+    global _TEXT_BACKEND_SET
+    if _TEXT_BACKEND_SET:
+        return
+    try:
+        import vtkmodules.vtkRenderingFreeType  # noqa: F401 - registers the text renderer
+        from vtkmodules.vtkRenderingCore import vtkTextRenderer
+        renderer = vtkTextRenderer.GetInstance()
+        if renderer is not None:
+            renderer.SetDefaultBackend(vtkTextRenderer.FreeType)
+    except ImportError:
+        pass
+    _TEXT_BACKEND_SET = True
+
+
 def _require_pyvista():
     """Import PyVista lazily so non-plotting code has no plotting dependency."""
     try:
         import pyvista as pv
     except ImportError as exc:
         raise ImportError("hdgfem plotting helpers require pyvista") from exc
+    _use_freetype_text()
     return pv
 
 

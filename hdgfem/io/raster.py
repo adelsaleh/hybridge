@@ -23,6 +23,7 @@ class RasterGeometry:
     bounds: tuple[float, float, float, float]
     element_ids: np.ndarray
     reference_points: np.ndarray
+    points: np.ndarray | None = None
 
     @classmethod
     def from_mesh(cls, mesh, width: int, height: int):
@@ -71,12 +72,19 @@ class RasterGeometry:
         if bounds is None:
             lo, hi = nodes.min(axis=0), nodes.max(axis=0)
             bounds = (lo[0], hi[0], lo[1], hi[1])
-        return cls(width, height, bounds, owners, reference)
+        return cls(width, height, bounds, owners, reference, points)
 
     @property
     def valid_pixels(self):
         """Return flattened indices of pixels inside actual mesh triangles."""
         return np.flatnonzero(self.element_ids >= 0).astype(np.int32)
+
+    @property
+    def valid_points(self):
+        """Return physical pixel-center coordinates inside actual mesh triangles."""
+        if self.points is None:
+            raise ValueError("this raster geometry does not retain its pixel coordinates")
+        return self.points[self.valid_pixels]
 
     def sampling_matrix(self, space, *, max_bytes: int = 512 * 1024**2):
         """Build a bounded CSR map from element coefficients to image pixels."""
@@ -158,10 +166,39 @@ class DeviceRasterSampler:
         coefficients = as_cupy_coefficients(field, self.cspace, copy=False)
         return self.matrix @ coefficients.reshape(-1)
 
+    def sample_callable(self, function, *, device: bool = False):
+        """Evaluate a vectorized callable at the owned pixel centers.
+
+        Pixels outside the mesh are zero, matching :meth:`sample`. By default
+        this is a host evaluation and upload, intended for static reference
+        panels. ``device=True`` calls ``function`` with CuPy coordinates of the
+        cached device pixel centers, for time-dependent analytic panels.
+        """
+        if device:
+            with self.cp.cuda.Device(self.device_id):
+                if getattr(self, "_device_points", None) is None:
+                    self._device_points = self.cp.asarray(self.geometry.valid_points, dtype=REAL_DTYPE)
+                points = self._device_points
+                values = self.cp.asarray(function(points[:, 0], points[:, 1]), dtype=REAL_DTYPE)
+                full = self.cp.zeros(self.geometry.element_ids.size, dtype=REAL_DTYPE)
+                full[self.valid] = self.cp.broadcast_to(values, (points.shape[0],))
+            return full
+        points = self.geometry.valid_points
+        values = np.asarray(function(points[:, 0], points[:, 1]), dtype=REAL_DTYPE)
+        values = np.broadcast_to(values, (points.shape[0],))
+        with self.cp.cuda.Device(self.device_id):
+            full = self.cp.zeros(self.geometry.element_ids.size, dtype=REAL_DTYPE)
+            full[self.valid] = self.cp.asarray(values)
+        return full
+
     def image(self, field, *, symmetric: bool = False, limits=None, expand_limits=False):
         """Return R32 indices into a 256-entry LUT and device scalar limits."""
+        return self.values_image(self.sample(field), symmetric=symmetric, limits=limits,
+                                 expand_limits=expand_limits)
+
+    def values_image(self, values, *, symmetric: bool = False, limits=None, expand_limits=False):
+        """Map sampled pixel values to R32 LUT indices and device scalar limits."""
         cp = self.cp
-        values = self.sample(field)
         if expand_limits:
             inside = values[self.valid]
             limits = expanding_color_limits(cp.min(inside), cp.max(inside), limits=limits,
@@ -176,7 +213,7 @@ class DeviceRasterSampler:
                 limits = (minimum, maximum)
         lo, hi = limits
         pixels = values.reshape(self.geometry.height, self.geometry.width)
-        normalized = (pixels - lo) / cp.maximum(hi - lo, 1.e-30)
+        normalized = cp.clip((pixels - lo) / cp.maximum(hi - lo, 1.e-30), 0., 1.)
         # Holoviz uses unnormalized LUT coordinates, including for float
         # textures: supply 0..255, not 0..1. Its Vulkan shader applies the
         # colour table with nearest sampling. Only display indices use FP32.

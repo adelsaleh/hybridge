@@ -59,6 +59,32 @@ def test_raster_keeps_discontinuous_values_and_holes():
     assert np.all(values.reshape(x.shape)[hole] == 0.)
 
 
+def test_raster_retains_pixel_centers_for_callable_panels():
+    space = DGSpace(rectangle_mesh(3, 2, xlim=(-2., 3.), ylim=(-1., 2.)), 1)
+    geometry = RasterGeometry.from_mesh(space.mesh, 37, 29)
+    x, y = pixel_centers(geometry)
+    valid = geometry.valid_pixels
+    np.testing.assert_allclose(geometry.valid_points[:, 0], x.ravel()[valid])
+    np.testing.assert_allclose(geometry.valid_points[:, 1], y.ravel()[valid])
+
+
+def test_device_callable_samples_and_clipped_lut_indices():
+    cp = pytest.importorskip("cupy")
+    if cp.cuda.runtime.getDeviceCount() == 0:
+        pytest.skip("No CUDA device")
+    space = DGSpace(rectangle_mesh(2, 2), 2)
+    geometry = RasterGeometry.from_mesh(space.mesh, 24, 20)
+    sampler = DeviceRasterSampler(space, geometry, device_id=cp.cuda.runtime.getDevice())
+    polynomial = lambda x, y: 1. + x - 2. * y + x * y
+    projected = sampler.sample(space.project_callable(polynomial))
+    exact = sampler.sample_callable(polynomial)
+    np.testing.assert_allclose(cp.asnumpy(exact), cp.asnumpy(projected), atol=1e-12)
+    assert np.all(cp.asnumpy(exact)[geometry.element_ids < 0] == 0.)
+    image, _ = sampler.values_image(exact, limits=(cp.asarray(0.), cp.asarray(1.)))
+    indices = cp.asnumpy(image)
+    assert indices.min() >= 0. and indices.max() <= 255.
+
+
 def test_sampling_map_checks_memory_before_basis_allocation():
     space = DGSpace(rectangle_mesh(1, 1), 2)
     geometry = RasterGeometry.from_mesh(space.mesh, 20, 20)

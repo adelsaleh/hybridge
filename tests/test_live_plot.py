@@ -27,7 +27,7 @@ class Plotter:
     def __init__(self, **options):
         self.options = options
         self.render_window = SimpleNamespace(GetClassName=lambda: self.window_class)
-        self.meshes, self.actors, self.shows, self.screenshots = [], [], [], []
+        self.meshes, self.actors, self.shows, self.screenshots, self.texts = [], [], [], [], []
         self.renders = self.updates = self.closes = self.links = self.grids = 0
 
     def add_mesh(self, mesh, **options):
@@ -39,8 +39,11 @@ class Plotter:
     def subplot(self, *args):
         pass
 
-    def add_text(self, *args, **kwargs):
-        pass
+    def add_text(self, text, **kwargs):
+        actor = SimpleNamespace(text=text)
+        actor.SetInput = lambda value: setattr(actor, "text", value)
+        self.texts.append(actor)
+        return actor
 
     def add_title(self, *args, **kwargs):
         pass

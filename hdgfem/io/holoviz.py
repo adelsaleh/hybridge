@@ -1,4 +1,10 @@
-"""Optional Holoviz panels for GPU-resident guiding-center fields.
+"""Optional NVIDIA Holoviz panels for GPU-sampled DG fields.
+
+:class:`HolovizScalarPanels` is the generic fixed-view viewer; the static
+helpers :func:`plot_field_holoviz`, :func:`plot_fields_holoviz` and
+:func:`plot_solution_comparison_holoviz` mirror the PyVista functions in
+:mod:`hdgfem.io.plot`. :class:`GuidingCenterHolovizPanels` specializes it for
+live guiding-center density/potential updates.
 
 Holoscan is imported only when a viewer is constructed. Live updates have no
 device-to-host readback. PNG and movie saving are the only image download paths. A bounded
@@ -28,6 +34,7 @@ class _Frame:
     time_value: float
     done: threading.Event = field(default_factory=threading.Event)
     submitted_at: float = field(default_factory=time.perf_counter)
+    captions: tuple[str, ...] | None = None
 
 
 def _save_framebuffer(cp, tensor, path: Path) -> None:
@@ -78,21 +85,23 @@ def _make_application(owner):
                 # Completion must identify this exact frame, not whichever
                 # frame is currently waiting on the runner thread.
                 self.metadata["hdgfem_frame"] = frame
-                caption = simulation_frame_label(
-                    step=frame.step, time_value=frame.time_value,
-                    time_step=owner.time_step, total_steps=owner.total_steps,
-                )
+                if frame.captions is None:
+                    caption = simulation_frame_label(
+                        step=frame.step, time_value=frame.time_value,
+                        time_step=owner.time_step, total_steps=owner.total_steps,
+                    )
+                    captions = [caption] * owner.panel_count
+                else:
+                    captions = list(frame.captions)
                 overlays = []
                 for index in range(owner.panel_count):
                     overlay = HolovizOp.InputSpec(f"progress_{index}", HolovizOp.InputType.TEXT)
-                    overlay.text = [caption]
+                    overlay.text = [captions[index]]
                     overlay.priority = 3
                     overlay.color = [1., 1., 1., 1.]
                     view = HolovizOp.InputSpec.View()
-                    view.offset_x = index / owner.panel_count
-                    view.offset_y = 0.
-                    view.width = 1. / owner.panel_count
-                    view.height = 1.
+                    for name, value in owner.panel_view(index).items():
+                        setattr(view, name, value)
                     overlay.views = [view]
                     overlays.append(overlay)
                 op_output.emit(overlays, "input_specs")
@@ -151,8 +160,8 @@ def _make_application(owner):
                 spec["views"] = views
                 specs.append(spec)
             visualizer = HolovizOp(
-                self, name="plot_viewer", width=owner.width * owner.panel_count,
-                height=owner.height, window_title=owner.title,
+                self, name="plot_viewer", width=owner.width * owner.columns,
+                height=owner.height * owner.rows, window_title=owner.title,
                 headless=owner.off_screen, vsync=False, tensors=specs,
                 color_lut=owner._color_lut, cuda_stream_pool=pool,
                 enable_render_buffer_output=True,
@@ -185,27 +194,36 @@ def _make_application(owner):
     return ViewerApplication()
 
 
-class GuidingCenterHolovizPanels:
+class HolovizScalarPanels:
     """Fixed-view scalar panels with GPU sampling and asynchronous display.
 
-    ``update`` skips a live preview if the queue is occupied or the FPS cap has
-    not elapsed. The last image is re-presented periodically to service window
+    Each panel samples fields of one DGSpace on a fixed pixel grid; panels
+    that share a space share its sampling map. All panels use one colormap,
+    because Holoviz applies a single colour table per window. ``submit``
+    skips a live preview if the queue is occupied or the FPS cap has not
+    elapsed. The last image is re-presented periodically to service window
     events, and minimized-window drops are retried with the same owned image.
-    Saving is synchronous and retains every requested frame.
-    ``flush`` and ``close`` drain accepted frames and propagate renderer errors.
+    Saving is synchronous and retains every requested frame. ``flush`` and
+    ``close`` drain accepted frames and propagate renderer errors.
     """
 
     def __init__(
-        self, density_field, potential_field, *, width=1024, height=1024,
-        title="Guiding center", show_mesh=True, off_screen=False,
-        screenshot_dir=None, screenshot_prefix="guiding_center",
-        include_potential=False, density_is_vorticity=False, max_fps=10.0,
-        time_step=None, total_steps=None, movie_path=None, movie_fps=20.,
+        self, spaces, labels, *, width=1024, height=1024, title="HDGFEM",
+        show_mesh=True, cmap="viridis", off_screen=False, screenshot_dir=None,
+        screenshot_prefix="holoviz", max_fps=10.0, time_step=None,
+        total_steps=None, movie_path=None, movie_fps=20., columns=None,
     ):
-        """Prepare fixed sampling maps and start the asynchronous viewer."""
+        """Prepare fixed sampling maps and start the asynchronous viewer.
+
+        ``width``/``height`` are per panel; ``columns`` (default: all panels in
+        one row) arranges the panels row by row in a grid.
+        """
         from ..backends.cupy import require_cupy
         from matplotlib import colormaps
 
+        spaces, labels = tuple(spaces), tuple(labels)
+        if not spaces or len(spaces) != len(labels):
+            raise ValueError("Holoviz panels need one label per DG space")
         if not np.isfinite(max_fps) or max_fps <= 0:
             raise ValueError("plot_max_fps must be finite and positive")
         if width < 2 or height < 2:
@@ -215,9 +233,10 @@ class GuidingCenterHolovizPanels:
         self.width, self.height = int(width), int(height)
         self.title, self.off_screen = title, bool(off_screen)
         self.time_step, self.total_steps = time_step, total_steps
-        self.panel_count = 2 if include_potential else 1
-        self.include_potential = bool(include_potential)
-        self.density_is_vorticity = bool(density_is_vorticity)
+        self.panel_count = len(spaces)
+        self.columns = self.panel_count if columns is None else max(1, min(int(columns), self.panel_count))
+        self.rows = -(-self.panel_count // self.columns)
+        self.labels = labels
         self.max_fps = float(max_fps)
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
         self._movie = None
@@ -234,24 +253,25 @@ class GuidingCenterHolovizPanels:
         self.frames_rendered = self.frames_skipped = self.frames_submitted = 0
         self.last_frame_latency = 0.0
         self.saved_paths = []
-        self._density_limits = None
-        self._potential_limits = None
         self._static_tensors, self._specs = {}, []
         self._samplers = []
-        fields = [density_field] + ([potential_field] if include_potential else [])
-        cmap = colormaps["RdBu_r" if density_is_vorticity else "viridis"]
-        self._color_lut = cmap(np.linspace(0, 1, 256)).tolist()
+        self._color_lut = colormaps[cmap](np.linspace(0, 1, 256)).tolist()
         samplers = {}
-        for index, scalar_field in enumerate(fields):
-            key = id(scalar_field.space)
+        for index, space in enumerate(spaces):
+            key = id(space)
             if key not in samplers:
-                geometry = RasterGeometry.from_mesh(scalar_field.space.mesh, self.width, self.height)
-                samplers[key] = DeviceRasterSampler(scalar_field.space, geometry, device_id=self.device_id)
+                geometry = RasterGeometry.from_mesh(space.mesh, self.width, self.height)
+                samplers[key] = DeviceRasterSampler(space, geometry, device_id=self.device_id)
             sampler = samplers[key]
             self._samplers.append(sampler)
-            self._add_panel(index, sampler.geometry, scalar_field.space.mesh, show_mesh)
+            self._add_panel(index, sampler.geometry, space.mesh, show_mesh)
         self._app = _make_application(self)
         self._future = self._app.run_async()
+
+    @property
+    def samplers(self):
+        """Return the per-panel device samplers (shared between equal spaces)."""
+        return tuple(self._samplers)
 
     @property
     def _capture_enabled(self):
@@ -259,8 +279,7 @@ class GuidingCenterHolovizPanels:
 
     def _add_panel(self, index, geometry, mesh, show_mesh):
         """Add the scalar image, static outside mask, mesh, and panel label."""
-        view = {"offset_x": index / self.panel_count, "offset_y": 0.,
-                "width": 1. / self.panel_count, "height": 1.}
+        view = self.panel_view(index)
         name = f"field_{index}"
         self._specs.append({"name": name, "type": "color_lut", "views": [view]})
         background = np.zeros((self.height, self.width, 4), dtype=np.uint8)
@@ -273,14 +292,18 @@ class GuidingCenterHolovizPanels:
             self._static_tensors[mesh_name] = geometry.mesh_lines(mesh)
             self._specs.append({"name": mesh_name, "type": "lines", "priority": 2,
                                 "color": [0., 0., 0., 0.35], "line_width": 1., "views": [view]})
-        label = "Potential" if index else "Density"
         self._static_tensors[f"progress_{index}"] = np.array(
             [[0.025, 0.09, 0.018]], dtype=np.float32)
         label_name = f"label_{index}"
         self._static_tensors[label_name] = np.array(
             [[0.025, 0.02, 0.018], [0.025, 0.055, 0.025]], dtype=np.float32)
-        self._specs.append({"name": label_name, "type": "text", "text": [self.title, label], "priority": 3,
-                            "color": [1., 1., 1., 1.], "views": [view]})
+        self._specs.append({"name": label_name, "type": "text", "text": [self.title, self.labels[index]],
+                            "priority": 3, "color": [1., 1., 1., 1.], "views": [view]})
+
+    def panel_view(self, index):
+        """Normalized window placement of panel ``index`` in the row-major grid."""
+        return {"offset_x": (index % self.columns) / self.columns, "offset_y": (index // self.columns) / self.rows,
+                "width": 1. / self.columns, "height": 1. / self.rows}
 
     def _frame_for_tick(self):
         """Keep event processing alive, retrying frames skipped while minimized."""
@@ -327,37 +350,37 @@ class GuidingCenterHolovizPanels:
             except Exception as exc:
                 raise RuntimeError("Holoviz rendering failed") from exc
             if not self._closing and not self._user_closed:
-                raise RuntimeError("Holoviz renderer stopped unexpectedly")
+                # Holoscan installs its own SIGINT handler and stops the app cleanly on
+                # Ctrl-C; report that as an interrupt even if Python's handler has not run yet.
+                self._closing = True
+                raise KeyboardInterrupt("Holoviz renderer stopped (SIGINT)")
 
-    def update(self, density_field, potential_field, *, step: int, time_value: float):
-        """Sample on the caller's CUDA stream, then hand off owned GPU images."""
+    def _accept_frame(self):
+        """Return the submission time, or None to skip a rate-limited live preview."""
         self._check_renderer()
         if self._closing or self._closed:
-            return False
+            return None
         now = time.perf_counter()
         with self._condition:
             if not self._capture_enabled and (
                 self._pending is not None or now - self._last_submit < 1. / self.max_fps
             ):
                 self.frames_skipped += 1
-                return False
+                return None
         if self._capture_enabled:
             self.flush()
+        return now
+
+    def _enqueue(self, images, *, now, step, time_value, captions=None):
+        """Record GPU completion of sampled images and hand them to the renderer."""
         with self.cp.cuda.Device(self.device_id):
             tensors = dict(self._static_tensors)
-            image, limits = self._samplers[0].image(
-                density_field, symmetric=self.density_is_vorticity,
-                limits=self._density_limits, expand_limits=True,
-            )
-            self._density_limits = limits
-            tensors["field_0"] = image
-            if self.include_potential:
-                tensors["field_1"], self._potential_limits = self._samplers[1].image(
-                    potential_field, limits=self._potential_limits, expand_limits=True,
-                )
+            for index, image in enumerate(images):
+                tensors[f"field_{index}"] = image
             ready = self.cp.cuda.Event()
             ready.record()
-        frame = _Frame(tensors, ready, int(step), float(time_value))
+        frame = _Frame(tensors, ready, int(step), float(time_value),
+                       captions=None if captions is None else tuple(captions))
         with self._condition:
             self._pending = frame
             self.frames_submitted += 1
@@ -368,6 +391,29 @@ class GuidingCenterHolovizPanels:
         if self.frames_submitted == 1 or self._capture_enabled:
             self.flush()
         return True
+
+    def submit(self, images, *, step=0, time_value=0., captions=None):
+        """Display one LUT-index image per panel (see ``DeviceRasterSampler.values_image``)."""
+        images = tuple(images)
+        if len(images) != self.panel_count:
+            raise ValueError(f"expected {self.panel_count} panel images, got {len(images)}")
+        now = self._accept_frame()
+        if now is None:
+            return False
+        return self._enqueue(images, now=now, step=step, time_value=time_value, captions=captions)
+
+    def update_fields(self, fields, *, step=0, time_value=0., limits=None, captions=None):
+        """Sample one DG field per panel with per-panel or shared limits."""
+        fields = tuple(fields)
+        if len(fields) != self.panel_count:
+            raise ValueError(f"expected {self.panel_count} fields, got {len(fields)}")
+        now = self._accept_frame()
+        if now is None:
+            return False
+        with self.cp.cuda.Device(self.device_id):
+            images = [sampler.image(field, limits=limits)[0]
+                      for sampler, field in zip(self._samplers, fields)]
+        return self._enqueue(images, now=now, step=step, time_value=time_value, captions=captions)
 
     def flush(self, timeout: float = 30.) -> None:
         """Wait for accepted frames, including PNG encoding when enabled."""
@@ -380,6 +426,17 @@ class GuidingCenterHolovizPanels:
                 if time.monotonic() >= deadline:
                     raise TimeoutError("timed out waiting for Holoviz to render a frame")
                 self._condition.wait(timeout=min(0.05, max(0., deadline - time.monotonic())))
+
+    def wait_until_closed(self) -> None:
+        """Block until the user closes the window; return at once when off screen."""
+        if self.off_screen:
+            return
+        while True:
+            self._check_renderer()
+            with self._condition:
+                if self._user_closed or self._closing:
+                    return
+                self._condition.wait(timeout=0.05)
 
     def metrics(self):
         """Return host scheduling counters without querying device field values."""
@@ -409,3 +466,167 @@ class GuidingCenterHolovizPanels:
                     if self._movie is not None:
                         self._movie.close()
                     self._closed = True
+
+
+class GuidingCenterHolovizPanels(HolovizScalarPanels):
+    """Live density (or vorticity) and optional potential panels for guiding-center runs."""
+
+    def __init__(
+        self, density_field, potential_field, *, width=1024, height=1024,
+        title="Guiding center", show_mesh=True, off_screen=False,
+        screenshot_dir=None, screenshot_prefix="guiding_center",
+        include_potential=False, density_is_vorticity=False, max_fps=10.0,
+        time_step=None, total_steps=None, movie_path=None, movie_fps=20.,
+    ):
+        """Prepare fixed sampling maps and start the asynchronous viewer."""
+        self.include_potential = bool(include_potential)
+        self.density_is_vorticity = bool(density_is_vorticity)
+        self._density_limits = None
+        self._potential_limits = None
+        fields = [density_field] + ([potential_field] if include_potential else [])
+        super().__init__(
+            [scalar_field.space for scalar_field in fields], ["Density", "Potential"][:len(fields)],
+            width=width, height=height, title=title, show_mesh=show_mesh,
+            cmap="RdBu_r" if density_is_vorticity else "viridis", off_screen=off_screen,
+            screenshot_dir=screenshot_dir, screenshot_prefix=screenshot_prefix,
+            max_fps=max_fps, time_step=time_step, total_steps=total_steps,
+            movie_path=movie_path, movie_fps=movie_fps,
+        )
+
+    def update(self, density_field, potential_field, *, step: int, time_value: float):
+        """Sample on the caller's CUDA stream, then hand off owned GPU images."""
+        now = self._accept_frame()
+        if now is None:
+            return False
+        with self.cp.cuda.Device(self.device_id):
+            image, limits = self._samplers[0].image(
+                density_field, symmetric=self.density_is_vorticity,
+                limits=self._density_limits, expand_limits=True,
+            )
+            self._density_limits = limits
+            images = [image]
+            if self.include_potential:
+                image, self._potential_limits = self._samplers[1].image(
+                    potential_field, limits=self._potential_limits, expand_limits=True,
+                )
+                images.append(image)
+        return self._enqueue(images, now=now, step=step, time_value=time_value)
+
+
+def _range_caption(limits) -> str:
+    """Format device color limits for a static panel (one small download)."""
+    lo, hi = (float(value) for value in limits)
+    return f"range [{lo:.4g}, {hi:.4g}]"
+
+
+def _finish_static(viewer, show):
+    """Keep a static window open until closed, or return the open viewer."""
+    if not show:
+        return viewer
+    try:
+        viewer.wait_until_closed()
+    finally:
+        viewer.close()
+    return viewer
+
+
+def plot_fields_holoviz(
+        fields,
+        *,
+        titles=None,
+        title="HDGFEM",
+        show_mesh=True,
+        show=True,
+        off_screen=False,
+        width=1024,
+        height=1024,
+        cmap="viridis",
+        share_clim=False,
+        screenshot_dir=None,
+        screenshot_prefix="holoviz",
+):
+    """Plot scalar DG fields side by side in one Holoviz window.
+
+    The Holoviz counterpart of :func:`hdgfem.io.plot.plot_fields`: sampling is
+    a fixed ``width x height`` GPU raster per panel, so the cost follows pixel
+    count rather than mesh size. ``show=True`` blocks until the window closes;
+    ``show=False`` returns the open viewer, which the caller must ``close()``.
+    Holoviz has no colour bar: each panel caption states its value range.
+    """
+    fields = tuple(fields)
+    if not fields:
+        raise ValueError("at least one DG field is required")
+    titles = tuple(field.name for field in fields) if titles is None else tuple(titles)
+    if len(titles) != len(fields):
+        raise ValueError("titles must have the same length as fields")
+    viewer = HolovizScalarPanels(
+        [field.space for field in fields], titles, width=width, height=height, title=title,
+        show_mesh=show_mesh, cmap=cmap, off_screen=off_screen,
+        screenshot_dir=screenshot_dir, screenshot_prefix=screenshot_prefix,
+    )
+    cp = viewer.cp
+    with cp.cuda.Device(viewer.device_id):
+        values = [sampler.sample(field) for sampler, field in zip(viewer.samplers, fields)]
+        limits = [None] * len(fields)
+        if share_clim:
+            inside = [value[sampler.valid] for sampler, value in zip(viewer.samplers, values)]
+            shared = (cp.min(cp.stack([cp.min(v) for v in inside])),
+                      cp.max(cp.stack([cp.max(v) for v in inside])))
+            limits = [shared] * len(fields)
+        rendered = [sampler.values_image(value, limits=limit)
+                    for sampler, value, limit in zip(viewer.samplers, values, limits)]
+    viewer.submit([image for image, _ in rendered],
+                  captions=[_range_caption(limit) for _, limit in rendered])
+    return _finish_static(viewer, show)
+
+
+def plot_field_holoviz(field, *, title=None, **options):
+    """Plot one scalar DG field in a Holoviz window; see :func:`plot_fields_holoviz`."""
+    return plot_fields_holoviz((field,), titles=(field.name if title is None else title,), **options)
+
+
+def plot_solution_comparison_holoviz(
+        field,
+        exact_solution,
+        *,
+        title="",
+        show_mesh=True,
+        show=True,
+        off_screen=False,
+        width=1024,
+        height=1024,
+        cmap="viridis",
+        screenshot_dir=None,
+        screenshot_prefix="solution_comparison",
+):
+    """Plot numerical solution, exact solution, and absolute error with Holoviz.
+
+    The Holoviz counterpart of :func:`hdgfem.io.plot.plot_solution_comparison`.
+    The numerical panel is sampled on the GPU without host staging of device
+    fields; the vectorized exact callable is evaluated once on the host at the
+    owned pixel centers. Numerical and exact panels share one value range and
+    the error panel starts at zero. All panels use ``cmap`` (one colour table
+    per Holoviz window).
+    """
+    viewer = HolovizScalarPanels(
+        (field.space,) * 3, ("Numerical solution", "Exact solution", "Absolute error"),
+        width=width, height=height, title=title or "Solution comparison",
+        show_mesh=show_mesh, cmap=cmap, off_screen=off_screen,
+        screenshot_dir=screenshot_dir, screenshot_prefix=screenshot_prefix,
+    )
+    sampler, cp = viewer.samplers[0], viewer.cp
+    with cp.cuda.Device(viewer.device_id):
+        numerical = sampler.sample(field)
+        exact = sampler.sample_callable(exact_solution)
+        error = cp.abs(numerical - exact)
+        inside_numerical, inside_exact = numerical[sampler.valid], exact[sampler.valid]
+        field_limits = (cp.minimum(cp.min(inside_numerical), cp.min(inside_exact)),
+                        cp.maximum(cp.max(inside_numerical), cp.max(inside_exact)))
+        error_limits = (cp.zeros((), dtype=error.dtype), cp.max(error[sampler.valid]))
+        images = [sampler.values_image(numerical, limits=field_limits)[0],
+                  sampler.values_image(exact, limits=field_limits)[0],
+                  sampler.values_image(error, limits=error_limits)[0]]
+    captions = [_range_caption(field_limits)] * 2 + [
+        f"max |error| {float(error_limits[1]):.4e}"]
+    viewer.submit(images, captions=captions)
+    return _finish_static(viewer, show)

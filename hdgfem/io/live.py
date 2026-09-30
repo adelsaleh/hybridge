@@ -57,6 +57,37 @@ def simulation_frame_label(*, step, time_value, time_step=None, total_steps=None
     return " | ".join(parts)
 
 
+class AnalyticPanelField:
+    """Duck-typed panel field that evaluates ``function(x, y)`` on a DG space's elements.
+
+    It provides the ``space``, ``name`` and ``values_at_ref`` used by
+    :class:`PyVistaFieldPanels`, so exact solutions are sampled pointwise at
+    the plot points without projection. Replace ``function`` between updates
+    for time-dependent data.
+    """
+
+    def __init__(self, space, function, name="exact"):
+        self.space, self.function, self.name = space, function, str(name)
+
+    def values_at_ref(self, reference_points):
+        """Evaluate at the physical images of reference points, shape ``(K, n)``."""
+        mapped = self.space.mesh.map_reference_points(np.asarray(reference_points))
+        values = np.asarray(self.function(mapped[..., 0], mapped[..., 1]), dtype=float)
+        return np.broadcast_to(values, mapped.shape[:-1])
+
+
+class DifferencePanelField:
+    """Duck-typed panel field ``field - reference`` (for example a DG field minus the exact solution)."""
+
+    def __init__(self, field, reference, name="error"):
+        self.field, self.reference, self.name = field, reference, str(name)
+        self.space = field.space
+
+    def values_at_ref(self, reference_points):
+        """Pointwise difference at reference points on every element."""
+        return np.asarray(self.field.values_at_ref(reference_points)) - self.reference.values_at_ref(reference_points)
+
+
 class PyVistaFieldPanels:
     """Update scalar DG panels on a fixed mesh without rebuilding VTK geometry.
 
@@ -112,6 +143,7 @@ class PyVistaFieldPanels:
         )
         self._shown = self._closed = False
         self._panels = []
+        self._captions = []
         self._panel_labels = [
             f"{title}\n{panel[0]}" if title else str(panel[0])
             for panel in normalized
@@ -166,12 +198,22 @@ class PyVistaFieldPanels:
             time_step=self.time_step, total_steps=self.total_steps,
         )
         for index in range(len(self._panels)):
+            text = f"{self._panel_labels[index]}\n{caption}"
+            if index < len(self._captions):
+                # Rebuilding text actors each update dominated the refresh cost.
+                actor = self._captions[index]
+                if hasattr(actor, "SetInput"):
+                    actor.SetInput(text)
+                else:  # upper_edge text is a vtkCornerAnnotation
+                    actor.SetText(7, text)  # vtkCornerAnnotation.UpperEdge
+                continue
             self.plotter.subplot(index // self._shape[1], index % self._shape[1])
-            self.plotter.add_text(
-                f"{self._panel_labels[index]}\n{caption}",
-                position="upper_edge", font_size=10, shadow=False,
+            # A plain text actor at a fixed viewport position: corner annotations
+            # re-fit their font on every render, which dominated the refresh cost.
+            self._captions.append(self.plotter.add_text(
+                text, position=(0.02, 0.86), viewport=True, font_size=10, shadow=False,
                 name="simulation_progress", render=False,
-            )
+            ))
         if not self._shown:
             self.plotter.show(auto_close=False, interactive_update=not self._render_only)
             self._shown = True
