@@ -1,7 +1,7 @@
 """Small element-local inverse diffusion mass actions for fused HDG kernels."""
 import numpy as np
 from hdgfem.runtime.optional import njit
-from hdgfem.kernels.common import (
+from hdgfem.hdg.numba_common import (
     lu_factor_inplace,
     lu_solve_inplace,
     cholesky_factor_inplace,

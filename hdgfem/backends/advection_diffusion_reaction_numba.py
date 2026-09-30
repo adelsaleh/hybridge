@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hdgfem.assembly import hdg
+from hdgfem.hdg import condensation as hdg
 from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
 from hdgfem.assembly.diffusion_coefficients import PreparedDiffusion, prepare_diffusion
 from hdgfem.core.space import DGSpace, DGTraceSpace
@@ -23,12 +23,12 @@ from hdgfem.kernels.advection_diffusion_reaction_fused import (
     reconstruct_projected_adr_local_unknowns_kernel,
 )
 from hdgfem.linalg.system import KnownDofReduction
-from hdgfem.backends.numba import (
+from hdgfem.hdg.trace_maps import (
     _boundary_reduction_maps,
-    _interior_side_index,
     _reduction_with_system,
     _trace_orientation_mode,
 )
+from hdgfem.backends.numba import _interior_side_index
 
 
 @dataclass(frozen=True)

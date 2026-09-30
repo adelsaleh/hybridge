@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from hdgfem.runtime.precision import REAL_DTYPE
 
-import inspect
 
 import numpy as np
 
 from hdgfem.runtime.threads import for_element_chunks
-from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField, _normalize_callable_values
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.core.projection import scalar_moments_from_values
 from hdgfem.core.mass import (
     _accumulate_local_matrix,
@@ -23,232 +22,9 @@ from hdgfem.core.mass import (
     _local_matrix_shape,
     _require_local_matrix_out,
 )
-from hdgfem.core.quadrature import _reference_edge_points_from_1d
-
-
-def _trace_ref(space: DGSpace, trace_space: DGTraceSpace | None = None) -> DGTraceSpace:
-    """Return the requested trace reference, defaulting to the legacy trace basis."""
-    return space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-
-
-def _require_normal_flux(
-        beta_dot_normal: np.ndarray,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    """Validate cached face-normal flux values."""
-    trace_ref = _trace_ref(test_space, trace_space)
-    flux = np.asarray(beta_dot_normal, dtype=REAL_DTYPE)
-    expected_shape = (
-        test_space.mesh.num_tri,
-        3,
-        trace_ref.weights.size,
-    )
-    if flux.shape != expected_shape:
-        raise ValueError(f"beta_dot_normal must have shape {expected_shape}; got {flux.shape}")
-    return flux
-
-
-def dg_field_basis_on_trace_faces(
-        field_space: DGSpace,
-        trace_space: DGTraceSpace,
-) -> np.ndarray:
-    """Return a cached reference basis table on trace quadrature."""
-    if field_space is trace_space.space:
-        return trace_space.bas_of_bd_quads
-
-    field_trace = field_space.trace_space(trace_space.kind)
-    if np.array_equal(field_trace.quads, trace_space.quads):
-        return field_trace.bas_of_bd_quads
-
-    cache = getattr(trace_space, "_hdgfem_dg_field_face_basis_cache", None)
-    if cache is None:
-        cache = {}
-        object.__setattr__(trace_space, "_hdgfem_dg_field_face_basis_cache", cache)
-    if field_space not in cache:
-        face_points = _reference_edge_points_from_1d(trace_space.quads).reshape(-1, 2)
-        num_face_quads = trace_space.weights.size
-        cache[field_space] = np.ascontiguousarray(
-            field_space.basis_at(face_points)
-            .reshape(num_face_quads, 3, field_space.el_dof)
-            .transpose(1, 2, 0)
-        )
-    return cache[field_space]
-
-
-def dg_field_values_on_trace_faces(
-        field: DGField,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    """Contract DG coefficients with a face reference table.
-
-    This is deliberately separate from generic point evaluation: a DGField is
-    discrete coefficient data, so face sampling should reuse the reference
-    tables owned by its DGSpace rather than pass through callable or physical
-    point evaluation.
-    """
-    field.space.assert_same_mesh(test_space)
-    trace_ref = _trace_ref(test_space, trace_space)
-    constant_value = field.constant_value
-    if constant_value is not None:
-        return np.full(
-            (test_space.mesh.num_tri, 3, trace_ref.weights.size),
-            constant_value,
-            dtype=REAL_DTYPE,
-        )
-    basis = dg_field_basis_on_trace_faces(field.space, trace_ref)
-    return np.ascontiguousarray(np.einsum("Ki,fiq->Kfq", field.coeffs, basis, optimize=True))
-
-
-def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: int,
-                            *, normals=None, t=None) -> np.ndarray:
-    """Evaluate geometry, keyword incidence/normal, or legacy positional laws.
-
-    Bind before calling so a TypeError inside a user law is never mistaken for
-    an unsupported signature. Points are flattened in quadrature/face order.
-    Device (CuPy) points and normals yield device ``element``/``local_face``
-    context arrays, so the same law can be evaluated on the GPU.
-    """
-    from hdgfem.runtime.optional import array_module
-    xp = array_module(mapped_points)
-    x, y = mapped_points[..., 0], mapped_points[..., 1]
-    element = xp.broadcast_to(xp.arange(x.shape[0])[:, None], x.shape)
-    local_face = xp.broadcast_to(xp.tile(xp.arange(3), num_face_quads), x.shape)
-    normal = None if normals is None else normals[element, local_face]
-    try:
-        signature = inspect.signature(values)
-    except (TypeError, ValueError):
-        return values(x, y)
-    context = dict(element=element, local_face=local_face, normal=normal)
-    candidates = [((x, y), dict(context, t=t)), ((x, y), context),
-                  ((x, y), {}), ((x, y, element, local_face), {})]
-    for args, kwargs in candidates:
-        try:
-            signature.bind(*args, **kwargs)
-        except TypeError:
-            continue
-        return values(*args, **kwargs)
-    raise TypeError("face callable must accept (x, y), (x, y, K, e), or "
-                    "(x, y, *, element, local_face, normal, t=None)")
-
-
-def _face_quadrature_values_from_scalar_input(
-        values,
-        space: DGSpace,
-        label: str,
-        *,
-        trace_space: DGTraceSpace | None = None,
-    t=None,
-) -> np.ndarray:
-    """Normalize scalar face data to ``(num_elements, 3, num_face_quads)``.
-
-    The advection trace stabilization is allowed to be a scalar, callable,
-    same-space DG field/coefficient array, per-face constants, or already
-    evaluated element-face quadrature values.  This helper reduces those input
-    forms to the single shape used by the vectorized HDG trace contractions.
-    """
-    mesh = space.mesh
-    trace_ref = _trace_ref(space, trace_space)
-    num_face_quads = trace_ref.weights.size
-    if np.isscalar(values):
-        return np.full((mesh.num_tri, 3, num_face_quads), float(values), dtype=REAL_DTYPE)
-
-    if isinstance(values, DGField):
-        return dg_field_values_on_trace_faces(values, space, trace_space=trace_ref)
-
-    if callable(values):
-        face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
-        mapped_points = mesh.map_reference_points(face_points)
-        flat_values = _normalize_callable_values(
-            _evaluate_face_callable(values, mapped_points, num_face_quads, normals=mesh.normals, t=t),
-            mesh.num_tri,
-            face_points.shape[0],
-        )
-        return np.ascontiguousarray(
-            flat_values.reshape(mesh.num_tri, num_face_quads, 3).transpose(0, 2, 1),
-            dtype=REAL_DTYPE,
-        )
-
-    array = np.asarray(values, dtype=REAL_DTYPE)
-    if array.shape == (mesh.num_tri,):
-        return np.ascontiguousarray(np.broadcast_to(array[:, None, None], (mesh.num_tri, 3, num_face_quads)))
-    if array.shape == (mesh.num_tri, 3, num_face_quads):
-        return np.ascontiguousarray(array)
-    if array.shape == (mesh.num_tri, 3):
-        return np.ascontiguousarray(np.broadcast_to(array[:, :, None], (mesh.num_tri, 3, num_face_quads)))
-    if array.shape == space.shape:
-        return _face_quadrature_values_from_scalar_input(
-            space.field(array, name=label),
-            space,
-            label,
-            trace_space=trace_ref,
-        )
-    raise TypeError(
-        f"{label} must be a scalar, callable, DGField, coefficient array with shape "
-        f"{space.shape}, face constants with shape ({mesh.num_tri}, 3), or face "
-        f"quadrature values with shape ({mesh.num_tri}, 3, {num_face_quads}); got {array.shape}"
-    )
-
-
-def advection_trace_stabilization_values(
-        test_space: DGSpace,
-        beta_dot_normal: np.ndarray,
-        stabilization=None,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    r"""Return side-quadrature advection stabilization values.
-
-    ``stabilization=None`` selects the upwind choice
-    :math:`\tau_{K,F}=|\beta_h\cdot n_K|`.  Explicit scalar, callable, DG field,
-    coefficient-array, or already evaluated face data specify absolute tau.
-    ``ScaledUpwind(factor)`` selects ``factor*abs(beta_h.n)``;
-    ``"lax-friedrichs"`` is the factor-two alias. Arrays have shape
-    ``(num_elements, 3, num_face_quads)`` without averaging across an interior
-    edge for these policies. ``"conflict-averaged-upwind"`` instead uses
-    effective velocities from the shared interior double-outflow repair.
-    """
-    trace_ref = _trace_ref(test_space, trace_space)
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
-    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux
-    beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
-    factor = upwind_factor(stabilization)
-    if factor is not None:
-        return np.ascontiguousarray(factor * np.abs(beta_dot_normal))
-    return _face_quadrature_values_from_scalar_input(
-        stabilization,
-        test_space,
-        "advection_stabilization",
-        trace_space=trace_ref,
-    )
-
-
-def advection_trace_weights_from_normal_flux(
-        test_space: DGSpace,
-        beta_dot_normal: np.ndarray,
-        stabilization=None,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    r"""Return the side weights ``tau`` and ``gamma=tau-beta_h\cdot n``.
-
-    ``tau`` multiplies the element-side value ``u_h`` in the trace conservation
-    equation, while ``gamma`` multiplies the trace unknown ``\widehat u_h``.
-    """
-    trace_ref = _trace_ref(test_space, trace_space)
-    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
-    tau = advection_trace_stabilization_values(
-        test_space,
-        beta_dot_normal,
-        stabilization,
-        trace_space=trace_ref,
-    )
-    from hdgfem.solvers.stabilization import effective_advection_normal_flux
-    gamma = tau - effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
-    return np.ascontiguousarray(tau), np.ascontiguousarray(gamma)
+from hdgfem.hdg.trace_maps import _trace_ref
+from hdgfem.hdg.coefficients import _require_normal_flux
+from hdgfem.hdg.coefficients import _advective_normal_flux
 
 
 def _oriented_trace_basis_on_element_sides(
@@ -328,71 +104,6 @@ def _vector_values_on_test_quads(beta: VectorDGField, test_space: DGSpace) -> np
         [component.values_at_ref(test_space.quad_data.Krf_quads) for component in beta.components],
         axis=-1,
     )
-
-
-def _vector_values_on_test_faces(
-        beta: VectorDGField,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    """Evaluate a 2D vector field on ``test_space`` face quadrature points."""
-    if beta.dim != 2:
-        raise ValueError("expected a two-component vector field")
-    trace_ref = _trace_ref(test_space, trace_space)
-    face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
-    num_face_quads = trace_ref.weights.size
-    values = []
-    for component in beta.components:
-        component_values = component.values_at_ref(face_points)
-        component_values = component_values.reshape(test_space.mesh.num_tri, num_face_quads, 3)
-        values.append(np.moveaxis(component_values, 1, 2))
-    return np.stack(values, axis=-1)
-
-
-def _basis_on_test_faces(
-        space: DGSpace,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    """Evaluate ``space`` basis on ``test_space`` reference-face quadrature."""
-    trace_ref = _trace_ref(test_space, trace_space)
-    if space is test_space:
-        return trace_ref.bas_of_bd_quads
-    face_points = _reference_edge_points_from_1d(trace_ref.quads).reshape(-1, 2)
-    num_face_quads = trace_ref.weights.size
-    values = space.basis_at(face_points)
-    return values.reshape(num_face_quads, 3, space.el_dof).transpose(1, 2, 0)
-
-
-def _advective_normal_flux(
-        beta: VectorDGField,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    r"""Evaluate :math:`\beta_h\cdot n` on element-face quadrature."""
-    if beta.dim != 2:
-        raise ValueError("expected a two-component vector field")
-    trace_ref = _trace_ref(test_space, trace_space)
-    beta_space = beta.components[0].space
-    test_space.assert_same_mesh(beta_space)
-    if beta.components[1].space is beta_space:
-        beta_basis = _basis_on_test_faces(beta_space, test_space, trace_space=trace_ref)
-        beta_coeffs = np.empty((2,) + beta.components[0].coeffs.shape, dtype=REAL_DTYPE)
-        beta_coeffs[0] = beta.components[0].coeffs
-        beta_coeffs[1] = beta.components[1].coeffs
-        return np.einsum(
-            "dKi,Kfd,fiq->Kfq",
-            beta_coeffs,
-            test_space.mesh.normals,
-            beta_basis,
-            optimize=["einsum_path", (0, 1, 2)],
-        )
-
-    beta_values = _vector_values_on_test_faces(beta, test_space, trace_space=trace_ref)
-    return np.einsum("Kfqd,Kfd->Kfq", beta_values, test_space.mesh.normals, optimize=True)
 
 
 def advection_mats(test_space: DGSpace, beta: VectorDGField) -> np.ndarray:
@@ -691,16 +402,8 @@ def advection_interior_trace_mass_blocks_from_weight(
     for_element_chunks(build, mesh.num_tri)
     blocks = np.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if inactive_tau is not None:
-        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.hdg.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(blocks, inactive_tau, mesh)
     return blocks
 
 
-def advective_boundary_normal(
-        beta: VectorDGField,
-        test_space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    r"""Evaluate :math:`\beta_h\cdot n` on element-face quadrature points."""
-    return _advective_normal_flux(beta, test_space, trace_space=trace_space)

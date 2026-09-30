@@ -40,7 +40,7 @@ from hdgfem.backends.cupy import (
     diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place,
 )
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
-from hdgfem.backends.raw_cuda import RawCudaBlockSize
+from hdgfem.hdg.cuda.launch import RawCudaBlockSize
 from hdgfem.backends.amgx_errors import (
     as_amgx_capacity_error as _as_amgx_capacity_error,
     destroy_amgx_objects,
@@ -570,7 +570,7 @@ def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_
     )
     result = cp.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if gauge_inactive:
-        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.hdg.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(result, cp.abs(beta_dot_normal), mesh, xp=cp)
     if timings is not None:
         timings["interior_mass"] = timings.get("interior_mass", 0.0) + sync_elapsed(start)
@@ -607,7 +607,7 @@ def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str
 
 def boundary_trace_values_cupy(boundary_condition: Callable, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
     """Evaluate prescribed boundary trace coefficients on the device."""
-    from hdgfem.assembly.hdg import boundary_trace_coefficients
+    from hdgfem.hdg.condensation import boundary_trace_coefficients
     with require_cupy().cuda.Device(cspace.device_id):
         return boundary_trace_coefficients(boundary_condition, cspace.host, trace_space=trace_ref.host,
                                            backend="device", boundary_only=True)
@@ -683,7 +683,11 @@ def assemble_reduced_system_cuda(
     """Assemble the boundary-eliminated advection trace system on device."""
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
-    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import (
+            upwind_factor,
+            effective_advection_normal_flux,
+            is_conflict_averaged_upwind,
+        )
     factor = upwind_factor(advection_stabilization)
     if factor is None:
         raise NotImplementedError("This CUDA wrapper requires an upwind stabilization policy")

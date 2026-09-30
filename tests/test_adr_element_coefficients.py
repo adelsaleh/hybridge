@@ -8,7 +8,7 @@ import pytest
 from hdgfem import (DGMesh, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref,
                     rectangle_mesh, solve_advection_diffusion_reaction_hdg)
 from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
-from hdgfem.assembly.matrices_numpy import _face_quadrature_values_from_scalar_input
+from hdgfem.hdg.coefficients import _face_quadrature_values_from_scalar_input
 
 TABLES = ('beta_dot_normal', 'beta_values', 'source_rhs', 'reaction_values', 'tau_total', 'gamma')
 
@@ -171,9 +171,9 @@ def test_device_preparation_is_resident_and_matches_host(cp, basis, order):
 
 
 def test_device_source_and_reaction_arrays(cp):
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.backends.adr_coefficients_cupy import _source_moments
-    from hdgfem.backends.coefficients_cupy import volume_samples_cupy
+    from hdgfem.hdg.coefficients_device import volume_samples_cupy
     space = distorted_space(3)
     values = space.project_callable(lambda x, y: 1. + x*y).values()
     moments = hdg.source_moments(values, space)

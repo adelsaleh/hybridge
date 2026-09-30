@@ -11,6 +11,11 @@ import numpy as np
 
 from hdgfem.core.space import DGSpace, DGField
 
+from hdgfem.core.space import DGTraceSpace
+from hdgfem.hdg.coefficients import _face_quadrature_values_from_scalar_input
+from hdgfem.hdg.trace_maps import _trace_ref
+from hdgfem.hdg.coefficients import _require_normal_flux
+
 
 DomainLength = float | Literal["auto"] | None
 
@@ -292,3 +297,59 @@ def gauge_inactive_advection_trace_blocks(blocks, tau, mesh, *, xp=np):
 
 __all__ += ["is_conflict_averaged_upwind", "conflict_averaged_normal_pair",
             "effective_advection_normal_flux", "gauge_inactive_advection_trace_blocks"]
+
+
+def advection_trace_stabilization_values(
+        test_space: DGSpace,
+        beta_dot_normal: np.ndarray,
+        stabilization=None,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> np.ndarray:
+    r"""Return side-quadrature advection stabilization values.
+
+    ``stabilization=None`` selects the upwind choice
+    :math:`\tau_{K,F}=|\beta_h\cdot n_K|`.  Explicit scalar, callable, DG field,
+    coefficient-array, or already evaluated face data specify absolute tau.
+    ``ScaledUpwind(factor)`` selects ``factor*abs(beta_h.n)``;
+    ``"lax-friedrichs"`` is the factor-two alias. Arrays have shape
+    ``(num_elements, 3, num_face_quads)`` without averaging across an interior
+    edge for these policies. ``"conflict-averaged-upwind"`` instead uses
+    effective velocities from the shared interior double-outflow repair.
+    """
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
+    beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
+    factor = upwind_factor(stabilization)
+    if factor is not None:
+        return np.ascontiguousarray(factor * np.abs(beta_dot_normal))
+    return _face_quadrature_values_from_scalar_input(
+        stabilization,
+        test_space,
+        "advection_stabilization",
+        trace_space=trace_ref,
+    )
+
+
+def advection_trace_weights_from_normal_flux(
+        test_space: DGSpace,
+        beta_dot_normal: np.ndarray,
+        stabilization=None,
+        *,
+        trace_space: DGTraceSpace | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Return the side weights ``tau`` and ``gamma=tau-beta_h\cdot n``.
+
+    ``tau`` multiplies the element-side value ``u_h`` in the trace conservation
+    equation, while ``gamma`` multiplies the trace unknown ``\widehat u_h``.
+    """
+    trace_ref = _trace_ref(test_space, trace_space)
+    beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
+    tau = advection_trace_stabilization_values(
+        test_space,
+        beta_dot_normal,
+        stabilization,
+        trace_space=trace_ref,
+    )
+    gamma = tau - effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
+    return np.ascontiguousarray(tau), np.ascontiguousarray(gamma)

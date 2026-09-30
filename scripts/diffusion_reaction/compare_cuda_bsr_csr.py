@@ -60,7 +60,7 @@ from hdgfem import (
 )
 from hdgfem.runtime.optional import require_cupy
 from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
-from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 

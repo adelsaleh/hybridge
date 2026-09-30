@@ -3,8 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly import hdg as hdg_assembly
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import condensation as hdg_assembly
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
+import hdgfem.hdg.stabilization as hdg_stabilization
+import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.core.mass as core_mass
 from hdgfem.backends import UnsupportedBackendConfigurationError
 from hdgfem.backends.numba import (
@@ -48,7 +51,7 @@ def test_dg_stabilization_uses_field_space_reference_tables(monkeypatch) -> None
     field_space = DGSpace(mesh, 2, basis_type="dub_orth")
     tau_h = field_space.project_callable(lambda x, y: 3.0 + x - 0.25 * y, name="tau_h")
     trace_space = test_space.trace_space("legendre-modal")
-    basis = hdg_mats.dg_field_basis_on_trace_faces(field_space, trace_space)
+    basis = hdg_coefficients.dg_field_basis_on_trace_faces(field_space, trace_space)
     expected = np.ascontiguousarray(np.einsum("Ki,fiq->Kfq", tau_h.coeffs, basis, optimize=True))
 
     def fail_generic_evaluation(*_args, **_kwargs):
@@ -56,7 +59,7 @@ def test_dg_stabilization_uses_field_space_reference_tables(monkeypatch) -> None
 
     monkeypatch.setattr(DGField, "values_at_ref", fail_generic_evaluation)
     beta_dot_normal = np.zeros_like(expected)
-    actual = hdg_mats.advection_trace_stabilization_values(
+    actual = hdg_stabilization.advection_trace_stabilization_values(
         test_space,
         beta_dot_normal,
         tau_h,
@@ -75,7 +78,7 @@ def test_context_aware_callable_stabilization_receives_element_and_face_ids() ->
     def tau(x, y, element, face):
         return 4.0 + 0.0 * x * y + element + 0.25 * face
 
-    actual = hdg_mats.advection_trace_stabilization_values(
+    actual = hdg_stabilization.advection_trace_stabilization_values(
         space,
         np.zeros(shape, dtype=np.float64),
         tau,
@@ -99,8 +102,8 @@ def _numpy_weighted_advection_trace_system(
         zero_boundary_flux: bool = False,
 ):
     trace_space = space.trace_space(trace_basis)
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space)
-    tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
+    beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_h, space, trace_space=trace_space)
+    tau_face, gamma_face = hdg_stabilization.advection_trace_weights_from_normal_flux(
         space,
         beta_dot_normal,
         trace_space=trace_space,
@@ -171,8 +174,8 @@ def test_discontinuous_beta_uses_side_weighted_trace_mass() -> None:
         name="beta_h",
     )
 
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
-    _, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(space, beta_dot_normal)
+    beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_h, space)
+    _, gamma_face = hdg_stabilization.advection_trace_weights_from_normal_flux(space, beta_dot_normal)
     side_blocks = hdg_mats.advection_interior_trace_mass_blocks_from_weight(space, gamma_face)
 
     assert side_blocks.shape == (mesh.interior_elements.size, space.quad_data.edg_dof, space.quad_data.edg_dof)
@@ -237,7 +240,7 @@ def test_numba_local_assembly_matches_numpy_projected_coefficients() -> None:
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth")
     beta_h, reaction_h, _, _ = _projected_test2_fields(space)
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_h, space)
 
     numba_data = assemble_local_advection_reaction_numba(
         space,

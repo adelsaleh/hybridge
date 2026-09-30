@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly import matrices_numpy as mats
+from hdgfem.hdg import matrices as mats
 from hdgfem.runtime import threads as ht
 
 

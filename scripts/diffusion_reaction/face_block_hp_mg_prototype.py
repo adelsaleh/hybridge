@@ -34,7 +34,7 @@ from hdgfem.linalg.face_hp_multigrid import (
     symmetric_scalar_amgx_config,
 )
 from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
-from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 

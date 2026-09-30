@@ -13,7 +13,7 @@ from hdgfem.assembly.face_dense import (
     face_dense_matvec,
     face_dense_to_dense,
 )
-from hdgfem.assembly.hdg import block_source_moments, free_trace_dofs
+from hdgfem.hdg.condensation import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.system import eliminate_known_dofs

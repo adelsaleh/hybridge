@@ -526,7 +526,7 @@ def _summarize_solve(
         ("trace dofs", result.trace.size, ",d"),
     ]
     if config.diffusion_stabilization_mode == "global-length":
-        from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+        from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 
         policy = GlobalLengthDiffusion(
             gamma_d=config.diffusion_stabilization_gamma,
@@ -790,7 +790,7 @@ def _main() -> None:
     from hdgfem.core.field_ops import coefficient_field
     from hdgfem.core.space import DGSpace
     from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
-    from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+    from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 
     case = case_definition_by_key(config.case)
     problem = case.build(**config.case_params)

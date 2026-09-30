@@ -1021,7 +1021,7 @@ def evaluate_hdg_scalar_error(
     the selected backend and the space's quadrature. Device-backed fields
     stay resident; only reduced scalar results are copied to the host.
     """
-    from hdgfem.assembly.hdg_gram import ScalarHDGGram
+    from hdgfem.hdg.gram import ScalarHDGGram
 
     space = field.space
     if backend not in {"auto", "host", "device"}:

@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.core.space import DGSpace
 from hdgfem.kernels import NUMBA_AVAILABLE
 from scripts.diffusion_reaction.experiments.test7_fused_kernels import (
@@ -16,12 +16,11 @@ from scripts.diffusion_reaction.experiments.test7_fused_kernels import (
 )
 from hdgfem.backends.numba import (
     NumbaDiffusionTraceAssembly,
-    _boundary_reduction_maps,
     _interior_side_index,
     _normalize_diffusion_stabilization,
-    _reduction_with_system,
     _reference_diffusion_derivative_matrices,
 )
+from hdgfem.hdg.trace_maps import _boundary_reduction_maps, _reduction_with_system
 
 
 def _test7_frequencies(m: int = 1, n: int = 1) -> tuple[float, float]:

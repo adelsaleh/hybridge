@@ -29,6 +29,9 @@ except ImportError:  # pragma: no cover
 
 from hdgfem.core.space import DGSpace
 
+from hdgfem.core.space import DGField
+
+
 
 @dataclass(frozen=True)
 class HDGGram:
@@ -1044,4 +1047,27 @@ __all__ = [
     "build_flux_jump_gram_inverse",
     "build_ilu_bicgstab_inverse",
     "build_krylov_hdg_gram_inverse",
+    "field_l2_norm",
 ]
+
+
+def field_l2_norm(field: DGField) -> float:
+    """Return a physical L2 norm without materializing resident device coefficients.
+
+    Device reductions reuse the package's scalar HDG Gram and geometry cache;
+    only the resulting scalar is transferred to the host.
+    """
+    coefficients = field._first_device_coefficients()
+    if coefficients is None:
+        return field.l2_norm()
+    from hdgfem.runtime.optional import require_cupy
+    cp = require_cupy()
+    device = int(coefficients.device.id)
+    cache = getattr(field.space, "_field_l2_gram_cache", None)
+    if cache is None:
+        cache = {}
+        object.__setattr__(field.space, "_field_l2_gram_cache", cache)
+    with cp.cuda.Device(device):
+        if device not in cache:
+            cache[device] = ScalarHDGGram(field.space, backend="device")
+        return float(np.sqrt(cache[device].l2_squared(coefficients)))

@@ -41,8 +41,12 @@ import numpy as np
 from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
 
 from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
-from hdgfem.backends.raw_cuda_local import (RAW_TRACE_ORIENTATION_HELPERS, RAW_COOPERATIVE_SOLVES,
-                             RAW_WARP_COLUMN_SOLVES, checked_warp_lu_source)
+from hdgfem.hdg.cuda.raw_source import (
+    RAW_TRACE_ORIENTATION_HELPERS,
+    RAW_COOPERATIVE_SOLVES,
+    RAW_WARP_COLUMN_SOLVES,
+    checked_warp_lu_source,
+)
 
 
 _MASS_ALGEBRA = r'''
@@ -712,16 +716,20 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     for constant tensors), and ``"none"`` refactors everything there. Arrays
     and the kernel follow the selected precision (``HDGFEM_PRECISION``).
     """
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
     from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.advection_cuda import CudaAdvectionAssembly
     from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.backends.advection_raw_cuda import build_reduced_csr_pattern_raw
-    from hdgfem.backends.diffusion_raw_cuda import (_edge_to_solve_edge, _interior_side_index,
-                                    _side_flux_offsets, validate_raw_cuda_supported)
-    from hdgfem.backends.numba import _trace_orientation_mode
+    from hdgfem.hdg.cuda.pattern import build_reduced_csr_pattern_raw
+    from hdgfem.hdg.trace_maps import (
+            _edge_to_solve_edge,
+            _interior_side_index,
+            _side_flux_offsets,
+        )
+    from hdgfem.backends.diffusion_raw_cuda import validate_raw_cuda_supported
+    from hdgfem.hdg.trace_maps import _trace_orientation_mode
     from hdgfem.backends.advection_diffusion_reaction_raw_cuda import RawADRTraceOperator
 
     start = time.perf_counter()
@@ -892,7 +900,7 @@ def reconstruct_tensor_operator(operator, trace, *, block_size="auto"):
     otherwise local factors are rebuilt using the same kernel algebra.
     """
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
+    from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
     cp=require_cupy()
     local=operator.reconstruction_data
     if local is None:

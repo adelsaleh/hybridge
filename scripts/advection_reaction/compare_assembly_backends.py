@@ -116,8 +116,8 @@ def _load_hdgfem() -> None:
 
     with _suppress_output_fds():
         import numpy as _np
-        from hdgfem.assembly import hdg as _hdg_assembly
-        from hdgfem.assembly import matrices_numpy as _hdg_mats
+        from hdgfem.hdg import condensation as _hdg_assembly
+        from hdgfem.hdg import matrices as _hdg_mats
         from hdgfem.backends.numba import (
             assemble_projected_diffusion_trace_system_eliminated_numba as _assemble_projected_diffusion_trace_system_eliminated_numba,
             assemble_projected_trace_system_eliminated_numba as _assemble_projected_trace_system_eliminated_numba,

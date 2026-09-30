@@ -10,7 +10,7 @@ from hdgfem.backends.numba import (
     assemble_projected_diffusion_trace_rhs_eliminated_numba,
     reconstruct_projected_diffusion_local_unknowns_numba,
 )
-from hdgfem.kernels.common import cholesky_factor_inplace, cholesky_solve_inplace
+from hdgfem.hdg.numba_common import cholesky_factor_inplace, cholesky_solve_inplace
 from hdgfem.linalg import expand_known_dofs
 
 
@@ -151,7 +151,7 @@ def test_stateful_solver_numpy_parity_and_invalidation(kind, basis, order, assem
 @pytest.mark.parametrize('order', [1, 3, 6])
 def test_factor_action_against_numpy_schur(kind, order):
     from hdgfem.solvers.diffusion_reaction import _local_solver_pre_mats
-    from hdgfem.kernels.common import lu_solve_inplace
+    from hdgfem.hdg.numba_common import lu_solve_inplace
     space = DGSpace(rectangle_mesh(2, 1, xlim=(-2., 1.), ylim=(-0.3, 0.7)), order)
     reaction = space.project_callable(lambda x, y: 0.1 + x * x)
     cache = build_diffusion_schur_cache_numba(reaction, 0.7, space, factor_kind=kind)

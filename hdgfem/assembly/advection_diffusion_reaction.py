@@ -7,8 +7,10 @@ import time
 
 import numpy as np
 
-from hdgfem.assembly import hdg
-from hdgfem.assembly import matrices_numpy as matrices
+from hdgfem.hdg import condensation as hdg
+from hdgfem.hdg import matrices
+import hdgfem.hdg.coefficients as hdg_coefficients
+import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.runtime.threads import parallel_copy
 from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
@@ -19,8 +21,8 @@ from hdgfem.solvers.diffusion_reaction import (
     diffusion_inverse_mass_blocks,
     diffusion_trace_lift,
 )
-from hdgfem.solvers.stabilization import resolve_diffusion_stabilization
-from hdgfem.backends.numba import beta_values_on_volume, reaction_values_on_volume
+from hdgfem.hdg.stabilization import resolve_diffusion_stabilization
+from hdgfem.hdg.coefficients import beta_values_on_volume, reaction_values_on_volume
 
 
 @dataclass(frozen=True)
@@ -128,11 +130,11 @@ def normalize_diffusion_stabilization(
         tau = stabilization
     else:
         if device:
-            from hdgfem.backends.coefficients_cupy import face_samples_cupy
+            from hdgfem.hdg.coefficients_device import face_samples_cupy
             tau = face_samples_cupy(stabilization, space, label="diffusion_stabilization",
                                     trace_space=trace_space, t=t)
         else:
-            tau = matrices._face_quadrature_values_from_scalar_input(
+            tau = hdg_coefficients._face_quadrature_values_from_scalar_input(
                 stabilization, space, "diffusion_stabilization", trace_space=trace_space, t=t)
         # Preserve the established public shape for incidence-constant inputs.
         if not callable(stabilization) and not hasattr(stabilization, "space"):
@@ -155,7 +157,7 @@ def diffusion_stabilization_on_trace(prepared, space, trace_space, *, device=Fal
     xp = np
     if device:
         from hdgfem.runtime.optional import require_cupy
-        from hdgfem.backends.coefficients_cupy import face_samples_cupy
+        from hdgfem.hdg.coefficients_device import face_samples_cupy
         xp = require_cupy()
         values = face_samples_cupy(law, space, label="diffusion_stabilization",
                                   trace_space=trace_space, t=prepared.sample_time)
@@ -163,7 +165,7 @@ def diffusion_stabilization_on_trace(prepared, space, trace_space, *, device=Fal
         if hasattr(law, '__cuda_array_interface__'):
             from hdgfem.runtime.optional import asnumpy
             law = asnumpy(law)
-        values = matrices._face_quadrature_values_from_scalar_input(
+        values = hdg_coefficients._face_quadrature_values_from_scalar_input(
             law, space, "diffusion_stabilization", trace_space=trace_space, t=prepared.sample_time)
     if xp.any(~xp.isfinite(values)) or xp.any(values <= 0.):
         raise ValueError("diffusion stabilization must be finite and strictly positive")
@@ -203,8 +205,8 @@ def _normal_flux(beta, space: DGSpace, trace_space: DGTraceSpace, *, t=None) -> 
     if isinstance(beta, ElementCoefficient):
         return element_beta_normal(beta, space, trace_space, t=t)
     if isinstance(beta, VectorDGField):
-        return matrices.advective_boundary_normal(beta, space, trace_space=trace_space)
-    from hdgfem.solvers.advection_reaction import _prepare_beta_data
+        return hdg_coefficients.advective_boundary_normal(beta, space, trace_space=trace_space)
+    from hdgfem.hdg.coefficients import _prepare_beta_data
 
     _field, values, _callables = _prepare_beta_data(beta, space, trace_space=trace_space)
     return np.ascontiguousarray(values)
@@ -244,7 +246,7 @@ def prepare_adr_data(
             static[name] = build()
         return static[name]
     beta_dot_normal = _normal_flux(beta, space, trace_ref, t=t)
-    tau_advection = matrices.advection_trace_stabilization_values(
+    tau_advection = hdg_stabilization.advection_trace_stabilization_values(
         space,
         beta_dot_normal,
         advection_stabilization,
@@ -301,7 +303,7 @@ def prepare_adr_data(
     else:
         u_boundary_mass = normal_mass_x = normal_mass_y = None
         element_boundary = trace_lift = interior_gamma_mass = None
-    from hdgfem.solvers.diffusion_reaction import _reference_derivative_matrices
+    from hdgfem.hdg.reference import _reference_derivative_matrices
 
     d0_reference, d1_reference = cached("reference_derivatives", lambda: _reference_derivative_matrices(space))
     return ADRPreparedData(

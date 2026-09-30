@@ -734,6 +734,17 @@ Execution protocol (approved 2026-09-29):
     helpers.
 
   This removes the `assembly → solvers` and `backends → solvers` imports.
+
+  Progress 2026-09-30:
+  - `hdg/` now holds `condensation`, `coefficients` (plus `_device`),
+    `stabilization` (with the τ/γ evaluators), `trace_maps`, `reference`,
+    `matrices`, `gram`, `numba_common`, and `cuda/{launch, raw_source,
+    pattern}`.
+  - Duplicate trace-map and compile helpers are removed, and
+    `backends/numpy.py` is deleted.
+  - Layering violations are down to 22.
+  - Still open: the single CUDA source library and A4, which follow the family
+    moves.
 - [ ] Phase 4: consolidate `linalg/`:
   - `amgx/`, holding the device AMGX solver and retries (moved out of
     `backends/advection_cuda.py`), host AMGX, AMGX config and errors;

@@ -98,7 +98,7 @@ class PoissonTauRecovery:
 
     def increase(self, solver, failure, *, step_time):
         """Increase stabilization through the solver API, or propagate exhaustion."""
-        from hdgfem.solvers.stabilization import resolve_diffusion_stabilization
+        from hdgfem.hdg.stabilization import resolve_diffusion_stabilization
 
         old = float(resolve_diffusion_stabilization(
             solver.options.stabilization, solver.options.diffusion, solver.space))

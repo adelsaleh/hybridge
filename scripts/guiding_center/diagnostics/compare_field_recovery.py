@@ -11,7 +11,7 @@ import json
 
 import numpy as np
 
-from hdgfem.assembly.hdg import block_source_moments, element_traces
+from hdgfem.hdg.condensation import block_source_moments, element_traces
 from hdgfem.core.field_ops import project_callable_to_trace
 from hdgfem.core.mesh import DGMesh
 from hdgfem.core.space import DGSpace

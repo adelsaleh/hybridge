@@ -33,7 +33,7 @@ from hdgfem.core.device import (
     clear_cupy_space_cache,
 )
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
+from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh
 from hdgfem.core.space import DGSpace, VectorDGField
 from scripts.advection_reaction.cases import case_definition_by_key

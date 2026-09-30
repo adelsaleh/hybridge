@@ -58,7 +58,7 @@ def field_on_volume_cupy(field: DGField, space: DGSpace):
 
 def field_on_faces_cupy(field: DGField, space: DGSpace, trace_space: DGTraceSpace):
     """Evaluate ``field`` on the element-side trace quadrature, shape ``(K, 3, nfq)``."""
-    from hdgfem.assembly.matrices_numpy import _basis_on_test_faces
+    from hdgfem.hdg.coefficients import _basis_on_test_faces
 
     cp = require_cupy()
     field.space.assert_same_mesh(space)
@@ -75,7 +75,7 @@ def field_on_faces_cupy(field: DGField, space: DGSpace, trace_space: DGTraceSpac
 
 def volume_samples_cupy(value, space: DGSpace, *, label: str):
     """Device twin of ``_component_quadrature_values``: samples of shape ``(K, nq)``."""
-    from hdgfem.solvers.diffusion_reaction import _component_quadrature_values
+    from hdgfem.hdg.coefficients import _component_quadrature_values
 
     cp = require_cupy()
     num_elements, num_points = space.mesh.num_tri, space.quad_data.Krf_w.size
@@ -95,7 +95,10 @@ def volume_samples_cupy(value, space: DGSpace, *, label: str):
 
 def face_samples_cupy(value, space: DGSpace, *, label: str, trace_space: DGTraceSpace, t=None):
     """Device twin of ``_face_quadrature_values_from_scalar_input``: shape ``(K, 3, nfq)``."""
-    from hdgfem.assembly.matrices_numpy import _evaluate_face_callable, _face_quadrature_values_from_scalar_input
+    from hdgfem.hdg.coefficients import (
+            _evaluate_face_callable,
+            _face_quadrature_values_from_scalar_input,
+        )
 
     cp = require_cupy()
     num_elements, nfq = space.mesh.num_tri, trace_space.weights.size

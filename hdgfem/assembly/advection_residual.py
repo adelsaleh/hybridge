@@ -67,7 +67,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         if boundary_mode not in {"zero-flux", "eliminate"}:
             raise ValueError("explicit HDG residual requires zero-flux or eliminated boundaries")
         super().__init__(space, trace_basis=trace_basis, backend=backend)
-        from hdgfem.solvers.stabilization import upwind_factor
+        from hdgfem.hdg.stabilization import upwind_factor
         if upwind_factor(advection_stabilization) != 1.0:
             raise ValueError("residual requires upwind or conflict-averaged-upwind stabilization")
         self.advection_stabilization = advection_stabilization
@@ -155,7 +155,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             return
         if boundary is None:
             raise ValueError("eliminated residual requires prescribed boundary data")
-        from hdgfem.assembly.hdg import boundary_trace_coefficients
+        from hdgfem.hdg.condensation import boundary_trace_coefficients
         self.full_trace[self.mesh.bnd_edges_inds] = boundary_trace_coefficients(
             boundary, self.space, trace_space=self.trace_host, backend=self.backend, boundary_only=True,
         )
@@ -193,7 +193,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             self.beta_volume[:, :, component] = b @ q.bas_of_quads
             self.beta_face[:, :, :, component] = xp.einsum("ki,fiq->kfq", b, self.face_basis)
         self.normal_flux[:] = xp.einsum("kfqd,kfd->kfq", self.beta_face, mesh.normals)
-        from hdgfem.solvers.stabilization import effective_advection_normal_flux
+        from hdgfem.hdg.stabilization import effective_advection_normal_flux
         self.normal_flux[:] = effective_advection_normal_flux(
             self.normal_flux, mesh, self.advection_stabilization, xp=xp)
         self.normal_flux *= self.active_faces[:, :, None]

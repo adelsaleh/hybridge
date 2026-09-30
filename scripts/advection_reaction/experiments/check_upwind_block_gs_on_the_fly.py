@@ -40,7 +40,8 @@ from scipy.sparse.linalg import bicgstab
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
@@ -334,7 +335,7 @@ def active_edges_for_ordering(space: DGSpace, boundary_mode: str):
 def build_ordering(args, space: DGSpace, beta_h) -> tuple[GraphOrderingResult, float, float]:
     """Compute beta-normal flux data and the tested upwind-SCC edge ordering."""
     flux_start = time.perf_counter()
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_h, space)
     flux_seconds = time.perf_counter() - flux_start
     ordering_start = time.perf_counter()
     ordering = upwind_scc_trace_ordering(

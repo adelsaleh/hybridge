@@ -1,6 +1,6 @@
 import pytest
 
-from hdgfem.backends.raw_cuda import (
+from hdgfem.hdg.cuda.launch import (
     recommended_raw_cuda_block_size,
     resolve_raw_cuda_block_size,
     triangle_element_dof,

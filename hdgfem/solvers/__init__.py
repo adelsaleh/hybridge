@@ -58,7 +58,7 @@ def __getattr__(name: str):
     elif name in _DIFFUSION_EXPORTS:
         module = import_module(".diffusion_reaction", __name__)
     elif name in _STABILIZATION_EXPORTS:
-        module = import_module(".stabilization", __name__)
+        module = import_module("hdgfem.hdg.stabilization")
     elif name in _CANONICAL_MODULES:
         module = import_module(_CANONICAL_MODULES[name], __name__)
         globals()[name] = module

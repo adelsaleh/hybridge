@@ -43,33 +43,16 @@ SIBLINGS = {"hdgfem.transport", "hdgfem.mixed"}
 
 ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
     {
-        ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.backends.coefficients_cupy"),
-        ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.backends.numba"),
-        ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.solvers.advection_reaction"),
         ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.solvers.stabilization"),
-        ("hdgfem.assembly.advection_residual", "hdgfem.solvers.stabilization"),
         ("hdgfem.assembly.diffusion_coefficients", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.assembly.flux_recovery", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.assembly.matrices_numpy", "hdgfem.solvers.stabilization"),
-        ("hdgfem.backends.adr_coefficients_cupy", "hdgfem.solvers.advection_reaction"),
-        ("hdgfem.backends.adr_coefficients_cupy", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.adr_coefficients_cupy", "hdgfem.solvers.stabilization"),
         ("hdgfem.backends.advection_cuda", "hdgfem.io.config"),
-        ("hdgfem.backends.advection_cuda", "hdgfem.solvers.stabilization"),
         ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.advection_diffusion_reaction"),
         ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.advection_raw_cuda", "hdgfem.solvers.stabilization"),
-        ("hdgfem.backends.advection_tsle_bsr", "hdgfem.solvers.stabilization"),
-        ("hdgfem.backends.coefficients_cupy", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.cupy", "hdgfem.solvers.stabilization"),
         ("hdgfem.backends.diffusion_cupy", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.backends.diffusion_flux_recovery_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.backends.diffusion_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.numba", "hdgfem.solvers.stabilization"),
-        ("hdgfem.core.field_ops", "hdgfem.assembly.hdg"),
-        ("hdgfem.core.field_ops", "hdgfem.assembly.hdg_gram"),
-        ("hdgfem.core.space", "hdgfem.assembly.matrices_numpy"),
+        ("hdgfem.core.space", "hdgfem.hdg.matrices"),
         ("hdgfem.diagnostics", "hdgfem.io.plot"),
         ("hdgfem.linalg.additive_schwarz", "hdgfem.assembly.face_dense"),
         ("hdgfem.linalg.block_jacobi", "hdgfem.assembly.face_dense"),
@@ -81,7 +64,7 @@ ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
         ("hdgfem.linalg.pardiso_runtime", "hdgfem.kernels.sparse_pattern"),
         ("hdgfem.linalg.polynomial", "hdgfem.assembly.face_dense"),
         ("hdgfem.linalg.system", "hdgfem.backends.cupy"),
-        ("hdgfem.linalg.transport_diagnostics", "hdgfem.solvers.stabilization"),
+        ("hdgfem.linalg.transport_diagnostics", "hdgfem.hdg.stabilization"),
     }
 )
 

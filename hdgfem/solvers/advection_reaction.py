@@ -19,16 +19,18 @@ from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.backends.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
     validate_advection_backend_configuration,
 )
-from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
 from hdgfem.backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
 from hdgfem.backends.advection_raw_cuda import RawAdvectionFactorWorkspace
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
+import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
 from hdgfem.linalg.system import (
     KnownDofReduction,
@@ -46,7 +48,12 @@ from hdgfem.linalg.ordering import (
     save_upwind_reordered_matrix_patterns,
     upwind_scc_trace_ordering,
 )
-from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from hdgfem.hdg.coefficients import (
+    _is_callable_beta,
+    _normalize_coefficient_values,
+    _prepare_beta_data,
+)
 
 
 ReturnKey = Literal[
@@ -229,21 +236,6 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
     return result, elapsed
 
 
-def _normalize_coefficient_values(values, space: DGSpace, num_points: int, label: str) -> np.ndarray:
-    """Normalize scalar coefficient samples to ``(num_elements, num_points)``."""
-    values = np.asarray(values, dtype=REAL_DTYPE)
-    if values.shape == (space.mesh.num_tri, num_points):
-        return values
-    if values.shape == (num_points,):
-        return np.broadcast_to(values[None, :], (space.mesh.num_tri, num_points))
-    if values.ndim == 0:
-        return np.full((space.mesh.num_tri, num_points), float(values), dtype=REAL_DTYPE)
-    raise ValueError(
-        f"{label} must return a scalar, shape ({num_points},), or shape "
-        f"({space.mesh.num_tri}, {num_points}); got {values.shape}"
-    )
-
-
 def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSpace) -> np.ndarray:
     """Evaluate callable advection coefficients on solution volume quadrature."""
     points = space.mapped_quads()
@@ -264,50 +256,6 @@ def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSp
     return values
 
 
-def _reference_edge_points_from_trace(trace_space: DGTraceSpace) -> np.ndarray:
-    """Map trace-space 1D edge quadrature nodes to reference-triangle faces."""
-    t = np.asarray(trace_space.quads, dtype=REAL_DTYPE)
-    return np.ascontiguousarray(
-        np.stack(
-            (
-                np.stack((t, -np.ones_like(t)), axis=1),
-                np.stack((-t, t), axis=1),
-                np.stack((-np.ones_like(t), -t), axis=1),
-            ),
-            axis=1,
-        )
-    )
-
-
-def _callable_beta_normal_flux(
-        beta: tuple[Callable, Callable],
-        space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> np.ndarray:
-    r"""Evaluate :math:`\beta\cdot n` on element-face quadrature."""
-    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-    face_points = _reference_edge_points_from_trace(trace_ref).reshape(-1, 2)
-    mapped_points = space.mesh.map_reference_points(face_points)
-    num_face_quads = trace_ref.weights.size
-    num_flat_points = face_points.shape[0]
-    beta_values = np.empty((space.mesh.num_tri, num_flat_points, 2), dtype=REAL_DTYPE)
-    beta_values[..., 0] = _normalize_coefficient_values(
-        beta[0](mapped_points[:, :, 0], mapped_points[:, :, 1]),
-        space,
-        num_flat_points,
-        "beta[0]",
-    )
-    beta_values[..., 1] = _normalize_coefficient_values(
-        beta[1](mapped_points[:, :, 0], mapped_points[:, :, 1]),
-        space,
-        num_flat_points,
-        "beta[1]",
-    )
-    beta_values = beta_values.reshape(space.mesh.num_tri, num_face_quads, 3, 2).transpose(0, 2, 1, 3)
-    return np.einsum("Kfqd,Kfd->Kfq", beta_values, space.mesh.normals, optimize=True)
-
-
 def _callable_advection_mats(space: DGSpace, beta: tuple[Callable, Callable]) -> np.ndarray:
     r"""Assemble advection matrices from callable coefficients without projection."""
     beta_values = _callable_beta_values_on_volume(beta, space)
@@ -321,35 +269,6 @@ def _callable_advection_mats(space: DGSpace, beta: tuple[Callable, Callable]) ->
         space.quad_data.Krf_w,
         optimize=["einsum_path", (0, 1), (0, 2), (0, 2), (0, 1)],
     )
-
-
-def _is_callable_beta(beta) -> bool:
-    """Return ``True`` for a two-component callable advection coefficient."""
-    return (
-        isinstance(beta, (tuple, list))
-        and len(beta) == 2
-        and not any(isinstance(component, DGField) for component in beta)
-        and all(callable(component) for component in beta)
-    )
-
-
-def _as_beta_field(beta, space: DGSpace) -> VectorDGField:
-    """Normalize DG advection coefficients without projecting callables."""
-    if isinstance(beta, VectorDGField):
-        if beta.dim != 2:
-            raise ValueError("advection field must have two components")
-        beta.components[0].space.assert_same_mesh(space)
-        beta.components[1].space.assert_same_mesh(space)
-        return beta
-    if _is_callable_beta(beta):
-        raise TypeError("callable beta is evaluated directly and should not be converted to a DG field")
-    try:
-        return (space * space).field(beta, name="beta_h")
-    except (TypeError, ValueError) as exc:
-        raise TypeError(
-            "beta must be a tuple of two callables, a two-component VectorDGField, "
-            "a tuple/list of two DGField or coefficient arrays, or a compatible coefficient array"
-        ) from exc
 
 
 def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
@@ -394,23 +313,6 @@ def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> Ve
         f"assembly_backend='{backend}' requires beta to be a VectorDGField; "
         "wrap coefficient data with (space * space).field(...)."
     )
-
-
-def _prepare_beta_data(
-        beta,
-        space: DGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> tuple[VectorDGField | None, np.ndarray, tuple[Callable, Callable] | None]:
-    """Return DG beta data, normal fluxes, and callable beta data for assembly."""
-    trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-    if _is_callable_beta(beta):
-        beta_callables = (beta[0], beta[1])
-        return None, _callable_beta_normal_flux(beta_callables, space, trace_space=trace_ref), beta_callables
-
-    beta_field = _as_beta_field(beta, space)
-    beta_normal_flux = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
-    return beta_field, beta_normal_flux, None
 
 
 class AdvectionReactionHDGSolver:
@@ -1197,7 +1099,11 @@ def solve_advection_reaction_hdg(
         or matrix_pattern_dir is not None
         or any(key in want for key in ("matrix_rows", "matrix_cols", "matrix_data"))
     )
-    from hdgfem.solvers.stabilization import is_lax_friedrichs, ScaledUpwind, is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import (
+            is_lax_friedrichs,
+            ScaledUpwind,
+            is_conflict_averaged_upwind,
+        )
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
         operation=operation,
@@ -1409,7 +1315,7 @@ def solve_advection_reaction_hdg(
             beta_dot_normal, beta_flux_time = _timed_call(
                 "assembling normal flux for trace ordering",
                 verbosity,
-                lambda: hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space_host),
+                lambda: hdg_coefficients.advective_boundary_normal(beta_h, space, trace_space=trace_space_host),
                 level=2,
             )
             preparation += beta_flux_time
@@ -1781,7 +1687,7 @@ def solve_advection_reaction_hdg(
                 flush=True,
             )
     else:
-        tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
+        tau_face, gamma_face = hdg_stabilization.advection_trace_weights_from_normal_flux(
             space,
             beta_dot_normal,
             advection_stabilization,

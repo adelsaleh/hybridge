@@ -25,13 +25,13 @@ from typing import Any, Literal
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.backends.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
     validate_diffusion_backend_configuration,
 )
-from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
 from hdgfem.core.projection import scalar_moments_from_values
 from hdgfem.linalg.system import (
     KnownDofReduction,
@@ -43,13 +43,18 @@ from hdgfem.linalg.system import (
     solve_global_system,
 )
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
-from hdgfem.solvers.stabilization import resolve_diffusion_stabilization
+from hdgfem.hdg.stabilization import resolve_diffusion_stabilization
 
 try:  # pragma: no cover - availability depends on the runtime environment.
     from numba import njit, prange
 except ImportError:  # pragma: no cover
     njit = None
     prange = range
+from hdgfem.hdg.coefficients import (
+    _component_quadrature_values,
+    _project_quadrature_values,
+)
+from hdgfem.hdg.reference import _reference_derivative_matrices
 
 
 LocalSolverBackend = Literal["numpy", "numba"]
@@ -254,8 +259,6 @@ class DiffusionReactionHDGOptions:
         return {field.name: getattr(self, field.name) for field in fields(type(self))}
 
 
-
-
 def _normalize_local_factor_cache_policy(value: str) -> LocalFactorCachePolicy:
     """Normalize the optional persistent element-factor cache policy."""
     normalized = str(value).strip().lower().replace("_", "-")
@@ -365,40 +368,6 @@ def is_identity_diffusion(diffusion) -> bool:
 _diffusion_is_identity = is_identity_diffusion
 
 
-def _component_quadrature_values(component, space: DGSpace, *, label: str) -> np.ndarray:
-    """Evaluate one scalar coefficient component on volume quadrature points."""
-    num_elements = space.mesh.num_tri
-    num_quads = space.quad_data.Krf_w.shape[0]
-    if np.isscalar(component):
-        return np.full((num_elements, num_quads), float(component), dtype=REAL_DTYPE)
-    if isinstance(component, DGField):
-        component.space.assert_same_mesh(space)
-        return np.asarray(component.values_at_ref(space.quad_data.Krf_quads), dtype=REAL_DTYPE)
-    if callable(component):
-        points = space.mapped_quads()
-        values = component(points[:, :, 0], points[:, :, 1])
-    else:
-        values = np.asarray(component, dtype=REAL_DTYPE)
-        if values.shape == space.shape:
-            values = space.field(values, name=label).values()
-        elif values.shape != (num_elements, num_quads):
-            raise ValueError(
-                f"{label} must be scalar, callable, DGField, DG coefficients with shape "
-                f"{space.shape}, or quadrature values with shape ({num_elements}, {num_quads}); "
-                f"got {values.shape}"
-            )
-    values = np.asarray(values, dtype=REAL_DTYPE)
-    if values.ndim == 0:
-        return np.full((num_elements, num_quads), float(values), dtype=REAL_DTYPE)
-    if values.shape == (num_quads,):
-        return np.broadcast_to(values[None, :], (num_elements, num_quads)).copy()
-    if values.shape != (num_elements, num_quads):
-        raise ValueError(
-            f"{label} values must have shape ({num_elements}, {num_quads}); got {values.shape}"
-        )
-    return np.ascontiguousarray(values)
-
-
 def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_space=None,
                           device=False) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sample tensor components using shared volume or element-side evaluators.
@@ -420,12 +389,17 @@ def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_sp
     def component_values(component, *, label):
         """Choose the existing volume or incidence-aware face sampler."""
         if device:
-            from hdgfem.backends.coefficients_cupy import face_samples_cupy, volume_samples_cupy
+            from hdgfem.hdg.coefficients_device import (
+                            face_samples_cupy,
+                            volume_samples_cupy,
+                        )
             if on_faces:
                 return face_samples_cupy(component, space, label=label, trace_space=trace_ref)
             return volume_samples_cupy(component, space, label=label)
         if on_faces:
-            from hdgfem.assembly.matrices_numpy import _face_quadrature_values_from_scalar_input
+            from hdgfem.hdg.coefficients import (
+                            _face_quadrature_values_from_scalar_input,
+                        )
             return _face_quadrature_values_from_scalar_input(
                 component, space, label, trace_space=trace_ref)
         return _component_quadrature_values(component, space, label=label)
@@ -488,7 +462,6 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     Returns ``(G00, G01, G10, G11)`` where
     ``Gab[K] = int_K (kappa^{-1})_{ab} phi_i phi_j dx``.
     """
-    from hdgfem.assembly import matrices_numpy as hdg_mats
     import hdgfem.core.mass as core_mass
 
     from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
@@ -505,16 +478,6 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     core_mass.set_weighted_mass_from_values(g10, inv10, space)
     core_mass.set_weighted_mass_from_values(g11, inv11, space)
     return g00, g01, g10, g11
-
-
-def _project_quadrature_values(values: np.ndarray, space: DGSpace) -> np.ndarray:
-    """Project element-quadrature values into same-space DG coefficients."""
-    values = np.asarray(values, dtype=REAL_DTYPE)
-    expected = (space.mesh.num_tri, space.quad_data.Krf_w.shape[0])
-    if values.shape != expected:
-        raise ValueError(f"values must have shape {expected}; got {values.shape}")
-    rhs = values @ space.quad_data.weighted_phi
-    return np.ascontiguousarray(rhs @ space.quad_data.MKrf_inv, dtype=REAL_DTYPE)
 
 
 def _project_inverse_diffusion_for_numba(diffusion, space: DGSpace) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -553,14 +516,6 @@ def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: st
         f"assembly_backend='{backend}' requires {label} to be a DGField; "
         "wrap coefficient arrays with space.field(...)."
     )
-
-
-def _reference_derivative_matrices(space: DGSpace) -> tuple[np.ndarray, np.ndarray]:
-    """Return legacy-oriented reference derivative matrices."""
-    q = space.quad_data
-    d0 = np.einsum("q,iq,jq->ij", q.Krf_w, q.bas_of_quads, q.dbas_of_quads[0], optimize=True)
-    d1 = np.einsum("q,iq,jq->ij", q.Krf_w, q.bas_of_quads, q.dbas_of_quads[1], optimize=True)
-    return np.ascontiguousarray(d0.T), np.ascontiguousarray(d1.T)
 
 
 def diffusion_trace_lift(

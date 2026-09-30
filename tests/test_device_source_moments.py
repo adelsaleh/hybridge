@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly import hdg
+from hdgfem.hdg import condensation as hdg
 
 cp = pytest.importorskip("cupy")
 

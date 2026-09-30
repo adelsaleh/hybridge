@@ -43,14 +43,18 @@ def _beta_samples(cp, beta, space: DGSpace, trace_ref: DGTraceSpace, t=None):
     through its L2 projection into ``space``; DG beta uses the same field for both;
     an ``ElementCoefficient`` is evaluated directly at both point sets.
     """
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.assembly.advection_diffusion_reaction import element_beta_samples
 
     if isinstance(beta, ElementCoefficient):
         return element_beta_samples(beta, space, trace_ref, xp=cp, t=t)
-    from hdgfem.solvers.advection_reaction import _is_callable_beta
-    from hdgfem.backends.coefficients_cupy import (
-        field_on_faces_cupy, field_on_volume_cupy, mapped_face_points_cupy, volume_samples_cupy)
+    from hdgfem.hdg.coefficients import _is_callable_beta
+    from hdgfem.hdg.coefficients_device import (
+            field_on_faces_cupy,
+            field_on_volume_cupy,
+            mapped_face_points_cupy,
+            volume_samples_cupy,
+        )
     from hdgfem.core.device import _normalize_cupy_values
 
     cspace = as_cupy_space(space)
@@ -80,7 +84,7 @@ def _source_moments(cp, source, space: DGSpace, t=None):
     Device arrays (moments or volume-quadrature values) and ``ElementCoefficient``
     sources stay on the device; other non-callable forms use the host sampler.
     """
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.core.space import DGField
     from hdgfem.backends.advection_cuda import source_moments_cupy, source_moments_from_values_cupy
 
@@ -131,14 +135,15 @@ def prepare_adr_data_cupy(
     A precomputed ``tau_diffusion`` (from an earlier call with the same
     diffusion, law and trace space) skips its time-independent evaluation.
     """
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.assembly.advection_diffusion_reaction import (
         ADRPreparedData, _normal_flux, element_beta_samples, normalize_diffusion_stabilization)
-    from hdgfem.assembly import matrices_numpy as matrices
-    from hdgfem.solvers.diffusion_reaction import _reference_derivative_matrices
-    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind, upwind_factor
-    from hdgfem.backends.coefficients_cupy import volume_samples_cupy, face_samples_cupy
-    from hdgfem.backends.numba import beta_values_on_volume, reaction_values_on_volume
+    from hdgfem.hdg import matrices
+    import hdgfem.hdg.stabilization as hdg_stabilization
+    from hdgfem.hdg.reference import _reference_derivative_matrices
+    from hdgfem.hdg.stabilization import is_conflict_averaged_upwind, upwind_factor
+    from hdgfem.hdg.coefficients_device import volume_samples_cupy, face_samples_cupy
+    from hdgfem.hdg.coefficients import beta_values_on_volume, reaction_values_on_volume
 
     cp = require_cupy()
     timings = {} if timings is None else timings
@@ -186,12 +191,12 @@ def prepare_adr_data_cupy(
         tau_advection = _host_fallback(
             cp, lambda: face_samples_cupy(advection_stabilization, space,
                 label="advection_stabilization", trace_space=trace_ref, t=t),
-            lambda: matrices.advection_trace_stabilization_values(
+            lambda: hdg_stabilization.advection_trace_stabilization_values(
                 space, cp.asnumpy(beta_dot_normal), advection_stabilization, trace_space=trace_ref),
             timings, "raw.coefficients.tau_advection")
     else:
         # Explicit tau forms and the conflict repair keep their host definitions.
-        tau_advection = cp.asarray(matrices.advection_trace_stabilization_values(
+        tau_advection = cp.asarray(hdg_stabilization.advection_trace_stabilization_values(
             space, cp.asnumpy(beta_dot_normal), advection_stabilization, trace_space=trace_ref))
     timings["raw.coefficients.tau_advection"] = _elapsed(cp, start)
 

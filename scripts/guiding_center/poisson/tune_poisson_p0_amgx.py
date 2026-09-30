@@ -16,7 +16,7 @@ import time
 import traceback
 
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.core.field_ops import field_l2_norm
+from hdgfem.hdg.gram import field_l2_norm
 from hdgfem.diagnostics import solver_result_metrics
 from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle
 from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config

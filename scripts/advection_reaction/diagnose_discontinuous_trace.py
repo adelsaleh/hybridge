@@ -14,7 +14,9 @@ from pathlib import Path
 import numpy as np
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.assembly import matrices_numpy as mats
+from hdgfem.hdg import matrices as mats
+import hdgfem.hdg.coefficients as hdg_coefficients
+import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
 from hdgfem.linalg.system import assemble_global_matrix
 from hdgfem.linalg.transport_diagnostics import trace_inflow_diagnostics, trace_matrix_diagnostics
@@ -99,12 +101,12 @@ def diagnose(assembly: FixtureAssembly):
     scaled = dense / np.where(row_scale > 0, row_scale, 1.)[:, None]
     singular = np.linalg.svd(scaled, compute_uv=False)
     tolerance = max(scaled.shape) * np.finfo(scaled.dtype).eps * singular[0]
-    normal = mats.advective_boundary_normal(assembly.beta, space, trace_space=trace)
+    normal = hdg_coefficients.advective_boundary_normal(assembly.beta, space, trace_space=trace)
     face_report = trace_inflow_diagnostics(
         normal, mesh.loc2glob_edge, mesh.orientations, mesh.int_edges_inds,
         trace.bas1d_of_ref_edg_qds, trace.weights, stabilization=assembly.policy,
     )
-    tau, gamma = mats.advection_trace_weights_from_normal_flux(
+    tau, gamma = hdg_stabilization.advection_trace_weights_from_normal_flux(
         space, normal, assembly.policy, trace_space=trace)
     local = np.ascontiguousarray(mats.boundary_mass_from_trace_stabilization(space, tau, trace_space=trace))
     core_mass.add_reaction_mass(local, assembly.reaction, space)

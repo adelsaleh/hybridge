@@ -19,8 +19,10 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 
-from hdgfem.assembly import hdg as hdg_assembly
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import condensation as hdg_assembly
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.stabilization as hdg_stabilization
+import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.linalg.system import KnownDofReduction
 
@@ -336,7 +338,11 @@ def _advection_trace_weights_cupy(
 ):
     """Return device tau and gamma tables on element-side face quadrature."""
     cupy = require_cupy()
-    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import (
+            upwind_factor,
+            effective_advection_normal_flux,
+            is_conflict_averaged_upwind,
+        )
     if is_conflict_averaged_upwind(stabilization):
         beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, stabilization, xp=cupy)
     factor = upwind_factor(stabilization)
@@ -356,12 +362,12 @@ def _advection_trace_weights_cupy(
                 face_basis = trace_ref.bas_of_bd_quads
             else:
                 face_basis = cupy.asarray(
-                    hdg_mats.dg_field_basis_on_trace_faces(stabilization.space, trace_ref.host),
+                    hdg_coefficients.dg_field_basis_on_trace_faces(stabilization.space, trace_ref.host),
                     dtype=REAL_DTYPE,
                 )
             tau_face = cupy.einsum("Ki,fiq->Kfq", coefficients, face_basis, optimize=True)
     else:
-        tau_host = hdg_mats.advection_trace_stabilization_values(
+        tau_host = hdg_stabilization.advection_trace_stabilization_values(
             cspace.host,
             cupy.asnumpy(beta_dot_normal),
             stabilization,
@@ -528,7 +534,7 @@ def _advection_interior_trace_mass_blocks_cupy(cspace: CupyDGSpace, gamma_face, 
     )
     blocks = cupy.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if inactive_tau is not None:
-        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.hdg.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(blocks, inactive_tau, mesh, xp=cupy)
     return blocks
 
@@ -806,7 +812,7 @@ def assemble_advection_reaction_trace_system_cupy(
     )
     rows_device = cupy.asarray(rows, dtype=cupy.int64)
     cols_device = cupy.asarray(cols, dtype=cupy.int64)
-    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import is_conflict_averaged_upwind
     data = _trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face, boundary_penalty,
                                    inactive_tau=tau_face if is_conflict_averaged_upwind(advection_stabilization) else None)
     rhs, boundary_trace = _global_rhs_cupy(
@@ -904,7 +910,7 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
     trace_lift = _advection_trace_lift_cupy(cspace, tau_face, trace_ref)
     trace_blocks = _element_to_trace_matrix_cupy(local_solver, element_boundary_mats, trace_lift, cspace, trace_ref)
     rows_cp, cols_cp = _reduced_trace_matrix_indices_cupy(cspace, trace_ref)
-    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import is_conflict_averaged_upwind
     data_cp = _reduced_trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face,
                                             inactive_tau=tau_face if is_conflict_averaged_upwind(advection_stabilization) else None)
     rhs_cp = _global_rhs_without_boundary_penalty_cupy(source_rhs, local_solver, trace_lift, cspace, trace_ref)

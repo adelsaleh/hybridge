@@ -62,7 +62,7 @@ def run_worker(args) -> None:
     """Assemble and reconstruct in this process's precision; write an ``.npz``."""
     import cupy as cp
     from hdgfem import DGSpace
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.backends.adr_coefficients_cupy import prepare_adr_data_cupy
     from hdgfem.backends.advection_diffusion_reaction_raw_cuda import (
         assemble_projected_adr_trace_operator_raw_cuda, reconstruct_projected_adr_local_unknowns_raw_cuda)

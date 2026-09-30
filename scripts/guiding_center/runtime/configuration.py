@@ -383,7 +383,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         )
     upwind_scale = getattr(args, "transport_upwind_factor", None)
     if upwind_scale is not None:
-        from hdgfem.solvers.stabilization import ScaledUpwind
+        from hdgfem.hdg.stabilization import ScaledUpwind
         updates["transport_advection_stabilization"] = ScaledUpwind(upwind_scale)
     runtime = replace(config, **updates) if updates else config
     if args.transport_amgx_config is None:

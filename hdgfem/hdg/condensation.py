@@ -2,7 +2,7 @@
 
 This module contains the mesh/trace glue that is independent of the concrete
 PDE local operator.  Local element matrices still come from problem-specific
-code, usually via :mod:`hdgfem.assembly.matrices_numpy`; once those matrices and element RHS
+code, usually via :mod:`hdgfem.hdg.matrices` and the family packages; once those matrices and element RHS
 moments are available, the functions here assemble the global trace system and
 recover element coefficients.
 """
@@ -18,7 +18,7 @@ from typing import Literal
 
 import numpy as np
 
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import matrices as hdg_mats
 import hdgfem.core.mass as core_mass
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
@@ -691,3 +691,35 @@ __all__ = [
     "trace_matrix_data",
     "trace_matrix_indices",
 ]
+
+
+def expand_interior_trace(space: DGSpace, reduced, boundary_condition, *, trace_basis="legacy-lagrange"):
+    """Restore prescribed boundary coefficients, preserving the trace backend.
+
+    Only interior entries come from the solve. Boundary coefficients use the
+    same interpolation/projection convention as DGTraceSpace and the solvers.
+    Device input is expanded and boundary data evaluated entirely with CuPy.
+    """
+    if boundary_condition is None:
+        raise ValueError("trace expansion requires prescribed boundary data")
+    if hasattr(reduced, "__cuda_array_interface__"):
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
+        from hdgfem.core.device import as_cupy_trace_space
+
+        xp = require_cupy()
+        mesh = as_cupy_space(space).mesh
+        trace = as_cupy_trace_space(space.trace_space(trace_basis))
+    else:
+        xp, mesh, trace = np, space.mesh, space.trace_space(trace_basis)
+    reduced = xp.asarray(reduced, dtype=REAL_DTYPE)
+    expected = mesh.int_edges_inds.size * trace.edg_dof
+    if reduced.size != expected:
+        raise ValueError(f"interior trace needs {expected} coefficients; got {reduced.size}")
+    full = xp.zeros((mesh.num_edg, trace.edg_dof), dtype=REAL_DTYPE)
+    full[mesh.int_edges_inds] = reduced.reshape(-1, trace.edg_dof)
+    full[mesh.bnd_edges_inds] = boundary_trace_coefficients(
+        boundary_condition, space, trace_basis=trace_basis,
+        backend="device" if xp is not np else "host", boundary_only=True,
+    )
+    return full.ravel()

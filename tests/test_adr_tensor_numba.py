@@ -5,7 +5,7 @@ from scipy.sparse import coo_matrix
 
 from hdgfem import DGSpace, DGMesh, rectangle_mesh, solve_advection_diffusion_reaction_hdg
 from hdgfem.assembly.diffusion_coefficients import prepare_diffusion, normal_diffusivity_on_faces
-from hdgfem.solvers.stabilization import GlobalLengthDiffusion
+from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 from scripts.advection_diffusion_reaction.cases.tensor_cases import (
     diffusion_cases as coefficient_cases, manufactured_tensor, raw_cuda_coefficient,

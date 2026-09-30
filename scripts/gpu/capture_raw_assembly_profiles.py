@@ -59,7 +59,7 @@ def main():
                     ROOT / "hdgfem/backends/diffusion_cupy.py", ROOT / "hdgfem/backends/advection_raw_cuda.py",
                     ROOT / "hdgfem/backends/advection_tsle_bsr.py",
                     ROOT / "hdgfem/backends/adr_tensor_raw_cuda.py",
-                    ROOT / "hdgfem/backends/raw_cuda_local.py"]
+                    ROOT / "hdgfem/hdg/cuda/raw_source.py"]
     source_hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True)
     manifest = {"scope": "Raw Poisson none/Schur-LU assembly, RHS and reconstruction; separate CuPy compact Schur-Cholesky construction/reuse; fused transport COO/CSR/BSR; transport TSLE BSR; cooperative tensor-ready ADR COO/CSR/BSR",

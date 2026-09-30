@@ -108,7 +108,7 @@ def test_numba_matches_numpy_with_asymmetric_element_face_stabilization(trace_ba
 @pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
 @pytest.mark.parametrize("diffusion", (0.3, np.array([[1.0, 0.3], [0.3, 0.5]])))
 def test_numba_builds_face_tables_in_kernel_from_light_preparation(trace_basis, diffusion):
-    from hdgfem.assembly import hdg
+    from hdgfem.hdg import condensation as hdg
     from hdgfem.assembly.advection_diffusion_reaction import local_solvers_numpy
     from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
 

@@ -8,12 +8,13 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.assembly import hdg
+from hdgfem.hdg import condensation as hdg
 from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
 from hdgfem.core.space import DGSpace, DGTraceSpace
 from hdgfem.core.device import as_cupy_space
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.numba import _boundary_reduction_maps, _interior_side_index, _trace_orientation_mode
+from hdgfem.hdg.trace_maps import _boundary_reduction_maps, _trace_orientation_mode
+from hdgfem.backends.numba import _interior_side_index
 
 
 _RAW_ADR_TEMPLATE = r'''
@@ -250,7 +251,7 @@ def assemble_projected_adr_trace_operator_raw_cuda(
     CSR with dense preparation retains the original serial diagnostic kernel.
     Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/6.
     """
-    from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
+    from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
     from hdgfem.backends.adr_tensor_raw_cuda import assemble_tensor_operator
     if space.order > 6 or trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
         raise ValueError("raw CUDA tensor ADR supports p=0--6 and legacy-lagrange/legendre-modal traces")

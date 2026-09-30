@@ -78,7 +78,7 @@ def test_tensor_assembly_all_shapes(cp, order, basis, diffusion, kind):
         if fmt == 'bsr':
             assert actual.data.shape[1:] == (order+1, order+1)
         if fmt == 'csr':
-            from hdgfem.assembly import hdg
+            from hdgfem.hdg import condensation as hdg
             from hdgfem.backends.advection_diffusion_reaction_numba import reconstruct_projected_adr_local_unknowns_numba
             from hdgfem.backends.advection_diffusion_reaction_raw_cuda import reconstruct_projected_adr_local_unknowns_raw_cuda
             trace_values=np.sin(np.arange(mesh.num_edg*(order+1))+.2)

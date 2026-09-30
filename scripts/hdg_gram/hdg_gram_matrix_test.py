@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hdgfem.assembly.hdg_gram import assemble_hdg_gram, build_krylov_hdg_gram_inverse
+from hdgfem.hdg.gram import assemble_hdg_gram, build_krylov_hdg_gram_inverse
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 

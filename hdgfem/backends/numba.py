@@ -14,8 +14,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import condensation as hdg_assembly
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
+import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.kernels import NUMBA_AVAILABLE
 from hdgfem.kernels.advection_reaction import assemble_local_mats_and_boundary_kernel
 from hdgfem.linalg.system import KnownDofReduction
@@ -37,6 +39,14 @@ from hdgfem.kernels.diffusion_reaction_fused import (
     reconstruct_projected_tensor_diffusion_local_unknowns_kernel,
 )
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.hdg.coefficients import beta_values_on_volume, reaction_values_on_volume
+from hdgfem.hdg.trace_maps import _trace_ref
+from hdgfem.hdg.trace_maps import (
+    _boundary_reduction_maps,
+    _edge_order_to_solve_map,
+    _reduction_with_system,
+    _trace_orientation_mode,
+)
 
 
 @dataclass(frozen=True)
@@ -158,87 +168,6 @@ def _diffusion_schur_cache_arguments(cache, reaction, stabilization, space):
     return (2 if cache.factor_kind == "schur-cholesky" else 1), cache.factors, cache.pivots
 
 
-def _normalize_values(values, num_elements: int, num_points: int, label: str) -> np.ndarray:
-    """Normalize scalar/quadrature values to ``(num_elements, num_points)``."""
-    values = np.asarray(values, dtype=np.float64)
-    if values.shape == (num_elements, num_points):
-        return np.ascontiguousarray(values)
-    if values.shape == (num_points,):
-        return np.ascontiguousarray(np.broadcast_to(values[None, :], (num_elements, num_points)))
-    if values.ndim == 0:
-        return np.full((num_elements, num_points), float(values), dtype=np.float64)
-    raise ValueError(
-        f"{label} must be a scalar, have shape ({num_points},), or have shape "
-        f"({num_elements}, {num_points}); got {values.shape}"
-    )
-
-
-def beta_values_on_volume(
-        beta_field: VectorDGField | None,
-        beta_callables: tuple[Callable, Callable] | None,
-        space: DGSpace,
-) -> np.ndarray:
-    """Return advection values on volume quadrature points."""
-    num_elements = space.mesh.num_tri
-    num_points = space.quad_data.Krf_w.size
-    values = np.empty((num_elements, num_points, 2), dtype=np.float64)
-    if beta_field is not None:
-        if beta_field.dim != 2:
-            raise ValueError("beta_field must have two components")
-        beta_field.components[0].space.assert_same_mesh(space)
-        beta_field.components[1].space.assert_same_mesh(space)
-        values[..., 0] = beta_field.components[0].values_at_ref(space.quad_data.Krf_quads)
-        values[..., 1] = beta_field.components[1].values_at_ref(space.quad_data.Krf_quads)
-        return np.ascontiguousarray(values)
-
-    if beta_callables is None:
-        raise ValueError("either beta_field or beta_callables must be provided")
-    points = space.mapped_quads()
-    values[..., 0] = _normalize_values(
-        beta_callables[0](points[:, :, 0], points[:, :, 1]),
-        num_elements,
-        num_points,
-        "beta[0]",
-    )
-    values[..., 1] = _normalize_values(
-        beta_callables[1](points[:, :, 0], points[:, :, 1]),
-        num_elements,
-        num_points,
-        "beta[1]",
-    )
-    return np.ascontiguousarray(values)
-
-
-def reaction_values_on_volume(reaction, space: DGSpace) -> np.ndarray:
-    """Return reaction values on solution-space volume quadrature points."""
-    num_elements = space.mesh.num_tri
-    num_points = space.quad_data.Krf_w.size
-    if np.isscalar(reaction):
-        return np.full((num_elements, num_points), float(reaction), dtype=np.float64)
-    if isinstance(reaction, DGField):
-        reaction.space.assert_same_mesh(space)
-        return np.ascontiguousarray(reaction.values_at_ref(space.quad_data.Krf_quads), dtype=np.float64)
-    if callable(reaction):
-        points = space.mapped_quads()
-        return _normalize_values(
-            reaction(points[:, :, 0], points[:, :, 1]),
-            num_elements,
-            num_points,
-            "reaction",
-        )
-
-    values = np.asarray(reaction, dtype=np.float64)
-    if values.shape == (num_elements, num_points):
-        return np.ascontiguousarray(values)
-    if values.shape == (num_points,):
-        return np.ascontiguousarray(np.broadcast_to(values[None, :], (num_elements, num_points)))
-    if values.shape == space.shape:
-        return np.ascontiguousarray(space.field(values, name="reaction").values_at_ref(space.quad_data.Krf_quads))
-    raise TypeError(
-        "reaction must be a scalar, callable, DGField, quadrature values, or DG coefficients"
-    )
-
-
 def assemble_local_advection_reaction_numba(
         space: DGSpace,
         *,
@@ -269,11 +198,11 @@ def assemble_local_advection_reaction_numba(
     if beta_dot_normal is None:
         if beta_field is None:
             raise ValueError("beta_dot_normal is required when beta is provided as callables")
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
+        beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     if zero_boundary_flux:
         beta_dot_normal = beta_dot_normal.copy()
-    tau_face = hdg_mats.advection_trace_stabilization_values(
+    tau_face = hdg_stabilization.advection_trace_stabilization_values(
         space,
         beta_dot_normal,
         advection_stabilization,
@@ -396,7 +325,7 @@ def _advection_stabilization_coefficients(stabilization, space: DGSpace) -> tupl
     ``kind=4`` builds conflict-averaged weights inside the element loop. Callable
     stabilizations must be projected before using the fused backend.
     """
-    from hdgfem.solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    from hdgfem.hdg.stabilization import upwind_factor, is_conflict_averaged_upwind
     if is_conflict_averaged_upwind(stabilization):
         return 4, 1.0, np.zeros((1, 1), dtype=np.float64)
     factor = upwind_factor(stabilization)
@@ -516,23 +445,6 @@ def _reference_advection_tensor(space: DGSpace) -> np.ndarray:
     )
 
 
-def _trace_ref(space: DGSpace, trace_space: DGTraceSpace | None = None) -> DGTraceSpace:
-    """Return the requested trace reference, defaulting to legacy Lagrange."""
-    return space.trace_space("legacy-lagrange") if trace_space is None else trace_space
-
-
-def _trace_orientation_mode(trace_ref: DGTraceSpace) -> int:
-    """Return the fused-kernel edge orientation mode for a trace basis."""
-    if trace_ref.kind == "legacy-lagrange" and trace_ref.nodal:
-        return 0
-    if trace_ref.kind == "legendre-modal" and not trace_ref.nodal:
-        return 1
-    raise NotImplementedError(
-        "assembly_backend='numba' currently supports trace_basis='legacy-lagrange' "
-        "and trace_basis='legendre-modal'"
-    )
-
-
 def _diffusion_face_element_trace(trace_ref: DGTraceSpace) -> np.ndarray:
     """Return ``(face, element-test, trace-trial)`` diffusion coupling table."""
     return np.ascontiguousarray(
@@ -549,103 +461,12 @@ def _reference_diffusion_derivative_matrices(space: DGSpace) -> tuple[np.ndarray
     return np.ascontiguousarray(d0.T), np.ascontiguousarray(d1.T)
 
 
-def _edge_order_to_solve_map(
-        num_edges: int,
-        active_edges: np.ndarray,
-        edge_order: np.ndarray | None,
-) -> np.ndarray:
-    """Map global mesh edges to contiguous solve-edge positions."""
-    active_edges = np.asarray(active_edges, dtype=np.int64)
-    if edge_order is None:
-        ordered_edges = active_edges
-    else:
-        ordered_edges = np.asarray(edge_order, dtype=np.int64)
-        if ordered_edges.ndim != 1:
-            raise ValueError("edge_order must be one-dimensional")
-        if ordered_edges.shape != active_edges.shape:
-            raise ValueError(
-                f"edge_order must have shape {active_edges.shape} for this solve system; "
-                f"got {ordered_edges.shape}"
-            )
-
-    if ordered_edges.size and (ordered_edges.min() < 0 or ordered_edges.max() >= num_edges):
-        raise ValueError("edge_order contains edge ids outside the mesh")
-
-    active_mask = np.zeros(num_edges, dtype=bool)
-    active_mask[active_edges] = True
-    seen = np.zeros(num_edges, dtype=bool)
-    seen[ordered_edges] = True
-    if not np.array_equal(active_mask, seen):
-        raise ValueError("edge_order must contain every active solve edge exactly once")
-
-    edge_to_solve_edge = np.full(num_edges, -1, dtype=np.int64)
-    edge_to_solve_edge[ordered_edges] = np.arange(ordered_edges.size, dtype=np.int64)
-    return np.ascontiguousarray(edge_to_solve_edge)
-
-
 def _full_edge_order_map(space: DGSpace, edge_order: np.ndarray | None) -> np.ndarray:
     """Return the full-system global-edge to solve-edge map."""
     return _edge_order_to_solve_map(
         space.mesh.num_edg,
         np.arange(space.mesh.num_edg, dtype=np.int64),
         edge_order,
-    )
-
-
-def _boundary_reduction_maps(
-        space: DGSpace,
-        boundary_trace: np.ndarray,
-        edge_order: np.ndarray | None = None,
-        *,
-        trace_space: DGTraceSpace | None = None,
-) -> tuple[np.ndarray, np.ndarray, KnownDofReduction]:
-    """Return edge and dof maps for direct boundary elimination."""
-    mesh = space.mesh
-    trace_ref = _trace_ref(space, trace_space)
-    edg_dof = trace_ref.edg_dof
-
-    edge_is_free = np.ones(mesh.num_edg, dtype=bool)
-    edge_is_free[mesh.bnd_edges_inds] = False
-    free_edges = np.flatnonzero(edge_is_free).astype(np.int64)
-
-    edge_to_solve_edge = _edge_order_to_solve_map(mesh.num_edg, free_edges, edge_order)
-
-    system_size = mesh.num_edg * edg_dof
-    free_mask = np.repeat(edge_is_free, edg_dof)
-    known_mask = ~free_mask
-    old_to_new = np.full(system_size, -1, dtype=np.int64)
-    old_to_new[free_mask] = np.arange(np.count_nonzero(free_mask), dtype=np.int64)
-
-    reduction = KnownDofReduction(
-        rows=np.empty(0, dtype=np.int64),
-        cols=np.empty(0, dtype=np.int64),
-        data=np.empty(0, dtype=np.float64),
-        rhs=np.empty(np.count_nonzero(free_mask), dtype=np.float64),
-        free_mask=np.ascontiguousarray(free_mask),
-        known_mask=np.ascontiguousarray(known_mask),
-        known_values=np.ascontiguousarray(boundary_trace.ravel(), dtype=np.float64),
-        old_to_new=np.ascontiguousarray(old_to_new),
-    )
-    return edge_to_solve_edge, np.ascontiguousarray(free_edges), reduction
-
-
-def _reduction_with_system(
-        reduction: KnownDofReduction,
-        rows: np.ndarray,
-        cols: np.ndarray,
-        data: np.ndarray,
-        rhs: np.ndarray,
-) -> KnownDofReduction:
-    """Attach assembled reduced COO arrays to a precomputed reduction map."""
-    return KnownDofReduction(
-        rows=rows,
-        cols=cols,
-        data=data,
-        rhs=rhs,
-        free_mask=reduction.free_mask,
-        known_mask=reduction.known_mask,
-        known_values=reduction.known_values,
-        old_to_new=reduction.old_to_new,
     )
 
 
@@ -699,7 +520,7 @@ def assemble_projected_trace_system_numba(
     start = time.perf_counter()
     boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     if beta_dot_normal is None:
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
+        beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     timings["boundary_trace_and_flux"] = time.perf_counter() - start
@@ -835,7 +656,7 @@ def assemble_projected_trace_system_eliminated_numba(
             raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
         boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
     if beta_dot_normal is None:
-        beta_dot_normal = hdg_mats.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
+        beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
     timings["boundary_trace_and_flux"] = time.perf_counter() - start
@@ -1779,10 +1600,8 @@ __all__ = [
     "assemble_projected_trace_system_eliminated_numba",
     "assemble_projected_trace_system_numba",
     "assemble_projected_trace_system_zero_flux_numba",
-    "beta_values_on_volume",
     "reconstruct_diffusion_local_unknowns_numba",
     "reconstruct_projected_diffusion_local_unknowns_numba",
     "reconstruct_projected_tensor_diffusion_local_unknowns_numba",
     "reconstruct_projected_field_numba",
-    "reaction_values_on_volume",
 ]

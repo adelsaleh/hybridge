@@ -18,7 +18,7 @@ from hdgfem import (
     solve_advection_reaction_hdg,
 )
 from hdgfem.core.space import evaluate_product
-from hdgfem.assembly.hdg import (
+from hdgfem.hdg.condensation import (
     assemble_trace_system,
     as_vector_field,
     boundary_trace_coefficients,
@@ -29,16 +29,16 @@ from hdgfem.assembly.hdg import (
     trace_matrix_data,
     trace_matrix_indices,
 )
-from hdgfem.assembly.matrices_numpy import (
+from hdgfem.hdg.matrices import (
     _vector_values_on_test_quads,
     add_advection_mats,
     advection_mats,
-    advective_boundary_normal,
     boundary_mass,
     boundary_mass_from_normal_flux,
     element_boundary_mats,
     element_boundary_mats_from_normal_flux,
 )
+from hdgfem.hdg.coefficients import advective_boundary_normal
 from hdgfem.core.mass import (
     add_reaction_mass,
     mass_from_field,

@@ -16,7 +16,7 @@ from time import perf_counter
 
 import numpy as np
 
-from hdgfem.assembly.hdg_gram import ScalarHDGGram
+from hdgfem.hdg.gram import ScalarHDGGram
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.configuration import _validate_config
 from scripts.guiding_center.runtime.runner import run_guiding_center_case
@@ -143,7 +143,7 @@ def accepted_density_trace(snapshot, *, trace_basis):
     reduced = getattr(snapshot, "accepted_density_trace_reduced", None)
     if reduced is None:
         return _transport_trace(snapshot.transport_result)
-    from hdgfem.core.field_ops import expand_interior_trace
+    from hdgfem.hdg.condensation import expand_interior_trace
 
     boundary = snapshot.accepted_density_boundary
     return expand_interior_trace(snapshot.space, reduced,

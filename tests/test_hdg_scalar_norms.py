@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.assembly.hdg_gram import ScalarHDGGram, assemble_hdg_gram
+from hdgfem.hdg.gram import ScalarHDGGram, assemble_hdg_gram
 from hdgfem.core.field_ops import project_callable_to_trace
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
@@ -152,7 +152,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
     except cp.cuda.runtime.CUDARuntimeError as error:
         pytest.skip(str(error))
     from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.core.field_ops import expand_interior_trace
+    from hdgfem.hdg.condensation import expand_interior_trace
     from hdgfem.core.space import DGField
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import (
         VorticityMetrics, VorticityRaster, _resident_coefficients,

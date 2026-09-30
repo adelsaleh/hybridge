@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.assembly.face_dense import (
     FaceDenseSystem,
     FaceTopology,

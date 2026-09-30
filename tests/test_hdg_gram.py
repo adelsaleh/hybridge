@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse.linalg import spsolve
 
-from hdgfem.assembly.hdg_gram import assemble_hdg_gram, build_condensed_hdg_gram_inverse
+from hdgfem.hdg.gram import assemble_hdg_gram, build_condensed_hdg_gram_inverse
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 
@@ -44,7 +44,7 @@ def test_condensed_hdg_dual_norm_matches_energy_identity() -> None:
 
 
 def test_configurable_krylov_gram_inverse_matches_sparse_direct() -> None:
-    from hdgfem.assembly.hdg_gram import build_krylov_hdg_gram_inverse
+    from hdgfem.hdg.gram import build_krylov_hdg_gram_inverse
 
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 1, basis_type="dub_orth")

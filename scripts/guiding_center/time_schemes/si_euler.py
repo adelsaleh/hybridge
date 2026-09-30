@@ -5,7 +5,9 @@ import math
 from time import perf_counter
 
 from hdgfem.core.field_ops import (
-    perpendicular_vector_field, solution_field, solution_trace,
+    perpendicular_vector_field,
+    solution_field,
+    solution_trace,
 )
 from .recovery import with_poisson_recovery, recovery_options, poisson_tau
 from .stage_support import GuidingCenterStep, _fixed_operator_trace_predictor

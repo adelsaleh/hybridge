@@ -134,7 +134,10 @@ def trace_inflow_diagnostics(normal, edge_ids, orientations, interior_edges,
     matrix. Supports standard upwind and conflict-averaged upwind; reported
     support and rank use effective velocities, alongside the raw samples.
     """
-    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind, conflict_averaged_normal_pair
+    from hdgfem.hdg.stabilization import (
+            is_conflict_averaged_upwind,
+            conflict_averaged_normal_pair,
+        )
 
     normal = np.asarray(normal)
     edge_ids, orientations = np.asarray(edge_ids), np.asarray(orientations)
@@ -313,7 +316,7 @@ def save_transport_failure_snapshot(path, assembly, *, initial_guess=None, best_
             "dki,kfd,fiq->kfq", arrays["beta_coeffs"], mesh.normals,
             trace.bas_of_bd_quads, optimize=True,
         )
-        from hdgfem.solvers.stabilization import effective_advection_normal_flux
+        from hdgfem.hdg.stabilization import effective_advection_normal_flux
         arrays["effective_normal_flux"] = effective_advection_normal_flux(
             arrays["normal_flux"], mesh, getattr(raw, "advection_stabilization", None)).copy()
         if raw.zero_boundary_flux:

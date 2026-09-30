@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
 from scripts.advection_reaction.cases import test2 as adv_rea_test2
 
@@ -88,7 +89,7 @@ def _boundary_numerical_flux(result, beta_h: VectorDGField) -> float:
         oriented_trace_basis,
         optimize=True,
     )
-    beta_dot_n = hdg_mats.advective_boundary_normal(beta_h, space, trace_space=trace_space)
+    beta_dot_n = hdg_coefficients.advective_boundary_normal(beta_h, space, trace_space=trace_space)
     upwind_tau = np.abs(beta_dot_n)
     numerical_flux = beta_dot_n * uhat_face + upwind_tau * (uh_face - uhat_face)
     boundary_side = np.isin(mesh.loc2glob_edge, mesh.bnd_edges_inds)

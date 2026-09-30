@@ -68,39 +68,6 @@ def solution_trace(result, space: DGSpace, *, reduced: bool = False, prefer_devi
     return np.ascontiguousarray(trace_array.reshape(-1))
 
 
-def expand_interior_trace(space: DGSpace, reduced, boundary_condition, *, trace_basis="legacy-lagrange"):
-    """Restore prescribed boundary coefficients, preserving the trace backend.
-
-    Only interior entries come from the solve. Boundary coefficients use the
-    same interpolation/projection convention as DGTraceSpace and the solvers.
-    Device input is expanded and boundary data evaluated entirely with CuPy.
-    """
-    if boundary_condition is None:
-        raise ValueError("trace expansion requires prescribed boundary data")
-    if hasattr(reduced, "__cuda_array_interface__"):
-        from hdgfem.core.device import as_cupy_space
-        from hdgfem.runtime.optional import require_cupy
-        from hdgfem.core.device import as_cupy_trace_space
-
-        xp = require_cupy()
-        mesh = as_cupy_space(space).mesh
-        trace = as_cupy_trace_space(space.trace_space(trace_basis))
-    else:
-        xp, mesh, trace = np, space.mesh, space.trace_space(trace_basis)
-    reduced = xp.asarray(reduced, dtype=REAL_DTYPE)
-    expected = mesh.int_edges_inds.size * trace.edg_dof
-    if reduced.size != expected:
-        raise ValueError(f"interior trace needs {expected} coefficients; got {reduced.size}")
-    full = xp.zeros((mesh.num_edg, trace.edg_dof), dtype=REAL_DTYPE)
-    full[mesh.int_edges_inds] = reduced.reshape(-1, trace.edg_dof)
-    from hdgfem.assembly.hdg import boundary_trace_coefficients
-    full[mesh.bnd_edges_inds] = boundary_trace_coefficients(
-        boundary_condition, space, trace_basis=trace_basis,
-        backend="device" if xp is not np else "host", boundary_only=True,
-    )
-    return full.ravel()
-
-
 def field_linear_combination(
         space: DGSpace,
         terms,
@@ -419,7 +386,6 @@ __all__ = [
     "coefficient_field",
     "field_gradient_at_ref",
     "field_linear_combination",
-    "field_l2_norm",
     "field_values_at_ref",
     "perpendicular_vector_field",
     "project_callable_to_trace",
@@ -431,24 +397,3 @@ __all__ = [
 ]
 
 
-def field_l2_norm(field: DGField) -> float:
-    """Return a physical L2 norm without materializing resident device coefficients.
-
-    Device reductions reuse the package's scalar HDG Gram and geometry cache;
-    only the resulting scalar is transferred to the host.
-    """
-    coefficients = field._first_device_coefficients()
-    if coefficients is None:
-        return field.l2_norm()
-    from hdgfem.assembly.hdg_gram import ScalarHDGGram
-    from hdgfem.runtime.optional import require_cupy
-    cp = require_cupy()
-    device = int(coefficients.device.id)
-    cache = getattr(field.space, "_field_l2_gram_cache", None)
-    if cache is None:
-        cache = {}
-        object.__setattr__(field.space, "_field_l2_gram_cache", cache)
-    with cp.cuda.Device(device):
-        if device not in cache:
-            cache[device] = ScalarHDGGram(field.space, backend="device")
-        return float(np.sqrt(cache[device].l2_squared(coefficients)))

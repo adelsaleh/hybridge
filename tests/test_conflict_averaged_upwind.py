@@ -11,14 +11,16 @@ from scipy.sparse import coo_matrix
 
 import hdgfem.runtime.optional as runtime_optional
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly import matrices_numpy as mats
+from hdgfem.hdg import matrices as mats
+import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
 from hdgfem.backends import numba as nb
 from hdgfem.kernels.advection_reaction_fused import _assemble_conflict_face_trace_weights
 from hdgfem.linalg.transport_diagnostics import trace_inflow_diagnostics
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-from hdgfem.solvers.stabilization import (
-    conflict_averaged_normal_pair, effective_advection_normal_flux,
+from hdgfem.hdg.stabilization import (
+    conflict_averaged_normal_pair,
+    effective_advection_normal_flux,
     gauge_inactive_advection_trace_blocks,
 )
 
@@ -63,7 +65,7 @@ def test_saved_failure_recovers_full_weighted_rank(case, scale):
     assert face["sampling_rank"] == 7
     assert face["effective_trace_support"] >= 7
     assert face["sampling_rcond"] > 1.e-3
-    tau, gamma = mats.advection_trace_weights_from_normal_flux(space, normal, POLICY, trace_space=trace)
+    tau, gamma = hdg_stabilization.advection_trace_weights_from_normal_flux(space, normal, POLICY, trace_space=trace)
     effective = effective_advection_normal_flux(normal, space.mesh, POLICY)
     np.testing.assert_array_equal(tau, np.abs(effective))
     np.testing.assert_array_equal(gamma, tau - effective)
@@ -94,7 +96,7 @@ def test_numba_owned_weights_match_numpy_and_cupy_reference(monkeypatch, basis):
     trace = space.trace_space(basis)
     beta = np.random.default_rng(27).normal(size=(2, *space.shape))
     raw = np.einsum("dki,kfd,fiq->kfq", beta, space.mesh.normals, trace.bas_of_bd_quads)
-    expected = mats.advection_trace_weights_from_normal_flux(space, raw, POLICY, trace_space=trace)
+    expected = hdg_stabilization.advection_trace_weights_from_normal_flux(space, raw, POLICY, trace_space=trace)
     tau, gamma = np.empty_like(raw), np.empty_like(raw)
     slots = space.mesh.edge_side_indices
     # Reverse execution order to expose any dependency on neighbor weight writes.

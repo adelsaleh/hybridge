@@ -7,7 +7,7 @@ import pytest
 from hdgfem.solvers import ScaledUpwind
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.assembly.matrices_numpy import advection_trace_stabilization_values
+from hdgfem.hdg.stabilization import advection_trace_stabilization_values
 from hdgfem.backends.numba import _advection_stabilization_coefficients, _advection_trace_weight_tables
 from hdgfem.backends.advection_raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
 from hdgfem.linalg.transport_diagnostics import transport_rank_failure_details
@@ -156,7 +156,7 @@ def test_cli_multiplier_overrides_preset():
 @pytest.mark.parametrize("factor", [1., 1.25, 3.5])
 def test_cuda_precomputed_face_matrices_with_numpy_standin(monkeypatch, factor):
     import hdgfem.backends.advection_cuda as backend
-    from hdgfem.assembly import matrices_numpy as reference
+    from hdgfem.hdg import matrices as reference
     space = DGSpace(rectangle_mesh(1, 1), 3, basis_type="dub_orth")
     trace = space.trace_space("legendre-modal")
     normal = np.random.default_rng(70).normal(size=(space.mesh.num_tri, 3, trace.weights.size))

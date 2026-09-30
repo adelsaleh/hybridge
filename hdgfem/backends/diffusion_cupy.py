@@ -17,11 +17,11 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.core.space import DGField
 from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-from hdgfem.backends.raw_cuda import RawCudaBlockSize
+from hdgfem.hdg.cuda.launch import RawCudaBlockSize
 from hdgfem.backends.diffusion_raw_cuda import (
     RawDiffusionAssemblyResult,
     assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda,

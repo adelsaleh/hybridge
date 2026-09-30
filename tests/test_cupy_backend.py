@@ -1063,10 +1063,10 @@ def test_advection_reaction_raw_cuda_solver_returns_host_result():
 def test_raw_reduced_csr_pattern_matches_cupy_reference():
     from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.advection_raw_cuda import (
-        assert_reduced_csr_patterns_equal,
-        build_reduced_csr_pattern_cupy_reference,
-        build_reduced_csr_pattern_raw,
-    )
+            assert_reduced_csr_patterns_equal,
+            build_reduced_csr_pattern_cupy_reference,
+        )
+    from hdgfem.hdg.cuda.pattern import build_reduced_csr_pattern_raw
 
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)

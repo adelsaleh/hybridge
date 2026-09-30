@@ -8,8 +8,8 @@ from typing import Any, Literal
 
 import numpy as np
 
-from hdgfem.assembly import hdg
-from hdgfem.assembly import matrices_numpy as matrices
+from hdgfem.hdg import condensation as hdg
+from hdgfem.hdg import matrices
 from hdgfem.assembly.advection_diffusion_reaction import (
     ADRPreparedData,
     assemble_numpy,
@@ -276,7 +276,7 @@ def _reported_postprocessing_backend(backend: str, mode: str) -> str:
 
 def _positive_scalar_diffusion(diffusion) -> bool:
     """Return whether diffusion is an exactly isotropic positive constant."""
-    from hdgfem.solvers.stabilization import constant_isotropic_diffusivity
+    from hdgfem.hdg.stabilization import constant_isotropic_diffusivity
     try:
         value = constant_isotropic_diffusivity(diffusion)
     except (NotImplementedError, TypeError, ValueError):
@@ -334,7 +334,7 @@ def _adr_postprocess_samples(
     # Upwind-family policies (None, ScaledUpwind, "lax-friedrichs",
     # "conflict-averaged-upwind") use the same rule as ADR assembly:
     # factor * |beta.n|, with the conflict-averaged interior repair.
-    from hdgfem.solvers.stabilization import effective_advection_normal_flux, upwind_factor
+    from hdgfem.hdg.stabilization import effective_advection_normal_flux, upwind_factor
 
     factor = upwind_factor(advection_stabilization)
     if factor is not None:
@@ -692,7 +692,7 @@ def solve_advection_diffusion_reaction_hdg(
 
     scalar_diffusion = _positive_scalar_diffusion(opts.diffusion)
     if scalar_diffusion and not np.isscalar(opts.diffusion):
-        from hdgfem.solvers.stabilization import constant_isotropic_diffusivity
+        from hdgfem.hdg.stabilization import constant_isotropic_diffusivity
         opts = opts.with_overrides(diffusion=constant_isotropic_diffusivity(opts.diffusion))
     from hdgfem.backends.capabilities import validate_advection_diffusion_backend_configuration
 

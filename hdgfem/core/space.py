@@ -732,7 +732,7 @@ class DGSpace:
         ``func`` is evaluated at physical volume quadrature coordinates and may
         return a scalar, ``(num_quads,)``, or ``(num_elements, num_quads)``.
         """
-        from hdgfem.assembly import matrices_numpy as hdg_mats
+        from hdgfem.hdg import matrices as hdg_mats
         import hdgfem.core.mass as core_mass
 
         return core_mass.weighted_mass(self, func)
@@ -744,7 +744,7 @@ class DGSpace:
         points.  This permits ``u`` to use a different polynomial order while
         sharing the same mesh object.
         """
-        from hdgfem.assembly import matrices_numpy as hdg_mats
+        from hdgfem.hdg import matrices as hdg_mats
         import hdgfem.core.mass as core_mass
 
         return core_mass.weighted_mass_from_field(self, func, u, parameters=parameters)

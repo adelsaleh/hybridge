@@ -13,8 +13,11 @@ import numpy as np
 
 from hdgfem.core.field_ops import (
     field_linear_combination,
-    perpendicular_vector_field, solution_field, solution_trace, field_l2_norm,
+    perpendicular_vector_field,
+    solution_field,
+    solution_trace,
 )
+from hdgfem.hdg.gram import field_l2_norm
 from hdgfem.runtime.logging import timed_call
 from scripts.guiding_center.reference.legacy_ark3.stage_support import closest_trace, GuidingCenterStep
 from scripts.guiding_center.reference.legacy_ark3.poisson_recovery import (

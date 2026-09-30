@@ -14,7 +14,9 @@ from .recovery import (
 )
 from scripts.guiding_center.poisson.poisson_recovery import PoissonStageFailure
 from hdgfem.core.field_ops import (
-    perpendicular_vector_field, solution_field, solution_trace,
+    perpendicular_vector_field,
+    solution_field,
+    solution_trace,
 )
 
 

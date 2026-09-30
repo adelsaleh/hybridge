@@ -2,7 +2,8 @@
 import numpy as np
 import pytest
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.assembly import matrices_numpy as matrices
+from hdgfem.hdg import matrices
+import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.assembly.advection_diffusion_reaction import (
     prepare_adr_data, normalize_diffusion_stabilization, diffusion_stabilization_on_trace)
 from hdgfem.solvers.advection_diffusion_reaction import _adr_postprocess_samples
@@ -29,12 +30,12 @@ def test_supported_face_laws_and_resampling(kind):
     law=laws[kind]
     trace=space.trace_space('legendre-modal')
     prep=prepare_adr_data(space.constant(1.),.2,beta,space,diffusion_stabilization=law,trace_space=trace,t=.3)
-    expected=matrices._face_quadrature_values_from_scalar_input(law,space,'tau',trace_space=trace,t=.3)
+    expected=hdg_coefficients._face_quadrature_values_from_scalar_input(law,space,'tau',trace_space=trace,t=.3)
     np.testing.assert_allclose(prep.tau_total-prep.tau_advection,expected)
     post=DGSpace(mesh,space.order+1,basis_type='dub_orth')
     post_trace=post.trace_space('bernstein')
     resampled=diffusion_stabilization_on_trace(prep,space,post_trace)
-    expected_post=matrices._face_quadrature_values_from_scalar_input(law,space,'tau',trace_space=post_trace,t=.3)
+    expected_post=hdg_coefficients._face_quadrature_values_from_scalar_input(law,space,'tau',trace_space=post_trace,t=.3)
     np.testing.assert_allclose(resampled,expected_post)
     _,beta_face,total=_adr_postprocess_samples(beta,prep,space,post,None)
     normal=np.einsum('Kfqd,Kfd->Kfq',beta_face,mesh.normals)
@@ -93,7 +94,7 @@ def test_light_preparation_never_builds_dense_local_operators(monkeypatch):
 )
 def test_postprocess_samples_accept_every_upwind_policy(policy, factor):
     """Postprocessing tau_adv follows the same upwind-family rule as ADR assembly."""
-    from hdgfem.solvers.stabilization import ScaledUpwind
+    from hdgfem.hdg.stabilization import ScaledUpwind
 
     space, beta = setup()
     if policy == 'scaled':
@@ -110,7 +111,7 @@ def test_postprocess_samples_accept_every_upwind_policy(policy, factor):
 def test_lax_friedrichs_flux_postprocess_runs_end_to_end():
     """An ADR solve with Lax-Friedrichs stabilization recovers the p+1 flux."""
     from hdgfem import solve_advection_diffusion_reaction_hdg
-    from hdgfem.solvers.stabilization import ScaledUpwind
+    from hdgfem.hdg.stabilization import ScaledUpwind
 
     space, beta = setup()
     common = dict(diffusion=.3, assembly_backend='numba', solver='direct', preconditioner=None,

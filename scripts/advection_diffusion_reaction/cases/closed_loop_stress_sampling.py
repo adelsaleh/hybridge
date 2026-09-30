@@ -21,7 +21,7 @@ def _load(name, path):
 class StressCoefficientSampler:
     def __init__(self, spec):
         root = Path(spec["master_root"])/"hdgfem"
-        sampling = _load("_hdgfem_coefficient_sampling", root/"assembly/coefficient_sampling.py")
+        sampling = _load("_hdgfem_coefficient_sampling", root/"hdg/coefficient_sampling.py")
         self.formulas = _load("_hdgfem_closed_loop_coefficients", root/"core/closed_loop_coefficients.py")
         p = spec["stress_parameters"]
         self.volume_function = self.formulas.closed_loop_volume

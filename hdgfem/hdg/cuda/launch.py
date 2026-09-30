@@ -5,6 +5,10 @@ from __future__ import annotations
 from numbers import Integral
 from typing import Literal, TypeAlias
 
+import time
+from hdgfem.runtime.precision import real_raw_kernel
+
+
 
 RawCudaEquation = Literal["advection-reaction", "diffusion-reaction"]
 RawCudaBlockSize: TypeAlias = int | Literal["auto"]
@@ -84,3 +88,21 @@ def resolve_raw_cuda_block_size(
     if block_size not in RAW_CUDA_EXPLICIT_BLOCK_SIZES:
         raise ValueError("raw-CUDA block size must be 'auto' or one of 1, 32, 64, 128")
     return block_size
+
+
+def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
+    """Compile a raw CUDA kernel and request its dynamic shared-memory budget."""
+    kernel = real_raw_kernel(source, name, options=('--std=c++11',))
+    try:
+        kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
+    except Exception:
+        pass
+    return kernel
+
+
+def _compile_kernel_timed(cupy, source: str, name: str, shared_bytes: int):
+    """Eagerly compile a raw kernel and return its host-side JIT/load time."""
+    start = time.perf_counter()
+    kernel = _compile_kernel(cupy, source, name, shared_bytes)
+    kernel.compile()
+    return kernel, time.perf_counter() - start

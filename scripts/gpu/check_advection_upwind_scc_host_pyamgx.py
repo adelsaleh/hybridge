@@ -23,7 +23,8 @@ import scipy.sparse
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
 from hdgfem.backends.cupy import scipy_csr_to_cupy
 from hdgfem.backends.numba import reconstruct_projected_field_numba
@@ -204,7 +205,7 @@ def active_edges_for_ordering(space: DGSpace, boundary_mode: str):
 
 
 def build_ordering(args, space: DGSpace, beta_h) -> tuple[GraphOrderingResult, float]:
-    beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+    beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_h, space)
     start = time.perf_counter()
     ordering = upwind_scc_trace_ordering(
         space.mesh,

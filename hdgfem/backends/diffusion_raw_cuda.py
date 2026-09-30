@@ -17,7 +17,7 @@ the reduced matrix directly as COO or CSR.
 
 from __future__ import annotations
 
-from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE
 
 import time
 from dataclasses import dataclass
@@ -27,7 +27,13 @@ import numpy as np
 
 from hdgfem.core.device import as_cupy_space
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.hdg.trace_maps import (
+    _edge_to_solve_edge,
+    _interior_side_index,
+    _side_flux_offsets,
+)
+from hdgfem.hdg.cuda.launch import _compile_kernel, _compile_kernel_timed
 
 
 @dataclass(frozen=True)
@@ -106,7 +112,7 @@ def _validate_local_schur_factors(cached_raw, *, num_elements: int, nel: int, lo
     return schur_lu, schur_pivots
 
 
-from hdgfem.backends.raw_cuda_local import (
+from hdgfem.hdg.cuda.raw_source import (
     RAW_TRACE_ORIENTATION_HELPERS as _RAW_TRACE_ORIENTATION_HELPERS,
     RAW_COOPERATIVE_SOLVES,
 )
@@ -2078,51 +2084,6 @@ def _coop_shared_sizes(
     return assembly_doubles * REAL_ITEMSIZE + nel * 4 + 256
 
 
-def _compile_kernel(cupy, source: str, name: str, shared_bytes: int):
-    """Compile a raw CUDA kernel and request its dynamic shared-memory budget."""
-    kernel = real_raw_kernel(source, name, options=('--std=c++11',))
-    try:
-        kernel.max_dynamic_shared_size_bytes = int(shared_bytes)
-    except Exception:
-        pass
-    return kernel
-
-
-def _compile_kernel_timed(cupy, source: str, name: str, shared_bytes: int):
-    """Eagerly compile a raw kernel and return its host-side JIT/load time."""
-    start = time.perf_counter()
-    kernel = _compile_kernel(cupy, source, name, shared_bytes)
-    kernel.compile()
-    return kernel, time.perf_counter() - start
-
-
-def _edge_to_solve_edge(mesh) -> np.ndarray:
-    """Map interior global edges to contiguous reduced solve-edge ids."""
-    edge_is_free = np.ones(mesh.num_edg, dtype=bool)
-    edge_is_free[mesh.bnd_edges_inds] = False
-    free_edges = np.flatnonzero(edge_is_free).astype(np.int64)
-    edge_to_solve = np.full(mesh.num_edg, -1, dtype=np.int64)
-    edge_to_solve[free_edges] = np.arange(free_edges.size, dtype=np.int64)
-    return np.ascontiguousarray(edge_to_solve)
-
-
-def _interior_side_index(mesh) -> np.ndarray:
-    """Map each interior element side to its contiguous side index."""
-    index = np.full((mesh.num_tri, 3), -1, dtype=np.int64)
-    index[mesh.interior_elements, mesh.interior_faces] = np.arange(mesh.interior_elements.size, dtype=np.int64)
-    return np.ascontiguousarray(index)
-
-
-def _side_flux_offsets(mesh, edge_to_solve_edge: np.ndarray, edg_dof: int) -> np.ndarray:
-    """Compute packed flux-block offsets for all interior element sides."""
-    face_is_free = edge_to_solve_edge[mesh.loc2glob_edge] >= 0
-    side_col_counts = np.count_nonzero(face_is_free[mesh.interior_elements], axis=1).astype(np.int64)
-    offsets = np.empty(side_col_counts.size + 1, dtype=np.int64)
-    offsets[0] = 0
-    np.cumsum(side_col_counts * edg_dof * edg_dof, out=offsets[1:])
-    return np.ascontiguousarray(offsets)
-
-
 def _raw_trace_orientation_mode(trace_ref) -> int:
     """Select the raw CUDA orientation rule for the active trace basis."""
     kind = getattr(trace_ref, 'kind', '')
@@ -2149,7 +2110,6 @@ def validate_raw_cuda_supported(cspace, trace_ref) -> None:
     _raw_trace_orientation_mode(trace_ref)
     if cspace.el_dof > 28:
         raise ValueError('raw CUDA diffusion assembly currently supports p <= 6 (el_dof <= 28)')
-
 
 
 def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
@@ -2463,7 +2423,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     csr_pattern = None
     indptr = indices = None
     if matrix_format in {'csr', 'bsr'}:
-        from hdgfem.backends.advection_raw_cuda import build_reduced_csr_pattern_raw
+        from hdgfem.hdg.cuda.pattern import build_reduced_csr_pattern_raw
 
         start = time.perf_counter()
         csr_pattern = build_reduced_csr_pattern_raw(
