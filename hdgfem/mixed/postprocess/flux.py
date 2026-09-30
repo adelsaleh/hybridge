@@ -319,9 +319,9 @@ def _build_hdg_postprocess_cache(
         cache = _new_hdg_postprocess_cache(space, trace_space)
 
     if want_flux and cache.flux_schur_lu is None:
-        from hdgfem.mixed.numba_kernels import (
-                    factor_hdiv_flux_min_distance_postprocess_kernel,
-                )
+        from hdgfem.mixed.postprocess.numba_kernels import (
+            factor_hdiv_flux_min_distance_postprocess_kernel,
+        )
 
         post_el_dof = cache.post_space.el_dof
         post_edg_dof = cache.post_space.quad_data.edg_dof
@@ -346,7 +346,9 @@ def _build_hdg_postprocess_cache(
         )
 
     if want_primal and cache.primal_lu is None:
-        from hdgfem.mixed.numba_kernels import factor_primal_postprocess_kernel
+        from hdgfem.mixed.postprocess.numba_kernels import (
+                    factor_primal_postprocess_kernel,
+                )
 
         post_el_dof = cache.post_space.el_dof
         rows = post_el_dof + 1
@@ -376,8 +378,8 @@ def _postprocess_rt_flux_from_samples(
         materialize_host: bool = True,
 ) -> VectorDGField:
     r"""Reconstruct an RT_p flux from volume and numerical-normal targets."""
-    from hdgfem.mixed.adr_numba_kernels import (
-            solve_adr_rt_total_flux_postprocess_kernel,
+    from hdgfem.mixed.postprocess.numba_kernels import (
+            solve_rt_flux_postprocess_kernel,
         )
 
     qpost = post_space.quad_data
@@ -465,7 +467,7 @@ def _postprocess_rt_flux_from_samples(
         coeffs = np.empty(
             (2, space.mesh.num_tri, post_space.el_dof), dtype=REAL_DTYPE
         )
-        solve_adr_rt_total_flux_postprocess_kernel(coeffs, *rt_inputs)
+        solve_rt_flux_postprocess_kernel(coeffs, *rt_inputs)
     else:
         raise ValueError(
             "RT flux postprocessing backend must be 'numba', 'cupy', or 'raw-cuda'"
@@ -624,7 +626,9 @@ def _postprocess_diffusion_solution(
     postprocessed_field = None
     postprocessed_flux = None
     if want_primal:
-        from hdgfem.mixed.numba_kernels import solve_primal_postprocess_kernel
+        from hdgfem.mixed.postprocess.numba_kernels import (
+                    solve_primal_postprocess_kernel,
+                )
 
         if cache.primal_lu is None or cache.primal_pivots is None:
             raise RuntimeError("missing primal post-processing factorization")
@@ -660,10 +664,10 @@ def _postprocess_diffusion_solution(
         )
 
     if want_flux and flux_space == "l2_closest":
-        from hdgfem.mixed.numba_kernels import (
-                    solve_hdiv_flux_min_distance_postprocess_kernel,
-                    solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel,
-                )
+        from hdgfem.mixed.postprocess.numba_kernels import (
+            solve_diffusion_flux_min_distance_postprocess_kernel,
+            solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel,
+        )
 
         if (
             cache.flux_ainv_constraint_t is None
@@ -699,7 +703,9 @@ def _postprocess_diffusion_solution(
                 int(trace_orientation_mode),
             )
         else:
-            solve_hdiv_flux_min_distance_postprocess_kernel(
+            # Shares its projection and constrained correction with the ADR
+            # kernel; DR gaps are computed in registers (β = 0 fast path).
+            solve_diffusion_flux_min_distance_postprocess_kernel(
                 coeffs,
                 local_unknowns,
                 trace,

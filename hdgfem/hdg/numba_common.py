@@ -156,3 +156,19 @@ __all__ = [
     "zero_matrix",
     "zero_vector",
 ]
+
+
+@njit(cache=True, inline="always")
+def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_mode):
+    """Map a global trace dof into local orientation for nodal/modal traces."""
+    if trace_orientation_mode == 1:
+        return dof
+    return map_edge_dof_bool(is_positive_orientation, dof, edge_dof)
+
+
+@njit(cache=True, inline="always")
+def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode):
+    """Return the coefficient sign for the selected trace orientation rule."""
+    if trace_orientation_mode == 1 and (not is_positive_orientation) and dof % 2 == 1:
+        return -1.0
+    return 1.0

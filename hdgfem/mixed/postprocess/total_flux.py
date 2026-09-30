@@ -177,7 +177,9 @@ def _postprocess_total_flux(
         postprocessing_backend="numba",
 ) -> VectorDGField:
     """Recover the total flux by full-space or RT_p normal-moment matching."""
-    from hdgfem.mixed.adr_numba_kernels import solve_adr_total_flux_postprocess_kernel
+    from hdgfem.mixed.postprocess.numba_kernels import (
+            solve_flux_min_distance_postprocess_kernel,
+        )
     from hdgfem.mixed.postprocess.flux import _trace_basis_at
 
     xp = np
@@ -285,7 +287,7 @@ def _postprocess_total_flux(
         optimize=True,
     ).reshape(space.mesh.num_tri, -1)
     coeffs = np.empty((2, space.mesh.num_tri, post.el_dof), dtype=np.float64)
-    solve_adr_total_flux_postprocess_kernel(
+    solve_flux_min_distance_postprocess_kernel(
         coeffs,
         xp.ascontiguousarray(base_coeffs),
         xp.ascontiguousarray(gap),
@@ -313,7 +315,7 @@ def _postprocess_primal_from_total_flux(
         postprocessing_backend="numba",
 ) -> DGField:
     """Recover u_h^* through the coupled ADR local Neumann HDG problem."""
-    from hdgfem.mixed.adr_numba_kernels import (
+    from hdgfem.mixed.postprocess.numba_kernels import (
             solve_adr_primal_from_total_flux_postprocess_kernel,
         )
 

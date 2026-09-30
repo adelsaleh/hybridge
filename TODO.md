@@ -802,6 +802,23 @@ Execution protocol (approved 2026-09-29):
 
   Keep the DR fast paths listed in the plan as specializations. The primal
   postprocess stays as two methods.
+
+  6.1 done 2026-09-30:
+  - all mixed postprocessing kernels live in
+    `mixed/postprocess/numba_kernels.py`;
+  - RT uses the one shared kernel `solve_rt_flux_postprocess_kernel`;
+  - l2_closest shares its projection and constrained correction (inline
+    helpers) between `solve_flux_min_distance_postprocess_kernel` (ADR,
+    host-sampled gaps) and `solve_diffusion_flux_min_distance_postprocess_kernel`
+    (DR, gaps computed in registers);
+  - the Numba trace dof/sign helpers exist once, in `hdg/numba_common`;
+  - DR/ADR(β = 0) flux parity holds at 1e-12.
+
+  Performance gate at p = 5, K = 18,432, host Numba:
+  - DR l2_closest: min 14.15–14.23 ms before, 14.16–14.22 ms after;
+  - ADR: unchanged within noise;
+  - a first attempt that split the DR kernel into gap and solve passes was
+    ~10% slower and was not kept.
 - [ ] Phase 7: create `diagnostics/` and `cases/`, split
   `solvers/diffusion_reaction.py`, and remove or keep dead and test-only code
   per the decision above. Update CODEMAP and `docs/backends/README.md` to the

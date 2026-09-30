@@ -18,10 +18,10 @@ except ImportError:  # pragma: no cover
 from hdgfem.hdg.numba_common import (
     lu_factor_inplace,
     lu_solve_inplace,
-    map_edge_dof_bool,
     zero_matrix,
 )
 from hdgfem.runtime.optional import njit
+from hdgfem.hdg.numba_common import _trace_local_dof, _trace_orientation_sign
 
 
 @njit(cache=True, inline="always", fastmath=True)
@@ -164,22 +164,6 @@ def _assemble_conflict_face_trace_weights(tau, gamma, element, normals, face_bas
             gamma[element, face, qf] = abs(a) - a
         gauge[face] = inactive and left == side
     return gauge
-
-
-@njit(cache=True, inline="always")
-def _trace_local_dof(is_positive_orientation, dof, edge_dof, trace_orientation_mode):
-    """Map a global trace dof into local orientation for nodal/modal traces."""
-    if trace_orientation_mode == 1:
-        return dof
-    return map_edge_dof_bool(is_positive_orientation, dof, edge_dof)
-
-
-@njit(cache=True, inline="always")
-def _trace_orientation_sign(is_positive_orientation, dof, trace_orientation_mode):
-    """Return the coefficient sign for the selected trace orientation rule."""
-    if trace_orientation_mode == 1 and (not is_positive_orientation) and dof % 2 == 1:
-        return -1.0
-    return 1.0
 
 
 @njit(cache=True, fastmath=True)

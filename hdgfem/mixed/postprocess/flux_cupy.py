@@ -29,7 +29,7 @@ def solve_adr_rt_total_flux_postprocess_cupy(
     r"""Reconstruct ``RT_p`` total fluxes with batched device dense solves.
 
     This is the CuPy mirror of
-    ``solve_adr_rt_total_flux_postprocess_kernel``. Static reference and mesh
+    ``solve_rt_flux_postprocess_kernel``. Static reference and mesh
     tables are uploaded once per call, all element moment matrices are formed
     and solved in batches on the active CUDA device. Final degree-``p+1``
     coefficients stay on device when ``materialize_host=False``; the default
