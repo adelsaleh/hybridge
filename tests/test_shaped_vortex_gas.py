@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from hdgfem.core.geometry import PolygonDomain, shaped_domain
-from hdgfem.core.profiles import GaussianBlobField
+from hdgfem.cases.profiles import GaussianBlobField
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser

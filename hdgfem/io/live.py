@@ -6,12 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from hdgfem.io.plot import (
-    _require_pyvista,
-    add_field_to_plotter,
-    reference_plot_points,
-    scalar_color_limits,
-)
+from hdgfem.io.plot import _require_pyvista, add_field_to_plotter, scalar_color_limits
+from hdgfem.core.quadrature import reference_plot_points
 
 
 def expanding_color_limits(minimum, maximum, *, limits=None, symmetric=False,

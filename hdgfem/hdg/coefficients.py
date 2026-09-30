@@ -546,3 +546,26 @@ def _reaction_coefficients(reaction, space: DGSpace) -> tuple[np.ndarray, float,
         if constant_value is not None:
             return np.zeros((1, 1), dtype=np.float64), float(constant_value), True
     return _same_space_field_coefficients(reaction, space, "reaction"), 0.0, False
+
+
+def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
+    """Return a same-space DGField or raise a backend-specific projection error."""
+    if isinstance(value, DGField):
+        value.space.assert_same_mesh(space)
+        if value.space is not space:
+            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
+        return value
+    if callable(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "project callables first with space.project_callable(...)."
+        )
+    if np.isscalar(value):
+        raise TypeError(
+            f"assembly_backend='{backend}' requires {label} to be a DGField; "
+            "use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"assembly_backend='{backend}' requires {label} to be a DGField; "
+        "wrap coefficient arrays with space.field(...)."
+    )

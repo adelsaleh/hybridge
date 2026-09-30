@@ -6,7 +6,7 @@ import pytest
 
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.diagnostics import ScalarPositivityDiagnostics
+from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
 from hdgfem.io.raster import RasterGeometry
 from scripts.guiding_center.diagnostics.diocotron_reference import annulus_spectrum, fit_growth, candidate_annulus, PAPER_PARAMETERS
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics

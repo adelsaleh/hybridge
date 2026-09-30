@@ -69,6 +69,7 @@ from hdgfem.mixed.local_numpy import (
     local_solvers,
     split_diffusion_unknowns,
 )
+from hdgfem.hdg.coefficients import _require_same_space_dg_field_for_backend
 
 
 AssemblyBackend = Literal["numpy", "numba", "auto"]
@@ -302,29 +303,6 @@ def _validate_local_factor_cache_configuration(options, backend: str, *, statefu
     if policy == "schur-cholesky" and (not np.isscalar(options.stabilization) or float(options.stabilization) <= 0.0):
         raise ValueError("cache_local_factors='schur-cholesky' requires strictly positive scalar stabilization")
     return policy
-
-
-def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
-    """Return a same-space DGField or raise a backend-specific projection error."""
-    if isinstance(value, DGField):
-        value.space.assert_same_mesh(space)
-        if value.space is not space:
-            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
-        return value
-    if callable(value):
-        raise TypeError(
-            f"assembly_backend='{backend}' requires {label} to be a DGField; "
-            "project callables first with space.project_callable(...)."
-        )
-    if np.isscalar(value):
-        raise TypeError(
-            f"assembly_backend='{backend}' requires {label} to be a DGField; "
-            "use space.zeros(...) or space.constant(...) for constants."
-        )
-    raise TypeError(
-        f"assembly_backend='{backend}' requires {label} to be a DGField; "
-        "wrap coefficient arrays with space.field(...)."
-    )
 
 
 def _resolve_diffusion_postprocessing_backend(

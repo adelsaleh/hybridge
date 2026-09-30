@@ -248,7 +248,10 @@ def test_real_poisson_retry_rebuilds_then_reuses_and_records_all_work(tmp_path, 
 
 
 def test_rejected_result_snapshot_preserves_metrics_without_solution_or_preconditioner():
-    from hdgfem.diagnostics import solver_diagnostics_snapshot, solver_result_metrics
+    from hdgfem.diagnostics.solver import (
+            solver_diagnostics_snapshot,
+            solver_result_metrics,
+        )
     from hdgfem.linalg.results import SolveResult
     global_result = SolveResult(x=np.ones(4), x_device=object(), preconditioner=object(),
                                 iteration_count=5, status='converged')

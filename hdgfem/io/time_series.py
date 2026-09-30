@@ -192,7 +192,7 @@ def plot_mode_history(times, modes, amplitudes, output_dir=None, *, title="Mode 
         return []
     from matplotlib.colors import LogNorm
     from matplotlib.ticker import MaxNLocator
-    from hdgfem.diagnostics import modal_activity
+    from hdgfem.diagnostics.guiding_center import modal_activity
 
     times, modes, amplitudes = np.asarray(times), np.asarray(modes), np.asarray(amplitudes)
     activity = modal_activity(amplitudes, modes, relative_threshold=relative_threshold)

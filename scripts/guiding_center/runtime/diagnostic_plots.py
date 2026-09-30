@@ -159,7 +159,7 @@ def diagnostic_panels(rows, timing_rows=()):
         if measured is None and rows and not any(drift_key in row for row in rows):
             baseline = rows[0].get(total_key)
             if rows[0].get("time") == 0 and baseline is not None and np.isfinite(baseline) and baseline != 0:
-                from hdgfem.diagnostics import relative_drift
+                from hdgfem.diagnostics.solver import relative_drift
 
                 times = np.asarray([row.get("time", np.nan) for row in rows])
                 values = np.asarray([

@@ -1692,7 +1692,7 @@ def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materi
 def test_guiding_center_field_diagnostics_stays_on_device_and_matches_host():
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.diagnostics import guiding_center_field_diagnostics
+    from hdgfem.diagnostics.guiding_center import guiding_center_field_diagnostics
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))

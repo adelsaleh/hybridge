@@ -18,21 +18,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "hdgfem"
 
-# Longest matching prefix wins. Legacy packages carry the layer of their
-# destination until they are dissolved.
+# Longest matching prefix wins.
 LAYERS: dict[str, float] = {
     "hdgfem.runtime": 0,
-    "hdgfem.runtime.precision": 0,
-    "hdgfem.runtime.benchmarking": 0,
     "hdgfem.core": 1,
     "hdgfem.cases": 1.5,
     "hdgfem.linalg": 2,
     "hdgfem.hdg": 3,
-    "hdgfem.assembly": 3,
-    "hdgfem.kernels": 3,
     "hdgfem.transport": 4,
     "hdgfem.mixed": 4,
-    "hdgfem.backends": 4,
     "hdgfem.solvers": 5,
     "hdgfem.diagnostics": 6,
     "hdgfem.io": 7,
@@ -41,11 +35,7 @@ LAYERS: dict[str, float] = {
 # Families on the same layer that must stay independent of each other.
 SIBLINGS = {"hdgfem.transport", "hdgfem.mixed"}
 
-ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("hdgfem.diagnostics", "hdgfem.io.plot"),
-    }
-)
+ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 
 
 def _module_name(path: Path) -> str:

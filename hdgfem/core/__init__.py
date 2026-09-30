@@ -36,15 +36,11 @@ from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolon
 from hdgfem.core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
 from hdgfem.core.geometry import DiskDomain, PolygonDomain, shaped_domain
-from hdgfem.core.profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
 
 __all__ = [
     "PolygonDomain",
     "DiskDomain",
-    "GaussianBlobField",
-    "FFTGaussianBlobField",
     "shaped_domain",
-    "sample_gaussian_blob_field",
     "DGCoefficientLayout",
     "DGTraceSpace",
     "DGField",

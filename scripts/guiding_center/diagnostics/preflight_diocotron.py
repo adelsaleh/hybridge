@@ -10,7 +10,11 @@ import numpy as np
 from scipy.integrate import quad
 
 from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.diagnostics import ScalarPositivityDiagnostics, evaluate_scalar_error, guiding_center_field_diagnostics
+from hdgfem.diagnostics.guiding_center import (
+    ScalarPositivityDiagnostics,
+    guiding_center_field_diagnostics,
+)
+from hdgfem.diagnostics.errors import evaluate_scalar_error
 from scripts.guiding_center.diagnostics.diocotron_reference import PAPER_PARAMETERS, annulus_spectrum, candidate_annulus
 from scripts.guiding_center.cases.guiding_center_cases import diocotron_k
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key

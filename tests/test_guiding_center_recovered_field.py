@@ -14,7 +14,7 @@ import hdgfem.runtime.optional as runtime_optional
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.diagnostics import guiding_center_field_diagnostics
+from hdgfem.diagnostics.guiding_center import guiding_center_field_diagnostics
 from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser

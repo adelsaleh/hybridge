@@ -36,7 +36,7 @@ from hdgfem.core.field_ops import (
     vector_field_linear_combination,
 )
 from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
-from hdgfem.diagnostics import (
+from hdgfem.diagnostics.errors import (
     ScalarComparisonSamples,
     ScalarErrorMetrics,
     ScalarHDGErrorMetrics,
@@ -44,11 +44,15 @@ from hdgfem.diagnostics import (
     VectorComparisonSamples,
     VectorErrorMetrics,
     VectorErrorReport,
-    azimuthal_mode_diagnostics,
     evaluate_scalar_error,
     evaluate_hdg_scalar_error,
     evaluate_vector_error,
+)
+from hdgfem.diagnostics.guiding_center import (
+    azimuthal_mode_diagnostics,
     guiding_center_field_diagnostics,
+)
+from hdgfem.diagnostics.solver import (
     relative_drift,
     result_transfer_time,
     solver_result_metrics,

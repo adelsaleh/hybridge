@@ -4,12 +4,12 @@ from __future__ import annotations
 import time
 from typing import Any
 from hdgfem.core.field_ops import perpendicular_vector_field
-from hdgfem.diagnostics import (
-    evaluate_scalar_error,
+from hdgfem.diagnostics.errors import evaluate_scalar_error
+from hdgfem.diagnostics.guiding_center import (
     guiding_center_field_diagnostics,
     transport_velocity_diagnostics,
-    relative_drift,
 )
+from hdgfem.diagnostics.solver import relative_drift
 
 
 def _electric_flux(poisson_result):

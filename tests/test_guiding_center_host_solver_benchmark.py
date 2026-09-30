@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.diagnostics import azimuthal_mode_diagnostics
+from hdgfem.diagnostics.guiding_center import azimuthal_mode_diagnostics
 
 from scripts.guiding_center.benchmarks.benchmark_host_solver_stages import (
     SCIPY_ITERATIVE_SOLVERS,

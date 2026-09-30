@@ -248,7 +248,7 @@ def _summarize_solve(result, report, problem, *, preset_key, mesh, space, config
     Also records pointwise error metrics in ``report`` for JSON output.
     """
     import numpy as np
-    from hdgfem.diagnostics import evaluate_scalar_error
+    from hdgfem.diagnostics.errors import evaluate_scalar_error
     from hdgfem.runtime.logging import format_elapsed_percent
     from hdgfem.io.output import pretty_print_sections
 

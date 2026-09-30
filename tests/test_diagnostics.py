@@ -141,7 +141,7 @@ def test_scalar_field_integral_and_min_max_are_field_operations() -> None:
 def test_diagnostic_packing_rejects_unreduced_arrays_before_download() -> None:
     from types import SimpleNamespace
     import pytest
-    from hdgfem.diagnostics import _diagnostic_scalars
+    from hdgfem.diagnostics.guiding_center import _diagnostic_scalars
 
     calls = []
     namespace = SimpleNamespace(asarray=np.asarray, stack=np.stack,
@@ -155,7 +155,7 @@ def test_diagnostic_packing_rejects_unreduced_arrays_before_download() -> None:
 
 def test_azimuthal_host_override_preserves_explicit_backend_choice() -> None:
     import pytest
-    from hdgfem.diagnostics import azimuthal_mode_diagnostics
+    from hdgfem.diagnostics.guiding_center import azimuthal_mode_diagnostics
 
     space = _space(2)
     equilibrium = space.project_callable(lambda x, y: 1.0 + 0.1*x)

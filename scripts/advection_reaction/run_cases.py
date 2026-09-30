@@ -128,7 +128,7 @@ def _numba_thread_count() -> int | None:
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
-    from hdgfem.diagnostics import evaluate_scalar_error
+    from hdgfem.diagnostics.errors import evaluate_scalar_error
     from hdgfem.io.output import pretty_print_sections
 
     metrics = evaluate_scalar_error(result.field, exact).metrics

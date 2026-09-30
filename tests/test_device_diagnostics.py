@@ -8,13 +8,13 @@ import pytest
 
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.diagnostics import (
+from hdgfem.diagnostics.guiding_center import (
     ScalarPositivityDiagnostics,
     azimuthal_mode_diagnostics,
-    evaluate_scalar_error,
     guiding_center_field_diagnostics,
-    solver_result_metrics,
 )
+from hdgfem.diagnostics.errors import evaluate_scalar_error
+from hdgfem.diagnostics.solver import solver_result_metrics
 from hdgfem.io.records import DiagnosticsRecorder
 from hdgfem.linalg.results import SolveResult
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics

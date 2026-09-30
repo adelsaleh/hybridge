@@ -5,7 +5,8 @@ matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg", force=True)
 
 from hdgfem import rectangle_mesh
-from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib, reference_plot_points
+from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib
+from hdgfem.core.quadrature import reference_plot_points
 
 
 def _sample_values(mesh, reference_points, offset=0.0, scale=1.0):

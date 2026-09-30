@@ -89,7 +89,7 @@ class DiocotronModeDiagnostics:
             diocotron_phi_mode_target_l2=result[f"diocotron_phi_mode_{self.mode}_l2"],
             diocotron_modal_radius=self.radius,diocotron_modal_backend=self.backend,
             diocotron_modal_radial_points=len(self.radii),diocotron_modal_angular_points=self.angular_points)
-        from hdgfem.diagnostics import modal_activity
+        from hdgfem.diagnostics.guiding_center import modal_activity
         activity = modal_activity(packed[:len(self.modes)], self.modes)
         result["diocotron_active_mode_count"] = int(activity["active_counts"][0])
         for rank, (number, value) in enumerate(zip(

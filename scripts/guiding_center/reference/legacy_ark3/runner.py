@@ -43,10 +43,12 @@ from hdgfem.core.field_ops import (
     solution_trace,
     trace_linear_combination,
 )
-from hdgfem.diagnostics import (
-    evaluate_scalar_error,
+from hdgfem.diagnostics.errors import evaluate_scalar_error
+from hdgfem.diagnostics.guiding_center import (
     guiding_center_field_diagnostics,
     transport_velocity_diagnostics,
+)
+from hdgfem.diagnostics.solver import (
     relative_drift,
     result_transfer_time,
     solver_result_metrics,
@@ -1783,7 +1785,7 @@ def run_guiding_center_case(
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
-        from hdgfem.diagnostics import ScalarPositivityDiagnostics
+        from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity, _ = timed_call("[gc:init] caching positivity diagnostics", _detail_verbosity(config),
             lambda: ScalarPositivityDiagnostics(space,
                 backend="device" if projection_backend == "cupy" else "host",

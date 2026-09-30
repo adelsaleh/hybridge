@@ -736,3 +736,18 @@ def _reference_edge_points_from_1d(edge_points_1d: np.ndarray) -> np.ndarray:
             axis=1,
         )
     )
+
+
+def reference_plot_points(resolution: int) -> np.ndarray:
+    r"""Return a uniform plotting grid on :math:`\hat K`.
+
+    The reference triangle is
+    :math:`\hat K=\{(r,s)\in[-1,1]^2:\ s\le -r\}`.  The returned array has
+    shape ``(num_plot_points, 2)`` and is C-contiguous.
+    """
+    if resolution < 2:
+        raise ValueError("resolution must be at least 2")
+    axis = np.linspace(-1.0, 1.0, int(resolution))
+    xx, yy = np.meshgrid(axis, axis, indexing="xy")
+    inside = yy <= -xx
+    return np.ascontiguousarray(np.column_stack((xx[inside], yy[inside])), dtype=np.float64)

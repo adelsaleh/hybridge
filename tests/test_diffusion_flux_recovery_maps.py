@@ -111,6 +111,8 @@ def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, varia
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
     monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
+    monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
+        get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
     cache=None
     for tau in (1.,2.):
         primal,flux,cache=diffusion._postprocess_diffusion_solution(local,trace,space,tau,1.,'flux',

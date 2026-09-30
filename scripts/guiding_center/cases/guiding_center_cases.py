@@ -467,7 +467,7 @@ def positive_turbulence(
     preserves the requested zero-density wall band after grid spreading.
     """
     from hdgfem.core.geometry import DiskDomain, shaped_domain
-    from hdgfem.core.profiles import sample_gaussian_blob_field
+    from hdgfem.cases.profiles import sample_gaussian_blob_field
 
     counts, sigmas = tuple(counts), tuple(sigmas)
     geometry_params = dict(geometry_params or {})
@@ -529,7 +529,7 @@ def euler_shaped_vortex_gas(
 ) -> GuidingCenterCase:
     """Signed multiscale gas in a horseshoe, supplied ITER wall, or Pac-Man domain."""
     from hdgfem.core.geometry import shaped_domain
-    from hdgfem.core.profiles import sample_gaussian_blob_field
+    from hdgfem.cases.profiles import sample_gaussian_blob_field
 
     geometry_params = dict(geometry_params or {})
     domain = shaped_domain(geometry, **geometry_params)

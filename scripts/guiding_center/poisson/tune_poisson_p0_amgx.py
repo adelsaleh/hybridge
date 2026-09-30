@@ -17,7 +17,7 @@ import traceback
 
 from hdgfem.runtime.optional import require_cupy
 from hdgfem.hdg.gram import field_l2_norm
-from hdgfem.diagnostics import solver_result_metrics
+from hdgfem.diagnostics.solver import solver_result_metrics
 from hdgfem.linalg.multigrid.face_hp import AmgxScalarVcycle
 from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver

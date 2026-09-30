@@ -15,11 +15,8 @@ from hdgfem.runtime.precision import (
 )
 from hdgfem.core.field_ops import project_callable_to_trace, solution_trace
 from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.diagnostics import (
-    transport_velocity_diagnostics,
-    result_transfer_time,
-    solver_result_metrics,
-)
+from hdgfem.diagnostics.guiding_center import transport_velocity_diagnostics
+from hdgfem.diagnostics.solver import result_transfer_time, solver_result_metrics
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 from hdgfem.io.records import DiagnosticsRecorder, _json_safe
 from scripts.guiding_center.runtime.configuration import (
@@ -279,7 +276,7 @@ def run_guiding_center_case(
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
-        from hdgfem.diagnostics import ScalarPositivityDiagnostics
+        from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity, _ = timed_call("[gc:init] caching positivity diagnostics", _detail_verbosity(config),
             lambda: ScalarPositivityDiagnostics(space,
                 backend="device" if projection_backend == "cupy" else "host",

@@ -2,7 +2,7 @@
 from time import perf_counter
 
 from hdgfem.core.field_ops import perpendicular_vector_field, trace_linear_combination
-from hdgfem.diagnostics import solver_result_metrics
+from hdgfem.diagnostics.solver import solver_result_metrics
 from .si_euler import SIEulerStepper
 from .stage_support import GuidingCenterStep
 

@@ -327,7 +327,7 @@ class _ARKWork:
         return rhs, trace, drift
 
     def repair(self, failure):
-        from hdgfem.diagnostics import solver_diagnostics_snapshot
+        from hdgfem.diagnostics.solver import solver_diagnostics_snapshot
         # Drop rejected solution/system arrays, retaining the package metric
         # interface and owning traces already stored in the candidate lists.
         for prefix in ("transport", "poisson"):

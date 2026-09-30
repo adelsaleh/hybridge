@@ -59,6 +59,7 @@ from hdgfem.runtime.logging import (
     _timed_call,
     _verbosity_level,
 )
+from hdgfem.hdg.coefficients import _require_same_space_dg_field_for_backend
 
 
 ReturnKey = Literal[
@@ -196,29 +197,6 @@ class AdvectionReactionHDGOptions:
     def as_solve_kwargs(self) -> dict[str, Any]:
         """Return keyword arguments for :func:`solve_advection_reaction_hdg`."""
         return {field.name: getattr(self, field.name) for field in fields(type(self))}
-
-
-def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
-    """Return a same-space DGField or raise a backend-specific projection error."""
-    if isinstance(value, DGField):
-        value.space.assert_same_mesh(space)
-        if value.space is not space:
-            raise ValueError(f"{label} must live in the same DGSpace object for assembly_backend='{backend}'")
-        return value
-    if callable(value):
-        raise TypeError(
-            f"assembly_backend='{backend}' requires {label} to be a DGField; "
-            "project callables first with space.project_callable(...)."
-        )
-    if np.isscalar(value):
-        raise TypeError(
-            f"assembly_backend='{backend}' requires {label} to be a DGField; "
-            "use space.zeros(...) or space.constant(...) for constants."
-        )
-    raise TypeError(
-        f"assembly_backend='{backend}' requires {label} to be a DGField; "
-        "wrap coefficient arrays with space.field(...)."
-    )
 
 
 def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> VectorDGField:

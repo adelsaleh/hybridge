@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 
 import numpy as np
 
-from hdgfem.diagnostics import ScalarComparisonSamples
+from hdgfem.diagnostics.errors import ScalarComparisonSamples
 from hdgfem.io.plot import (
     _require_pyvista,
     add_samples_to_plotter,

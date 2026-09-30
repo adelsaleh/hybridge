@@ -22,7 +22,7 @@ class StressCoefficientSampler:
     def __init__(self, spec):
         root = Path(spec["master_root"])/"hdgfem"
         sampling = _load("_hdgfem_coefficient_sampling", root/"hdg/coefficient_sampling.py")
-        self.formulas = _load("_hdgfem_closed_loop_coefficients", root/"core/closed_loop_coefficients.py")
+        self.formulas = _load("_hdgfem_closed_loop_coefficients", root/"cases/closed_loop_coefficients.py")
         p = spec["stress_parameters"]
         self.volume_function = self.formulas.closed_loop_volume
         self.velocity_function = self.formulas.closed_loop_velocity
@@ -30,7 +30,7 @@ class StressCoefficientSampler:
                            p["speed"]/spec["velocity_normalization"], p["reaction"],
                            ("trap", "cross", "orthogonal").index(p["variant"]))
         if p.get("geometry", "annulus") == "square":
-            self.formulas = _load("_hdgfem_square_stress_coefficients", root/"core/square_stress_coefficients.py")
+            self.formulas = _load("_hdgfem_square_stress_coefficients", root/"cases/square_stress_coefficients.py")
             self.parameters = (p["epsilon"], p["speed"]/spec["velocity_normalization"],
                                p["reaction"], ("trap", "cross", "orthogonal").index(p["variant"]))
             self.volume_function = self.formulas.square_volume

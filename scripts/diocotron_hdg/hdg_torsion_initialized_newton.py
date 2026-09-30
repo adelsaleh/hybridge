@@ -45,7 +45,8 @@ from hdgfem.core.mesh import (
     mesh_edge_min_max,
 )
 from hdgfem.core.space import DGField, DGSpace
-from hdgfem.io.plot import add_field_to_plotter, reference_plot_points
+from hdgfem.io.plot import add_field_to_plotter
+from hdgfem.core.quadrature import reference_plot_points
 from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,

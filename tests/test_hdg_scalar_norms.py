@@ -8,7 +8,7 @@ from hdgfem.hdg.gram import ScalarHDGGram, assemble_hdg_gram
 from hdgfem.core.field_ops import project_callable_to_trace
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.diagnostics import evaluate_hdg_scalar_error
+from hdgfem.diagnostics.errors import evaluate_hdg_scalar_error
 from scripts.guiding_center.benchmarks import run_guiding_center_temporal_convergence as driver
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
@@ -198,7 +198,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
     assert accepted["rho_l2_error"] == pytest.approx(expected.l2, rel=1e-12)
     assert not device_field.coefficients_materialized
     # A host mirror must not pull auto diagnostics back onto the CPU.
-    import hdgfem.diagnostics as diagnostics
+    import hdgfem.diagnostics.errors as diagnostics
     monkeypatch.setattr(diagnostics, "_evaluate_host", forbidden)
     device_field._coeffs = field.coeffs
     scalar_error = diagnostics.evaluate_scalar_error(device_field, exact)

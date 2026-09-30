@@ -338,7 +338,7 @@ class _ARKWork:
 
     def repair(self, failure):
         """Increase tau and rebuild the failed Poisson checkpoint within the retry limit."""
-        from hdgfem.diagnostics import solver_diagnostics_snapshot
+        from hdgfem.diagnostics.solver import solver_diagnostics_snapshot
         # Drop rejected solution/system arrays, retaining the package metric
         # interface and owning traces already stored in the candidate lists.
         for prefix in ("transport", "poisson"):

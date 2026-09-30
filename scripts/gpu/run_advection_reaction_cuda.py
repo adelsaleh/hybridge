@@ -22,7 +22,7 @@ from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace, VectorDGField
 from hdgfem.core.field_ops import solution_field
-from hdgfem.diagnostics import evaluate_scalar_error
+from hdgfem.diagnostics.errors import evaluate_scalar_error
 from hdgfem.io.comparison import plot_sampled_solution_comparison
 from hdgfem.linalg.amgx.config import load_amgx_config
 from hdgfem.io.output import pretty_print_sections

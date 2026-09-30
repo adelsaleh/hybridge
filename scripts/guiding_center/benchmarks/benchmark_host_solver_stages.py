@@ -23,7 +23,7 @@ if __package__ in {None, ""}:
 
 from hdgfem.runtime.optional import asnumpy
 from hdgfem.core.field_ops import solution_field
-from hdgfem.diagnostics import solver_result_metrics
+from hdgfem.diagnostics.solver import solver_result_metrics
 from hdgfem.linalg import clear_pypardiso_cache
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver

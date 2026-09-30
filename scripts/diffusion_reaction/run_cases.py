@@ -495,7 +495,7 @@ def _summarize_solve(
         config: DiffusionReactionRunPreset,
 ) -> float:
     import numpy as np
-    from hdgfem.diagnostics import evaluate_scalar_error
+    from hdgfem.diagnostics.errors import evaluate_scalar_error
     from hdgfem.io.output import pretty_print_sections
     from hdgfem.mixed.coefficients import is_identity_diffusion
 
@@ -874,7 +874,7 @@ def _main() -> None:
     if config.plot:
         _configure_plot_gl_environment(config.plot_gl_mode)
 
-        from hdgfem.diagnostics import evaluate_scalar_error
+        from hdgfem.diagnostics.errors import evaluate_scalar_error
         from hdgfem.io.comparison import plot_sampled_solution_comparison
         from hdgfem.io.plot import resolve_postprocessed_plot_resolution
 

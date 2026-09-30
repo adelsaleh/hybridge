@@ -112,7 +112,7 @@ class StepRecoveryWork:
 
     def repair(self, failure):
         """Repeat the failed checkpoint first; the caller then rebuilds histories."""
-        from hdgfem.diagnostics import solver_diagnostics_snapshot
+        from hdgfem.diagnostics.solver import solver_diagnostics_snapshot
         for kind in ("poisson", "transport"):
             results = getattr(self, kind+"_results")
             for index, result in enumerate(results):

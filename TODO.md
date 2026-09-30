@@ -806,6 +806,20 @@ Execution protocol (approved 2026-09-29):
   `solvers/diffusion_reaction.py`, and remove or keep dead and test-only code
   per the decision above. Update CODEMAP and `docs/backends/README.md` to the
   final layout.
+
+  Progress 2026-09-30:
+  - `diagnostics/` is a package (`errors`, `solver`, `guiding_center`; the
+    public names are re-exported);
+  - `cases/` holds the analytic coefficient sets and profiles;
+  - `reference_plot_points` moved to `core/quadrature`;
+  - the AR/DR `_require_same_space_dg_field_for_backend` copies are merged;
+  - the layering test passes with **zero** allowed violations.
+
+  Remaining:
+  - dead-code removal;
+  - the solver modules are now orchestration only, but still large: the DR
+    solver class is ~1.9k lines and the AR functional solver ~1.6k. Splitting
+    them into per-backend drivers is logic work, recorded as a follow-up.
 - [ ] Final merge: bring master into `package-reorganization`, rerun the full
   host and GPU suites, and merge into master (not pushed).
 

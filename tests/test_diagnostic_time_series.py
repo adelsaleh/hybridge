@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from hdgfem.diagnostics import modal_activity
+from hdgfem.diagnostics.guiding_center import modal_activity
 from hdgfem.io.time_series import DiagnosticPanel, TimeSeries, draw_time_series_panel, numeric_time_series, plot_diagnostic_panels
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics

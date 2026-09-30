@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 
 from hdgfem.core.geometry import DiskDomain, PolygonDomain
-from hdgfem.core.profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
+from hdgfem.cases.profiles import (
+    FFTGaussianBlobField,
+    GaussianBlobField,
+    sample_gaussian_blob_field,
+)
 from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_cases import positive_turbulence
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
