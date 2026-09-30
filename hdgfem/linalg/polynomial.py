@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..assembly.face_dense import FaceDenseSystem, face_dense_matvec
+from hdgfem.assembly.face_dense import FaceDenseSystem, face_dense_matvec
 
 VectorOperator = Callable[[np.ndarray], np.ndarray]
 

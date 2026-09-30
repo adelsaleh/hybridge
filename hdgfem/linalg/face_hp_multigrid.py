@@ -18,14 +18,14 @@ from typing import Any, Callable
 
 import numpy as np
 
-from ..backends.cupy import require_cupy
-from .system import residual_history_is_stagnated
-from .face_hp_policy import (
+from hdgfem.backends.cupy import require_cupy
+from hdgfem.linalg.system import residual_history_is_stagnated
+from hdgfem.linalg.face_hp_policy import (
     scalar_p0_amgx_config,
     robust_scalar_p0_amgx_config,
     face_hp_mg_preconditioner_parameters,
 )
-from ..backends.legendre_face_bsr import (
+from hdgfem.backends.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     modal_degree_schedule,
     principal_modal_bsr_data,
@@ -240,7 +240,7 @@ class AmgxScalarVcycle:
         """Build one reusable AMGX hierarchy for the scalar face operator."""
         if int(operator.block_size) != 1:
             raise ValueError("the scalar AMG coarse operator must have block size one")
-        from ..backends.advection_cuda import PyAMGXCsrDeviceSolver
+        from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
 
         self.operator = operator
         self.config = copy.deepcopy(config)
@@ -278,7 +278,7 @@ class CupyxCgScalarSolve:
         """Create the diagnostic scalar CuPyX CSR solver."""
         if int(operator.block_size) != 1:
             raise ValueError("the scalar diagnostic solver needs block size one")
-        from ..backends.cupy import require_cupyx_sparse, require_cupyx_sparse_linalg
+        from hdgfem.backends.cupy import require_cupyx_sparse, require_cupyx_sparse_linalg
 
         sparse = require_cupyx_sparse()
         self.linalg = require_cupyx_sparse_linalg()
@@ -718,7 +718,7 @@ class FaceBlockHpMgPcgSolver:
             verbose: int = 0,
     ):
         """Build and validate the fixed native hierarchy."""
-        from ..backends.legendre_face_bsr import legendre_orthonormal_scales
+        from hdgfem.backends.legendre_face_bsr import legendre_orthonormal_scales
 
         cp = require_cupy()
         self.cp = cp

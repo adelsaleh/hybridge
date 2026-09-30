@@ -18,7 +18,8 @@ import traceback
 from hdgfem.backends.cupy import require_cupy
 from hdgfem.core.field_ops import field_l2_norm
 from hdgfem.diagnostics import solver_result_metrics
-from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle, scalar_p0_amgx_config
+from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle
+from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
 from scripts.guiding_center.poisson.benchmark_poisson_backends import PRESET, digest
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key

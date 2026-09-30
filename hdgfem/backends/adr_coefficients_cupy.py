@@ -24,9 +24,9 @@ import time
 
 import numpy as np
 
-from ..core.element_coefficients import ElementCoefficient
-from ..core.space import DGSpace, DGTraceSpace, VectorDGField
-from .cupy import as_cupy_space, require_cupy
+from hdgfem.core.element_coefficients import ElementCoefficient
+from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.backends.cupy import as_cupy_space, require_cupy
 
 
 def _elapsed(cp, start: float) -> float:
@@ -42,15 +42,15 @@ def _beta_samples(cp, beta, space: DGSpace, trace_ref: DGTraceSpace, t=None):
     through its L2 projection into ``space``; DG beta uses the same field for both;
     an ``ElementCoefficient`` is evaluated directly at both point sets.
     """
-    from ..assembly import hdg
-    from ..assembly.advection_diffusion_reaction import element_beta_samples
+    from hdgfem.assembly import hdg
+    from hdgfem.assembly.advection_diffusion_reaction import element_beta_samples
 
     if isinstance(beta, ElementCoefficient):
         return element_beta_samples(beta, space, trace_ref, xp=cp, t=t)
-    from ..solvers.advection_reaction import _is_callable_beta
-    from .coefficients_cupy import (
+    from hdgfem.solvers.advection_reaction import _is_callable_beta
+    from hdgfem.backends.coefficients_cupy import (
         field_on_faces_cupy, field_on_volume_cupy, mapped_face_points_cupy, volume_samples_cupy)
-    from .cupy import _normalize_cupy_values
+    from hdgfem.backends.cupy import _normalize_cupy_values
 
     cspace = as_cupy_space(space)
     if _is_callable_beta(beta):
@@ -79,9 +79,9 @@ def _source_moments(cp, source, space: DGSpace, t=None):
     Device arrays (moments or volume-quadrature values) and ``ElementCoefficient``
     sources stay on the device; other non-callable forms use the host sampler.
     """
-    from ..assembly import hdg
-    from ..core.space import DGField
-    from .advection_cuda import source_moments_cupy, source_moments_from_values_cupy
+    from hdgfem.assembly import hdg
+    from hdgfem.core.space import DGField
+    from hdgfem.backends.advection_cuda import source_moments_cupy, source_moments_from_values_cupy
 
     if isinstance(source, ElementCoefficient):
         values = source.volume_values(space, xp=cp, t=t)
@@ -130,14 +130,14 @@ def prepare_adr_data_cupy(
     A precomputed ``tau_diffusion`` (from an earlier call with the same
     diffusion, law and trace space) skips its time-independent evaluation.
     """
-    from ..assembly import hdg
-    from ..assembly.advection_diffusion_reaction import (
+    from hdgfem.assembly import hdg
+    from hdgfem.assembly.advection_diffusion_reaction import (
         ADRPreparedData, _normal_flux, element_beta_samples, normalize_diffusion_stabilization)
-    from ..assembly import matrices_numpy as matrices
-    from ..solvers.diffusion_reaction import _reference_derivative_matrices
-    from ..solvers.stabilization import is_conflict_averaged_upwind, upwind_factor
-    from .coefficients_cupy import volume_samples_cupy, face_samples_cupy
-    from .numba import beta_values_on_volume, reaction_values_on_volume
+    from hdgfem.assembly import matrices_numpy as matrices
+    from hdgfem.solvers.diffusion_reaction import _reference_derivative_matrices
+    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind, upwind_factor
+    from hdgfem.backends.coefficients_cupy import volume_samples_cupy, face_samples_cupy
+    from hdgfem.backends.numba import beta_values_on_volume, reaction_values_on_volume
 
     cp = require_cupy()
     timings = {} if timings is None else timings

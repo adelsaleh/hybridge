@@ -49,7 +49,7 @@ class ElementCoefficient:
     def values_at_ref(self, reference_points, *, xp=np, t=None):
         """Return values at ``(n, 2)`` reference points on every element."""
         if hasattr(reference_points, "__cuda_array_interface__"):
-            from ..backends.cupy import asnumpy
+            from hdgfem.backends.cupy import asnumpy
             reference_points = asnumpy(reference_points)
         points = np.ascontiguousarray(np.asarray(reference_points, dtype=REAL_DTYPE).reshape(-1, 2))
         values = xp.asarray(self.function(points, xp=xp, t=t), dtype=REAL_DTYPE)
@@ -82,7 +82,7 @@ class ElementCoefficient:
 
     def face_values(self, space, trace_space, *, xp=np, t=None):
         """Return element-side values on the trace quadrature, shape ``(K, 3, nfq[, c])``."""
-        from ..assembly.matrices_numpy import _reference_edge_points_from_1d
+        from hdgfem.assembly.matrices_numpy import _reference_edge_points_from_1d
 
         self._check_space(space)
         return self.face_values_at_ref(_reference_edge_points_from_1d(trace_space.quads), xp=xp, t=t)
@@ -111,12 +111,12 @@ def physical_points(space, reference_points, *, xp=np):
     with ``xp=cupy`` need no per-call geometry upload.
     """
     if hasattr(reference_points, "__cuda_array_interface__"):
-        from ..backends.cupy import asnumpy
+        from hdgfem.backends.cupy import asnumpy
         reference_points = asnumpy(reference_points)
     points = np.ascontiguousarray(np.asarray(reference_points, dtype=REAL_DTYPE).reshape(-1, 2))
     if xp is np:
         return space.mesh.map_reference_points(points)
-    from ..backends.cupy import as_cupy_space
+    from hdgfem.backends.cupy import as_cupy_space
     mesh = as_cupy_space(space).mesh
     return xp.einsum("Krc,qc->Kqr", mesh.aff_mats, xp.asarray(points)) + mesh.aff_vecs[:, None, :]
 

@@ -25,15 +25,15 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..assembly import hdg as hdg_assembly
-from ..backends.capabilities import (
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.backends.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
     validate_diffusion_backend_configuration,
 )
-from ..backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
-from ..assembly.projection import scalar_moments_from_values
-from ..linalg.system import (
+from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.assembly.projection import scalar_moments_from_values
+from hdgfem.linalg.system import (
     KnownDofReduction,
     SolveResult,
     assemble_global_matrix,
@@ -42,8 +42,8 @@ from ..linalg.system import (
     expand_known_dofs,
     solve_global_system,
 )
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
-from .stabilization import resolve_diffusion_stabilization
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.solvers.stabilization import resolve_diffusion_stabilization
 
 try:  # pragma: no cover - availability depends on the runtime environment.
     from numba import njit, prange
@@ -408,7 +408,7 @@ def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_sp
     """
     xp = np
     if device:
-        from ..backends.cupy import require_cupy
+        from hdgfem.backends.cupy import require_cupy
         xp = require_cupy()
     num_elements = space.mesh.num_tri
     num_quads = space.quad_data.Krf_w.shape[0]
@@ -420,12 +420,12 @@ def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_sp
     def component_values(component, *, label):
         """Choose the existing volume or incidence-aware face sampler."""
         if device:
-            from ..backends.coefficients_cupy import face_samples_cupy, volume_samples_cupy
+            from hdgfem.backends.coefficients_cupy import face_samples_cupy, volume_samples_cupy
             if on_faces:
                 return face_samples_cupy(component, space, label=label, trace_space=trace_ref)
             return volume_samples_cupy(component, space, label=label)
         if on_faces:
-            from ..assembly.matrices_numpy import _face_quadrature_values_from_scalar_input
+            from hdgfem.assembly.matrices_numpy import _face_quadrature_values_from_scalar_input
             return _face_quadrature_values_from_scalar_input(
                 component, space, label, trace_space=trace_ref)
         return _component_quadrature_values(component, space, label=label)
@@ -488,9 +488,9 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     Returns ``(G00, G01, G10, G11)`` where
     ``Gab[K] = int_K (kappa^{-1})_{ab} phi_i phi_j dx``.
     """
-    from ..assembly import matrices_numpy as hdg_mats
+    from hdgfem.assembly import matrices_numpy as hdg_mats
 
-    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
     inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, space))
     inv00, inv01, inv10, inv11 = (inverse[..., component] for component in range(4))
 
@@ -1037,7 +1037,7 @@ def split_diffusion_unknowns(local_unknowns: np.ndarray, space: DGSpace) -> tupl
     """Split raw ``[u_h, q_x, q_y]`` coefficients into DG fields, preserving host/device residency."""
     device = hasattr(local_unknowns, "__cuda_array_interface__")
     if device:
-        from ..backends.cupy import require_cupy, field_from_cupy_coefficients
+        from hdgfem.backends.cupy import require_cupy, field_from_cupy_coefficients
         unknowns = require_cupy().asarray(local_unknowns, dtype=REAL_DTYPE)
     else:
         unknowns = np.asarray(local_unknowns, dtype=REAL_DTYPE)
@@ -1404,7 +1404,7 @@ def _build_hdg_postprocess_cache(
         cache = _new_hdg_postprocess_cache(space, trace_space)
 
     if want_flux and cache.flux_schur_lu is None:
-        from ..kernels.diffusion_reaction_fused import factor_hdiv_flux_min_distance_postprocess_kernel
+        from hdgfem.kernels.diffusion_reaction_fused import factor_hdiv_flux_min_distance_postprocess_kernel
 
         post_el_dof = cache.post_space.el_dof
         post_edg_dof = cache.post_space.quad_data.edg_dof
@@ -1429,7 +1429,7 @@ def _build_hdg_postprocess_cache(
         )
 
     if want_primal and cache.primal_lu is None:
-        from ..kernels.diffusion_reaction_fused import factor_primal_postprocess_kernel
+        from hdgfem.kernels.diffusion_reaction_fused import factor_primal_postprocess_kernel
 
         post_el_dof = cache.post_space.el_dof
         rows = post_el_dof + 1
@@ -1459,7 +1459,7 @@ def _postprocess_rt_flux_from_samples(
         materialize_host: bool = True,
 ) -> VectorDGField:
     r"""Reconstruct an RT_p flux from volume and numerical-normal targets."""
-    from ..kernels.advection_diffusion_reaction_fused import (
+    from hdgfem.kernels.advection_diffusion_reaction_fused import (
         solve_adr_rt_total_flux_postprocess_kernel,
     )
 
@@ -1530,14 +1530,14 @@ def _postprocess_rt_flux_from_samples(
         np.ascontiguousarray(face_test),
     )
     if backend == "cupy":
-        from ..backends.advection_diffusion_reaction_cupy import (
+        from hdgfem.backends.advection_diffusion_reaction_cupy import (
             solve_adr_rt_total_flux_postprocess_cupy,
         )
 
         coeffs = solve_adr_rt_total_flux_postprocess_cupy(
             *rt_inputs, materialize_host=materialize_host)
     elif backend == "raw-cuda":
-        from ..backends.diffusion_rt_postprocess_raw_cuda import (
+        from hdgfem.backends.diffusion_rt_postprocess_raw_cuda import (
             solve_diffusion_rt_flux_postprocess_raw_cuda,
         )
 
@@ -1554,7 +1554,7 @@ def _postprocess_rt_flux_from_samples(
             "RT flux postprocessing backend must be 'numba', 'cupy', or 'raw-cuda'"
         )
     if not materialize_host and backend == "cupy":
-        from ..backends.cupy import field_from_cupy_coefficients
+        from hdgfem.backends.cupy import field_from_cupy_coefficients
         return VectorDGField(tuple(field_from_cupy_coefficients(post_space, c, name=name)
                                    for c in coeffs), name=name)
     return (post_space * post_space).field(
@@ -1667,7 +1667,7 @@ def _postprocess_diffusion_solution(
         )
 
     if postprocessing_backend == "raw-cuda" and mode == "flux":
-        from ..backends.diffusion_flux_recovery_raw_cuda import recover_diffusion_flux_raw_cuda
+        from hdgfem.backends.diffusion_flux_recovery_raw_cuda import recover_diffusion_flux_raw_cuda
         trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
         if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
             cache = _new_hdg_postprocess_cache(space, trace_ref)
@@ -1676,7 +1676,7 @@ def _postprocess_diffusion_solution(
             cache=cache.raw_flux_cache,
         )
         # Include completed GPU work in the solver's postprocessing timing.
-        from ..backends.cupy import require_cupy
+        from hdgfem.backends.cupy import require_cupy
         require_cupy().cuda.get_current_stream().synchronize()
         return None, recovered, cache
 
@@ -1705,7 +1705,7 @@ def _postprocess_diffusion_solution(
     postprocessed_field = None
     postprocessed_flux = None
     if want_primal:
-        from ..kernels.diffusion_reaction_fused import solve_primal_postprocess_kernel
+        from hdgfem.kernels.diffusion_reaction_fused import solve_primal_postprocess_kernel
 
         if cache.primal_lu is None or cache.primal_pivots is None:
             raise RuntimeError("missing primal post-processing factorization")
@@ -1741,7 +1741,7 @@ def _postprocess_diffusion_solution(
         )
 
     if want_flux and flux_space == "l2_closest":
-        from ..kernels.diffusion_reaction_fused import (
+        from hdgfem.kernels.diffusion_reaction_fused import (
             solve_hdiv_flux_min_distance_postprocess_kernel,
             solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel,
         )
@@ -1847,7 +1847,7 @@ def _host_array(value, *, dtype=None) -> np.ndarray | None:
     if value is None:
         return None
     try:
-        from ..backends.cupy import require_cupy
+        from hdgfem.backends.cupy import require_cupy
 
         cupy = require_cupy()
         if isinstance(value, cupy.ndarray):
@@ -2315,7 +2315,7 @@ class DiffusionReactionHDGSolver:
             source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="numba")
             reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="numba")
             if _diffusion_is_identity(options.diffusion):
-                from ..backends.numba import (
+                from hdgfem.backends.numba import (
                     assemble_projected_diffusion_trace_system_eliminated_numba,
                     build_diffusion_schur_cache_numba,
                 )
@@ -2336,7 +2336,7 @@ class DiffusionReactionHDGSolver:
                     cached_factors=self._numba_local_factors,
                 )
             else:
-                from ..backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
+                from hdgfem.backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
 
                 assembled = assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
                     source_input,
@@ -2381,7 +2381,7 @@ class DiffusionReactionHDGSolver:
             if not np.isscalar(options.stabilization):
                 raise NotImplementedError(f"{backend} diffusion assembly currently supports scalar stabilization only")
             if backend == "cupy":
-                from ..backends.diffusion_cupy import assemble_projected_diffusion_trace_system_eliminated_cupy
+                from hdgfem.backends.diffusion_cupy import assemble_projected_diffusion_trace_system_eliminated_cupy
 
                 gpu = assemble_projected_diffusion_trace_system_eliminated_cupy(
                     self.source,
@@ -2392,7 +2392,7 @@ class DiffusionReactionHDGSolver:
                     trace_basis=trace_basis,
                 )
             else:
-                from ..backends.diffusion_cupy import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
+                from hdgfem.backends.diffusion_cupy import assemble_projected_diffusion_trace_system_eliminated_raw_cupy
 
                 source_input = _require_same_space_dg_field_for_backend(self.source, self.space, label="source", backend="raw-cuda")
                 reaction_input = _require_same_space_dg_field_for_backend(self.reaction, self.space, label="reaction", backend="raw-cuda")
@@ -2526,7 +2526,7 @@ class DiffusionReactionHDGSolver:
             if backend == "raw-cuda":
                 result = self._solve_raw_cuda_device_amgx()
             elif backend == "cupy":
-                from .diffusion_device import solve_cupy_device_amgx
+                from hdgfem.solvers.diffusion_device import solve_cupy_device_amgx
 
                 result = solve_cupy_device_amgx(self)
             elif self._can_solve_with_cached_numpy_operator():
@@ -2620,23 +2620,23 @@ class DiffusionReactionHDGSolver:
                 "raw-CUDA diffusion device solves support hdg_postprocess='none' or 'flux'"
             )
 
-        from ..backends.cupy import field_from_cupy_coefficients, require_cupy
-        from ..backends.advection_cuda import (
+        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
+        from hdgfem.backends.advection_cuda import (
             PyAMGXCsrDeviceSolver,
             reconstruct_trace_cupy,
             solve_reduced_system_amgx_device,
         )
-        from ..backends.diffusion_cupy import (
-            as_cupy_space,
-            assemble_projected_diffusion_trace_rhs_cached_cupy,
-            assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
-            assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
-            attach_schur_cholesky_cache_cupy,
-            build_trace_reference,
-            reconstruct_compact_diffusion_field_cupy,
-            solve_mixed_from_scalar_cholesky_cupy,
-        )
-        from ..backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
+        from hdgfem.backends.cupy import as_cupy_space
+        from hdgfem.backends.diffusion_cupy import (
+                    assemble_projected_diffusion_trace_rhs_cached_cupy,
+                    assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
+                    assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
+                    attach_schur_cholesky_cache_cupy,
+                    build_trace_reference,
+                    reconstruct_compact_diffusion_field_cupy,
+                    solve_mixed_from_scalar_cholesky_cupy,
+                )
+        from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
 
         cp = require_cupy()
         total_start = time.perf_counter()
@@ -2675,7 +2675,7 @@ class DiffusionReactionHDGSolver:
 
         def assemble_raw_full():
             """Assemble the complete reduced raw CUDA trace system."""
-            from ..core.field_ops import coefficient_field
+            from hdgfem.core.field_ops import coefficient_field
 
             source_input = coefficient_field(self.space, self.source, name="source_h")
             reaction_input = coefficient_field(self.space, self.reaction, name="reaction_h")
@@ -2714,7 +2714,7 @@ class DiffusionReactionHDGSolver:
                     self._raw_cuda_assembly_cache,
                 )
 
-            from ..core.field_ops import coefficient_field
+            from hdgfem.core.field_ops import coefficient_field
 
             source_input = coefficient_field(self.space, self.source, name="source_h")
             reaction_input = coefficient_field(self.space, self.reaction, name="reaction_h")
@@ -2865,13 +2865,13 @@ class DiffusionReactionHDGSolver:
         )
         if native_requested and self._raw_cuda_fb_hp_mg_failed_key != native_key:
             try:
-                from ..backends.legendre_face_bsr import diagonal_block_positions
-                from ..linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
-                from ..backends.advection_cuda import (
+                from hdgfem.backends.legendre_face_bsr import diagonal_block_positions
+                from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+                from hdgfem.backends.advection_cuda import (
                     _assembly_device_csr_matrix, _device_compressed_matvec,
                     _residual_stats_cp,
                 )
-                from ..backends.cupy import require_cupyx_sparse
+                from hdgfem.backends.cupy import require_cupyx_sparse
 
                 native_hierarchy_reused = (
                     self._raw_cuda_fb_hp_mg_solver is not None
@@ -3036,7 +3036,7 @@ class DiffusionReactionHDGSolver:
 
         amgx_hierarchy_reused = False
         if native_result is not None:
-            from ..linalg.system import SolveResult
+            from hdgfem.linalg.system import SolveResult
 
             trace_reduced_cp = native_result.solution
             solve_time = (
@@ -3394,7 +3394,7 @@ class DiffusionReactionHDGSolver:
                 self._host_scaled_solve_matrix_shape = shape
             return self._host_solve_matrix, None
 
-        from ..backends.cupy import scipy_csr_to_cupy
+        from hdgfem.backends.cupy import scipy_csr_to_cupy
 
         if scale_system:
             device_host_matrix, _ = diagonal_scale_system(
@@ -3430,7 +3430,7 @@ class DiffusionReactionHDGSolver:
 
     def _reduced_rhs_from_cached_numpy_operator(self, rhs_full: np.ndarray, boundary_trace: np.ndarray):
         """Eliminate known trace values using the shared fixed-operator helper."""
-        from ..linalg.system import update_known_dof_rhs
+        from hdgfem.linalg.system import update_known_dof_rhs
         if self.reduction is None:
             raise RuntimeError("cached reduced RHS requires a KnownDofReduction")
         reduction = update_known_dof_rhs(self.rows, self.cols, self.data, rhs_full,
@@ -3572,7 +3572,7 @@ class DiffusionReactionHDGSolver:
 
     def _solve_numba_with_cached_operator(self) -> DiffusionReactionResult:
         """Solve with cached numba local solvers and reduced trace matrix."""
-        from ..backends.numba import (
+        from hdgfem.backends.numba import (
             assemble_projected_diffusion_trace_rhs_eliminated_numba,
             reconstruct_projected_diffusion_local_unknowns_numba,
         )
@@ -4054,7 +4054,7 @@ def solve_diffusion_reaction_hdg(
     def assemble_trace():
         """Assemble the condensed global diffusion trace system."""
         if projected_numba_identity_diffusion:
-            from ..backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
+            from hdgfem.backends.numba import assemble_projected_diffusion_trace_system_eliminated_numba
 
             return assemble_projected_diffusion_trace_system_eliminated_numba(
                 source_for_backend,
@@ -4065,7 +4065,7 @@ def solve_diffusion_reaction_hdg(
                 trace_space=trace_space,
             )
         if projected_numba_tensor_diffusion:
-            from ..backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
+            from hdgfem.backends.numba import assemble_projected_tensor_diffusion_trace_system_eliminated_numba
 
             return assemble_projected_tensor_diffusion_trace_system_eliminated_numba(
                 source_for_backend,
@@ -4077,7 +4077,7 @@ def solve_diffusion_reaction_hdg(
                 trace_space=trace_space,
             )
         if effective_backend == "numba":
-            from ..backends.numba import assemble_diffusion_trace_system_eliminated_numba
+            from hdgfem.backends.numba import assemble_diffusion_trace_system_eliminated_numba
 
             return assemble_diffusion_trace_system_eliminated_numba(
                 local_solver,
@@ -4224,7 +4224,7 @@ def solve_diffusion_reaction_hdg(
     def reconstruct():
         """Recover local mixed fields from the solved trace coefficients."""
         if projected_numba_identity_diffusion:
-            from ..backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
+            from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
             unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
                 trace,
@@ -4235,7 +4235,7 @@ def solve_diffusion_reaction_hdg(
                 trace_space=trace_space,
             )
         elif projected_numba_tensor_diffusion:
-            from ..backends.numba import reconstruct_projected_tensor_diffusion_local_unknowns_numba
+            from hdgfem.backends.numba import reconstruct_projected_tensor_diffusion_local_unknowns_numba
 
             unknowns = reconstruct_projected_tensor_diffusion_local_unknowns_numba(
                 trace,
@@ -4247,7 +4247,7 @@ def solve_diffusion_reaction_hdg(
                 trace_space=trace_space,
             )
         elif effective_backend == "numba":
-            from ..backends.numba import reconstruct_diffusion_local_unknowns_numba
+            from hdgfem.backends.numba import reconstruct_diffusion_local_unknowns_numba
 
             unknowns = reconstruct_diffusion_local_unknowns_numba(
                 trace,

@@ -12,18 +12,18 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..assembly import hdg
-from ..assembly.advection_diffusion_reaction import ADRPreparedData
-from ..assembly.diffusion_coefficients import PreparedDiffusion, prepare_diffusion
-from ..core.space import DGSpace, DGTraceSpace
-from ..kernels import NUMBA_AVAILABLE
-from ..kernels.advection_diffusion_reaction_fused import (
+from hdgfem.assembly import hdg
+from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
+from hdgfem.assembly.diffusion_coefficients import PreparedDiffusion, prepare_diffusion
+from hdgfem.core.space import DGSpace, DGTraceSpace
+from hdgfem.kernels import NUMBA_AVAILABLE
+from hdgfem.kernels.advection_diffusion_reaction_fused import (
     assemble_projected_adr_trace_system_eliminated_kernel,
     reconstruct_adr_from_local_columns_kernel,
     reconstruct_projected_adr_local_unknowns_kernel,
 )
-from ..linalg.system import KnownDofReduction
-from .numba import (
+from hdgfem.linalg.system import KnownDofReduction
+from hdgfem.backends.numba import (
     _boundary_reduction_maps,
     _interior_side_index,
     _reduction_with_system,

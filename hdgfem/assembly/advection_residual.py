@@ -11,7 +11,7 @@ from contextlib import nullcontext
 
 import numpy as np
 
-from ..precision import REAL_DTYPE
+from hdgfem.precision import REAL_DTYPE
 
 
 class HDGTraceWorkspace:
@@ -29,7 +29,7 @@ class HDGTraceWorkspace:
         self.trace_host = space.trace_space(trace_basis)
         self.xp, self.cspace = np, None
         if backend == "device":
-            from ..backends.cupy import as_cupy_space, require_cupy
+            from hdgfem.backends.cupy import as_cupy_space, require_cupy
             self.xp = require_cupy()
             self.cspace = as_cupy_space(space)
 
@@ -46,7 +46,7 @@ class HDGTraceWorkspace:
 
     def project_trace(self, density):
         """Project the nearest density predictor into the configured trace basis."""
-        from ..core.field_ops import project_field_to_trace
+        from hdgfem.core.field_ops import project_field_to_trace
         with self._device_context():
             return project_field_to_trace(density, trace_basis=self.trace_host.kind, backend=self.backend)
 
@@ -66,7 +66,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         if boundary_mode not in {"zero-flux", "eliminate"}:
             raise ValueError("explicit HDG residual requires zero-flux or eliminated boundaries")
         super().__init__(space, trace_basis=trace_basis, backend=backend)
-        from ..solvers.stabilization import upwind_factor
+        from hdgfem.solvers.stabilization import upwind_factor
         if upwind_factor(advection_stabilization) != 1.0:
             raise ValueError("residual requires upwind or conflict-averaged-upwind stabilization")
         self.advection_stabilization = advection_stabilization
@@ -80,7 +80,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         if self.cspace is None:
             self.mesh, self.q, self.trace = self.space.mesh, self.space.quad_data, self.trace_host
         else:
-            from ..backends.advection_cuda import as_cupy_trace_space
+            from hdgfem.backends.advection_cuda import as_cupy_trace_space
             self.mesh, self.q = self.cspace.mesh, self.cspace.quad_data
             self.trace = as_cupy_trace_space(self.trace_host, device=self.cspace.device_id)
         mesh, trace, q = self.mesh, self.trace, self.q
@@ -118,7 +118,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             raise ValueError("residual fields must belong to its fixed DGSpace")
         if self.cspace is None:
             return field.coeffs
-        from ..backends.cupy import as_cupy_coefficients
+        from hdgfem.backends.cupy import as_cupy_coefficients
         return as_cupy_coefficients(field, self.cspace)
 
     def _sum_sides(self, values):
@@ -130,7 +130,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
 
     def _check_trace_support(self):
         """Reject structurally singular active faces before a dense solve hides it."""
-        from ..linalg.transport_diagnostics import trace_inflow_node_counts, UpwindHDGTraceRankError
+        from hdgfem.linalg.transport_diagnostics import trace_inflow_node_counts, UpwindHDGTraceRankError
 
         xp, mesh = self.xp, self.mesh
         aligned = xp.where(mesh.orientations[:, :, None], self.normal_flux,
@@ -154,7 +154,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             return
         if boundary is None:
             raise ValueError("eliminated residual requires prescribed boundary data")
-        from .hdg import boundary_trace_coefficients
+        from hdgfem.assembly.hdg import boundary_trace_coefficients
         self.full_trace[self.mesh.bnd_edges_inds] = boundary_trace_coefficients(
             boundary, self.space, trace_space=self.trace_host, backend=self.backend, boundary_only=True,
         )
@@ -192,7 +192,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             self.beta_volume[:, :, component] = b @ q.bas_of_quads
             self.beta_face[:, :, :, component] = xp.einsum("ki,fiq->kfq", b, self.face_basis)
         self.normal_flux[:] = xp.einsum("kfqd,kfd->kfq", self.beta_face, mesh.normals)
-        from ..solvers.stabilization import effective_advection_normal_flux
+        from hdgfem.solvers.stabilization import effective_advection_normal_flux
         self.normal_flux[:] = effective_advection_normal_flux(
             self.normal_flux, mesh, self.advection_stabilization, xp=xp)
         self.normal_flux *= self.active_faces[:, :, None]
@@ -238,7 +238,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         reference_beta = xp.einsum("kqd,kdD->kqD", self.beta_volume, mesh.inv_aff_mats_t)
         volume_load = xp.einsum("kq,kqD,Diq->ki", self.u_volume, reference_beta,
                                 self.volume_weighted_gradient)
-        from .projection import field_from_moments
+        from hdgfem.assembly.projection import field_from_moments
         moments = volume_load*mesh.aff_jacs[:, None] - face_load
         field = field_from_moments(self.space, moments, name="transport_rhs_h")
         return field, xp.ascontiguousarray(self.full_trace[interior].ravel())

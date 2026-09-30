@@ -21,14 +21,14 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..linalg.polynomial import (
+from hdgfem.linalg.polynomial import (
     RootBlock,
     conjugate_root_blocks,
     harmonic_ritz_values,
     leja_order_conjugate_preserving,
 )
-from .cupy import device_arrays_overlap, require_cupy_device
-from .cupy_gmres import (
+from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
+from hdgfem.backends.cupy_gmres import (
     CuPyOrthogonalization,
     CuPyVectorBLAS,
     DeviceMatvecOperator,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .cupy import require_cupy
+from hdgfem.backends.cupy import require_cupy
 
 
 def solve_adr_rt_total_flux_postprocess_cupy(
@@ -173,8 +173,8 @@ __all__ = ["solve_adr_rt_total_flux_postprocess_cupy"]
 
 def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
     """Apply the host-equivalent constrained minimum-distance flux recovery."""
-    from .cupy import field_from_cupy_coefficients
-    from ..core.space import VectorDGField
+    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.space import VectorDGField
 
     cp = require_cupy()
     post = cache.post_space
@@ -216,7 +216,7 @@ def _primal_system_cupy(local_unknowns, total_flux, space, cache, samples, diffu
     Volume, face and mean equations match the Numba reference, including the
     total numerical flux and the scalar Neumann multiplier.
     """
-    from .cupy import as_cupy_coefficients, as_cupy_space
+    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
 
     cp = require_cupy()
     post = cache.post_space
@@ -233,7 +233,7 @@ def _primal_system_cupy(local_unknowns, total_flux, space, cache, samples, diffu
     beta_volume, beta_face, tau = samples
     flux = cp.stack([as_cupy_coefficients(f, as_cupy_space(f.space)) for f in total_flux.components], axis=1)
     values = flux @ phi.T
-    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
     inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, post, device=True))
     for c in range(2):
         constitutive = slice(c*d, (c+1)*d)
@@ -278,9 +278,9 @@ def _primal_system_cupy(local_unknowns, total_flux, space, cache, samples, diffu
 
 def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, diffusion):
     """Recover tensor ADR primal coefficients using fused assembly and batched LU."""
-    from ..assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
-    from .adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
-    from .cupy import field_from_cupy_coefficients
+    from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
+    from hdgfem.backends.adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
+    from hdgfem.backends.cupy import field_from_cupy_coefficients
 
     cp = require_cupy()
     post = cache.post_space

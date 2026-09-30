@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..core.space import DGSpace, DGField
+from hdgfem.core.space import DGSpace, DGField
 
 
 DomainLength = float | Literal["auto"] | None
@@ -110,7 +110,7 @@ class GlobalLengthDiffusion:
         try:
             kappa = constant_isotropic_diffusivity(diffusion)
         except NotImplementedError:
-            from ..assembly.diffusion_coefficients import normal_diffusivity_on_faces
+            from hdgfem.assembly.diffusion_coefficients import normal_diffusivity_on_faces
             scale = geometric_diffusion_tau(1., self.resolved_domain_length(space), self.gamma_d)
             return scale * normal_diffusivity_on_faces(diffusion, space, device=device)
         return geometric_diffusion_tau(

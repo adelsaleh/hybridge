@@ -9,8 +9,8 @@ from typing import Callable, Literal
 
 import numpy as np
 
-from .core.quadrature import ReferenceElementData
-from .core.space import DGField, VectorDGField
+from hdgfem.core.quadrature import ReferenceElementData
+from hdgfem.core.space import DGField, VectorDGField
 
 
 def modal_activity(amplitudes, modes, *, relative_threshold=1e-3, top=3):
@@ -343,7 +343,7 @@ def azimuthal_mode_diagnostics(
                 for value in (field, equilibrium))
     )
     if use_device:
-        from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 
         if equilibrium.space is not space:
             raise ValueError("device equilibrium density must use the scalar DGSpace")
@@ -379,8 +379,8 @@ class ScalarPositivityDiagnostics:
     """
 
     def __init__(self, space, *, backend="host", tolerance=1.e-12, chunk_size=8192):
-        from .assembly.advection_residual import HDGTraceWorkspace
-        from .core.basis import evaluate_bernstein_basis
+        from hdgfem.assembly.advection_residual import HDGTraceWorkspace
+        from hdgfem.core.basis import evaluate_bernstein_basis
 
         if not np.isfinite(tolerance) or tolerance < 0 or chunk_size < 1:
             raise ValueError("nonnegative finite tolerance and positive chunk_size required")
@@ -414,7 +414,7 @@ class ScalarPositivityDiagnostics:
             if self.workspace.cspace is None:
                 coefficients = field.coeffs
             else:
-                from .backends.cupy import as_cupy_coefficients
+                from hdgfem.backends.cupy import as_cupy_coefficients
                 coefficients = as_cupy_coefficients(field, self.workspace.cspace)
             low, high = xp.asarray(np.inf), xp.asarray(-np.inf)
             lower, upper, mean_low = xp.asarray(np.inf), xp.asarray(-np.inf), xp.asarray(np.inf)
@@ -523,7 +523,7 @@ def guiding_center_field_diagnostics(
             result.update(azimuthal_mode_diagnostics(density, equilibrium_density, mode, backend="host"))
         return result
 
-    from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 
     cp = require_cupy()
     base_space = density.space
@@ -645,7 +645,7 @@ def transport_velocity_diagnostics(
         and any(component.device_coefficients_materialized() for component in velocity.components)
     )
     if use_device:
-        from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 
         xp = require_cupy()
         cspace = as_cupy_space(space)
@@ -739,7 +739,7 @@ def _weight_values(weight, x, y, xp):
 
 def _sample_reference_points(resolution: int) -> np.ndarray:
     """Return the standard triangular plotting sample grid."""
-    from .io.plot import reference_plot_points
+    from hdgfem.io.plot import reference_plot_points
 
     return reference_plot_points(int(resolution))
 
@@ -783,7 +783,7 @@ def _evaluate_host(field, exact, *, volume_quad_1d, sample_resolution, include_s
 def _evaluate_device(field, exact, *, volume_quad_1d, sample_resolution, include_samples,
                      weight=None, volume_degree=None):
     """Evaluate scalar metrics on the resident CUDA device with CuPy."""
-    from .backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
 
     cp = require_cupy()
     space = field.space
@@ -1017,7 +1017,7 @@ def evaluate_hdg_scalar_error(
     the selected backend and the space's quadrature. Device-backed fields
     stay resident; only reduced scalar results are copied to the host.
     """
-    from .assembly.hdg_gram import ScalarHDGGram
+    from hdgfem.assembly.hdg_gram import ScalarHDGGram
 
     space = field.space
     if backend not in {"auto", "host", "device"}:
@@ -1027,7 +1027,7 @@ def evaluate_hdg_scalar_error(
                          chunk_size=chunk_size, backend="device" if use_device else "host")
     xp = gram.xp
     if use_device:
-        from .backends.cupy import as_cupy_coefficients
+        from hdgfem.backends.cupy import as_cupy_coefficients
 
         q, mesh = gram.cspace.quad_data, gram.cspace.mesh
         coefficients = as_cupy_coefficients(field, gram.cspace, copy=False)

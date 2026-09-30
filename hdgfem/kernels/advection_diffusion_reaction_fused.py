@@ -21,8 +21,8 @@ try:  # pragma: no cover - exercised when Numba is installed.
 except ImportError:  # pragma: no cover
     prange = range
 
-from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
-from .diffusion_mass import factor_diffusion_mass, apply_inverse_diffusion_mass
+from hdgfem.kernels.common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit
+from hdgfem.kernels.diffusion_mass import factor_diffusion_mass, apply_inverse_diffusion_mass
 
 
 @njit(cache=True, inline="always")

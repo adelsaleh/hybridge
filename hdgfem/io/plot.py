@@ -17,8 +17,8 @@ import os
 import numpy as np
 from scipy.spatial import Delaunay
 
-from ..core.mesh import DGMesh
-from ..core.space import DGField
+from hdgfem.core.mesh import DGMesh
+from hdgfem.core.space import DGField
 
 
 _TEXT_BACKEND_SET = False
@@ -710,7 +710,7 @@ def add_matplotlib_mesh(ax, mesh: DGMesh, *, color: str = "black", linewidth: fl
 
     The array-only implementation is in hdgfem.io.figures.add_matplotlib_mesh.
     """
-    from .figures import add_matplotlib_mesh as overlay
+    from hdgfem.io.figures import add_matplotlib_mesh as overlay
     return overlay(ax, mesh, color=color, linewidth=linewidth, alpha=alpha, bounds=bounds)
 
 

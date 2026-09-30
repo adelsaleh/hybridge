@@ -24,8 +24,8 @@ from typing import Any, Literal
 
 import numpy as np
 
-from .cupy import require_cupy_device
-from .cupy_gmres import (
+from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.backends.cupy_gmres import (
     CuPyGMRESResult,
     CuPyGMRESWorkspace,
     CuPyOrthogonalization,

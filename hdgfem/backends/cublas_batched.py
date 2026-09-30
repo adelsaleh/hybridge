@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import require_cupy_device
+from hdgfem.backends.cupy import require_cupy_device
 
 
 @dataclass(frozen=True)

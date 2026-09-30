@@ -10,8 +10,8 @@ import numba as nb
 import numpy as np
 from scipy.spatial import cKDTree
 
-from . import basis as basis_module
-from .space import DGField, DGSpace, VectorDGField, VectorDGSpace
+from hdgfem.core import basis as basis_module
+from hdgfem.core.space import DGField, DGSpace, VectorDGField, VectorDGSpace
 
 
 @dataclass(frozen=True)
@@ -331,7 +331,7 @@ def project_same_mesh_field(field: DGField, target: DGSpace, *, name: str | None
     matrix, device_matrices = cache[source]
     devices = field._device_coeffs or {}
     if devices:
-        from ..backends.cupy import field_from_cupy_coefficients, require_cupy
+        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
         cp = require_cupy()
         device_id = min(devices)
         with cp.cuda.Device(device_id):

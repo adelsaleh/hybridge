@@ -21,7 +21,7 @@ import time
 
 import numpy as np
 
-from .host_threads import for_element_chunks
+from hdgfem.core.host_threads import for_element_chunks
 
 
 _MESH_CACHE_VERSION = 2
@@ -1091,7 +1091,7 @@ def gmsh_polygon_mesh(
         num_threads: int | None = None, log_cache: bool = True,
 ) -> DGMesh:
     """Mesh a simple polygon through the standard Gmsh geometry/cache path."""
-    from .geometry import PolygonDomain
+    from hdgfem.core.geometry import PolygonDomain
 
     domain = PolygonDomain(vertices)
     return _generate_gmsh_mesh(
@@ -1162,7 +1162,7 @@ def gmsh_smooth_star_mesh(
     if len(hole_center) != 2 or not np.all(np.isfinite(hole_center)):
         raise ValueError("hole_center must contain two finite coordinates")
     if hole_radius > 0:
-        from .geometry import PolygonDomain
+        from hdgfem.core.geometry import PolygonDomain
 
         domain = PolygonDomain(vertices)
         point = np.asarray(hole_center)[None, :]

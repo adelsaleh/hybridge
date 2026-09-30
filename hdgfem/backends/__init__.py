@@ -10,7 +10,7 @@ Optional runtime modules remain lazy: importing :mod:`hdgfem.backends` does not
 import CuPy, AMGX, PETSc, PARDISO, Gmsh, or DOLFINx.
 """
 
-from .capabilities import (
+from hdgfem.backends.capabilities import (
     BACKEND_CAPABILITIES,
     BackendCapability,
     UnsupportedBackendConfigurationError,

@@ -15,9 +15,9 @@ from typing import Callable
 
 import numpy as np
 
-from ..core.host_threads import for_element_chunks
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField, _normalize_callable_values
-from .projection import scalar_moments_from_values
+from hdgfem.core.host_threads import for_element_chunks
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField, _normalize_callable_values
+from hdgfem.assembly.projection import scalar_moments_from_values
 
 
 def _local_matrix_shape(space: DGSpace) -> tuple[int, int, int]:
@@ -157,7 +157,7 @@ def _evaluate_face_callable(values, mapped_points: np.ndarray, num_face_quads: i
     Device (CuPy) points and normals yield device ``element``/``local_face``
     context arrays, so the same law can be evaluated on the GPU.
     """
-    from ..backends.cupy import array_module
+    from hdgfem.backends.cupy import array_module
     xp = array_module(mapped_points)
     x, y = mapped_points[..., 0], mapped_points[..., 1]
     element = xp.broadcast_to(xp.arange(x.shape[0])[:, None], x.shape)
@@ -258,7 +258,7 @@ def advection_trace_stabilization_values(
     """
     trace_ref = _trace_ref(test_space, trace_space)
     beta_dot_normal = _require_normal_flux(beta_dot_normal, test_space, trace_space=trace_ref)
-    from ..solvers.stabilization import upwind_factor, effective_advection_normal_flux
+    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux
     beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
     factor = upwind_factor(stabilization)
     if factor is not None:
@@ -291,7 +291,7 @@ def advection_trace_weights_from_normal_flux(
         stabilization,
         trace_space=trace_ref,
     )
-    from ..solvers.stabilization import effective_advection_normal_flux
+    from hdgfem.solvers.stabilization import effective_advection_normal_flux
     gamma = tau - effective_advection_normal_flux(beta_dot_normal, test_space.mesh, stabilization)
     return np.ascontiguousarray(tau), np.ascontiguousarray(gamma)
 
@@ -903,7 +903,7 @@ def advection_interior_trace_mass_blocks_from_weight(
     for_element_chunks(build, mesh.num_tri)
     blocks = np.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if inactive_tau is not None:
-        from ..solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(blocks, inactive_tau, mesh)
     return blocks
 

@@ -7,21 +7,21 @@ import time
 
 def solve_cupy_device_amgx(owner):
     """Assemble, solve, and reconstruct a CuPy diffusion problem through AMGX."""
-    from ..backends.advection_cuda import (
+    from hdgfem.backends.advection_cuda import (
         PyAMGXCsrDeviceSolver,
         reconstruct_trace_cupy,
         solve_reduced_system_amgx_device,
     )
-    from ..backends.cupy import field_from_cupy_coefficients, require_cupy
-    from ..backends.diffusion_cupy import (
-        as_cupy_space,
-        assemble_projected_diffusion_trace_system_eliminated_cupy,
-        assemble_projected_diffusion_trace_rhs_cached_cupy,
-        build_trace_reference,
-        solve_mixed_from_scalar_cholesky_cupy,
-    )
-    from ..core.space import VectorDGField
-    from .diffusion_reaction import (
+    from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
+    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.backends.diffusion_cupy import (
+            assemble_projected_diffusion_trace_system_eliminated_cupy,
+            assemble_projected_diffusion_trace_rhs_cached_cupy,
+            build_trace_reference,
+            solve_mixed_from_scalar_cholesky_cupy,
+        )
+    from hdgfem.core.space import VectorDGField
+    from hdgfem.solvers.diffusion_reaction import (
         DiffusionReactionResult,
         DiffusionReactionTimings,
         _format_seconds,

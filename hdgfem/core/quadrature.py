@@ -28,7 +28,7 @@ from itertools import permutations
 
 import numpy as np
 
-from . import basis as basis_module
+from hdgfem.core import basis as basis_module
 
 
 _VOLUME_QUADRATURE_ALIASES = {

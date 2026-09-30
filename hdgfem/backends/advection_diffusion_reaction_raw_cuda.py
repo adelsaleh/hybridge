@@ -8,11 +8,11 @@ from typing import Any
 
 import numpy as np
 
-from ..assembly import hdg
-from ..assembly.advection_diffusion_reaction import ADRPreparedData
-from ..core.space import DGSpace, DGTraceSpace
-from .cupy import as_cupy_space, require_cupy
-from .numba import _boundary_reduction_maps, _interior_side_index, _trace_orientation_mode
+from hdgfem.assembly import hdg
+from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
+from hdgfem.core.space import DGSpace, DGTraceSpace
+from hdgfem.backends.cupy import as_cupy_space, require_cupy
+from hdgfem.backends.numba import _boundary_reduction_maps, _interior_side_index, _trace_orientation_mode
 
 
 _RAW_ADR_TEMPLATE = r'''
@@ -249,8 +249,8 @@ def assemble_projected_adr_trace_operator_raw_cuda(
     CSR with dense preparation retains the original serial diagnostic kernel.
     Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/6.
     """
-    from .raw_cuda import resolve_raw_cuda_block_size
-    from .adr_tensor_raw_cuda import assemble_tensor_operator
+    from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
+    from hdgfem.backends.adr_tensor_raw_cuda import assemble_tensor_operator
     if space.order > 6 or trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
         raise ValueError("raw CUDA tensor ADR supports p=0--6 and legacy-lagrange/legendre-modal traces")
     if trace_space.space is not space:
@@ -272,7 +272,7 @@ def assemble_projected_adr_trace_operator_raw_cuda(
 
 def reconstruct_projected_adr_local_unknowns_raw_cuda(operator, trace, *, block_size="auto"):
     """Return device mixed local unknowns and timings from a full trace."""
-    from .adr_tensor_raw_cuda import reconstruct_tensor_operator
+    from hdgfem.backends.adr_tensor_raw_cuda import reconstruct_tensor_operator
     return reconstruct_tensor_operator(operator, trace, block_size=block_size)
 
 
@@ -285,7 +285,7 @@ def _assemble_scalar_serial_operator(
         raise NotImplementedError("raw CUDA ADR currently requires positive constant scalar diffusion")
     cp = require_cupy()
     from cupyx.scipy import sparse
-    from .advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space
+    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(trace_space)
     mesh = space.mesh
@@ -327,7 +327,7 @@ def _assemble_scalar_serial_operator(
     cp.cuda.get_current_stream().synchronize()
     conversion_seconds=time.perf_counter()-conversion_start
     assembly=CudaAdvectionAssembly(None,None,csr.data,rhs,None,None,device_inputs[16],boundary[mesh.bnd_edges_inds],None,cspace,trace_ref,indptr=csr.indptr,indices=csr.indices,matrix_format="csr",timings={"raw.kernel.jit":compile_seconds,"raw.kernel.wall":assembly_seconds,"raw.kernel.device":device_seconds,"raw.coo_to_csr.wall":conversion_seconds})
-    from ..assembly.diffusion_coefficients import DIFFUSION_KINDS
+    from hdgfem.assembly.diffusion_coefficients import DIFFUSION_KINDS
     counts={name: mesh.num_tri if i==0 else 0 for i,name in enumerate(DIFFUSION_KINDS)}
     return RawADRTraceOperator(assembly, module, device_inputs, boundary,
                                diffusion_structure=counts, diffusion_kinds=np.zeros(mesh.num_tri,dtype=np.int64))
@@ -381,12 +381,16 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     if str(options.solver).lower() not in {"amgx", "pyamgx"}:
         raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx'")
     cp = require_cupy()
-    from .advection_cuda import reconstruct_trace_cupy, solve_reduced_system_amgx_device
-    from ..solvers.advection_diffusion_reaction import (
-        _detailed_logging, _print_diffusion_structure, _print_timing_details, _solver_verbosity,
-        _timed_call, _timed_substep, _verbosity_level,
-    )
-    from .adr_coefficients_cupy import prepare_adr_data_cupy
+    from hdgfem.backends.advection_cuda import reconstruct_trace_cupy, solve_reduced_system_amgx_device
+    from hdgfem.solvers.advection_diffusion_reaction import (
+            _detailed_logging,
+            _print_diffusion_structure,
+            _print_timing_details,
+            _solver_verbosity,
+            _timed_substep,
+        )
+    from hdgfem.solvers.diffusion_reaction import _timed_call, _verbosity_level
+    from hdgfem.backends.adr_coefficients_cupy import prepare_adr_data_cupy
     verbosity = _verbosity_level(options.verbose)
 
     static = None
@@ -398,7 +402,7 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
 
     def assemble():
         """Sample coefficients on the device, then run the tensor assembly kernel."""
-        from ..assembly.diffusion_coefficients import prepare_diffusion
+        from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
 
         coefficient_timings: dict[str, float] = {}
         device_prepared = prepare_adr_data_cupy(
@@ -468,7 +472,7 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
         reuse = options.amgx_reuse
         if cache is None or reuse == "none":
             return solve_once()
-        from .advection_cuda import PyAMGXCsrDeviceSolver
+        from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
         states = cache.setdefault("amgx", {})
         key = _amgx_cache_key(amgx_config, options, assembly.rhs.size)
         state = states.get(key)
@@ -513,12 +517,12 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
         lambda: reconstruct_projected_adr_local_unknowns_raw_cuda(
             operator, trace_device, block_size=options.raw_block_size))
     _print_timing_details("raw-cuda reconstruction timings", reconstruction_timings, verbosity)
-    from ..solvers.advection_diffusion_reaction import (
+    from hdgfem.solvers.advection_diffusion_reaction import (
         AdvectionDiffusionReactionResult, AdvectionDiffusionReactionTimings,
         _postprocess_primal_from_total_flux, _postprocess_total_flux,
         _reported_postprocessing_backend, _project_total_flux,
     )
-    from ..solvers.diffusion_reaction import _normalize_hdg_postprocess_mode, split_diffusion_unknowns
+    from hdgfem.solvers.diffusion_reaction import _normalize_hdg_postprocess_mode, split_diffusion_unknowns
 
     field, flux = split_diffusion_unknowns(unknowns, space)
     total_flux = _project_total_flux(unknowns, prepared, space)

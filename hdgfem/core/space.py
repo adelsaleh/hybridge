@@ -18,8 +18,8 @@ from hdgfem.precision import REAL_DTYPE
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Sequence
 import numpy as np
-from .mesh import DGMesh, as_dg_mesh
-from .quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
+from hdgfem.core.mesh import DGMesh, as_dg_mesh
+from hdgfem.core.quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
 
 
 def _cache_key(points: np.ndarray) -> tuple[int, tuple[int, ...], str]:
@@ -732,7 +732,7 @@ class DGSpace:
         ``func`` is evaluated at physical volume quadrature coordinates and may
         return a scalar, ``(num_quads,)``, or ``(num_elements, num_quads)``.
         """
-        from ..assembly import matrices_numpy as hdg_mats
+        from hdgfem.assembly import matrices_numpy as hdg_mats
 
         return hdg_mats.weighted_mass(self, func)
 
@@ -743,7 +743,7 @@ class DGSpace:
         points.  This permits ``u`` to use a different polynomial order while
         sharing the same mesh object.
         """
-        from ..assembly import matrices_numpy as hdg_mats
+        from hdgfem.assembly import matrices_numpy as hdg_mats
 
         return hdg_mats.weighted_mass_from_field(self, func, u, parameters=parameters)
 
@@ -823,7 +823,7 @@ class DGSpace:
         geometric search work for multiple fields on the same source/target
         spaces.
         """
-        from .transfer import build_transfer_plan
+        from hdgfem.core.transfer import build_transfer_plan
 
         return build_transfer_plan(source, self, verbose=verbose)
 
@@ -1251,7 +1251,7 @@ class DGField:
         mesh receive ``missing``.  This path performs geometric point location
         and is therefore slower than :meth:`values` or :meth:`values_at_ref`.
         """
-        from .transfer import evaluate_field_at_points
+        from hdgfem.core.transfer import evaluate_field_at_points
 
         return evaluate_field_at_points(self, points_xy, missing=missing)
 
@@ -1357,7 +1357,7 @@ class DGField:
         locates target quadrature points in the source mesh; passing a reusable
         ``plan`` avoids repeating that search.
         """
-        from .transfer import project_field
+        from hdgfem.core.transfer import project_field
 
         return project_field(self, target, plan=plan, verbose=verbose)
 
@@ -1438,7 +1438,7 @@ class DGField:
     def _binary_field_op(self, other, op, symbol: str) -> "DGField":
         """Apply a coefficient-wise binary operation to compatible DG fields."""
         if isinstance(other, DGField):
-            from .field_ops import field_linear_combination
+            from hdgfem.core.field_ops import field_linear_combination
 
             self.space.assert_basis_compatible(other.space)
             result_space = (
@@ -1470,7 +1470,7 @@ class DGField:
             return self.space.constant(constant_value * value, name=f"({label})")
         if value == 0.0:
             return self.space.zeros(name=f"({label})")
-        from .field_ops import field_linear_combination
+        from hdgfem.core.field_ops import field_linear_combination
 
         return field_linear_combination(
             self.space, [(value, self)], name=f"({label})",
@@ -1919,6 +1919,6 @@ class VectorDGField:
 
     def project_to(self, target: VectorDGSpace, *, plan=None, verbose: bool = True):
         """Project component-wise into another vector DG space."""
-        from .transfer import project_vector_field
+        from hdgfem.core.transfer import project_vector_field
 
         return project_vector_field(self, target, plan=plan, verbose=verbose)

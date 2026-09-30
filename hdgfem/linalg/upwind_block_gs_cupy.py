@@ -16,7 +16,7 @@ from typing import Sequence
 import numpy as np
 import scipy.sparse
 
-from .upwind_block_gs import UpwindBlockGSStats, build_upwind_block_gs_preconditioner
+from hdgfem.linalg.upwind_block_gs import UpwindBlockGSStats, build_upwind_block_gs_preconditioner
 
 
 _UPWIND_FORWARD_LEVEL_KERNEL_TEMPLATE = r"""
@@ -223,7 +223,7 @@ def cupy_upwind_block_gs_from_host_preconditioner(
     lower-coupling, and inverse-diagonal arrays to the current CUDA device and
     returns the Cupyx ``LinearOperator`` used by iterative solvers.
     """
-    from ..backends.cupy import require_cupy, require_cupyx_sparse_linalg
+    from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg
 
     cupy = require_cupy()
     cupyx_linalg = require_cupyx_sparse_linalg()
@@ -279,7 +279,7 @@ def build_cupy_upwind_block_gs_preconditioner(
         dtype=None,
 ):
     """Build a Cupyx ``LinearOperator`` for an upwind block-GS sweep."""
-    from ..backends.cupy import require_cupy, require_cupyx_sparse_linalg
+    from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg
 
     cupy = require_cupy()
     cupyx_linalg = require_cupyx_sparse_linalg()

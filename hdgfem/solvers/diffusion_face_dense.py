@@ -12,8 +12,8 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..assembly import hdg as hdg_assembly
-from ..assembly.face_dense import (
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.assembly.face_dense import (
     FaceDenseSystem,
     FaceTopology,
     assemble_global_face_blocks,
@@ -24,8 +24,8 @@ from ..assembly.face_dense import (
     make_penalty_system,
     materialize_face_dense_matrix,
 )
-from ..core.space import DGField, DGSpace, VectorDGField
-from .diffusion_reaction import (
+from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from hdgfem.solvers.diffusion_reaction import (
     diffusion_element_boundary_mats,
     diffusion_trace_lift,
     local_solvers,

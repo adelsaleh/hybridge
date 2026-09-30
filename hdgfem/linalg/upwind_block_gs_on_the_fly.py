@@ -27,7 +27,7 @@ except ImportError:  # pragma: no cover
     njit = None
     prange = range
 
-from .upwind_block_gs import UpwindBlockGSPreconditioner, UpwindBlockGSStats
+from hdgfem.linalg.upwind_block_gs import UpwindBlockGSPreconditioner, UpwindBlockGSStats
 
 
 @dataclass(frozen=True)

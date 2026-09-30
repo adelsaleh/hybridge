@@ -25,7 +25,7 @@ from typing import Literal
 
 import numpy as np
 
-from ..assembly.face_dense import FaceDenseSystem, face_dense_matvec
+from hdgfem.assembly.face_dense import FaceDenseSystem, face_dense_matvec
 
 VectorOperator = Callable[[np.ndarray], np.ndarray]
 GMRESStatus = Literal["converged", "max_iterations", "breakdown"]

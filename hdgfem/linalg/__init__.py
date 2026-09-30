@@ -1,16 +1,16 @@
 """Sparse linear-system and graph-ordering helpers."""
 
-from .additive_schwarz import (
+from hdgfem.linalg.additive_schwarz import (
     FaceAdditiveSchwarzPreconditioner,
     build_face_additive_schwarz_preconditioner,
 )
-from .block_jacobi import (
+from hdgfem.linalg.block_jacobi import (
     FaceBlockJacobiPreconditioner,
     build_face_block_jacobi_preconditioner,
 )
-from .gmres import GMRESResult, restarted_gmres, solve_face_dense_gmres
+from hdgfem.linalg.gmres import GMRESResult, restarted_gmres, solve_face_dense_gmres
 
-from .ordering import (
+from hdgfem.linalg.ordering import (
     GraphOrderingDiagnostics,
     GraphOrderingResult,
     GraphOrderingTimings,
@@ -22,7 +22,7 @@ from .ordering import (
     strongly_connected_component_order,
     upwind_scc_trace_ordering,
 )
-from .system import (
+from hdgfem.linalg.system import (
     KnownDofReduction,
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
@@ -39,17 +39,17 @@ from .system import (
     solve_global_system,
     solve_pypardiso_system,
 )
-from .upwind_block_gs import (
+from hdgfem.linalg.upwind_block_gs import (
     UpwindBlockGSPreconditioner,
     UpwindBlockGSStats,
     build_upwind_block_gs_preconditioner,
 )
-from .upwind_block_gs_on_the_fly import (
+from hdgfem.linalg.upwind_block_gs_on_the_fly import (
     UpwindBlockGSOnTheFlyTimings,
     build_forward_upwind_block_gs_from_coo,
     build_forward_upwind_block_gs_from_ordered_block_coo,
 )
-from .upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
+from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
 
 __all__ = [
     "FaceAdditiveSchwarzPreconditioner",

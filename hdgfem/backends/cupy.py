@@ -19,10 +19,10 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 
-from ..assembly import hdg as hdg_assembly
-from ..assembly import matrices_numpy as hdg_mats
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
-from ..linalg.system import KnownDofReduction
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.linalg.system import KnownDofReduction
 
 try:  # pragma: no cover - depends on optional runtime dependency.
     import cupy as cp
@@ -264,7 +264,7 @@ class CupyDGSpace:
         Without timings, the normal asynchronous batching is preserved.
         """
         from contextlib import nullcontext
-        from ..io.output import timed_section
+        from hdgfem.io.output import timed_section
 
         cupy = require_cupy()
         sync = cupy.cuda.get_current_stream().synchronize if timings is not None else None
@@ -574,7 +574,7 @@ def initialize_pyamgx_once():
         # AMGX's default printf callback becomes block-buffered under terminal
         # log pipes. Its public callback emits each native iteration row now,
         # rather than leaving it in C stdout until a failed solve is unwound.
-        from ..io.terminal import flush_native_stdio, write_native_solver_output
+        from hdgfem.io.terminal import flush_native_stdio, write_native_solver_output
 
         flush_native_stdio()
         amgx.register_print_callback(write_native_solver_output)
@@ -874,7 +874,7 @@ def _advection_trace_weights_cupy(
 ):
     """Return device tau and gamma tables on element-side face quadrature."""
     cupy = require_cupy()
-    from ..solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
     if is_conflict_averaged_upwind(stabilization):
         beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, stabilization, xp=cupy)
     factor = upwind_factor(stabilization)
@@ -1003,7 +1003,7 @@ def reconstruct_advection_reaction_field_cupy(
 
 def _oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyTraceReferenceData):
     """Return trace basis values in global edge orientation on every side."""
-    from .advection_cuda import as_cupy_trace_space, oriented_trace_basis_cupy
+    from hdgfem.backends.advection_cuda import as_cupy_trace_space, oriented_trace_basis_cupy
     trace = as_cupy_trace_space(trace_ref.host, device=cspace.device_id)
     return oriented_trace_basis_cupy(cspace, trace)
 
@@ -1065,7 +1065,7 @@ def _advection_interior_trace_mass_blocks_cupy(cspace: CupyDGSpace, gamma_face, 
     )
     blocks = cupy.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if inactive_tau is not None:
-        from ..solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(blocks, inactive_tau, mesh, xp=cupy)
     return blocks
 
@@ -1343,7 +1343,7 @@ def assemble_advection_reaction_trace_system_cupy(
     )
     rows_device = cupy.asarray(rows, dtype=cupy.int64)
     cols_device = cupy.asarray(cols, dtype=cupy.int64)
-    from ..solvers.stabilization import is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind
     data = _trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face, boundary_penalty,
                                    inactive_tau=tau_face if is_conflict_averaged_upwind(advection_stabilization) else None)
     rhs, boundary_trace = _global_rhs_cupy(
@@ -1442,7 +1442,7 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
     trace_lift = _advection_trace_lift_cupy(cspace, tau_face, trace_ref)
     trace_blocks = _element_to_trace_matrix_cupy(local_solver, element_boundary_mats, trace_lift, cspace, trace_ref)
     rows_cp, cols_cp = _reduced_trace_matrix_indices_cupy(cspace, trace_ref)
-    from ..solvers.stabilization import is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import is_conflict_averaged_upwind
     data_cp = _reduced_trace_matrix_data_cupy(trace_blocks, cspace, trace_ref, gamma_face,
                                             inactive_tau=tau_face if is_conflict_averaged_upwind(advection_stabilization) else None)
     rhs_cp = _global_rhs_without_boundary_penalty_cupy(source_rhs, local_solver, trace_lift, cspace, trace_ref)
@@ -1754,7 +1754,7 @@ def solve_pyamgx_csr(
         return_info: bool = False,
 ):
     """Solve a CuPy CSR system with PyAMGX and optionally return native diagnostics."""
-    from .amgx_errors import as_amgx_capacity_error, destroy_amgx_objects
+    from hdgfem.backends.amgx_errors import as_amgx_capacity_error, destroy_amgx_objects
 
     cupy = require_cupy()
     amgx = initialize_pyamgx_once()

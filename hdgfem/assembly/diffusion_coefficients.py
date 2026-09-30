@@ -28,7 +28,7 @@ def _on_host_chunks(values) -> bool:
 
 def _element_blocks(function, count: int) -> None:
     """``function(start, stop)`` over element chunks of the host pool."""
-    from ..core.host_threads import for_element_chunks
+    from hdgfem.core.host_threads import for_element_chunks
     for_element_chunks(function, count, min_chunk=64)
 
 
@@ -39,12 +39,12 @@ def sample_diffusion_tensor(diffusion, space, *, on_faces=False, trace_space=Non
     definite. Face samples retain both incidences of discontinuous fields.
     ``device=True`` returns a CuPy array sampled on the device.
     """
-    from ..backends.cupy import array_module
-    from ..solvers.diffusion_reaction import _diffusion_components
+    from hdgfem.backends.cupy import array_module
+    from hdgfem.solvers.diffusion_reaction import _diffusion_components
     components = _diffusion_components(diffusion, space, on_faces=on_faces, trace_space=trace_space, device=device)
     xp = array_module(*components)
     if isinstance(components[0], np.ndarray) and components[0].ndim >= 1:
-        from ..core.host_threads import elementwise
+        from hdgfem.core.host_threads import elementwise
         values = elementwise(lambda *parts: np.stack(parts, axis=-1).astype(np.float64, copy=False), *components)
     else:
         values = xp.ascontiguousarray(xp.stack(components, axis=-1), dtype=xp.float64)
@@ -75,7 +75,7 @@ def _worst_status(values, xp) -> int:
 
 def validate_diffusion_values(values):
     """Reject nonfinite tensors or non-positive symmetric parts (NumPy or CuPy input)."""
-    from ..backends.cupy import array_module
+    from hdgfem.backends.cupy import array_module
     if _on_host_chunks(values):
         statuses = []
         _element_blocks(lambda start, stop: statuses.append(_worst_status(values[start:stop], np)), values.shape[0])
@@ -90,7 +90,7 @@ def validate_diffusion_values(values):
 
 def constant_diffusion_components(diffusion):
     """Return a compact constant tensor when its input representation proves it."""
-    from ..core.space import DGField
+    from hdgfem.core.space import DGField
     if isinstance(diffusion, DGField):
         if diffusion.constant_value is None:
             return None
@@ -126,7 +126,7 @@ def _inverse(values, xp):
 
 def inverse_diffusion_values(values):
     """Invert validated two-dimensional tensors with scale-aware arithmetic (NumPy or CuPy)."""
-    from ..backends.cupy import array_module
+    from hdgfem.backends.cupy import array_module
     if _on_host_chunks(values):
         inverse, finite = np.empty(values.shape, dtype=np.float64), []
 
@@ -153,7 +153,7 @@ def normal_diffusivity_on_faces(diffusion, space, *, trace_space=None, device=Fa
     """
     xp, normals = np, space.mesh.normals
     if device:
-        from ..backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.backends.cupy import as_cupy_space, require_cupy
         xp, normals = require_cupy(), as_cupy_space(space).mesh.normals
     constant = constant_diffusion_components(diffusion)
     if constant is not None:
@@ -201,7 +201,7 @@ def prepare_diffusion(diffusion, space, *, device=False):
         kind = 0 if diagonal and compact[0] == compact[3] else (1 if diagonal else 2)
         return PreparedDiffusion(np.full(space.mesh.num_tri, kind, dtype=np.int64),
                                  compact[None, :], np.empty((0, 0, 4), dtype=np.float64))
-    from ..backends.cupy import array_module
+    from hdgfem.backends.cupy import array_module
     values = sample_diffusion_tensor(diffusion, space, device=device)
     xp = array_module(values)
     return PreparedDiffusion(diffusion_kinds(values), xp.ascontiguousarray(values[:, 0]),
@@ -210,7 +210,7 @@ def prepare_diffusion(diffusion, space, *, device=False):
 
 def diffusion_kinds(values):
     """Exact structural kind of each element's ``(K, nq, 4)`` samples (NumPy or CuPy)."""
-    from ..backends.cupy import array_module
+    from hdgfem.backends.cupy import array_module
     if not _on_host_chunks(values):
         return _diffusion_kinds(values, array_module(values))
     kinds = np.empty(values.shape[0], dtype=np.int64)

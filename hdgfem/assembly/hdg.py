@@ -18,8 +18,8 @@ from typing import Literal
 
 import numpy as np
 
-from . import matrices_numpy as hdg_mats
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 @dataclass(frozen=True)
@@ -231,8 +231,8 @@ def boundary_trace_coefficients(
     if backend == "host":
         values = trace_ref.boundary_coefficients(boundary_condition)
         return values[space.mesh.bnd_edges_inds] if boundary_only else values
-    from ..backends.cupy import as_cupy_space, require_cupy
-    from ..backends.advection_cuda import as_cupy_trace_space
+    from hdgfem.backends.cupy import as_cupy_space, require_cupy
+    from hdgfem.backends.advection_cuda import as_cupy_trace_space
     xp = require_cupy()
     cspace = as_cupy_space(space)
     mesh = cspace.mesh

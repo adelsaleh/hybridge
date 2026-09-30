@@ -14,18 +14,18 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..assembly import hdg as hdg_assembly
-from ..assembly import matrices_numpy as hdg_mats
-from ..kernels import NUMBA_AVAILABLE
-from ..kernels.advection_reaction import assemble_local_mats_and_boundary_kernel
-from ..linalg.system import KnownDofReduction
-from ..kernels.advection_reaction_fused import (
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.kernels import NUMBA_AVAILABLE
+from hdgfem.kernels.advection_reaction import assemble_local_mats_and_boundary_kernel
+from hdgfem.linalg.system import KnownDofReduction
+from hdgfem.kernels.advection_reaction_fused import (
     assemble_face_trace_weights_kernel,
     assemble_projected_trace_system_eliminated_kernel,
     assemble_projected_trace_system_kernel,
     reconstruct_projected_field_kernel,
 )
-from ..kernels.diffusion_reaction_fused import (
+from hdgfem.kernels.diffusion_reaction_fused import (
     factor_projected_diffusion_schur_kernel,
     assemble_diffusion_trace_rhs_eliminated_kernel,
     assemble_diffusion_trace_system_eliminated_kernel,
@@ -36,7 +36,7 @@ from ..kernels.diffusion_reaction_fused import (
     reconstruct_projected_diffusion_local_unknowns_kernel,
     reconstruct_projected_tensor_diffusion_local_unknowns_kernel,
 )
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 @dataclass(frozen=True)
@@ -396,7 +396,7 @@ def _advection_stabilization_coefficients(stabilization, space: DGSpace) -> tupl
     ``kind=4`` builds conflict-averaged weights inside the element loop. Callable
     stabilizations must be projected before using the fused backend.
     """
-    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
     if is_conflict_averaged_upwind(stabilization):
         return 4, 1.0, np.zeros((1, 1), dtype=np.float64)
     factor = upwind_factor(stabilization)

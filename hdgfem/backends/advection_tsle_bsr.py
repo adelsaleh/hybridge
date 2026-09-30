@@ -84,7 +84,7 @@ from typing import Any
 
 import numpy as np
 
-from .advection_raw_cuda import (
+from hdgfem.backends.advection_raw_cuda import (
     RawAdvectionAssemblyResult,
     _RAW_FUSED_TEMPLATE,
     _kernel_source,
@@ -92,8 +92,8 @@ from .advection_raw_cuda import (
     build_reduced_csr_pattern_raw,
     validate_raw_cuda_supported,
 )
-from .cupy import require_cupy
-from .raw_cuda import RawCudaBlockSize
+from hdgfem.backends.cupy import require_cupy
+from hdgfem.backends.raw_cuda import RawCudaBlockSize
 
 
 _TSLE_KERNEL_NAMES = (
@@ -597,7 +597,7 @@ def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: s
         If ``advection_stabilization`` is not an upwind policy.
     """
     device_id = int(cupy.cuda.runtime.getDevice())
-    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
     factor = upwind_factor(advection_stabilization)
     if factor is None:
         raise ValueError("Unsupported TSLE advection stabilization")

@@ -40,8 +40,8 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import require_cupy, require_cupyx_sparse
-from .raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse
+from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 
 
 @dataclass(frozen=True)
@@ -2186,7 +2186,7 @@ def _kernel_source(
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
     if trace_orientation not in {'nodal', 'modal'}:
         raise ValueError("trace_orientation must be 'nodal' or 'modal'")
-    from ..solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import upwind_factor, is_conflict_averaged_upwind
     factor = upwind_factor(advection_stabilization)
     if factor is None:
         raise ValueError("Unsupported raw CUDA advection stabilization")

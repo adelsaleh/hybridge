@@ -5,7 +5,7 @@ spaces, fields, reusable HDG assembly helpers, sparse solvers, and executable
 advection-reaction and diffusion-reaction solver modules.
 """
 
-from .core.mesh import (
+from hdgfem.core.mesh import (
     DGMesh,
     as_dg_mesh,
     default_mesh_cache_dir,
@@ -19,10 +19,10 @@ from .core.mesh import (
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from .core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
-from .core.element_coefficients import ElementCoefficient
-from .core.pointwise import PointwiseCoefficient, PointwiseLaw, pointwise_coefficient, pointwise_law
-from .core.field_ops import (
+from hdgfem.core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from hdgfem.core.element_coefficients import ElementCoefficient
+from hdgfem.core.pointwise import PointwiseCoefficient, PointwiseLaw, pointwise_coefficient, pointwise_law
+from hdgfem.core.field_ops import (
     coefficient_field,
     field_gradient_at_ref,
     field_linear_combination,
@@ -35,8 +35,8 @@ from .core.field_ops import (
     trace_linear_combination,
     vector_field_linear_combination,
 )
-from .core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
-from .diagnostics import (
+from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
+from hdgfem.diagnostics import (
     ScalarComparisonSamples,
     ScalarErrorMetrics,
     ScalarHDGErrorMetrics,
@@ -84,7 +84,7 @@ _SOLVER_EXPORTS = {
 def __getattr__(name: str):
     """Lazily expose solver symbols without pre-importing script modules."""
     if name in _SOLVER_EXPORTS:
-        from . import solvers
+        from hdgfem import solvers
 
         value = getattr(solvers, name)
         globals()[name] = value
@@ -97,7 +97,7 @@ def __getattr__(name: str):
         "SolveStatus",
         "solve_global_system",
     }:
-        from .linalg.system import (
+        from hdgfem.linalg.system import (
             LinearSolveCapacityError,
             LinearSolveConvergenceError,
             LinearSolveError,

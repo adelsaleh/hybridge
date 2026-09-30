@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..core.space import DGField, DGSpace, _normalize_callable_values
+from hdgfem.core.space import DGField, DGSpace, _normalize_callable_values
 
 
 def _call_with_optional_parameters(func: Callable, x: np.ndarray, y: np.ndarray, parameters):
@@ -92,7 +92,7 @@ def project_callable(
     Instrumentation adds synchronization and can perturb elapsed time.
     """
     from contextlib import nullcontext
-    from ..io.output import timed_section
+    from hdgfem.io.output import timed_section
 
     sync = None
 
@@ -123,7 +123,7 @@ def project_callable(
                                 parameters=parameters, verbose=False)
             return space.field(coeffs, name=name, _coefficient_kind="projected")
     with section("backend_import_time"):
-        from ..backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.backends.cupy import as_cupy_space, require_cupy
         cp = require_cupy()
     # Charge context startup and previously queued work separately, before
     # timing shared mesh/reference mirrors or any projection GPU operations.
@@ -256,7 +256,7 @@ def field_from_moments(space: DGSpace, moments: np.ndarray, *, name: str) -> DGF
     if tuple(moments.shape) != expected:
         raise ValueError(f"moments must have shape {expected}; got {moments.shape}")
     if hasattr(moments, "__cuda_array_interface__"):
-        from ..backends.cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
+        from hdgfem.backends.cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
         device = int(moments.device.id)
         with require_cupy().cuda.Device(device):
             cspace = as_cupy_space(space, device=device)

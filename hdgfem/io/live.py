@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .plot import (
+from hdgfem.io.plot import (
     _require_pyvista,
     add_field_to_plotter,
     reference_plot_points,

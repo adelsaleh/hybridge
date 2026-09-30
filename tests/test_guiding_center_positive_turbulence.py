@@ -235,9 +235,7 @@ def test_positive_turbulence_poisson_retry_order_and_conditioning(preset) -> Non
 
 
 def test_robust_native_poisson_preconditioner_remains_symmetric() -> None:
-    from hdgfem.linalg.face_hp_multigrid import (
-        face_hp_mg_preconditioner_parameters,
-    )
+    from hdgfem.linalg.face_hp_policy import face_hp_mg_preconditioner_parameters
 
     policy = face_hp_mg_preconditioner_parameters("robust")
     assert policy["schedule"] == "halve"

@@ -19,7 +19,7 @@ import numpy as np
 from numba import prange, types
 from numba.extending import intrinsic
 
-from .common import njit
+from hdgfem.kernels.common import njit
 
 XYT_SIGNATURE = types.float64(types.float64, types.float64, types.float64)
 VALUES_SIGNATURE = types.float64(types.float64, types.float64, types.float64, types.CPointer(types.float64))

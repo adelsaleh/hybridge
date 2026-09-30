@@ -10,7 +10,7 @@ import numpy as np
 from hdgfem.precision import REAL_DTYPE, real_raw_kernel
 from hdgfem.assembly.flux_recovery import build_flux_recovery_reference
 from hdgfem.core.space import VectorDGField
-from .cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
+from hdgfem.backends.cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
 
 _KERNELS = {}
 _SOURCE = r'''

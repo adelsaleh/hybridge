@@ -12,7 +12,7 @@ import time
 
 import numpy as np
 
-from .cupy import require_cupy
+from hdgfem.backends.cupy import require_cupy
 
 
 def superlu_gather_indices(perm_r, perm_c):
@@ -34,7 +34,7 @@ def _check_status(status, operation):
 
 
 def _triangular_library():
-    from .legendre_face_bsr import _load_cusparse
+    from hdgfem.backends.legendre_face_bsr import _load_cusparse
 
     lib = _load_cusparse()
     pointer, integer = ctypes.c_void_p, ctypes.c_int

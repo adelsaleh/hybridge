@@ -19,17 +19,17 @@ from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
 
-from ..assembly import hdg as hdg_assembly
-from ..backends.capabilities import (
+from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.backends.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
     validate_advection_backend_configuration,
 )
-from ..backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
-from ..backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
-from ..backends.advection_raw_cuda import RawAdvectionFactorWorkspace
-from ..assembly import matrices_numpy as hdg_mats
-from ..linalg.system import (
+from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
+from hdgfem.backends.advection_raw_cuda import RawAdvectionFactorWorkspace
+from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.linalg.system import (
     KnownDofReduction,
     SolveResult,
     assemble_global_matrix,
@@ -39,13 +39,13 @@ from ..linalg.system import (
     diagonal_scale_system,
     update_known_dof_rhs,
 )
-from ..linalg.ordering import (
+from hdgfem.linalg.ordering import (
     GraphOrderingResult,
     SparsePatternPlotResult,
     save_upwind_reordered_matrix_patterns,
     upwind_scc_trace_ordering,
 )
-from ..core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
 ReturnKey = Literal[
@@ -814,11 +814,11 @@ class AdvectionReactionHDGSolver:
             raise ValueError(
                 "tangent-boundary BSR assembly requires raw_local_assembly='fused' or 'split3'"
             )
-        from ..backends.advection_cuda import (
+        from hdgfem.backends.advection_cuda import (
             as_cupy_trace_space,
             assemble_reduced_system_cuda,
         )
-        from ..backends.cupy import (
+        from hdgfem.backends.cupy import (
             as_cupy_space,
             as_cupy_vector_coefficients,
         )
@@ -1201,7 +1201,7 @@ def solve_advection_reaction_hdg(
         or matrix_pattern_dir is not None
         or any(key in want for key in ("matrix_rows", "matrix_cols", "matrix_data"))
     )
-    from .stabilization import is_lax_friedrichs, ScaledUpwind, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import is_lax_friedrichs, ScaledUpwind, is_conflict_averaged_upwind
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
         operation=operation,
@@ -1446,7 +1446,7 @@ def solve_advection_reaction_hdg(
         wants_host_system = requires_host_system
         local_assembly = local_inverse = boundary_assembly = 0.0
         if effective_backend == "raw-cuda":
-            from ..backends.advection_cuda import update_reduced_system_rhs_cuda
+            from hdgfem.backends.advection_cuda import update_reduced_system_rhs_cuda
             cuda_assembly, trace_assembly = _timed_call(
                 "updating RHS with cached transport LU and trace operator", verbosity,
                 lambda: update_reduced_system_rhs_cuda(cached["cuda_assembly"], source_data,
@@ -1467,7 +1467,7 @@ def solve_advection_reaction_hdg(
         detail_timings["operator.reused"] = 1.0
         detail_timings["local.factors.reused"] = 1.0
     elif effective_backend == "numba":
-        from ..backends.numba import (
+        from hdgfem.backends.numba import (
             assemble_local_advection_reaction_numba,
             assemble_projected_trace_system_eliminated_numba,
             assemble_projected_trace_system_numba,
@@ -1563,8 +1563,8 @@ def solve_advection_reaction_hdg(
             )
             element_boundary_mats = numba_local.element_boundary_mats
     elif effective_backend == "raw-cuda":
-        from ..backends.cupy import as_cupy_space, as_cupy_vector_coefficients, require_cupy
-        from ..backends.advection_cuda import (
+        from hdgfem.backends.cupy import as_cupy_space, as_cupy_vector_coefficients, require_cupy
+        from hdgfem.backends.advection_cuda import (
             assemble_reduced_system_cuda,
             as_cupy_trace_space,
             beta_dot_normal_from_coeffs,
@@ -1708,7 +1708,7 @@ def solve_advection_reaction_hdg(
                         formatted = f"{value:.5f}s"
                     print(f"    {key}: {formatted}", flush=True)
     elif effective_backend == "cupy":
-        from ..backends.cupy import (
+        from hdgfem.backends.cupy import (
             assemble_advection_reaction_trace_system_cupy,
             assemble_advection_reaction_trace_system_eliminated_cupy,
         )
@@ -2088,7 +2088,7 @@ def solve_advection_reaction_hdg(
     if initial_guess is not None and not raw_cuda_device_amgx:
         full_size = int(space.mesh.num_edg * trace_space_host.edg_dof)
         if cupy_device_trace_handoff:
-            from ..backends.cupy import require_cupy
+            from hdgfem.backends.cupy import require_cupy
 
             cp = require_cupy()
             guess = cp.asarray(initial_guess, dtype=REAL_DTYPE)
@@ -2195,8 +2195,8 @@ def solve_advection_reaction_hdg(
         )
 
     if raw_cuda_device_amgx:
-        from ..backends.cupy import require_cupy
-        from ..backends.advection_cuda import solve_reduced_system_amgx_device
+        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.backends.advection_cuda import solve_reduced_system_amgx_device
 
         cp = require_cupy()
 
@@ -2253,7 +2253,7 @@ def solve_advection_reaction_hdg(
             rows = cols = data = rhs = solve_rows = solve_cols = solve_data = solve_rhs = None
             boundary_trace = None
     elif cupy_device_trace_handoff:
-        from ..linalg.cupyx_device import solve_cupyx_device_coo
+        from hdgfem.linalg.cupyx_device import solve_cupyx_device_coo
 
         global_solve_result, solve_time = _timed_call(
             "solving global system (cupyx device COO)",
@@ -2315,8 +2315,8 @@ def solve_advection_reaction_hdg(
     trace_device = None
 
     if effective_backend == "raw-cuda":
-        from ..backends.cupy import asnumpy, require_cupy
-        from ..backends.advection_cuda import reconstruct_advection_field_cuda, reconstruct_trace_cupy
+        from hdgfem.backends.cupy import asnumpy, require_cupy
+        from hdgfem.backends.advection_cuda import reconstruct_advection_field_cuda, reconstruct_trace_cupy
 
         cp = require_cupy()
         if trace_reduced_cp is None:
@@ -2350,7 +2350,7 @@ def solve_advection_reaction_hdg(
             trace = None
     else:
         if effective_backend == "cupy":
-            from ..backends.cupy import (
+            from hdgfem.backends.cupy import (
                 asnumpy,
                 expand_boundary_trace_cupy,
                 expand_known_dofs_cupy,
@@ -2412,7 +2412,7 @@ def solve_advection_reaction_hdg(
         else:
             can_use_projected_reconstruction = effective_backend == "numba"
             if can_use_projected_reconstruction:
-                from ..backends.numba import reconstruct_projected_field_numba
+                from hdgfem.backends.numba import reconstruct_projected_field_numba
 
                 label = "reconstructing element field (numba)"
                 field, reconstruction = _timed_call(
@@ -2438,7 +2438,7 @@ def solve_advection_reaction_hdg(
                             "local solver cache is required for reconstruction when projected Numba reconstruction is unavailable"
                         )
                     if not isinstance(local_solver, np.ndarray) or not isinstance(element_boundary_mats, np.ndarray):
-                        from ..backends.cupy import asnumpy
+                        from hdgfem.backends.cupy import asnumpy
 
                         local_solver = np.ascontiguousarray(asnumpy(local_solver))
                         element_boundary_mats = np.ascontiguousarray(asnumpy(element_boundary_mats))

@@ -1149,7 +1149,7 @@ def solve_pyamgx_system(
     """
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter)
     total_start = time.time()
-    from ..backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
+    from hdgfem.backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
 
     physical_matrix = matrix.tocsr()
     physical_rhs = np.asarray(rhs, dtype=REAL_DTYPE)
@@ -1340,7 +1340,7 @@ def solve_cupyx_system(
     """
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     total_start = time.time()
-    from ..backends.cupy import (
+    from hdgfem.backends.cupy import (
         asnumpy,
         build_cupyx_exported_host_ilu_preconditioner,
         build_cupyx_ilu_preconditioner,
@@ -1584,7 +1584,7 @@ def solve_cupyx_system(
                 int(upwind_block_size),
             )
             preconditioner_start = time.time()
-            from .upwind_block_gs_cupy import build_cupy_upwind_block_gs_preconditioner
+            from hdgfem.linalg.upwind_block_gs_cupy import build_cupy_upwind_block_gs_preconditioner
 
             preconditioner_operator = build_cupy_upwind_block_gs_preconditioner(
                 host_matrix,

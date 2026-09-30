@@ -25,8 +25,8 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import as_cupy_space, require_cupy
-from .raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hdgfem.backends.cupy import as_cupy_space, require_cupy
+from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ def _validate_local_schur_factors(cached_raw, *, num_elements: int, nel: int, lo
     return schur_lu, schur_pivots
 
 
-from .raw_cuda_local import (
+from hdgfem.backends.raw_cuda_local import (
     RAW_TRACE_ORIENTATION_HELPERS as _RAW_TRACE_ORIENTATION_HELPERS,
     RAW_COOPERATIVE_SOLVES,
 )
@@ -2462,7 +2462,7 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
     csr_pattern = None
     indptr = indices = None
     if matrix_format in {'csr', 'bsr'}:
-        from .advection_raw_cuda import build_reduced_csr_pattern_raw
+        from hdgfem.backends.advection_raw_cuda import build_reduced_csr_pattern_raw
 
         start = time.perf_counter()
         csr_pattern = build_reduced_csr_pattern_raw(
@@ -3217,7 +3217,7 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     total_start = time.perf_counter()
 
     setup_start = time.perf_counter()
-    from ..solvers.diffusion_reaction import _new_hdg_postprocess_cache
+    from hdgfem.solvers.diffusion_reaction import _new_hdg_postprocess_cache
 
     trace_ref = cspace.host.trace_space('legacy-lagrange') if trace_space is None else trace_space
     if cache is None or cache.base_space is not cspace.host or cache.trace_space is not trace_ref:
@@ -3247,7 +3247,7 @@ def postprocess_projected_diffusion_primal_raw_cuda(
     stiffness_ss = cupy.asarray(cache.primal_stiffness_ss, dtype=REAL_DTYPE)
     inverse_constants = _constant_inverse_diffusion_components(diffusion)
     if inverse_constants is None:
-        from ..solvers.diffusion_reaction import _inverse_diffusion_values
+        from hdgfem.solvers.diffusion_reaction import _inverse_diffusion_values
 
         inv00_h, inv01_h, inv10_h, inv11_h = _inverse_diffusion_values(diffusion, cache.post_space)
         inverse_mode = np.int32(1)

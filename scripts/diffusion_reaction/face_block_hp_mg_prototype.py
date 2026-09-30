@@ -29,11 +29,11 @@ from hdgfem.linalg.face_hp_multigrid import (
     AmgxScalarVcycle,
     CupyxCgScalarSolve,
     FaceBlockPmgPrototype,
-    scalar_p0_amgx_config,
     solve_pcgf_prototype,
     solve_pcg_prototype,
     symmetric_scalar_amgx_config,
 )
+from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
 from hdgfem.solvers.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 

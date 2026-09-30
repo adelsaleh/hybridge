@@ -15,7 +15,7 @@ try:  # pragma: no cover - exercised only when numba is installed.
 except ImportError:  # pragma: no cover
     prange = range
 
-from .common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit, zero_matrix
+from hdgfem.kernels.common import lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit, zero_matrix
 
 
 @njit(cache=True, inline="always", fastmath=True)

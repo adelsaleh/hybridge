@@ -1,13 +1,13 @@
 """Core DG mesh, basis, quadrature, space, and transfer objects."""
 
-from .adaptivity import (
+from hdgfem.core.adaptivity import (
     SmoothStarGeometry,
     StructuredSizeOptions,
     gradient_weighted_indicator,
     remesh_smooth_star_from_indicator,
     structured_size_field_from_indicator,
 )
-from .mesh import (
+from hdgfem.core.mesh import (
     DGMesh,
     as_dg_mesh,
     default_mesh_cache_dir,
@@ -21,7 +21,7 @@ from .mesh import (
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from .field_ops import (
+from hdgfem.core.field_ops import (
     coefficient_field,
     field_linear_combination,
     perpendicular_vector_field,
@@ -32,11 +32,11 @@ from .field_ops import (
     trace_linear_combination,
     vector_field_linear_combination,
 )
-from .trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
-from .space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
+from hdgfem.core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
 
-from .geometry import DiskDomain, PolygonDomain, shaped_domain
-from .profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
+from hdgfem.core.geometry import DiskDomain, PolygonDomain, shaped_domain
+from hdgfem.core.profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
 
 __all__ = [
     "PolygonDomain",

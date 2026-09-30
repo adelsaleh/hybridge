@@ -7,20 +7,20 @@ import time
 
 import numpy as np
 
-from . import hdg
-from . import matrices_numpy as matrices
-from ..core.element_coefficients import ElementCoefficient
-from ..core.host_threads import parallel_copy
-from ..core.space import DGSpace, DGTraceSpace, VectorDGField
-from ..linalg.system import KnownDofReduction, eliminate_known_dofs
-from ..solvers.diffusion_reaction import (
+from hdgfem.assembly import hdg
+from hdgfem.assembly import matrices_numpy as matrices
+from hdgfem.core.element_coefficients import ElementCoefficient
+from hdgfem.core.host_threads import parallel_copy
+from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
+from hdgfem.linalg.system import KnownDofReduction, eliminate_known_dofs
+from hdgfem.solvers.diffusion_reaction import (
     _local_solver_pre_mats,
     diffusion_element_boundary_mats,
     diffusion_inverse_mass_blocks,
     diffusion_trace_lift,
 )
-from ..solvers.stabilization import resolve_diffusion_stabilization
-from ..backends.numba import beta_values_on_volume, reaction_values_on_volume
+from hdgfem.solvers.stabilization import resolve_diffusion_stabilization
+from hdgfem.backends.numba import beta_values_on_volume, reaction_values_on_volume
 
 
 @dataclass(frozen=True)
@@ -78,14 +78,14 @@ def recommended_diffusion_stabilization(
     side, namely ``2*det(J_K)/J_F`` in the mesh's reference scaling.
     ``device=True`` evaluates on the device and returns a CuPy array.
     """
-    from .diffusion_coefficients import normal_diffusivity_on_faces
+    from hdgfem.assembly.diffusion_coefficients import normal_diffusivity_on_faces
     constant = float(penalty_constant)
     if not np.isfinite(constant) or constant <= 0.0:
         raise ValueError("diffusion_penalty_constant must be finite and positive")
     kappa = normal_diffusivity_on_faces(diffusion, space, device=device)
     xp, mesh = np, space.mesh
     if device:
-        from ..backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.backends.cupy import as_cupy_space, require_cupy
         xp, mesh = require_cupy(), as_cupy_space(space).mesh
     h_normal = 2.0 * mesh.aff_jacs[:, None] / mesh.jacs_el_fc
     return xp.ascontiguousarray(constant * (space.order + 1) ** 2 * kappa / h_normal)
@@ -114,7 +114,7 @@ def normalize_diffusion_stabilization(
     )
     xp = np
     if device:
-        from ..backends.cupy import require_cupy
+        from hdgfem.backends.cupy import require_cupy
         xp = require_cupy()
     if legacy_inverse_h:
         tau = recommended_diffusion_stabilization(
@@ -127,7 +127,7 @@ def normalize_diffusion_stabilization(
         tau = stabilization
     else:
         if device:
-            from ..backends.coefficients_cupy import face_samples_cupy
+            from hdgfem.backends.coefficients_cupy import face_samples_cupy
             tau = face_samples_cupy(stabilization, space, label="diffusion_stabilization",
                                     trace_space=trace_space, t=t)
         else:
@@ -153,14 +153,14 @@ def diffusion_stabilization_on_trace(prepared, space, trace_space, *, device=Fal
             raise ValueError("diffusion stabilization quadrature table is incompatible with recovery quadrature; supply a spatial law")
     xp = np
     if device:
-        from ..backends.cupy import require_cupy
-        from ..backends.coefficients_cupy import face_samples_cupy
+        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.backends.coefficients_cupy import face_samples_cupy
         xp = require_cupy()
         values = face_samples_cupy(law, space, label="diffusion_stabilization",
                                   trace_space=trace_space, t=prepared.sample_time)
     else:
         if hasattr(law, '__cuda_array_interface__'):
-            from ..backends.cupy import asnumpy
+            from hdgfem.backends.cupy import asnumpy
             law = asnumpy(law)
         values = matrices._face_quadrature_values_from_scalar_input(
             law, space, "diffusion_stabilization", trace_space=trace_space, t=prepared.sample_time)
@@ -181,7 +181,7 @@ def element_beta_normal(beta, space: DGSpace, trace_space: DGTraceSpace, *, xp=n
     if xp is np:
         normals = space.mesh.normals
     else:
-        from ..backends.cupy import as_cupy_space
+        from hdgfem.backends.cupy import as_cupy_space
         normals = as_cupy_space(space).mesh.normals
     normal = face[..., 0] * normals[:, :, 0, None] + face[..., 1] * normals[:, :, 1, None]
     return xp.ascontiguousarray(normal)
@@ -203,7 +203,7 @@ def _normal_flux(beta, space: DGSpace, trace_space: DGTraceSpace, *, t=None) -> 
         return element_beta_normal(beta, space, trace_space, t=t)
     if isinstance(beta, VectorDGField):
         return matrices.advective_boundary_normal(beta, space, trace_space=trace_space)
-    from ..solvers.advection_reaction import _prepare_beta_data
+    from hdgfem.solvers.advection_reaction import _prepare_beta_data
 
     _field, values, _callables = _prepare_beta_data(beta, space, trace_space=trace_space)
     return np.ascontiguousarray(values)
@@ -300,7 +300,7 @@ def prepare_adr_data(
     else:
         u_boundary_mass = normal_mass_x = normal_mass_y = None
         element_boundary = trace_lift = interior_gamma_mass = None
-    from ..solvers.diffusion_reaction import _reference_derivative_matrices
+    from hdgfem.solvers.diffusion_reaction import _reference_derivative_matrices
 
     d0_reference, d1_reference = cached("reference_derivatives", lambda: _reference_derivative_matrices(space))
     return ADRPreparedData(

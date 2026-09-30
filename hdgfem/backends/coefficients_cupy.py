@@ -23,13 +23,13 @@ import numpy as np
 
 from hdgfem.precision import REAL_DTYPE
 
-from ..core.space import DGField, DGSpace, DGTraceSpace
-from .cupy import _normalize_cupy_values, as_cupy_coefficients, as_cupy_space, require_cupy
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace
+from hdgfem.backends.cupy import _normalize_cupy_values, as_cupy_coefficients, as_cupy_space, require_cupy
 
 
 def mapped_face_points_cupy(space: DGSpace, trace_space: DGTraceSpace):
     """Physical trace points, shape ``(K, 3*nfq, 2)``, flat index ``q*3 + face`` (host layout)."""
-    from ..assembly.matrices_numpy import _reference_edge_points_from_1d
+    from hdgfem.assembly.matrices_numpy import _reference_edge_points_from_1d
 
     cp = require_cupy()
     mesh = as_cupy_space(space).mesh
@@ -53,7 +53,7 @@ def field_on_volume_cupy(field: DGField, space: DGSpace):
 
 def field_on_faces_cupy(field: DGField, space: DGSpace, trace_space: DGTraceSpace):
     """Evaluate ``field`` on the element-side trace quadrature, shape ``(K, 3, nfq)``."""
-    from ..assembly.matrices_numpy import _basis_on_test_faces
+    from hdgfem.assembly.matrices_numpy import _basis_on_test_faces
 
     cp = require_cupy()
     field.space.assert_same_mesh(space)
@@ -70,7 +70,7 @@ def field_on_faces_cupy(field: DGField, space: DGSpace, trace_space: DGTraceSpac
 
 def volume_samples_cupy(value, space: DGSpace, *, label: str):
     """Device twin of ``_component_quadrature_values``: samples of shape ``(K, nq)``."""
-    from ..solvers.diffusion_reaction import _component_quadrature_values
+    from hdgfem.solvers.diffusion_reaction import _component_quadrature_values
 
     cp = require_cupy()
     num_elements, num_points = space.mesh.num_tri, space.quad_data.Krf_w.size
@@ -90,7 +90,7 @@ def volume_samples_cupy(value, space: DGSpace, *, label: str):
 
 def face_samples_cupy(value, space: DGSpace, *, label: str, trace_space: DGTraceSpace, t=None):
     """Device twin of ``_face_quadrature_values_from_scalar_input``: shape ``(K, 3, nfq)``."""
-    from ..assembly.matrices_numpy import _evaluate_face_callable, _face_quadrature_values_from_scalar_input
+    from hdgfem.assembly.matrices_numpy import _evaluate_face_callable, _face_quadrature_values_from_scalar_input
 
     cp = require_cupy()
     num_elements, nfq = space.mesh.num_tri, trace_space.weights.size

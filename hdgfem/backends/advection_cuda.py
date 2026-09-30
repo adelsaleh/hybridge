@@ -19,17 +19,17 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..core.space import DGField, DGSpace, DGTraceSpace
-from ..io.config import format_amgx_configuration
-from ..io.terminal import flush_native_stdio as _flush_c_stdio
-from ..linalg.system import (
+from hdgfem.core.space import DGField, DGSpace, DGTraceSpace
+from hdgfem.io.config import format_amgx_configuration
+from hdgfem.io.terminal import flush_native_stdio as _flush_c_stdio
+from hdgfem.linalg.system import (
     KnownDofReduction,
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
     SolveResult,
     finalize_solve_result,
 )
-from .cupy import (
+from hdgfem.backends.cupy import (
     CupyDGSpace,
     as_cupy_coefficients,
     as_cupy_space,
@@ -39,13 +39,13 @@ from .cupy import (
     require_pyamgx,
     symmetric_scale_cupy_csr_in_place,
 )
-from .raw_cuda import RawCudaBlockSize
-from .amgx_errors import (
+from hdgfem.backends.raw_cuda import RawCudaBlockSize
+from hdgfem.backends.amgx_errors import (
     as_amgx_capacity_error as _as_amgx_capacity_error,
     destroy_amgx_objects,
     is_amgx_capacity_error as _is_amgx_capacity_error,
 )
-from .advection_raw_cuda import (
+from hdgfem.backends.advection_raw_cuda import (
     RawAdvectionAssemblyResult,
     assemble_projected_advection_trace_system_eliminated_raw_cuda,
     assemble_projected_advection_trace_system_eliminated_raw_cuda_fused,
@@ -53,7 +53,7 @@ from .advection_raw_cuda import (
     reconstruct_projected_advection_field_raw_cuda_fused,
     reconstruct_projected_advection_field_from_response_raw_cuda,
 )
-from .advection_tsle_bsr import (
+from hdgfem.backends.advection_tsle_bsr import (
     RawAdvectionTsleWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
@@ -640,7 +640,7 @@ def interior_trace_mass_blocks_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_
     )
     result = cp.ascontiguousarray(side_blocks[mesh.interior_elements, mesh.interior_faces])
     if gauge_inactive:
-        from ..solvers.stabilization import gauge_inactive_advection_trace_blocks
+        from hdgfem.solvers.stabilization import gauge_inactive_advection_trace_blocks
         gauge_inactive_advection_trace_blocks(result, cp.abs(beta_dot_normal), mesh, xp=cp)
     if timings is not None:
         timings["interior_mass"] = timings.get("interior_mass", 0.0) + sync_elapsed(start)
@@ -677,7 +677,7 @@ def face_rhs_cupy(solved_src, trace_lift, cspace: CupyDGSpace, timings: dict[str
 
 def boundary_trace_values_cupy(boundary_condition: Callable, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
     """Evaluate prescribed boundary trace coefficients on the device."""
-    from ..assembly.hdg import boundary_trace_coefficients
+    from hdgfem.assembly.hdg import boundary_trace_coefficients
     with require_cupy().cuda.Device(cspace.device_id):
         return boundary_trace_coefficients(boundary_condition, cspace.host, trace_space=trace_ref.host,
                                            backend="device", boundary_only=True)
@@ -753,7 +753,7 @@ def assemble_reduced_system_cuda(
     """Assemble the boundary-eliminated advection trace system on device."""
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
-    from ..solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
+    from hdgfem.solvers.stabilization import upwind_factor, effective_advection_normal_flux, is_conflict_averaged_upwind
     factor = upwind_factor(advection_stabilization)
     if factor is None:
         raise NotImplementedError("This CUDA wrapper requires an upwind stabilization policy")
@@ -942,7 +942,7 @@ def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors
     Reuses source moments, trace lifting, orientation, scatter, and response
     reconstruction formalism from the regular assembly path.
     """
-    from .advection_raw_cuda import solve_cached_advection_source_raw
+    from hdgfem.backends.advection_raw_cuda import solve_cached_advection_source_raw
     cp = require_cupy()
     start = time.perf_counter()
     cspace, trace_ref, raw = assembly.cspace, assembly.trace_ref, assembly.raw
@@ -1649,7 +1649,7 @@ def _close_reusable_amgx_solvers() -> None:
 
 def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0, fixed_amg_cycles: int | None = None):
     """Build an AMGX solver configuration with normalized controls and diagnostics."""
-    from .cupy import default_pyamgx_config
+    from hdgfem.backends.cupy import default_pyamgx_config
 
     if config is None:
         amgx_config = default_pyamgx_config(tolerance=tolerance, maxiter=maxiter, verbose=verbose)
@@ -2888,7 +2888,7 @@ def solve_reduced_system_amgx_device(
         error.amgx_retry_seed = dict(seed_metrics)
     # Preserve the failed system for the application error handler. Successful
     # solves incur no host transfer or snapshot allocation.
-    from ..linalg.transport_diagnostics import save_transport_failure_snapshot
+    from hdgfem.linalg.transport_diagnostics import save_transport_failure_snapshot
 
     def save_failure_snapshot(path):
         return save_transport_failure_snapshot(

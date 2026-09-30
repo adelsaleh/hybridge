@@ -7,7 +7,7 @@ the independent einsum reference in advection_diffusion_reaction_cupy.
 """
 from functools import lru_cache
 
-from .cupy import require_cupy, as_cupy_space, as_cupy_coefficients
+from hdgfem.backends.cupy import require_cupy, as_cupy_space, as_cupy_coefficients
 
 
 _SOURCE = r'''

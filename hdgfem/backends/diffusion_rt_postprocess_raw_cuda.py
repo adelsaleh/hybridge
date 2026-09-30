@@ -6,7 +6,7 @@ from hdgfem.precision import REAL_DTYPE, real_raw_kernel
 
 import numpy as np
 
-from .cupy import require_cupy
+from hdgfem.backends.cupy import require_cupy
 
 _KERNEL_CACHE = {}
 

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.sparse import bsr_matrix, csr_matrix, isspmatrix_bsr
 
-from ..assembly.face_dense import FaceDenseSystem
+from hdgfem.assembly.face_dense import FaceDenseSystem
 
 
 @dataclass(frozen=True)

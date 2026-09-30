@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..assembly.face_dense import FaceDenseSystem
+from hdgfem.assembly.face_dense import FaceDenseSystem
 
 
 @dataclass(frozen=True)

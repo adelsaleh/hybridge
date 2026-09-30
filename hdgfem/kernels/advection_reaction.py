@@ -8,7 +8,7 @@ owns that conversion.
 
 from __future__ import annotations
 
-from .common import njit
+from hdgfem.kernels.common import njit
 
 
 @njit(cache=True)

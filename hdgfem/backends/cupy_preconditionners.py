@@ -15,14 +15,14 @@ from typing import Any
 
 import numpy as np
 
-from ..assembly.face_dense import FaceDenseSystem
-from ..linalg.additive_schwarz import (
+from hdgfem.assembly.face_dense import FaceDenseSystem
+from hdgfem.linalg.additive_schwarz import (
     build_face_additive_schwarz_local_matrices,
     build_face_additive_schwarz_preconditioner,
 )
-from ..linalg.block_jacobi import build_face_block_jacobi_preconditioner
-from .cublas_batched import invert_batched_cublas
-from .cupy import device_arrays_overlap, require_cupy_device, solve_batched_vectors
+from hdgfem.linalg.block_jacobi import build_face_block_jacobi_preconditioner
+from hdgfem.backends.cublas_batched import invert_batched_cublas
+from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device, solve_batched_vectors
 
 
 _BATCHED_DENSE_MV_KERNEL_SOURCE = r"""

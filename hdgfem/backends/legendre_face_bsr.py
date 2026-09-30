@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from .cupy import require_cupy
+from hdgfem.backends.cupy import require_cupy
 
 
 _CUSPARSE_SUCCESS = 0

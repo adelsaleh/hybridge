@@ -22,8 +22,8 @@ import time
 
 import numpy as np
 
-from .raster import DeviceRasterSampler, RasterGeometry
-from .live import simulation_frame_label
+from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
+from hdgfem.io.live import simulation_frame_label
 
 
 @dataclass
@@ -218,7 +218,7 @@ class HolovizScalarPanels:
         ``width``/``height`` are per panel; ``columns`` (default: all panels in
         one row) arranges the panels row by row in a grid.
         """
-        from ..backends.cupy import require_cupy
+        from hdgfem.backends.cupy import require_cupy
         from matplotlib import colormaps
 
         spaces, labels = tuple(spaces), tuple(labels)
@@ -241,7 +241,7 @@ class HolovizScalarPanels:
         self.screenshot_dir = None if screenshot_dir is None else Path(screenshot_dir)
         self._movie = None
         if movie_path is not None:
-            from .movie import MovieWriter
+            from hdgfem.io.movie import MovieWriter
             self._movie = MovieWriter(movie_path, fps=movie_fps)
         self.screenshot_prefix = screenshot_prefix
         if self.screenshot_dir is not None:

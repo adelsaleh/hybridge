@@ -4,8 +4,8 @@ New code must use the full-name module. This shim remains for the documented
 alpha compatibility period and delegates private implementation helpers too.
 """
 
-from . import diffusion_reaction as _implementation
-from .diffusion_reaction import *  # noqa: F401,F403
+from hdgfem.solvers import diffusion_reaction as _implementation
+from hdgfem.solvers.diffusion_reaction import *  # noqa: F401,F403
 
 
 __all__ = _implementation.__all__

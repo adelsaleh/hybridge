@@ -95,7 +95,7 @@ def test_modal_transfer_is_adjoint_and_principal_block_is_galerkin() -> None:
 
 def test_scalar_p0_amgx_config_is_independent_of_nodal_preset() -> None:
     """The scalar coarse cycle must not inherit high-order nodal tuning."""
-    from hdgfem.linalg.face_hp_multigrid import scalar_p0_amgx_config
+    from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
 
     solver = scalar_p0_amgx_config()["solver"]
     assert solver["solver"] == "AMG"

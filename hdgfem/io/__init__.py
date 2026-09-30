@@ -1,16 +1,16 @@
 """Output and plotting helpers."""
 
-from .comparison import plot_sampled_solution_comparison
-from .config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
-from .holoviz import (
+from hdgfem.io.comparison import plot_sampled_solution_comparison
+from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
+from hdgfem.io.holoviz import (
     HolovizScalarPanels,
     plot_field_holoviz,
     plot_fields_holoviz,
     plot_solution_comparison_holoviz,
 )
-from .live import AnalyticPanelField, DifferencePanelField, PyVistaFieldPanels
-from .output import format_elapsed_percent, pretty_print_ncol, timed_call
-from .plot import (
+from hdgfem.io.live import AnalyticPanelField, DifferencePanelField, PyVistaFieldPanels
+from hdgfem.io.output import format_elapsed_percent, pretty_print_ncol, timed_call
+from hdgfem.io.plot import (
     contour_levels_for_order,
     plot_field,
     plot_fields,
@@ -24,7 +24,7 @@ from .plot import (
     scalar_color_limits,
 )
 
-from .time_series import DiagnosticPanel, TimeSeries, plot_diagnostic_panels, plot_mode_history
+from hdgfem.io.time_series import DiagnosticPanel, TimeSeries, plot_diagnostic_panels, plot_mode_history
 
 __all__ = [
     "DiagnosticPanel",
