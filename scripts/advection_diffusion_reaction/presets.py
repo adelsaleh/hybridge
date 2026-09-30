@@ -32,6 +32,7 @@ class AdvectionDiffusionReactionRunPreset:
     scale_system: bool = False
     diffusion_stabilization: str | float = "global_length"
     advection_stabilization: float | None = None
+    amgx_config: str | None = None  # JSON path, repository-relative or absolute
     raw_matrix_format: str = "csr"
     raw_block_size: str | int = "auto"
     materialize_host_solution: bool = True
@@ -39,7 +40,10 @@ class AdvectionDiffusionReactionRunPreset:
     gmsh_verbosity: int = 0
     verbosity: int = 1
     plot: bool = False
-    plot_resolution: int = 20
+    plot_backend: str = "pyvista"  # pyvista (Matplotlib on tiny meshes) or holoviz
+    plot_resolution: int = 20  # PyVista/Matplotlib samples per reference edge
+    plot_width: int = 1024  # Holoviz pixels per panel
+    plot_height: int = 1024
 
 
 PRESETS = {
@@ -60,6 +64,13 @@ for _format in ("coo", "csr", "bsr"):
         PRESETS["raw_tensor_affine"], description=f"General tensor, raw CUDA and native AMGX ({_format}).",
         assembly_backend="raw-cuda", solver="amgx", raw_matrix_format=_format,
         scale_system=True, materialize_host_solution=False)
+
+# Transport-dominated winner of the matched ADR solver study (FGMRES + classical
+# block-graph-dense AMG with DILU smoothing); the block hierarchy requires BSR.
+PRESETS["tensor_cuda_bsr_amg"] = replace(
+    PRESETS["tensor_cuda_bsr"],
+    description="General tensor, raw CUDA and AMGX BSR FGMRES + block-graph AMG/DILU.",
+    amgx_config="configs/amgx/adv_diff_rea_gpu4_hdg_fgmres_amg_block_graph_dense_dilu_bsr.json")
 
 DEFAULT_PRESET = "quadratic"
 

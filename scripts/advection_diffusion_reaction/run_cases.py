@@ -30,7 +30,8 @@ def build_arg_parser():
     parser.add_argument("--case", choices=sorted(CASE_DEFINITIONS))
     parser.add_argument("--case-param", action="append", default=[], metavar="KEY=JSON",
                         help='case parameter, e.g. peclet=20 or level="entry"; plain strings also work')
-    for name in ("order", "nx", "ny", "volume-quad-1d", "edge-quad-1d", "maxiter", "plot-resolution"):
+    for name in ("order", "nx", "ny", "volume-quad-1d", "edge-quad-1d", "maxiter", "plot-resolution",
+                 "plot-width", "plot-height"):
         parser.add_argument(f"--{name}", type=int)
     for name in ("mesh-size", "solver-rtol", "solver-atol", "advection-stabilization"):
         parser.add_argument(f"--{name}", type=float)
@@ -41,16 +42,31 @@ def build_arg_parser():
     parser.add_argument("--assembly-backend", choices=("numpy", "numba", "raw-cuda"))
     parser.add_argument("--reconstruction-backend", choices=("auto", "numpy", "numba", "raw-cuda"))
     parser.add_argument("--solver", choices=("pypardiso", "amgx"))
+    parser.add_argument("--amgx-config", help="AMGX JSON config (repository-relative or absolute); requires --solver amgx")
     parser.add_argument("--diffusion-stabilization", help="global_length, inverse-h, or a positive scalar")
     parser.add_argument("--raw-matrix-format", choices=("coo", "csr", "bsr"))
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"))
     parser.add_argument("--threads", choices=("16", "all"))
+    parser.add_argument("--plot-backend", choices=("pyvista", "holoviz"),
+                        help="pyvista (Matplotlib for tiny meshes) or NVIDIA Holoviz GPU raster panels")
     for name in ("scale-system", "materialize-host-solution", "plot"):
         parser.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, default=None)
-    for name in ("verbosity", "gmsh-verbosity"):
-        parser.add_argument(f"--{name}", type=int, choices=(0, 1, 2))
+    parser.add_argument(
+        "--verbosity", "-v", type=int, choices=(0, 1, 2, 3),
+        help="logging level: 0 quiet, 1 stage timings, 2 solver phase logs and backend micro-timings, "
+             "3 everything: detailed backend timings plus native/AMGX iteration tables")
+    parser.add_argument("--quiet", action="store_true", help="same as --verbosity 0")
+    parser.add_argument("--gmsh-verbosity", type=int, choices=(0, 1, 2))
     parser.add_argument("--output", type=Path, help="write a JSON result summary")
     return parser
+
+
+def _resolve_repository_path(path):
+    """Resolve a working-directory or repository-relative path."""
+    path = Path(path).expanduser()
+    if path.is_absolute() or path.exists():
+        return path
+    return Path(__file__).resolve().parents[2] / path
 
 
 def runtime_config(args):
@@ -68,6 +84,8 @@ def runtime_config(args):
         except json.JSONDecodeError:
             params[key.strip()] = value
     updates["case_params"] = params
+    if args.quiet:
+        updates["verbosity"] = 0
     if updates.get("raw_block_size", "auto") != "auto":
         updates["raw_block_size"] = int(updates["raw_block_size"])
     tau = updates.get("diffusion_stabilization")
@@ -85,6 +103,8 @@ def runtime_config(args):
         value = getattr(config, key)
         if value is not None and value <= 0:
             raise ValueError(f"{key} must be positive")
+    if config.plot_width < 2 or config.plot_height < 2:
+        raise ValueError("plot width and height must be at least 2")
     for key in ("mesh_size", "solver_rtol", "solver_atol", "advection_stabilization"):
         value = getattr(config, key)
         if value is not None and (not math.isfinite(value) or value < 0 or (key == "mesh_size" and value == 0)):
@@ -94,6 +114,11 @@ def runtime_config(args):
         raise ValueError("diffusion_stabilization must be finite and positive")
     if config.assembly_backend == "raw-cuda" and config.solver != "amgx":
         raise ValueError("raw-cuda requires --solver amgx (or use a tensor_cuda_* preset)")
+    if config.amgx_config is not None:
+        if config.solver != "amgx":
+            raise ValueError("--amgx-config requires --solver amgx")
+        if not _resolve_repository_path(config.amgx_config).is_file():
+            raise ValueError(f"AMGX config not found: {config.amgx_config}")
     if config.assembly_backend == "raw-cuda" and config.reconstruction_backend not in {"auto", "raw-cuda"}:
         raise ValueError("raw-cuda assembly requires raw-cuda reconstruction")
     if config.assembly_backend != "raw-cuda" and config.reconstruction_backend == "raw-cuda":
@@ -133,26 +158,41 @@ def _build_mesh(config, problem):
         log_cache=bool(config.verbosity))
 
 
-def run_case(config):
-    """Build, solve, diagnose and optionally plot one case using package helpers."""
+def _numba_thread_count() -> int | None:
+    """Return the active Numba worker count when Numba is importable."""
+    try:
+        from numba import get_num_threads
+    except Exception:
+        return None
+    return int(get_num_threads())
+
+
+def _solve_case(config):
+    """Build and solve one case; return the problem, mesh, space, result and report."""
     from hdgfem import DGSpace, AdvectionDiffusionReactionHDGSolver, AdvectionDiffusionReactionHDGOptions
     from hdgfem.io.output import timed_call
     from hdgfem.linalg.pardiso_runtime import pardiso_thread_limit
 
     problem, case_seconds = timed_call("preparing analytic case", config.verbosity,
         lambda: CASE_DEFINITIONS[config.case].build(**config.case_params))
-    mesh, mesh_seconds = timed_call("building mesh", config.verbosity, lambda: _build_mesh(config, problem))
+    domain = problem.domain if config.domain == "auto" else config.domain
+    mesh, mesh_seconds = timed_call(f"generating {domain} mesh", config.verbosity,
+                                    lambda: _build_mesh(config, problem))
     space, space_seconds = timed_call("building DG space", config.verbosity, lambda: DGSpace(
         mesh, config.order, basis_type=config.basis, volume_quadrature=config.volume_quadrature,
         volume_quad_1d=config.volume_quad_1d, edge_quad_1d=config.edge_quad_1d))
     # The public ADR API accepts callable/field velocity components, not numbers.
     beta = tuple(value if callable(value) else space.constant(value) for value in problem.beta)
+    amgx_config = None
+    if config.amgx_config is not None:
+        from hdgfem.io.config import load_amgx_config
+        amgx_config, _ = load_amgx_config(_resolve_repository_path(config.amgx_config))
     options = AdvectionDiffusionReactionHDGOptions(
         diffusion=problem.diffusion, trace_basis=config.trace_basis,
         diffusion_stabilization=config.diffusion_stabilization,
         advection_stabilization=config.advection_stabilization,
         assembly_backend=config.assembly_backend, reconstruction_backend=config.reconstruction_backend,
-        solver=config.solver, solver_rtol=config.solver_rtol, solver_atol=config.solver_atol,
+        solver=config.solver, amgx_config=amgx_config, solver_rtol=config.solver_rtol, solver_atol=config.solver_atol,
         maxiter=config.maxiter, scale_system=config.scale_system, hdg_postprocess="none",
         raw_matrix_format=config.raw_matrix_format, raw_block_size=config.raw_block_size,
         materialize_host_solution=config.materialize_host_solution, verbose=config.verbosity)
@@ -177,13 +217,132 @@ def run_case(config):
                   diffusive_flux_l2_error=None if problem.exact_flux is None else float(result.flux.l2_error(problem.exact_flux)))
     linear = result.global_solve_result
     report["relative_residual"] = None if linear is None else linear.physical_relative_residual_norm
+    return problem, mesh, space, result, report
+
+
+def _plot_case(config, problem, result):
+    """Show the HDG solution beside the exact solution and their pointwise error."""
+    if problem.exact is None:
+        raise ValueError("comparison plotting requires a manufactured exact solution")
+    title = f"ADR: {config.case}, p={config.order}"
+    if config.plot_backend == "holoviz":
+        from hdgfem.io.holoviz import plot_solution_comparison_holoviz
+        plot_solution_comparison_holoviz(result.field, problem.exact, title=title,
+                                         width=config.plot_width, height=config.plot_height)
+        return
+    from hdgfem.io.plot import plot_solution_comparison
+    plot_solution_comparison(result.field, problem.exact, resolution=config.plot_resolution, title=title)
+
+
+def run_case(config):
+    """Build, solve, diagnose and optionally plot one case using package helpers."""
+    problem, _, _, result, report = _solve_case(config)
     if config.plot:
-        from hdgfem.io.plot import plot_solution_comparison
-        if problem.exact is None:
-            raise ValueError("comparison plotting requires a manufactured exact solution")
-        plot_solution_comparison(result.field, problem.exact, resolution=config.plot_resolution,
-                                 title=f"ADR: {config.case}, p={config.order}")
+        _plot_case(config, problem, result)
     return result, report
+
+
+def _summarize_solve(result, report, problem, *, preset_key, mesh, space, config):
+    """Print the diffusion-reaction/advection-reaction style solve summary.
+
+    Also records pointwise error metrics in ``report`` for JSON output.
+    """
+    import numpy as np
+    from hdgfem.diagnostics import evaluate_scalar_error
+    from hdgfem.io.output import format_elapsed_percent, pretty_print_sections
+
+    run_mesh_items = [
+        ("preset", preset_key, "s"),
+        ("case", config.case, "s"),
+        ("p", space.order, ",d"),
+        ("triangles", mesh.num_tri, ",d"),
+        ("edges", mesh.num_edg, ",d"),
+        ("trace dofs", report["trace_dofs"], ",d"),
+    ]
+    structure = result.diffusion_structure or {}
+    used_structures = [name for name, count in structure.items() if count]
+    option_items = [
+        ("assembly backend", result.assembly_backend, "s"),
+        ("reconstruction backend", result.reconstruction_backend, "s"),
+        ("matrix format", result.matrix_format, "s"),
+        ("trace basis", config.trace_basis, "s"),
+        ("diffusion", ", ".join(used_structures) if used_structures else "not classified", "s"),
+        ("diffusion stabilization", config.diffusion_stabilization,
+         "s" if isinstance(config.diffusion_stabilization, str) else ".6g"),
+        ("advection stabilization",
+         "upwind |beta.n|" if config.advection_stabilization is None else config.advection_stabilization,
+         "s" if config.advection_stabilization is None else ".6g"),
+        ("linear scaling", "on" if config.scale_system else "off", "s"),
+    ]
+    if result.assembly_backend == "numba":
+        numba_threads = _numba_thread_count()
+        if numba_threads is not None:
+            option_items.append(("numba threads", numba_threads, ",d"))
+    if report["cpu"]["mkl_max_threads"] is not None:
+        option_items.append(("MKL thread limit", report["cpu"]["mkl_max_threads"], "d"))
+
+    solver_items = [("solver", config.solver, "s")]
+    if config.solver == "amgx":
+        solver_items.append(("AMGX config", "raw-cuda default (FGMRES + DILU)" if config.amgx_config is None
+                             else Path(config.amgx_config).stem, "s"))
+    global_solve = result.global_solve_result
+    if global_solve is not None:
+        iterations = global_solve.iteration_count
+        solver_items.extend([
+            ("iterations", -1 if iterations is None else iterations, ",d"),
+            ("solver rel res", np.nan if global_solve.solver_relative_residual_norm is None
+             else global_solve.solver_relative_residual_norm, ".3e"),
+            ("physical rel res", np.nan if report["relative_residual"] is None
+             else report["relative_residual"], ".3e"),
+        ])
+
+    error_items = [("theoretical h^(p+1)", mesh.h ** (space.order + 1), ".4e")]
+    if problem.exact is not None:
+        metrics = evaluate_scalar_error(result.field, problem.exact).metrics
+        report.update(scalar_linf_error=float(metrics.linf),
+                      scalar_mean_element_linf_error=float(metrics.mean_element_linf),
+                      max_error_element=int(metrics.max_element))
+        error_items.extend([
+            ("primal L2 error", report["scalar_l2_error"], ".4e"),
+            ("flux L2 error", report["diffusive_flux_l2_error"], ".4e"),
+            ("Linf error", metrics.linf, ".4e"),
+            ("avg max error", metrics.mean_element_linf, ".4e"),
+            ("max-error element", metrics.max_element, "d"),
+        ])
+    else:
+        error_items.append(("exact solution", "none", "s"))
+
+    timings = result.timings
+    total_time = timings.total
+    timing_items = [
+        ("preparation (s)", format_elapsed_percent(timings.preparation, total_time, precision=3), "s"),
+        ("assembly (s)", format_elapsed_percent(timings.trace_assembly, total_time, precision=3), "s"),
+        ("global solve (s)", format_elapsed_percent(timings.solve, total_time, precision=3), "s"),
+        ("reconstruct (s)", format_elapsed_percent(timings.reconstruction, total_time, precision=3), "s"),
+        ("postprocess (s)", format_elapsed_percent(timings.postprocessing, total_time, precision=3), "s"),
+    ]
+    if global_solve is not None:
+        for label, seconds in (("precond build (s)", global_solve.preconditioner_elapsed_seconds),
+                               ("iterative solve (s)", global_solve.solve_elapsed_seconds)):
+            if seconds is not None:
+                timing_items.append((label, format_elapsed_percent(seconds, total_time, precision=3), "s"))
+    timing_items.extend([
+        ("total (s)", total_time, "1.3f"),
+        ("wall incl. JIT (s)", report["timings"]["wall_solve"], "1.3f"),
+    ])
+    if report["cpu"]["mkl_max_threads"] is not None:
+        timing_items.append(("solve CPU / wall", report["cpu"]["solve_cpu_wall_ratio"], ".3g"))
+
+    pretty_print_sections(
+        [
+            ("Run / mesh", run_mesh_items),
+            ("Options", option_items),
+            ("Solver", solver_items),
+            ("Errors", error_items),
+            ("Timings", timing_items),
+        ],
+        title="Advection-Diffusion-Reaction Preset Solve Summary",
+    )
 
 
 def main(argv=None):
@@ -202,20 +361,13 @@ def main(argv=None):
     if args.print_preset or args.dry_run:
         print(json.dumps(configuration_record(config), indent=2, allow_nan=False))
         return 0
-    _, report = run_case(config)
+    problem, mesh, space, result, report = _solve_case(config)
+    _summarize_solve(result, report, problem, preset_key=args.preset, mesh=mesh, space=space, config=config)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, allow_nan=False)+"\n")
-    from hdgfem.io.output import pretty_print_sections
-    items = [("elements", report["elements"], ",d"), ("trace DOFs", report["trace_dofs"], ",d"),
-             ("solve wall (s)", report["timings"]["wall_solve"], ".4g")]
-    if report["cpu"]["mkl_max_threads"] is not None:
-        items.extend([("MKL thread limit", report["cpu"]["mkl_max_threads"], "d"),
-                      ("solve CPU / wall", report["cpu"]["solve_cpu_wall_ratio"], ".3g")])
-    for key in ("scalar_l2_error", "diffusive_flux_l2_error", "relative_residual"):
-        if report[key] is not None:
-            items.append((key.replace("_", " "), report[key], ".4e"))
-    pretty_print_sections([("Stationary solve", items)], title=f"ADR: {config.case}")
+    if config.plot:
+        _plot_case(config, problem, result)
     return 0
 
 

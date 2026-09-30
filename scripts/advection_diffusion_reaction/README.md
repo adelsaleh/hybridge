@@ -16,7 +16,7 @@ advection_diffusion_reaction/
 ├── studies/                     # disk runner and stabilization study
 ├── benchmarks/                  # tensor timings and solver-profile preparation
 ├── meshes/                      # oscillatory/stress geometry and mesh preparation
-├── diagnostics/                 # cached-system Pardiso check
+├── diagnostics/                 # cached-system Pardiso check, FP32/FP64 raw-CUDA assembly check, tensor shared-memory budget
 └── campaigns/
     ├── logging.py               # shared campaign reporting
     ├── stress/                  # closed-loop stress orchestration and workers
@@ -66,8 +66,14 @@ python -m scripts.advection_diffusion_reaction.run_cases tensor_cuda_bsr --order
 python -m scripts.advection_diffusion_reaction.run_cases stress_square_cross --case-param level=entry --nx 16
 ```
 
-There are **35 cases and 38 presets**: one preset per case and three CUDA tensor
-presets (`tensor_cuda_coo`, `tensor_cuda_csr`, `tensor_cuda_bsr`). The default is
+There are **35 cases and 39 presets**: one preset per case, three CUDA tensor
+presets (`tensor_cuda_coo`, `tensor_cuda_csr`, `tensor_cuda_bsr`) and
+`tensor_cuda_bsr_amg`, which adds FGMRES with block-graph-dense classical AMG and
+DILU smoothing ([config](../../configs/amgx/adv_diff_rea_gpu4_hdg_fgmres_amg_block_graph_dense_dilu_bsr.json)).
+The CUDA presets otherwise use the raw-CUDA default FGMRES + one-level DILU,
+whose iteration count grows with refinement. `--amgx-config PATH` selects any
+AMGX JSON (repository-relative or absolute) with `--solver amgx`; the preset
+`solver_rtol` and `--maxiter` apply when the file stores no tolerance. The default is
 `quadratic`, p=2, an 8×8 structured square mesh, Numba assembly and PyPardiso.
 Use `--case NAME` to change the problem within another solver preset; case
 parameters from the previous case are cleared. `--case-param KEY=JSON` overrides
@@ -80,6 +86,27 @@ backend thread limit and measured CPU/wall ratio of the complete stationary
 solve, including coefficient preparation and JIT. That ratio records observed
 activity; it is not a measurement of factorization alone. Tiny solves need not
 use all configured threads. No SciPy direct-solver preset is provided.
+
+Logging follows the diffusion-reaction, advection-reaction and guiding-center
+runners: `-v/--verbosity` takes 0–3 (default 1) and `--quiet` means 0.
+
+| Level | Output |
+| --- | --- |
+| 0 | the final summary table only |
+| 1 | case/mesh/space timings and one timed line per solver stage (preparation, assembly, global solve, reconstruction, postprocessing) |
+| 2 | level 1 plus backend micro-timings: coefficient sampling and tensor classification, Numba or raw-CUDA assembly/reconstruction phases and launch settings, reduced-system sizes, postprocessing substeps, and linear-solver phase timings/AMGX configuration |
+| 3 | everything: level 2 plus the solver layer's per-iteration tables (native AMGX residual history, Krylov iterations) and its detailed timings |
+
+The summary uses the Run/mesh, Options, Solver, Errors and Timings sections of
+the other stationary runners. With `--plot`, the comparison window opens after
+the summary is printed.
+
+`--plot-backend pyvista` (default) uses Matplotlib for at most 130 triangles and
+PyVista otherwise, sampling `--plot-resolution` points per reference edge on
+every element, so its cost grows with the mesh. `--plot-backend holoviz` samples
+a fixed GPU raster (`--plot-width`/`--plot-height` per panel, default 1024) with
+[NVIDIA Holoviz](../../docs/backends/holoviz.md); it needs `holoscan-cu13`, CuPy
+and a display, shows value ranges instead of colour bars, and uses one colormap.
 
 Raw CUDA requires an installed CUDA/CuPy/AMGX runtime and `--solver amgx`.
 The CUDA presets select scaling and retain reconstructed fields on device;
@@ -139,6 +166,8 @@ the current HDGFEM package.
 | [run_adr_unified_campaign.py](campaigns/unified/run_adr_unified_campaign.py) | Iterative replay of the archived ADR inventory. |
 | [run_adr_pardiso_campaign.py](campaigns/pardiso/run_adr_pardiso_campaign.py) | Direct-solver campaign for archived systems. |
 | [check_cached_adr_pardiso.py](diagnostics/check_cached_adr_pardiso.py) | Bounded cached-system CPU diagnostic with detailed resource monitoring. |
+| [compare_tensor_raw_cuda_precision.py](diagnostics/compare_tensor_raw_cuda_precision.py) | Raw-CUDA tensor assembly and reconstruction in FP64 vs FP32 (one worker per `HDGFEM_PRECISION`), COO/CSR/BSR agreement and kernel times; exits 1 above tolerance. No solve. |
+| [tensor_shared_memory_budget.py](diagnostics/tensor_shared_memory_budget.py) | Host-only table of the raw-CUDA tensor ADR shared-memory budget per order, diffusion kind and volume/face quadrature rule (batch width, bytes, largest fitting NQ); `--json` records. No GPU or solve. |
 | [export_adr_unified_inventory.py](campaigns/unified/export_adr_unified_inventory.py) | Export the archived-system inventory. |
 | [make_oscillatory_geometry.py](meshes/make_oscillatory_geometry.py), [make_oscillatory_scaling_meshes.py](meshes/make_oscillatory_scaling_meshes.py) | Existing study geometry/mesh generators. |
 | [prepare_adr_solver_kernel_profiles.py](benchmarks/prepare_adr_solver_kernel_profiles.py) | Existing solver-profile preparation. |

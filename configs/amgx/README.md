@@ -237,6 +237,20 @@ Working fused stress runs on the 24 GB Quadro RTX 6000:
 
 For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR conversion OOMs before AMGX setup. The next memory target is the global sparse conversion/solver path, not local fused assembly.
 
+## Advection-Diffusion-Reaction HDGFEM
+
+- `adv_diff_rea_gpu4_hdg_fgmres_amg_block_graph_dense_dilu_bsr.json`: FGMRES
+  (restart 75) preconditioned by one V-cycle of classical block-graph-dense AMG
+  with one-sweep `MULTICOLOR_DILU` pre/post smoothing and a dense-LU coarse
+  solve; natural face BSR is required. It is the transport-dominated winner of
+  the [matched ADR solver study](../../docs/research/solver_studies/adr_solver_comparison_2026_09_17.md)
+  (`K=1e-3 I`, `beta=(1,0.5)`, p=6, 99,458 triangles: 35 iterations versus 263
+  for direct block DILU). The stored absolute tolerance was removed and
+  convergence is `RELATIVE_INI_CORE`, so runners supply the tolerance. The ADR
+  runner preset `tensor_cuda_bsr_amg` uses it. Fork-only keys: it fails on
+  upstream AMGX. The study reports that transferred block AMG does not rescue
+  the cellular low-diffusion or directional-anisotropy oscillatory classes.
+
 ## Diffusion-Reaction HDGFEM
 
 Working configs:

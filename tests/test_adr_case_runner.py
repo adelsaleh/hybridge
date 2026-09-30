@@ -111,6 +111,10 @@ def test_every_preset_is_inspectable_without_building_case(key, capsys, monkeypa
     (["stress_square_trap", "--case-param", "geometry=annulus"], "unexpected keyword"),
     (["--diffusion-stabilization", "-1"], "positive"),
     (["coefficient_constant_full", "--plot"], "exact solution"),
+    (["--amgx-config", "configs/amgx/adv_diff_rea_gpu4_hdg_fgmres_amg_block_graph_dense_dilu_bsr.json"],
+     "requires --solver amgx"),
+    (["tensor_cuda_bsr", "--amgx-config", "configs/amgx/missing.json"], "not found"),
+    (["--plot-width", "1"], "at least 2"),
 ])
 def test_invalid_cli_fails_before_numerical_work(args, match):
     with pytest.raises((TypeError, ValueError), match=match):
@@ -125,6 +129,87 @@ def test_parameter_overrides_and_case_switch():
     args = build_arg_parser().parse_args(["tensor_cuda_bsr", "--raw-block-size", "64", "--no-scale-system"])
     config = runtime_config(args)
     assert config.raw_block_size == 64 and not config.scale_system
+
+
+def test_block_amg_preset_loads_study_config(monkeypatch):
+    import hdgfem
+    from types import SimpleNamespace
+    from hdgfem.solvers.advection_diffusion_reaction import AdvectionDiffusionReactionTimings
+    seen = {}
+
+    class FakeSolver:
+        def __init__(self, space, **kwargs):
+            seen.update(kwargs)
+
+        def solve(self):
+            return SimpleNamespace(
+                trace=np.zeros(3), matrix_format="bsr", diffusion_structure=None,
+                timings=AdvectionDiffusionReactionTimings(), global_solve_result=None,
+                field=SimpleNamespace(l2_error=lambda exact: 0.), flux=SimpleNamespace(l2_error=lambda exact: 0.))
+
+    monkeypatch.setattr(hdgfem, "AdvectionDiffusionReactionHDGSolver", FakeSolver)
+    run_case(replace(preset_by_key("tensor_cuda_bsr_amg"), nx=1, verbosity=0))
+    options = seen["options"]
+    assert options.raw_matrix_format == "bsr"
+    preconditioner = options.amgx_config["solver"]["preconditioner"]
+    assert options.amgx_config["solver"]["solver"] == "FGMRES"
+    assert preconditioner["classical_bsr_hierarchy"] == "block_graph_dense"
+    assert preconditioner["smoother"]["solver"] == "MULTICOLOR_DILU"
+    # The runner's solver_rtol, not a stored absolute target, controls convergence.
+    assert "tolerance" not in options.amgx_config["solver"]
+
+
+@pytest.mark.parametrize("backend", ["pyvista", "holoviz"])
+def test_plot_backend_selects_only_requested_helper(monkeypatch, backend):
+    import hdgfem.io.holoviz as holoviz
+    import hdgfem.io.plot as plot
+    from types import SimpleNamespace
+    from scripts.advection_diffusion_reaction import run_cases
+    calls = []
+
+    def record(name):
+        def helper(field, exact, **options):
+            calls.append((name, options))
+        return helper
+
+    monkeypatch.setattr(plot, "plot_solution_comparison", record("pyvista"))
+    monkeypatch.setattr(holoviz, "plot_solution_comparison_holoviz", record("holoviz"))
+    args = build_arg_parser().parse_args(["sine", "--plot", "--plot-backend", backend,
+                                          "--plot-width", "320", "--plot-height", "240"])
+    config = runtime_config(args)
+    run_cases._plot_case(config, SimpleNamespace(exact=lambda x, y: x), SimpleNamespace(field=None))
+    (name, options), = calls
+    assert name == backend
+    if backend == "holoviz":
+        assert (options["width"], options["height"]) == (320, 240)
+    else:
+        assert options["resolution"] == config.plot_resolution
+
+
+def test_verbosity_cli_matches_other_runners():
+    parser = build_arg_parser()
+    assert runtime_config(parser.parse_args(["-v", "3"])).verbosity == 3
+    assert runtime_config(parser.parse_args(["--verbosity", "2", "--quiet"])).verbosity == 0
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--verbosity", "4"])
+
+
+def test_verbosity_levels_are_nested(capsys):
+    """Level 2 adds backend micro-timings; level 3 also asks the solver layer for everything."""
+    pytest.importorskip("pypardiso")
+    from hdgfem.solvers.advection_diffusion_reaction import _solver_verbosity
+
+    outputs = {}
+    for level in (0, 1, 2, 3):
+        run_case(replace(preset_by_key("tensor_general"), nx=1, ny=1, order=1, verbosity=level))
+        outputs[level] = capsys.readouterr().out
+    assert outputs[0] == ""
+    assert "assembling reduced global trace system (numba)" in outputs[1]
+    assert "numba assembly timings" not in outputs[1]
+    for level in (2, 3):
+        assert "numba assembly timings" in outputs[level]
+        assert "diffusion structure: variable-full=2" in outputs[level]
+    assert [_solver_verbosity(level) for level in range(4)] == [0, 1, 2, 4]
 
 
 def test_file_and_module_entrypoints_have_no_numerical_imports():
