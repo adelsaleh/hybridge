@@ -201,7 +201,7 @@ def test_device_embedded_norm_preserves_residency_and_reuses_gram():
     cp = pytest.importorskip("cupy")
     if not cp.cuda.runtime.getDeviceCount():
         pytest.skip("CUDA device unavailable")
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.core.field_ops import field_l2_norm
     s = DGSpace(rectangle_mesh(2, 1), 3, basis_type="dub_orth")
     host = s.project_callable(lambda x, y: 1+x-y+x*y)

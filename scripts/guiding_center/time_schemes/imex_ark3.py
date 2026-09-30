@@ -14,7 +14,7 @@ import numpy as np
 from hdgfem.core.field_ops import (
     perpendicular_vector_field, solution_field, solution_trace, field_l2_norm,
 )
-from hdgfem.io.output import timed_call
+from hdgfem.runtime.logging import timed_call
 from scripts.guiding_center.time_schemes.stage_support import closest_trace, GuidingCenterStep
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageRankFailure, PoissonTauRecovery,

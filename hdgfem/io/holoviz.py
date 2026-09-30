@@ -218,7 +218,7 @@ class HolovizScalarPanels:
         ``width``/``height`` are per panel; ``columns`` (default: all panels in
         one row) arranges the panels row by row in a grid.
         """
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         from matplotlib import colormaps
 
         spaces, labels = tuple(spaces), tuple(labels)

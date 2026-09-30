@@ -171,7 +171,7 @@ def test_workspace_limit_is_a_clear_configuration_error():
     from hdgfem.backends.adr_tensor_raw_cuda import (TENSOR_SHARED_MEMORY_LIMIT, TensorWorkspaceError,
                                                      max_tensor_volume_points, tensor_shared_bytes,
                                                      tensor_workspace)
-    from hdgfem.backends.capabilities import UnsupportedBackendConfigurationError
+    from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
     nel, kind, nfq = 28, 6, 14
     largest = max_tensor_volume_points(nel, kind, nfq)
     assert tensor_shared_bytes(nel, kind, largest, nfq, 1)[1] <= TENSOR_SHARED_MEMORY_LIMIT

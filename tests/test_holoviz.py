@@ -9,7 +9,7 @@ import pytest
 
 from hdgfem import DGMesh, DGSpace, rectangle_mesh
 from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
 import scripts.guiding_center.run_guiding_center_cases as cli

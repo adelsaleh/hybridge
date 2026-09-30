@@ -75,7 +75,7 @@ both.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
 
 from dataclasses import dataclass
 import statistics
@@ -92,7 +92,7 @@ from hdgfem.backends.advection_raw_cuda import (
     build_reduced_csr_pattern_raw,
     validate_raw_cuda_supported,
 )
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.raw_cuda import RawCudaBlockSize
 
 

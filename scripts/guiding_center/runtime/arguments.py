@@ -5,7 +5,7 @@ import shlex
 from argparse import ArgumentParser, BooleanOptionalAction, RawDescriptionHelpFormatter
 from pathlib import Path
 from scripts.guiding_center.time_schemes import STEPPERS
-from hdgfem.precision import PRECISION
+from hdgfem.runtime.precision import PRECISION
 from scripts.guiding_center.cases.guiding_center_cases import CASE_DEFINITIONS
 from scripts.guiding_center.cases.guiding_center_presets import PRESETS
 

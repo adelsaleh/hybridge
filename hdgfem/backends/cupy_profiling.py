@@ -28,7 +28,8 @@ from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy_device, solve_batched_vectors
+from hdgfem.runtime.optional import require_cupy_device
+from hdgfem.backends.cupy import solve_batched_vectors
 
 
 @dataclass(frozen=True)

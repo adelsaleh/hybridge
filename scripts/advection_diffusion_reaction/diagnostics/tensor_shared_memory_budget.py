@@ -123,7 +123,7 @@ def main(argv=None) -> int:
     parser.add_argument("--json", type=Path, help="write the records to this JSON file")
     args = parser.parse_args(argv)
     from hdgfem.backends.adr_tensor_raw_cuda import TENSOR_SHARED_MEMORY_LIMIT
-    from hdgfem.precision import REAL_ITEMSIZE
+    from hdgfem.runtime.precision import REAL_ITEMSIZE
 
     records = budget(args.orders, args.rules, args.trace_basis)
     print(f"trace basis {args.trace_basis}, real size {REAL_ITEMSIZE} B, limit {TENSOR_SHARED_MEMORY_LIMIT:,} B; cell = batch/KiB, '-' = does not fit")

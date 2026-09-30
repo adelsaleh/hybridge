@@ -170,7 +170,11 @@ def test_device_face_solve_never_calls_numpy_solve(monkeypatch):
     cp = pytest.importorskip('cupy')
     if not cp.cuda.runtime.getDeviceCount():
         pytest.skip('CUDA unavailable')
-    from hdgfem.backends.cupy import field_from_cupy_coefficients, as_cupy_coefficients, as_cupy_space
+    from hdgfem.core.device import (
+            field_from_cupy_coefficients,
+            as_cupy_coefficients,
+            as_cupy_space,
+        )
     space = DGSpace(rectangle_mesh(2, 1), 6, basis_type='dub_orth')
     density, bx, by = space.constant(2), space.constant(.2), space.constant(.5)
     device_fields = [field_from_cupy_coefficients(space, cp.asarray(f.coeffs), device=0)

@@ -37,7 +37,8 @@ def test_explicit_factors_preserve_original_nonsymmetric_operator(explicit_facto
                     reason="opt-in GPU diagnostic; existing kernels only")
 @pytest.mark.parametrize("candidate", benchmark.METHODS)
 def test_gpu_lu_reuses_analysis_with_changing_rhs(explicit_factors, candidate):
-    from hdgfem.backends.cupy import require_cupy_device, scipy_csr_to_cupy
+    from hdgfem.runtime.optional import require_cupy_device
+    from hdgfem.backends.cupy import scipy_csr_to_cupy
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 
     cp = require_cupy_device()

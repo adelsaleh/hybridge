@@ -7,7 +7,10 @@ import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import replace
 from pathlib import Path
-from hdgfem.io.output import format_elapsed_percent as _timing_with_percent, timed_call as _timed_call
+from hdgfem.runtime.logging import (
+    format_elapsed_percent as _timing_with_percent,
+    timed_call as _timed_call,
+)
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

@@ -217,7 +217,7 @@ def _cuda_float64_runtime():
             pytest.skip("No CUDA device")
     except Exception as exc:  # pragma: no cover - driver-dependent
         pytest.skip(f"CUDA runtime unavailable: {exc}")
-    from hdgfem.precision import REAL_DTYPE
+    from hdgfem.runtime.precision import REAL_DTYPE
 
     if REAL_DTYPE != np.float64:
         pytest.skip("raw-CUDA ADR is FP64 only")
@@ -246,7 +246,7 @@ def test_raw_cuda_operator_and_reconstruction_match_diffusion_reaction(matrix_fo
         assemble_projected_adr_trace_operator_raw_cuda,
         reconstruct_projected_adr_local_unknowns_raw_cuda,
     )
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import (
         build_trace_reference,
         face_element_mass,

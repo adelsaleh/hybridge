@@ -145,7 +145,7 @@ def test_high_mode_diagnostics_retain_neighboring_modes():
 
 
 def test_device_diagnostics_match_host_without_materializing_coefficients(cp):
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     s=small_space(6)
     host=s.project_callable(lambda x,y:x*x-y*y+.1)
     device=field_from_cupy_coefficients(s,cp.asarray(host.coeffs).copy())
@@ -162,8 +162,8 @@ def test_device_diagnostics_match_host_without_materializing_coefficients(cp):
 
 
 def test_richer_projection_reuses_rule_and_matches_host_on_device(cp):
-    from hdgfem.assembly.projection import project_callable
-    from hdgfem.backends.cupy import as_cupy_space, as_cupy_coefficients
+    from hdgfem.core.projection import project_callable
+    from hdgfem.core.device import as_cupy_space, as_cupy_coefficients
     s=small_space(3)
     function=lambda x,y:(x**6+2*y**4)*(x<.3)
     host=project_callable(function,s,volume_quad_1d=12)

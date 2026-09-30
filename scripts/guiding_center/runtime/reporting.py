@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import Any
 from scripts.guiding_center.runtime.labels import run_label
-from hdgfem.precision import PRECISION
+from hdgfem.runtime.precision import PRECISION
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 from scripts.guiding_center.runtime.configuration import _hybrid_startup_method, _verbosity_level
 from scripts.guiding_center.runtime.models import GuidingCenterRunResult

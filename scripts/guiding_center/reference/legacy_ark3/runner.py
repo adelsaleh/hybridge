@@ -27,7 +27,14 @@ if __name__ == "__main__":
     configure_precision_cli()
 
 import numpy as np
-from hdgfem.precision import REAL_DTYPE, PRECISION, AMGX_MODE, KERNEL_AUDIT, PIPELINE_AUDIT, audit_arrays
+from hdgfem.runtime.precision import (
+    REAL_DTYPE,
+    PRECISION,
+    AMGX_MODE,
+    KERNEL_AUDIT,
+    PIPELINE_AUDIT,
+    audit_arrays,
+)
 
 from hdgfem.core.field_ops import (
     perpendicular_vector_field,
@@ -1716,7 +1723,7 @@ def _initial_projection_backend(config: GuidingCenterRunPreset) -> str:
 
 def _project_initial_field(config: GuidingCenterRunPreset, space, function, *, name: str):
     """Project on the selected backend, keeping device coefficients resident."""
-    from hdgfem.assembly.projection import project_callable
+    from hdgfem.core.projection import project_callable
 
     return project_callable(function, space,
         backend="device" if _initial_projection_backend(config) == "cupy" else "host",
@@ -1736,7 +1743,7 @@ def run_guiding_center_case(
     from hdgfem.core.space import DGSpace
     from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
     from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
-    from hdgfem.io.output import timed_call
+    from hdgfem.runtime.logging import timed_call
     from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)

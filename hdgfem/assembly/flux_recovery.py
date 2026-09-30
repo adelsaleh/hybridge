@@ -8,7 +8,7 @@ k), avoiding a per-element system with O(k**2) constraints.
 from dataclasses import dataclass
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 
 @dataclass

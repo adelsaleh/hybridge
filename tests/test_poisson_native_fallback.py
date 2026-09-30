@@ -11,7 +11,9 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+import hdgfem.runtime.optional as runtime_optional
 from hdgfem.backends import advection_cuda, cupy, diffusion_cupy, diffusion_raw_cuda
+import hdgfem.core.device as core_device
 from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgResult
 from hdgfem.solvers import diffusion_reaction
 
@@ -71,9 +73,12 @@ def poisson_handoff(monkeypatch, request):
         linalg=SimpleNamespace(norm=lambda a: SimpleNamespace(get=lambda: np.linalg.norm(a))),
     )
     monkeypatch.setattr(cupy, "require_cupy", lambda: cp)
+    monkeypatch.setattr(runtime_optional, "require_cupy", lambda: cp)
     monkeypatch.setattr(advection_cuda, "require_cupy", lambda: cp)
     monkeypatch.setattr(cupy, "require_cupyx_sparse", lambda: None)
+    monkeypatch.setattr(runtime_optional, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(diffusion_cupy, "as_cupy_space", lambda _: cspace)
+    monkeypatch.setattr(core_device, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(diffusion_cupy, "build_trace_reference", lambda *args: None)
     monkeypatch.setattr(diffusion_reaction, "audit_arrays", lambda *args: None)
     monkeypatch.setattr(advection_cuda, "_assembly_device_csr_matrix", lambda *args: matrix)
@@ -93,7 +98,7 @@ def poisson_handoff(monkeypatch, request):
         diffusion_raw_cuda, "reconstruct_projected_diffusion_field_raw_cuda",
         lambda **kwargs: (np.zeros((1, 1)), np.zeros((1, 3)), 0.0),
     )
-    monkeypatch.setattr(cupy, "field_from_cupy_coefficients", lambda space, coefficients, **kwargs: coefficients)
+    monkeypatch.setattr(core_device, "field_from_cupy_coefficients", lambda space, coefficients, **kwargs: coefficients)
     monkeypatch.setattr(diffusion_reaction, "VectorDGField", lambda components, **kwargs: components)
 
     def run_native(solution, *, converged):

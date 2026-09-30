@@ -271,7 +271,7 @@ def run_vortex_comparison(*, resolution=1024, plot=False, cached_kernels_only=Fa
     if manifest_path.exists():
         raise FileExistsError(f"Comparison already exists: {manifest_path}; choose a new prefix")
     manifest = dict(study="vortex-gas", status="running", configs=[asdict(c) for c in configs],
-                    precision=str(__import__("hdgfem.precision", fromlist=["REAL_DTYPE"]).REAL_DTYPE),
+                    precision=str(__import__("hdgfem.runtime.precision", fromlist=["REAL_DTYPE"]).REAL_DTYPE),
                     cached_kernels_only=cached_kernels_only,
                     note="Fixed-space temporal sensitivity, not an observed order or exact error. "
                          "HDG palinstrophy = broken palinstrophy + J/2; J uses 1/h_K (element diameter). "

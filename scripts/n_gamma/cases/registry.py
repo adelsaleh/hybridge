@@ -14,7 +14,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from hdgfem.core.host_threads import elementwise
+from hdgfem.runtime.threads import elementwise
 
 from . import forcing
 from .geometry import GEOMETRIES, build_case_mesh, frame_shift

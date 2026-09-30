@@ -5,7 +5,7 @@ from time import perf_counter
 from hdgfem.core.field_ops import solution_trace
 from hdgfem.core.transfer import project_same_mesh_field
 from hdgfem.core.space import DGField
-from hdgfem.io.output import timed_call
+from hdgfem.runtime.logging import timed_call
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
     raise_for_poisson_rank_failure, raise_for_poisson_transport_failure,

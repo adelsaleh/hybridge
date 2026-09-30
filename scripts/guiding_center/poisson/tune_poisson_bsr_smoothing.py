@@ -21,7 +21,8 @@ from scipy import sparse
 from hdgfem.backends.advection_cuda import (
     PyAMGXCsrDeviceSolver, _DeviceBsrMatrixView, solve_reduced_system_amgx_device,
 )
-from hdgfem.backends.cupy import initialize_pyamgx_once, require_cupy
+from hdgfem.backends.cupy import initialize_pyamgx_once
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver, _trace_basis_at
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import (
     BASE_CONFIG, ROOT, cycle_gate, smoothing_cases,

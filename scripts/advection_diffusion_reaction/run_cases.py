@@ -170,7 +170,7 @@ def _numba_thread_count() -> int | None:
 def _solve_case(config):
     """Build and solve one case; return the problem, mesh, space, result and report."""
     from hdgfem import DGSpace, AdvectionDiffusionReactionHDGSolver, AdvectionDiffusionReactionHDGOptions
-    from hdgfem.io.output import timed_call
+    from hdgfem.runtime.logging import timed_call
     from hdgfem.linalg.pardiso_runtime import pardiso_thread_limit
 
     problem, case_seconds = timed_call("preparing analytic case", config.verbosity,
@@ -249,7 +249,8 @@ def _summarize_solve(result, report, problem, *, preset_key, mesh, space, config
     """
     import numpy as np
     from hdgfem.diagnostics import evaluate_scalar_error
-    from hdgfem.io.output import format_elapsed_percent, pretty_print_sections
+    from hdgfem.runtime.logging import format_elapsed_percent
+    from hdgfem.io.output import pretty_print_sections
 
     run_mesh_items = [
         ("preset", preset_key, "s"),

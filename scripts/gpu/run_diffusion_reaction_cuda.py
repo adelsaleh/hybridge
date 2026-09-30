@@ -26,7 +26,8 @@ from hdgfem.core.mesh import (
 )
 from hdgfem.io.comparison import plot_sampled_solution_comparison
 from hdgfem.io.config import load_amgx_config
-from hdgfem.io.output import format_elapsed_percent, pretty_print_sections
+from hdgfem.runtime.logging import format_elapsed_percent
+from hdgfem.io.output import pretty_print_sections
 from hdgfem.io.plot import resolve_field_plot_resolution, resolve_postprocessed_plot_resolution
 from scripts.diffusion_reaction.cases import case_definition_by_key
 
@@ -235,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.assembly_backend == "raw-cuda" and args.plot_postprocess_primal:
         raise ValueError("raw-CUDA diffusion currently does not support HDG postprocessing; use --assembly-backend cupy")
     if args.show_cupy_config:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
 
         require_cupy().show_config()
 

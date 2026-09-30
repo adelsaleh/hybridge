@@ -23,7 +23,8 @@ from hdgfem import (
     automatic_domain_length,
     gmsh_disc_mesh,
 )
-from hdgfem.io.output import format_elapsed_percent, pretty_print_sections, timed_call
+from hdgfem.runtime.logging import format_elapsed_percent, timed_call
+from hdgfem.io.output import pretty_print_sections
 
 
 from scripts.advection_diffusion_reaction.cases.disk_case import (

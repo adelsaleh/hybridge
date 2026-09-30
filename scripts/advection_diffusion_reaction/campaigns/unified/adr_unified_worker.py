@@ -59,7 +59,7 @@ def check_loaded_cuda_runtime(libraries, runtime_version):
 
 def probe(spec):
     import cupy as cp
-    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/backends/device_inventory.py')
+    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/runtime/devices.py')
     devices = inventory.discover_cuda_devices(cp.cuda.runtime)
     selected = inventory.select_fp64_device(devices, overrides={int(k): v for k, v in spec.get('fp64_overrides', {}).items()})
     runtime = cp.cuda.runtime.runtimeGetVersion()
@@ -158,7 +158,7 @@ def run_numerical(spec, common):
             raise ValueError('Mesh changed after preparation')
     if spec.get('expected_operator_sha256') and operator_hash(spec['cache']) != spec['expected_operator_sha256']:
         raise ValueError('Operator/RHS changed after assembly')
-    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/backends/device_inventory.py')
+    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/runtime/devices.py')
     estimate = spec['memory_estimate']
     phase = spec['stage']
     host_need = estimate['assembly_host_bytes' if phase == 'assemble' else 'solver_host_bytes']

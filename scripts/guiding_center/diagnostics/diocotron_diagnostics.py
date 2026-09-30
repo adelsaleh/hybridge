@@ -50,7 +50,7 @@ class DiocotronModeDiagnostics:
         # neighboring instabilities outside the seeded mode's first harmonics.
         self.modes=tuple(range(1,self.angular_points//2))
         if backend == "device":
-            from hdgfem.backends.cupy import as_cupy_space
+            from hdgfem.core.device import as_cupy_space
             self.sampler=DeviceRasterSampler(space,geometry,device_id=as_cupy_space(space).device_id)
             self.xp=self.sampler.cp
             self.sample=self.sampler.sample

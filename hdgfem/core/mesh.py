@@ -9,7 +9,7 @@ the small set of legacy attribute names that are useful for numerical kernels
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, PRECISION
+from hdgfem.runtime.precision import REAL_DTYPE, PRECISION
 
 from dataclasses import dataclass, field
 import hashlib
@@ -21,7 +21,7 @@ import time
 
 import numpy as np
 
-from hdgfem.core.host_threads import for_element_chunks
+from hdgfem.runtime.threads import for_element_chunks
 
 
 _MESH_CACHE_VERSION = 2

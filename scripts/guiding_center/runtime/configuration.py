@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from scripts.guiding_center.time_schemes import STEPPERS
-from hdgfem.precision import PRECISION
+from hdgfem.runtime.precision import PRECISION
 from hdgfem.io.config import load_amgx_config, with_amgx_residual_history
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 

@@ -24,7 +24,7 @@ from hdgfem.backends.advection_diffusion_reaction_numba import (
     assemble_projected_adr_trace_system_eliminated_numba as assemble,
     reconstruct_projected_adr_local_unknowns_numba as reconstruct,
 )
-from hdgfem.benchmarking import measure
+from hdgfem.runtime.benchmarking import measure
 from hdgfem.io.records import append_jsonl_record
 
 

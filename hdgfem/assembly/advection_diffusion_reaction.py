@@ -10,7 +10,7 @@ import numpy as np
 from hdgfem.assembly import hdg
 from hdgfem.assembly import matrices_numpy as matrices
 from hdgfem.core.element_coefficients import ElementCoefficient
-from hdgfem.core.host_threads import parallel_copy
+from hdgfem.runtime.threads import parallel_copy
 from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.linalg.system import KnownDofReduction, eliminate_known_dofs
 from hdgfem.solvers.diffusion_reaction import (
@@ -85,7 +85,8 @@ def recommended_diffusion_stabilization(
     kappa = normal_diffusivity_on_faces(diffusion, space, device=device)
     xp, mesh = np, space.mesh
     if device:
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
         xp, mesh = require_cupy(), as_cupy_space(space).mesh
     h_normal = 2.0 * mesh.aff_jacs[:, None] / mesh.jacs_el_fc
     return xp.ascontiguousarray(constant * (space.order + 1) ** 2 * kappa / h_normal)
@@ -114,7 +115,7 @@ def normalize_diffusion_stabilization(
     )
     xp = np
     if device:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         xp = require_cupy()
     if legacy_inverse_h:
         tau = recommended_diffusion_stabilization(
@@ -153,14 +154,14 @@ def diffusion_stabilization_on_trace(prepared, space, trace_space, *, device=Fal
             raise ValueError("diffusion stabilization quadrature table is incompatible with recovery quadrature; supply a spatial law")
     xp = np
     if device:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         from hdgfem.backends.coefficients_cupy import face_samples_cupy
         xp = require_cupy()
         values = face_samples_cupy(law, space, label="diffusion_stabilization",
                                   trace_space=trace_space, t=prepared.sample_time)
     else:
         if hasattr(law, '__cuda_array_interface__'):
-            from hdgfem.backends.cupy import asnumpy
+            from hdgfem.runtime.optional import asnumpy
             law = asnumpy(law)
         values = matrices._face_quadrature_values_from_scalar_input(
             law, space, "diffusion_stabilization", trace_space=trace_space, t=prepared.sample_time)
@@ -181,7 +182,7 @@ def element_beta_normal(beta, space: DGSpace, trace_space: DGTraceSpace, *, xp=n
     if xp is np:
         normals = space.mesh.normals
     else:
-        from hdgfem.backends.cupy import as_cupy_space
+        from hdgfem.core.device import as_cupy_space
         normals = as_cupy_space(space).mesh.normals
     normal = face[..., 0] * normals[:, :, 0, None] + face[..., 1] * normals[:, :, 1, None]
     return xp.ascontiguousarray(normal)

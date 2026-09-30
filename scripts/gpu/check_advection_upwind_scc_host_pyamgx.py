@@ -24,7 +24,8 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from hdgfem.assembly import matrices_numpy as hdg_mats
-from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse, scipy_csr_to_cupy
+from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
+from hdgfem.backends.cupy import scipy_csr_to_cupy
 from hdgfem.backends.numba import reconstruct_projected_field_numba
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace

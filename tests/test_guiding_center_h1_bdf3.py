@@ -9,7 +9,7 @@ import pytest
 from hdgfem import DGField, DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
 from hdgfem.core.field_ops import field_linear_combination, project_field_to_trace
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.time_schemes import h1_bdf3
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner

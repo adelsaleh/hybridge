@@ -8,7 +8,7 @@ production integration.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, audit_arrays
+from hdgfem.runtime.precision import REAL_DTYPE, audit_arrays
 
 import copy
 import time
@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.linalg.system import residual_history_is_stagnated
 from hdgfem.linalg.face_hp_policy import (
     scalar_p0_amgx_config,
@@ -278,7 +278,10 @@ class CupyxCgScalarSolve:
         """Create the diagnostic scalar CuPyX CSR solver."""
         if int(operator.block_size) != 1:
             raise ValueError("the scalar diagnostic solver needs block size one")
-        from hdgfem.backends.cupy import require_cupyx_sparse, require_cupyx_sparse_linalg
+        from hdgfem.runtime.optional import (
+                    require_cupyx_sparse,
+                    require_cupyx_sparse_linalg,
+                )
 
         sparse = require_cupyx_sparse()
         self.linalg = require_cupyx_sparse_linalg()

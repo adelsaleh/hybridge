@@ -5,6 +5,7 @@ import pytest
 
 from hdgfem.assembly import hdg as hdg_assembly
 from hdgfem.assembly import matrices_numpy as hdg_mats
+import hdgfem.core.mass as core_mass
 from hdgfem.backends import UnsupportedBackendConfigurationError
 from hdgfem.backends.numba import (
     assemble_local_advection_reaction_numba,
@@ -116,7 +117,7 @@ def _numpy_weighted_advection_trace_system(
         hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face, trace_space=trace_space)
     )
     scratch = np.empty_like(local_mats)
-    hdg_mats.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
+    core_mass.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
     hdg_mats.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
     local_solver = np.linalg.inv(local_mats)
     element_boundary_mats = hdg_mats.element_boundary_mats_from_trace_weight(
@@ -248,7 +249,7 @@ def test_numba_local_assembly_matches_numpy_projected_coefficients() -> None:
 
     numpy_local = np.ascontiguousarray(hdg_mats.boundary_mass_from_normal_flux(space, beta_dot_normal))
     scratch = np.empty_like(numpy_local)
-    hdg_mats.add_reaction_mass(numpy_local, reaction_h, space, scratch=scratch)
+    core_mass.add_reaction_mass(numpy_local, reaction_h, space, scratch=scratch)
     hdg_mats.add_advection_mats(numpy_local, space, beta_h, scale=-1.0)
     numpy_boundary = hdg_mats.element_boundary_mats_from_normal_flux(space, beta_dot_normal)
 

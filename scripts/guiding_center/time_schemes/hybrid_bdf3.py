@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from time import perf_counter
 
-from hdgfem.io.output import timed_call
+from hdgfem.runtime.logging import timed_call
 from .recovery import (
     StepRecoveryWork, with_poisson_recovery, recovery_options, poisson_tau,
 )

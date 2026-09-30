@@ -8,7 +8,7 @@ preconditioning, and cheap diagonal Jacobi preconditioning.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 import threading
 import time
@@ -1149,7 +1149,8 @@ def solve_pyamgx_system(
     """
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter)
     total_start = time.time()
-    from hdgfem.backends.cupy import asnumpy, scipy_csr_to_cupy, solve_pyamgx_csr
+    from hdgfem.runtime.optional import asnumpy
+    from hdgfem.backends.cupy import scipy_csr_to_cupy, solve_pyamgx_csr
 
     physical_matrix = matrix.tocsr()
     physical_rhs = np.asarray(rhs, dtype=REAL_DTYPE)
@@ -1340,14 +1341,14 @@ def solve_cupyx_system(
     """
     _validate_solver_controls(rtol=rtol, atol=atol, maxiter=maxiter, restart=restart)
     total_start = time.time()
+    from hdgfem.runtime.optional import asnumpy
     from hdgfem.backends.cupy import (
-        asnumpy,
-        build_cupyx_exported_host_ilu_preconditioner,
-        build_cupyx_ilu_preconditioner,
-        scipy_coo_to_cupy_csr,
-        scipy_csr_to_cupy,
-        solve_cupyx_csr,
-    )
+            build_cupyx_exported_host_ilu_preconditioner,
+            build_cupyx_ilu_preconditioner,
+            scipy_coo_to_cupy_csr,
+            scipy_csr_to_cupy,
+            solve_cupyx_csr,
+        )
 
     import os
 

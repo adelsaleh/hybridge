@@ -15,7 +15,7 @@ from pathlib import Path
 import time
 import traceback
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.core.field_ops import field_l2_norm
 from hdgfem.diagnostics import solver_result_metrics
 from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle

@@ -8,7 +8,12 @@ callers that can keep the global solve on device, or host arrays when requested.
 
 from __future__ import annotations
 
-from hdgfem.precision import audit_arrays, REAL_DTYPE, AMGX_MODE, real_raw_kernel
+from hdgfem.runtime.precision import (
+    audit_arrays,
+    REAL_DTYPE,
+    AMGX_MODE,
+    real_raw_kernel,
+)
 
 import copy
 import time
@@ -21,7 +26,6 @@ import numpy as np
 
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace
 from hdgfem.io.config import format_amgx_configuration
-from hdgfem.io.terminal import flush_native_stdio as _flush_c_stdio
 from hdgfem.linalg.system import (
     KnownDofReduction,
     LinearSolveCapacityError,
@@ -29,22 +33,17 @@ from hdgfem.linalg.system import (
     SolveResult,
     finalize_solve_result,
 )
+from hdgfem.core.device import CupyDGSpace, as_cupy_coefficients, as_cupy_space
 from hdgfem.backends.cupy import (
-    CupyDGSpace,
-    as_cupy_coefficients,
-    as_cupy_space,
     initialize_pyamgx_once,
-    require_cupy,
-    require_cupyx_sparse,
-    require_pyamgx,
     symmetric_scale_cupy_csr_in_place,
     diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place,
 )
+from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.backends.raw_cuda import RawCudaBlockSize
 from hdgfem.backends.amgx_errors import (
     as_amgx_capacity_error as _as_amgx_capacity_error,
     destroy_amgx_objects,
-    is_amgx_capacity_error as _is_amgx_capacity_error,
 )
 from hdgfem.backends.advection_raw_cuda import (
     RawAdvectionAssemblyResult,
@@ -58,94 +57,12 @@ from hdgfem.backends.advection_tsle_bsr import (
     RawAdvectionTsleWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
+from hdgfem.core.device import CupyDGTraceSpace, as_cupy_trace_space
 
 
 RawLocalAssembly = Literal["precomputed", "fused", "split3"]
 RawLuMode = Literal["safe", "coop"]
 CudaAdvectionAssemblyBackend = Literal["cupy", "raw-cuda"]
-
-
-@dataclass(frozen=True)
-class CupyDGTraceSpace:
-    """CUDA mirror of host :class:`DGTraceSpace` data."""
-
-    host: DGTraceSpace
-    device_id: int
-    kind: str
-    nodal: bool
-    interpolation_nodes: Any
-    quads: Any
-    weights: Any
-    bas_of_bd_quads: Any
-    bas1d_of_ref_edg_qds: Any
-    weighted_bas_of_bd_quads: Any
-    weighted_bas1d_of_ref_edg_qds: Any
-    face_trace_test_element_trial_oriented: Any
-    M_rf_fc: Any
-
-    @classmethod
-    def from_host(cls, trace_space: DGTraceSpace, *, device_id: int) -> "CupyDGTraceSpace":
-        """Convert host-side data to device representation."""
-        cp = require_cupy()
-        return cls(
-            host=trace_space,
-            device_id=int(device_id),
-            kind=trace_space.kind,
-            nodal=bool(trace_space.nodal),
-            interpolation_nodes=cp.asarray(trace_space.interpolation_nodes, dtype=REAL_DTYPE),
-            quads=cp.asarray(trace_space.quads, dtype=REAL_DTYPE),
-            weights=cp.asarray(trace_space.weights, dtype=REAL_DTYPE),
-            bas_of_bd_quads=cp.asarray(trace_space.bas_of_bd_quads, dtype=REAL_DTYPE),
-            bas1d_of_ref_edg_qds=cp.asarray(trace_space.bas1d_of_ref_edg_qds, dtype=REAL_DTYPE),
-            weighted_bas_of_bd_quads=cp.asarray(trace_space.weighted_bas_of_bd_quads, dtype=REAL_DTYPE),
-            weighted_bas1d_of_ref_edg_qds=cp.asarray(trace_space.weighted_bas1d_of_ref_edg_qds, dtype=REAL_DTYPE),
-            face_trace_test_element_trial_oriented=cp.asarray(
-                trace_space.face_trace_test_element_trial_oriented,
-                dtype=REAL_DTYPE,
-            ),
-            M_rf_fc=cp.asarray(trace_space.M_rf_fc, dtype=REAL_DTYPE),
-        )
-
-    @property
-    def oriented_basis_table(self):
-        """Cached compact orientation tables owned by the host trace formalism."""
-        cached = getattr(self, "_oriented_basis_table", None)
-        if cached is None:
-            cp = require_cupy()
-            with cp.cuda.Device(self.device_id):
-                cached = cp.asarray(self.host.oriented_basis_table)
-            object.__setattr__(self, "_oriented_basis_table", cached)
-        return cached
-
-    @property
-    def mass_inverse(self):
-        """Cached device mirror of the trace mass inverse."""
-        inverse = getattr(self, "_mass_inverse", None)
-        if inverse is None:
-            cp = require_cupy()
-            with cp.cuda.Device(self.device_id):
-                inverse = cp.asarray(self.host.mass_inverse)
-            object.__setattr__(self, "_mass_inverse", inverse)
-        return inverse
-
-    @property
-    def edg_dof(self) -> int:
-        """Return the number of trace degrees of freedom per edge."""
-        return self.host.edg_dof
-
-
-def as_cupy_trace_space(trace_space: DGTraceSpace, *, device: int | None = None) -> CupyDGTraceSpace:
-    """Return a cached CUDA mirror of ``trace_space``."""
-    cp = require_cupy()
-    device_id = int(cp.cuda.runtime.getDevice()) if device is None else int(device)
-    cache = getattr(trace_space, "_hdgfem_cupy_trace_space_cache", None)
-    if cache is None:
-        cache = {}
-        object.__setattr__(trace_space, "_hdgfem_cupy_trace_space_cache", cache)
-    if device_id not in cache:
-        with cp.cuda.Device(device_id):
-            cache[device_id] = CupyDGTraceSpace.from_host(trace_space, device_id=device_id)
-    return cache[device_id]
 
 
 @dataclass(frozen=True)
@@ -310,7 +227,6 @@ def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, floa
     if timings is not None:
         timings["reference_advection_tensor"] = timings.get("reference_advection_tensor", 0.0) + sync_elapsed(start)
     return result
-
 
 
 def reference_advection_sparse_cupy(
@@ -949,7 +865,6 @@ def assemble_reduced_system_cuda(
     )
 
 
-
 def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors):
     """Condense a new source/boundary RHS with an unchanged raw transport operator.
 
@@ -1301,8 +1216,6 @@ def _assembly_device_csr_matrix(assembly: CudaAdvectionAssembly, cp, sparse):
             dtype=REAL_DTYPE,
         )
     return matrix
-
-
 
 
 _CSR_ROW_UNSCALE_SOURCE = r"""
@@ -2915,9 +2828,7 @@ __all__ = [
     "TIMINGS",
     "assemble_reduced_system",
     "build_trace_reference",
-    "CupyDGTraceSpace",
     "CudaAdvectionAssembly",
-    "as_cupy_trace_space",
     "assemble_reduced_system_cuda",
     "beta_dot_normal_from_coeffs",
     "build_dof_maps",

@@ -11,7 +11,7 @@ from contextlib import nullcontext
 
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 
 class HDGTraceWorkspace:
@@ -29,7 +29,8 @@ class HDGTraceWorkspace:
         self.trace_host = space.trace_space(trace_basis)
         self.xp, self.cspace = np, None
         if backend == "device":
-            from hdgfem.backends.cupy import as_cupy_space, require_cupy
+            from hdgfem.core.device import as_cupy_space
+            from hdgfem.runtime.optional import require_cupy
             self.xp = require_cupy()
             self.cspace = as_cupy_space(space)
 
@@ -80,7 +81,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         if self.cspace is None:
             self.mesh, self.q, self.trace = self.space.mesh, self.space.quad_data, self.trace_host
         else:
-            from hdgfem.backends.advection_cuda import as_cupy_trace_space
+            from hdgfem.core.device import as_cupy_trace_space
             self.mesh, self.q = self.cspace.mesh, self.cspace.quad_data
             self.trace = as_cupy_trace_space(self.trace_host, device=self.cspace.device_id)
         mesh, trace, q = self.mesh, self.trace, self.q
@@ -118,7 +119,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             raise ValueError("residual fields must belong to its fixed DGSpace")
         if self.cspace is None:
             return field.coeffs
-        from hdgfem.backends.cupy import as_cupy_coefficients
+        from hdgfem.core.device import as_cupy_coefficients
         return as_cupy_coefficients(field, self.cspace)
 
     def _sum_sides(self, values):
@@ -238,7 +239,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         reference_beta = xp.einsum("kqd,kdD->kqD", self.beta_volume, mesh.inv_aff_mats_t)
         volume_load = xp.einsum("kq,kqD,Diq->ki", self.u_volume, reference_beta,
                                 self.volume_weighted_gradient)
-        from hdgfem.assembly.projection import field_from_moments
+        from hdgfem.core.projection import field_from_moments
         moments = volume_load*mesh.aff_jacs[:, None] - face_load
         field = field_from_moments(self.space, moments, name="transport_rhs_h")
         return field, xp.ascontiguousarray(self.full_trace[interior].ravel())

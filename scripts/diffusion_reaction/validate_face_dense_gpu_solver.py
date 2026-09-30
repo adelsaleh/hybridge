@@ -13,7 +13,7 @@ from time import perf_counter
 import numpy as np
 
 from hdgfem.assembly import hdg as hdg_assembly
-from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.runtime.optional import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_polynomial import CuPyPolynomialPreconditioner
 from hdgfem.backends.cupy_preconditionners import (

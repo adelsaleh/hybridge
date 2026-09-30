@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 
 
 Equation = Literal["advection-reaction", "advection-diffusion-reaction", "diffusion-reaction"]
@@ -31,10 +32,6 @@ _CUPYX_SOLVERS = {"bicgstab", "bicg_stab", "bcgs", "cg", "cgs", "gmres"}
 _PRODUCTION_TRACE_BASES = ("legacy-lagrange", "legendre-modal")
 _ALL_DIFFUSION_NUMPY_TRACE_BASES = _PRODUCTION_TRACE_BASES + ("bernstein",)
 _CAPABILITY_DOC = "docs/reference/backend_capabilities.md"
-
-
-class UnsupportedBackendConfigurationError(NotImplementedError):
-    """A valid option combination is outside the supported backend matrix."""
 
 
 @dataclass(frozen=True)
@@ -739,7 +736,6 @@ def render_backend_capability_table() -> str:
 __all__ = [
     "BACKEND_CAPABILITIES",
     "BackendCapability",
-    "UnsupportedBackendConfigurationError",
     "get_backend_capability",
     "normalize_assembly_backend",
     "normalize_solver_backend",

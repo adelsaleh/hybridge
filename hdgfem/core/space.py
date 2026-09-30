@@ -13,7 +13,7 @@ module.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Sequence
@@ -733,8 +733,9 @@ class DGSpace:
         return a scalar, ``(num_quads,)``, or ``(num_elements, num_quads)``.
         """
         from hdgfem.assembly import matrices_numpy as hdg_mats
+        import hdgfem.core.mass as core_mass
 
-        return hdg_mats.weighted_mass(self, func)
+        return core_mass.weighted_mass(self, func)
 
     def weighted_mass_of(self, func: Callable, u: "DGField", *, parameters=None) -> np.ndarray:
         r"""Assemble :math:`\int_K f(u_h)\phi_i\phi_j\,dx`.
@@ -744,8 +745,9 @@ class DGSpace:
         sharing the same mesh object.
         """
         from hdgfem.assembly import matrices_numpy as hdg_mats
+        import hdgfem.core.mass as core_mass
 
-        return hdg_mats.weighted_mass_from_field(self, func, u, parameters=parameters)
+        return core_mass.weighted_mass_from_field(self, func, u, parameters=parameters)
 
     def project_callable(self, func: Callable, *, parameters=None, name: str = "Pi_h f") -> "DGField":
         r"""Project an analytic scalar callable into this DG space.

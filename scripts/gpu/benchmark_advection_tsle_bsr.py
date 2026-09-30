@@ -24,17 +24,15 @@ if __package__ in {None, ""}:
 
 from hdgfem.backends import advection_raw_cuda as fused_cuda
 from hdgfem.backends import advection_tsle_bsr as tsle_cuda
-from hdgfem.backends.advection_cuda import (
-    assemble_reduced_system_cuda,
-    as_cupy_trace_space,
-)
+from hdgfem.backends.advection_cuda import assemble_reduced_system_cuda
+from hdgfem.core.device import as_cupy_trace_space
 from hdgfem.backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
-from hdgfem.backends.cupy import (
+from hdgfem.core.device import (
     as_cupy_space,
     as_cupy_vector_coefficients,
     clear_cupy_space_cache,
-    require_cupy,
 )
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh
 from hdgfem.core.space import DGSpace, VectorDGField

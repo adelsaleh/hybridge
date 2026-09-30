@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from hdgfem.linalg.system import LinearSolveConvergenceError, SolveResult, finalize_solve_result
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner

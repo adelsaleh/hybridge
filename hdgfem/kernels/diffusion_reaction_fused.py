@@ -15,8 +15,14 @@ try:  # pragma: no cover - exercised only when numba is installed.
 except ImportError:  # pragma: no cover
     prange = range
 
-from hdgfem.kernels.common import (lu_factor_inplace, lu_solve_inplace, map_edge_dof_bool, njit,
-                     cholesky_factor_inplace, cholesky_solve_inplace)
+from hdgfem.kernels.common import (
+    lu_factor_inplace,
+    lu_solve_inplace,
+    map_edge_dof_bool,
+    cholesky_factor_inplace,
+    cholesky_solve_inplace,
+)
+from hdgfem.runtime.optional import njit
 
 
 @njit(cache=True, inline="always", fastmath=True)

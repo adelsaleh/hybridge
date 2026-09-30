@@ -102,7 +102,7 @@ def main():
     import numpy as np
     import cupy as cp
     from hdgfem import DGField, DGSpace, rectangle_mesh
-    from hdgfem.precision import REAL_DTYPE
+    from hdgfem.runtime.precision import REAL_DTYPE
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.plotting import _make_plotter
 

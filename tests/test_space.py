@@ -32,13 +32,15 @@ from hdgfem.assembly.hdg import (
 from hdgfem.assembly.matrices_numpy import (
     _vector_values_on_test_quads,
     add_advection_mats,
-    add_reaction_mass,
     advection_mats,
     advective_boundary_normal,
     boundary_mass,
     boundary_mass_from_normal_flux,
     element_boundary_mats,
     element_boundary_mats_from_normal_flux,
+)
+from hdgfem.core.mass import (
+    add_reaction_mass,
     mass_from_field,
     weighted_mass_from_field,
 )

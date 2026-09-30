@@ -19,7 +19,7 @@ Explicit ``*_parallel`` wrappers are provided for top-level bulk tabulation.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from functools import lru_cache
 from math import factorial

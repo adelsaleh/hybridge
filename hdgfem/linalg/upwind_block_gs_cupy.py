@@ -223,7 +223,7 @@ def cupy_upwind_block_gs_from_host_preconditioner(
     lower-coupling, and inverse-diagonal arrays to the current CUDA device and
     returns the Cupyx ``LinearOperator`` used by iterative solvers.
     """
-    from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg
+    from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse_linalg
 
     cupy = require_cupy()
     cupyx_linalg = require_cupyx_sparse_linalg()
@@ -279,7 +279,7 @@ def build_cupy_upwind_block_gs_preconditioner(
         dtype=None,
 ):
     """Build a Cupyx ``LinearOperator`` for an upwind block-GS sweep."""
-    from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg
+    from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse_linalg
 
     cupy = require_cupy()
     cupyx_linalg = require_cupyx_sparse_linalg()

@@ -7,7 +7,7 @@ from hdgfem.assembly.face_dense import (
     face_dense_relative_residual,
     normalize_penalty_rows,
 )
-from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.runtime.optional import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import (
     _apply_previous_givens,

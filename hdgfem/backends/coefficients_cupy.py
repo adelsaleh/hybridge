@@ -21,15 +21,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace
-from hdgfem.backends.cupy import _normalize_cupy_values, as_cupy_coefficients, as_cupy_space, require_cupy
+from hdgfem.core.device import (
+    _normalize_cupy_values,
+    as_cupy_coefficients,
+    as_cupy_space,
+)
+from hdgfem.runtime.optional import require_cupy
 
 
 def mapped_face_points_cupy(space: DGSpace, trace_space: DGTraceSpace):
     """Physical trace points, shape ``(K, 3*nfq, 2)``, flat index ``q*3 + face`` (host layout)."""
-    from hdgfem.assembly.matrices_numpy import _reference_edge_points_from_1d
+    from hdgfem.core.quadrature import _reference_edge_points_from_1d
 
     cp = require_cupy()
     mesh = as_cupy_space(space).mesh

@@ -19,7 +19,7 @@ import sys
 import time
 
 from hdgfem.io.records import append_jsonl_record
-from hdgfem.benchmarking import measure
+from hdgfem.runtime.benchmarking import measure
 
 
 def worker(args):

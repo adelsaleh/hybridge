@@ -21,7 +21,11 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse_linalg, require_pyamgx
+from hdgfem.runtime.optional import (
+    require_cupy,
+    require_cupyx_sparse_linalg,
+    require_pyamgx,
+)
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.io.config import load_amgx_config
 from hdgfem.core.space import DGField, DGSpace, VectorDGField

@@ -252,7 +252,7 @@ def test_existing_plot_api_delegates_to_lightweight_mesh_helper():
     tree = ast.parse((ROOT/"hdgfem/io/plot.py").read_text())
     helper = next(node for node in tree.body
                   if isinstance(node, ast.FunctionDef) and node.name == "add_matplotlib_mesh")
-    assert any(isinstance(node, ast.ImportFrom) and node.module == "figures"
+    assert any(isinstance(node, ast.ImportFrom) and node.module == "hdgfem.io.figures"
                and any(alias.name == "add_matplotlib_mesh" for alias in node.names)
                for node in ast.walk(helper))
 

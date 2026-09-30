@@ -48,7 +48,7 @@ def error_norms(fields: dict[str, DGField], exact: dict[str, Callable], *, geome
 
 def sampled_minimum(field: DGField, space, trace_space, *, device: bool = False) -> float:
     """Return the minimum of ``field`` sampled on volume and element-side face points."""
-    from hdgfem.assembly.matrices_numpy import _reference_edge_points_from_1d
+    from hdgfem.core.quadrature import _reference_edge_points_from_1d
 
     face = np.asarray(_reference_edge_points_from_1d(trace_space.quads)).reshape(-1, 2)
     volume = field_values_at_ref(field, space.quad_data.Krf_quads, device=device)

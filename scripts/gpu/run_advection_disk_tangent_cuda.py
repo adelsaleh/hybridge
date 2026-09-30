@@ -13,7 +13,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse, require_pyamgx
+from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
 from hdgfem.core.mesh import gmsh_disc_mesh
 from hdgfem.core.space import DGSpace, VectorDGField

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 
 def _array_module(x, y):
     """Choose the array backend without importing CuPy for host coordinates."""
     if any(hasattr(value, "__cuda_array_interface__") for value in (x, y)):
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         return require_cupy()
     return np
 

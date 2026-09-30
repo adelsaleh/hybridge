@@ -34,7 +34,7 @@ DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "hdg_torsion_initialized_newton"
 from hdgfem.assembly import hdg as hdg_assembly
 from hdgfem.assembly.hdg_gram import CondensedHDGGramInverse, build_flux_jump_gram_inverse
 from hdgfem.assembly.matrices_numpy import scalar_volume_residual
-from hdgfem.assembly.projection import (
+from hdgfem.core.projection import (
     field_from_moments,
     l2_from_values,
     mass_from_values,

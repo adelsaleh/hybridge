@@ -15,6 +15,7 @@ import numpy as np
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.assembly import matrices_numpy as mats
+import hdgfem.core.mass as core_mass
 from hdgfem.linalg.system import assemble_global_matrix
 from hdgfem.linalg.transport_diagnostics import trace_inflow_diagnostics, trace_matrix_diagnostics
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
@@ -106,7 +107,7 @@ def diagnose(assembly: FixtureAssembly):
     tau, gamma = mats.advection_trace_weights_from_normal_flux(
         space, normal, assembly.policy, trace_space=trace)
     local = np.ascontiguousarray(mats.boundary_mass_from_trace_stabilization(space, tau, trace_space=trace))
-    mats.add_reaction_mass(local, assembly.reaction, space)
+    core_mass.add_reaction_mass(local, assembly.reaction, space)
     mats.add_advection_mats(local, space, assembly.beta, scale=-1.)
     local_singular = np.linalg.svd(local, compute_uv=False)
     coupling = mats.element_boundary_mats_from_trace_weight(space, gamma, trace_space=trace)

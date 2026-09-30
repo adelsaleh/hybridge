@@ -9,7 +9,7 @@ recover element coefficients.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,6 +19,7 @@ from typing import Literal
 import numpy as np
 
 from hdgfem.assembly import matrices_numpy as hdg_mats
+import hdgfem.core.mass as core_mass
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 
 
@@ -79,16 +80,16 @@ def reaction_mass(reaction, space: DGSpace) -> np.ndarray:
             if constant_value == 0.0:
                 return np.zeros((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=REAL_DTYPE)
             return constant_value * space.mesh.aff_jacs[:, None, None] * space.quad_data.MKrf[None, :, :]
-        return hdg_mats.mass_from_field(space, reaction)
+        return core_mass.mass_from_field(space, reaction)
     if callable(reaction):
         return space.weighted_mass(reaction)
 
     values = np.asarray(reaction, dtype=REAL_DTYPE)
     if values.shape == (space.mesh.num_tri, space.quad_data.Krf_w.shape[0]):
         out = np.empty((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=REAL_DTYPE)
-        return hdg_mats.set_weighted_mass_from_values(out, values, space)
+        return core_mass.set_weighted_mass_from_values(out, values, space)
     if values.shape == (space.mesh.num_tri, space.el_dof):
-        return hdg_mats.mass_from_field(space, space.field(values, name="reaction"))
+        return core_mass.mass_from_field(space, space.field(values, name="reaction"))
     raise TypeError("reaction must be a scalar, callable, quadrature values, or DG coefficient array")
 
 
@@ -231,8 +232,9 @@ def boundary_trace_coefficients(
     if backend == "host":
         values = trace_ref.boundary_coefficients(boundary_condition)
         return values[space.mesh.bnd_edges_inds] if boundary_only else values
-    from hdgfem.backends.cupy import as_cupy_space, require_cupy
-    from hdgfem.backends.advection_cuda import as_cupy_trace_space
+    from hdgfem.core.device import as_cupy_space
+    from hdgfem.runtime.optional import require_cupy
+    from hdgfem.core.device import as_cupy_trace_space
     xp = require_cupy()
     cspace = as_cupy_space(space)
     mesh = cspace.mesh

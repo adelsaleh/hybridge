@@ -10,11 +10,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import hdgfem.runtime.optional as runtime_optional
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.core.transfer import project_same_mesh_field
 from hdgfem.diagnostics import guiding_center_field_diagnostics
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
@@ -153,12 +154,14 @@ class NumpyDevice:
 
 def test_device_projection_keeps_coefficients_resident(monkeypatch):
     import hdgfem.backends.cupy as backend
+    import hdgfem.core.device as core_device
     density_space, poisson_space = spaces(4)
     coefficients = np.random.default_rng(123).normal(size=density_space.shape).astype(REAL_DTYPE)
     expected = project_same_mesh_field(density_space.field(coefficients), poisson_space)
     resident = DGField.from_device_coefficients(density_space, coefficients, device_id=0)
     monkeypatch.setattr(backend, 'require_cupy', lambda: NumpyDevice())
-    monkeypatch.setattr(backend, 'field_from_cupy_coefficients',
+    monkeypatch.setattr(runtime_optional, 'require_cupy', lambda: NumpyDevice())
+    monkeypatch.setattr(core_device, 'field_from_cupy_coefficients',
         lambda space, coeffs, device, name: DGField.from_device_coefficients(space, coeffs, device_id=device, name=name))
     projected = project_same_mesh_field(resident, poisson_space)
     assert resident._coeffs is None and projected._coeffs is None
@@ -167,6 +170,7 @@ def test_device_projection_keeps_coefficients_resident(monkeypatch):
 
 def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
     import hdgfem.backends.cupy as backend
+    import hdgfem.core.device as core_device
     density_space, poisson_space = spaces(3)
     rho = density_space.project_callable(lambda x, y: 2+x*x*y)
     fields = result(density_space, poisson_space)
@@ -174,12 +178,13 @@ def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
         equilibrium_potential=poisson_space.zeros(), equilibrium_density=density_space.constant(1.))
     host = guiding_center_field_diagnostics(rho, fields.field, fields.flux, backend='host', **kwargs)
     monkeypatch.setattr(backend, 'require_cupy', lambda: NumpyDevice())
-    monkeypatch.setattr(backend, 'as_cupy_space', lambda space, device=None:
+    monkeypatch.setattr(runtime_optional, 'require_cupy', lambda: NumpyDevice())
+    monkeypatch.setattr(core_device, 'as_cupy_space', lambda space, device=None:
         SimpleNamespace(host=space, mesh=space.mesh, quad_data=space.quad_data, device_id=0))
     def coefficients(field, device_space):
         assert field.space is device_space.host
         return field.coeffs
-    monkeypatch.setattr(backend, 'as_cupy_coefficients', coefficients)
+    monkeypatch.setattr(core_device, 'as_cupy_coefficients', coefficients)
     device = guiding_center_field_diagnostics(rho, fields.field, fields.flux, backend='device', **kwargs)
     for key in host.keys() - {'diagnostics_backend'}:
         assert device[key] == pytest.approx(host[key], abs=TOL, rel=TOL)

@@ -19,9 +19,12 @@ import numpy as np
 from scipy import sparse
 
 from hdgfem import DGSpace, DiffusionReactionHDGSolver
-from hdgfem.backends.cupy import (
-    as_cupy_coefficients, as_cupy_space, field_from_cupy_coefficients, require_cupy,
+from hdgfem.core.device import (
+    as_cupy_coefficients,
+    as_cupy_space,
+    field_from_cupy_coefficients,
 )
+from hdgfem.runtime.optional import require_cupy
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key

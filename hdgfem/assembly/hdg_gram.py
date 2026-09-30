@@ -703,7 +703,8 @@ class ScalarHDGGram:
         self.trace_basis, self.jump_weight, self.sigma = trace_basis, jump_weight, sigma
         self.include_boundary, self.chunk_size = include_boundary, int(chunk_size)
         if backend == "device":
-            from hdgfem.backends.cupy import as_cupy_space, require_cupy
+            from hdgfem.core.device import as_cupy_space
+            from hdgfem.runtime.optional import require_cupy
 
             self.xp = require_cupy()
             self.cspace = as_cupy_space(space)
@@ -750,7 +751,7 @@ class ScalarHDGGram:
         if self._trace_data is None:
             host_trace = self.space.trace_space(self.trace_basis)
             if self.backend == "device":
-                from hdgfem.backends.advection_cuda import as_cupy_trace_space
+                from hdgfem.core.device import as_cupy_trace_space
 
                 trace_space = as_cupy_trace_space(host_trace)
             else:

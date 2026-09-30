@@ -17,7 +17,7 @@ import traceback
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.core.field_ops import field_l2_norm
 from hdgfem.diagnostics import solver_result_metrics
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver, _trace_basis_at

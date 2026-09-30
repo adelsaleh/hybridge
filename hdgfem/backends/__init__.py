@@ -13,9 +13,9 @@ import CuPy, AMGX, PETSc, PARDISO, Gmsh, or DOLFINx.
 from hdgfem.backends.capabilities import (
     BACKEND_CAPABILITIES,
     BackendCapability,
-    UnsupportedBackendConfigurationError,
     get_backend_capability,
 )
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 
 
 __all__ = [

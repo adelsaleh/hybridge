@@ -11,21 +11,7 @@ try:  # pragma: no cover - availability depends on the runtime environment.
     import numba as nb
 except ImportError:  # pragma: no cover
     nb = None
-
-
-NUMBA_AVAILABLE = nb is not None
-prange = nb.prange if nb is not None else range
-
-
-def njit(*args, **kwargs):
-    """Return ``numba.njit`` when available, otherwise a no-op decorator."""
-    if nb is None:
-        def decorator(function):
-            """Return the decorated function unchanged when Numba is unavailable."""
-            return function
-
-        return decorator
-    return nb.njit(*args, **kwargs)
+from hdgfem.runtime.optional import njit
 
 
 @njit(cache=True, inline="always")
@@ -164,12 +150,9 @@ def cholesky_solve_inplace(factor, rhs):
 __all__ = [
     "cholesky_factor_inplace",
     "cholesky_solve_inplace",
-    "NUMBA_AVAILABLE",
     "lu_factor_inplace",
     "lu_solve_inplace",
     "map_edge_dof_bool",
-    "njit",
-    "prange",
     "zero_matrix",
     "zero_vector",
 ]

@@ -11,7 +11,8 @@ import numpy as np
 from hdgfem.assembly import hdg
 from hdgfem.assembly.advection_diffusion_reaction import ADRPreparedData
 from hdgfem.core.space import DGSpace, DGTraceSpace
-from hdgfem.backends.cupy import as_cupy_space, require_cupy
+from hdgfem.core.device import as_cupy_space
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.numba import _boundary_reduction_maps, _interior_side_index, _trace_orientation_mode
 
 
@@ -285,7 +286,8 @@ def _assemble_scalar_serial_operator(
         raise NotImplementedError("raw CUDA ADR currently requires positive constant scalar diffusion")
     cp = require_cupy()
     from cupyx.scipy import sparse
-    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space
+    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly
+    from hdgfem.core.device import as_cupy_trace_space
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(trace_space)
     mesh = space.mesh

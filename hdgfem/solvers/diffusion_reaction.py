@@ -15,7 +15,7 @@ fused trace assembly path in Numba.
 
 from __future__ import annotations
 
-from hdgfem.precision import audit_arrays, REAL_DTYPE
+from hdgfem.runtime.precision import audit_arrays, REAL_DTYPE
 
 import time
 from collections.abc import Callable, Iterable
@@ -32,7 +32,7 @@ from hdgfem.backends.capabilities import (
     validate_diffusion_backend_configuration,
 )
 from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
-from hdgfem.assembly.projection import scalar_moments_from_values
+from hdgfem.core.projection import scalar_moments_from_values
 from hdgfem.linalg.system import (
     KnownDofReduction,
     SolveResult,
@@ -408,7 +408,7 @@ def _diffusion_components(diffusion, space: DGSpace, *, on_faces=False, trace_sp
     """
     xp = np
     if device:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         xp = require_cupy()
     num_elements = space.mesh.num_tri
     num_quads = space.quad_data.Krf_w.shape[0]
@@ -489,6 +489,7 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     ``Gab[K] = int_K (kappa^{-1})_{ab} phi_i phi_j dx``.
     """
     from hdgfem.assembly import matrices_numpy as hdg_mats
+    import hdgfem.core.mass as core_mass
 
     from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
     inverse = inverse_diffusion_values(sample_diffusion_tensor(diffusion, space))
@@ -499,10 +500,10 @@ def diffusion_inverse_mass_blocks(diffusion, space: DGSpace) -> tuple[np.ndarray
     g01 = np.empty(shape, dtype=REAL_DTYPE)
     g10 = np.empty(shape, dtype=REAL_DTYPE)
     g11 = np.empty(shape, dtype=REAL_DTYPE)
-    hdg_mats.set_weighted_mass_from_values(g00, inv00, space)
-    hdg_mats.set_weighted_mass_from_values(g01, inv01, space)
-    hdg_mats.set_weighted_mass_from_values(g10, inv10, space)
-    hdg_mats.set_weighted_mass_from_values(g11, inv11, space)
+    core_mass.set_weighted_mass_from_values(g00, inv00, space)
+    core_mass.set_weighted_mass_from_values(g01, inv01, space)
+    core_mass.set_weighted_mass_from_values(g10, inv10, space)
+    core_mass.set_weighted_mass_from_values(g11, inv11, space)
     return g00, g01, g10, g11
 
 
@@ -1037,7 +1038,8 @@ def split_diffusion_unknowns(local_unknowns: np.ndarray, space: DGSpace) -> tupl
     """Split raw ``[u_h, q_x, q_y]`` coefficients into DG fields, preserving host/device residency."""
     device = hasattr(local_unknowns, "__cuda_array_interface__")
     if device:
-        from hdgfem.backends.cupy import require_cupy, field_from_cupy_coefficients
+        from hdgfem.runtime.optional import require_cupy
+        from hdgfem.core.device import field_from_cupy_coefficients
         unknowns = require_cupy().asarray(local_unknowns, dtype=REAL_DTYPE)
     else:
         unknowns = np.asarray(local_unknowns, dtype=REAL_DTYPE)
@@ -1554,7 +1556,7 @@ def _postprocess_rt_flux_from_samples(
             "RT flux postprocessing backend must be 'numba', 'cupy', or 'raw-cuda'"
         )
     if not materialize_host and backend == "cupy":
-        from hdgfem.backends.cupy import field_from_cupy_coefficients
+        from hdgfem.core.device import field_from_cupy_coefficients
         return VectorDGField(tuple(field_from_cupy_coefficients(post_space, c, name=name)
                                    for c in coeffs), name=name)
     return (post_space * post_space).field(
@@ -1676,7 +1678,7 @@ def _postprocess_diffusion_solution(
             cache=cache.raw_flux_cache,
         )
         # Include completed GPU work in the solver's postprocessing timing.
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         require_cupy().cuda.get_current_stream().synchronize()
         return None, recovered, cache
 
@@ -1847,7 +1849,7 @@ def _host_array(value, *, dtype=None) -> np.ndarray | None:
     if value is None:
         return None
     try:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
 
         cupy = require_cupy()
         if isinstance(value, cupy.ndarray):
@@ -2620,13 +2622,14 @@ class DiffusionReactionHDGSolver:
                 "raw-CUDA diffusion device solves support hdg_postprocess='none' or 'flux'"
             )
 
-        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
+        from hdgfem.core.device import field_from_cupy_coefficients
+        from hdgfem.runtime.optional import require_cupy
         from hdgfem.backends.advection_cuda import (
             PyAMGXCsrDeviceSolver,
             reconstruct_trace_cupy,
             solve_reduced_system_amgx_device,
         )
-        from hdgfem.backends.cupy import as_cupy_space
+        from hdgfem.core.device import as_cupy_space
         from hdgfem.backends.diffusion_cupy import (
                     assemble_projected_diffusion_trace_rhs_cached_cupy,
                     assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
@@ -2871,7 +2874,7 @@ class DiffusionReactionHDGSolver:
                     _assembly_device_csr_matrix, _device_compressed_matvec,
                     _residual_stats_cp,
                 )
-                from hdgfem.backends.cupy import require_cupyx_sparse
+                from hdgfem.runtime.optional import require_cupyx_sparse
 
                 native_hierarchy_reused = (
                     self._raw_cuda_fb_hp_mg_solver is not None

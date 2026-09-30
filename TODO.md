@@ -714,9 +714,19 @@ Execution protocol (approved 2026-09-29):
 
   A4 is deferred to phase 3, where the CUDA LU copies are consolidated into
   one status-reporting routine.
-- [ ] Phase 2: create `runtime/` (gates, precision, logging, error types) and
+- [x] Phase 2: create `runtime/` (gates, precision, logging, error types) and
   `core/device.py` (CuPy mirrors, mesh maps, orientation mode). This removes
-  every `core → backends` import.
+  every `core → backends` import. Done 2026-09-30:
+  - `runtime/`: `optional`, `precision`, `logging`, `terminal`, `errors`,
+    `devices`, `threads`, `benchmarking`;
+  - `core/device.py` holds the CuPy mesh, space and trace mirrors;
+  - `core/mass.py` holds the generic mass matrices; `core/projection.py` and
+    `core/pointwise_kernels.py` moved into `core/`;
+  - layering violations dropped from 66 to 39, and every `core → backends`
+    import is gone. The mesh maps and orientation mode go to `hdg/trace_maps`
+    in phase 3, and `core/field_ops` moves up to `hdg/` in phase 3.
+  - The full suite matches the baseline outcome for every test (same 46
+    pre-existing failures).
 - [ ] Phase 3: create the shared `hdg/` layer:
   - one τ/γ stabilization evaluator, coefficient sampling and reference tables;
   - one CUDA source library (status-returning LU, Cholesky, triangular solves,

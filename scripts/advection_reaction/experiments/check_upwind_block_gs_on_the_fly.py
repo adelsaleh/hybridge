@@ -561,7 +561,8 @@ def run_cupyx_bicgstab(
         import_start = logger.start("cupyx_imports", "loading CuPy/Cupyx helpers", level=2)
     else:
         import_start = time.perf_counter()
-    from hdgfem.backends.cupy import require_cupy, scipy_csr_to_cupy, solve_cupyx_csr
+    from hdgfem.runtime.optional import require_cupy
+    from hdgfem.backends.cupy import scipy_csr_to_cupy, solve_cupyx_csr
     from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
 
     cupy = require_cupy()

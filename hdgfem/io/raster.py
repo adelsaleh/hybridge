@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from hdgfem.io.live import expanding_color_limits
 
 
@@ -131,7 +131,8 @@ class DeviceRasterSampler:
 
     def __init__(self, space, geometry: RasterGeometry, *, device_id: int):
         """Upload a fixed sampling map and cache the matching device space."""
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
         from cupyx.scipy.sparse import csr_matrix
 
         self.cp = require_cupy()
@@ -153,7 +154,7 @@ class DeviceRasterSampler:
 
     def sample(self, field):
         """Evaluate the field at owned pixels without materializing host coefficients."""
-        from hdgfem.backends.cupy import as_cupy_coefficients
+        from hdgfem.core.device import as_cupy_coefficients
 
         if field.space is not self.space:
             raise ValueError("Holoviz's fixed sampling map requires the original DGSpace")

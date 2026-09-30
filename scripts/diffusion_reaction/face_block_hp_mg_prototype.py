@@ -18,7 +18,7 @@ import numpy as np
 
 from hdgfem import DGSpace, gmsh_disc_mesh, rectangle_mesh
 from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     diagonal_block_positions,

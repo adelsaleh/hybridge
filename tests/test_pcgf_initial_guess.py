@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from hdgfem.linalg.face_hp_multigrid import solve_pcgf_prototype
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 
 

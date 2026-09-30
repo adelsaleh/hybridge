@@ -26,7 +26,8 @@ import numpy as np
 
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
-from hdgfem.backends.cupy import as_cupy_space, require_cupy
+from hdgfem.core.device import as_cupy_space
+from hdgfem.runtime.optional import require_cupy
 
 
 def _elapsed(cp, start: float) -> float:
@@ -50,7 +51,7 @@ def _beta_samples(cp, beta, space: DGSpace, trace_ref: DGTraceSpace, t=None):
     from hdgfem.solvers.advection_reaction import _is_callable_beta
     from hdgfem.backends.coefficients_cupy import (
         field_on_faces_cupy, field_on_volume_cupy, mapped_face_points_cupy, volume_samples_cupy)
-    from hdgfem.backends.cupy import _normalize_cupy_values
+    from hdgfem.core.device import _normalize_cupy_values
 
     cspace = as_cupy_space(space)
     if _is_callable_beta(beta):

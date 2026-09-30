@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from collections.abc import Callable
 from dataclasses import dataclass, field

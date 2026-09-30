@@ -27,7 +27,7 @@ from hdgfem.linalg.polynomial import (
     harmonic_ritz_values,
     leja_order_conjugate_preserving,
 )
-from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
+from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
 from hdgfem.backends.cupy_gmres import (
     CuPyOrthogonalization,
     CuPyVectorBLAS,

@@ -8,7 +8,7 @@ control.  This is an internal prototype, not a public backend contract.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
 
 import ctypes
 from dataclasses import dataclass
@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 
 
 _CUSPARSE_SUCCESS = 0

@@ -7,7 +7,7 @@ import pytest
 
 from hdgfem.core.geometry import DiskDomain, PolygonDomain
 from hdgfem.core.profiles import FFTGaussianBlobField, GaussianBlobField, sample_gaussian_blob_field
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_cases import positive_turbulence
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
@@ -133,8 +133,8 @@ def test_fft_gpu_matches_host_and_keeps_grid_and_projection_on_device():
             pytest.skip("CUDA device unavailable")
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
-    from hdgfem.assembly.projection import project_callable
-    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
+    from hdgfem.core.projection import project_callable
+    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
     from hdgfem.core.mesh import rectangle_mesh
     from hdgfem.core.space import DGSpace
 

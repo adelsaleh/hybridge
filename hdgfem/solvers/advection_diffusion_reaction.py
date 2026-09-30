@@ -303,7 +303,7 @@ def _adr_postprocess_samples(
     if xp is np:
         coefficients = lambda field: field.coeffs
     else:
-        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
+        from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
         coefficients = lambda field: as_cupy_coefficients(field, as_cupy_space(field.space))
     qpost = post_space.quad_data
     nqf = qpost.weights_JGL.size
@@ -341,7 +341,7 @@ def _adr_postprocess_samples(
         if xp is np:
             mesh = space.mesh
         else:
-            from hdgfem.backends.cupy import as_cupy_space
+            from hdgfem.core.device import as_cupy_space
             mesh = as_cupy_space(space).mesh
         tau_adv = factor * xp.abs(
             effective_advection_normal_flux(beta_n, mesh, advection_stabilization, xp=xp)
@@ -404,7 +404,8 @@ def _project_total_flux(
     """Project q_h plus beta_h u_h into the degree-p vector DG space."""
     xp = np
     if hasattr(local_unknowns, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import require_cupy, field_from_cupy_coefficients
+        from hdgfem.runtime.optional import require_cupy
+        from hdgfem.core.device import field_from_cupy_coefficients
         xp = require_cupy()
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)
     basis = xp.asarray(space.quad_data.bas_of_quads)
@@ -452,7 +453,7 @@ def _postprocess_total_flux(
 
     xp = np
     if postprocessing_backend == "cupy":
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         xp = require_cupy()
     local_unknowns = xp.asarray(local_unknowns)
     flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
@@ -593,7 +594,7 @@ def _postprocess_primal_from_total_flux(
     qpost = post.quad_data
     if postprocessing_backend == "cupy":
         from hdgfem.backends.advection_diffusion_reaction_cupy import postprocess_primal_cupy
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         samples = _adr_postprocess_samples(
             beta, prepared, space, post, advection_stabilization, xp=require_cupy())
         return postprocess_primal_cupy(local_unknowns, total_flux_star, space, cache,
@@ -959,7 +960,7 @@ def solve_advection_diffusion_reaction_hdg(
                 ),
             )
         if postprocessing_backend == "cupy":
-            from hdgfem.backends.cupy import require_cupy
+            from hdgfem.runtime.optional import require_cupy
 
             def synchronize():
                 """Materialize requested host outputs and drain the device stream."""

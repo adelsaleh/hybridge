@@ -4,7 +4,7 @@ import pytest
 
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.assembly import matrices_numpy as mats
-from hdgfem.core import host_threads as ht
+from hdgfem.runtime import threads as ht
 
 
 @pytest.fixture

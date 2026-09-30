@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from dataclasses import dataclass
 
 import numba as nb
@@ -331,7 +331,8 @@ def project_same_mesh_field(field: DGField, target: DGSpace, *, name: str | None
     matrix, device_matrices = cache[source]
     devices = field._device_coeffs or {}
     if devices:
-        from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
+        from hdgfem.core.device import field_from_cupy_coefficients
+        from hdgfem.runtime.optional import require_cupy
         cp = require_cupy()
         device_id = min(devices)
         with cp.cuda.Device(device_id):

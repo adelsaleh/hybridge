@@ -175,7 +175,8 @@ def factor_cpu(args, matrix, matrix_hashes, stage):
 
 
 def gpu_benchmark(args, matrix, rhs, reference, matrix_hashes, target, stage):
-    from hdgfem.backends.cupy import require_cupy, scipy_csr_to_cupy
+    from hdgfem.runtime.optional import require_cupy
+    from hdgfem.backends.cupy import scipy_csr_to_cupy
     from hdgfem.backends.cupy_triangular import ReusableCuPyLUSolve
 
     manifest = json.loads((args.factor_cache / "metadata.json").read_text())
@@ -336,7 +337,7 @@ def make_iter_capture(args, stage):
     from unittest.mock import patch
 
     from hdgfem import DGSpace, DiffusionReactionHDGSolver
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.geometry import iter_geometry_path
     from hdgfem.core.mesh import gmsh_geo_mesh
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key

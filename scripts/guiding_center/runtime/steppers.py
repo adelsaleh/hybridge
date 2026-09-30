@@ -1,5 +1,5 @@
 """Connect preset policy and case boundaries to the guiding-center time steppers."""
-from hdgfem.io.output import timed_call
+from hdgfem.runtime.logging import timed_call
 from scripts.guiding_center.time_schemes import STEPPERS, SIEulerStepper
 from .configuration import (
     _detail_verbosity,

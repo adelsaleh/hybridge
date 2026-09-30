@@ -62,7 +62,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hdgfem.core.host_threads import host_threads, set_host_threads  # noqa: E402
+from hdgfem.runtime.threads import host_threads, set_host_threads
 from scripts.n_gamma.cases import CASE_NAMES, get_case  # noqa: E402
 from scripts.n_gamma.cases.forcing import C_S, D, MU  # noqa: E402
 from scripts.n_gamma.cases.geometry import BASELINE_SIZES, STRESS_POLYGONIZATIONS  # noqa: E402

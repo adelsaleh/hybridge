@@ -17,8 +17,8 @@ def _cupy_runtime_available() -> bool:
 
 
 def _projected_problem(order: int, trace_basis: str):
-    from hdgfem.backends.advection_cuda import as_cupy_trace_space
-    from hdgfem.backends.cupy import as_cupy_space, as_cupy_vector_coefficients
+    from hdgfem.core.device import as_cupy_trace_space
+    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
 
     mesh = rectangle_mesh(2, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(

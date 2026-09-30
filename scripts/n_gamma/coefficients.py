@@ -36,7 +36,7 @@ import numpy as np
 
 from hdgfem import DGField, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref
 from hdgfem.core.element_coefficients import physical_points
-from hdgfem.core.host_threads import elementwise
+from hdgfem.runtime.threads import elementwise
 
 PoloidalField = Callable[..., tuple]
 GEOMETRIES = ("cartesian", "axisymmetric")
@@ -181,14 +181,14 @@ def density_floor_diagnostics(n_star: DGField, space: DGSpace, trace_space, dens
     Raises ``FloatingPointError`` for nonfinite extrapolated densities: the
     floor never repairs a nonfinite state. Only four scalars leave the device.
     """
-    from hdgfem.assembly.matrices_numpy import _reference_edge_points_from_1d
+    from hdgfem.core.quadrature import _reference_edge_points_from_1d
 
     face = np.asarray(_reference_edge_points_from_1d(trace_space.quads)).reshape(-1, 2)
     volume_values = field_values_at_ref(n_star, space.quad_data.Krf_quads, device=device)
     face_values = field_values_at_ref(n_star, face, device=device)
     xp = np
     if device:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
         xp = require_cupy()
     floor = float(density_floor)
     stats = xp.stack((xp.minimum(volume_values.min(), face_values.min()),

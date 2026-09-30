@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 import numpy as np
 
@@ -31,7 +31,7 @@ def solution_field(result, space: DGSpace, *, name: str = "u_h") -> DGField:
     coefficients = getattr(result, "field_device", None)
     if coefficients is None:
         raise RuntimeError("solver result contains neither a host field nor device field coefficients")
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
 
     device_id = int(getattr(getattr(coefficients, "device", None), "id", 0))
     return field_from_cupy_coefficients(space, coefficients, device=device_id, name=name)
@@ -53,7 +53,8 @@ def solution_trace(result, space: DGSpace, *, reduced: bool = False, prefer_devi
     if trace is None:
         return device_trace
     if hasattr(trace, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
         cp = require_cupy()
         trace_array = cp.asarray(trace, dtype=REAL_DTYPE)
         if reduced:
@@ -77,8 +78,9 @@ def expand_interior_trace(space: DGSpace, reduced, boundary_condition, *, trace_
     if boundary_condition is None:
         raise ValueError("trace expansion requires prescribed boundary data")
     if hasattr(reduced, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
-        from hdgfem.backends.advection_cuda import as_cupy_trace_space
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
+        from hdgfem.core.device import as_cupy_trace_space
 
         xp = require_cupy()
         mesh = as_cupy_space(space).mesh
@@ -142,7 +144,8 @@ def field_linear_combination(
         else set()
     )
     if common_devices:
-        from hdgfem.backends.cupy import as_cupy_space, field_from_cupy_coefficients, require_cupy
+        from hdgfem.core.device import as_cupy_space, field_from_cupy_coefficients
+        from hdgfem.runtime.optional import require_cupy
 
         cp = require_cupy()
         device_id = min(common_devices)
@@ -241,7 +244,7 @@ def trace_linear_combination(terms):
         return None
     first = present[0][1]
     if type(first).__module__.split(".", 1)[0] == "cupy" or hasattr(first, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
 
         cp = require_cupy()
         return cp.ascontiguousarray(sum(weight * cp.asarray(trace) for weight, trace in present))
@@ -271,8 +274,9 @@ def project_callable_to_trace(
         raise ValueError("backend must be 'auto', 'host', or 'device'")
     use_device = normalized_backend == "device"
     if use_device:
-        from hdgfem.backends.advection_cuda import as_cupy_trace_space
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.core.device import as_cupy_trace_space
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
 
         xp = require_cupy()
         cspace = as_cupy_space(space)
@@ -317,7 +321,7 @@ def project_field_to_trace(
         field.device_coefficients_materialized() and not field.coefficients_materialized)
     xp, mesh, trace, inverse, counts = _trace_projection_data(field.space, trace_basis, use_device)
     if use_device:
-        from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
+        from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
         coefficients = as_cupy_coefficients(field, as_cupy_space(field.space))
     else:
         coefficients = field.coeffs
@@ -339,8 +343,9 @@ def _trace_projection_data(space, trace_basis, use_device):
     """Fixed-space projection data shared by boundary and density traces."""
     trace_host = space.trace_space(trace_basis)
     if use_device:
-        from hdgfem.backends.advection_cuda import as_cupy_trace_space
-        from hdgfem.backends.cupy import as_cupy_space, require_cupy
+        from hdgfem.core.device import as_cupy_trace_space
+        from hdgfem.core.device import as_cupy_space
+        from hdgfem.runtime.optional import require_cupy
         xp = require_cupy()
         cspace = as_cupy_space(space)
         mesh = cspace.mesh
@@ -363,7 +368,7 @@ def _trace_projection_data(space, trace_basis, use_device):
 def _host_reference_points(reference_points) -> np.ndarray:
     """Return reference points as a host ``(n, 2)`` table (they are small tables)."""
     if hasattr(reference_points, "__cuda_array_interface__"):
-        from hdgfem.backends.cupy import asnumpy
+        from hdgfem.runtime.optional import asnumpy
         reference_points = asnumpy(reference_points)
     return np.ascontiguousarray(np.asarray(reference_points, dtype=REAL_DTYPE).reshape(-1, 2))
 
@@ -378,7 +383,8 @@ def field_values_at_ref(field: DGField, reference_points, *, device: bool = Fals
     points = _host_reference_points(reference_points)
     if not device:
         return field.values_at_ref(points)
-    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    from hdgfem.runtime.optional import require_cupy
     cp = require_cupy()
     if field.constant_value is not None:
         return cp.full((field.space.mesh.num_tri, points.shape[0]), float(field.constant_value), dtype=REAL_DTYPE)
@@ -396,7 +402,8 @@ def field_gradient_at_ref(field: DGField, reference_points, *, device: bool = Fa
     points = _host_reference_points(reference_points)
     if not device:
         return field.grad_at_ref(points)
-    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy
+    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    from hdgfem.runtime.optional import require_cupy
     cp = require_cupy()
     if field.constant_value is not None:
         zeros = cp.zeros((field.space.mesh.num_tri, points.shape[0]), dtype=REAL_DTYPE)
@@ -434,7 +441,7 @@ def field_l2_norm(field: DGField) -> float:
     if coefficients is None:
         return field.l2_norm()
     from hdgfem.assembly.hdg_gram import ScalarHDGGram
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
     cp = require_cupy()
     device = int(coefficients.device.id)
     cache = getattr(field.space, "_field_l2_gram_cache", None)

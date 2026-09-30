@@ -46,7 +46,12 @@ def main() -> None:
     import cupy as cp
     import pyamgx
     import numpy as np
-    from hdgfem.precision import KERNEL_AUDIT, PIPELINE_AUDIT, AMGX_MODE, audit_arrays
+    from hdgfem.runtime.precision import (
+            KERNEL_AUDIT,
+            PIPELINE_AUDIT,
+            AMGX_MODE,
+            audit_arrays,
+        )
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.runner import run_guiding_center_case
     from scripts.guiding_center.runtime.configuration import _with_fp32_transport_solver

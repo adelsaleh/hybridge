@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from hdgfem.precision import audit_arrays, REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel, real_raw_module
+from hdgfem.runtime.precision import (
+    audit_arrays,
+    REAL_DTYPE,
+    REAL_ITEMSIZE,
+    real_raw_kernel,
+    real_raw_module,
+)
 
 import time
 from collections.abc import Callable
@@ -13,7 +19,8 @@ import numpy as np
 
 from hdgfem.assembly import hdg as hdg_assembly
 from hdgfem.core.space import DGField
-from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space, require_cupy, require_cupyx_sparse
+from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
 from hdgfem.backends.raw_cuda import RawCudaBlockSize
 from hdgfem.backends.diffusion_raw_cuda import (
     RawDiffusionAssemblyResult,

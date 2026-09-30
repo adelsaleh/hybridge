@@ -4,7 +4,7 @@ from copy import deepcopy
 import numpy as np
 import pytest
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
 from hdgfem.core.field_ops import solution_field
 

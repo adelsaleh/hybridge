@@ -27,7 +27,7 @@ from typing import Literal
 import numpy as np
 
 from hdgfem.assembly.face_dense import FaceDenseSystem
-from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
+from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
 
 
 GPUFaceMatvecImplementation = Literal["matmul", "raw", "raw_fused"]

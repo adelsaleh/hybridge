@@ -12,7 +12,7 @@ import time
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 
 
 def superlu_gather_indices(perm_r, perm_c):

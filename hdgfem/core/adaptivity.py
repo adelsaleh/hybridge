@@ -15,8 +15,8 @@ from scipy.spatial import cKDTree
 
 from hdgfem.core.mesh import DGMesh, gmsh_smooth_star_mesh_with_background_sizes
 from hdgfem.core.space import DGField, DGSpace
-from hdgfem.assembly.projection import project_quadrature_values
-from hdgfem.io.output import logv, timed_section
+from hdgfem.core.projection import project_quadrature_values
+from hdgfem.runtime.logging import logv, timed_section
 
 
 ScoreReduction = str

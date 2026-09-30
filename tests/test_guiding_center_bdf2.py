@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.runtime import runner
 import scripts.guiding_center.run_guiding_center_cases as cli
 import scripts.guiding_center.time_schemes.si_bdf2 as si_bdf2

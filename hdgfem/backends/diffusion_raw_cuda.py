@@ -17,7 +17,7 @@ the reduced matrix directly as COO or CSR.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
 
 import time
 from dataclasses import dataclass
@@ -25,7 +25,8 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.backends.cupy import as_cupy_space, require_cupy
+from hdgfem.core.device import as_cupy_space
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 
 

@@ -105,7 +105,7 @@ def _element(space, function, components=1):
 def test_numba_solve_matches_numpy_element_coefficients_with_one_kernel_signature(space):
     from hdgfem.kernels.advection_diffusion_reaction_fused import (
         assemble_projected_adr_trace_system_eliminated_kernel, reconstruct_projected_adr_local_unknowns_kernel)
-    from hdgfem.kernels.pointwise import sample_pointwise_xyt_kernel
+    from hdgfem.core.pointwise_kernels import sample_pointwise_xyt_kernel
 
     beta = pointwise_coefficient((lambda x, y, t: .8 + .1*y, lambda x, y, t: -.25 + .07*x), space)
     source = pointwise_coefficient(lambda x, y, t: np.sin(pi*x)*np.cos(y), space)

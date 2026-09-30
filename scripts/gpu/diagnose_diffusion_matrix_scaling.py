@@ -249,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     scales = [_scale_mode(value) for value in requested_scales]
     if args.show_cupy_config:
-        from hdgfem.backends.cupy import require_cupy
+        from hdgfem.runtime.optional import require_cupy
 
         require_cupy().show_config()
 

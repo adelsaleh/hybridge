@@ -151,7 +151,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
             pytest.skip("CUDA device required for resident diagnostic check")
     except cp.cuda.runtime.CUDARuntimeError as error:
         pytest.skip(str(error))
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.core.field_ops import expand_interior_trace
     from hdgfem.core.space import DGField
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import (

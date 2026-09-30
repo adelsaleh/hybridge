@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 
 
 def solve_adr_rt_total_flux_postprocess_cupy(
@@ -173,7 +173,7 @@ __all__ = ["solve_adr_rt_total_flux_postprocess_cupy"]
 
 def postprocess_total_flux_l2_cupy(total_values, numerical, space, cache):
     """Apply the host-equivalent constrained minimum-distance flux recovery."""
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.core.space import VectorDGField
 
     cp = require_cupy()
@@ -216,7 +216,7 @@ def _primal_system_cupy(local_unknowns, total_flux, space, cache, samples, diffu
     Volume, face and mean equations match the Numba reference, including the
     total numerical flux and the scalar Neumann multiplier.
     """
-    from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
+    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
 
     cp = require_cupy()
     post = cache.post_space
@@ -280,7 +280,7 @@ def postprocess_primal_cupy(local_unknowns, total_flux, space, cache, samples, d
     """Recover tensor ADR primal coefficients using fused assembly and batched LU."""
     from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
     from hdgfem.backends.adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
 
     cp = require_cupy()
     post = cache.post_space

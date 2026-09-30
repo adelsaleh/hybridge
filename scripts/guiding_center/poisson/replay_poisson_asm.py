@@ -21,7 +21,8 @@ from scipy import sparse
 
 from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver, _DeviceBsrMatrixView
 from hdgfem.backends.cublas_batched import invert_batched_cublas
-from hdgfem.backends.cupy import initialize_pyamgx_once, require_cupy
+from hdgfem.backends.cupy import initialize_pyamgx_once
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.backends.diffusion_raw_cuda import _edge_to_solve_edge
 from hdgfem.backends.legendre_face_bsr import _CusparseGenericBsrOperator
 from hdgfem.core.mesh import _mesh_cache_files, _load_cached_gmsh_mesh

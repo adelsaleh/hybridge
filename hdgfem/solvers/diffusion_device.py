@@ -12,8 +12,9 @@ def solve_cupy_device_amgx(owner):
         reconstruct_trace_cupy,
         solve_reduced_system_amgx_device,
     )
-    from hdgfem.backends.cupy import field_from_cupy_coefficients, require_cupy
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import field_from_cupy_coefficients
+    from hdgfem.runtime.optional import require_cupy
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import (
             assemble_projected_diffusion_trace_system_eliminated_cupy,
             assemble_projected_diffusion_trace_rhs_cached_cupy,

@@ -15,7 +15,8 @@ if __package__ in {None, ""}:
 
 from hdgfem import AdvectionReactionHDGSolver, DGSpace, VectorDGField, evaluate_scalar_error
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.io.output import format_elapsed_percent, pretty_print_sections
+from hdgfem.runtime.logging import format_elapsed_percent
+from hdgfem.io.output import pretty_print_sections
 from hdgfem.io.plot import plot_solution_comparison, resolve_field_plot_resolution
 from scripts.advection_reaction.cases import case_definition_by_key
 

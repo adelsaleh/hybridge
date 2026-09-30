@@ -193,7 +193,7 @@ class NGammaBDF2Stepper:
     def _resident(self, field: DGField) -> DGField:
         """Cache a device copy so combinations and evaluations stay on the GPU."""
         if self.device and field.constant_value is None and not field.device_coefficients_materialized():
-            from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
+            from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
             as_cupy_coefficients(field, as_cupy_space(field.space))
         return field
 

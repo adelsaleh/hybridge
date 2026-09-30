@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.precision import AMGX_MODE, REAL_DTYPE
+from hdgfem.runtime.precision import AMGX_MODE, REAL_DTYPE
 
 
 @pytest.fixture(scope="module")

@@ -20,7 +20,7 @@ if __package__ in {None, ''}:
 
 import numpy as np
 from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data
 from hdgfem.backends.advection_diffusion_reaction_raw_cuda import assemble_projected_adr_trace_operator_raw_cuda
 

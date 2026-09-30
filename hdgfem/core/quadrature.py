@@ -21,7 +21,7 @@ assembly kernels simple.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from dataclasses import dataclass, field
 from itertools import permutations
@@ -721,3 +721,18 @@ def as_reference_element(reference: ReferenceElementData) -> ReferenceElementDat
     if isinstance(reference, ReferenceElementData):
         return reference
     raise TypeError(f"expected ReferenceElementData, got {type(reference)!r}")
+
+
+def _reference_edge_points_from_1d(edge_points_1d: np.ndarray) -> np.ndarray:
+    """Map 1D edge points to the three reference-triangle faces."""
+    t = np.asarray(edge_points_1d, dtype=REAL_DTYPE)
+    return np.ascontiguousarray(
+        np.stack(
+            (
+                np.stack((t, -np.ones_like(t)), axis=1),
+                np.stack((-t, t), axis=1),
+                np.stack((-np.ones_like(t), -t), axis=1),
+            ),
+            axis=1,
+        )
+    )

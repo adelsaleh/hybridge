@@ -4,6 +4,7 @@ No PDE solves, time steps, CUDA compilation, or kernel launches are needed.
 """
 import numpy as np
 import pytest
+import hdgfem.runtime.optional as runtime_optional
 from hdgfem.assembly.flux_recovery import build_flux_recovery_reference
 from hdgfem.core.mesh import DGMesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
@@ -97,6 +98,8 @@ def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, varia
         return sentinel,cached
     monkeypatch.setattr(raw,'recover_diffusion_flux_raw_cuda',recover)
     monkeypatch.setattr(cupy_backend,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
+        get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
+    monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
     cache=None
     for tau in (1.,2.):

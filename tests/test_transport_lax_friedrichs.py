@@ -107,9 +107,12 @@ import os
 def test_cuda_lax_friedrichs_local_assembly_and_reconstruction(cache_response, assembly_mode, policy):
     import cupy as cp
     from scipy.sparse import coo_matrix,bsr_matrix
-    from hdgfem.backends.cupy import as_cupy_space,as_cupy_vector_coefficients
+    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
+    from hdgfem.core.device import as_cupy_trace_space
     from hdgfem.backends.advection_cuda import (
-        as_cupy_trace_space,assemble_reduced_system_cuda,reconstruct_advection_field_cuda)
+            assemble_reduced_system_cuda,
+            reconstruct_advection_field_cuda,
+        )
     from hdgfem.backends.numba import (
         assemble_projected_trace_system_zero_flux_numba,reconstruct_projected_field_numba)
     space=DGSpace(rectangle_mesh(1,1),6,basis_type='dub_orth')

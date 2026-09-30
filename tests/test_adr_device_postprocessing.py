@@ -41,7 +41,7 @@ def _problem(order):
 def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant, diffusion_kind):
     """Forbid downloads through both CuPy and lazy field access during recovery."""
     cp = _cupy()
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
 
     space, beta, tau = _problem(order)
     from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases
@@ -160,7 +160,7 @@ def test_raw_cuda_result_materialization(monkeypatch, materialize, mode, variant
 def test_device_stabilization_sampling(monkeypatch, kind):
     """Preserve supported stabilization inputs without hidden coefficient downloads."""
     cp = _cupy()
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.solvers.advection_diffusion_reaction import _adr_postprocess_samples
 
     space, beta, _ = _problem(2)
@@ -196,7 +196,7 @@ def test_fused_primal_system_matches_independent_contractions(order):
     from hdgfem.backends.advection_diffusion_reaction_cupy import _primal_system_cupy
     from hdgfem.backends.adr_primal_postprocess_raw_cuda import primal_system_raw_cuda
     from hdgfem.assembly.diffusion_coefficients import sample_diffusion_tensor, inverse_diffusion_values
-    from hdgfem.backends.cupy import field_from_cupy_coefficients
+    from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.solvers.diffusion_reaction import _build_hdg_postprocess_cache
     from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
 

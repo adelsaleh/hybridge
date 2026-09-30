@@ -4,8 +4,8 @@ import pytest
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
-from hdgfem.backends.cupy import as_cupy_coefficients, as_cupy_space
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+from hdgfem.runtime.precision import REAL_DTYPE
 
 
 @pytest.fixture

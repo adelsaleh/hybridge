@@ -55,7 +55,7 @@ def fields(*, order=3, basis="dub_orth", nx=2, mixed=False):
 
 
 def upload_fields(cp, source):
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
 
     uploaded = []
 

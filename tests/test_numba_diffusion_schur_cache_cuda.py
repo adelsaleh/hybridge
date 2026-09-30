@@ -41,7 +41,7 @@ def boundary(x, y):
 @pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
 @pytest.mark.parametrize('policy', ['none', 'schur-lu', 'schur-cholesky'])
 def test_numba_cached_matches_raw_cuda(cp, order, basis, policy):
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import (
         assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
         assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,

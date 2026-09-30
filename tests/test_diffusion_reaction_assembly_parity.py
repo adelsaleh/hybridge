@@ -160,7 +160,7 @@ def test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident(
     matrix_format: str,
     config_name: str,
 ) -> None:
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
 
     cp = require_cupy()
     full_array_downloads = 0
@@ -233,7 +233,7 @@ def test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident(
 def test_diffusion_raw_cuda_schur_lu_cache_reuses_factors_rhs_reconstruction_and_amgx(
         trace_basis: str, order: int, raw_block_size: int | str,
 ) -> None:
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -461,7 +461,7 @@ def test_fb_hp_mg_runtime_gate_falls_back_once_and_reuses_hybrid_amgx(monkeypatc
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -> None:
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -574,7 +574,7 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_diffusion_cupy_schur_cholesky_cache_reuses_factors_rhs_reconstruction_and_amgx() -> None:
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -637,7 +637,7 @@ def test_diffusion_cupy_schur_cholesky_cache_reuses_factors_rhs_reconstruction_a
 @GPU_RUNTIME_MARK
 @pytest.mark.parametrize("order", (7, 10))
 def test_diffusion_cupy_schur_cholesky_matches_full_mixed_high_order(order: int) -> None:
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
     from hdgfem.backends.diffusion_cupy import (
         assemble_projected_diffusion_trace_system_eliminated_cupy,
         solve_mixed_from_scalar_cholesky_cupy,
@@ -812,7 +812,7 @@ def test_diffusion_compact_schur_rhs_and_reconstruction_match_cublas(order: int)
     """The fused compact kernels preserve the mixed HDG signs and face orientation."""
     import cupy as cp
 
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import (
         assemble_compact_diffusion_rhs_cupy,
         assemble_projected_diffusion_trace_system_eliminated_cupy,
@@ -876,7 +876,7 @@ def test_diffusion_modal_raw_cuda_reconstruction_matches_numpy(raw_matrix_format
     import cupy as cp
     from scipy.sparse.linalg import spsolve
 
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import build_trace_reference, face_element_mass, reference_derivative_mats, source_moments_cupy
     from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
 
@@ -933,7 +933,7 @@ def test_diffusion_modal_raw_cuda_reconstruction_matches_numpy(raw_matrix_format
 def test_diffusion_device_primal_postprocess_matches_host(trace_basis: str, order: int) -> None:
     import cupy as cp
 
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import postprocess_projected_diffusion_primal_cupy
     from hdgfem.backends.diffusion_raw_cuda import postprocess_projected_diffusion_primal_raw_cuda
     from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba
@@ -1008,7 +1008,7 @@ def test_diffusion_raw_cuda_reconstruction_full_local_unknowns_matches_numba(tra
 
     from scipy.sparse.linalg import spsolve
 
-    from hdgfem.backends.cupy import as_cupy_space
+    from hdgfem.core.device import as_cupy_space
     from hdgfem.backends.diffusion_cupy import build_trace_reference, face_element_mass, reference_derivative_mats, source_moments_cupy
     from hdgfem.backends.diffusion_raw_cuda import reconstruct_projected_diffusion_field_raw_cuda
     from hdgfem.backends.numba import reconstruct_projected_diffusion_local_unknowns_numba

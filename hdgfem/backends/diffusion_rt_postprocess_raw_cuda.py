@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, real_raw_kernel
+from hdgfem.runtime.precision import REAL_DTYPE, real_raw_kernel
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 
 _KERNEL_CACHE = {}
 

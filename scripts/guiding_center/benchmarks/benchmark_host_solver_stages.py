@@ -21,7 +21,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem.backends.cupy import asnumpy
+from hdgfem.runtime.optional import asnumpy
 from hdgfem.core.field_ops import solution_field
 from hdgfem.diagnostics import solver_result_metrics
 from hdgfem.linalg import clear_pypardiso_cache

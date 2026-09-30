@@ -18,7 +18,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 
-from hdgfem.backends.cupy import device_arrays_overlap, require_cupy_device
+from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
 
 CuPyGMRESStatus = Literal[
     "converged",

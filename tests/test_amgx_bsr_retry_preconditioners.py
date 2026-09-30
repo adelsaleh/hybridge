@@ -19,7 +19,7 @@ def test_native_amgx_bsr_retry_preconditioners(block_size, retry_index, scale_sy
         pytest.skip("CUDA runtime unavailable")
 
     from hdgfem.backends.advection_cuda import _solve_reduced_system_amgx_device_once
-    from hdgfem.precision import REAL_DTYPE
+    from hdgfem.runtime.precision import REAL_DTYPE
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 
@@ -71,7 +71,7 @@ def unpooled_bsr_system():
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
 
-    from hdgfem.precision import REAL_DTYPE
+    from hdgfem.runtime.precision import REAL_DTYPE
 
     def build(block_size, block_rows=513):
         # More than 256 rows exposes the old large-block BJ scratch overflow.

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix
 
+import hdgfem.runtime.optional as runtime_optional
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.assembly import matrices_numpy as mats
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
@@ -103,6 +104,7 @@ def test_numba_owned_weights_match_numpy_and_cupy_reference(monkeypatch, basis):
     np.testing.assert_allclose(tau, expected[0], atol=2.e-13)
     np.testing.assert_allclose(gamma, expected[1], atol=2.e-13)
     monkeypatch.setattr(cp_backend, "require_cupy", lambda: np)
+    monkeypatch.setattr(runtime_optional, "require_cupy", lambda: np)
     actual = cp_backend._advection_trace_weights_cupy(POLICY, SimpleNamespace(mesh=space.mesh), raw, trace)
     np.testing.assert_allclose(actual, expected, atol=2.e-13)
     assert space.mesh.edge_side_indices is slots
@@ -243,10 +245,12 @@ import os
 def test_authorized_cuda_matrices_and_reconstruction(mode, fmt, basis, cache_response, pair, boundary_mode, order):
     import cupy as cp
     from scipy.sparse import csr_matrix, bsr_matrix
-    from hdgfem.backends.cupy import as_cupy_space, as_cupy_vector_coefficients
+    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
+    from hdgfem.core.device import as_cupy_trace_space
     from hdgfem.backends.advection_cuda import (
-        as_cupy_trace_space, assemble_reduced_system_cuda, reconstruct_advection_field_cuda,
-    )
+            assemble_reduced_system_cuda,
+            reconstruct_advection_field_cuda,
+        )
     space, beta = constant_pair_problem(*(pair if pair != "variable" else (.1, .2)), order=order)
     if pair == "variable":
         rng = np.random.default_rng(81)
@@ -318,6 +322,7 @@ def test_cupy_reference_mass_gauge_matches_numpy(monkeypatch):
     trace = space.trace_space("legendre-modal")
     tau = np.zeros((space.mesh.num_tri, 3, trace.weights.size))
     monkeypatch.setattr(backend, "require_cupy", lambda: np)
+    monkeypatch.setattr(runtime_optional, "require_cupy", lambda: np)
     monkeypatch.setattr(backend, "_oriented_trace_basis_cupy",
         lambda *_: mats._oriented_trace_basis_on_element_sides(space, trace_space=trace))
     actual = backend._advection_interior_trace_mass_blocks_cupy(

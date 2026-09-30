@@ -46,7 +46,7 @@ import warnings
 
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE
+from hdgfem.runtime.precision import REAL_DTYPE
 
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.core.field_ops import field_gradient_at_ref, field_values_at_ref
@@ -77,7 +77,7 @@ def _compile(function, arity: int, name: str):
     """Compile one scalar component with the matching kernel signature."""
     from numba import cfunc
 
-    from hdgfem.kernels.pointwise import VALUES_SIGNATURE, XYT_SIGNATURE
+    from hdgfem.core.pointwise_kernels import VALUES_SIGNATURE, XYT_SIGNATURE
     frozen = _global_constants(function)
     if frozen:
         listed = ", ".join(f"{key}={value!r}" for key, value in frozen.items())
@@ -187,7 +187,10 @@ class PointwiseCoefficient(ElementCoefficient):
         if xp is not np:
             raise TypeError(f"pointwise coefficient {self.name!r} is evaluated by host Numba kernels; the device "
                             "path needs a projected coefficient (space.project_callable(...)).")
-        from hdgfem.kernels.pointwise import sample_pointwise_values_kernel, sample_pointwise_xyt_kernel
+        from hdgfem.core.pointwise_kernels import (
+                    sample_pointwise_values_kernel,
+                    sample_pointwise_xyt_kernel,
+                )
         points = np.ascontiguousarray(np.asarray(points, dtype=REAL_DTYPE).reshape(-1, 2))
         mapped = self.mesh.map_reference_points(points)
         x, y = np.ascontiguousarray(mapped[..., 0]), np.ascontiguousarray(mapped[..., 1])
@@ -215,7 +218,7 @@ def pointwise_coefficient(function, mesh, *, fields=(), gradients=(), params=(),
     objects in the function) raise :class:`TypeError` asking to project the
     coefficient first.
     """
-    from hdgfem.kernels import NUMBA_AVAILABLE
+    from hdgfem.runtime.optional import NUMBA_AVAILABLE
     if not NUMBA_AVAILABLE:
         raise RuntimeError("pointwise coefficients need Numba. " + _PROJECT_FIRST)
     mesh = getattr(mesh, "mesh", mesh)
@@ -254,7 +257,10 @@ class PointwiseLaw:
         if hasattr(x, "__cuda_array_interface__") or hasattr(y, "__cuda_array_interface__"):
             raise TypeError(f"pointwise law {self.name!r} is evaluated by host Numba kernels; the device "
                             "path needs a projected coefficient (space.project_callable(...)).")
-        from hdgfem.kernels.pointwise import sample_pointwise_values_kernel, sample_pointwise_xyt_kernel
+        from hdgfem.core.pointwise_kernels import (
+                    sample_pointwise_values_kernel,
+                    sample_pointwise_xyt_kernel,
+                )
         x, y = np.broadcast_arrays(np.asarray(x, dtype=REAL_DTYPE), np.asarray(y, dtype=REAL_DTYPE))
         shape = x.shape
         if x.size == 0:
@@ -281,7 +287,7 @@ def pointwise_law(function, *, params=(), time: float = 0., name: str = "law") -
     where ``v`` holds the parameters. Compilation errors raise
     :class:`TypeError` as for :func:`pointwise_coefficient`.
     """
-    from hdgfem.kernels import NUMBA_AVAILABLE
+    from hdgfem.runtime.optional import NUMBA_AVAILABLE
     if not NUMBA_AVAILABLE:
         raise RuntimeError("pointwise laws need Numba. " + _PROJECT_FIRST)
     params = _parameters(params)

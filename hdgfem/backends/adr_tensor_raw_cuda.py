@@ -38,9 +38,9 @@ from __future__ import annotations
 import time
 import numpy as np
 
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
 
-from hdgfem.backends.capabilities import UnsupportedBackendConfigurationError
+from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
 from hdgfem.backends.raw_cuda_local import (RAW_TRACE_ORIENTATION_HELPERS, RAW_COOPERATIVE_SOLVES,
                              RAW_WARP_COLUMN_SOLVES, checked_warp_lu_source)
 
@@ -714,8 +714,10 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     """
     from hdgfem.assembly import hdg
     from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
-    from hdgfem.backends.cupy import require_cupy, as_cupy_space
-    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly, as_cupy_trace_space
+    from hdgfem.runtime.optional import require_cupy
+    from hdgfem.core.device import as_cupy_space
+    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly
+    from hdgfem.core.device import as_cupy_trace_space
     from hdgfem.backends.advection_raw_cuda import build_reduced_csr_pattern_raw
     from hdgfem.backends.diffusion_raw_cuda import (_edge_to_solve_edge, _interior_side_index,
                                     _side_flux_offsets, validate_raw_cuda_supported)
@@ -889,7 +891,7 @@ def reconstruct_tensor_operator(operator, trace, *, block_size="auto"):
     the assembly's Schur LU cache the kernel skips quadrature and factorization;
     otherwise local factors are rebuilt using the same kernel algebra.
     """
-    from hdgfem.backends.cupy import require_cupy
+    from hdgfem.runtime.optional import require_cupy
     from hdgfem.backends.raw_cuda import resolve_raw_cuda_block_size
     cp=require_cupy()
     local=operator.reconstruction_data

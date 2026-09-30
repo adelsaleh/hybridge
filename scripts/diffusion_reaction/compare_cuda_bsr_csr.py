@@ -58,7 +58,7 @@ from hdgfem import (
     gmsh_disc_mesh,
     rectangle_mesh,
 )
-from hdgfem.backends.cupy import require_cupy
+from hdgfem.runtime.optional import require_cupy
 from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
 from hdgfem.solvers.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case

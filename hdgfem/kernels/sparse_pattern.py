@@ -18,7 +18,7 @@ import math
 
 import numpy as np
 
-from hdgfem.kernels.common import NUMBA_AVAILABLE, njit, prange
+from hdgfem.runtime.optional import NUMBA_AVAILABLE, njit, prange
 
 # Rows longer than this are sorted with a stable merge sort instead of an insertion sort.
 _INSERTION_SORT_LIMIT = 64

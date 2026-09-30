@@ -5,7 +5,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from hdgfem.io.terminal import flush_terminal_streams as _flush_terminal_streams
+from hdgfem.runtime.terminal import flush_terminal_streams as _flush_terminal_streams
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 
 

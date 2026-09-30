@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.backends.cupy import require_cupy_device
+from hdgfem.runtime.optional import require_cupy_device
 from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
 from hdgfem.backends.cupy_gmres import (
     _termination_reason,

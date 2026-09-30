@@ -32,7 +32,7 @@ qualification, while the precomputed raw path keeps its original p <= 6 guard.
 
 from __future__ import annotations
 
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_kernel
 
 import time
 from dataclasses import dataclass
@@ -40,7 +40,7 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.backends.cupy import require_cupy, require_cupyx_sparse
+from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
 from hdgfem.backends.raw_cuda import RawCudaBlockSize, resolve_raw_cuda_block_size
 
 
