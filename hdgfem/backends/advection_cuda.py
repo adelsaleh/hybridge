@@ -412,9 +412,13 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
         if constant_value is not None:
             ref_moments = cp.asarray(cspace.host._constant_reference_moments(constant_value))
             rhs = mesh.aff_jacs[:, None] * ref_moments[None, :]
-        else:
+        elif source.space is cspace.host:
             coeffs = as_cupy_coefficients(source, cspace)
             rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
+        else:
+            # A field from another DG space on this mesh is sampled on this
+            # space's volume quadrature, as in hdg.source_moments.
+            rhs = source_moments_from_values_cupy(_field_on_volume_quadrature_cupy(source, cspace), cspace)
     else:
         points = mapped_quads_cupy(cspace)
         values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
@@ -422,6 +426,15 @@ def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] |
     if timings is not None:
         timings["source_moments"] = timings.get("source_moments", 0.0) + sync_elapsed(start)
     return cp.ascontiguousarray(rhs)
+
+
+def _field_on_volume_quadrature_cupy(field: DGField, cspace: CupyDGSpace):
+    """Device values ``(K, nq)`` of a same-mesh DG field on ``cspace`` volume quadrature."""
+    cp = require_cupy()
+    source_space = field.space
+    coeffs = as_cupy_coefficients(field, as_cupy_space(source_space, device=cspace.device_id))
+    basis = cp.asarray(source_space.basis_at(cspace.host.quad_data.Krf_quads), dtype=REAL_DTYPE)
+    return coeffs @ basis.T
 
 
 def source_moments_from_values_cupy(values, cspace: CupyDGSpace):

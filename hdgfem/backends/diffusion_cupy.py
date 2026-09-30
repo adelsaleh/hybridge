@@ -732,12 +732,18 @@ def source_moments_cupy(source: Callable, cspace):
             ref_moments = cupy.asarray(cspace.host._constant_reference_moments(constant_value))
             rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * ref_moments[None, :]
             return cupy.ascontiguousarray(rhs)
-        coeffs = as_cupy_coefficients(source, cspace)
-        # For a coefficient field in this same DG space, quadrature followed
-        # by moment assembly is exactly multiplication by the reference mass
-        # matrix. Avoid materializing the much wider (K, nquad) value table.
-        rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
-        return cupy.ascontiguousarray(rhs)
+        if source.space is cspace.host:
+            coeffs = as_cupy_coefficients(source, cspace)
+            # For a coefficient field in this same DG space, quadrature followed
+            # by moment assembly is exactly multiplication by the reference mass
+            # matrix. Avoid materializing the much wider (K, nquad) value table.
+            rhs[:, : cspace.el_dof] = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
+            return cupy.ascontiguousarray(rhs)
+        # A field from another DG space on this mesh is sampled on this space's
+        # volume quadrature, as in hdg.source_moments.
+        source_cspace = as_cupy_space(source.space, device=cspace.device_id)
+        basis = cupy.asarray(source.space.basis_at(cspace.host.quad_data.Krf_quads), dtype=REAL_DTYPE)
+        values = as_cupy_coefficients(source, source_cspace) @ basis.T
     else:
         points = mapped_quads_cupy(cspace)
         values = cupy.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)

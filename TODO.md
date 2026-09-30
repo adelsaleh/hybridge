@@ -704,8 +704,16 @@ Execution protocol (approved 2026-09-29):
 - [ ] A4: make all CUDA LU copies report tiny or NaN pivots with a status, as
   the ADR warp LU and RT postprocess already do, instead of clamping and
   propagating NaN.
-- [ ] A5: add the `source.space is space` check to both device
-  `source_moments_cupy` twins, matching host `hdg.source_moments`.
+- [x] A5: add the `source.space is space` check to both device
+  `source_moments_cupy` twins, matching host `hdg.source_moments`. Done
+  2026-09-30:
+  - both device paths now sample a same-mesh field from another DG space on the
+    volume quadrature, instead of reusing its coefficients as moments;
+  - `tests/test_device_source_moments.py` reproduced wrong moments for
+    order-1 and order-4 source fields before the fix.
+
+  A4 is deferred to phase 3, where the CUDA LU copies are consolidated into
+  one status-reporting routine.
 - [ ] Phase 2: create `runtime/` (gates, precision, logging, error types) and
   `core/device.py` (CuPy mirrors, mesh maps, orientation mode). This removes
   every `core → backends` import.
