@@ -653,8 +653,9 @@ Execution protocol (approved 2026-09-29):
   around the moved modules, and rerun the host and GPU suites. Then merge into
   master. Do not push.
 
-- [ ] Set up the reorganization worktree and branch after the pending work is
-  committed.
+- [x] Set up the reorganization worktree and branch after the pending work is
+  committed. Done 2026-09-30: `../hdgfem-reorg` on `package-reorganization` from
+  `8bb2d4d`.
 - [x] Resolve the plan's open decisions before phase 2. Decided 2026-09-29 (details
   in the plan):
   - clean-break import codemod;
@@ -663,11 +664,21 @@ Execution protocol (approved 2026-09-29):
   - dead and test-only code deleted;
   - shared layer named `hdg/`;
   - all phases in scope.
-- [ ] Phase 0: start from a committed tree, then add:
+- [x] Phase 0: start from a committed tree, then add:
   - a layering test that fails on new upward imports (the current violations
     are the baseline);
   - DR versus ADR(β = 0) parity tests for local blocks, reduced systems, RT and
     l2_closest flux recovery.
+
+  Done 2026-09-30:
+  - `tests/test_package_layering.py` starts with 66 allowed module-pair
+    violations and fails on new or stale entries.
+  - `tests/test_mixed_beta_zero_parity.py` has 120 tests: NumPy and Numba
+    reduced systems and reconstructions, host RT/l2_closest flux recovery, and
+    raw-CUDA CSR/BSR operators. They cover p = 1–3, both production trace bases,
+    and Poisson, scalar-κ and tensor-κ cases, and agree to a norm-relative 1e-12
+    (observed ≤ 5e-14).
+  - Intra-package imports are absolute and point at defining modules.
 - [ ] A1: give `backends/cupy.py` `diagonal_scale_csr_rows` and
   `csr_inverse_sqrt_diagonal` the tiny/non-finite diagonal fallback already
   used by the `advection_cuda.py` scaling kernels. Confirmed by reading. Add a
