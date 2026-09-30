@@ -720,7 +720,7 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     from hdgfem.assembly.diffusion_coefficients import prepare_diffusion
     from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly
+    from hdgfem.hdg.condensation_device import CudaAdvectionAssembly
     from hdgfem.core.device import as_cupy_trace_space
     from hdgfem.hdg.cuda.pattern import build_reduced_csr_pattern_raw
     from hdgfem.hdg.trace_maps import (

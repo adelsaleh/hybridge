@@ -82,7 +82,7 @@ def test_disk_bdf2_presets_require_continuous_raw_cuda_recovered_drift(suffix,va
 def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, variant):
     from types import SimpleNamespace
     import hdgfem.backends.diffusion_flux_recovery_raw_cuda as raw
-    import hdgfem.backends.cupy as cupy_backend
+    import hdgfem.transport.cupy as cupy_backend
     import hdgfem.solvers.diffusion_reaction as diffusion
     space = DGSpace(rectangle_mesh(1,1),2,basis_type='dub_orth')
     trace_space = space.trace_space('legendre-modal')
@@ -98,6 +98,8 @@ def test_raw_dispatch_keeps_inputs_on_device_and_reuses_cache(monkeypatch, varia
         return sentinel,cached
     monkeypatch.setattr(raw,'recover_diffusion_flux_raw_cuda',recover)
     monkeypatch.setattr(cupy_backend,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
+        get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
+    monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))
     monkeypatch.setattr(runtime_optional,'require_cupy',lambda: SimpleNamespace(cuda=SimpleNamespace(
         get_current_stream=lambda: SimpleNamespace(synchronize=lambda:None))))

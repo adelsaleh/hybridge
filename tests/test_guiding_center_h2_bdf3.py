@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from hdgfem import DGField
-from hdgfem.assembly.advection_residual import HDGTraceWorkspace
+from hdgfem.transport.residual import HDGTraceWorkspace
 from scripts.guiding_center.time_schemes.h2_bdf3 import H2BDF3Stepper
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner

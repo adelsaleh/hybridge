@@ -139,7 +139,7 @@ def test_block_jacobi_exception_reaches_real_dilu(
     monkeypatch, unpooled_bsr_system, failure_phase,
 ) -> None:
     """Inject a recoverable BJ error; the very next attempt must solve via DILU."""
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.transport.cuda as raw_amgx
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options

@@ -64,7 +64,7 @@ def _assemble(
     zero_boundary_flux: bool = False,
     matrix_format: str = "bsr",
 ):
-    from hdgfem.backends.advection_cuda import assemble_reduced_system_cuda
+    from hdgfem.transport.cuda import assemble_reduced_system_cuda
 
     (
         space,
@@ -161,10 +161,10 @@ def test_p9_split3_256_thread_solve_matches_fused_128() -> None:
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_split3_autotune_and_workspace_are_reused() -> None:
-    from hdgfem.backends.advection_tsle_bsr import (
-        RawAdvectionTsleWorkspace,
-        clear_tsle_runtime_caches,
-    )
+    from hdgfem.transport.tsle_bsr import (
+            RawAdvectionTsleWorkspace,
+            clear_tsle_runtime_caches,
+        )
 
     clear_tsle_runtime_caches()
     workspace = RawAdvectionTsleWorkspace()

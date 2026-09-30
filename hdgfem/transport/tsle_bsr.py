@@ -3,7 +3,7 @@
 TSLE-BSR ("tri-stage local elimination", selected with
 ``raw_local_assembly="split3"``) assembles the same statically condensed
 advection-reaction HDG trace system as the fused raw assembler in
-:mod:`hdgfem.backends.advection_raw_cuda`. The discretization is identical,
+:mod:`hdgfem.transport.raw_cuda`. The discretization is identical,
 and matrix, RHS, and local response agree exactly with the fused path. The
 difference is scheduling: the fused kernel builds, factors, and condenses each
 element in one launch. TSLE splits that work into three launches, and each
@@ -84,7 +84,7 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.backends.advection_raw_cuda import (
+from hdgfem.transport.raw_cuda import (
     RawAdvectionAssemblyResult,
     _RAW_FUSED_TEMPLATE,
     _kernel_source,

@@ -103,7 +103,7 @@ def _projected_test2_fields(space: DGSpace):
 
 
 def test_cupy_backend_imports_without_optional_runtime():
-    backend = importlib.import_module("hdgfem.backends.cupy")
+    backend = importlib.import_module("hdgfem.transport.cupy")
     assert hasattr(backend, "require_cupy")
     assert hasattr(backend, "assemble_advection_reaction_trace_system_cupy")
 
@@ -112,10 +112,10 @@ def test_cupy_backend_imports_without_optional_runtime():
 def test_cupy_constant_source_reaction_helpers_do_not_materialize_fields():
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import (
-        reaction_mass_cupy as adv_reaction_mass_cupy,
-        source_moments_cupy as adv_source_moments_cupy,
-    )
+    from hdgfem.transport.cuda import reaction_mass_cupy as adv_reaction_mass_cupy
+    from hdgfem.hdg.coefficients_device import (
+            source_moments_cupy as adv_source_moments_cupy,
+        )
     from hdgfem.backends.diffusion_cupy import (
         reaction_mass_cupy as diff_reaction_mass_cupy,
         source_moments_cupy as diff_source_moments_cupy,
@@ -765,7 +765,7 @@ def test_advection_reaction_raw_cuda_discontinuous_beta_matrix_matches_numpy(
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_matches_direct_small_system(monkeypatch):
-    import hdgfem.backends.cupy as cupy_backend
+    import hdgfem.transport.cupy as cupy_backend
     import hdgfem.linalg.gpu.sparse as gpu_sparse
     import hdgfem.runtime.optional as runtime_optional
 
@@ -816,7 +816,7 @@ def test_cupyx_solver_matches_direct_small_system(monkeypatch):
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_keeps_solution_on_device_unless_host_copy_requested(monkeypatch):
-    import hdgfem.backends.cupy as cupy_backend
+    import hdgfem.transport.cupy as cupy_backend
     import hdgfem.linalg.gpu.sparse as gpu_sparse
     import hdgfem.runtime.optional as runtime_optional
 
@@ -902,14 +902,14 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy():
     """
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import (
-        TIMINGS,
-        assemble_reduced_system,
-        beta_dot_normal_from_coeffs,
-        build_dof_maps,
-        build_trace_reference,
-        project_callable_cupy,
-    )
+    from hdgfem.transport.cuda import (
+            TIMINGS,
+            assemble_reduced_system,
+            beta_dot_normal_from_coeffs,
+            build_dof_maps,
+            build_trace_reference,
+            project_callable_cupy,
+        )
 
     cp = require_cupy()
     TIMINGS.clear()
@@ -958,14 +958,14 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta():
     """
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import (
-        TIMINGS,
-        assemble_reduced_system,
-        beta_dot_normal_from_coeffs,
-        build_dof_maps,
-        build_trace_reference,
-        project_callable_cupy,
-    )
+    from hdgfem.transport.cuda import (
+            TIMINGS,
+            assemble_reduced_system,
+            beta_dot_normal_from_coeffs,
+            build_dof_maps,
+            build_trace_reference,
+            project_callable_cupy,
+        )
 
     cp = require_cupy()
     TIMINGS.clear()
@@ -1064,7 +1064,7 @@ def test_advection_reaction_raw_cuda_solver_returns_host_result():
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
 def test_raw_reduced_csr_pattern_matches_cupy_reference():
     from hdgfem.core.device import as_cupy_space
-    from hdgfem.backends.advection_raw_cuda import (
+    from hdgfem.transport.raw_cuda import (
             assert_reduced_csr_patterns_equal,
             build_reduced_csr_pattern_cupy_reference,
         )
@@ -1085,7 +1085,7 @@ def test_raw_reduced_csr_pattern_matches_cupy_reference():
 def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import (
+    from hdgfem.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )
@@ -1181,7 +1181,7 @@ def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
 def test_raw_fused_csr_and_bsr_assembly_match_coo(trace_basis, raw_lu_mode, order):
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-    from hdgfem.backends.advection_cuda import (
+    from hdgfem.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )
@@ -1337,7 +1337,7 @@ def test_advection_reaction_raw_cuda_zero_flux_matches_numba(trace_basis):
 def test_raw_fused_zero_flux_csr_assembly_matches_coo():
     from hdgfem.core.device import as_cupy_space
     from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-    from hdgfem.backends.advection_cuda import (
+    from hdgfem.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )

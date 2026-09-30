@@ -380,7 +380,7 @@ class ScalarPositivityDiagnostics:
     """
 
     def __init__(self, space, *, backend="host", tolerance=1.e-12, chunk_size=8192):
-        from hdgfem.assembly.advection_residual import HDGTraceWorkspace
+        from hdgfem.transport.residual import HDGTraceWorkspace
         from hdgfem.core.basis import evaluate_bernstein_basis
 
         if not np.isfinite(tolerance) or tolerance < 0 or chunk_size < 1:

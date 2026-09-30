@@ -23,7 +23,8 @@ def _require_device():
 def test_device_source_moments_match_host_for_other_space_fields(source_order):
     """A same-mesh field of another order is sampled, not reused as coefficients."""
     _require_device()
-    from hdgfem.backends import advection_cuda, diffusion_cupy
+    from hdgfem.transport import cuda as advection_cuda
+    from hdgfem.backends import diffusion_cupy
     from hdgfem.core.device import as_cupy_space
 
     mesh = rectangle_mesh(3, 2)

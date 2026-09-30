@@ -273,7 +273,7 @@ def test_factory_forwards_recovery_policy_for_every_scheme(monkeypatch, scheme):
     from dataclasses import replace
     from scripts.guiding_center.runtime import steppers
     from scripts.guiding_center.cases.guiding_center_presets import PRESETS
-    from hdgfem.assembly import advection_residual
+    from hdgfem.transport import residual as advection_residual
     config = replace(PRESETS['euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr'],
                      time_scheme=scheme, poisson_tau_retry_factor=2., poisson_tau_max_retries=7,
                      verbosity=0)

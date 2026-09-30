@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
+from hdgfem.transport.residual import UpwindHDGTransportResidual
 from hdgfem.core.field_ops import field_linear_combination, perpendicular_vector_field
 from hdgfem.transport.diagnostics import (
     UpwindHDGTraceRankError,

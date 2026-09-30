@@ -23,7 +23,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends.advection_cuda import assemble_reduced_system_cuda
+from hdgfem.transport.cuda import assemble_reduced_system_cuda
 from hdgfem.core.device import as_cupy_trace_space
 from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
 from hdgfem.runtime.optional import require_cupy

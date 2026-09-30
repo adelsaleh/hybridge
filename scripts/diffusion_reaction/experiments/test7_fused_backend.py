@@ -42,7 +42,7 @@ def assemble_test7_tensor_trace_system_eliminated_numba(
     timings: dict[str, float] = {}
     start = time.perf_counter()
     tau = _normalize_diffusion_stabilization(stabilization, space)
-    interior_side_index = _interior_side_index(space)
+    interior_side_index = _interior_side_index(space.mesh)
     d0_reference, d1_reference = _reference_diffusion_derivative_matrices(space)
     a, b = _test7_frequencies(m, n)
     timings["preparation"] = time.perf_counter() - start

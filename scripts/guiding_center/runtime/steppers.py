@@ -30,7 +30,7 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
         return stepper_type(space, config.dt, density, poisson_result, density_trace,
                             potential_trace=potential_trace, **options)
 
-    from hdgfem.assembly.advection_residual import HDGTraceWorkspace, UpwindHDGTransportResidual
+    from hdgfem.transport.residual import HDGTraceWorkspace, UpwindHDGTransportResidual
 
     def initialize():
         """Prime the shared residual/projection workspace before normal timings."""

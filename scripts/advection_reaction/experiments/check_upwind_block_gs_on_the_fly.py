@@ -47,7 +47,7 @@ from hdgfem.core.space import DGSpace
 from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
 from hdgfem.linalg.system import assemble_global_matrix
 from hdgfem.linalg.results import diagonal_scale_system, residual_diagnostics
-from hdgfem.backends.numba import assemble_projected_trace_system_eliminated_numba
+from hdgfem.transport.numba import assemble_projected_trace_system_eliminated_numba
 from hdgfem.linalg.upwind_block_gs import UpwindBlockGSPreconditioner, build_upwind_block_gs_preconditioner
 from hdgfem.linalg.upwind_block_gs_on_the_fly import (
     build_forward_upwind_block_gs_from_coo,

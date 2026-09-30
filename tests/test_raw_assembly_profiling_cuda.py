@@ -29,7 +29,7 @@ def test_adr_assembly_only_matches_numpy(cp, monkeypatch, basis, order):
     """The new shared helper preserves reference algebra without invoking AMGX."""
     from cupyx.scipy.sparse import csr_matrix
     from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data, assemble_numpy
-    from hdgfem.backends import advection_cuda
+    from hdgfem.transport import cuda as advection_cuda
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from hdgfem.backends.advection_diffusion_reaction_raw_cuda import assemble_projected_adr_trace_operator_raw_cuda
 

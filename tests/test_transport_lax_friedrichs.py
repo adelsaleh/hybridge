@@ -8,8 +8,11 @@ from hdgfem.solvers import ScaledUpwind
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.hdg.stabilization import advection_trace_stabilization_values
-from hdgfem.backends.numba import _advection_stabilization_coefficients, _advection_trace_weight_tables
-from hdgfem.backends.advection_raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
+from hdgfem.transport.numba import (
+    _advection_stabilization_coefficients,
+    _advection_trace_weight_tables,
+)
+from hdgfem.transport.raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
 from hdgfem.transport.diagnostics import transport_rank_failure_details
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
@@ -39,7 +42,7 @@ def test_saved_face_has_full_trace_support_with_lax_friedrichs(case):
 
 @pytest.mark.parametrize('policy', [None, 'lax-friedrichs', ScaledUpwind(1), ScaledUpwind(1.25), ScaledUpwind(3.5)])
 def test_numpy_numba_and_cupy_policy_weights_agree_without_cuda(monkeypatch, policy):
-    import hdgfem.backends.cupy as backend
+    import hdgfem.transport.cupy as backend
     space=DGSpace(rectangle_mesh(1,1),3,basis_type='dub_orth')
     trace=space.trace_space('legendre-modal')
     beta=np.random.default_rng(13).normal(size=(2,space.mesh.num_tri,space.el_dof))
@@ -109,12 +112,14 @@ def test_cuda_lax_friedrichs_local_assembly_and_reconstruction(cache_response, a
     from scipy.sparse import coo_matrix,bsr_matrix
     from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
     from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.backends.advection_cuda import (
+    from hdgfem.transport.cuda import (
             assemble_reduced_system_cuda,
             reconstruct_advection_field_cuda,
         )
-    from hdgfem.backends.numba import (
-        assemble_projected_trace_system_zero_flux_numba,reconstruct_projected_field_numba)
+    from hdgfem.transport.numba import (
+            assemble_projected_trace_system_zero_flux_numba,
+            reconstruct_projected_field_numba,
+        )
     space=DGSpace(rectangle_mesh(1,1),6,basis_type='dub_orth')
     trace=space.trace_space('legacy-lagrange')
     rng=np.random.default_rng(44)
@@ -155,7 +160,7 @@ def test_cli_multiplier_overrides_preset():
 
 @pytest.mark.parametrize("factor", [1., 1.25, 3.5])
 def test_cuda_precomputed_face_matrices_with_numpy_standin(monkeypatch, factor):
-    import hdgfem.backends.advection_cuda as backend
+    import hdgfem.transport.cuda as backend
     from hdgfem.hdg import matrices as reference
     space = DGSpace(rectangle_mesh(1, 1), 3, basis_type="dub_orth")
     trace = space.trace_space("legendre-modal")

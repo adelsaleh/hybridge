@@ -28,7 +28,7 @@ from hdgfem.hdg.trace_maps import (
     _reduction_with_system,
     _trace_orientation_mode,
 )
-from hdgfem.backends.numba import _interior_side_index
+from hdgfem.hdg.trace_maps import _interior_side_index
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ def assemble_projected_adr_trace_system_eliminated_numba(
         rhs_values,
         np.ascontiguousarray(mesh.loc2glob_edge, dtype=np.int64),
         np.ascontiguousarray(mesh.orientations, dtype=np.bool_),
-        _interior_side_index(space),
+        _interior_side_index(space.mesh),
         np.ascontiguousarray(edge_to_solve, dtype=np.int64),
         np.ascontiguousarray(offsets),
         np.ascontiguousarray(mesh.aff_mats, dtype=np.float64),

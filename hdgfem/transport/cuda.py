@@ -14,101 +14,36 @@ from hdgfem.runtime.precision import (
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
-from typing import Any, Literal
+from dataclasses import replace
+from typing import Literal
 
 import numpy as np
 
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace
-from hdgfem.linalg.reduction import KnownDofReduction
 from hdgfem.core.device import CupyDGSpace, as_cupy_coefficients, as_cupy_space
 from hdgfem.runtime.optional import require_cupy
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize
-from hdgfem.backends.advection_raw_cuda import (
-    RawAdvectionAssemblyResult,
+from hdgfem.transport.raw_cuda import (
     assemble_projected_advection_trace_system_eliminated_raw_cuda,
     assemble_projected_advection_trace_system_eliminated_raw_cuda_fused,
     reconstruct_projected_advection_field_raw_cuda,
     reconstruct_projected_advection_field_raw_cuda_fused,
     reconstruct_projected_advection_field_from_response_raw_cuda,
 )
-from hdgfem.backends.advection_tsle_bsr import (
+from hdgfem.transport.tsle_bsr import (
     RawAdvectionTsleWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
 from hdgfem.core.device import CupyDGTraceSpace, as_cupy_trace_space
+from hdgfem.hdg.condensation_device import CudaAdvectionAssembly, reconstruct_trace_cupy
+from hdgfem.hdg.coefficients_device import source_moments_cupy
+from hdgfem.runtime.logging import sync_elapsed
+from hdgfem.core.device import mapped_quads_cupy
 
 
 RawLocalAssembly = Literal["precomputed", "fused", "split3"]
 RawLuMode = Literal["safe", "coop"]
 CudaAdvectionAssemblyBackend = Literal["cupy", "raw-cuda"]
-
-
-@dataclass(frozen=True)
-class CudaAdvectionAssembly:
-    """Reduced trace system assembled by the CUDA path.
-
-    Rows, columns, data, RHS, local tensors, and boundary trace are CUDA arrays.
-    Use :meth:`to_host_reduction` when passing the system to host-only solver
-    APIs.
-    """
-
-    rows: Any | None
-    cols: Any | None
-    data: Any
-    rhs: Any
-    local_mats: Any | None
-    element_boundary: Any | None
-    source_rhs: Any | None
-    boundary_trace: Any
-    beta_dot_normal: Any | None
-    cspace: CupyDGSpace
-    trace_ref: CupyDGTraceSpace
-    raw: RawAdvectionAssemblyResult | None = None
-    indptr: Any | None = None
-    indices: Any | None = None
-    matrix_format: str = "coo"
-    timings: dict[str, float] = field(default_factory=dict)
-
-    def to_host_reduction(self) -> KnownDofReduction:
-        """Transfer the reduced system metadata to a host KnownDofReduction."""
-        if self.matrix_format != "coo":
-            raise RuntimeError("host KnownDofReduction materialization is currently supported only for COO raw systems")
-        cp = require_cupy()
-        space = self.cspace.host
-        edg_dof = self.cspace.edg_dof
-        full_size = space.mesh.num_edg * edg_dof
-        free_mask = np.zeros(full_size, dtype=bool)
-        local = np.arange(edg_dof, dtype=np.int64)
-        free_mask[(space.mesh.int_edges_inds[:, None] * edg_dof + local[None, :]).ravel()] = True
-        known_mask = ~free_mask
-        known_values = np.zeros(full_size, dtype=REAL_DTYPE)
-        boundary_host = np.ascontiguousarray(cp.asnumpy(self.boundary_trace), dtype=REAL_DTYPE)
-        known_values[(space.mesh.bnd_edges_inds[:, None] * edg_dof + local[None, :]).ravel()] = boundary_host.ravel()
-        old_to_new = np.full(full_size, -1, dtype=np.int64)
-        old_to_new[free_mask] = np.arange(np.count_nonzero(free_mask), dtype=np.int64)
-        return KnownDofReduction(
-            rows=np.ascontiguousarray(cp.asnumpy(self.rows), dtype=np.int64),
-            cols=np.ascontiguousarray(cp.asnumpy(self.cols), dtype=np.int64),
-            data=np.ascontiguousarray(cp.asnumpy(self.data), dtype=REAL_DTYPE),
-            rhs=np.ascontiguousarray(cp.asnumpy(self.rhs), dtype=REAL_DTYPE),
-            free_mask=np.ascontiguousarray(free_mask),
-            known_mask=np.ascontiguousarray(known_mask),
-            known_values=np.ascontiguousarray(known_values),
-            old_to_new=np.ascontiguousarray(old_to_new),
-        )
-
-
-def sync_elapsed(start: float) -> float:
-    """Synchronize the active CUDA stream and return elapsed wall time."""
-    cp = require_cupy()
-    cp.cuda.get_current_stream().synchronize()
-    return time.perf_counter() - start
-
-
-def mapped_quads_cupy(cspace: CupyDGSpace):
-    """Return physical volume quadrature points resident on the device."""
-    return cspace.mapped_quads
 
 
 def project_callable_cupy(func: Callable, cspace: CupyDGSpace, timings: dict[str, float] | str | None = None, key: str | None = None):
@@ -278,65 +213,6 @@ def reference_advection_sparse_cupy(
         if sparse_candidate and cached is not None:
             timings["reference_advection_sparse.nnz"] = float(cached[2].size)
     return offsets, modes, values0, values1, enabled, mass_is_diagonal
-
-
-def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Assemble element source moments on the device.
-
-    ``source`` is a DG field, a CuPy-compatible callable, or a device array of
-    element moments ``(K, el_dof)`` or volume-quadrature values ``(K, nq)``;
-    as in ``hdg.source_moments``, the moment shape wins when both match.
-    """
-    cp = require_cupy()
-    start = time.perf_counter()
-    mesh = cspace.mesh
-    q = cspace.quad_data
-    if isinstance(source, cp.ndarray):
-        num_elements, el_dof, num_points = cspace.host.mesh.num_tri, cspace.host.el_dof, q.Krf_w.size
-        values = source.astype(REAL_DTYPE, copy=False)
-        if values.shape == (num_elements, el_dof):
-            rhs = values
-        elif values.shape == (num_elements, num_points):
-            rhs = source_moments_from_values_cupy(values, cspace)
-        else:
-            raise ValueError(f"device source must have shape ({num_elements}, {el_dof}) moments or "
-                             f"({num_elements}, {num_points}) quadrature values; got {values.shape}")
-    elif isinstance(source, DGField):
-        source.space.assert_same_mesh(cspace.host)
-        constant_value = source.constant_value
-        if constant_value is not None:
-            ref_moments = cp.asarray(cspace.host._constant_reference_moments(constant_value))
-            rhs = mesh.aff_jacs[:, None] * ref_moments[None, :]
-        elif source.space is cspace.host:
-            coeffs = as_cupy_coefficients(source, cspace)
-            rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
-        else:
-            # A field from another DG space on this mesh is sampled on this
-            # space's volume quadrature, as in hdg.source_moments.
-            rhs = source_moments_from_values_cupy(_field_on_volume_quadrature_cupy(source, cspace), cspace)
-    else:
-        points = mapped_quads_cupy(cspace)
-        values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
-        rhs = source_moments_from_values_cupy(values, cspace)
-    if timings is not None:
-        timings["source_moments"] = timings.get("source_moments", 0.0) + sync_elapsed(start)
-    return cp.ascontiguousarray(rhs)
-
-
-def _field_on_volume_quadrature_cupy(field: DGField, cspace: CupyDGSpace):
-    """Device values ``(K, nq)`` of a same-mesh DG field on ``cspace`` volume quadrature."""
-    cp = require_cupy()
-    source_space = field.space
-    coeffs = as_cupy_coefficients(field, as_cupy_space(source_space, device=cspace.device_id))
-    basis = cp.asarray(source_space.basis_at(cspace.host.quad_data.Krf_quads), dtype=REAL_DTYPE)
-    return coeffs @ basis.T
-
-
-def source_moments_from_values_cupy(values, cspace: CupyDGSpace):
-    """Element moments from device values on volume quadrature, shape ``(K, nq)``."""
-    cp = require_cupy()
-    q = cspace.quad_data
-    return cspace.mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w)
 
 
 def beta_dot_normal_from_coeffs(beta_coeffs, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
@@ -854,7 +730,7 @@ def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors
     Reuses source moments, trace lifting, orientation, scatter, and response
     reconstruction formalism from the regular assembly path.
     """
-    from hdgfem.backends.advection_raw_cuda import solve_cached_advection_source_raw
+    from hdgfem.transport.raw_cuda import solve_cached_advection_source_raw
     cp = require_cupy()
     start = time.perf_counter()
     cspace, trace_ref, raw = assembly.cspace, assembly.trace_ref, assembly.raw
@@ -884,19 +760,6 @@ def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors
     timings["local.factors.reused"] = 1.0
     timings["total"] = sync_elapsed(start)
     return replace(assembly, rhs=rhs, boundary_trace=boundary, raw=raw, timings=timings)
-
-
-def reconstruct_trace_cupy(trace_reduced, boundary_trace, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Expand reduced trace values into the full device trace vector."""
-    cp = require_cupy()
-    start = time.perf_counter()
-    trace = cp.empty(cspace.mesh.num_edg * cspace.edg_dof, dtype=REAL_DTYPE)
-    trace_r = trace.reshape((cspace.mesh.num_edg, cspace.edg_dof))
-    trace_r[cspace.mesh.int_edges_inds] = trace_reduced.reshape((cspace.mesh.int_edges_inds.size, cspace.edg_dof))
-    trace_r[cspace.mesh.bnd_edges_inds] = boundary_trace
-    if timings is not None:
-        timings["reconstruct.trace"] = timings.get("reconstruct.trace", 0.0) + sync_elapsed(start)
-    return trace
 
 
 def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assembly: CudaAdvectionAssembly):
@@ -1030,11 +893,9 @@ __all__ = [
     "TIMINGS",
     "assemble_reduced_system",
     "build_trace_reference",
-    "CudaAdvectionAssembly",
     "assemble_reduced_system_cuda",
     "beta_dot_normal_from_coeffs",
     "build_dof_maps",
     "project_callable_cupy",
     "reconstruct_advection_field_cuda",
-    "reconstruct_trace_cupy",
 ]

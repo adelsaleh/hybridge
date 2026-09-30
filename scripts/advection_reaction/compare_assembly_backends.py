@@ -119,10 +119,14 @@ def _load_hdgfem() -> None:
         from hdgfem.hdg import condensation as _hdg_assembly
         from hdgfem.hdg import matrices as _hdg_mats
         from hdgfem.backends.numba import (
-            assemble_projected_diffusion_trace_system_eliminated_numba as _assemble_projected_diffusion_trace_system_eliminated_numba,
-            assemble_projected_trace_system_eliminated_numba as _assemble_projected_trace_system_eliminated_numba,
-        )
-        from hdgfem.backends.numba import assemble_projected_trace_system_numba as _assemble_projected_trace_system_numba
+                    assemble_projected_diffusion_trace_system_eliminated_numba as _assemble_projected_diffusion_trace_system_eliminated_numba,
+                )
+        from hdgfem.transport.numba import (
+                    assemble_projected_trace_system_eliminated_numba as _assemble_projected_trace_system_eliminated_numba,
+                )
+        from hdgfem.transport.numba import (
+                    assemble_projected_trace_system_numba as _assemble_projected_trace_system_numba,
+                )
         from hdgfem.core.mesh import gmsh_disc_mesh as _gmsh_disc_mesh
         from hdgfem.core.mesh import gmsh_lshape_mesh as _gmsh_lshape_mesh
         from hdgfem.core.mesh import gmsh_rectangle_mesh as _gmsh_rectangle_mesh

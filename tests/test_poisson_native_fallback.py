@@ -11,8 +11,10 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+import hdgfem.hdg.condensation_device as hdg_condensation_device
 import hdgfem.runtime.optional as runtime_optional
-from hdgfem.backends import advection_cuda, cupy, diffusion_cupy, diffusion_raw_cuda
+from hdgfem.transport import cuda as advection_cuda, cupy
+from hdgfem.backends import diffusion_cupy, diffusion_raw_cuda
 import hdgfem.linalg.gpu.sparse as gpu_sparse
 import hdgfem.runtime.optional as runtime_optional
 import hdgfem.linalg.amgx.device_solver as amgx_device_solver
@@ -96,6 +98,7 @@ def poisson_handoff(monkeypatch, request):
     )
     reconstructed = Mock(side_effect=lambda trace, *args: trace.copy())
     monkeypatch.setattr(advection_cuda, "reconstruct_trace_cupy", reconstructed)
+    monkeypatch.setattr(hdg_condensation_device, "reconstruct_trace_cupy", reconstructed)
     monkeypatch.setattr(
         diffusion_raw_cuda, "reconstruct_projected_diffusion_field_raw_cuda",
         lambda **kwargs: (np.zeros((1, 1)), np.zeros((1, 3)), 0.0),

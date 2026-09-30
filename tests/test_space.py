@@ -29,8 +29,8 @@ from hdgfem.hdg.condensation import (
     trace_matrix_data,
     trace_matrix_indices,
 )
-from hdgfem.hdg.matrices import (
-    _vector_values_on_test_quads,
+from hdgfem.hdg.matrices import _vector_values_on_test_quads
+from hdgfem.transport.local_numpy import (
     add_advection_mats,
     advection_mats,
     boundary_mass,

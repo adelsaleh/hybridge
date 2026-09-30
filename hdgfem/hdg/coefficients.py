@@ -480,3 +480,69 @@ def _require_normal_flux(
     if flux.shape != expected_shape:
         raise ValueError(f"beta_dot_normal must have shape {expected_shape}; got {flux.shape}")
     return flux
+
+
+def _same_space_field_coefficients(field, space: DGSpace, label: str) -> np.ndarray:
+    """Return contiguous same-space DG coefficients for a scalar projected input."""
+    if isinstance(field, DGField):
+        field.space.assert_same_mesh(space)
+        if field.space is not space:
+            raise ValueError(f"{label} must live in the same DGSpace object for the fused Numba backend")
+        return np.ascontiguousarray(field.coeffs, dtype=np.float64)
+    if callable(field):
+        raise TypeError(
+            f"{label} is callable; assembly_backend='numba' requires a DGField. "
+            "Project callables first with space.project_callable(...)."
+        )
+    if np.isscalar(field):
+        raise TypeError(
+            f"{label} is a scalar; assembly_backend='numba' requires a DGField. "
+            "Use space.zeros(...) or space.constant(...) for constants."
+        )
+    raise TypeError(
+        f"{label} must be a DGField for assembly_backend='numba'. "
+        "Wrap coefficient arrays with space.field(...)."
+    )
+
+
+def _same_space_vector_coefficients(beta_field, space: DGSpace) -> np.ndarray:
+    """Return contiguous ``(2, nK, nel)`` coefficients for a projected beta."""
+    if not isinstance(beta_field, VectorDGField):
+        raise TypeError(
+            "assembly_backend='numba' requires projected beta as a "
+            "two-component VectorDGField. Project callables first with VectorDGField((beta_x, beta_y), space)."
+        )
+    if beta_field.dim != 2:
+        raise ValueError("projected beta must have exactly two components")
+    for component in beta_field.components:
+        component.space.assert_same_mesh(space)
+        if component.space is not space:
+            raise ValueError("projected beta components must live in the same DGSpace object")
+    return np.ascontiguousarray(beta_field.as_component_first(), dtype=np.float64)
+
+
+def _source_coefficients(source, space: DGSpace) -> tuple[np.ndarray, int]:
+    """Normalize source data for projected Numba kernels.
+
+    ``kind=0`` means exact zero source, ``kind=1`` stores reference source
+    moments in row 0, and ``kind=2`` stores the usual element coefficient table.
+    """
+    if isinstance(source, DGField):
+        source.space.assert_same_mesh(space)
+        if source.space is not space:
+            raise ValueError("source must live in the same DGSpace object for assembly_backend='numba'")
+        constant_value = source.constant_value
+        if constant_value is not None:
+            if constant_value == 0.0:
+                return np.zeros((1, 1), dtype=np.float64), 0
+            return np.ascontiguousarray(space._constant_reference_moments(constant_value)[None, :]), 1
+    return _same_space_field_coefficients(source, space, "source"), 2
+
+
+def _reaction_coefficients(reaction, space: DGSpace) -> tuple[np.ndarray, float, bool]:
+    """Normalize reaction data for projected Numba kernels."""
+    if isinstance(reaction, DGField):
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            return np.zeros((1, 1), dtype=np.float64), float(constant_value), True
+    return _same_space_field_coefficients(reaction, space, "reaction"), 0.0, False

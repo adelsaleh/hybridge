@@ -2581,7 +2581,7 @@ class DiffusionReactionHDGSolver:
                     PyAMGXCsrDeviceSolver,
                     solve_reduced_system_amgx_device,
                 )
-        from hdgfem.backends.advection_cuda import reconstruct_trace_cupy
+        from hdgfem.hdg.condensation_device import reconstruct_trace_cupy
         from hdgfem.core.device import as_cupy_space
         from hdgfem.backends.diffusion_cupy import (
                     assemble_projected_diffusion_trace_rhs_cached_cupy,

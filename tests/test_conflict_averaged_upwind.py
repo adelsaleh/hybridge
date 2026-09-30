@@ -13,9 +13,10 @@ import hdgfem.runtime.optional as runtime_optional
 from hdgfem import DGSpace, rectangle_mesh
 from hdgfem.hdg import matrices as mats
 import hdgfem.hdg.stabilization as hdg_stabilization
-from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
-from hdgfem.backends import numba as nb
-from hdgfem.kernels.advection_reaction_fused import _assemble_conflict_face_trace_weights
+from hdgfem.transport.residual import UpwindHDGTransportResidual
+import hdgfem.transport.numba as nb
+import hdgfem.transport.numba as transport_numba
+from hdgfem.transport.numba_kernels import _assemble_conflict_face_trace_weights
 from hdgfem.transport.diagnostics import trace_inflow_diagnostics
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from hdgfem.hdg.stabilization import (
@@ -91,7 +92,7 @@ def test_node_rules_exact_and_near_cancellation_and_scaling():
 
 @pytest.mark.parametrize("basis", ["legacy-lagrange", "legendre-modal"])
 def test_numba_owned_weights_match_numpy_and_cupy_reference(monkeypatch, basis):
-    import hdgfem.backends.cupy as cp_backend
+    import hdgfem.transport.cupy as cp_backend
     space = DGSpace(rectangle_mesh(2, 1), 3, basis_type="dub_orth")
     trace = space.trace_space(basis)
     beta = np.random.default_rng(27).normal(size=(2, *space.shape))
@@ -166,7 +167,7 @@ def test_zero_flux_residual_matches_implicit_operator_and_conserves_mass(a, b, b
     integral = np.einsum("ki,ki,k->", space.constant(1).coeffs, mass_moments, space.mesh.aff_jacs)
     assert abs(integral) < 2.e-13
     # COO and face-block COO carry exactly the same algebraic gauge.
-    assembly = nb.assemble_projected_trace_system_zero_flux_numba(source, beta, reaction, space,
+    assembly = transport_numba.assemble_projected_trace_system_zero_flux_numba(source, beta, reaction, space,
         advection_stabilization=POLICY, trace_space=space.trace_space(basis), return_block_coo=True)
     blocks = np.zeros((len(interior), len(interior), space.trace_space(basis).edg_dof, space.trace_space(basis).edg_dof))
     np.add.at(blocks, (assembly.block_rows, assembly.block_cols), assembly.block_data)
@@ -212,8 +213,8 @@ def test_operator_reuse_keeps_policy_and_option_change_invalidates():
 
 
 def test_raw_specializations_keep_launches_and_connectivity_static():
-    from hdgfem.backends import advection_raw_cuda as raw
-    from hdgfem.backends import advection_tsle_bsr as split
+    from hdgfem.transport import raw_cuda as raw
+    from hdgfem.transport import tsle_bsr as split
     templates = [raw._RAW_FUSED_TEMPLATE, raw._raw_fused_csr_template(), raw._raw_fused_bsr_template(),
                  raw._RAW_FUSED_TEMPLATE + split._TSLE_KERNEL_TEMPLATE]
     for template in templates:
@@ -249,7 +250,7 @@ def test_authorized_cuda_matrices_and_reconstruction(mode, fmt, basis, cache_res
     from scipy.sparse import csr_matrix, bsr_matrix
     from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
     from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.backends.advection_cuda import (
+    from hdgfem.transport.cuda import (
             assemble_reduced_system_cuda,
             reconstruct_advection_field_cuda,
         )
@@ -261,7 +262,7 @@ def test_authorized_cuda_matrices_and_reconstruction(mode, fmt, basis, cache_res
     source, reaction = space.constant(1), space.constant(3)
     boundary = None if boundary_mode == "zero-flux" else 1.
     if boundary_mode == "zero-flux":
-        ref = nb.assemble_projected_trace_system_zero_flux_numba(source, beta, reaction, space,
+        ref = transport_numba.assemble_projected_trace_system_zero_flux_numba(source, beta, reaction, space,
             advection_stabilization=POLICY, trace_space=trace).reduction
         rhs = ref.rhs
         shape = (rhs.size,) * 2
@@ -289,7 +290,7 @@ def test_authorized_cuda_matrices_and_reconstruction(mode, fmt, basis, cache_res
     np.testing.assert_allclose(matrix.toarray(), expected, rtol=2.e-10, atol=2.e-12)
     np.testing.assert_allclose(cp.asnumpy(device.rhs), rhs, rtol=2.e-10, atol=2.e-12)
     full_trace = np.random.default_rng(44).normal(size=space.mesh.num_edg*trace.edg_dof)
-    host = nb.reconstruct_projected_field_numba(full_trace, source, beta, reaction, space,
+    host = transport_numba.reconstruct_projected_field_numba(full_trace, source, beta, reaction, space,
         trace_space=trace, advection_stabilization=POLICY, zero_boundary_flux=boundary_mode == "zero-flux")
     actual, _ = reconstruct_advection_field_cuda(cp.asarray(full_trace), source, reaction, coeffs, device)
     np.testing.assert_allclose(cp.asnumpy(actual), host.coeffs, rtol=2.e-10, atol=2.e-12)
@@ -319,7 +320,7 @@ def test_active_deficient_residual_retains_strict_support_check():
 
 
 def test_cupy_reference_mass_gauge_matches_numpy(monkeypatch):
-    from hdgfem.backends import cupy as backend
+    from hdgfem.transport import cupy as backend
     space, _ = constant_pair_problem()
     trace = space.trace_space("legendre-modal")
     tau = np.zeros((space.mesh.num_tri, 3, trace.weights.size))
@@ -336,8 +337,8 @@ def test_cupy_reference_mass_gauge_matches_numpy(monkeypatch):
 
 def test_raw_kernel_argument_counts_without_compilation():
     import re
-    from hdgfem.backends import advection_raw_cuda as raw
-    from hdgfem.backends import advection_tsle_bsr as split
+    from hdgfem.transport import raw_cuda as raw
+    from hdgfem.transport import tsle_bsr as split
     source = raw._RAW_FUSED_TEMPLATE + split._TSLE_KERNEL_TEMPLATE
     local = re.findall(r'assemble_projected_local_advection_raw\((.*?)\)', source, flags=re.S)
     assert len(local) == 4  # definition, fused build, reconstruction, split build

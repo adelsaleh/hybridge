@@ -31,6 +31,12 @@ from hdgfem.core.device import (
 )
 from hdgfem.runtime.optional import require_cupy
 
+import time
+from hdgfem.core.device import CupyDGSpace
+from hdgfem.core.device import mapped_quads_cupy
+from hdgfem.runtime.logging import sync_elapsed
+
+
 
 def mapped_face_points_cupy(space: DGSpace, trace_space: DGTraceSpace):
     """Physical trace points, shape ``(K, 3*nfq, 2)``, flat index ``q*3 + face`` (host layout)."""
@@ -128,3 +134,62 @@ __all__ = [
     "mapped_face_points_cupy",
     "volume_samples_cupy",
 ]
+
+
+def source_moments_cupy(source, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
+    """Assemble element source moments on the device.
+
+    ``source`` is a DG field, a CuPy-compatible callable, or a device array of
+    element moments ``(K, el_dof)`` or volume-quadrature values ``(K, nq)``;
+    as in ``hdg.source_moments``, the moment shape wins when both match.
+    """
+    cp = require_cupy()
+    start = time.perf_counter()
+    mesh = cspace.mesh
+    q = cspace.quad_data
+    if isinstance(source, cp.ndarray):
+        num_elements, el_dof, num_points = cspace.host.mesh.num_tri, cspace.host.el_dof, q.Krf_w.size
+        values = source.astype(REAL_DTYPE, copy=False)
+        if values.shape == (num_elements, el_dof):
+            rhs = values
+        elif values.shape == (num_elements, num_points):
+            rhs = source_moments_from_values_cupy(values, cspace)
+        else:
+            raise ValueError(f"device source must have shape ({num_elements}, {el_dof}) moments or "
+                             f"({num_elements}, {num_points}) quadrature values; got {values.shape}")
+    elif isinstance(source, DGField):
+        source.space.assert_same_mesh(cspace.host)
+        constant_value = source.constant_value
+        if constant_value is not None:
+            ref_moments = cp.asarray(cspace.host._constant_reference_moments(constant_value))
+            rhs = mesh.aff_jacs[:, None] * ref_moments[None, :]
+        elif source.space is cspace.host:
+            coeffs = as_cupy_coefficients(source, cspace)
+            rhs = mesh.aff_jacs[:, None] * (coeffs @ q.MKrf)
+        else:
+            # A field from another DG space on this mesh is sampled on this
+            # space's volume quadrature, as in hdg.source_moments.
+            rhs = source_moments_from_values_cupy(_field_on_volume_quadrature_cupy(source, cspace), cspace)
+    else:
+        points = mapped_quads_cupy(cspace)
+        values = cp.asarray(source(points[:, 0, :], points[:, 1, :]), dtype=REAL_DTYPE)
+        rhs = source_moments_from_values_cupy(values, cspace)
+    if timings is not None:
+        timings["source_moments"] = timings.get("source_moments", 0.0) + sync_elapsed(start)
+    return cp.ascontiguousarray(rhs)
+
+
+def _field_on_volume_quadrature_cupy(field: DGField, cspace: CupyDGSpace):
+    """Device values ``(K, nq)`` of a same-mesh DG field on ``cspace`` volume quadrature."""
+    cp = require_cupy()
+    source_space = field.space
+    coeffs = as_cupy_coefficients(field, as_cupy_space(source_space, device=cspace.device_id))
+    basis = cp.asarray(source_space.basis_at(cspace.host.quad_data.Krf_quads), dtype=REAL_DTYPE)
+    return coeffs @ basis.T
+
+
+def source_moments_from_values_cupy(values, cspace: CupyDGSpace):
+    """Element moments from device values on volume quadrature, shape ``(K, nq)``."""
+    cp = require_cupy()
+    q = cspace.quad_data
+    return cspace.mesh.aff_jacs[:, None] * cp.einsum("Kq,iq,q->Ki", values, q.bas_of_quads, q.Krf_w)

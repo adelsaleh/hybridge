@@ -82,7 +82,7 @@ def test_reused_solves_match_fresh_solves(cp, reuse):
 
 
 def test_failed_stale_solve_retries_with_fresh_setup(cp, monkeypatch):
-    from hdgfem.backends import advection_cuda
+    from hdgfem.transport import cuda as advection_cuda
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     dg = space()
     solver = AdvectionDiffusionReactionHDGSolver(dg, **options(amgx_reuse='preconditioner'))

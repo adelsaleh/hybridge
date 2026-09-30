@@ -481,7 +481,7 @@ def _postprocess_total_flux(
         local_trace = trace_ref.element_coefficients(trace).reshape(
             space.mesh.num_tri, 3, trace_ref.edg_dof)
     else:
-        from hdgfem.backends.cupy import element_traces_cupy
+        from hdgfem.hdg.condensation_device import element_traces_cupy
         local_trace = element_traces_cupy(trace, space, trace_space=trace_ref).reshape(
             space.mesh.num_tri, 3, trace_ref.edg_dof)
     blocks = local_unknowns.reshape(space.mesh.num_tri, 3, space.el_dof)

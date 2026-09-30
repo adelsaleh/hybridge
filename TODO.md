@@ -770,6 +770,14 @@ Execution protocol (approved 2026-09-29):
   - the full suite matches the baseline.
 - [ ] Phase 5: move modules into `transport/` (AR) and `mixed/` (DR, ADR)
   without behavior changes; keep public solver names.
+
+  Progress 2026-09-30, `transport/` done:
+  - modules `local_numpy`, `numba` (+ `numba_kernels`, `numba_local_kernels`),
+    `cupy`, `cuda`, `raw_cuda`, `tsle_bsr`, `residual` and `diagnostics`;
+  - device condensation helpers shared with DR/ADR moved to
+    `hdg/condensation_device.py` and `hdg/coefficients_device.py`;
+  - duplicate `_interior_side_index` and `mapped_quads_cupy` copies removed;
+  - the full suite matches the baseline.
 - [ ] Phase 6: merge DR into the ADR implementations inside `mixed/`, gated by
   the phase 0 parity tests, in this order:
   1. flux postprocessing;

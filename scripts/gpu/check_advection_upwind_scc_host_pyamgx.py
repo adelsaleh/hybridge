@@ -27,7 +27,7 @@ from hdgfem.hdg import matrices as hdg_mats
 import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
 from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
-from hdgfem.backends.numba import reconstruct_projected_field_numba
+from hdgfem.transport.numba import reconstruct_projected_field_numba
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering

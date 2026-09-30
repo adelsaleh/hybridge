@@ -26,9 +26,10 @@ from hdgfem.backends.capabilities import (
     validate_advection_backend_configuration,
 )
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
-from hdgfem.backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
-from hdgfem.backends.advection_raw_cuda import RawAdvectionFactorWorkspace
+from hdgfem.transport.tsle_bsr import RawAdvectionTsleWorkspace
+from hdgfem.transport.raw_cuda import RawAdvectionFactorWorkspace
 from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.transport.local_numpy as transport_local_numpy
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
@@ -49,9 +50,9 @@ from hdgfem.linalg.ordering import (
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.hdg.coefficients import (
     _is_callable_beta,
-    _normalize_coefficient_values,
     _prepare_beta_data,
 )
+from hdgfem.transport.local_numpy import _callable_advection_mats
 
 
 ReturnKey = Literal[
@@ -232,41 +233,6 @@ def _timed_call(label: str, verbosity: bool | int, function, *, level: int = 1, 
         else:
             print(f"done in {_format_seconds(elapsed)}", flush=True)
     return result, elapsed
-
-
-def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSpace) -> np.ndarray:
-    """Evaluate callable advection coefficients on solution volume quadrature."""
-    points = space.mapped_quads()
-    num_points = space.quad_data.Krf_w.shape[0]
-    values = np.empty((space.mesh.num_tri, num_points, 2), dtype=REAL_DTYPE)
-    values[..., 0] = _normalize_coefficient_values(
-        beta[0](points[:, :, 0], points[:, :, 1]),
-        space,
-        num_points,
-        "beta[0]",
-    )
-    values[..., 1] = _normalize_coefficient_values(
-        beta[1](points[:, :, 0], points[:, :, 1]),
-        space,
-        num_points,
-        "beta[1]",
-    )
-    return values
-
-
-def _callable_advection_mats(space: DGSpace, beta: tuple[Callable, Callable]) -> np.ndarray:
-    r"""Assemble advection matrices from callable coefficients without projection."""
-    beta_values = _callable_beta_values_on_volume(beta, space)
-    scaled_inv_t = space.mesh.aff_jacs[:, None, None] * space.mesh.inv_aff_mats_t
-    return np.einsum(
-        "Kqd,KdD,jq,Diq,q->Kij",
-        beta_values,
-        scaled_inv_t,
-        space.quad_data.bas_of_quads,
-        space.quad_data.dbas_of_quads,
-        space.quad_data.Krf_w,
-        optimize=["einsum_path", (0, 1), (0, 2), (0, 2), (0, 1)],
-    )
 
 
 def _require_same_space_dg_field_for_backend(value, space: DGSpace, *, label: str, backend: str) -> DGField:
@@ -716,7 +682,7 @@ class AdvectionReactionHDGSolver:
                 "tangent-boundary BSR assembly requires raw_local_assembly='fused' or 'split3'"
             )
         from hdgfem.core.device import as_cupy_trace_space
-        from hdgfem.backends.advection_cuda import assemble_reduced_system_cuda
+        from hdgfem.transport.cuda import assemble_reduced_system_cuda
         from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
 
         cspace = as_cupy_space(self.space)
@@ -1346,7 +1312,7 @@ def solve_advection_reaction_hdg(
         wants_host_system = requires_host_system
         local_assembly = local_inverse = boundary_assembly = 0.0
         if effective_backend == "raw-cuda":
-            from hdgfem.backends.advection_cuda import update_reduced_system_rhs_cuda
+            from hdgfem.transport.cuda import update_reduced_system_rhs_cuda
             cuda_assembly, trace_assembly = _timed_call(
                 "updating RHS with cached transport LU and trace operator", verbosity,
                 lambda: update_reduced_system_rhs_cuda(cached["cuda_assembly"], source_data,
@@ -1367,12 +1333,12 @@ def solve_advection_reaction_hdg(
         detail_timings["operator.reused"] = 1.0
         detail_timings["local.factors.reused"] = 1.0
     elif effective_backend == "numba":
-        from hdgfem.backends.numba import (
-            assemble_local_advection_reaction_numba,
-            assemble_projected_trace_system_eliminated_numba,
-            assemble_projected_trace_system_numba,
-            assemble_projected_trace_system_zero_flux_numba,
-        )
+        from hdgfem.transport.numba import (
+                    assemble_local_advection_reaction_numba,
+                    assemble_projected_trace_system_eliminated_numba,
+                    assemble_projected_trace_system_numba,
+                    assemble_projected_trace_system_zero_flux_numba,
+                )
 
         if boundary_mode == "zero-flux":
             trace_assembler = assemble_projected_trace_system_zero_flux_numba
@@ -1465,7 +1431,7 @@ def solve_advection_reaction_hdg(
     elif effective_backend == "raw-cuda":
         from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
         from hdgfem.runtime.optional import require_cupy
-        from hdgfem.backends.advection_cuda import (
+        from hdgfem.transport.cuda import (
                     assemble_reduced_system_cuda,
                     beta_dot_normal_from_coeffs,
                 )
@@ -1609,10 +1575,10 @@ def solve_advection_reaction_hdg(
                         formatted = f"{value:.5f}s"
                     print(f"    {key}: {formatted}", flush=True)
     elif effective_backend == "cupy":
-        from hdgfem.backends.cupy import (
-            assemble_advection_reaction_trace_system_cupy,
-            assemble_advection_reaction_trace_system_eliminated_cupy,
-        )
+        from hdgfem.transport.cupy import (
+                    assemble_advection_reaction_trace_system_cupy,
+                    assemble_advection_reaction_trace_system_eliminated_cupy,
+                )
 
         transfer_cupy_local_solver = (
             cache_local_solvers
@@ -1718,7 +1684,7 @@ def solve_advection_reaction_hdg(
                 "assembling advection matrices",
                 verbosity,
                 lambda: (
-                    hdg_mats.add_advection_mats(local_blocks, space, beta_h, scale=-1.0)
+                    transport_local_numpy.add_advection_mats(local_blocks, space, beta_h, scale=-1.0)
                     if beta_h is not None
                     else np.subtract(local_blocks, _callable_advection_mats(space, beta_callables), out=local_blocks)
                 ),
@@ -2219,7 +2185,8 @@ def solve_advection_reaction_hdg(
 
     if effective_backend == "raw-cuda":
         from hdgfem.runtime.optional import asnumpy, require_cupy
-        from hdgfem.backends.advection_cuda import reconstruct_advection_field_cuda, reconstruct_trace_cupy
+        from hdgfem.transport.cuda import reconstruct_advection_field_cuda
+        from hdgfem.hdg.condensation_device import reconstruct_trace_cupy
 
         cp = require_cupy()
         if trace_reduced_cp is None:
@@ -2254,7 +2221,7 @@ def solve_advection_reaction_hdg(
     else:
         if effective_backend == "cupy":
             from hdgfem.runtime.optional import asnumpy, require_cupy
-            from hdgfem.backends.cupy import (
+            from hdgfem.transport.cupy import (
                             expand_boundary_trace_cupy,
                             reconstruct_advection_reaction_field_cupy,
                         )
@@ -2314,7 +2281,7 @@ def solve_advection_reaction_hdg(
         else:
             can_use_projected_reconstruction = effective_backend == "numba"
             if can_use_projected_reconstruction:
-                from hdgfem.backends.numba import reconstruct_projected_field_numba
+                from hdgfem.transport.numba import reconstruct_projected_field_numba
 
                 label = "reconstructing element field (numba)"
                 field, reconstruction = _timed_call(

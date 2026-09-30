@@ -22,11 +22,11 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.backends import advection_raw_cuda as fused_cuda
-from hdgfem.backends import advection_tsle_bsr as tsle_cuda
-from hdgfem.backends.advection_cuda import assemble_reduced_system_cuda
+from hdgfem.transport import raw_cuda as fused_cuda
+from hdgfem.transport import tsle_bsr as tsle_cuda
+from hdgfem.transport.cuda import assemble_reduced_system_cuda
 from hdgfem.core.device import as_cupy_trace_space
-from hdgfem.backends.advection_tsle_bsr import RawAdvectionTsleWorkspace
+from hdgfem.transport.tsle_bsr import RawAdvectionTsleWorkspace
 from hdgfem.core.device import (
     as_cupy_space,
     as_cupy_vector_coefficients,

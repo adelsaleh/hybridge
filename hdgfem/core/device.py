@@ -574,3 +574,8 @@ def as_cupy_trace_space(trace_space: DGTraceSpace, *, device: int | None = None)
         with cp.cuda.Device(device_id):
             cache[device_id] = CupyDGTraceSpace.from_host(trace_space, device_id=device_id)
     return cache[device_id]
+
+
+def mapped_quads_cupy(cspace: CupyDGSpace):
+    """Return physical volume quadrature points resident on the device."""
+    return cspace.mapped_quads

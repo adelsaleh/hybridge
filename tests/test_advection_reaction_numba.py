@@ -5,12 +5,13 @@ import pytest
 
 from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.hdg import matrices as hdg_mats
+import hdgfem.transport.local_numpy as transport_local_numpy
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.core.mass as core_mass
 from hdgfem.backends import UnsupportedBackendConfigurationError
-from hdgfem.backends.numba import (
+from hdgfem.transport.numba import (
     assemble_local_advection_reaction_numba,
     assemble_projected_trace_system_eliminated_numba,
     assemble_projected_trace_system_numba,
@@ -122,7 +123,7 @@ def _numpy_weighted_advection_trace_system(
     )
     scratch = np.empty_like(local_mats)
     core_mass.add_reaction_mass(local_mats, reaction_h, space, scratch=scratch)
-    hdg_mats.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
+    transport_local_numpy.add_advection_mats(local_mats, space, beta_h, scale=-1.0)
     local_solver = np.linalg.inv(local_mats)
     element_boundary_mats = hdg_mats.element_boundary_mats_from_trace_weight(
         space,
@@ -251,11 +252,11 @@ def test_numba_local_assembly_matches_numpy_projected_coefficients() -> None:
         reaction=reaction_h,
     )
 
-    numpy_local = np.ascontiguousarray(hdg_mats.boundary_mass_from_normal_flux(space, beta_dot_normal))
+    numpy_local = np.ascontiguousarray(transport_local_numpy.boundary_mass_from_normal_flux(space, beta_dot_normal))
     scratch = np.empty_like(numpy_local)
     core_mass.add_reaction_mass(numpy_local, reaction_h, space, scratch=scratch)
-    hdg_mats.add_advection_mats(numpy_local, space, beta_h, scale=-1.0)
-    numpy_boundary = hdg_mats.element_boundary_mats_from_normal_flux(space, beta_dot_normal)
+    transport_local_numpy.add_advection_mats(numpy_local, space, beta_h, scale=-1.0)
+    numpy_boundary = transport_local_numpy.element_boundary_mats_from_normal_flux(space, beta_dot_normal)
 
     np.testing.assert_allclose(numba_data.local_mats, numpy_local, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(numba_data.element_boundary_mats, numpy_boundary, rtol=1e-12, atol=1e-12)

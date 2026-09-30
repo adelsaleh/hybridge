@@ -65,6 +65,7 @@ from hdgfem.core.device import (
     as_cupy_trace_reference,
     as_cupy_vector_coefficients,
 )
+from hdgfem.hdg.condensation_device import element_traces_cupy
 
 
 @dataclass(frozen=True)
@@ -104,42 +105,6 @@ def expand_boundary_trace_cupy(
     full = cupy.asarray(boundary_trace, dtype=REAL_DTYPE).copy()
     full[cspace.mesh.int_edges_inds] = reduced_cp.reshape((-1, trace_ref.edg_dof))
     return cupy.ascontiguousarray(full.ravel())
-
-
-def element_traces_cupy(
-        trace,
-        space: DGSpace | CupyDGSpace,
-        *,
-        trace_space: DGTraceSpace | None = None,
-):
-    """Gather and orient global trace coefficients entirely on-device."""
-    cupy = require_cupy()
-    cspace = as_cupy_space(space)
-    trace_ref = as_cupy_trace_reference(trace_space, cspace)
-    expected_size = int(cspace.mesh.num_edg * trace_ref.edg_dof)
-    trace_cp = cupy.asarray(trace, dtype=REAL_DTYPE)
-    if trace_cp.shape != (expected_size,):
-        raise ValueError(f"trace must have shape ({expected_size},); got {trace_cp.shape}")
-
-    traces = trace_cp.reshape((cspace.mesh.num_edg, trace_ref.edg_dof))[
-        cspace.mesh.loc2glob_edge
-    ].copy()
-    if cspace.mesh.num_negative_orientations:
-        elements = cspace.mesh.negative_orientation_elements
-        faces = cspace.mesh.negative_orientation_faces
-        negative = traces[elements, faces]
-        if trace_ref.kind == "legendre-modal":
-            signs = cupy.where(
-                cupy.arange(trace_ref.edg_dof, dtype=cupy.int64) % 2 == 0,
-                REAL_DTYPE(1.0),
-                REAL_DTYPE(-1.0),
-            )
-            traces[elements, faces] = negative * signs[None, :]
-        else:
-            traces[elements, faces] = negative[:, ::-1]
-    return cupy.ascontiguousarray(
-        traces.reshape((cspace.mesh.num_tri, 3 * trace_ref.edg_dof))
-    )
 
 
 def _normalize_values(values, num_elements: int, num_points: int, label: str) -> np.ndarray:
@@ -421,7 +386,7 @@ def reconstruct_advection_reaction_field_cupy(
 def _oriented_trace_basis_cupy(cspace: CupyDGSpace, trace_ref: CupyTraceReferenceData):
     """Return trace basis values in global edge orientation on every side."""
     from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.backends.advection_cuda import oriented_trace_basis_cupy
+    from hdgfem.transport.cuda import oriented_trace_basis_cupy
     trace = as_cupy_trace_space(trace_ref.host, device=cspace.device_id)
     return oriented_trace_basis_cupy(cspace, trace)
 
@@ -932,7 +897,6 @@ __all__ = [
     "CupyAdvectionTraceAssembly",
     "assemble_advection_reaction_trace_system_cupy",
     "assemble_advection_reaction_trace_system_eliminated_cupy",
-    "element_traces_cupy",
     "expand_boundary_trace_cupy",
     "reconstruct_advection_reaction_field_cupy",
 ]

@@ -15,6 +15,7 @@ import numpy as np
 
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.hdg import matrices as mats
+import hdgfem.transport.local_numpy as transport_local_numpy
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
@@ -111,7 +112,7 @@ def diagnose(assembly: FixtureAssembly):
         space, normal, assembly.policy, trace_space=trace)
     local = np.ascontiguousarray(mats.boundary_mass_from_trace_stabilization(space, tau, trace_space=trace))
     core_mass.add_reaction_mass(local, assembly.reaction, space)
-    mats.add_advection_mats(local, space, assembly.beta, scale=-1.)
+    transport_local_numpy.add_advection_mats(local, space, assembly.beta, scale=-1.)
     local_singular = np.linalg.svd(local, compute_uv=False)
     coupling = mats.element_boundary_mats_from_trace_weight(space, gamma, trace_space=trace)
     seam = mesh.int_edges_inds[np.all(mesh.node_coords[mesh.edges[mesh.int_edges_inds], 0] == 0., axis=1)]

@@ -5,7 +5,7 @@ with Numba (``cfunc``, cached on disk) and returns a
 :class:`PointwiseCoefficient`, an :class:`~hdgfem.core.element_coefficients.ElementCoefficient`
 that every ADR consumer already accepts (sampling, face samples,
 post-processing). Evaluation runs in the parallel kernels of
-:mod:`hdgfem.kernels.pointwise`, which are compiled once for all functions of
+:mod:`hdgfem.core.pointwise_kernels`, which are compiled once for all functions of
 the same signature.
 
 The function takes ``(x, y, t)`` or ``(x, y, t, v)``, where ``v`` holds, in
@@ -242,7 +242,7 @@ class PointwiseLaw:
     """Compiled scalar law of the physical point, called as ``law(x, y)`` on host arrays.
 
     Build it with :func:`pointwise_law`. Evaluation runs in the parallel
-    kernels of :mod:`hdgfem.kernels.pointwise` at ``time``; the result has
+    kernels of :mod:`hdgfem.core.pointwise_kernels` at ``time``; the result has
     the broadcast shape of ``x`` and ``y``.
     """
 

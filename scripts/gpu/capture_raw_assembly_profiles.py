@@ -56,8 +56,8 @@ def main():
         parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1; use --cases transport for p=7..9")
     args.output.mkdir(parents=True, exist_ok=True)
     source_paths = [BENCHMARK, Path(__file__), *sorted((ROOT / "hdgfem/backends").glob("*diffusion*cuda.py")),
-                    ROOT / "hdgfem/backends/diffusion_cupy.py", ROOT / "hdgfem/backends/advection_raw_cuda.py",
-                    ROOT / "hdgfem/backends/advection_tsle_bsr.py",
+                    ROOT / "hdgfem/backends/diffusion_cupy.py", ROOT / "hdgfem/transport/raw_cuda.py",
+                    ROOT / "hdgfem/transport/tsle_bsr.py",
                     ROOT / "hdgfem/backends/adr_tensor_raw_cuda.py",
                     ROOT / "hdgfem/hdg/cuda/raw_source.py"]
     source_hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}

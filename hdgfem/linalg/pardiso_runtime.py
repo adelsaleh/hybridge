@@ -50,7 +50,7 @@ class ReusablePardisoSolver:
 
     The first solve (and any solve whose COO ``rows``/``cols`` differ from the
     stored pattern) builds the CSR pattern and a gather map with the parallel
-    kernels of :mod:`hdgfem.kernels.sparse_pattern` and runs the reordering
+    kernels of :mod:`hdgfem.linalg.sparse_pattern` and runs the reordering
     and symbolic analysis (phase 11). Every solve then gathers the new values
     (duplicates summed in COO order, finiteness checked on the way) and runs
     only the numerical factorization (phase 22) and the solve (phase 33). If a

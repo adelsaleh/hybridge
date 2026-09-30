@@ -16,7 +16,7 @@ assembly stages:
 The kernels are heavily commented because there are now two assembly depths in
 this file.  The precomputed path accepts local matrices/RHS columns built by
 CuPy and fuses only the local solve/COO emission.  The fused-local path mirrors
-``hdgfem.kernels.advection_reaction_fused``: it consumes already-projected coefficients,
+``hdgfem.transport.numba_kernels``: it consumes already-projected coefficients,
 builds the element-local operator/RHS in shared memory, solves it, and emits the
 reduced trace matrix without ever materializing dense local tensors globally.
 
@@ -622,7 +622,7 @@ extern "C" __global__ void assemble_advection_raw_coop(
 
 _RAW_FUSED_TEMPLATE = r"""
 // The fused-local raw path is intentionally close to
-// hdgfem.kernels.advection_reaction_fused._assemble_projected_local_system.  All
+// hdgfem.transport.numba_kernels._assemble_projected_local_system.  All
 // coefficient fields have already been projected into the element basis before
 // this kernel is launched.  The kernel therefore only needs small reference
 // tensors and per-element geometry, and no Python/CuPy dense local tensors are

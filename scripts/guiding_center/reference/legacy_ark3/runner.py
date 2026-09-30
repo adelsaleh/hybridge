@@ -1933,7 +1933,10 @@ def run_guiding_center_case(
 
     stage_stepper = None
     if config.time_scheme in {"h1-bdf3", "h2-bdf3", "imex-ark3"}:
-        from hdgfem.assembly.advection_residual import HDGTraceWorkspace, UpwindHDGTransportResidual
+        from hdgfem.transport.residual import (
+                    HDGTraceWorkspace,
+                    UpwindHDGTransportResidual,
+                )
         from scripts.guiding_center.time_schemes.h1_bdf3 import H1BDF3Stepper
         from scripts.guiding_center.time_schemes.h2_bdf3 import H2BDF3Stepper
         from scripts.guiding_center.reference.legacy_ark3.imex_ark3 import IMEXARK3Stepper

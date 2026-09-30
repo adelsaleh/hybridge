@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from hdgfem import DGField, DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
+from hdgfem.transport.residual import UpwindHDGTransportResidual
 from hdgfem.core.field_ops import field_linear_combination, project_field_to_trace
 from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.time_schemes import h1_bdf3
@@ -211,7 +211,7 @@ def test_hybrid_configuration_and_warm_retry_policy(verbosity, time_scheme):
 
 
 def test_reference_advection_device_tensor_is_uploaded_once_per_device(monkeypatch):
-    import hdgfem.backends.advection_cuda as cuda
+    import hdgfem.transport.cuda as cuda
     uploads = []
     fake_cp = SimpleNamespace(asarray=lambda x: uploads.append(x) or np.array(x),
                               cuda=SimpleNamespace(Device=lambda device: nullcontext()))
@@ -233,7 +233,7 @@ def test_hybrid_runner_with_canned_solvers_only(monkeypatch, tmp_path, capfd, ve
     """Exercise runner wiring; every PDE solver and residual is replaced."""
     import hdgfem.solvers.advection_reaction as advection
     import hdgfem.solvers.diffusion_reaction as diffusion
-    import hdgfem.assembly.advection_residual as residual_module
+    import hdgfem.transport.residual as residual_module
     config = replace(preset_by_key('rho_helm_wave_host_accuracy'), time_scheme=time_scheme,
                      h1_startup=startup_method, h2_startup=startup_method, dt=.01, num_steps=4, verbosity=verbosity, diagnostics_dir=str(tmp_path), plot_every=0)
     calls = {'transport': [], 'poisson': []}

@@ -5,6 +5,9 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 
+from hdgfem.runtime.optional import require_cupy
+
+
 
 def logv(config, level: int, message: str) -> None:
     """Print ``message`` when ``config.verbosity`` is at least ``level``.
@@ -61,3 +64,10 @@ def timed_section(config, level: int, label: str, *, timings=None, synchronize=N
             timings[label] = timings.get(label, 0.0) + elapsed
         if verbose:
             print(f"{label}_DONE time={elapsed:.3f}", flush=True)
+
+
+def sync_elapsed(start: float) -> float:
+    """Synchronize the active CUDA stream and return elapsed wall time."""
+    cp = require_cupy()
+    cp.cuda.get_current_stream().synchronize()
+    return time.perf_counter() - start

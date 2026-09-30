@@ -86,7 +86,10 @@ def _source_moments(cp, source, space: DGSpace, t=None):
     """
     from hdgfem.hdg import condensation as hdg
     from hdgfem.core.space import DGField
-    from hdgfem.backends.advection_cuda import source_moments_cupy, source_moments_from_values_cupy
+    from hdgfem.hdg.coefficients_device import (
+            source_moments_cupy,
+            source_moments_from_values_cupy,
+        )
 
     if isinstance(source, ElementCoefficient):
         values = source.volume_values(space, xp=cp, t=t)

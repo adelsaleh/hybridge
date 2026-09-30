@@ -14,7 +14,7 @@ from hdgfem.core.space import DGSpace, DGTraceSpace
 from hdgfem.core.device import as_cupy_space
 from hdgfem.runtime.optional import require_cupy
 from hdgfem.hdg.trace_maps import _boundary_reduction_maps, _trace_orientation_mode
-from hdgfem.backends.numba import _interior_side_index
+from hdgfem.hdg.trace_maps import _interior_side_index
 
 
 _RAW_ADR_TEMPLATE = r'''
@@ -287,7 +287,7 @@ def _assemble_scalar_serial_operator(
         raise NotImplementedError("raw CUDA ADR currently requires positive constant scalar diffusion")
     cp = require_cupy()
     from cupyx.scipy import sparse
-    from hdgfem.backends.advection_cuda import CudaAdvectionAssembly
+    from hdgfem.hdg.condensation_device import CudaAdvectionAssembly
     from hdgfem.core.device import as_cupy_trace_space
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(trace_space)
@@ -295,7 +295,7 @@ def _assemble_scalar_serial_operator(
     ntr = trace_space.edg_dof
     boundary_host = hdg.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_space)
     edge_to_solve, free_edges, _reduction = _boundary_reduction_maps(space, boundary_host, None, trace_space=trace_space)
-    side_index = _interior_side_index(space)
+    side_index = _interior_side_index(space.mesh)
     valid_elements = mesh.interior_elements
     counts = np.count_nonzero(edge_to_solve[mesh.loc2glob_edge[valid_elements]] >= 0, axis=1).astype(np.int64)
     offsets = np.empty(counts.size + 1, dtype=np.int64); offsets[0]=0
@@ -384,7 +384,7 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     if str(options.solver).lower() not in {"amgx", "pyamgx"}:
         raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx'")
     cp = require_cupy()
-    from hdgfem.backends.advection_cuda import reconstruct_trace_cupy
+    from hdgfem.hdg.condensation_device import reconstruct_trace_cupy
     from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
     from hdgfem.solvers.advection_diffusion_reaction import (
             _detailed_logging,

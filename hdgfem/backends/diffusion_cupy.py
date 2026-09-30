@@ -17,7 +17,6 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.core.space import DGField
 from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
@@ -28,6 +27,7 @@ from hdgfem.backends.diffusion_raw_cuda import (
     assemble_projected_diffusion_trace_system_eliminated_raw_cuda,
     validate_raw_cuda_supported,
 )
+from hdgfem.core.device import mapped_quads_cupy
 
 
 RAW_CUDA_MAX_EL_DOF = 28
@@ -567,14 +567,6 @@ def build_trace_reference(cspace, kind: str) -> TraceReferenceData:
         face_trace_test_element_trial_oriented=cupy.asarray(trace_lift, dtype=REAL_DTYPE),
         M_rf_fc=cupy.asarray(np.ascontiguousarray(edge_mass), dtype=REAL_DTYPE),
     )
-
-
-def mapped_quads_cupy(cspace):
-    """Return mapped volume quadrature points on device."""
-    cupy = require_cupy()
-    mesh = cspace.mesh
-    q = cspace.quad_data
-    return cupy.einsum("Krc,qc->Krq", mesh.aff_mats, q.Krf_quads) + mesh.aff_vecs[:, :, None]
 
 
 def _require_same_space_dg_field(value, cspace, label: str, backend: str) -> DGField:
@@ -1871,7 +1863,6 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
         source_rhs=source_rhs,
         raw_assembly=raw,
     )
-
 
 
 def _postprocess_reference_cache(space, trace_space, cache):

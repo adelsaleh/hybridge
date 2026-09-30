@@ -25,7 +25,7 @@ def _run(code: str, precision: str, tmp_path: Path) -> subprocess.CompletedProce
 def test_precision_geometry_fields_and_mixed_array_guard(precision, mode, itemsize, tmp_path):
     code = f'''
 import numpy as np
-from hdgfem.precision import REAL_DTYPE, REAL_ITEMSIZE, AMGX_MODE, check_real_arrays
+from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, AMGX_MODE, check_real_arrays
 from hdgfem.core.mesh import rectangle_mesh, _mesh_cache_files
 from hdgfem.core.space import DGSpace
 mesh = rectangle_mesh(nx=1, ny=1)
@@ -74,7 +74,7 @@ sys.path.insert(0, {str(BINDING)!r})
 import cupy as cp
 import numpy as np
 import pyamgx
-from hdgfem.precision import cuda_source, real_raw_kernel
+from hdgfem.runtime.precision import cuda_source, real_raw_kernel
 source = 'extern "C" __global__ void eval(const double* x, double* y) {{ int i=threadIdx.x; y[i]=sqrt(x[i])+1.25e-2; }}'
 converted = cuda_source(source)
 assert 'double' not in converted and 'sqrtf(' in converted and '1.25e-2f' in converted

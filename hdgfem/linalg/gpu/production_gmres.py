@@ -14,7 +14,7 @@ restarted GMRES implementation with:
 
 Operator/preconditioner construction and persistent architecture autotuning are
 kept separate.  This makes the solver useful immediately with any object that
-implements the device operator protocols in :mod:`hdgfem.backends.cupy_gmres`.
+implements the device operator protocols in :mod:`hdgfem.linalg.gpu.gmres`.
 """
 
 from __future__ import annotations

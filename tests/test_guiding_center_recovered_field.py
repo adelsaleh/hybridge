@@ -153,7 +153,7 @@ class NumpyDevice:
 
 
 def test_device_projection_keeps_coefficients_resident(monkeypatch):
-    import hdgfem.backends.cupy as backend
+    import hdgfem.transport.cupy as backend
     import hdgfem.core.device as core_device
     density_space, poisson_space = spaces(4)
     coefficients = np.random.default_rng(123).normal(size=density_space.shape).astype(REAL_DTYPE)
@@ -169,7 +169,7 @@ def test_device_projection_keeps_coefficients_resident(monkeypatch):
 
 
 def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
-    import hdgfem.backends.cupy as backend
+    import hdgfem.transport.cupy as backend
     import hdgfem.core.device as core_device
     density_space, poisson_space = spaces(3)
     rho = density_space.project_callable(lambda x, y: 2+x*x*y)

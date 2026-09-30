@@ -32,7 +32,7 @@ def test_fixed_cycles_reject_a_krylov_solver():
 def test_native_coarse_cycle_enforces_fixed_work(monkeypatch):
     from types import SimpleNamespace
     from unittest.mock import Mock
-    from hdgfem.backends import advection_cuda
+    from hdgfem.transport import cuda as advection_cuda
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from hdgfem.linalg.multigrid.face_hp import AmgxScalarVcycle
     from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config

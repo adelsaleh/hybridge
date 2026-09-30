@@ -233,7 +233,7 @@ def main():
         if digest(values) != metadata[f'matrix_{label}_sha256']:
             raise RuntimeError(f'Captured matrix {label} changed')
     sources = provenance()
-    for path in [Path(__file__), ROOT/'hdgfem/linalg/additive_schwarz.py', ROOT/'hdgfem/linalg/multigrid/face_hp.py', ROOT/'scripts/guiding_center/poisson/asm_patches.py', ROOT/'hdgfem/backends/advection_cuda.py', ROOT/'hdgfem/linalg/gpu/legendre_face_bsr.py', ROOT/'hdgfem/linalg/gpu/cublas_batched.py']:
+    for path in [Path(__file__), ROOT/'hdgfem/linalg/additive_schwarz.py', ROOT/'hdgfem/linalg/multigrid/face_hp.py', ROOT/'scripts/guiding_center/poisson/asm_patches.py', ROOT/'hdgfem/transport/cuda.py', ROOT/'hdgfem/linalg/gpu/legendre_face_bsr.py', ROOT/'hdgfem/linalg/gpu/cublas_batched.py']:
         sources[str(path.resolve())] = dict(sha256=hashlib.sha256(path.read_bytes()).hexdigest(), bytes=path.stat().st_size, mtime_ns=path.stat().st_mtime_ns)
     save_json(args.output_dir/'provenance.json', sources)
     (args.output_dir/'replay_source.py').write_text(Path(__file__).read_text())

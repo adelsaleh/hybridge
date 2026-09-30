@@ -86,7 +86,7 @@ def test_device_qr_solves_nonsymmetric_scaled_rows_without_host_solution(cp, fmt
 
 
 def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypatch):
-    import hdgfem.backends.advection_cuda as backend
+    import hdgfem.transport.cuda as backend
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, dense, exact, rtol = system(cp, "bsr")
     config = replace(preset_by_key("euler_vortex_gas_localized_p6_50k_dt001_t50_raw_cuda_bsr"),
@@ -110,7 +110,7 @@ def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypat
 
 
 def test_direct_retry_is_not_called_after_an_accepted_solve(cp, monkeypatch):
-    import hdgfem.backends.advection_cuda as backend
+    import hdgfem.transport.cuda as backend
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, _, _, rtol = system(cp)
     solved = amgx_device_solver._solve_reduced_system_cusolver_qr_device_once(assembly, check_rtol=rtol)
@@ -148,7 +148,7 @@ def test_singular_device_matrix_is_not_accepted(cp):
 
 
 def test_exhausted_direct_retry_reports_matrix_scales(cp, monkeypatch):
-    import hdgfem.backends.advection_cuda as backend
+    import hdgfem.transport.cuda as backend
     import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, dense, _, _ = system(cp, "bsr")
     monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", lambda a, **kw: rejection(cp, a))
