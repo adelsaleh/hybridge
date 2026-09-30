@@ -77,7 +77,8 @@ class _FakeGmsh:
     def isInitialized(self):
         return self.initialized
 
-    def initialize(self):
+    def initialize(self, **options):
+        self.initialize_options = options
         self.initialized = True
         self.initialize_calls += 1
 
@@ -113,6 +114,8 @@ def test_gmsh_rectangle_mesh_uses_local_cache_logs_and_thread_options(monkeypatc
     assert "mesh cache stored" in first_log
     assert fake.model.mesh.generate_calls == 1
     assert fake.option.values["General.NumThreads"] == 4
+    # gmsh's interruptible mode leaves SIGINT at SIG_DFL after finalize (Ctrl-C regression).
+    assert fake.initialize_options == {"interruptible": False}
     assert fake.option.values["Mesh.MaxNumThreads2D"] == 4
     assert fake.option.values["Geometry.OCCParallel"] == 1
     assert list(tmp_path.glob("rectangle-*.npz"))

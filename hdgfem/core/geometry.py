@@ -216,7 +216,9 @@ def polygon_from_geo(path, *, samples_per_curve=1024):
     path = Path(path).resolve(strict=True)
     started = not gmsh.isInitialized()
     if started:
-        gmsh.initialize()
+        # interruptible=False: gmsh 4.15's interruptible mode sets SIGINT to SIG_DFL and, lacking a
+        # `global`, never restores Python's handler in finalize(), which breaks Ctrl-C afterwards.
+        gmsh.initialize(interruptible=False)
     previous = gmsh.model.getCurrent()
     model = "boundary_" + uuid4().hex
     gmsh.model.add(model)

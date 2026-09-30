@@ -803,7 +803,9 @@ def _generate_gmsh_mesh(
 
     started_gmsh = not gmsh.isInitialized()
     if started_gmsh:
-        gmsh.initialize()
+        # interruptible=False: gmsh 4.15's interruptible mode sets SIGINT to SIG_DFL and, lacking a
+        # `global`, never restores Python's handler in finalize(), which breaks Ctrl-C afterwards.
+        gmsh.initialize(interruptible=False)
     else:
         gmsh.clear()
 
@@ -1023,8 +1025,8 @@ def gmsh_star_mesh(
     )
 
 
-def _gmsh_polygon_surface(gmsh, vertices, mesh_size, *, circular_holes=()):
-    """Build a polygonal OCC surface with optional circular inner walls."""
+def _gmsh_polygon_surface(gmsh, vertices, mesh_size, *, circular_holes=(), polygon_holes=()):
+    """Build a polygonal OCC surface with circular or polygonal inner walls."""
     occ = gmsh.model.occ
     points = [occ.addPoint(float(x), float(y), 0.0, mesh_size) for x, y in vertices]
     lines = [occ.addLine(points[i], points[(i+1) % len(points)]) for i in range(len(points))]
@@ -1033,6 +1035,12 @@ def _gmsh_polygon_surface(gmsh, vertices, mesh_size, *, circular_holes=()):
         circle = occ.addCircle(float(cx), float(cy), 0.0, float(radius))
         loops.append(occ.addCurveLoop([circle]))
         lines.append(circle)
+    for hole in polygon_holes:
+        points = [occ.addPoint(float(x), float(y), 0.0, mesh_size) for x, y in hole]
+        inner_lines = [occ.addLine(points[i], points[(i+1) % len(points)])
+                       for i in range(len(points))]
+        loops.append(occ.addCurveLoop(inner_lines))
+        lines.extend(inner_lines)
     return occ.addPlaneSurface(loops), lines
 
 
@@ -1092,6 +1100,8 @@ def gmsh_smooth_star_mesh(
         amplitude: float = 0.32,
         mode: int = 5,
         hole_radius: float = 0.0,
+        hole_center: tuple[float, float] | None = None,
+        hole_boundary_points: int | None = None,
         center: tuple[float, float] = (0.0, 0.0),
         rotation: float = 0.0,
         verbosity: int = 0,
@@ -1108,8 +1118,12 @@ def gmsh_smooth_star_mesh(
     The boundary follows ``r(theta) = radius + amplitude*cos(mode*theta)`` and
     is sampled by straight segments, matching FreeFEM's ``buildmesh`` use of
     ``border GammaStar(t=0, 2*pi)`` with ``GammaStar(boundary_points)``.
-    A positive ``hole_radius`` removes a concentric circular disk. Both the
-    outer wall and the hole belong to the physical boundary group.
+    ``boundary_points`` fixes the outer polygon vertex count. A positive
+    ``hole_radius`` removes a disk centered at ``hole_center`` (absolute
+    coordinates; defaults to ``center``). ``hole_boundary_points`` replaces
+    the circular CAD wall with an independently sampled regular polygon.
+    Both walls belong to the physical boundary group. Gmsh may subdivide
+    polygon segments; vertex counts describe geometry, not mesh edge counts.
     """
     boundary_points = int(boundary_points)
     mode = int(mode)
@@ -1120,19 +1134,40 @@ def gmsh_smooth_star_mesh(
         raise ValueError("boundary_points is too small for the requested star mode")
     if radius <= abs(amplitude):
         raise ValueError("radius must be larger than abs(amplitude) so the star radius stays positive")
-    # This disk fits even inside the chords of the sampled outer boundary.
-    inner_bound = (radius - abs(amplitude)) * np.cos(np.pi / boundary_points)
-    if not np.isfinite(hole_radius) or not 0.0 <= hole_radius < inner_bound:
-        raise ValueError("hole_radius must be nonnegative and strictly inside the sampled star")
+    if not np.all(np.isfinite((radius, amplitude, rotation, *center))):
+        raise ValueError("star geometry must be finite")
+    if not np.isfinite(hole_radius) or hole_radius < 0:
+        raise ValueError("hole_radius must be finite and nonnegative")
+    if hole_boundary_points is not None:
+        if int(hole_boundary_points) != hole_boundary_points or hole_boundary_points < 3:
+            raise ValueError("hole_boundary_points must be an integer at least 3")
+        hole_boundary_points = int(hole_boundary_points)
     cx, cy = float(center[0]), float(center[1])
     theta = float(rotation) + np.linspace(0.0, 2.0 * np.pi, boundary_points, endpoint=False)
     rr = radius + amplitude * np.cos(mode * (theta - float(rotation)))
     vertices = np.column_stack((cx + rr * np.cos(theta), cy + rr * np.sin(theta)))
 
+    hole_center = tuple(center if hole_center is None else hole_center)
+    if len(hole_center) != 2 or not np.all(np.isfinite(hole_center)):
+        raise ValueError("hole_center must contain two finite coordinates")
+    if hole_radius > 0:
+        from .geometry import PolygonDomain
+
+        domain = PolygonDomain(vertices)
+        point = np.asarray(hole_center)[None, :]
+        if not domain.contains(point)[0] or domain.boundary_distance(point)[0] <= hole_radius:
+            raise ValueError("hole disk must lie strictly inside the sampled star")
+    polygon_holes = ()
+    if hole_radius > 0 and hole_boundary_points is not None:
+        angles = np.linspace(0, -2*np.pi, hole_boundary_points, endpoint=False)
+        polygon_holes = (np.column_stack((hole_center[0] + hole_radius*np.cos(angles),
+                                          hole_center[1] + hole_radius*np.sin(angles))),)
+
     def build(gmsh):
         """Create the polygonal star surface, optionally with an inner wall."""
-        holes = ((cx, cy, hole_radius),) if hole_radius > 0.0 else ()
-        return _gmsh_polygon_surface(gmsh, vertices, mesh_size, circular_holes=holes)
+        holes = ((*hole_center, hole_radius),) if hole_radius > 0 and not polygon_holes else ()
+        return _gmsh_polygon_surface(gmsh, vertices, mesh_size,
+                                     circular_holes=holes, polygon_holes=polygon_holes)
 
     cache_key_data = {
         "geometry": "smooth_star",
@@ -1145,6 +1180,8 @@ def gmsh_smooth_star_mesh(
     }
     if hole_radius > 0.0:
         cache_key_data["hole_radius"] = hole_radius
+        cache_key_data["hole_center"] = hole_center
+        cache_key_data["hole_boundary_points"] = hole_boundary_points
 
     return _generate_gmsh_mesh(
         "smooth_star",
@@ -1237,7 +1274,9 @@ def gmsh_smooth_star_mesh_with_background_sizes(
     background_file: str | None = None
     t_phase = start_phase("INIT")
     if started_gmsh:
-        gmsh.initialize()
+        # interruptible=False: gmsh 4.15's interruptible mode sets SIGINT to SIG_DFL and, lacking a
+        # `global`, never restores Python's handler in finalize(), which breaks Ctrl-C afterwards.
+        gmsh.initialize(interruptible=False)
     else:
         gmsh.clear()
     finish_phase("INIT", t_phase, started=started_gmsh)
