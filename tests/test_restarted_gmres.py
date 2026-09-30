@@ -3,11 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import (
+from hdgfem.linalg.face_dense import (
     face_dense_relative_residual,
     materialize_face_dense_matrix,
-    normalize_penalty_rows,
 )
+from hdgfem.assembly.face_dense import normalize_penalty_rows
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.gmres import restarted_gmres, solve_face_dense_gmres

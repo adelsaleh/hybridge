@@ -93,7 +93,7 @@ def test_spd_storage_preserves_full_operator_and_rejects_asymmetry():
 
 
 def test_pmg_screen_preserves_balanced_fixed_work():
-    from hdgfem.linalg.face_hp_policy import face_hp_mg_preconditioner_parameters
+    from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
     for policy, tuning in benchmark.PMG_REPLAY_POLICIES.values():
         parameters = face_hp_mg_preconditioner_parameters(policy, overrides=tuning)
         assert parameters["presweeps"] == parameters["postsweeps"]
@@ -124,7 +124,7 @@ def test_original_matrix_refinement_with_nearly_symmetric_factor():
     ("standard", {"chebyshev_order": 1}), ("fast", None),
 ])
 def test_pmg_constructor_forwards_fixed_work_tuning(monkeypatch, policy, tuning):
-    from hdgfem.linalg import face_hp_multigrid as mg
+    from hdgfem.linalg.multigrid import face_hp as mg
     captured = {}
 
     class StopBeforeDeviceWork(Exception):

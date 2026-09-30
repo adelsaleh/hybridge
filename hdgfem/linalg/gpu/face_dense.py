@@ -1,7 +1,7 @@
 """CuPy implementation of the HDG face-dense matrix--vector product.
 
 This module implements only the first GPU operator layer.  It transfers an
-already assembled :class:`~hdgfem.assembly.face_dense.FaceDenseSystem` to a
+already assembled :class:`~hdgfem.linalg.face_dense.FaceDenseSystem` to a
 CUDA device, gathers the neighbouring face vectors into a fixed-width extended
 layout, and applies the face-row dense matrices in a batch.
 
@@ -26,7 +26,7 @@ from typing import Literal
 
 import numpy as np
 
-from hdgfem.assembly.face_dense import FaceDenseSystem
+from hdgfem.linalg.face_dense import FaceDenseSystem
 from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
 
 

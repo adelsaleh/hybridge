@@ -43,14 +43,13 @@ def solve_cupyx_device_coo(
         raise_on_nonconvergence: bool = False,
 ):
     """Solve a device COO system without materializing matrix, RHS, or trace."""
-    from hdgfem.backends.cupy import (
-            build_cupyx_ilu_preconditioner,
+    from hdgfem.linalg.gpu.cupyx import build_cupyx_ilu_preconditioner, solve_cupyx_csr
+    from hdgfem.linalg.gpu.sparse import (
             diagonal_scale_cupy_csr_rows_in_place,
             scipy_coo_to_cupy_csr,
-            solve_cupyx_csr,
         )
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.linalg.system import SolveResult, finalize_solve_result
+    from hdgfem.linalg.results import SolveResult, finalize_solve_result
 
     cupy = require_cupy()
     total_start = time.perf_counter()

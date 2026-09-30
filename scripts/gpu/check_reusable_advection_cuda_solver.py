@@ -27,7 +27,7 @@ from hdgfem.runtime.optional import (
     require_pyamgx,
 )
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.io.config import load_amgx_config
+from hdgfem.linalg.amgx.config import load_amgx_config
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key

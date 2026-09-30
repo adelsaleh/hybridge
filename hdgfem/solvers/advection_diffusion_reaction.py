@@ -18,7 +18,9 @@ from hdgfem.assembly.advection_diffusion_reaction import (
 )
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.linalg.system import KnownDofReduction, SolveResult, expand_known_dofs, solve_global_system
+from hdgfem.linalg.reduction import KnownDofReduction, expand_known_dofs
+from hdgfem.linalg.results import SolveResult
+from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.diffusion_reaction import (
     FluxPostprocessSpace,
     _build_hdg_postprocess_cache,

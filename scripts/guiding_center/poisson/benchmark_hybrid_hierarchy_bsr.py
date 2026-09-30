@@ -17,8 +17,14 @@ import time
 
 import numpy as np
 
-from hdgfem.linalg.hierarchy_bsr import (load_operator, level_permutation,
-    permute_operator, padded_bsr, verify_reconstruction, storage_stats)
+from hdgfem.linalg.multigrid.hierarchy_bsr import (
+    load_operator,
+    level_permutation,
+    permute_operator,
+    padded_bsr,
+    verify_reconstruction,
+    storage_stats,
+)
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import ROOT
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 from scripts.guiding_center.poisson.hierarchy_product_benchmark import benchmark_operator

@@ -19,7 +19,8 @@ import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
 from hdgfem.linalg.system import assemble_global_matrix
-from hdgfem.linalg.transport_diagnostics import trace_inflow_diagnostics, trace_matrix_diagnostics
+from hdgfem.transport.diagnostics import trace_inflow_diagnostics
+from hdgfem.linalg.failure_snapshot import trace_matrix_diagnostics
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 
 

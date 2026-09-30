@@ -3,13 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import (
-    face_dense_relative_residual,
-    normalize_penalty_rows,
-)
+from hdgfem.linalg.face_dense import face_dense_relative_residual
+from hdgfem.assembly.face_dense import normalize_penalty_rows
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
-from hdgfem.backends.cupy_gmres import (
+from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hdgfem.linalg.gpu.gmres import (
     _apply_previous_givens,
     _back_substitute_upper,
     _compute_givens,
@@ -19,9 +17,7 @@ from hdgfem.backends.cupy_gmres import (
     CuPyVectorBLAS,
     restarted_gmres_cupy,
 )
-from hdgfem.backends.cupy_preconditionners import (
-    CuPyFaceBlockJacobiPreconditioner,
-)
+from hdgfem.linalg.gpu.preconditioners import CuPyFaceBlockJacobiPreconditioner
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
@@ -400,9 +396,7 @@ def test_cupy_block_jacobi_application_matches_cpu_reference() -> None:
 
 
 def test_orthogonality_metrics_identity_and_perturbation() -> None:
-    from hdgfem.backends.cupy_gmres import (
-        _orthogonality_metrics_from_gram,
-    )
+    from hdgfem.linalg.gpu.gmres import _orthogonality_metrics_from_gram
 
     identity = np.eye(4)
     assert _orthogonality_metrics_from_gram(identity) == (0.0, 0.0, 0.0)
@@ -422,9 +416,7 @@ def test_orthogonality_metrics_identity_and_perturbation() -> None:
 
 @pytest.mark.parametrize("bad", [np.ones(3), np.ones((2, 3))])
 def test_orthogonality_metrics_reject_nonsquare_input(bad: np.ndarray) -> None:
-    from hdgfem.backends.cupy_gmres import (
-        _orthogonality_metrics_from_gram,
-    )
+    from hdgfem.linalg.gpu.gmres import _orthogonality_metrics_from_gram
 
     with pytest.raises(ValueError, match="square"):
         _orthogonality_metrics_from_gram(bad)

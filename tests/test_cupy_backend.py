@@ -766,11 +766,12 @@ def test_advection_reaction_raw_cuda_discontinuous_beta_matrix_matches_numpy(
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_matches_direct_small_system(monkeypatch):
     import hdgfem.backends.cupy as cupy_backend
+    import hdgfem.linalg.gpu.sparse as gpu_sparse
     import hdgfem.runtime.optional as runtime_optional
 
     upload_count = 0
     download_count = 0
-    original_upload = cupy_backend.scipy_coo_to_cupy_csr
+    original_upload = gpu_sparse.scipy_coo_to_cupy_csr
     original_download = runtime_optional.asnumpy
 
     def counted_upload(*args, **kwargs):
@@ -783,7 +784,7 @@ def test_cupyx_solver_matches_direct_small_system(monkeypatch):
         download_count += 1
         return original_download(array)
 
-    monkeypatch.setattr(cupy_backend, "scipy_coo_to_cupy_csr", counted_upload)
+    monkeypatch.setattr(gpu_sparse, "scipy_coo_to_cupy_csr", counted_upload)
     monkeypatch.setattr(runtime_optional, "asnumpy", counted_download)
 
     rows = np.array([0, 0, 1, 1], dtype=np.int64)
@@ -816,6 +817,7 @@ def test_cupyx_solver_matches_direct_small_system(monkeypatch):
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_keeps_solution_on_device_unless_host_copy_requested(monkeypatch):
     import hdgfem.backends.cupy as cupy_backend
+    import hdgfem.linalg.gpu.sparse as gpu_sparse
     import hdgfem.runtime.optional as runtime_optional
 
     download_count = 0
@@ -1523,7 +1525,7 @@ def test_cuda_row_scaling_uses_row_max_for_near_zero_diagonal():
     import cupyx.scipy.sparse as sparse
 
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import _diagonal_scale_csr_rows_in_place
+    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
 
     cp = require_cupy()
     matrix = sparse.csr_matrix(
@@ -1555,11 +1557,9 @@ def test_cuda_row_scaling_restore_round_trip():
     import cupyx.scipy.sparse as sparse
 
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.cupy import symmetric_scale_cupy_csr_in_place
-    from hdgfem.backends.advection_cuda import (
-        _diagonal_scale_csr_rows_in_place,
-        _restore_scaled_csr_rows_in_place,
-    )
+    from hdgfem.linalg.gpu.sparse import symmetric_scale_cupy_csr_in_place
+    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
+    from hdgfem.linalg.gpu.sparse import _restore_scaled_csr_rows_in_place
 
     cp = require_cupy()
     matrix_host = np.asarray(
@@ -1609,12 +1609,12 @@ def test_cuda_bsr_left_scaling_matches_scalar_csr_and_restores_values():
     import cupyx.scipy.sparse as sparse
 
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.advection_cuda import (
-        _DeviceBsrMatrixView,
-        _diagonal_scale_bsr_rows_in_place,
-        _diagonal_scale_csr_rows_in_place,
-        _restore_left_scaled_bsr_rows_in_place,
-    )
+    from hdgfem.linalg.gpu.sparse import (
+            _DeviceBsrMatrixView,
+            _diagonal_scale_bsr_rows_in_place,
+            _restore_left_scaled_bsr_rows_in_place,
+        )
+    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
 
     cp = require_cupy()
     matrix_host = np.asarray(
@@ -1808,13 +1808,15 @@ def test_p6_face_bsr_fgmres_dilu_fallback_scalarizes_only_on_device() -> None:
     import cupy as cp
     import cupyx.scipy.sparse as sparse
 
-    from hdgfem.backends.advection_cuda import (
-        _assembly_device_csr_matrix,
-        _device_compressed_matvec,
-        _scalarize_device_bsr_matrix,
-        _solve_reduced_system_amgx_device_once,
-        PyAMGXCsrDeviceSolver,
-    )
+    from hdgfem.linalg.gpu.sparse import (
+            _assembly_device_csr_matrix,
+            _device_compressed_matvec,
+            _scalarize_device_bsr_matrix,
+        )
+    from hdgfem.linalg.amgx.device_solver import (
+            _solve_reduced_system_amgx_device_once,
+            PyAMGXCsrDeviceSolver,
+        )
     from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 
     mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))

@@ -11,11 +11,11 @@ import numpy as np
 
 from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
-from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
-from hdgfem.backends.cupy_polynomial import CuPyPolynomialPreconditioner
-from hdgfem.backends.cupy_preconditionners import CuPyFaceAdditiveSchwarzPreconditioner
-from hdgfem.backends.cupy_profiling import (
+from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hdgfem.linalg.gpu.gmres import restarted_gmres_cupy
+from hdgfem.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
+from hdgfem.linalg.gpu.preconditioners import CuPyFaceAdditiveSchwarzPreconditioner
+from hdgfem.linalg.gpu.profiling import (
     CuPyGMRESProfiler,
     benchmark_cuda_call,
     profile_additive_schwarz,

@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.backends import advection_cuda as raw_amgx
-from hdgfem.backends import cupy as cupy_backend
-from hdgfem.backends.amgx_errors import as_amgx_capacity_error, is_amgx_capacity_error
-from hdgfem.linalg.system import LinearSolveCapacityError
+import hdgfem.linalg.amgx.device_solver as raw_amgx
+import hdgfem.linalg.amgx.host as cupy_backend
+from hdgfem.linalg.amgx.errors import as_amgx_capacity_error, is_amgx_capacity_error
+from hdgfem.linalg.results import LinearSolveCapacityError
 
 
 class AMGXAllocationError(RuntimeError):

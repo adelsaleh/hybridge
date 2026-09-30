@@ -16,7 +16,8 @@ from hdgfem.backends.numba import (
     assemble_projected_trace_system_numba,
     assemble_projected_trace_system_zero_flux_numba,
 )
-from hdgfem.linalg.system import assemble_global_matrix, eliminate_known_dofs
+from hdgfem.linalg.system import assemble_global_matrix
+from hdgfem.linalg.reduction import eliminate_known_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.solvers.advection_reaction import (
     AdvectionReactionHDGSolver,

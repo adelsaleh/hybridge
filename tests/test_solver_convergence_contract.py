@@ -5,17 +5,17 @@ import pytest
 import scipy.sparse
 
 import hdgfem
-import hdgfem.linalg.system as system
-from hdgfem.linalg.system import (
+import hdgfem.linalg.results as linalg_results
+import hdgfem.linalg.iterative as linalg_iterative
+from hdgfem.linalg.results import (
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
     SolveResult,
     finalize_solve_result,
     residual_history_is_stagnated,
-    solve_global_system,
-    solve_iterative_system,
-    solve_petsc_system,
 )
+from hdgfem.linalg.system import solve_global_system
+from hdgfem.linalg.iterative import solve_iterative_system, solve_petsc_system
 
 
 def _identity_problem():
@@ -87,7 +87,7 @@ def test_backend_success_cannot_override_true_residual_failure(monkeypatch) -> N
     def false_success(_matrix, _rhs, **_kwargs):
         return np.zeros_like(_rhs), 0
 
-    monkeypatch.setitem(system._ITERATIVE_SOLVERS, "BICGSTAB", false_success)
+    monkeypatch.setitem(linalg_iterative._ITERATIVE_SOLVERS, "BICGSTAB", false_success)
     result = solve_iterative_system(
         matrix,
         rhs,
@@ -111,7 +111,7 @@ def test_raise_on_nonconvergence_carries_the_normalized_result(monkeypatch) -> N
     def false_success(_matrix, _rhs, **_kwargs):
         return np.zeros_like(_rhs), 0
 
-    monkeypatch.setitem(system._ITERATIVE_SOLVERS, "BICGSTAB", false_success)
+    monkeypatch.setitem(linalg_iterative._ITERATIVE_SOLVERS, "BICGSTAB", false_success)
     with pytest.raises(LinearSolveConvergenceError) as raised:
         solve_iterative_system(
             matrix,
@@ -134,7 +134,7 @@ def test_backend_nonconvergence_is_preserved_separately_from_normalized_info(mon
     def native_failure(_matrix, _rhs, **_kwargs):
         return _rhs.copy(), 7
 
-    monkeypatch.setitem(system._ITERATIVE_SOLVERS, "BICGSTAB", native_failure)
+    monkeypatch.setitem(linalg_iterative._ITERATIVE_SOLVERS, "BICGSTAB", native_failure)
     result = solve_iterative_system(
         matrix,
         rhs,
@@ -205,7 +205,7 @@ def test_petsc_wrapper_destroys_registered_resources_on_failure(monkeypatch) -> 
         _resource_owner(Resource("vector"))
         raise RuntimeError("native PETSc failure")
 
-    monkeypatch.setattr(system, "_solve_petsc_system_impl", fail_impl)
+    monkeypatch.setattr(linalg_iterative, "_solve_petsc_system_impl", fail_impl)
     matrix, rhs = _identity_problem()
     with pytest.raises(RuntimeError, match="native PETSc failure"):
         solve_petsc_system(matrix, rhs)
@@ -237,7 +237,7 @@ def test_petsc_matrix_construction_failure_destroys_partial_matrix(monkeypatch) 
         IntType = np.int64
         Mat = FakePetscMatrix
 
-    monkeypatch.setattr(system, "_import_petsc", lambda: FakePETSc)
+    monkeypatch.setattr(linalg_iterative, "_import_petsc", lambda: FakePETSc)
     matrix, rhs = _identity_problem()
     with pytest.raises(RuntimeError, match="matrix construction failed"):
         solve_petsc_system(matrix, rhs)
@@ -246,7 +246,7 @@ def test_petsc_matrix_construction_failure_destroys_partial_matrix(monkeypatch) 
 
 
 def test_amgx_retry_count_is_bounded_before_optional_runtime_import() -> None:
-    from hdgfem.backends.advection_cuda import solve_reduced_system_amgx_device
+    from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
 
     retries = tuple({"label": f"retry-{index}"} for index in range(8))
     with pytest.raises(ValueError, match="at most 8 bounded attempts"):
@@ -290,7 +290,8 @@ class _FakeAMGXNoMemoryError(RuntimeError):
 
 @pytest.mark.parametrize("primary_throws", (False, True))
 def test_raw_amgx_primary_retry_reuses_only_a_live_solver(monkeypatch, primary_throws):
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from types import SimpleNamespace
 
     primary = SimpleNamespace(closed=False, is_setup=True)
@@ -311,8 +312,8 @@ def test_raw_amgx_primary_retry_reuses_only_a_live_solver(monkeypatch, primary_t
         return result, np.ones(2)
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", attempt)
-    result, _ = raw_amgx.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", attempt)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(), reusable_solver=primary,
         retry_attempts=({"reuse_primary_solver": True, "use_initial_guess": False},),
     )
@@ -328,7 +329,7 @@ def test_raw_amgx_primary_retry_reuses_only_a_live_solver(monkeypatch, primary_t
     {"scale_system": "left"},
 ))
 def test_raw_amgx_primary_reuse_rejects_changed_solver_or_matrix_scaling(override):
-    from hdgfem.backends.advection_cuda import solve_reduced_system_amgx_device
+    from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
 
     with pytest.raises(ValueError, match="primary configuration and scaling"):
         solve_reduced_system_amgx_device(
@@ -339,7 +340,8 @@ def test_raw_amgx_primary_reuse_rejects_changed_solver_or_matrix_scaling(overrid
 
 def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkeypatch):
     from types import SimpleNamespace
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     config = {"solver": {"solver": "PCGF", "preconditioner": {
         "solver": "AMG", "classical_bsr_hierarchy": "scalar_expand",
@@ -354,9 +356,9 @@ def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkey
     def attempt(_assembly, **kwargs):
         calls.append(kwargs)
         if not kwargs["scalarize_bsr"]:
-            raw_amgx.PyAMGXCsrDeviceSolver.setup(primary, matrix)
+            amgx_device_solver.PyAMGXCsrDeviceSolver.setup(primary, matrix)
             raise AssertionError("scalar-only smoother unexpectedly accepted face blocks")
-        raw_amgx._validate_amgx_block_configuration(config, 1)
+        amgx_device_solver._validate_amgx_block_configuration(config, 1)
         result = _diagnostic_result(
             solver_residual=1.0e-8, solver_target=1.0e-6,
             physical_residual=1.0e-8, physical_target=1.0e-6,
@@ -365,8 +367,8 @@ def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkey
         return result, np.ones(2)
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", attempt)
-    result, _ = raw_amgx.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", attempt)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(), config=config,
         retry_attempts=({"scalarize_bsr": True},),
     )
@@ -380,7 +382,8 @@ def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkey
 def test_raw_amgx_nonfinite_seed_residual_does_not_poison_best_candidate(
     monkeypatch, seed_norm,
 ):
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from types import SimpleNamespace
 
     assembly = SimpleNamespace(rhs=np.ones(2))
@@ -402,11 +405,11 @@ def test_raw_amgx_nonfinite_seed_residual_does_not_poison_best_candidate(
     monkeypatch.setattr(raw_amgx, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(raw_amgx, "_assembly_device_csr_matrix", lambda *_args: None)
     monkeypatch.setattr(raw_amgx, "_device_compressed_matvec", lambda *_args: np.zeros(2))
-    monkeypatch.setattr(raw_amgx, "_residual_stats_cp", lambda *_args, **_kwargs: (
+    monkeypatch.setattr(amgx_device_solver, "_residual_stats_cp", lambda *_args, **_kwargs: (
         seed_norm, 1.0, seed_norm, 1.0e-6,
     ))
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", attempt)
-    result, _ = raw_amgx.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", attempt)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly, retry_seed_solution=seed,
         retry_attempts=({"use_best_solution": True},),
     )
@@ -421,7 +424,8 @@ def test_raw_amgx_retains_upstream_seed_until_physical_residual_passes(
     monkeypatch, correction,
 ):
     from dataclasses import dataclass
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     @dataclass
     class Assembly:
@@ -469,10 +473,10 @@ def test_raw_amgx_retains_upstream_seed_until_physical_residual_passes(
     monkeypatch.setattr(raw_amgx, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(raw_amgx, "_assembly_device_csr_matrix", lambda *_args: matrix)
     monkeypatch.setattr(raw_amgx, "_device_compressed_matvec", lambda mat, x, *_args: mat @ x)
-    monkeypatch.setattr(raw_amgx, "_residual_stats_cp", residual_stats)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", attempt)
+    monkeypatch.setattr(amgx_device_solver, "_residual_stats_cp", residual_stats)
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", attempt)
     retry = {"use_best_solution": True, "residual_correction": correction}
-    result, solution = raw_amgx.solve_reduced_system_amgx_device(
+    result, solution = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly, retry_seed_solution=seed, retry_seed_label="native-best",
         check_rtol=1.0e-6, retry_attempts=(retry, retry),
     )
@@ -487,7 +491,8 @@ def test_raw_amgx_retains_upstream_seed_until_physical_residual_passes(
 
 
 def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     class FakeDeviceData:
         nbytes = 16
@@ -515,12 +520,12 @@ def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
     assembly = FakeCsrAssembly()
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
     monkeypatch.setattr(
-        raw_amgx,
+        amgx_device_solver,
         "_solve_reduced_system_amgx_device_once",
         lambda *_args, **_kwargs: (result, solution),
     )
 
-    returned_result, returned_solution = raw_amgx.solve_reduced_system_amgx_device(
+    returned_result, returned_solution = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly,
         scale_system="none",
         retry_attempts=({"label": "scaled-retry", "scale_system": "left"},),
@@ -538,7 +543,8 @@ def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
 def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficients(
     monkeypatch,
 ) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     created = []
     calls = []
@@ -575,9 +581,9 @@ def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficient
         return result, np.ones(2)
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(raw_amgx, "PyAMGXCsrDeviceSolver", FakeReusableSolver)
+    monkeypatch.setattr(amgx_device_solver, "PyAMGXCsrDeviceSolver", FakeReusableSolver)
     monkeypatch.setattr(
-        raw_amgx, "_solve_reduced_system_amgx_device_once", fake_attempt
+        amgx_device_solver, "_solve_reduced_system_amgx_device_once", fake_attempt
     )
     cache = {}
     retry = ({
@@ -588,10 +594,10 @@ def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficient
         "solver_cache_key": "fgmres-dilu",
     },)
 
-    first, _ = raw_amgx.solve_reduced_system_amgx_device(
+    first, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(), retry_attempts=retry, retry_solver_cache=cache
     )
-    second, _ = raw_amgx.solve_reduced_system_amgx_device(
+    second, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(), retry_attempts=retry, retry_solver_cache=cache
     )
 
@@ -605,7 +611,8 @@ def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficient
 
 
 def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
 
@@ -615,13 +622,13 @@ def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) ->
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
     monkeypatch.setattr(
-        raw_amgx,
+        amgx_device_solver,
         "_solve_reduced_system_amgx_device_once",
         fail_with_oom,
     )
 
     with pytest.raises(LinearSolveCapacityError) as raised:
-        raw_amgx.solve_reduced_system_amgx_device(
+        amgx_device_solver.solve_reduced_system_amgx_device(
             _FakeAmgxAssembly(),
             retry_attempts=({"label": "retry-1"}, {"label": "retry-2"}),
             scale_system=False,
@@ -635,7 +642,8 @@ def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) ->
 
 
 def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
 
@@ -645,13 +653,13 @@ def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) ->
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
     monkeypatch.setattr(
-        raw_amgx,
+        amgx_device_solver,
         "_solve_reduced_system_amgx_device_once",
         fail_generically,
     )
 
     with pytest.raises(LinearSolveConvergenceError, match="exhausted 3 bounded attempts"):
-        raw_amgx.solve_reduced_system_amgx_device(
+        amgx_device_solver.solve_reduced_system_amgx_device(
             _FakeAmgxAssembly(),
             retry_attempts=({"label": "retry-1"}, {"label": "retry-2"}),
             scale_system=False,
@@ -661,7 +669,7 @@ def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) ->
 
 
 def test_raw_amgx_capacity_error_reports_structured_memory() -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
 
     class FakeRuntime:
         @staticmethod
@@ -700,7 +708,7 @@ def test_raw_amgx_capacity_error_reports_structured_memory() -> None:
 
 
 def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     destroyed = []
 
@@ -714,8 +722,8 @@ def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
             if self.fail:
                 raise RuntimeError(f"{self.label} destroy failed")
 
-    solver = raw_amgx.PyAMGXCsrDeviceSolver.__new__(
-        raw_amgx.PyAMGXCsrDeviceSolver
+    solver = amgx_device_solver.PyAMGXCsrDeviceSolver.__new__(
+        amgx_device_solver.PyAMGXCsrDeviceSolver
     )
     solver.solver = FakeObject("solver", fail=True)
     solver.vec_x = FakeObject("x")
@@ -735,7 +743,7 @@ def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
 
 @pytest.mark.parametrize("history", [0, 1])
 def test_raw_amgx_config_respects_explicit_residual_history_without_mutating_input(history) -> None:
-    from hdgfem.backends.advection_cuda import _amgx_config_for_solve
+    from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
 
     config = {"solver": {"solver": "FGMRES", "store_res_history": history}}
     normalized = _amgx_config_for_solve(config=config)
@@ -746,7 +754,7 @@ def test_raw_amgx_config_respects_explicit_residual_history_without_mutating_inp
 
 
 def test_raw_amgx_config_reserves_native_iteration_table_for_level_three() -> None:
-    from hdgfem.backends.advection_cuda import _amgx_config_for_solve
+    from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
 
     config = {"solver": {"solver": "BICGSTAB", "print_solve_stats": 0}}
 
@@ -761,7 +769,7 @@ def test_raw_amgx_config_reserves_native_iteration_table_for_level_three() -> No
 
 
 def test_raw_amgx_scaled_solver_validation_uses_configured_relative_tolerance() -> None:
-    from hdgfem.backends.advection_cuda import _amgx_relative_residual_check_rtol
+    from hdgfem.linalg.amgx.device_solver import _amgx_relative_residual_check_rtol
 
     relative = {
         "solver": {"convergence": "RELATIVE_INI_CORE", "tolerance": 1.0e-8}
@@ -775,7 +783,8 @@ def test_raw_amgx_scaled_solver_validation_uses_configured_relative_tolerance() 
 
 
 def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     result = _diagnostic_result(
         solver_residual=1.0,
@@ -786,13 +795,13 @@ def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) 
     finalize_solve_result(result, backend="pyamgx-device", backend_success=True)
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
     monkeypatch.setattr(
-        raw_amgx,
+        amgx_device_solver,
         "_solve_reduced_system_amgx_device_once",
         lambda *_args, **_kwargs: (result, np.ones(2)),
     )
 
     with pytest.raises(LinearSolveConvergenceError) as raised:
-        raw_amgx.solve_reduced_system_amgx_device(
+        amgx_device_solver.solve_reduced_system_amgx_device(
             _FakeAmgxAssembly(),
             retry_attempts=({"label": "retry"},),
         )
@@ -802,7 +811,8 @@ def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) 
 
 
 def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     result = _diagnostic_result(
         solver_residual=np.nan,
@@ -819,12 +829,12 @@ def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) ->
     solution = np.full(2, np.nan)
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
     monkeypatch.setattr(
-        raw_amgx,
+        amgx_device_solver,
         "_solve_reduced_system_amgx_device_once",
         lambda *_args, **_kwargs: (result, solution),
     )
 
-    returned_result, returned_solution = raw_amgx.solve_reduced_system_amgx_device(
+    returned_result, returned_solution = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(),
         retry_attempts=({"label": "retry"},),
         raise_on_nonconvergence=False,
@@ -839,7 +849,7 @@ def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) ->
 def test_convergence_contract_is_available_from_public_packages() -> None:
     assert hdgfem.LinearSolveCapacityError is LinearSolveCapacityError
     assert hdgfem.LinearSolveConvergenceError is LinearSolveConvergenceError
-    assert hdgfem.LinearSolveError is system.LinearSolveError
+    assert hdgfem.LinearSolveError is linalg_results.LinearSolveError
     assert "SolveStatus" in hdgfem.__all__
     assert issubclass(LinearSolveConvergenceError, RuntimeError)
 
@@ -849,7 +859,8 @@ def test_convergence_contract_is_available_from_public_packages() -> None:
 def test_guiding_center_retries_precondition_bicgstab_before_dilu(
     monkeypatch, accepted_attempt, failure
 ) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 
@@ -876,8 +887,8 @@ def test_guiding_center_retries_precondition_bicgstab_before_dilu(
         return result, np.ones(2)
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", fake_attempt)
-    result, _ = raw_amgx.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", fake_attempt)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly, config=options.amgx_config, retry_attempts=options.amgx_retry_attempts,
         initial_guess=guess, check_rtol=options.solver_rtol, atol=options.solver_atol,
     )
@@ -902,7 +913,8 @@ def test_guiding_center_retries_precondition_bicgstab_before_dilu(
 
 
 def test_raw_amgx_divergence_advances_retry_and_records_exit(monkeypatch, capsys) -> None:
-    import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
     def attempt(_assembly, **kwargs):
@@ -922,8 +934,8 @@ def test_raw_amgx_divergence_advances_retry_and_records_exit(monkeypatch, capsys
         return result, np.ones(2)
 
     monkeypatch.setattr(raw_amgx, "require_cupy", lambda: _FakeCupy)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", attempt)
-    result, _ = raw_amgx.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", attempt)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         _FakeAmgxAssembly(), retry_attempts=({"label": "recovery"},), verbose=1,
     )
     assert result.converged and len(calls) == 2

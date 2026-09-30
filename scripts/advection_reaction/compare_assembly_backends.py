@@ -132,7 +132,9 @@ def _load_hdgfem() -> None:
         from hdgfem.core.space import DGSpace as _DGSpace
         from hdgfem.core.space import VectorDGField as _VectorDGField
         from hdgfem.linalg.ordering import upwind_scc_trace_ordering as _upwind_scc_trace_ordering
-        from hdgfem.linalg.system import eliminate_known_dofs as _eliminate_known_dofs
+        from hdgfem.linalg.reduction import (
+                    eliminate_known_dofs as _eliminate_known_dofs,
+                )
         from hdgfem.solvers.diffusion_reaction import (
             _diffusion_is_identity as _diffusion_is_identity,
         )

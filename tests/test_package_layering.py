@@ -44,9 +44,9 @@ SIBLINGS = {"hdgfem.transport", "hdgfem.mixed"}
 ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
     {
         ("hdgfem.assembly.advection_diffusion_reaction", "hdgfem.solvers.diffusion_reaction"),
+        ("hdgfem.assembly.advection_residual", "hdgfem.transport.diagnostics"),
         ("hdgfem.assembly.diffusion_coefficients", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.assembly.flux_recovery", "hdgfem.solvers.diffusion_reaction"),
-        ("hdgfem.backends.advection_cuda", "hdgfem.io.config"),
         ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.advection_diffusion_reaction"),
         ("hdgfem.backends.advection_diffusion_reaction_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.backends.diffusion_cupy", "hdgfem.solvers.diffusion_reaction"),
@@ -54,17 +54,6 @@ ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
         ("hdgfem.backends.diffusion_raw_cuda", "hdgfem.solvers.diffusion_reaction"),
         ("hdgfem.core.space", "hdgfem.hdg.matrices"),
         ("hdgfem.diagnostics", "hdgfem.io.plot"),
-        ("hdgfem.linalg.additive_schwarz", "hdgfem.assembly.face_dense"),
-        ("hdgfem.linalg.block_jacobi", "hdgfem.assembly.face_dense"),
-        ("hdgfem.linalg.cupyx_device", "hdgfem.backends.cupy"),
-        ("hdgfem.linalg.face_hp_krylov", "hdgfem.backends.legendre_face_bsr"),
-        ("hdgfem.linalg.face_hp_multigrid", "hdgfem.backends.advection_cuda"),
-        ("hdgfem.linalg.face_hp_multigrid", "hdgfem.backends.legendre_face_bsr"),
-        ("hdgfem.linalg.gmres", "hdgfem.assembly.face_dense"),
-        ("hdgfem.linalg.pardiso_runtime", "hdgfem.kernels.sparse_pattern"),
-        ("hdgfem.linalg.polynomial", "hdgfem.assembly.face_dense"),
-        ("hdgfem.linalg.system", "hdgfem.backends.cupy"),
-        ("hdgfem.linalg.transport_diagnostics", "hdgfem.hdg.stabilization"),
     }
 )
 

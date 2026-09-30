@@ -18,7 +18,7 @@ def test_native_amgx_bsr_retry_preconditioners(block_size, retry_index, scale_sy
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
 
-    from hdgfem.backends.advection_cuda import _solve_reduced_system_amgx_device_once
+    from hdgfem.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
     from hdgfem.runtime.precision import REAL_DTYPE
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
@@ -104,7 +104,7 @@ def unpooled_bsr_system():
 @pytest.mark.parametrize("backend", ("legacy", "cusparse_generic"))
 def test_block_jacobi_large_block_update(unpooled_bsr_system, block_size, backend) -> None:
     """Check Dinv and both BSR multiplies, with allocations visible to memcheck."""
-    from hdgfem.backends.advection_cuda import _solve_reduced_system_amgx_device_once
+    from hdgfem.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
 
     cp, host, blocks, exact, assembly, rtol = unpooled_bsr_system(block_size)
     guess = np.cos(np.arange(exact.size) * 0.13).astype(exact.dtype)
@@ -140,6 +140,7 @@ def test_block_jacobi_exception_reaches_real_dilu(
 ) -> None:
     """Inject a recoverable BJ error; the very next attempt must solve via DILU."""
     import hdgfem.backends.advection_cuda as raw_amgx
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 
@@ -151,8 +152,8 @@ def test_block_jacobi_exception_reaches_real_dilu(
         config["device_mem_pool_enabled"] = 0
         config["solver"]["tolerance"] = rtol / 10.0
 
-    original_once = raw_amgx._solve_reduced_system_amgx_device_once
-    original_method = getattr(raw_amgx.PyAMGXCsrDeviceSolver, failure_phase)
+    original_once = amgx_device_solver._solve_reduced_system_amgx_device_once
+    original_method = getattr(amgx_device_solver.PyAMGXCsrDeviceSolver, failure_phase)
     calls = []
     failed_solvers = []
 
@@ -173,11 +174,11 @@ def test_block_jacobi_exception_reaches_real_dilu(
             kwargs["maxiter"] = 1  # Force primary and L1 to miss the strict target.
         return original_once(current_assembly, **kwargs)
 
-    monkeypatch.setattr(raw_amgx.PyAMGXCsrDeviceSolver, failure_phase, fail_block_jacobi)
-    monkeypatch.setattr(raw_amgx, "_solve_reduced_system_amgx_device_once", solve_once)
+    monkeypatch.setattr(amgx_device_solver.PyAMGXCsrDeviceSolver, failure_phase, fail_block_jacobi)
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", solve_once)
     cache = {}
     try:
-        result, solution = raw_amgx.solve_reduced_system_amgx_device(
+        result, solution = amgx_device_solver.solve_reduced_system_amgx_device(
             assembly, config=options.amgx_config, retry_attempts=options.amgx_retry_attempts,
             retry_solver_cache=cache, tolerance=rtol / 10.0, check_rtol=rtol,
             atol=rtol / 10.0, maxiter=100, initial_guess=cp.ones_like(assembly.rhs),

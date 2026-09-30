@@ -53,10 +53,10 @@ def validate_cache(system):
 def run(spec_path, output):
     import numpy as np
     import pypardiso
-    from hdgfem.assembly.face_dense import face_dense_matvec
+    from hdgfem.linalg.face_dense import face_dense_matvec
     from hdgfem.linalg.bsr import face_dense_to_bsr
     from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
-    from hdgfem.linalg.system import clear_pypardiso_cache, solve_pypardiso_system
+    from hdgfem.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
 
     spec = read(spec_path)
     system, protocol = spec['system'], spec['protocol']

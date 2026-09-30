@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pytest
 
-from hdgfem.backends.cupy_triangular import ReusableCuPyLUSolve, superlu_gather_indices
+from hdgfem.linalg.gpu.triangular import ReusableCuPyLUSolve, superlu_gather_indices
 from scripts.guiding_center.poisson import benchmark_scipy_lu_gpu as benchmark
 
 
@@ -38,7 +38,7 @@ def test_explicit_factors_preserve_original_nonsymmetric_operator(explicit_facto
 @pytest.mark.parametrize("candidate", benchmark.METHODS)
 def test_gpu_lu_reuses_analysis_with_changing_rhs(explicit_factors, candidate):
     from hdgfem.runtime.optional import require_cupy_device
-    from hdgfem.backends.cupy import scipy_csr_to_cupy
+    from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 
     cp = require_cupy_device()

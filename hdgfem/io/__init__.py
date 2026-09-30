@@ -1,7 +1,11 @@
 """Output and plotting helpers."""
 
 from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
+from hdgfem.linalg.amgx.config import (
+    describe_amgx_preconditioner,
+    describe_amgx_solver,
+    load_amgx_config,
+)
 from hdgfem.io.holoviz import (
     HolovizScalarPanels,
     plot_field_holoviz,

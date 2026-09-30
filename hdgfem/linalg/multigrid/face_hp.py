@@ -19,13 +19,13 @@ from typing import Any, Callable
 import numpy as np
 
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.linalg.system import residual_history_is_stagnated
-from hdgfem.linalg.face_hp_policy import (
+from hdgfem.linalg.results import residual_history_is_stagnated
+from hdgfem.linalg.multigrid.policy import (
     scalar_p0_amgx_config,
     robust_scalar_p0_amgx_config,
     face_hp_mg_preconditioner_parameters,
 )
-from hdgfem.backends.legendre_face_bsr import (
+from hdgfem.linalg.gpu.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     modal_degree_schedule,
     principal_modal_bsr_data,
@@ -240,7 +240,7 @@ class AmgxScalarVcycle:
         """Build one reusable AMGX hierarchy for the scalar face operator."""
         if int(operator.block_size) != 1:
             raise ValueError("the scalar AMG coarse operator must have block size one")
-        from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
+        from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
 
         self.operator = operator
         self.config = copy.deepcopy(config)
@@ -721,7 +721,7 @@ class FaceBlockHpMgPcgSolver:
             verbose: int = 0,
     ):
         """Build and validate the fixed native hierarchy."""
-        from hdgfem.backends.legendre_face_bsr import legendre_orthonormal_scales
+        from hdgfem.linalg.gpu.legendre_face_bsr import legendre_orthonormal_scales
 
         cp = require_cupy()
         self.cp = cp

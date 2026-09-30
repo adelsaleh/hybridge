@@ -131,7 +131,10 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
 
     def _check_trace_support(self):
         """Reject structurally singular active faces before a dense solve hides it."""
-        from hdgfem.linalg.transport_diagnostics import trace_inflow_node_counts, UpwindHDGTraceRankError
+        from hdgfem.transport.diagnostics import (
+                    trace_inflow_node_counts,
+                    UpwindHDGTraceRankError,
+                )
 
         xp, mesh = self.xp, self.mesh
         aligned = xp.where(mesh.orientations[:, :, None], self.normal_flux,

@@ -14,7 +14,7 @@ import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.runtime.threads import parallel_copy
 from hdgfem.core.space import DGSpace, DGTraceSpace, VectorDGField
-from hdgfem.linalg.system import KnownDofReduction, eliminate_known_dofs
+from hdgfem.linalg.reduction import KnownDofReduction, eliminate_known_dofs
 from hdgfem.solvers.diffusion_reaction import (
     _local_solver_pre_mats,
     diffusion_element_boundary_mats,

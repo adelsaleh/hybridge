@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
-from hdgfem.backends.cupy_gmres import (
+from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hdgfem.linalg.gpu.gmres import (
     _termination_reason,
     _updated_stagnation_count,
     _validate_robustness_parameters,
     restarted_gmres_cupy,
 )
-from hdgfem.backends.cupy_solver import (
+from hdgfem.linalg.gpu.production_gmres import (
     CuPyGMRESFailure,
     CuPyProductionGMRESOptions,
     CuPyProductionGMRESSolver,

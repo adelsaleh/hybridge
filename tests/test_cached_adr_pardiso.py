@@ -7,7 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import face_dense_matvec
+import hdgfem.linalg.direct as linalg_direct
+from hdgfem.linalg.face_dense import face_dense_matvec
 from hdgfem.linalg.bsr import face_dense_to_bsr
 from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostic
 
@@ -95,6 +96,7 @@ def test_real_backend_reuses_existing_wrapper(cached_system, tmp_path, monkeypat
         return original(*args, **kwargs)
 
     monkeypatch.setattr(backend, 'solve_pypardiso_system', wrapped)
+    monkeypatch.setattr(linalg_direct, 'solve_pypardiso_system', wrapped)
     args = diagnostic.parser().parse_args(['--spec', str(spec), '--output', str(output)])
     threads = int(pardiso.ps.libmkl.MKL_Get_Max_Threads())
     assert diagnostic.solve_cached(args, threads, output) == 0

@@ -16,7 +16,7 @@ from hdgfem.diagnostics import (
     solver_result_metrics,
 )
 from hdgfem.io.records import DiagnosticsRecorder
-from hdgfem.linalg.system import SolveResult
+from hdgfem.linalg.results import SolveResult
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics
 from scripts.guiding_center.runtime.diagnostics import _compute_diagnostics
 

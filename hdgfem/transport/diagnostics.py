@@ -8,10 +8,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import tempfile
 
 import numpy as np
-
+from hdgfem.hdg.stabilization import (
+    effective_advection_normal_flux,
+)
+from hdgfem.linalg.failure_snapshot import save_system_snapshot
+from hdgfem.linalg.failure_snapshot import (
+    trace_face_column_diagnostics,
+    trace_matrix_diagnostics,
+)
 
 
 class UpwindHDGTraceRankError(np.linalg.LinAlgError):
@@ -55,61 +61,6 @@ def transport_rank_failure_details(error):
                 "inflow_nodes": [face["inflow_nodes"] for face in deficient],
                 "trace_dofs": dofs}
     return None
-
-
-def trace_matrix_diagnostics(arrays):
-    """Measure rows AND columns without expanding face BSR to scalar CSR.
-
-    Zero columns prove singularity. Nonzero columns and row/column scales do
-    not prove nonsingularity or estimate the condition number.
-    """
-    data = np.asarray(arrays["data"])
-    n = int(np.asarray(arrays["rhs"]).size)
-    fmt = str(np.asarray(arrays["matrix_format"]).item())
-    if not np.isfinite(data).all():
-        return {"matrix_size": n, "matrix_finite": False}
-    stored_entries = int(data.size)
-    if fmt == "coo":
-        # Assembly COO contains repeated element contributions. Sum signed
-        # duplicates first: abs() before summation can hide cancelled columns.
-        from scipy.sparse import coo_matrix
-
-        matrix = coo_matrix((data, (arrays["rows"], arrays["cols"])), shape=(n, n)).tocsr()
-        data, indptr, indices = matrix.data, matrix.indptr, matrix.indices
-        fmt = "csr"
-        if not np.isfinite(data).all():
-            return {"matrix_size": n, "matrix_finite": False}
-    elif fmt in {"bsr", "csr"}:
-        indptr, indices = arrays["indptr"], arrays["indices"]
-    row_l1 = np.zeros(n, dtype=np.float64)
-    col_l1 = np.zeros(n, dtype=np.float64)
-    chunk = 8192
-    if fmt in {"bsr", "csr"}:
-        block = data.shape[1] if fmt == "bsr" else 1
-        rows = row_l1.reshape(-1, block)
-        cols = col_l1.reshape(-1, block)
-        for start in range(0, len(data), chunk):
-            end = min(start + chunk, len(data))
-            row_ids = np.searchsorted(indptr, np.arange(start, end), side="right") - 1
-            values = np.abs(data[start:end]).reshape(-1, block, block)
-            np.add.at(rows, row_ids, values.sum(axis=2, dtype=np.float64))
-            np.add.at(cols, indices[start:end], values.sum(axis=1, dtype=np.float64))
-    else:
-        raise ValueError(f"Unsupported matrix format {fmt!r}")
-    zero_rows, zero_cols = np.flatnonzero(row_l1 == 0), np.flatnonzero(col_l1 == 0)
-    return {
-        "matrix_size": n,
-        "matrix_scalar_stored_entries": stored_entries,
-        "matrix_finite": True,
-        "matrix_row_l1_min": float(row_l1.min()) if n else 0.0,
-        "matrix_row_l1_max": float(row_l1.max()) if n else 0.0,
-        "matrix_column_l1_min": float(col_l1.min()) if n else 0.0,
-        "matrix_column_l1_max": float(col_l1.max()) if n else 0.0,
-        "matrix_zero_rows": int(zero_rows.size),
-        "matrix_zero_columns": int(zero_cols.size),
-        "matrix_zero_row_samples": zero_rows[:28].tolist(),
-        "matrix_zero_column_samples": zero_cols[:28].tolist(),
-    }
 
 
 def trace_inflow_node_counts(aligned_normal_pairs, *, xp=np):
@@ -209,38 +160,6 @@ def trace_inflow_diagnostics(normal, edge_ids, orientations, interior_edges,
     return counts
 
 
-def trace_face_column_diagnostics(data, indptr, indices, face_index):
-    """SVD of all BSR blocks touching one face's columns, including neighbors.
-
-    A null vector of this small panel extends by zero to a null vector of the
-    complete matrix. A full-rank panel does not prove global nonsingularity.
-    """
-    positions = np.flatnonzero(np.asarray(indices) == face_index)
-    block = data.shape[-1]
-    panel = data[positions].reshape(-1, block)
-    if len(positions):
-        _, singular, vh = np.linalg.svd(panel, full_matrices=False)
-        mode = vh[-1]
-    else:
-        singular = np.zeros(block)
-        mode = np.eye(block)[0]
-    scale = float(singular[0])
-    tolerance = max(panel.shape) * np.finfo(data.dtype).eps
-    residual = float(np.linalg.norm(panel @ mode))
-    return {
-        "reduced_face_index": int(face_index),
-        "column_panel_shape": list(panel.shape),
-        "touched_block_rows": (np.searchsorted(indptr, positions, side="right") - 1).tolist(),
-        "column_panel_singular_values": singular.tolist(),
-        "column_panel_rank": int(np.count_nonzero(singular > tolerance * scale)),
-        "column_panel_rcond": float(singular[-1] / scale) if scale else 0.0,
-        "column_panel_rank_relative_tolerance": float(tolerance),
-        "weakest_trace_mode": mode.tolist(),
-        "matrix_mode_residual_norm": residual,
-        "matrix_mode_relative_residual": residual / scale if scale else 0.0,
-    }
-
-
 def analyze_transport_snapshot(arrays):
     """Analyze a loaded failure archive without invoking assembly or a solver."""
     report = {"matrix_diagnostics": trace_matrix_diagnostics(arrays)}
@@ -269,76 +188,60 @@ def analyze_transport_snapshot(arrays):
     return report
 
 
-def save_transport_failure_snapshot(path, assembly, *, initial_guess=None, best_solution=None):
-    """Save the restored, unscaled failed system and raw assembly inputs.
+def _transport_snapshot_arrays(assembly) -> dict:
+    """Advection inputs and mesh/trace tables of a raw transport assembly."""
+    raw = getattr(assembly, "raw", None)
+    if raw is None or raw.beta_coeffs is None:
+        return {}
 
-    Called only after failure. Transfers arrays to host without evaluating any
-    GPU kernel. The archive permits independent inspection without replaying
-    time integration. It contains no pickle objects. Scaling/restoration may
-    have changed physical matrix entries by roundoff during the attempts.
-    """
     def host(array):
         return np.asarray(array.get() if hasattr(array, "get") else array)
 
-    arrays = {"format_version": np.array(1), "matrix_format": np.array(assembly.matrix_format),
-              "data": host(assembly.data), "rhs": host(assembly.rhs)}
-    for name in ("indptr", "indices", "rows", "cols", "boundary_trace"):
-        value = getattr(assembly, name, None)
+    space, trace = assembly.cspace.host, assembly.trace_ref.host
+    mesh = space.mesh
+    arrays = {}
+    for name in ("source_coeffs", "beta_coeffs", "reaction_coeffs"):
+        value = getattr(raw, name, None)
         if value is not None:
             arrays[name] = host(value)
-    for name, value in (("initial_guess", initial_guess), ("best_solution", best_solution)):
-        if value is not None:
-            arrays[name] = host(value)
-    raw = getattr(assembly, "raw", None)
-    if raw is not None and raw.beta_coeffs is not None:
-        space, trace = assembly.cspace.host, assembly.trace_ref.host
-        mesh = space.mesh
-        for name in ("source_coeffs", "beta_coeffs", "reaction_coeffs"):
-            value = getattr(raw, name, None)
-            if value is not None:
-                arrays[name] = host(value)
-        arrays.update(
-            advection_stabilization=np.array(str(getattr(raw, "advection_stabilization", None) or "upwind")),
-            reaction_scalar=np.array(raw.reaction_scalar),
-            reaction_is_scalar=np.array(raw.reaction_is_scalar),
-            zero_boundary_flux=np.array(raw.zero_boundary_flux),
-            node_coords=mesh.node_coords, triangles=mesh.triangles,
-            edge_ids=mesh.loc2glob_edge, orientations=mesh.orientations,
-            interior_edges=mesh.int_edges_inds, edge_side_indices=mesh.edge_side_indices,
-            trace_basis=trace.bas1d_of_ref_edg_qds, trace_weights=trace.weights,
-            trace_quads=trace.quads,
-            order=np.array(space.order), basis_type=np.array(space.reference.basis_type),
-            trace_kind=np.array(trace.kind),
-        )
-        # Raw fused assembly uses this exact reference face basis and each
-        # element's own outward normal (before boundary-flux suppression).
-        arrays["normal_flux"] = np.einsum(
-            "dki,kfd,fiq->kfq", arrays["beta_coeffs"], mesh.normals,
-            trace.bas_of_bd_quads, optimize=True,
-        )
-        from hdgfem.hdg.stabilization import effective_advection_normal_flux
-        arrays["effective_normal_flux"] = effective_advection_normal_flux(
-            arrays["normal_flux"], mesh, getattr(raw, "advection_stabilization", None)).copy()
-        if raw.zero_boundary_flux:
-            arrays["effective_normal_flux"][~mesh.interior_face_mask] = 0
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npz", delete=False) as stream:
-            temporary = Path(stream.name)
-            np.savez(stream, **arrays)
-        temporary.replace(path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
-    # Save first, so an analysis failure never loses the numerical evidence.
-    report = {"system_snapshot": str(path), "system_snapshot_bytes": path.stat().st_size}
-    try:
-        report.update(analyze_transport_snapshot(arrays))
-    except Exception as error:
-        report["snapshot_analysis_error"] = f"{type(error).__name__}: {error}"
-    return report
+    arrays.update(
+        advection_stabilization=np.array(str(getattr(raw, "advection_stabilization", None) or "upwind")),
+        reaction_scalar=np.array(raw.reaction_scalar),
+        reaction_is_scalar=np.array(raw.reaction_is_scalar),
+        zero_boundary_flux=np.array(raw.zero_boundary_flux),
+        node_coords=mesh.node_coords, triangles=mesh.triangles,
+        edge_ids=mesh.loc2glob_edge, orientations=mesh.orientations,
+        interior_edges=mesh.int_edges_inds, edge_side_indices=mesh.edge_side_indices,
+        trace_basis=trace.bas1d_of_ref_edg_qds, trace_weights=trace.weights,
+        trace_quads=trace.quads,
+        order=np.array(space.order), basis_type=np.array(space.reference.basis_type),
+        trace_kind=np.array(trace.kind),
+    )
+    # Raw fused assembly uses this exact reference face basis and each
+    # element's own outward normal (before boundary-flux suppression).
+    arrays["normal_flux"] = np.einsum(
+        "dki,kfd,fiq->kfq", arrays["beta_coeffs"], mesh.normals,
+        trace.bas_of_bd_quads, optimize=True,
+    )
+    arrays["effective_normal_flux"] = effective_advection_normal_flux(
+        arrays["normal_flux"], mesh, getattr(raw, "advection_stabilization", None)).copy()
+    if raw.zero_boundary_flux:
+        arrays["effective_normal_flux"][~mesh.interior_face_mask] = 0
+    return arrays
+
+
+def save_transport_failure_snapshot(path, assembly, *, initial_guess=None, best_solution=None):
+    """Save a failed transport system with its advection inputs and analysis.
+
+    Extends :func:`hdgfem.linalg.failure_snapshot.save_system_snapshot` with
+    the raw advection coefficients, mesh incidence and trace tables, and the
+    inflow/rank analysis of :func:`analyze_transport_snapshot`. Pass it as
+    ``failure_snapshot`` to ``solve_reduced_system_amgx_device``.
+    """
+    return save_system_snapshot(
+        path, assembly, initial_guess=initial_guess, best_solution=best_solution,
+        extra_arrays=_transport_snapshot_arrays(assembly), analyze=analyze_transport_snapshot,
+    )
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ from typing import Any, Callable, Iterator
 import numpy as np
 
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy import solve_batched_vectors
+from hdgfem.linalg.gpu.preconditioners import solve_batched_vectors
 
 
 @dataclass(frozen=True)
@@ -545,7 +545,7 @@ def _asm_local_solve_into(preconditioner: Any) -> None:
         preconditioner._local_output[...] = solved
         return
     if preconditioner.application == "raw":
-        from hdgfem.backends.cupy_preconditionners import _launch_raw_batched_mv
+        from hdgfem.linalg.gpu.preconditioners import _launch_raw_batched_mv
 
         if preconditioner._raw_apply_kernel is None:
             raise RuntimeError("raw ASM application kernel is unavailable")

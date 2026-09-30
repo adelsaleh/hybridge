@@ -33,15 +33,13 @@ from hdgfem.backends.capabilities import (
 )
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
 from hdgfem.core.projection import scalar_moments_from_values
-from hdgfem.linalg.system import (
+from hdgfem.linalg.reduction import (
     KnownDofReduction,
-    SolveResult,
-    assemble_global_matrix,
-    diagonal_scale_system,
     eliminate_known_dofs,
     expand_known_dofs,
-    solve_global_system,
 )
+from hdgfem.linalg.results import SolveResult, diagonal_scale_system
+from hdgfem.linalg.system import assemble_global_matrix, solve_global_system
 from hdgfem.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hdgfem.hdg.stabilization import resolve_diffusion_stabilization
 
@@ -2579,11 +2577,11 @@ class DiffusionReactionHDGSolver:
 
         from hdgfem.core.device import field_from_cupy_coefficients
         from hdgfem.runtime.optional import require_cupy
-        from hdgfem.backends.advection_cuda import (
-            PyAMGXCsrDeviceSolver,
-            reconstruct_trace_cupy,
-            solve_reduced_system_amgx_device,
-        )
+        from hdgfem.linalg.amgx.device_solver import (
+                    PyAMGXCsrDeviceSolver,
+                    solve_reduced_system_amgx_device,
+                )
+        from hdgfem.backends.advection_cuda import reconstruct_trace_cupy
         from hdgfem.core.device import as_cupy_space
         from hdgfem.backends.diffusion_cupy import (
                     assemble_projected_diffusion_trace_rhs_cached_cupy,
@@ -2823,12 +2821,13 @@ class DiffusionReactionHDGSolver:
         )
         if native_requested and self._raw_cuda_fb_hp_mg_failed_key != native_key:
             try:
-                from hdgfem.backends.legendre_face_bsr import diagonal_block_positions
-                from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
-                from hdgfem.backends.advection_cuda import (
-                    _assembly_device_csr_matrix, _device_compressed_matvec,
-                    _residual_stats_cp,
-                )
+                from hdgfem.linalg.gpu.legendre_face_bsr import diagonal_block_positions
+                from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgSolver
+                from hdgfem.linalg.gpu.sparse import (
+                                    _assembly_device_csr_matrix,
+                                    _device_compressed_matvec,
+                                )
+                from hdgfem.linalg.amgx.device_solver import _residual_stats_cp
                 from hdgfem.runtime.optional import require_cupyx_sparse
 
                 native_hierarchy_reused = (
@@ -2994,7 +2993,7 @@ class DiffusionReactionHDGSolver:
 
         amgx_hierarchy_reused = False
         if native_result is not None:
-            from hdgfem.linalg.system import SolveResult
+            from hdgfem.linalg.results import SolveResult
 
             trace_reduced_cp = native_result.solution
             solve_time = (
@@ -3352,7 +3351,7 @@ class DiffusionReactionHDGSolver:
                 self._host_scaled_solve_matrix_shape = shape
             return self._host_solve_matrix, None
 
-        from hdgfem.backends.cupy import scipy_csr_to_cupy
+        from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
 
         if scale_system:
             device_host_matrix, _ = diagonal_scale_system(
@@ -3388,7 +3387,7 @@ class DiffusionReactionHDGSolver:
 
     def _reduced_rhs_from_cached_numpy_operator(self, rhs_full: np.ndarray, boundary_trace: np.ndarray):
         """Eliminate known trace values using the shared fixed-operator helper."""
-        from hdgfem.linalg.system import update_known_dof_rhs
+        from hdgfem.linalg.reduction import update_known_dof_rhs
         if self.reduction is None:
             raise RuntimeError("cached reduced RHS requires a KnownDofReduction")
         reduction = update_known_dof_rhs(self.rows, self.cols, self.data, rhs_full,

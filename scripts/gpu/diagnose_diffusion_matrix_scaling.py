@@ -30,7 +30,7 @@ from hdgfem.core.mesh import (
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from hdgfem.io.config import load_amgx_config
+from hdgfem.linalg.amgx.config import load_amgx_config
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.linalg import assemble_global_matrix, scale_sparse_system
 from scripts.diffusion_reaction.cases import case_definition_by_key

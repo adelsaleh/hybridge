@@ -15,15 +15,14 @@ from typing import Any
 
 import numpy as np
 
-from hdgfem.assembly.face_dense import FaceDenseSystem
+from hdgfem.linalg.face_dense import FaceDenseSystem
 from hdgfem.linalg.additive_schwarz import (
     build_face_additive_schwarz_local_matrices,
     build_face_additive_schwarz_preconditioner,
 )
 from hdgfem.linalg.block_jacobi import build_face_block_jacobi_preconditioner
-from hdgfem.backends.cublas_batched import invert_batched_cublas
+from hdgfem.linalg.gpu.cublas_batched import invert_batched_cublas
 from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
-from hdgfem.backends.cupy import solve_batched_vectors
 
 
 _BATCHED_DENSE_MV_KERNEL_SOURCE = r"""
@@ -1524,4 +1523,10 @@ __all__ = [
     "build_face_additive_schwarz_incidence_slots",
     "prepare_face_additive_schwarz_batch_layout",
     "prepare_face_additive_schwarz_matrix_layout",
+    "solve_batched_vectors",
 ]
+
+
+def solve_batched_vectors(array_module: Any, matrices: Any, vectors: Any) -> Any:
+    """Solve batched square systems with one vector RHS per matrix."""
+    return array_module.linalg.solve(matrices, vectors[..., None])[..., 0]

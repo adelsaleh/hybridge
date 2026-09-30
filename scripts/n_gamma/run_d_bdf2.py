@@ -155,7 +155,7 @@ def _amgx_config(name):
     """Load an AMGX JSON config (repository-relative or absolute); ``none`` keeps the built-in DILU."""
     if name is None or str(name).lower() == "none":
         return None
-    from hdgfem.io.config import load_amgx_config
+    from hdgfem.linalg.amgx.config import load_amgx_config
     path = Path(name)
     config, _ = load_amgx_config(path if path.is_absolute() else ROOT/path)
     return config

@@ -7,6 +7,7 @@ import pytest
 import scipy.sparse
 
 import hdgfem.linalg.system as system
+import hdgfem.linalg.direct as linalg_direct
 from hdgfem.linalg import (
     LinearSolveConvergenceError,
     LinearSolveError,
@@ -58,15 +59,15 @@ class _FakePardiso:
 
 @pytest.fixture(autouse=True)
 def _reset_pypardiso_solver_cache():
-    system._PYPARDISO_SOLVERS.clear()
+    linalg_direct._PYPARDISO_SOLVERS.clear()
     yield
-    system._PYPARDISO_SOLVERS.clear()
+    linalg_direct._PYPARDISO_SOLVERS.clear()
 
 
 @pytest.mark.parametrize("solver_name", ("pypardiso", "pardiso"))
 def test_pypardiso_aliases_use_normalized_direct_result(monkeypatch, solver_name: str) -> None:
     fake = _FakePardiso()
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
     rows = np.array([1, 0, 1, 0], dtype=np.int64)
     cols = np.array([1, 1, 0, 0], dtype=np.int64)
     data = np.array([3.0, 1.0, 2.0, 4.0], dtype=np.float64)
@@ -95,7 +96,7 @@ def test_pypardiso_spd_aliases_use_upper_triangle_and_mtype_two(
     monkeypatch, solver_name: str
 ) -> None:
     fake = _FakePardiso()
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
     matrix = scipy.sparse.csr_matrix([[4.0, 1.0], [1.0, 3.0]])
     rhs = np.array([1.0, 2.0])
 
@@ -122,7 +123,7 @@ def test_pypardiso_spd_aliases_use_upper_triangle_and_mtype_two(
 
 def test_pypardiso_native_success_cannot_override_true_residual_failure(monkeypatch) -> None:
     fake = _FakePardiso(solution=np.zeros(2))
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
     matrix = scipy.sparse.eye(2, format="csr")
     rhs = np.ones(2)
 
@@ -139,7 +140,7 @@ def test_pypardiso_native_success_cannot_override_true_residual_failure(monkeypa
 
 def test_pypardiso_native_failure_uses_stable_linear_solve_error(monkeypatch) -> None:
     fake = _FakePardiso(error=ValueError("native failure"))
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
 
     with pytest.raises(LinearSolveError, match="pypardiso solve failed: native failure"):
         solve_pypardiso_system(scipy.sparse.eye(2, format="csr"), np.ones(2))
@@ -151,7 +152,7 @@ def test_pypardiso_rejects_complex_systems_before_import(monkeypatch, complex_rh
     def unexpected_import():
         raise AssertionError("optional runtime imported before input validation")
 
-    monkeypatch.setattr(system, "_import_pypardiso", unexpected_import)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", unexpected_import)
     matrix_dtype = np.float64 if complex_rhs else np.complex128
     rhs_dtype = np.complex128 if complex_rhs else np.float64
 
@@ -166,7 +167,7 @@ def test_pypardiso_spd_rejects_nonsymmetric_input_before_import(monkeypatch) -> 
     def unexpected_import():
         raise AssertionError("optional runtime imported before symmetry validation")
 
-    monkeypatch.setattr(system, "_import_pypardiso", unexpected_import)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", unexpected_import)
     matrix = scipy.sparse.csr_matrix([[2.0, 1.0], [0.0, 2.0]])
 
     with pytest.raises(ValueError, match="requires a symmetric matrix"):
@@ -177,7 +178,7 @@ def test_pypardiso_rejects_nonfinite_inputs_before_import(monkeypatch) -> None:
     def unexpected_import():
         raise AssertionError("optional runtime imported before input validation")
 
-    monkeypatch.setattr(system, "_import_pypardiso", unexpected_import)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", unexpected_import)
     matrix = scipy.sparse.csr_matrix(np.diag([1.0, np.nan]))
 
     with pytest.raises(ValueError, match="matrix data"):
@@ -186,7 +187,7 @@ def test_pypardiso_rejects_nonfinite_inputs_before_import(monkeypatch) -> None:
 
 def test_clear_pypardiso_cache_releases_the_singleton(monkeypatch) -> None:
     fake = _FakePardiso()
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
 
     clear_pypardiso_cache()
     clear_pypardiso_cache(everything=False)
@@ -196,7 +197,7 @@ def test_clear_pypardiso_cache_releases_the_singleton(monkeypatch) -> None:
 
 def test_clear_pypardiso_cache_releases_cached_spd_solver(monkeypatch) -> None:
     fake = _FakePardiso()
-    monkeypatch.setattr(system, "_import_pypardiso", lambda: fake)
+    monkeypatch.setattr(linalg_direct, "_import_pypardiso", lambda: fake)
     matrix = scipy.sparse.csr_matrix([[4.0, 1.0], [1.0, 3.0]])
     rhs = np.ones(2)
 
@@ -208,4 +209,4 @@ def test_clear_pypardiso_cache_releases_cached_spd_solver(monkeypatch) -> None:
     assert len(fake.calls) == 2
     assert fake.cleanup == [True]
     assert fake.solver_cleanup == [(2, True)]
-    assert not system._PYPARDISO_SOLVERS
+    assert not linalg_direct._PYPARDISO_SOLVERS

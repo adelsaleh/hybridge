@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import face_dense_matvec
+from hdgfem.linalg.face_dense import face_dense_matvec
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_face_dense import (
+from hdgfem.linalg.gpu.face_dense import (
     CuPyFaceDenseOperator,
     prepare_face_dense_batch_layout,
 )

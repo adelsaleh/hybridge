@@ -9,7 +9,7 @@ from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.core.field_ops import vector_field_linear_combination
 from hdgfem.diagnostics import transport_velocity_diagnostics
-from hdgfem.linalg.system import LinearSolveConvergenceError
+from hdgfem.linalg.results import LinearSolveConvergenceError
 from hdgfem.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.runtime import runner
 

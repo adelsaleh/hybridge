@@ -17,15 +17,15 @@ from pathlib import Path
 import numpy as np
 
 from hdgfem import DGSpace, gmsh_disc_mesh, rectangle_mesh
-from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
+from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.legendre_face_bsr import (
+from hdgfem.linalg.gpu.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     diagonal_block_positions,
     transform_legendre_bsr_to_orthonormal,
 )
-from hdgfem.io.config import load_amgx_config
-from hdgfem.linalg.face_hp_multigrid import (
+from hdgfem.linalg.amgx.config import load_amgx_config
+from hdgfem.linalg.multigrid.face_hp import (
     AmgxScalarVcycle,
     CupyxCgScalarSolve,
     FaceBlockPmgPrototype,
@@ -33,7 +33,7 @@ from hdgfem.linalg.face_hp_multigrid import (
     solve_pcg_prototype,
     symmetric_scalar_amgx_config,
 )
-from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
+from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
 from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from hdgfem.linalg.transport_diagnostics import transport_rank_failure_details
+from hdgfem.transport.diagnostics import transport_rank_failure_details
 
 
 @dataclass
@@ -45,7 +45,7 @@ def raise_for_poisson_rank_failure(error, checkpoint, stage):
 
 def is_transport_solve_failure(error):
     """Recognize numerical failures across backends; do not retry capacity/config errors."""
-    from hdgfem.linalg.system import LinearSolveError, LinearSolveCapacityError
+    from hdgfem.linalg.results import LinearSolveError, LinearSolveCapacityError
     from numpy.linalg import LinAlgError
 
     cause = error.__cause__

@@ -11,7 +11,7 @@ import operator
 
 import numpy as np
 
-from hdgfem.backends.cupy_preconditionners import (
+from hdgfem.linalg.gpu.preconditioners import (
     build_face_additive_schwarz_incidence_slots,
 )
 

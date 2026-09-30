@@ -24,7 +24,7 @@ from hdgfem.core.space import DGSpace, VectorDGField
 from hdgfem.core.field_ops import solution_field
 from hdgfem.diagnostics import evaluate_scalar_error
 from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.io.config import load_amgx_config
+from hdgfem.linalg.amgx.config import load_amgx_config
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.io.plot import (
     plot_solution_comparison,

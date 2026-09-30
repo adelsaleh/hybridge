@@ -83,18 +83,19 @@ def test_reused_solves_match_fresh_solves(cp, reuse):
 
 def test_failed_stale_solve_retries_with_fresh_setup(cp, monkeypatch):
     from hdgfem.backends import advection_cuda
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     dg = space()
     solver = AdvectionDiffusionReactionHDGSolver(dg, **options(amgx_reuse='preconditioner'))
     sequence = list(problems(dg, 3))
     solver.set_problem(*sequence[0]).solve()
-    original, calls = advection_cuda.solve_reduced_system_amgx_device, []
+    original, calls = amgx_device_solver.solve_reduced_system_amgx_device, []
 
     def flaky(*args, reuse_primary_preconditioner=False, **kwargs):
         calls.append(reuse_primary_preconditioner)
         if reuse_primary_preconditioner:
             raise RuntimeError('stale preconditioner diverged')
         return original(*args, reuse_primary_preconditioner=reuse_primary_preconditioner, **kwargs)
-    monkeypatch.setattr(advection_cuda, 'solve_reduced_system_amgx_device', flaky)
+    monkeypatch.setattr(amgx_device_solver, 'solve_reduced_system_amgx_device', flaky)
     result = solver.set_problem(*sequence[1]).solve()
     assert calls == [True, False] and not result.global_solve_result.amgx_preconditioner_reused
     fresh = solve_advection_diffusion_reaction_hdg(*sequence[1], dg, **options())

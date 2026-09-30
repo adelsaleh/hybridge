@@ -23,7 +23,7 @@ PRESET = "euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr"
 ))
 @pytest.mark.parametrize("override_atol", [None, 2.0e-10])
 def test_disk_vortex_gas_keeps_previous_fast_poisson_settings(preset, override_atol) -> None:
-    from hdgfem.linalg.face_hp_policy import face_hp_mg_preconditioner_parameters
+    from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
 
     config = preset_by_key(preset)
     assert config.poisson_solver_atol == 1.0e-12

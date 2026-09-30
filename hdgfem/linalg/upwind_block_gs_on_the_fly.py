@@ -852,7 +852,7 @@ def build_forward_upwind_block_gs_from_ordered_block_coo(
     scalar dof ids.  They are expected to already be in the upwind-SCC order
     associated with ``level_widths``.  ``block_values`` contains unscaled dense
     edge blocks.  The builder computes the same left Jacobi row scaling used by
-    :func:`hdgfem.linalg.system.diagonal_scale_system` from the accumulated
+    :func:`hdgfem.linalg.results.diagonal_scale_system` from the accumulated
     diagonal blocks before compacting and inverting the block diagonal.
     """
     _require_numba()

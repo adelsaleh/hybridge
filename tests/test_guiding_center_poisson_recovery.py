@@ -8,8 +8,9 @@ import pytest
 from hdgfem import DGSpace, VectorDGField, rectangle_mesh
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
 from hdgfem.core.field_ops import field_linear_combination, perpendicular_vector_field
-from hdgfem.linalg.transport_diagnostics import (
-    UpwindHDGTraceRankError, transport_rank_failure_details,
+from hdgfem.transport.diagnostics import (
+    UpwindHDGTraceRankError,
+    transport_rank_failure_details,
 )
 from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 from scripts.guiding_center.time_schemes import imex_ark3 as ark
@@ -248,7 +249,7 @@ def test_real_poisson_retry_rebuilds_then_reuses_and_records_all_work(tmp_path, 
 
 def test_rejected_result_snapshot_preserves_metrics_without_solution_or_preconditioner():
     from hdgfem.diagnostics import solver_diagnostics_snapshot, solver_result_metrics
-    from hdgfem.linalg.system import SolveResult
+    from hdgfem.linalg.results import SolveResult
     global_result = SolveResult(x=np.ones(4), x_device=object(), preconditioner=object(),
                                 iteration_count=5, status='converged')
     global_result.amgx_attempts = [dict(iterations=5)]

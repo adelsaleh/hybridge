@@ -745,7 +745,7 @@ Execution protocol (approved 2026-09-29):
   - Layering violations are down to 22.
   - Still open: the single CUDA source library and A4, which follow the family
     moves.
-- [ ] Phase 4: consolidate `linalg/`:
+- [x] Phase 4: consolidate `linalg/`:
   - `amgx/`, holding the device AMGX solver and retries (moved out of
     `backends/advection_cuda.py`), host AMGX, AMGX config and errors;
   - `gpu/` for the face-dense Krylov stack and Legendre BSR, plus `multigrid/`
@@ -753,6 +753,21 @@ Execution protocol (approved 2026-09-29):
   - split `system.py`.
 
   This removes the `linalg → backends` imports.
+
+  Done 2026-09-30:
+  - `linalg/` = `system` (dispatcher) + `results` + `reduction` + `direct` +
+    `iterative` + `failure_snapshot` + `face_dense` + `sparse_pattern`;
+  - subpackages `amgx/{device_solver, host, config, errors}`, `gpu/{sparse,
+    cupyx, cupyx_device, upwind_block_gs, face_dense, gmres, production_gmres,
+    preconditioners, polynomial, triangular, profiling, cublas_batched,
+    legendre_face_bsr}` and `multigrid/{face_hp, policy, krylov,
+    hierarchy_bsr}`;
+  - transport failure analysis moved to `transport/diagnostics.py`. The AMGX
+    wrapper takes a `failure_snapshot` writer, and the AR solver passes the
+    transport one;
+  - `linalg` has no upward imports; the dead `_close_reusable_amgx_solvers`
+    is removed;
+  - the full suite matches the baseline.
 - [ ] Phase 5: move modules into `transport/` (AR) and `mixed/` (DR, ADR)
   without behavior changes; keep public solver names.
 - [ ] Phase 6: merge DR into the ADR implementations inside `mixed/`, gated by

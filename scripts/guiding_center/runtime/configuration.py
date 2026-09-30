@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from scripts.guiding_center.time_schemes import STEPPERS
 from hdgfem.runtime.precision import PRECISION
-from hdgfem.io.config import load_amgx_config, with_amgx_residual_history
+from hdgfem.linalg.amgx.config import load_amgx_config, with_amgx_residual_history
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 
 
@@ -715,7 +715,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
 def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) -> dict:
     """Enable native divergence exits for transport, preserving explicit overrides."""
     if config is None:
-        from hdgfem.backends.cupy import default_pyamgx_config
+        from hdgfem.linalg.amgx.host import default_pyamgx_config
         config = default_pyamgx_config(tolerance=tolerance, maxiter=None)
     config = copy.deepcopy(config)
     solver = config.setdefault("solver", {})

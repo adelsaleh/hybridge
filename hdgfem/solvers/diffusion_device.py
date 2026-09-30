@@ -7,11 +7,11 @@ import time
 
 def solve_cupy_device_amgx(owner):
     """Assemble, solve, and reconstruct a CuPy diffusion problem through AMGX."""
-    from hdgfem.backends.advection_cuda import (
-        PyAMGXCsrDeviceSolver,
-        reconstruct_trace_cupy,
-        solve_reduced_system_amgx_device,
-    )
+    from hdgfem.linalg.amgx.device_solver import (
+            PyAMGXCsrDeviceSolver,
+            solve_reduced_system_amgx_device,
+        )
+    from hdgfem.backends.advection_cuda import reconstruct_trace_cupy
     from hdgfem.core.device import field_from_cupy_coefficients
     from hdgfem.runtime.optional import require_cupy
     from hdgfem.core.device import as_cupy_space

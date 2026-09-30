@@ -21,7 +21,8 @@ from scripts.diffusion_reaction.experiments.test7_fused_backend import (
     reconstruct_test7_tensor_local_unknowns_numba,
 )
 from hdgfem.core.space import DGSpace
-from hdgfem.linalg.system import expand_known_dofs, solve_global_system
+from hdgfem.linalg.reduction import expand_known_dofs
+from hdgfem.linalg.system import solve_global_system
 from hdgfem.solvers.diffusion_reaction import (
     DiffusionReactionResult,
     DiffusionReactionTimings,

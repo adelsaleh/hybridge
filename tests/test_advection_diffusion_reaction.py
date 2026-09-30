@@ -531,7 +531,7 @@ def _raw_cuda_runtime_available():
 def test_raw_cuda_matches_numpy_with_asymmetric_side_stabilization(
         flux_postprocess_space, postprocessing_backend,
 ):
-    from hdgfem.io.config import load_amgx_config
+    from hdgfem.linalg.amgx.config import load_amgx_config
 
     space = DGSpace(rectangle_mesh(2, 2), 2, basis_type="dub_orth")
     source, beta, reaction, boundary = _problem(space)

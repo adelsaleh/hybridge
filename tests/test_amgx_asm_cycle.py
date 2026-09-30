@@ -53,7 +53,7 @@ def test_asm_staging_matches_symmetric_coarse_correction(sweeps):
 def test_fixed_chebyshev_asm_stages_match_dense_polynomial_and_symmetric_cycle(order, lower_fraction):
     """A fixed Chebyshev smoother preserves the symmetric coarse correction."""
     with kernel_cache_only(True):
-        from hdgfem.linalg.face_hp_multigrid import _chebyshev_richardson_weights
+        from hdgfem.linalg.multigrid.face_hp import _chebyshev_richardson_weights
         from scripts.guiding_center.poisson.replay_poisson_asm import AsmCycle, patch_energy_bound
 
         patches = np.array([[0, 1, 2], [0, 3, 4], [1, 3, 5], [2, 4, 5]])

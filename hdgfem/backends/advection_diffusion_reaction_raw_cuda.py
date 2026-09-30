@@ -384,7 +384,8 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
     if str(options.solver).lower() not in {"amgx", "pyamgx"}:
         raise ValueError("assembly_backend='raw-cuda' currently requires solver='amgx'")
     cp = require_cupy()
-    from hdgfem.backends.advection_cuda import reconstruct_trace_cupy, solve_reduced_system_amgx_device
+    from hdgfem.backends.advection_cuda import reconstruct_trace_cupy
+    from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
     from hdgfem.solvers.advection_diffusion_reaction import (
             _detailed_logging,
             _print_diffusion_structure,
@@ -475,7 +476,7 @@ def assemble_projected_adr_trace_system_eliminated_raw_cuda(
         reuse = options.amgx_reuse
         if cache is None or reuse == "none":
             return solve_once()
-        from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver
+        from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
         states = cache.setdefault("amgx", {})
         key = _amgx_cache_key(amgx_config, options, assembly.rhs.size)
         state = states.get(key)

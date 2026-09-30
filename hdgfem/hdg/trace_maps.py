@@ -5,7 +5,7 @@ from __future__ import annotations
 from hdgfem.core.space import DGSpace, DGTraceSpace
 
 import numpy as np
-from hdgfem.linalg.system import KnownDofReduction
+from hdgfem.linalg.reduction import KnownDofReduction
 
 
 

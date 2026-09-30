@@ -9,10 +9,13 @@ import time
 
 import numpy as np
 
-from hdgfem.backends.cupy import initialize_pyamgx_once
+from hdgfem.linalg.amgx.host import initialize_pyamgx_once
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.legendre_face_bsr import _CusparseGenericBsrOperator, _CusparseGenericCsrOperator
-from hdgfem.linalg.hierarchy_bsr import compare_product, deterministic_vectors
+from hdgfem.linalg.gpu.legendre_face_bsr import (
+    _CusparseGenericBsrOperator,
+    _CusparseGenericCsrOperator,
+)
+from hdgfem.linalg.multigrid.hierarchy_bsr import compare_product, deterministic_vectors
 
 
 class NativeCsrProduct:

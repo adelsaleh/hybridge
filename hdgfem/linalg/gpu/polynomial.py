@@ -28,7 +28,7 @@ from hdgfem.linalg.polynomial import (
     leja_order_conjugate_preserving,
 )
 from hdgfem.runtime.optional import device_arrays_overlap, require_cupy_device
-from hdgfem.backends.cupy_gmres import (
+from hdgfem.linalg.gpu.gmres import (
     CuPyOrthogonalization,
     CuPyVectorBLAS,
     DeviceMatvecOperator,

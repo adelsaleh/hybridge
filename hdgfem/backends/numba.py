@@ -20,7 +20,7 @@ import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.kernels import NUMBA_AVAILABLE
 from hdgfem.kernels.advection_reaction import assemble_local_mats_and_boundary_kernel
-from hdgfem.linalg.system import KnownDofReduction
+from hdgfem.linalg.reduction import KnownDofReduction
 from hdgfem.kernels.advection_reaction_fused import (
     assemble_face_trace_weights_kernel,
     assemble_projected_trace_system_eliminated_kernel,

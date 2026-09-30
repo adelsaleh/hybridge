@@ -403,7 +403,7 @@ def test_fb_hp_mg_reuses_all_fixed_poisson_state_and_supports_periodic_rt_flux(
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_fb_hp_mg_runtime_gate_falls_back_once_and_reuses_hybrid_amgx(monkeypatch) -> None:
-    from hdgfem.linalg import face_hp_multigrid
+    from hdgfem.linalg.multigrid import face_hp as face_hp_multigrid
 
     class RejectedNativeSolver:
         attempts = 0

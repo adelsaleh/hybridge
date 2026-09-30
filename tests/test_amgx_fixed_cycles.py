@@ -1,7 +1,7 @@
 """Explicit fixed-cycle AMG configuration must not inherit solve stopping."""
 import copy
 import pytest
-from hdgfem.backends.advection_cuda import _amgx_config_for_solve
+from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
 
 
 @pytest.mark.parametrize('cycles', (1, 2))
@@ -33,13 +33,14 @@ def test_native_coarse_cycle_enforces_fixed_work(monkeypatch):
     from types import SimpleNamespace
     from unittest.mock import Mock
     from hdgfem.backends import advection_cuda
-    from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle
-    from hdgfem.linalg.face_hp_policy import scalar_p0_amgx_config
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    from hdgfem.linalg.multigrid.face_hp import AmgxScalarVcycle
+    from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
 
     device = Mock()
     device.setup.return_value = 0.1
     constructor = Mock(return_value=device)
-    monkeypatch.setattr(advection_cuda, 'PyAMGXCsrDeviceSolver', constructor)
+    monkeypatch.setattr(amgx_device_solver, 'PyAMGXCsrDeviceSolver', constructor)
     source = scalar_p0_amgx_config()
     before = copy.deepcopy(source)
     cycle = AmgxScalarVcycle(SimpleNamespace(block_size=1), config=source)

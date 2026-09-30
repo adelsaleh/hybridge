@@ -97,14 +97,14 @@ def __getattr__(name: str):
         "SolveStatus",
         "solve_global_system",
     }:
-        from hdgfem.linalg.system import (
-            LinearSolveCapacityError,
-            LinearSolveConvergenceError,
-            LinearSolveError,
-            SolveResult,
-            SolveStatus,
-            solve_global_system,
-        )
+        from hdgfem.linalg.results import (
+                    LinearSolveCapacityError,
+                    LinearSolveConvergenceError,
+                    LinearSolveError,
+                    SolveResult,
+                    SolveStatus,
+                )
+        from hdgfem.linalg.system import solve_global_system
 
         symbols = {
             "LinearSolveCapacityError": LinearSolveCapacityError,

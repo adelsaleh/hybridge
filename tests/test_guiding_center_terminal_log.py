@@ -86,7 +86,7 @@ def test_amgx_callback_progress_is_visible_before_native_call_returns(tmp_path: 
 import ctypes
 import sys
 from types import SimpleNamespace
-from hdgfem.backends import cupy as backend
+import hdgfem.linalg.amgx.host as backend
 from scripts.guiding_center.runtime.terminal_log import _TerminalLogTee
 
 # No GPU initialization: exercise the shared registration path with a mock

@@ -25,7 +25,7 @@ from typing import Literal
 
 import numpy as np
 
-from hdgfem.assembly.face_dense import FaceDenseSystem, face_dense_matvec
+from hdgfem.linalg.face_dense import FaceDenseSystem, face_dense_matvec
 
 VectorOperator = Callable[[np.ndarray], np.ndarray]
 GMRESStatus = Literal["converged", "max_iterations", "breakdown"]
@@ -404,7 +404,7 @@ def solve_face_dense_gmres(
     reorthogonalize: bool = False,
     breakdown_tolerance: float | None = None,
 ) -> GMRESResult:
-    """Solve a :class:`~hdgfem.assembly.face_dense.FaceDenseSystem`.
+    """Solve a :class:`~hdgfem.linalg.face_dense.FaceDenseSystem`.
 
     The only matrix operation used is :func:`face_dense_matvec`; no COO, CSR,
     or scalar dense matrix is formed.

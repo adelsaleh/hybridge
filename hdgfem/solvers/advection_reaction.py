@@ -32,16 +32,14 @@ from hdgfem.hdg import matrices as hdg_mats
 import hdgfem.hdg.coefficients as hdg_coefficients
 import hdgfem.hdg.stabilization as hdg_stabilization
 import hdgfem.core.mass as core_mass
-from hdgfem.linalg.system import (
+from hdgfem.linalg.reduction import (
     KnownDofReduction,
-    SolveResult,
-    assemble_global_matrix,
     eliminate_known_dofs,
     expand_known_dofs,
-    solve_global_system,
-    diagonal_scale_system,
     update_known_dof_rhs,
 )
+from hdgfem.linalg.results import SolveResult, diagonal_scale_system
+from hdgfem.linalg.system import assemble_global_matrix, solve_global_system
 from hdgfem.linalg.ordering import (
     GraphOrderingResult,
     SparsePatternPlotResult,
@@ -2099,7 +2097,8 @@ def solve_advection_reaction_hdg(
 
     if raw_cuda_device_amgx:
         from hdgfem.runtime.optional import require_cupy
-        from hdgfem.backends.advection_cuda import solve_reduced_system_amgx_device
+        from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
+        from hdgfem.transport.diagnostics import save_transport_failure_snapshot
 
         cp = require_cupy()
 
@@ -2126,6 +2125,7 @@ def solve_advection_reaction_hdg(
             lambda: solve_reduced_system_amgx_device(
                 cuda_assembly,
                 config=amgx_config,
+                failure_snapshot=save_transport_failure_snapshot,
                 retry_attempts=amgx_retry_attempts,
                 retry_solver_cache=_raw_amgx_retry_solver_cache,
                 cache_fixed_operator=cache_operator,
@@ -2156,7 +2156,7 @@ def solve_advection_reaction_hdg(
             rows = cols = data = rhs = solve_rows = solve_cols = solve_data = solve_rhs = None
             boundary_trace = None
     elif cupy_device_trace_handoff:
-        from hdgfem.linalg.cupyx_device import solve_cupyx_device_coo
+        from hdgfem.linalg.gpu.cupyx_device import solve_cupyx_device_coo
 
         global_solve_result, solve_time = _timed_call(
             "solving global system (cupyx device COO)",
@@ -2256,9 +2256,9 @@ def solve_advection_reaction_hdg(
             from hdgfem.runtime.optional import asnumpy, require_cupy
             from hdgfem.backends.cupy import (
                             expand_boundary_trace_cupy,
-                            expand_known_dofs_cupy,
                             reconstruct_advection_reaction_field_cupy,
                         )
+            from hdgfem.linalg.reduction import expand_known_dofs_cupy
 
             cp = require_cupy()
             trace_reduced_cp = global_solve_result.x_device

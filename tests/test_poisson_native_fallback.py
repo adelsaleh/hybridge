@@ -13,8 +13,11 @@ import pytest
 
 import hdgfem.runtime.optional as runtime_optional
 from hdgfem.backends import advection_cuda, cupy, diffusion_cupy, diffusion_raw_cuda
+import hdgfem.linalg.gpu.sparse as gpu_sparse
+import hdgfem.runtime.optional as runtime_optional
+import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 import hdgfem.core.device as core_device
-from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgResult
+from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgResult
 from hdgfem.solvers import diffusion_reaction
 
 
@@ -75,21 +78,20 @@ def poisson_handoff(monkeypatch, request):
     monkeypatch.setattr(cupy, "require_cupy", lambda: cp)
     monkeypatch.setattr(runtime_optional, "require_cupy", lambda: cp)
     monkeypatch.setattr(advection_cuda, "require_cupy", lambda: cp)
-    monkeypatch.setattr(cupy, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(runtime_optional, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(diffusion_cupy, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(core_device, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(diffusion_cupy, "build_trace_reference", lambda *args: None)
     monkeypatch.setattr(diffusion_reaction, "audit_arrays", lambda *args: None)
-    monkeypatch.setattr(advection_cuda, "_assembly_device_csr_matrix", lambda *args: matrix)
+    monkeypatch.setattr(gpu_sparse, "_assembly_device_csr_matrix", lambda *args: matrix)
     physical_matvec = Mock(side_effect=lambda a, x, *args: a @ x)
-    monkeypatch.setattr(advection_cuda, "_device_compressed_matvec", physical_matvec)
+    monkeypatch.setattr(gpu_sparse, "_device_compressed_matvec", physical_matvec)
 
     amgx_result = SimpleNamespace(backend="pyamgx-device", converged=True)
     amgx = Mock(return_value=(amgx_result, exact_solution.copy()))
-    monkeypatch.setattr(advection_cuda, "solve_reduced_system_amgx_device", amgx)
+    monkeypatch.setattr(amgx_device_solver, "solve_reduced_system_amgx_device", amgx)
     monkeypatch.setattr(
-        advection_cuda, "PyAMGXCsrDeviceSolver",
+        amgx_device_solver, "PyAMGXCsrDeviceSolver",
         Mock(return_value=SimpleNamespace(closed=False, close=Mock())),
     )
     reconstructed = Mock(side_effect=lambda trace, *args: trace.copy())

@@ -10,7 +10,7 @@ from hdgfem.core.space import DGSpace
 from hdgfem.hdg.stabilization import advection_trace_stabilization_values
 from hdgfem.backends.numba import _advection_stabilization_coefficients, _advection_trace_weight_tables
 from hdgfem.backends.advection_raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
-from hdgfem.linalg.transport_diagnostics import transport_rank_failure_details
+from hdgfem.transport.diagnostics import transport_rank_failure_details
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key

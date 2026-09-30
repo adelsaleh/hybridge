@@ -30,13 +30,14 @@ def test_adr_assembly_only_matches_numpy(cp, monkeypatch, basis, order):
     from cupyx.scipy.sparse import csr_matrix
     from hdgfem.assembly.advection_diffusion_reaction import prepare_adr_data, assemble_numpy
     from hdgfem.backends import advection_cuda
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     from hdgfem.backends.advection_diffusion_reaction_raw_cuda import assemble_projected_adr_trace_operator_raw_cuda
 
     def forbidden(*args, **kwargs):
         """Fail if profiling enters a global solve."""
         raise AssertionError("assembly-only check invoked AMGX")
 
-    monkeypatch.setattr(advection_cuda, "solve_reduced_system_amgx_device", forbidden)
+    monkeypatch.setattr(amgx_device_solver, "solve_reduced_system_amgx_device", forbidden)
     space = DGSpace(rectangle_mesh(2, 1), order)
     trace = space.trace_space(basis)
     source = space.project_callable(lambda x, y: 1.0 + x * y)

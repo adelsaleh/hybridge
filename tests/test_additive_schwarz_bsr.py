@@ -11,8 +11,8 @@ from hdgfem.assembly.face_dense import (
     assemble_global_face_blocks,
     build_face_topology,
     eliminate_dirichlet_faces,
-    materialize_face_dense_matrix,
 )
+from hdgfem.linalg.face_dense import materialize_face_dense_matrix
 from hdgfem.linalg.additive_schwarz import (
     assemble_bsr_additive_schwarz_correction,
     assemble_bsr_face_additive_schwarz_correction,

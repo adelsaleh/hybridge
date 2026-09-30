@@ -25,7 +25,7 @@ from typing import Any, Literal
 import numpy as np
 
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_gmres import (
+from hdgfem.linalg.gpu.gmres import (
     CuPyGMRESResult,
     CuPyGMRESWorkspace,
     CuPyOrthogonalization,

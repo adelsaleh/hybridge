@@ -125,8 +125,11 @@ def worker(args):
                 to_host = np.asarray
             elif args.worker == "pmg-fast":
                 import cupy as cp
-                from hdgfem.backends.legendre_face_bsr import LegendreFaceBsrOperator, diagonal_block_positions
-                from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+                from hdgfem.linalg.gpu.legendre_face_bsr import (
+                                    LegendreFaceBsrOperator,
+                                    diagonal_block_positions,
+                                )
+                from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgSolver
                 sync = cp.cuda.get_current_stream().synchronize
                 stage("fast pMG control on identical captured matrix/RHS, zero initial guess")
                 sync(); started = time.perf_counter()

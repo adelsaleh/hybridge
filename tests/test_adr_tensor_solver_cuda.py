@@ -18,10 +18,10 @@ def cp():
 @pytest.mark.parametrize('basis',['legacy-lagrange','legendre-modal'])
 @pytest.mark.parametrize('fmt',['csr','bsr'])
 def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basis,fmt):
-    from hdgfem.backends import advection_cuda
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     def forbidden(*args,**kwargs):
         raise AssertionError('native BSR solve unexpectedly scalarized')
-    monkeypatch.setattr(advection_cuda,'_scalarize_device_bsr_matrix',forbidden)
+    monkeypatch.setattr(amgx_device_solver,'_scalarize_device_bsr_matrix',forbidden)
     space=DGSpace(rectangle_mesh(2,2),order,basis_type='dub_orth')
     beta=(space*space).field((space.constant(.7),space.constant(-.2)))
     problem, exact, flux = manufactured_raw_tensor('affine')

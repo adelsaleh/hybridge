@@ -185,7 +185,7 @@ def _solve_case(config):
     beta = tuple(value if callable(value) else space.constant(value) for value in problem.beta)
     amgx_config = None
     if config.amgx_config is not None:
-        from hdgfem.io.config import load_amgx_config
+        from hdgfem.linalg.amgx.config import load_amgx_config
         amgx_config, _ = load_amgx_config(_resolve_repository_path(config.amgx_config))
     options = AdvectionDiffusionReactionHDGOptions(
         diffusion=problem.diffusion, trace_basis=config.trace_basis,

@@ -262,7 +262,7 @@ def _build_native_preconditioner(config: LinearSolveConfig, matrix, rhs, trace_r
         )
 
     import numpy as np
-    from hdgfem.linalg.system import diagonal_scale_system
+    from hdgfem.linalg.results import diagonal_scale_system
     from hdgfem.linalg.upwind_block_gs import build_upwind_block_gs_preconditioner
 
     cache_key = _native_preconditioner_cache_key(config, solver, args)

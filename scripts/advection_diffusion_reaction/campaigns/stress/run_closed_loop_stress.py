@@ -46,7 +46,7 @@ def load_common(branch_root):
 
 def native_policy_parameters(policy, tuning):
     """Read shared pure policy data without importing numerical modules."""
-    spec = importlib.util.spec_from_file_location("_adr_stress_hp_policy", ROOT/"hdgfem/linalg/face_hp_policy.py")
+    spec = importlib.util.spec_from_file_location("_adr_stress_hp_policy", ROOT/"hdgfem/linalg/multigrid/policy.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.face_hp_mg_preconditioner_parameters(policy, overrides=tuning)

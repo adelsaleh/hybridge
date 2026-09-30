@@ -59,7 +59,11 @@ from hdgfem import (
     rectangle_mesh,
 )
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.io.config import describe_amgx_preconditioner, describe_amgx_solver, load_amgx_config
+from hdgfem.linalg.amgx.config import (
+    describe_amgx_preconditioner,
+    describe_amgx_solver,
+    load_amgx_config,
+)
 from hdgfem.hdg.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
@@ -454,10 +458,12 @@ def _replay_worker(args):
         if cpu:
             import ctypes
             import pypardiso
-            from hdgfem.linalg.system import (
-                solve_pypardiso_system, clear_pypardiso_cache, prepare_pypardiso_spd_matrix,
-                refine_host_linear_solution,
-            )
+            from hdgfem.linalg.direct import (
+                            solve_pypardiso_system,
+                            clear_pypardiso_cache,
+                            prepare_pypardiso_spd_matrix,
+                        )
+            from hdgfem.linalg.results import refine_host_linear_solution
             from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
             getter = pypardiso.ps.libmkl.MKL_Get_Max_Threads
             getter.restype = ctypes.c_int
@@ -470,7 +476,7 @@ def _replay_worker(args):
                 report["maximum_refinements"] = args.spd_refinement
                 report["maximum_original_matrix_corrections"] = args.spd_original_refinement
         else:
-            from hdgfem.backends.cupy import initialize_pyamgx_once
+            from hdgfem.linalg.amgx.host import initialize_pyamgx_once
             cp = require_cupy()
             cp.cuda.Device(0).use()
             sync = cp.cuda.get_current_stream().synchronize
@@ -521,7 +527,10 @@ def _replay_worker(args):
                         device_rhs = cp.asarray(rhs)
                         row = {}
                         if args.replay_worker.startswith("amgx"):
-                            from hdgfem.backends.advection_cuda import PyAMGXCsrDeviceSolver, _DeviceBsrMatrixView
+                            from hdgfem.linalg.amgx.device_solver import (
+                                                            PyAMGXCsrDeviceSolver,
+                                                        )
+                            from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
                             from scripts.guiding_center.poisson.amgx_bsr_smoothing import smoothing_config
                             sweeps = int(args.replay_worker[-1])
                             config = smoothing_config(postsweeps=3, hierarchy="scalar_expand",
@@ -531,7 +540,9 @@ def _replay_worker(args):
                             solver.setup(_DeviceBsrMatrixView(operator.data, operator.indices, operator.indptr, matrix.shape, q))
                             report["configuration"] = solver.config_dict
                         elif args.replay_worker in PMG_REPLAY_POLICIES:
-                            from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+                            from hdgfem.linalg.multigrid.face_hp import (
+                                                            FaceBlockHpMgPcgSolver,
+                                                        )
                             # E has modal basis rows: A_m=E A_n E^T, b_m=E b_n.
                             e_device = cp.asarray(evaluation)
                             modal_data = cp.ascontiguousarray(e_device @ operator.data @ e_device.T)
@@ -549,10 +560,19 @@ def _replay_worker(args):
                                        positive_curvature=solver.positive_curvature)
                         elif args.replay_worker == "asm_pp":
                             from hdgfem.linalg.additive_schwarz import build_bsr_face_additive_schwarz_local_matrices
-                            from hdgfem.backends.cublas_batched import invert_batched_cublas
-                            from hdgfem.backends.cupy_preconditionners import CuPyFaceAdditiveSchwarzPreconditioner
-                            from hdgfem.backends.cupy_polynomial import CuPyPolynomialPreconditioner
-                            from hdgfem.backends.cupy_solver import CuPyProductionGMRESSolver, CuPyProductionGMRESOptions
+                            from hdgfem.linalg.gpu.cublas_batched import (
+                                                            invert_batched_cublas,
+                                                        )
+                            from hdgfem.linalg.gpu.preconditioners import (
+                                                            CuPyFaceAdditiveSchwarzPreconditioner,
+                                                        )
+                            from hdgfem.linalg.gpu.polynomial import (
+                                                            CuPyPolynomialPreconditioner,
+                                                        )
+                            from hdgfem.linalg.gpu.production_gmres import (
+                                                            CuPyProductionGMRESSolver,
+                                                            CuPyProductionGMRESOptions,
+                                                        )
                             patches, _ = captured_patch_map(metadata)
                             local = build_bsr_face_additive_schwarz_local_matrices(matrix, patches)
                             local_device = cp.asarray(local.local_matrices)

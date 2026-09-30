@@ -25,7 +25,7 @@ from hdgfem.core.mesh import (
     rectangle_mesh,
 )
 from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.io.config import load_amgx_config
+from hdgfem.linalg.amgx.config import load_amgx_config
 from hdgfem.runtime.logging import format_elapsed_percent
 from hdgfem.io.output import pretty_print_sections
 from hdgfem.io.plot import resolve_field_plot_resolution, resolve_postprocessed_plot_resolution

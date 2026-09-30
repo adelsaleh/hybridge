@@ -103,17 +103,18 @@ def synthetic_element_faces(cp, faces: int):
 
 
 def native_operation(cp, candidate, matrix, blocks, neighbors, rhs, pp_degree):
-    from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
-    from hdgfem.backends.cupy_preconditionners import (
-        CuPyFaceAdditiveSchwarzPreconditioner, CuPyFaceBlockJacobiPreconditioner,
-    )
-    from hdgfem.backends.cupy_polynomial import CuPyPolynomialPreconditioner
-    from hdgfem.linalg.face_hp_krylov import BernsteinHpSymmetricPartPreconditioner
+    from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
+    from hdgfem.linalg.gpu.preconditioners import (
+            CuPyFaceAdditiveSchwarzPreconditioner,
+            CuPyFaceBlockJacobiPreconditioner,
+        )
+    from hdgfem.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
+    from hdgfem.linalg.multigrid.krylov import BernsteinHpSymmetricPartPreconditioner
 
     faces, _, block_size, _ = blocks.shape
     output = cp.empty_like(rhs)
     if candidate == "bsr_matvec":
-        from hdgfem.backends.legendre_face_bsr import LegendreFaceBsrOperator
+        from hdgfem.linalg.gpu.legendre_face_bsr import LegendreFaceBsrOperator
         operator = LegendreFaceBsrOperator(
             cp.asarray(matrix.indptr, dtype=cp.int32),
             cp.asarray(matrix.indices, dtype=cp.int32),

@@ -18,7 +18,7 @@ def pardiso_thread_limit(threads=16):
     existing solver lock protects this process-wide MKL setting. This reports
     the actual backend limit; CPU activity must be measured around the work.
     """
-    from hdgfem.linalg.system import _import_pypardiso, _PYPARDISO_LOCK
+    from hdgfem.linalg.direct import _import_pypardiso, _PYPARDISO_LOCK
 
     available = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
     requested = available if threads == "all" else min(int(threads), available)
@@ -74,7 +74,7 @@ class ReusablePardisoSolver:
 
     def _pattern(self, rows, cols, size):
         """Build and store the CSR pattern, gather map and compact copy of a new COO pattern."""
-        from hdgfem.kernels.sparse_pattern import build_coo_csr_pattern, index_dtype
+        from hdgfem.linalg.sparse_pattern import build_coo_csr_pattern, index_dtype
 
         self._rows = self._cols = None
         indptr, indices, self._order, self._segments = build_coo_csr_pattern(rows, cols, size)
@@ -90,7 +90,7 @@ class ReusablePardisoSolver:
 
     def _same_pattern(self, rows, cols, size) -> bool:
         """Whether ``(rows, cols, size)`` is the stored pattern (compared in parallel)."""
-        from hdgfem.kernels.sparse_pattern import coo_pattern_mismatches
+        from hdgfem.linalg.sparse_pattern import coo_pattern_mismatches
 
         return (self._rows is not None and self._size == int(size) and rows.shape == self._rows.shape
                 and cols.shape == self._cols.shape
@@ -98,7 +98,7 @@ class ReusablePardisoSolver:
 
     def _call(self, phase, values, rhs):
         """One MKL PARDISO call on the cached 1-based pattern (``pypardiso``'s call without index copies)."""
-        from hdgfem.linalg.system import _import_pypardiso
+        from hdgfem.linalg.direct import _import_pypardiso
 
         solver = self._solver
         x = np.zeros_like(rhs)
@@ -119,9 +119,15 @@ class ReusablePardisoSolver:
     def solve_coo(self, rows, cols, data, rhs, size, *, rtol=0.0, atol=0.0, raise_on_nonconvergence=True):
         """Solve the COO system (duplicates summed) and return a :class:`SolveResult`."""
         from contextlib import nullcontext
-        from hdgfem.kernels.sparse_pattern import csr_residual_norm, csr_values_from_coo
-        from hdgfem.linalg.system import (LinearSolveError, SolveResult, _import_pypardiso, _PYPARDISO_LOCK,
-                             _validate_finite_array, finalize_solve_result, residual_diagnostics)
+        from hdgfem.linalg.sparse_pattern import csr_residual_norm, csr_values_from_coo
+        from hdgfem.linalg.results import (
+                    LinearSolveError,
+                    SolveResult,
+                    finalize_solve_result,
+                    residual_diagnostics,
+                )
+        from hdgfem.linalg.direct import _import_pypardiso, _PYPARDISO_LOCK
+        from hdgfem.linalg.results import _validate_finite_array
 
         rhs = np.ascontiguousarray(rhs, dtype=np.float64)
         _validate_finite_array(rhs, "rhs")
@@ -188,7 +194,7 @@ class ReusablePardisoSolver:
     def close(self):
         """Release PARDISO memory and the stored pattern."""
         if self._solver is not None:
-            from hdgfem.linalg.system import _PYPARDISO_LOCK
+            from hdgfem.linalg.direct import _PYPARDISO_LOCK
             with _PYPARDISO_LOCK:
                 try:
                     self._solver.free_memory(everything=True)

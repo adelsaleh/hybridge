@@ -1,7 +1,7 @@
 """Archived/current ARK orchestration equivalence with canned solvers only."""
 import numpy as np
 import pytest
-from hdgfem.linalg.transport_diagnostics import UpwindHDGTraceRankError
+from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
 from scripts.guiding_center.time_schemes import STEPPERS, imex_ark3 as current
 from scripts.guiding_center.reference.legacy_ark3 import imex_ark3 as legacy
 from tests.test_guiding_center_all_scheme_recovery import canned_field_operations, problem

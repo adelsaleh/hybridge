@@ -3,17 +3,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import face_dense_matvec
+from hdgfem.linalg.face_dense import face_dense_matvec
 from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.backends.cupy_face_dense import CuPyFaceDenseOperator
-from hdgfem.backends.cupy_gmres import restarted_gmres_cupy
-from hdgfem.backends.cupy_polynomial import (
+from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hdgfem.linalg.gpu.gmres import restarted_gmres_cupy
+from hdgfem.linalg.gpu.polynomial import (
     CuPyPolynomialPreconditioner,
     setup_polynomial_preconditioner_cupy,
 )
-from hdgfem.backends.cupy_preconditionners import (
-    CuPyFaceAdditiveSchwarzPreconditioner,
-)
+from hdgfem.linalg.gpu.preconditioners import CuPyFaceAdditiveSchwarzPreconditioner
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.additive_schwarz import build_face_additive_schwarz_preconditioner

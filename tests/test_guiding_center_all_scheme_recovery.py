@@ -3,8 +3,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.linalg.system import LinearSolveError, LinearSolveConvergenceError, LinearSolveCapacityError
-from hdgfem.linalg.transport_diagnostics import UpwindHDGTraceRankError
+from hdgfem.linalg.results import (
+    LinearSolveError,
+    LinearSolveConvergenceError,
+    LinearSolveCapacityError,
+)
+from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
 from scripts.guiding_center.time_schemes import STEPPERS
 from scripts.guiding_center.time_schemes import (
     si_euler, si_bdf2, predictor_corrector, hybrid_bdf3, imex_ark3, recovery, stage_support,

@@ -17,7 +17,7 @@ from hdgfem.runtime.precision import AMGX_MODE, REAL_DTYPE
 @pytest.fixture(scope="module")
 def amgx():
     pytest.importorskip("pyamgx")
-    from hdgfem.backends.cupy import initialize_pyamgx_once
+    from hdgfem.linalg.amgx.host import initialize_pyamgx_once
     return initialize_pyamgx_once()
 
 

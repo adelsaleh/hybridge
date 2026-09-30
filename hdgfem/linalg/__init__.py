@@ -22,21 +22,24 @@ from hdgfem.linalg.ordering import (
     strongly_connected_component_order,
     upwind_scc_trace_ordering,
 )
-from hdgfem.linalg.system import (
+from hdgfem.linalg.reduction import (
     KnownDofReduction,
+    eliminate_known_dofs,
+    expand_known_dofs,
+)
+from hdgfem.linalg.results import (
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
     LinearSolveError,
     SolveStatus,
     SolveResult,
-    assemble_global_matrix,
-    clear_pypardiso_cache,
-    eliminate_known_dofs,
-    expand_known_dofs,
-    prepare_pypardiso_spd_matrix,
     refine_host_linear_solution,
     scale_sparse_system,
-    solve_global_system,
+)
+from hdgfem.linalg.system import assemble_global_matrix, solve_global_system
+from hdgfem.linalg.direct import (
+    clear_pypardiso_cache,
+    prepare_pypardiso_spd_matrix,
     solve_pypardiso_system,
 )
 from hdgfem.linalg.upwind_block_gs import (
@@ -49,7 +52,9 @@ from hdgfem.linalg.upwind_block_gs_on_the_fly import (
     build_forward_upwind_block_gs_from_coo,
     build_forward_upwind_block_gs_from_ordered_block_coo,
 )
-from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
+from hdgfem.linalg.gpu.upwind_block_gs import (
+    cupy_upwind_block_gs_from_host_preconditioner,
+)
 
 __all__ = [
     "FaceAdditiveSchwarzPreconditioner",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.assembly.face_dense import FaceDenseSystem
+from hdgfem.linalg.face_dense import FaceDenseSystem
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg import (

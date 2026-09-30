@@ -45,7 +45,8 @@ import hdgfem.hdg.coefficients as hdg_coefficients
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace
 from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
-from hdgfem.linalg.system import assemble_global_matrix, diagonal_scale_system, residual_diagnostics
+from hdgfem.linalg.system import assemble_global_matrix
+from hdgfem.linalg.results import diagonal_scale_system, residual_diagnostics
 from hdgfem.backends.numba import assemble_projected_trace_system_eliminated_numba
 from hdgfem.linalg.upwind_block_gs import UpwindBlockGSPreconditioner, build_upwind_block_gs_preconditioner
 from hdgfem.linalg.upwind_block_gs_on_the_fly import (
@@ -563,8 +564,11 @@ def run_cupyx_bicgstab(
     else:
         import_start = time.perf_counter()
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.cupy import scipy_csr_to_cupy, solve_cupyx_csr
-    from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
+    from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
+    from hdgfem.linalg.gpu.cupyx import solve_cupyx_csr
+    from hdgfem.linalg.gpu.upwind_block_gs import (
+            cupy_upwind_block_gs_from_host_preconditioner,
+        )
 
     cupy = require_cupy()
     if logger is not None:

@@ -51,7 +51,7 @@ from hdgfem.diagnostics import (
     result_transfer_time,
     solver_result_metrics,
 )
-from hdgfem.io.config import load_amgx_config
+from hdgfem.linalg.amgx.config import load_amgx_config
 from scripts.guiding_center.cases.guiding_center_cases import CASE_DEFINITIONS
 from scripts.guiding_center.reference.legacy_ark3.presets import (
     DEFAULT_PRESET,
@@ -1391,7 +1391,7 @@ def _solve_transport_stage(
         failure_path: Path,
 ):
     """Preserve diagnostics of the actual failed stage, then re-raise its error."""
-    from hdgfem.linalg.system import LinearSolveConvergenceError
+    from hdgfem.linalg.results import LinearSolveConvergenceError
 
     try:
         return solver.solve(initial_guess=initial_guess)
@@ -1476,7 +1476,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
 def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) -> dict:
     """Enable native divergence exits for transport, preserving explicit overrides."""
     if config is None:
-        from hdgfem.backends.cupy import default_pyamgx_config
+        from hdgfem.linalg.amgx.host import default_pyamgx_config
         config = default_pyamgx_config(tolerance=tolerance, maxiter=None)
     config = copy.deepcopy(config)
     solver = config.setdefault("solver", {})

@@ -16,7 +16,7 @@ import hdgfem.hdg.stabilization as hdg_stabilization
 from hdgfem.assembly.advection_residual import UpwindHDGTransportResidual
 from hdgfem.backends import numba as nb
 from hdgfem.kernels.advection_reaction_fused import _assemble_conflict_face_trace_weights
-from hdgfem.linalg.transport_diagnostics import trace_inflow_diagnostics
+from hdgfem.transport.diagnostics import trace_inflow_diagnostics
 from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 from hdgfem.hdg.stabilization import (
     conflict_averaged_normal_pair,
@@ -307,7 +307,7 @@ def test_reversing_global_orientation_preserves_effective_local_samples():
 
 
 def test_active_deficient_residual_retains_strict_support_check():
-    from hdgfem.linalg.transport_diagnostics import UpwindHDGTraceRankError
+    from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
     space = DGSpace(rectangle_mesh(1, 1), 2)
     residual = UpwindHDGTransportResidual(space, advection_stabilization=POLICY)
     count = residual.normal_flux.shape[-1]
@@ -366,7 +366,10 @@ def test_raw_kernel_argument_counts_without_compilation():
 
 
 def test_requested_snapshot_contains_raw_and_effective_samples(tmp_path):
-    from hdgfem.linalg.transport_diagnostics import save_transport_failure_snapshot, analyze_transport_snapshot
+    from hdgfem.transport.diagnostics import (
+            save_transport_failure_snapshot,
+            analyze_transport_snapshot,
+        )
     space, beta = constant_pair_problem()
     trace = space.trace_space("legacy-lagrange")
     matrix = coo_matrix(np.eye(trace.edg_dof))

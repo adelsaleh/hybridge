@@ -6,7 +6,11 @@ import pytest
 import scipy.sparse
 
 from hdgfem.runtime.precision import REAL_DTYPE
-from hdgfem.linalg.system import LinearSolveConvergenceError, SolveResult, finalize_solve_result
+from hdgfem.linalg.results import (
+    LinearSolveConvergenceError,
+    SolveResult,
+    finalize_solve_result,
+)
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
 
@@ -64,7 +68,9 @@ def rejection(cp, assembly):
 
 @pytest.mark.parametrize("fmt", ["csr", "bsr"])
 def test_device_qr_solves_nonsymmetric_scaled_rows_without_host_solution(cp, fmt):
-    from hdgfem.backends.advection_cuda import _solve_reduced_system_cusolver_qr_device_once
+    from hdgfem.linalg.amgx.device_solver import (
+            _solve_reduced_system_cusolver_qr_device_once,
+        )
     assembly, dense, exact, rtol = system(cp, fmt)
     original = assembly.data.copy()
     result, solution = _solve_reduced_system_cusolver_qr_device_once(
@@ -81,6 +87,7 @@ def test_device_qr_solves_nonsymmetric_scaled_rows_without_host_solution(cp, fmt
 
 def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypatch):
     import hdgfem.backends.advection_cuda as backend
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, dense, exact, rtol = system(cp, "bsr")
     config = replace(preset_by_key("euler_vortex_gas_localized_p6_50k_dt001_t50_raw_cuda_bsr"),
                      transport_direct_fallback="cusolver-qr")
@@ -89,8 +96,8 @@ def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypat
     def reject(assembly, **kwargs):
         calls.append(kwargs)
         return rejection(cp, assembly)
-    monkeypatch.setattr(backend, "_solve_reduced_system_amgx_device_once", reject)
-    result, solution = backend.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", reject)
+    result, solution = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly, retry_attempts=options.amgx_retry_attempts,
         check_rtol=rtol, materialize_host_solution=False,
     )
@@ -104,13 +111,14 @@ def test_final_direct_retry_recovers_after_all_six_amgx_rejections(cp, monkeypat
 
 def test_direct_retry_is_not_called_after_an_accepted_solve(cp, monkeypatch):
     import hdgfem.backends.advection_cuda as backend
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, _, _, rtol = system(cp)
-    solved = backend._solve_reduced_system_cusolver_qr_device_once(assembly, check_rtol=rtol)
-    monkeypatch.setattr(backend, "_solve_reduced_system_amgx_device_once", lambda *a, **k: solved)
+    solved = amgx_device_solver._solve_reduced_system_cusolver_qr_device_once(assembly, check_rtol=rtol)
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", lambda *a, **k: solved)
     def forbidden(*args, **kwargs):
         pytest.fail("direct retry must be lazy")
-    monkeypatch.setattr(backend, "_solve_reduced_system_cusolver_qr_device_once", forbidden)
-    result, _ = backend.solve_reduced_system_amgx_device(
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_cusolver_qr_device_once", forbidden)
+    result, _ = amgx_device_solver.solve_reduced_system_amgx_device(
         assembly, retry_attempts=({"backend": "cusolver-qr", "scale_system": False},),
     )
     assert result.converged and result.amgx_attempt_count == 1
@@ -119,7 +127,9 @@ def test_direct_retry_is_not_called_after_an_accepted_solve(cp, monkeypatch):
 @pytest.mark.parametrize("bad_value", [0.0, np.nan])
 def test_direct_solver_output_must_pass_physical_residual_and_finite_checks(cp, monkeypatch, bad_value):
     import cupyx.cusolver
-    from hdgfem.backends.advection_cuda import _solve_reduced_system_cusolver_qr_device_once
+    from hdgfem.linalg.amgx.device_solver import (
+            _solve_reduced_system_cusolver_qr_device_once,
+        )
     assembly, _, _, rtol = system(cp)
     monkeypatch.setattr(cupyx.cusolver, "csrlsvqr", lambda A, b, **kw: cp.full_like(b, bad_value))
     result, _ = _solve_reduced_system_cusolver_qr_device_once(assembly, check_rtol=rtol)
@@ -127,7 +137,9 @@ def test_direct_solver_output_must_pass_physical_residual_and_finite_checks(cp, 
 
 
 def test_singular_device_matrix_is_not_accepted(cp):
-    from hdgfem.backends.advection_cuda import _solve_reduced_system_cusolver_qr_device_once
+    from hdgfem.linalg.amgx.device_solver import (
+            _solve_reduced_system_cusolver_qr_device_once,
+        )
     host = scipy.sparse.csr_matrix(np.array([[1., 0.], [0., 0.]], dtype=REAL_DTYPE))
     assembly = Assembly(cp.asarray(host.data), cp.asarray(host.indices), cp.asarray(host.indptr),
                         cp.array([1., 1.], dtype=REAL_DTYPE), "csr")
@@ -137,11 +149,12 @@ def test_singular_device_matrix_is_not_accepted(cp):
 
 def test_exhausted_direct_retry_reports_matrix_scales(cp, monkeypatch):
     import hdgfem.backends.advection_cuda as backend
+    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
     assembly, dense, _, _ = system(cp, "bsr")
-    monkeypatch.setattr(backend, "_solve_reduced_system_amgx_device_once", lambda a, **kw: rejection(cp, a))
-    monkeypatch.setattr(backend, "_solve_reduced_system_cusolver_qr_device_once", lambda a, **kw: rejection(cp, a))
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_amgx_device_once", lambda a, **kw: rejection(cp, a))
+    monkeypatch.setattr(amgx_device_solver, "_solve_reduced_system_cusolver_qr_device_once", lambda a, **kw: rejection(cp, a))
     with pytest.raises(LinearSolveConvergenceError) as caught:
-        backend.solve_reduced_system_amgx_device(
+        amgx_device_solver.solve_reduced_system_amgx_device(
             assembly, retry_attempts=({"backend": "cusolver-qr"},),
         )
     error = caught.value

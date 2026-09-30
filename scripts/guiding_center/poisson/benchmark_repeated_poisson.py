@@ -77,8 +77,8 @@ def run(args):
     if any(args.output.iterdir()):
         raise ValueError("Choose an empty output directory")
     root = Path(__file__).resolve().parents[3]
-    provenance_paths = [Path(__file__), root / "hdgfem/linalg/face_hp_policy.py",
-                        root / "hdgfem/linalg/face_hp_multigrid.py",
+    provenance_paths = [Path(__file__), root / "hdgfem/linalg/multigrid/policy.py",
+                        root / "hdgfem/linalg/multigrid/face_hp.py",
                         root / "hdgfem/solvers/diffusion_reaction.py"]
     report = dict(status="running", config=asdict(config), policies=args.policies,
                   repeats=args.repeats, warmup=args.warmup, samples=[], cold=[], coarse_checks=[],

@@ -13,16 +13,18 @@ from collections.abc import Callable
 import numpy as np
 
 from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.assembly.face_dense import (
+from hdgfem.linalg.face_dense import (
     FaceDenseSystem,
+    expand_eliminated_solution,
+    face_dense_relative_residual,
+    materialize_face_dense_matrix,
+)
+from hdgfem.assembly.face_dense import (
     FaceTopology,
     assemble_global_face_blocks,
     build_face_topology,
     eliminate_dirichlet_faces,
-    expand_eliminated_solution,
-    face_dense_relative_residual,
     make_penalty_system,
-    materialize_face_dense_matrix,
 )
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.solvers.diffusion_reaction import (

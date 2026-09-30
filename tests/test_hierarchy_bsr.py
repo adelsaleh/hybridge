@@ -5,8 +5,16 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from hdgfem.linalg.hierarchy_bsr import (load_operator, padded_bsr, permute_operator,
-    verify_reconstruction, storage_stats, level_permutation, deterministic_vectors, compare_product)
+from hdgfem.linalg.multigrid.hierarchy_bsr import (
+    load_operator,
+    padded_bsr,
+    permute_operator,
+    verify_reconstruction,
+    storage_stats,
+    level_permutation,
+    deterministic_vectors,
+    compare_product,
+)
 
 
 @pytest.mark.parametrize('shape', [(9, 5), (5, 9), (9, 9)])

@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture
 def native_solver():
-    from hdgfem.linalg.face_hp_multigrid import FaceBlockHpMgPcgSolver
+    from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgSolver
 
     # NumPy-backed array shim exercises the production iteration without GPU
     # setup or compilation. The injected norm gap represents recurrence drift.

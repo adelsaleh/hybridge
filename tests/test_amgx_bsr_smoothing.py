@@ -57,7 +57,7 @@ def test_weighted_power_interval_covers_exact_block_scaled_spectrum(block_size):
     """Check the interval against a symmetric generalized dense eigensolve."""
     import re
     from scipy.linalg import eigh
-    from hdgfem.backends.cupy import initialize_pyamgx_once
+    from hdgfem.linalg.amgx.host import initialize_pyamgx_once
 
     matrix = coupled_spd_chain(block_size, 17, variable_basis=True)
     dense = matrix.toarray()

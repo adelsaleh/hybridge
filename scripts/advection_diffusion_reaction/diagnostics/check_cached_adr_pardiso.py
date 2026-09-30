@@ -67,9 +67,9 @@ def inspect_cache(spec_path, max_dofs):
 def solve_cached(args, threads, output):
     import numpy as np
     import pypardiso
-    from hdgfem.assembly.face_dense import face_dense_matvec
+    from hdgfem.linalg.face_dense import face_dense_matvec
     from hdgfem.linalg.bsr import face_dense_to_bsr
-    from hdgfem.linalg.system import clear_pypardiso_cache, solve_pypardiso_system
+    from hdgfem.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
 
     report = dict(status='running', threads=threads, timings_ms={})
     destination = output/'result.json'

@@ -22,7 +22,7 @@ from hdgfem.kernels.advection_diffusion_reaction_fused import (
     reconstruct_adr_from_local_columns_kernel,
     reconstruct_projected_adr_local_unknowns_kernel,
 )
-from hdgfem.linalg.system import KnownDofReduction
+from hdgfem.linalg.reduction import KnownDofReduction
 from hdgfem.hdg.trace_maps import (
     _boundary_reduction_maps,
     _reduction_with_system,

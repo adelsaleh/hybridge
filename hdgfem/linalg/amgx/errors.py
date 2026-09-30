@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from hdgfem.linalg.system import LinearSolveCapacityError
+from hdgfem.linalg.results import LinearSolveCapacityError
 
 
 def is_amgx_capacity_error(exc: BaseException) -> bool:

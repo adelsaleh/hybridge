@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from hdgfem.linalg.transport_diagnostics import transport_rank_failure_details
+from hdgfem.transport.diagnostics import transport_rank_failure_details
 
 
 @dataclass

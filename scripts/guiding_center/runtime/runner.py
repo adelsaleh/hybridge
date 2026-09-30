@@ -158,7 +158,7 @@ def _solve_transport_stage(
         failure_path: Path, diagnostics_enabled: bool = True,
 ):
     """Preserve diagnostics of the actual failed stage, then re-raise its error."""
-    from hdgfem.linalg.system import LinearSolveConvergenceError
+    from hdgfem.linalg.results import LinearSolveConvergenceError
 
     try:
         return solver.solve(initial_guess=initial_guess)

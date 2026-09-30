@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_array
 
-from hdgfem.assembly.face_dense import (
-    build_face_topology,
+from hdgfem.assembly.face_dense import build_face_topology
+from hdgfem.linalg.face_dense import (
     expand_eliminated_solution,
     face_dense_matvec,
     face_dense_to_dense,
@@ -16,7 +16,7 @@ from hdgfem.assembly.face_dense import (
 from hdgfem.hdg.condensation import block_source_moments, free_trace_dofs
 from hdgfem.core.mesh import rectangle_mesh
 from hdgfem.core.space import DGSpace
-from hdgfem.linalg.system import eliminate_known_dofs
+from hdgfem.linalg.reduction import eliminate_known_dofs
 from hdgfem.solvers.diffusion_reaction import (
     assemble_diffusion_trace_system,
     diffusion_element_boundary_mats,

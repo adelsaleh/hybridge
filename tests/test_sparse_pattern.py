@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.kernels import sparse_pattern as sp_
+from hdgfem.linalg import sparse_pattern as sp_
 
 
 def coo(size, count, *, long_row=False, seed=0):

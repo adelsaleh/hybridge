@@ -54,7 +54,8 @@ from hdgfem.core.trace_transfer import prolong_trace_coefficients
 from scripts.diffusion_reaction.experiments.bootstrap_initial_guess import (
     solve_diffusion_reaction_hdg as solve_diffusion_reaction_hdg_with_bootstrap,
 )
-from hdgfem.linalg.system import eliminate_known_dofs, expand_known_dofs, solve_global_system
+from hdgfem.linalg.reduction import eliminate_known_dofs, expand_known_dofs
+from hdgfem.linalg.system import solve_global_system
 from hdgfem.linalg.ordering import strongly_connected_component_order, upwind_scc_trace_ordering
 from scripts.diffusion_reaction.cases import (
     lshape_singular_harmonic_case,

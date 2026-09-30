@@ -156,7 +156,7 @@ def factor_cpu(args, matrix, matrix_hashes, stage):
     del factors, csr
     stage("validate complete Pr*A*Pc=L*U through three action probes")
     lower, upper, perm_r, perm_c = load_factor_cache(args.factor_cache, matrix.shape)
-    from hdgfem.backends.cupy_triangular import superlu_gather_indices
+    from hdgfem.linalg.gpu.triangular import superlu_gather_indices
     inverse_rows, columns = superlu_gather_indices(perm_r, perm_c)
     rng = np.random.default_rng(928)
     errors = []
@@ -176,8 +176,8 @@ def factor_cpu(args, matrix, matrix_hashes, stage):
 
 def gpu_benchmark(args, matrix, rhs, reference, matrix_hashes, target, stage):
     from hdgfem.runtime.optional import require_cupy
-    from hdgfem.backends.cupy import scipy_csr_to_cupy
-    from hdgfem.backends.cupy_triangular import ReusableCuPyLUSolve
+    from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
+    from hdgfem.linalg.gpu.triangular import ReusableCuPyLUSolve
 
     manifest = json.loads((args.factor_cache / "metadata.json").read_text())
     if manifest["status"] != "passed" or manifest["matrix_sha256"] != matrix_hashes:
@@ -261,7 +261,7 @@ def gpu_benchmark(args, matrix, rhs, reference, matrix_hashes, target, stage):
 
 
 def worker(args):
-    from hdgfem.backends import cupy_triangular
+    from hdgfem.linalg.gpu import triangular as cupy_triangular
 
     report = dict(status="running", candidate=args.worker, time_integration=False,
                   new_compilation_allowed=False, thread_limit=args.threads,

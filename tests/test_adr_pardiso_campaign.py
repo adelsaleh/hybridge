@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import hdgfem.linalg.direct as linalg_direct
 from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
 from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_inventory as inventory
 from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_worker as worker
@@ -132,6 +133,7 @@ def test_tiny_worker_repeats_fresh_lu_and_reuses_factors(tiny_spec, tmp_path, mo
         calls.append(kwargs)
         return original(*args, **kwargs)
     monkeypatch.setattr(backend, 'solve_pypardiso_system', solve)
+    monkeypatch.setattr(linalg_direct, 'solve_pypardiso_system', solve)
     assert worker.run(spec, output) == 0
     result = inventory.read(output/'result.json')
     assert len(result['warmups']) == 1 and len(result['samples']) == 2

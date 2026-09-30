@@ -4,10 +4,10 @@ from __future__ import annotations
 import numpy as np
 
 from hdgfem.runtime.optional import require_cupy
-from hdgfem.backends.legendre_face_bsr import legendre_orthonormal_scales
+from hdgfem.linalg.gpu.legendre_face_bsr import legendre_orthonormal_scales
 from hdgfem.core.space import _bernstein_edge_basis, _legendre_edge_basis
-from hdgfem.linalg.face_hp_multigrid import AmgxScalarVcycle, FaceBlockPmgPrototype
-from hdgfem.linalg.face_hp_policy import face_hp_mg_preconditioner_parameters
+from hdgfem.linalg.multigrid.face_hp import AmgxScalarVcycle, FaceBlockPmgPrototype
+from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
 
 
 class BernsteinHpSymmetricPartPreconditioner:
