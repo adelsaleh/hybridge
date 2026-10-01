@@ -35,7 +35,7 @@ from hdgfem.transport.tsle_bsr import (
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
 )
 from hdgfem.core.device import CupyDGTraceSpace, as_cupy_trace_space
-from hdgfem.hdg.condensation_device import CudaAdvectionAssembly, reconstruct_trace_cupy
+from hdgfem.hdg.condensation_device import require_finite_device_values, CudaAdvectionAssembly, reconstruct_trace_cupy
 from hdgfem.hdg.coefficients_device import source_moments_cupy
 from hdgfem.runtime.logging import sync_elapsed
 from hdgfem.core.device import mapped_quads_cupy
@@ -810,7 +810,7 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
                 cspace=cspace,
                 trace_ref=trace_ref,
             )
-        return uh, kernel_elapsed
+        return require_finite_device_values(uh, "raw-CUDA advection reconstruction"), kernel_elapsed
 
     beta_dot_normal = assembly.beta_dot_normal
     if beta_dot_normal is None:
@@ -831,7 +831,8 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
     rhs = source_rhs[..., None] + element_boundary @ element_traces[..., None]
     start = time.perf_counter()
     uh = cp.linalg.solve(local_mats, rhs).squeeze(-1)
-    return cp.ascontiguousarray(uh), sync_elapsed(start)
+    elapsed = sync_elapsed(start)
+    return require_finite_device_values(cp.ascontiguousarray(uh), "CuPy advection reconstruction"), elapsed
 
 
 TIMINGS: dict[str, float] = {}

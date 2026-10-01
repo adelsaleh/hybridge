@@ -9,7 +9,7 @@ from hdgfem.core.device import CupyDGSpace, CupyDGTraceSpace
 from hdgfem.linalg.reduction import KnownDofReduction
 from hdgfem.runtime.precision import REAL_DTYPE
 from dataclasses import dataclass, field
-from hdgfem.runtime.optional import require_cupy
+from hdgfem.runtime.optional import array_module, require_cupy
 from hdgfem.runtime.logging import sync_elapsed
 
 from hdgfem.core.space import DGSpace, DGTraceSpace
@@ -119,3 +119,23 @@ def element_traces_cupy(
     return cupy.ascontiguousarray(
         traces.reshape((cspace.mesh.num_tri, 3 * trace_ref.edg_dof))
     )
+
+
+def require_finite_device_values(values, stage: str):
+    """Raise ``numpy.linalg.LinAlgError`` if device values contain NaN or Inf.
+
+    The raw-CUDA local LU kernels clamp tiny pivots but cannot detect a
+    non-finite pivot, and a non-finite element solve poisons that element's
+    outputs. The global AMGX solve already rejects non-finite systems, so local
+    reconstruction outputs are where such a failure would otherwise pass
+    silently. Accepts host or device arrays. Returns ``values`` unchanged.
+    """
+    xp = array_module(values)
+    if not bool(xp.isfinite(values).all()):
+        flat = values.reshape(values.shape[0], -1)
+        elements = int((~xp.isfinite(flat)).any(axis=1).sum())
+        raise np.linalg.LinAlgError(
+            f"{stage} produced non-finite values on {elements} element(s): "
+            "a local solve met a NaN/Inf pivot or input"
+        )
+    return values

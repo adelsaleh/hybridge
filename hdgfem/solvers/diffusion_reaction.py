@@ -42,6 +42,7 @@ from hdgfem.linalg.system import assemble_global_matrix, solve_global_system
 from hdgfem.core.space import DGField, DGSpace, VectorDGField
 from hdgfem.mixed.stabilization import resolve_diffusion_stabilization
 
+from hdgfem.hdg.condensation_device import require_finite_device_values
 from hdgfem.runtime.logging import _detailed_logging, _timed_call, _verbosity_level
 from hdgfem.mixed.coefficients import (
     _project_inverse_diffusion_for_numba,
@@ -1735,6 +1736,7 @@ class DiffusionReactionHDGSolver:
                     local_factor_key=local_factor_key,
                 )
             cp.cuda.get_current_stream().synchronize()
+            require_finite_device_values(local_unknowns_cp, "raw-CUDA diffusion reconstruction")
             nel = int(self.space.el_dof)
             field = field_from_cupy_coefficients(self.space, uh_cp, device=cspace.device_id, name="u_h")
             qx = field_from_cupy_coefficients(

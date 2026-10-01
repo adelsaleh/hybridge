@@ -196,8 +196,10 @@ share the cooperative LU source `hdg/cuda/raw_source.RAW_COOP_LU_FACTOR`.
 
 Correctness items A1, A2 and A5 are fixed; A3 remains a watch item.
 
-TODO(A4): pending at the time of writing; update this line when the CUDA LU
-copies report tiny or NaN pivots with a status.
+A4 is fixed, scoped to non-finite values as decided. Non-finite local
+reconstruction results raise `LinAlgError` through
+`hdg/condensation_device.require_finite_device_values`. The AMGX path already
+rejects non-finite systems, and tiny-pivot clamping is unchanged.
 
 ## DR versus ADR(β = 0) by stage
 
@@ -239,7 +241,7 @@ the reorganization itself stays behavior-preserving.
 | A1 | `backends/cupy.py` `diagonal_scale_csr_rows` guards only a zero diagonal. The `advection_cuda.py` kernel of the same name also falls back to the row maximum for tiny or non-finite diagonals. The weak copy is used by the AR cupyx handoff (`linalg/cupyx_device.py`). The sibling `csr_inverse_sqrt_diagonal`, used by AMGX symmetric scaling, has the same weak guard. | fixed 2026-09-30 (`tests/test_cupy_scaling.py`) |
 | A2 | `solvers/advection_diffusion_reaction._adr_postprocess_samples` handles τ_adv itself. `"lax-friedrichs"` reaches `float("lax-friedrichs")`, and `ScaledUpwind` falls through to the array branch, although ADR assembly accepts both through `matrices_numpy.advection_trace_stabilization_values`. | fixed 2026-09-30 (`tests/test_adr_face_stabilization.py`) |
 | A3 | ADR computes γ = τ_total − β·n from the raw β·n (`assembly/advection_diffusion_reaction.py`, `backends/adr_coefficients_cupy.py`). AR uses `effective_advection_normal_flux` and the inactive-face gauge. `conflict-averaged-upwind` is likely inconsistent in ADR, and it is not rejected. | watch item (open decision 3) |
-| A4 | The AR/DR CUDA LU copies clamp tiny pivots to ±1e-30, and `fabs(d) < 1e-30` is false for NaN, so NaN spreads silently. The ADR warp LU, ADR serial LU and RT postprocess return a failure status instead. | pending (TODO) |
+| A4 | The AR/DR CUDA LU copies clamp tiny pivots to ±1e-30, and `fabs(d) < 1e-30` is false for NaN, so NaN spreads silently. The ADR warp LU, ADR serial LU and RT postprocess return a failure status instead. | fixed 2026-10-01: non-finite reconstruction outputs raise `LinAlgError` |
 | A5 | Neither device `source_moments_cupy` (`advection_cuda.py`, `diffusion_cupy.py`) checks `source.space is space`; host `hdg.source_moments` does. Latent today, because the raw callers enforce same-space inputs. | fixed 2026-09-30 (`tests/test_device_source_moments.py`) |
 
 ## Phases

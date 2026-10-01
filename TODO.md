@@ -705,9 +705,17 @@ Execution protocol (approved 2026-09-29):
   (2026-09-29): keep ADR's semantics, since diffusion is expected to prevent
   rank loss. Revisit if an ADR conflict-averaged solve shows singular or
   ill-conditioned trace rows at small κ.
-- [ ] A4: make all CUDA LU copies report tiny or NaN pivots with a status, as
+- [x] A4: make all CUDA LU copies report tiny or NaN pivots with a status, as
   the ADR warp LU and RT postprocess already do, instead of clamping and
-  propagating NaN.
+  propagating NaN. Done 2026-10-01, scoped to non-finite values as decided:
+  - the AMGX path already rejects non-finite matrices and RHS, so AR and DR
+    local reconstruction outputs were the remaining silent path;
+  - `hdg.condensation_device.require_finite_device_values` (host or device
+    arrays) now raises `LinAlgError` naming the stage and the number of
+    affected elements;
+  - tiny-pivot clamping is unchanged and kernel signatures are untouched;
+  - `tests/test_device_reconstruction_finite.py` reproduced the silent NaN
+    field before the fix.
 - [x] A5: add the `source.space is space` check to both device
   `source_moments_cupy` twins, matching host `hdg.source_moments`. Done
   2026-09-30:
@@ -731,7 +739,7 @@ Execution protocol (approved 2026-09-29):
     in phase 3, and `core/field_ops` moves up to `hdg/` in phase 3.
   - The full suite matches the baseline outcome for every test (same 46
     pre-existing failures).
-- [ ] Phase 3: create the shared `hdg/` layer:
+- [x] Phase 3: create the shared `hdg/` layer:
   - one τ/γ stabilization evaluator, coefficient sampling and reference tables;
   - one CUDA source library (status-returning LU, Cholesky, triangular solves,
     orientation, `#define` templates) with the launch, pattern and sparse
@@ -747,8 +755,13 @@ Execution protocol (approved 2026-09-29):
   - Duplicate trace-map and compile helpers are removed, and
     `backends/numpy.py` is deleted.
   - Layering violations are down to 22.
-  - Still open: the single CUDA source library and A4, which follow the family
-    moves.
+  - CUDA source library done 2026-10-01: the AR, DR and ADR cooperative LU
+    copies are one `hdg/cuda/raw_source.RAW_COOP_LU_FACTOR`
+    (`factor_local_lu_coop_raw`), split from the column solves
+    (`RAW_COOP_COLUMN_SOLVES`). A4 is done (see above).
+  - Changing that shared source text invalidates CuPy's on-disk kernel cache
+    once: the first test run afterwards spent ~40 min recompiling tensor-ADR
+    variants (5–22 s each); later runs are back to normal.
 - [x] Phase 4: consolidate `linalg/`:
   - `amgx/`, holding the device AMGX solver and retries (moved out of
     `backends/advection_cuda.py`), host AMGX, AMGX config and errors;
@@ -797,7 +810,7 @@ Execution protocol (approved 2026-09-29):
   - one layering violation remains (`diagnostics → io.plot`);
   - the full suite matches the baseline, except one GPU hybrid test that failed
     once under sharding and passed 5 of 5 reruns.
-- [ ] Phase 6: merge DR into the ADR implementations inside `mixed/`, gated by
+- [x] Phase 6: merge DR into the ADR implementations inside `mixed/`, gated by
   the phase 0 parity tests, in this order:
   1. flux postprocessing;
   2. the NumPy local solver and assembler;
@@ -839,7 +852,13 @@ Execution protocol (approved 2026-09-29):
   - A wholesale replacement of the DR kernels by ADR kernels is not done: DR's
     projected tables and cached Schur factors are the fast path, and only the
     u-row construction differs.
-- [ ] Phase 7: create `diagnostics/` and `cases/`, split
+
+  6.4 (raw CUDA), 2026-10-01: the DR and AR raw kernels and the ADR tensor
+  kernels share one cooperative LU source. Replacing the DR identity-κ raw
+  kernels with ADR tensor kind 0 would first need a β = 0 Cholesky variant,
+  RHS-only reuse and the compact warp caches in ADR, and is left open below
+  under the performance gate.
+- [x] Phase 7: create `diagnostics/` and `cases/`, split
   `solvers/diffusion_reaction.py`, and remove or keep dead and test-only code
   per the decision above. Update CODEMAP and `docs/backends/README.md` to the
   final layout.
@@ -863,12 +882,23 @@ Execution protocol (approved 2026-09-29):
   recovery supports Bernstein traces, is exercised by tests, and is reachable
   from the guiding-center runner, which calls flux recovery directly.
 
-  Remaining:
-  - the solver modules are now orchestration only, but still large: the DR
-    solver class is ~1.9k lines and the AR functional solver ~1.6k. Splitting
-    them into per-backend drivers is logic work, recorded as a follow-up.
-- [ ] Final merge: bring master into `package-reorganization`, rerun the full
-  host and GPU suites, and merge into master (not pushed).
+  CODEMAP, README, MANUAL and the current docs describe the new layout
+  (dated `docs/research` records keep their historical names; only their
+  links were updated).
+- [x] Final merge: bring master into `package-reorganization`, rerun the full
+  host and GPU suites, and merge into master (not pushed). Done 2026-10-01:
+  - master had not moved since `8bb2d4d`, so the merge is a fast-forward;
+  - the last full sharded suite matched the baseline outcome for every test,
+    apart from the six deliberately deleted DR primal-port tests and a known
+    flaky Cholesky test that now passes.
+- [ ] Split the remaining large solver modules into per-backend stage drivers.
+  After the reorganization they hold orchestration only, but the DR solver
+  class is ~1.9k lines and the AR functional solver ~1.6k. Keep public names
+  and the layering ratchet.
+- [ ] Optional raw-CUDA DR→ADR kernel unification (phase 6.4 remainder). Give
+  the ADR tensor kernels a β = 0 Cholesky variant, RHS-only reuse and compact
+  caches, then replace the DR identity-κ raw kernels only if they are not
+  slower (assembly-only timing at p ≤ 6).
 
 ## Mesh Geometry And Curvilinear Elements
 
