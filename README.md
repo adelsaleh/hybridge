@@ -177,8 +177,8 @@ The advection GPU runner supports CuPy assembly, raw-CUDA fused assembly, direct
 raw-CUDA CSR emission, Cupyx solver experiments, and AMGX solves through
 PyAMGX. The diffusion GPU runner is a thin `DiffusionReactionHDGSolver` front
 end for CuPy or raw-CUDA assembly with AMGX; the solver class owns assembly,
-scaling, device CSR handoff, reconstruction, diagnostics, and optional CuPy
-primal postprocessing. It defaults to `tau_d=kappa/L_Omega`; use
+scaling, device CSR handoff, reconstruction, diagnostics, and optional primal
+postprocessing, which runs on host Numba after CuPy assembly. It defaults to `tau_d=kappa/L_Omega`; use
 `--tau VALUE` for an explicit constant. Raw-CUDA diffusion uses direct CSR
 and currently omits
 solver-call HDG postprocessing. Public raw-CUDA solver and runner defaults use
@@ -244,33 +244,43 @@ in `MANUAL.md` and the Strategy A notes under `docs/research/strategy_a_band_par
 
 ## Package Map
 
-- `hdgfem/core/`: meshes, mesh caching, bases, quadrature, DG spaces/fields,
-  reusable field/trace operations, trace transfer, and adaptivity helpers.
-- `hdgfem/assembly/`: NumPy HDG local matrices, trace assembly helpers,
-  projection helpers, conservative stationary ADR blocks, face-dense diffusion
-  assembly, and Gram operators.
-- `hdgfem/backends/`: optional Numba, CuPy, Cupyx, raw-CUDA, PyAMGX, and fused
-  benchmark adapters.  This includes table-driven Numba assembly, CuPy device
-  mirrors, raw-CUDA advection/diffusion/ADR kernels, direct CSR/BSR assembly and
-  AMGX handoff, Legendre face-BSR operators, shared PyAMGX resource management,
-  and device reconstruction/postprocessing helpers. Optional dependencies are
-  imported lazily. The role map and naming migration policy are in
-  [docs/backends/README.md](docs/backends/README.md).
-- `hdgfem/kernels/`: low-level Numba kernels used by backend wrappers.
-- `hdgfem/linalg/`: sparse and face-block trace operators/solves, boundary dof
-  reduction, row scaling, upwind-SCC ordering, block-GS, block-Jacobi and ASM
-  preconditioners, polynomial/restarted-GMRES references, and the experimental
-  face-block hp-multigrid V-cycle.
-- `hdgfem/solvers/`: advection-reaction, diffusion-reaction, and stationary ADR
-  solver APIs, including reusable stateful solver classes in descriptive
-  full-name implementation modules and temporary abbreviated compatibility
-  shims.
-- `hdgfem/io/`: shared AMGX configuration, plotting/comparison, timing, and
-  console-output helpers.
-- `hdgfem/diagnostics.py`: scalar error reports and reusable solver/application
-  diagnostics.
+Subpackages form a one-way layering, checked with zero allowed violations by
+`tests/test_package_layering.py`:
+
+```text
+runtime → core → cases → linalg → hdg → {transport, mixed} → solvers → diagnostics → io
+```
+
+A module imports only from its own layer or from layers to its left;
+`transport` and `mixed` never import each other. The package root is the
+public facade over all layers. Module ownership per backend and the naming
+rules are in [docs/backends/README.md](docs/backends/README.md).
+
+- `hdgfem/runtime/`: optional-dependency gates and Numba fallbacks, precision,
+  logging/timing, error types, CUDA device inventory, host threads.
+- `hdgfem/core/`: meshes, bases, quadrature, DG spaces/fields, transfer,
+  adaptivity, mass matrices, L2 projection, and CuPy mirrors (`core/device.py`).
+- `hdgfem/cases/`: analytic coefficient sets and initial profiles for
+  manufactured and stress cases.
+- `hdgfem/linalg/`: global solve dispatch and results, dof reduction, direct and
+  iterative solves, orderings, preconditioners; `amgx/`, `gpu/`, `multigrid/`.
+- `hdgfem/hdg/`: equation-independent HDG layer: condensation, coefficient
+  sampling, advection stabilization, trace maps, Gram operators, `cuda/` sources.
+- `hdgfem/transport/`: first-order HDG (advection-reaction) local matrices and
+  NumPy, Numba, CuPy, and raw-CUDA assembly/reconstruction.
+- `hdgfem/mixed/`: mixed HDG for diffusion-reaction (ADR with β = 0) and ADR, all
+  backends side by side, plus degree-`p+1` recovery in `mixed/postprocess/`.
+- `hdgfem/solvers/`: public AR/DR/ADR solver APIs, the backend capability
+  contract, device pipelines, and the `adv_rea`/`diff_rea` compatibility shims.
+- `hdgfem/diagnostics/`: solution-error, solver-result, and guiding-center
+  diagnostics, re-exported from `hdgfem.diagnostics`.
+- `hdgfem/io/`: plotting, comparison figures, rasters, Holoviz panels, movies,
+  and JSONL/CSV records.
 - `scripts/`: command-line runners, benchmarks, diagnostics, and experiments.
 - `tests/`: focused regression tests.
+
+Optional dependencies are imported lazily: importing `hdgfem` must not require
+CUDA, AMGX, PETSc, PARDISO, Gmsh, or DOLFINx.
 
 Portable repository extras are declared for tests, Gmsh meshes, plotting, and
 release tooling. Gmsh is an optional dependency so core structured-mesh paths
@@ -402,9 +412,9 @@ every research backend. Work is ordered as follows:
 1. **Release quality:** keep package-root solver imports, failure semantics,
    backend capabilities, executable examples, clean-install checks, and hosted
    Python 3.10/3.12 CI synchronized.
-2. **Backend consolidation:** continue splitting the canonical CUDA modules by
-   assembly, sparse-solve, reconstruction, and device-data roles without
-   reintroducing numeric or equation-abbreviated filenames.
+2. **Backend consolidation:** keep the family/stage/backend layout and its
+   layering rule, and split the large solver modules into per-backend drivers
+   without reintroducing numeric or equation-abbreviated filenames.
 3. **Extensible HDG formalism:** add an `HDGTraceField` and user-defined local
    bilinear/numerical-flux interfaces so new equations and transmission
    conditions can use the same host/device backend machinery.

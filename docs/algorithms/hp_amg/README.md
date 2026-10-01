@@ -71,9 +71,9 @@ establish its convergence.
 
 ## Implementation and related documentation
 
-- [Native hierarchy, V-cycle and outer iteration](../../../hdgfem/linalg/face_hp_multigrid.py)
-- [Policy and scalar AMG configuration](../../../hdgfem/linalg/face_hp_policy.py)
-- [Modal BSR operators and transfers](../../../hdgfem/backends/legendre_face_bsr.py)
+- [Native hierarchy, V-cycle and outer iteration](../../../hdgfem/linalg/multigrid/face_hp.py)
+- [Policy and scalar AMG configuration](../../../hdgfem/linalg/multigrid/policy.py)
+- [Modal BSR operators and transfers](../../../hdgfem/linalg/gpu/legendre_face_bsr.py)
 - [Production backend and fallback](../../backends/face_hp_mg_pcg.md)
 - [HDG diffusion-reaction formulation](../diffusion_reaction/README.md)
 - [Historical design and tuning evidence](../../development/plans/face_block_hp_multigrid.md)

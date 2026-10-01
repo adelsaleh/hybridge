@@ -15,6 +15,15 @@ The fused raw-CUDA element kernels perform the expensive local work:
 - accumulate the reduced right-hand side on device;
 - reconstruct local fields with the matching equation kernel.
 
+Kernel source lives with its family: `hdgfem/transport/raw_cuda.py` and
+`hdgfem/transport/tsle_bsr.py` (advection-reaction),
+`hdgfem/mixed/raw_cuda/identity.py` (identity-κ diffusion),
+`hdgfem/mixed/raw_cuda/tensor.py` (tensor ADR), and the recovery kernels in
+`hdgfem/mixed/postprocess/`. The shared trace-orientation and cooperative LU
+source is `hdgfem/hdg/cuda/raw_source.py`, the launch policy is
+`hdgfem/hdg/cuda/launch.py`, and the reduced CSR/BSR pattern builder is
+`hdgfem/hdg/cuda/pattern.py`.
+
 Reference tensors, projected/source moments, compact boundary data, topology,
 and reduction maps are prepared before the element launch. Reusable solver
 objects cache matrix- and graph-dependent data when their invalidation contract
@@ -54,7 +63,7 @@ factors; full-warp launches keep the warp column solves.
 ## Tri-Stage Local Elimination BSR (`split3`)
 
 `raw_local_assembly="split3"` selects **TSLE-BSR**, implemented in
-`hdgfem.backends.advection_tsle_bsr`. It preserves the fused advection HDG
+`hdgfem.transport.tsle_bsr`. It preserves the fused advection HDG
 discretization and separates only the execution schedule:
 
 1. `advection_tsle_build` constructs each local operator `A_e`, unsolved trace
@@ -215,7 +224,7 @@ lift array remains active.
 ## Flux-Only Recovery And Scalar Tau Retries
 
 Diffusion `hdg_postprocess="flux"` with raw-CUDA recovery uses
-`hdgfem.backends.diffusion_flux_recovery_raw_cuda` for both `RT_projection`
+`hdgfem.mixed.postprocess.flux_recovery_raw_cuda` for both `RT_projection`
 and `l2_closest`. It applies cached reference lifts to resident local fields
 and full traces. L2-closest recovery additionally uses per-element geometry
 Cholesky factors. The current stabilization enters the dynamic flux jump;
@@ -300,7 +309,7 @@ selects 32/64/128 threads at p<=2/4/6. No BSR scalarization is needed.
 For assembly without a sparse solve, use
 `prepare_adr_data(..., dense_local_matrices=False)` followed by
 `assemble_projected_adr_trace_operator_raw_cuda(..., matrix_format="bsr")` in
-`hdgfem.backends.advection_diffusion_reaction_raw_cuda`. The returned operator
+`hdgfem.mixed.raw_cuda.adr_operator`. The returned operator
 contains compressed graph metadata, exact per-element diffusion classifications,
 and preparation/upload/graph/JIT/kernel timings. Its `assembly` contains the
 device sparse arrays and RHS. `reconstruct_projected_adr_local_unknowns_raw_cuda`

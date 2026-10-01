@@ -33,12 +33,18 @@ notes, and generated research outputs. The release-critical entry points are:
 .
   hdgfem/
     __init__.py   public package exports and lazy solver imports
-    core/         mesh/cache, basis, quadrature, DG spaces/fields, transfer, adaptivity
-    assembly/     HDG local/trace assembly, projections, face-dense helpers, Gram operators
-    linalg/       trace-system utilities, solves, ordering, scaling, preconditioners
-    solvers/      advection-reaction and diffusion-reaction solver APIs
-    backends/     optional Numba, CuPy, raw-CUDA, PyAMGX, and fused benchmark adapters
-    kernels/      low-level Numba kernels used by backend wrappers
+    runtime/      optional-dependency gates, precision, logging, errors, devices, threads
+    core/         mesh/cache, basis, quadrature, DG spaces/fields, transfer, adaptivity,
+                  mass matrices, L2 projection, CuPy mirrors (device.py)
+    cases/        analytic coefficient sets and initial profiles
+    linalg/       solve dispatch and results, reduction, ordering, scaling, preconditioners;
+                  amgx/ (PyAMGX), gpu/ (CuPy/Cupyx), multigrid/ (face-block hp-MG)
+    hdg/          shared HDG layer: condensation, coefficients, advection stabilization,
+                  trace maps, Gram operators, Numba helpers, cuda/ source library
+    transport/    first-order HDG (advection-reaction) on all backends
+    mixed/        mixed HDG (diffusion-reaction, ADR) on all backends, postprocess/
+    solvers/      advection-reaction, diffusion-reaction, and ADR solver APIs, capabilities
+    diagnostics/  error, solver-result, and guiding-center diagnostics
     io/           output formatting and plotting helpers
   scripts/        command-line runners and research harnesses
   examples/       copy-runnable base-install solver examples
@@ -47,6 +53,11 @@ notes, and generated research outputs. The release-critical entry points are:
   configs/        backend configuration files, currently AMGX presets
   tests/          focused regression tests
 ```
+
+The `hdgfem/` subpackages are listed in layer order. A module imports only
+from its own layer or from layers above it in this list; `transport` and
+`mixed` share a layer and never import each other.
+`tests/test_package_layering.py` enforces the rule with no allowed violations.
 
 Important module groups:
 
@@ -63,27 +74,34 @@ Important module groups:
   meshes and PDE-agnostic indicator/remeshing utilities.
 - `hdgfem.diagnostics`: reusable scalar error reports, drift calculations,
   solver/timing summaries, and guiding-center modal diagnostics.
-- `hdgfem.io.config`, `hdgfem.io.comparison`, and `hdgfem.io.plot`: shared
-  AMGX configuration, sampled comparisons, and plotting support used by runners.
-- `hdgfem.assembly.matrices_numpy`: reference NumPy HDG matrix builders and
-  output-buffer accumulation routines used by CPU solvers and validation code.
-- `hdgfem.assembly.hdg`: reusable static-condensation and trace-assembly
+- `hdgfem.io.comparison` and `hdgfem.io.plot`: sampled comparisons and
+  plotting support used by runners. AMGX configuration loading is in
+  `hdgfem.linalg.amgx.config`.
+- `hdgfem.core.mass`, `hdgfem.hdg.matrices`, `hdgfem.transport.local_numpy`,
+  and `hdgfem.mixed.local_numpy`: reference NumPy mass, trace-stabilization,
+  advection, and mixed local matrices, with output-buffer accumulation routines
+  used by CPU solvers and validation code.
+- `hdgfem.hdg.condensation`: reusable static-condensation and trace-assembly
   helpers shared by solver implementations.
-- `hdgfem.backends.numba`: projected advection-reaction trace assembly,
-  boundary-eliminated assembly, optional ordered block-COO emission, and Numba
-  reconstruction helpers. Identity-diffusion host assembly also supports persistent
-  Schur-LU/Cholesky factors; see the [host cache guide](docs/backends/numba_diffusion.md).
-- `hdgfem.backends.cupy`: CuPy/Cupyx import guards, device mirrors of mesh and
-  reference data, host/device sparse conversion, Cupyx Krylov wrappers, device
-  ILU(1), host-ILU export to device triangular solves, and PyAMGX CSR handoff.
-- `hdgfem.backends.advection_cuda`, `hdgfem.backends.advection_raw_cuda`,
-  `hdgfem.backends.diffusion_cupy`, and
-  `hdgfem.backends.diffusion_raw_cuda`: canonical CuPy and raw-CUDA assembly,
-  solve, reconstruction, and device-data paths for the two production solver
-  families.
-- `hdgfem.linalg.system`: sparse trace matrix assembly, boundary dof
-  elimination/expansion, diagonal row scaling, SciPy/PETSc/Cupyx solve routing,
-  and residual diagnostics.
+- `hdgfem.transport.numba`: projected advection-reaction trace assembly,
+  boundary-eliminated and zero-flux assembly, optional ordered block-COO
+  emission, and Numba reconstruction helpers. `hdgfem.mixed.numba` is the
+  diffusion counterpart, with persistent Schur-LU/Cholesky factors for identity
+  diffusion; see the [host cache guide](docs/backends/numba_diffusion.md).
+- `hdgfem.runtime.optional`, `hdgfem.core.device`, `hdgfem.linalg.gpu`, and
+  `hdgfem.linalg.amgx`: CuPy/Cupyx/PyAMGX import guards, device mirrors of mesh
+  and reference data, host/device sparse conversion and row scaling, Cupyx
+  Krylov wrappers, device ILU(1), host-ILU export to device triangular solves,
+  and host and device PyAMGX CSR handoff.
+- `hdgfem.transport.cupy`, `hdgfem.transport.cuda`,
+  `hdgfem.transport.raw_cuda`, `hdgfem.mixed.cupy`, and
+  `hdgfem.mixed.raw_cuda`: canonical CuPy and raw-CUDA assembly,
+  reconstruction, and device-data paths for the two HDG families. The device
+  AMGX solve shared by both is `hdgfem.linalg.amgx.device_solver`.
+- `hdgfem.linalg.system`: global trace matrix assembly and solve routing to
+  SciPy, PyPardiso, PETSc, Cupyx, or AMGX. Boundary dof elimination/expansion
+  is in `hdgfem.linalg.reduction`; diagonal row scaling, `SolveResult`, and
+  residual diagnostics are in `hdgfem.linalg.results`.
 - `hdgfem.linalg.ordering`: upwind-SCC graph ordering for trace edges and
   sparse-pattern plotting diagnostics.
 - `hdgfem.linalg.upwind_block_gs`: CSR-reference level-scheduled upwind block
@@ -91,7 +109,7 @@ Important module groups:
 - `hdgfem.linalg.upwind_block_gs_on_the_fly`: scalar-COO and ordered block-COO
   builders that construct the same forward upwind block-GS preconditioner
   without scanning a finished CSR matrix.
-- `hdgfem.linalg.upwind_block_gs_cupy`: device application of compact host-built
+- `hdgfem.linalg.gpu.upwind_block_gs`: device application of compact host-built
   upwind block-GS data through a Cupyx `LinearOperator`.
 
 Public application code should import solver classes and functions from
@@ -99,9 +117,11 @@ Public application code should import solver classes and functions from
 `hdgfem.solvers.advection_reaction` and
 `hdgfem.solvers.diffusion_reaction`. The abbreviated `adv_rea` and `diff_rea`
 modules are compatibility shims for the first alpha; production backends and
-kernels use descriptive names. See
+kernels use descriptive names. Internal module paths below the package root and
+`hdgfem.solvers` carry no compatibility guarantee; the package reorganization
+moved them without re-exports. See
 [docs/backends/README.md](docs/backends/README.md) before adding a backend
-module or migrating an existing import.
+module.
 
 ## Environment Setup
 
@@ -250,24 +270,28 @@ export LD_LIBRARY_PATH=$AMGX_LIB_DIR:$LD_LIBRARY_PATH
 python -c "import pyamgx; print('pyamgx ok')"
 ```
 
-`hdgfem.backends.cupy` exposes the shared GPU utilities:
+The shared GPU utilities are:
 
 ```text
-require_cupy                         import guard for CuPy
-require_cupyx_sparse                 import guard for cupyx.scipy.sparse
-require_cupyx_sparse_linalg          import guard for cupyx.scipy.sparse.linalg
-scipy_csr_to_cupy                    copy a SciPy CSR matrix to CuPy CSR
-scipy_coo_to_cupy_csr                copy host COO arrays and build CuPy CSR on device
-solve_cupyx_csr                      run Cupyx cg, bicgstab, cgs, or gmres
-build_cupyx_ilu_preconditioner       build device ILU(1) with Cupyx spilu
-build_cupyx_exported_host_ilu_preconditioner
+hdgfem.runtime.optional
+  require_cupy                       import guard for CuPy
+  require_cupyx_sparse               import guard for cupyx.scipy.sparse
+  require_cupyx_sparse_linalg        import guard for cupyx.scipy.sparse.linalg
+hdgfem.linalg.gpu.sparse
+  scipy_csr_to_cupy                  copy a SciPy CSR matrix to CuPy CSR
+  scipy_coo_to_cupy_csr              copy host COO arrays and build CuPy CSR on device
+hdgfem.linalg.gpu.cupyx
+  solve_cupyx_csr                    run Cupyx cg, bicgstab, cgs, or gmres
+  build_cupyx_ilu_preconditioner     build device ILU(1) with Cupyx spilu
+  build_cupyx_exported_host_ilu_preconditioner
                                      build SciPy SuperLU ILU and apply L/U on device
-solve_pyamgx_csr                     run AMGX through PyAMGX from CuPy CSR data
+hdgfem.linalg.amgx.host
+  solve_pyamgx_csr                   run AMGX through PyAMGX from CuPy CSR data
 ```
 
 Cupyx solves default to double precision.  Set `HDGFEM_CUPYX_DTYPE=float32` or
 `HDGFEM_CUPYX_DTYPE=float64` before starting Python to force the device matrix
-dtype in `solve_cupyx_system`:
+dtype in `hdgfem.linalg.gpu.cupyx.solve_cupyx_system`:
 
 ```bash
 HDGFEM_CUPYX_DTYPE=float64 python scripts/advection_reaction/run_upwind_gs_cupyx.py -o 6 -ms 0.01
@@ -283,7 +307,9 @@ operator.
 The authoritative public solver support and host/device residency matrix is
 [docs/reference/backend_capabilities.md](docs/reference/backend_capabilities.md). The summary below
 also names lower-level research capabilities and must not be read as a promise
-that every assembly/solve/reconstruction cross-product is supported.
+that every assembly/solve/reconstruction cross-product is supported. The
+modules implementing each backend are listed in
+[docs/backends/README.md](docs/backends/README.md).
 
 The solver APIs expose multiple assembly and solve paths. The important rule is
 that fast Numba and raw-CUDA kernels are table driven: coefficients must already
@@ -307,7 +333,8 @@ Diffusion-reaction backends:
 ```text
 NumPy          reference reduced assembly, reconstruction, and host postprocessing
 Numba          trace-space-aware projected assembly/reconstruction for legacy and modal traces
-CuPy           device assembly/reconstruction and device primal postprocessing
+CuPy           device assembly/reconstruction and CuPy RT_projection flux recovery; primal
+               postprocessing runs on host Numba
 raw-CUDA       identity-diffusion/zero-reaction fast path through p <= 6; supports legacy-lagrange
                and legendre-modal traces, COO or direct CSR emission, raw-CUDA reconstruction,
                full mixed local unknown output, and RHS-only rebuilds for cached fixed operators
@@ -603,9 +630,10 @@ evaluation on device unless host materialization is explicitly requested.
 The diffusion runner is likewise a thin `DiffusionReactionHDGSolver` front end.
 It selects CuPy or raw-CUDA assembly and AMGX, while package code owns scaling,
 device CSR handoff, reconstruction, error evaluation, timings, and plotting
-samples. CuPy supports optional primal HDG postprocessing. The raw-CUDA solver
-supports device-resident flux-only recovery with `RT_projection` or
-`l2_closest`; its compatible recovery cache survives scalar tau-only retries.
+samples. With CuPy assembly, optional primal HDG postprocessing runs on host
+Numba. The raw-CUDA solver supports device-resident flux-only recovery with
+`RT_projection` or `l2_closest`; its compatible recovery cache survives scalar
+tau-only retries.
 See the [recovery cache contract](docs/backends/raw_cuda.md#flux-only-recovery-and-scalar-tau-retries).
 
 [The AMGX guide](configs/amgx/README.md) contains current presets. The
@@ -1010,12 +1038,12 @@ second = diff_solver.solve()
 
 ### Static Condensation by Hand
 
-`hdgfem.assembly.hdg` exposes the reusable formalism beneath the solver
+`hdgfem.hdg.condensation` exposes the reusable formalism beneath the solver
 classes.  This is the right level when a user wants to build a new PDE driver
 that still uses the package's trace-system conventions.
 
 ```python
-from hdgfem.assembly import hdg as hdg_assembly
+from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.linalg.system import solve_global_system
 
 source_rhs = hdg_assembly.source_moments(source, space)
@@ -1132,10 +1160,10 @@ advection-reaction systems, pass only interior/free trace edges as active edges:
 
 ```python
 import numpy as np
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.hdg.coefficients import advective_boundary_normal
 from hdgfem.linalg.ordering import upwind_scc_trace_ordering
 
-beta_dot_normal = hdg_mats.advective_boundary_normal(beta_h, space)
+beta_dot_normal = advective_boundary_normal(beta_h, space)
 active = np.ones(space.mesh.num_edg, dtype=bool)
 active[space.mesh.bnd_edges_inds] = False
 ordering = upwind_scc_trace_ordering(
@@ -1183,7 +1211,7 @@ preconditioner = build_forward_upwind_block_gs_from_coo(
 Use ordered block COO when the Numba assembly kernel emits dense trace blocks:
 
 ```python
-from hdgfem.backends.numba import assemble_projected_trace_system_eliminated_numba
+from hdgfem.transport.numba import assemble_projected_trace_system_eliminated_numba
 from hdgfem.linalg.upwind_block_gs_on_the_fly import (
     build_forward_upwind_block_gs_from_ordered_block_coo,
     scale_ordered_trace_coo_from_block_gs,
@@ -1217,13 +1245,13 @@ scaled_data, scaled_rhs = scale_ordered_trace_coo_from_block_gs(
 ```
 
 The ordered block-COO builder computes the same left Jacobi row scale used by
-`hdgfem.linalg.system.diagonal_scale_system`.  Reuse that scale so the
+`hdgfem.linalg.results.diagonal_scale_system`.  Reuse that scale so the
 preconditioner and Cupyx matrix see the same scaled operator.
 
 Export a host-built forward upwind block-GS preconditioner to CuPy with:
 
 ```python
-from hdgfem.linalg.upwind_block_gs_cupy import cupy_upwind_block_gs_from_host_preconditioner
+from hdgfem.linalg.gpu.upwind_block_gs import cupy_upwind_block_gs_from_host_preconditioner
 
 M_cp = cupy_upwind_block_gs_from_host_preconditioner(preconditioner, warm_start=True)
 ```
@@ -1330,32 +1358,41 @@ space = DGSpace(mesh, 6, basis_type="dub_orth", volume_quad_1d=7, edge_quad_1d=7
 
 ### Local Matrix Assembly
 
-`hdgfem.assembly.matrices_numpy` keeps two API styles.
+The NumPy reference local matrices are split by owner: generic mass matrices
+in `hdgfem.core.mass`, advection matrices in `hdgfem.transport.local_numpy`,
+advective trace weights in `hdgfem.hdg.stabilization`, and trace-stabilization
+blocks in `hdgfem.hdg.matrices`. They keep two API styles.
 
 Return-style reference functions:
 
 ```python
-from hdgfem.assembly import matrices_numpy as hdg_mats
+from hdgfem.core.mass import weighted_mass
+from hdgfem.transport.local_numpy import advection_mats, boundary_mass
 
-mass = hdg_mats.weighted_mass(space, reaction)
-adv = hdg_mats.advection_mats(space, beta_h)
-bd = hdg_mats.boundary_mass(space, beta_h)
+mass = weighted_mass(space, reaction)
+adv = advection_mats(space, beta_h)
+bd = boundary_mass(space, beta_h)
 ```
 
 Output-buffer accumulation functions:
 
 ```python
-tau_face, gamma_face = hdg_mats.advection_trace_weights_from_normal_flux(
+from hdgfem.core.mass import add_reaction_mass
+from hdgfem.hdg.matrices import boundary_mass_from_trace_stabilization
+from hdgfem.hdg.stabilization import advection_trace_weights_from_normal_flux
+from hdgfem.transport.local_numpy import add_advection_mats
+
+tau_face, gamma_face = advection_trace_weights_from_normal_flux(
     space,
     beta_dot_normal,
     stabilization=None,
 )
-local = hdg_mats.boundary_mass_from_trace_stabilization(space, tau_face)
+local = boundary_mass_from_trace_stabilization(space, tau_face)
 local = np.ascontiguousarray(local)
 scratch = np.empty_like(local)
 
-hdg_mats.add_reaction_mass(local, reaction_h, space, scratch=scratch)
-hdg_mats.add_advection_mats(local, space, beta_h, scale=-1.0)
+add_reaction_mass(local, reaction_h, space, scratch=scratch)
+add_advection_mats(local, space, beta_h, scale=-1.0)
 ```
 
 For advection-reaction, `stabilization` is the element-side trace stabilization
@@ -1378,9 +1415,11 @@ and profiling.
 
 ### Projected Numba Assembly
 
-`hdgfem.backends.numba` adapts package objects to kernels in `hdgfem.kernels`.
-The fused projected trace assembly path performs local operator build, local
-solve, and global COO scatter inside the Numba kernel.
+`hdgfem.transport.numba` adapts package objects to the fused kernels in
+`hdgfem.transport.numba_kernels`; `hdgfem.mixed.numba` does the same for
+diffusion with `hdgfem.mixed.numba_kernels`. The fused projected trace assembly
+path performs local operator build, local solve, and global COO scatter inside
+the Numba kernel.
 
 At `--verbosity 2`, Numba assembly timing is split into:
 
@@ -1430,7 +1469,7 @@ documentation change needs them.
 
 ### HDG Gram Dual Norms
 
-`hdgfem.assembly.hdg_gram` builds the Gram matrix associated with the HDG tuple
+`hdgfem.hdg.gram` builds the Gram matrix associated with the HDG tuple
 `(q_x, q_y, u, uhat)`:
 
 ```text
@@ -1442,7 +1481,7 @@ Boundary trace degrees of freedom are eliminated, so the trace block is the
 interior HDG trace space.  Two inverse-application paths are available:
 
 ```python
-from hdgfem.assembly.hdg_gram import (
+from hdgfem.hdg.gram import (
     assemble_hdg_gram,
     build_condensed_hdg_gram_inverse,
     build_ilu_bicgstab_inverse,
@@ -1756,7 +1795,7 @@ CSV/JSON data and optional Matplotlib plots report L2, sampled Linf,
 broken-gradient L2, trace mismatch, and full HDG H1 errors for both density
 and potential, with rates for each metric.
 
-The scalar evaluator in [hdg_gram.py](hdgfem/assembly/hdg_gram.py) shares the
+The scalar evaluator in [gram.py](hdgfem/hdg/gram.py) shares the
 reference derivative Gram blocks and face weights with the assembled mixed
 Gram. It evaluates the factored quadratic forms without assembling a global
 matrix or applying a Gram inverse. With `h_K` the element diameter, it uses

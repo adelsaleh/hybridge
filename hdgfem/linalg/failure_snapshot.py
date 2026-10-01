@@ -102,6 +102,7 @@ def trace_face_column_diagnostics(data, indptr, indices, face_index):
 
 
 def _host(array):
+    """Host NumPy view or copy of a NumPy or CuPy array."""
     return np.asarray(array.get() if hasattr(array, "get") else array)
 
 

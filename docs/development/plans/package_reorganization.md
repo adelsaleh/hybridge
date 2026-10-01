@@ -1,8 +1,11 @@
 # Package reorganization by operator family
 
 Drafted on 2026-09-29 from a read-only audit of `hdgfem/` (import graph,
-duplicated helpers, and DR/ADR implementation parity). No code has moved yet.
-Line references below are from that date and will drift.
+duplicated helpers, and DR/ADR implementation parity). The audit sections
+(Why, DR versus ADR(β = 0) by stage, Correctness items) describe the tree at
+that date and use its module paths (`backends/`, `kernels/`, `assembly/`),
+which no longer exist. The target layout and implementation status sections
+describe the current tree.
 
 ## Why
 
@@ -62,71 +65,139 @@ visible.
 ### Layering rule
 
 ```
-runtime → core → linalg → hdg → {transport, mixed} → solvers → diagnostics → io
+runtime → core → cases → linalg → hdg → {transport, mixed} → solvers → diagnostics → io
 ```
 
-A module imports only from layers to its left. `transport` and `mixed` never
-import each other. A test enforces the rule (phase 0).
+A module imports only from its own layer or from layers to its left;
+function-level imports count. `transport` and `mixed` never import each other.
+The package root is the public facade over every layer.
+`tests/test_package_layering.py` enforces the rule with an empty
+allowed-violation list.
 
-## Target layout
+## Target layout (as implemented)
+
+The tree below is the final layout. It differs from the 2026-09-29 draft in
+these points:
+
+- `projection` lives in `core/`, next to the generic mass matrices and the
+  CuPy mirrors, not in `hdg/`;
+- device sparse views and scaling kernels live in `linalg/gpu/sparse`, not in
+  `hdg/cuda/`;
+- advection τ/γ policies are in `hdg/stabilization`; diffusion τ policies are
+  in `mixed/stabilization`;
+- transport failure diagnostics live in `transport/diagnostics`, and
+  `diagnostics/` holds `errors`, `solver` and `guiding_center`;
+- DR and ADR modules sit side by side in `mixed/` (`numba`/`adr_numba`,
+  `local_numpy`/`adr_numpy`) and share building blocks instead of forming one
+  kernel family; postprocessing is split into DR (`flux`) and ADR
+  (`total_flux`) drivers over shared kernels;
+- the ADR raw-CUDA pipeline is `solvers/advection_diffusion_reaction_device`,
+  over the operator API in `mixed/raw_cuda/adr_operator`.
 
 ```
 hdgfem/
-  runtime/     optional-dependency gates, precision, one logging/timing module,
-               error types, device inventory, benchmarking
-  core/        mesh, space, basis, quadrature, fields, transfer, element_coefficients
-    device.py  CuPy mirrors; mesh maps (interior side, solve edge) and the trace
-               orientation mode, one copy each
-  linalg/      system (dispatch), reduction, direct, iterative, residuals,
-               face_dense, ordering, block Gauss-Seidel,
-               amgx/ (device solver and retries, host, config, errors),
-               gpu/ (Krylov stack, preconditioners, Legendre BSR),
-               multigrid/
-  hdg/                     shared by every family
-    stabilization.py       policies plus ONE τ/γ evaluator (host/device,
-                           conflict-averaged repair, inactive-face gauge)
-    coefficients.py        volume/face sampling, source moments; host and device
-                           versions side by side, with same-space checks
-    reference.py           derivative matrices, advection tensor, trace bases
-                           (one LGL rule, one TraceReferenceData)
-    condensation.py        TraceSystem, lift/Schur glue, element traces,
-                           reconstruction (from assembly/hdg.py)
-    projection.py, gram.py
-    numba_common.py        LU/Cholesky, trace dof/sign, projected source moment
+  runtime/      optional (dependency gates, asnumpy, njit/prange fallbacks),
+                precision, logging, terminal, errors, devices, threads,
+                benchmarking
+  core/         mesh, geometry, space, basis, quadrature, field_ops, transfer,
+                trace_transfer, adaptivity, element_coefficients, pointwise
+                (+ pointwise_kernels)
+    mass.py     generic mass and reaction-mass matrices
+    projection.py  L2 projection onto DG spaces
+    device.py   CuPy mirrors: CupyDGMesh, CupyDGSpace, CupyDGTraceSpace,
+                as_cupy_space, as_cupy_trace_space, coefficient upload helpers
+  cases/        closed_loop_coefficients, square_stress_coefficients, profiles
+  linalg/       system (dispatch), results, reduction, direct, iterative,
+                pardiso_runtime, pardiso_diagnostics, failure_snapshot,
+                face_dense (FaceDenseSystem), sparse_pattern, ordering, bsr,
+                upwind_block_gs (+ _on_the_fly), block_jacobi,
+                additive_schwarz, gmres, polynomial
+    amgx/       device_solver (PyAMGXCsrDeviceSolver,
+                solve_reduced_system_amgx_device, retries, shared resources),
+                host, config, errors
+    gpu/        sparse (device CSR/BSR views, row/symmetric scaling), cupyx,
+                cupyx_device, upwind_block_gs, face_dense, gmres,
+                production_gmres, preconditioners, polynomial, triangular,
+                profiling, cublas_batched, legendre_face_bsr
+    multigrid/  face_hp, policy, krylov, hierarchy_bsr
+  hdg/                      shared by both families
+    condensation.py         TraceSystem, lift/Schur glue, element traces,
+                            reconstruction
+    condensation_device.py  CudaAdvectionAssembly, CuPy element traces and
+                            reduced-to-full trace expansion
+    coefficients.py         volume/face sampling, β normal flux, same-space checks
+    coefficients_device.py  CuPy sampling and source moments
+    coefficient_sampling.py GPU-first bundled coefficient sampling
+    stabilization.py        advection τ/γ policies and evaluators
+                            (conflict-averaged repair, inactive-face gauge)
+    trace_maps.py           solve-edge, interior-side and boundary-reduction
+                            maps; trace orientation mode
+    reference.py, matrices.py, gram.py
+    numba_common.py         LU/Cholesky, trace dof/sign
     cuda/
-      raw_source.py        one CUDA library: status-returning LU, Cholesky,
-                           triangular solves, orientation; #define templates
-      launch.py            block-size policy, module cache, shared-memory
-                           opt-in, autotuning helpers
-      pattern.py           reduced CSR/BSR pattern builder
-      sparse.py            device CSR/BSR views, row/symmetric scaling kernels
-  transport/               first-order HDG (AR)
-    local_numpy.py, numba.py (+ _kernels), cupy.py, cuda_driver.py,
-    raw_cuda.py, tsle_bsr.py, residual.py
-  mixed/                   second-order mixed HDG: DR = ADR(β=0)
-    coefficients.py        κ kinds, one τ_diff normalizer, MixedPreparedData
-                           (β optional; host and device)
-    local_numpy.py         one reference local solver, identity-κ closed-form fast path
-    assembly_numpy.py      one assembler (penalty and eliminate)
-    numba.py (+ _kernels)  one kernel family: has_advection,
-                           factor_kind ∈ {lu, cholesky}, cached factors, RHS-only
-    cupy.py                current diffusion_cupy (β term later)
-    raw_cuda/              identity.py (DR fast kernels), tensor.py (κ kinds 0–6),
-                           pipeline.py (ADR end-to-end)
-    postprocess/
-      flux.py              one sampler (β optional; τ per face or per point),
-                           RT and l2_closest drivers, Numba kernels
-      flux_cupy.py         RT (already shared) and l2 (becomes DR-capable)
-      flux_raw_cuda.py     RT (renamed, device output) and the jump-lift fast
-                           path (β = 0, face-constant τ)
-      primal_stenberg.py   DR primal (cached κ-free factors)
-      primal_mixed.py      ADR primal (Numba, CuPy, raw)
-  solvers/     thin facades: options, results, dispatch, capabilities.py;
-               public names unchanged
-  diagnostics/ errors, guiding_center, transport
-  io/          plotting, raster, holoviz, output, records
-  cases/       closed_loop / square_stress coefficients, profiles
+      raw_source.py         trace orientation, cooperative LU
+                            (RAW_COOP_LU_FACTOR) and column solves, checked
+                            warp LU
+      launch.py             block-size policy, kernel compilation
+      pattern.py            reduced CSR/BSR pattern builder
+  transport/                first-order HDG (AR)
+    local_numpy.py, numba.py (+ numba_kernels, numba_local_kernels), cupy.py,
+    cuda.py (raw-CUDA orchestration), raw_cuda.py, tsle_bsr.py, residual.py,
+    diagnostics.py
+  mixed/                    mixed HDG: DR (= ADR with β = 0) and ADR
+    coefficients.py         κ kinds, τ_diff normalizer
+    stabilization.py        diffusion τ policies (GlobalLengthDiffusion)
+    adr_preparation.py      ADRPreparedData, prepare_adr_data
+    coefficients_device.py  device ADR coefficients for raw CUDA
+    local_numpy.py          mixed_local_inverse, assemble_mixed_trace_system,
+                            DR local solvers
+    adr_numpy.py            ADR reference through the shared inverse/assembler
+    numba.py (+ numba_kernels)          DR, projected tables and cached factors
+    adr_numba.py (+ adr_numba_kernels, numba_diffusion_mass)  ADR
+    numba_common.py         shared condensation and column solve
+    cupy.py                 DR device assembly and compact Schur-Cholesky
+    face_dense.py           fixed-slot face assembly
+    raw_cuda/               identity.py (DR), tensor.py (κ kinds 0–6),
+                            adr_operator.py (ADR operator API)
+    postprocess/            flux.py (DR drivers), total_flux.py (ADR drivers),
+                            numba_kernels.py (shared RT and l2_closest kernels;
+                            DR and ADR primal kernels), flux_cupy.py,
+                            rt_raw_cuda.py, flux_recovery_raw_cuda.py,
+                            flux_recovery.py, primal_raw_cuda.py
+  solvers/      advection_reaction, diffusion_reaction,
+                advection_diffusion_reaction, advection_diffusion_reaction_device
+                (ADR raw-CUDA pipeline), diffusion_device,
+                diffusion_face_dense, capabilities, adv_rea / diff_rea shims;
+                public names unchanged
+  diagnostics/  errors, solver, guiding_center; names re-exported
+  io/           plot, comparison, figures, raster, holoviz, live, movie,
+                output, records, time_series
 ```
+
+## Implementation status (2026-10-01)
+
+Phases 0–5 and 7 are done on branch `package-reorganization`. The layering
+test passes with zero allowed violations; `hdgfem/backends/`,
+`hdgfem/kernels/` and `hdgfem/assembly/` are removed without compatibility
+shims, as are the DR primal-postprocess CuPy and raw-CUDA ports and the
+unreachable generic Numba DR adapters. The public names in `hdgfem` and
+`hdgfem.solvers` are unchanged. The Bernstein postprocess branches are kept:
+flux recovery supports Bernstein traces and is reachable from the
+guiding-center runner. Splitting the large solver modules into per-backend
+drivers is a recorded follow-up in `TODO.md`.
+
+Phase 6 is done as shared building blocks rather than one merged kernel
+family: 6.1 flux postprocessing (`mixed/postprocess/numba_kernels`), 6.2 the
+NumPy local inverse and assembler (`mixed/local_numpy`), and 6.3 the Numba
+condensation and column solve (`mixed/numba_common`). Replacing the DR kernels
+wholesale by the ADR kernels would lose DR's projected tables and cached
+Schur factors, which are its fast path. For raw CUDA (6.4), AR, DR and ADR
+share the cooperative LU source `hdg/cuda/raw_source.RAW_COOP_LU_FACTOR`.
+
+Correctness items A1, A2 and A5 are fixed; A3 remains a watch item.
+
+TODO(A4): pending at the time of writing; update this line when the CUDA LU
+copies report tiny or NaN pivots with a status.
 
 ## DR versus ADR(β = 0) by stage
 
@@ -165,11 +236,11 @@ the reorganization itself stays behavior-preserving.
 
 | # | Issue | Status |
 |---|---|---|
-| A1 | `backends/cupy.py` `diagonal_scale_csr_rows` guards only a zero diagonal. The `advection_cuda.py` kernel of the same name also falls back to the row maximum for tiny or non-finite diagonals. The weak copy is used by the AR cupyx handoff (`linalg/cupyx_device.py`). The sibling `csr_inverse_sqrt_diagonal`, used by AMGX symmetric scaling, has the same weak guard. | confirmed by reading |
-| A2 | `solvers/advection_diffusion_reaction._adr_postprocess_samples` handles τ_adv itself. `"lax-friedrichs"` reaches `float("lax-friedrichs")`, and `ScaledUpwind` falls through to the array branch, although ADR assembly accepts both through `matrices_numpy.advection_trace_stabilization_values`. | confirmed by reading; not run |
-| A3 | ADR computes γ = τ_total − β·n from the raw β·n (`assembly/advection_diffusion_reaction.py`, `backends/adr_coefficients_cupy.py`). AR uses `effective_advection_normal_flux` and the inactive-face gauge. `conflict-averaged-upwind` is likely inconsistent in ADR, and it is not rejected. | reported; unverified |
-| A4 | The AR/DR CUDA LU copies clamp tiny pivots to ±1e-30, and `fabs(d) < 1e-30` is false for NaN, so NaN spreads silently. The ADR warp LU, ADR serial LU and RT postprocess return a failure status instead. | reported |
-| A5 | Neither device `source_moments_cupy` (`advection_cuda.py`, `diffusion_cupy.py`) checks `source.space is space`; host `hdg.source_moments` does. Latent today, because the raw callers enforce same-space inputs. | reported |
+| A1 | `backends/cupy.py` `diagonal_scale_csr_rows` guards only a zero diagonal. The `advection_cuda.py` kernel of the same name also falls back to the row maximum for tiny or non-finite diagonals. The weak copy is used by the AR cupyx handoff (`linalg/cupyx_device.py`). The sibling `csr_inverse_sqrt_diagonal`, used by AMGX symmetric scaling, has the same weak guard. | fixed 2026-09-30 (`tests/test_cupy_scaling.py`) |
+| A2 | `solvers/advection_diffusion_reaction._adr_postprocess_samples` handles τ_adv itself. `"lax-friedrichs"` reaches `float("lax-friedrichs")`, and `ScaledUpwind` falls through to the array branch, although ADR assembly accepts both through `matrices_numpy.advection_trace_stabilization_values`. | fixed 2026-09-30 (`tests/test_adr_face_stabilization.py`) |
+| A3 | ADR computes γ = τ_total − β·n from the raw β·n (`assembly/advection_diffusion_reaction.py`, `backends/adr_coefficients_cupy.py`). AR uses `effective_advection_normal_flux` and the inactive-face gauge. `conflict-averaged-upwind` is likely inconsistent in ADR, and it is not rejected. | watch item (open decision 3) |
+| A4 | The AR/DR CUDA LU copies clamp tiny pivots to ±1e-30, and `fabs(d) < 1e-30` is false for NaN, so NaN spreads silently. The ADR warp LU, ADR serial LU and RT postprocess return a failure status instead. | pending (TODO) |
+| A5 | Neither device `source_moments_cupy` (`advection_cuda.py`, `diffusion_cupy.py`) checks `source.space is space`; host `hdg.source_moments` does. Latent today, because the raw callers enforce same-space inputs. | fixed 2026-09-30 (`tests/test_device_source_moments.py`) |
 
 ## Phases
 
@@ -233,7 +304,8 @@ Decided on 2026-09-29:
 4. **Dead and test-only code:** delete it, together with tests that only cover
    it:
    - the DR primal CuPy and raw-CUDA ports;
-   - the Bernstein postprocess branches;
+   - the Bernstein postprocess branches (kept after review; see Implementation
+     status);
    - `backends/numpy.py`;
    - the unreachable Numba DR generic branches.
 

@@ -607,19 +607,23 @@ This remains the highest-priority new shared-API design project after the unstea
   former script-owned diffusion and upwind-Cupyx solver paths are removed, and
   the scaling and Gram scripts are package-backed diagnostics rather than
   alternate implementations.
-- [ ] Finish the remaining backend-role split under this single ownership
+- [x] Finish the remaining backend-role split under this single ownership
   tracker. The first phase separated device diffusion solve orchestration,
   Cupyx device-system solving, reusable diagnostics/configuration, and
-  runner-facing field/trace operations. Remaining work is to split CuPy data
-  mirrors/runtime ownership from sparse-solver/PyAMGX adapters in
-  `hdgfem/backends/cupy.py`, split advection device assembly from reconstruction
-  and reusable device data in `hdgfem/backends/advection_cuda.py`, and reduce
-  the canonical equation solver modules to stage orchestration plus supported
-  numerical kernels. Retain compatibility imports for one transition period.
-  The independently selectable assembly/solve/reconstruction Cartesian-product
-  contract remains tracked separately under Backend And Residency Contract.
-  This split is now scheduled as phases 2–5 of the
-  [package reorganization plan](docs/development/plans/package_reorganization.md).
+  runner-facing field/trace operations. Done 2026-10-01 by the
+  [package reorganization plan](docs/development/plans/package_reorganization.md)
+  (clean break, no compatibility imports):
+  - the former `backends/cupy.py` was split into `runtime/optional`,
+    `core/device`, `linalg/gpu/{sparse,cupyx}`, `linalg/amgx/host` and
+    `transport/cupy`;
+  - the former `backends/advection_cuda.py` was split into
+    `linalg/amgx/device_solver`, `linalg/gpu/sparse`,
+    `hdg/condensation_device`, `hdg/coefficients_device` and `transport/cuda`.
+
+  Reducing the solver modules to stage orchestration is tracked under phase 7
+  of the plan. The independently selectable assembly/solve/reconstruction
+  Cartesian-product contract remains tracked separately under Backend And
+  Residency Contract.
 - [ ] Remove the abbreviated solver compatibility shims only after a documented
   transition release passes and downstream callers have migrated.
 

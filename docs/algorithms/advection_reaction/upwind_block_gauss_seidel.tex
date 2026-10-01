@@ -86,7 +86,7 @@ The important files are:
   ordered block COO variants.
 
   \item[CuPy apply]
-  \path{hdgfem/linalg/upwind_block_gs_cupy.py}.  Exports compact host data and
+  \path{hdgfem/linalg/gpu/upwind_block_gs.py}.  Exports compact host data and
   applies the preconditioner on device.
 
   \item[Experiment]
@@ -593,7 +593,7 @@ This is the assembly-emitted host builder used by performance experiments.
 
 Function:
 \begin{lstlisting}
-hdgfem.linalg.upwind_block_gs_cupy.upwind_block_gs_cupy_from_host_preconditioner
+hdgfem.linalg.gpu.upwind_block_gs.cupy_upwind_block_gs_from_host_preconditioner
 \end{lstlisting}
 It takes a host-built \code{UpwindBlockGSPreconditioner} and transfers compact
 arrays to the current CUDA device:

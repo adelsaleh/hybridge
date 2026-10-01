@@ -114,10 +114,10 @@ console sample. Printed times have five-decimal precision.
 | IMEX-ARK3 | 4,007 | 4.444 | 72.7% |
 
 `AmgxScalarVcycle.__call__` in
-[face_hp_multigrid.py](../../../hdgfem/linalg/face_hp_multigrid.py) measures
+[face_hp_multigrid.py](../../../hdgfem/linalg/multigrid/face_hp.py) measures
 all of `PyAMGXCsrDeviceSolver.solve`. Thus 73% is **AMGX plus adapter cost**,
 not a measured kernel-only share. In
-[advection_cuda.py](../../../hdgfem/backends/advection_cuda.py), the adapter
+[advection_cuda.py](../../../hdgfem/transport/cuda.py), the adapter
 allocates/zeros output, uploads RHS and zero guess through raw pointers,
 executes a cycle, downloads the result, synchronizes, then queries status,
 iterations, and residual history. `_amgx_config_for_solve` forces monitoring
@@ -160,7 +160,7 @@ achieved or promised speedup.
 RHS assembly is 8.9 ms/call: approximately 0.40 ms for moments and 8.48–8.50 ms
 for the fused phase. That phase includes source-array compaction and RHS
 zeroing as well as kernel execution. In
-[diffusion_cupy.py](../../../hdgfem/backends/diffusion_cupy.py),
+[diffusion_cupy.py](../../../hdgfem/mixed/cupy.py),
 `compact_diffusion_rhs` uses one warp per element, two sequential 28-row
 triangular solves at p=6, then source-flux recovery and atomic scatter.
 Dependent warp reductions/synchronizations are an optimization hypothesis;

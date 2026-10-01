@@ -41,6 +41,7 @@ from typing import Any
 import numpy as np
 
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
+from hdgfem.hdg.cuda.raw_source import RAW_COOP_LU_FACTOR
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
 from hdgfem.hdg.trace_maps import (
     _edge_to_solve_edge,
@@ -1040,68 +1041,7 @@ __device__ __forceinline__ void solve_column_zero_raw(
 }
 
 
-__device__ __forceinline__ void factor_local_lu_coop_safe_raw(
-        double* __restrict__ local_lu,
-        int* __restrict__ pivots)
-{
-    // Conservative cooperative LU for the fully fused assembly kernel.
-    //
-    // The first fused attempt reused the more aggressive helper above, where row
-    // swaps and multiplier-column scaling were distributed across the block.  That
-    // is valid on paper, but in the fully fused path it produced intermittent
-    // shared-memory value corruption and illegal accesses after the local matrix
-    // had just been assembled cooperatively.  This variant deliberately keeps the
-    // order-sensitive pivot search, row swap, diagonal clamp, and multiplier
-    // column scaling on thread 0, then parallelizes only the trailing Schur update.
-    // The trailing update is still the O(NEL^3) part of LU, so this keeps the main
-    // speedup while giving us a stable correctness baseline for fused assembly.
-    const int tid = threadIdx.x;
-    for (int k = 0; k < NEL; ++k) {
-        if (tid == 0) {
-            int pivot = k;
-            double max_value = fabs(local_lu[k * NEL + k]);
-            for (int i = k + 1; i < NEL; ++i) {
-                const double value = fabs(local_lu[i * NEL + k]);
-                if (value > max_value) {
-                    max_value = value;
-                    pivot = i;
-                }
-            }
-            pivots[k] = pivot;
-
-            if (pivot != k) {
-                for (int j = 0; j < NEL; ++j) {
-                    const double tmp = local_lu[k * NEL + j];
-                    local_lu[k * NEL + j] = local_lu[pivot * NEL + j];
-                    local_lu[pivot * NEL + j] = tmp;
-                }
-            }
-
-            double diagonal = local_lu[k * NEL + k];
-            if (fabs(diagonal) < 1.0e-30) {
-                diagonal = diagonal >= 0.0 ? 1.0e-30 : -1.0e-30;
-                local_lu[k * NEL + k] = diagonal;
-            }
-            for (int i = k + 1; i < NEL; ++i) {
-                local_lu[i * NEL + k] /= diagonal;
-            }
-        }
-        __syncthreads();
-
-        // Each trailing entry is updated by exactly one thread.  The pivot row and
-        // multiplier column are read-only after the barrier above.
-        const int width = NEL - k - 1;
-        for (int idx = tid; idx < width * width; idx += blockDim.x) {
-            const int i = k + 1 + idx / width;
-            const int j = k + 1 + idx - (idx / width) * width;
-            local_lu[i * NEL + j] -= local_lu[i * NEL + k] * local_lu[k * NEL + j];
-        }
-        __syncthreads();
-    }
-}
-
-
-__device__ __forceinline__ void factor_local_lu_coop_pivot_scale_raw(
+""" + RAW_COOP_LU_FACTOR + r"""__device__ __forceinline__ void factor_local_lu_coop_pivot_scale_raw(
         double* __restrict__ local_lu,
         int* __restrict__ pivots,
         double* __restrict__ pivot_abs_values,
@@ -1376,7 +1316,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
 #if RAW_LU_MODE_COOP
         factor_local_lu_coop_pivot_scale_raw(local_lu, pivots, lu_pivot_abs, lu_pivot_rows);
 #else
-        factor_local_lu_coop_safe_raw(local_lu, pivots);
+        factor_local_lu_coop_raw(local_lu, pivots);
 #endif
         solve_all_columns_raw(local_lu, pivots, local_rhs);
         if (cache_factors) {
@@ -1588,7 +1528,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
 #if RAW_LU_MODE_COOP
     factor_local_lu_coop_pivot_scale_raw(local_lu, pivots, lu_pivot_abs, lu_pivot_rows);
 #else
-    factor_local_lu_coop_safe_raw(local_lu, pivots);
+    factor_local_lu_coop_raw(local_lu, pivots);
 #endif
     solve_column_zero_raw(local_lu, pivots, local_rhs);
 

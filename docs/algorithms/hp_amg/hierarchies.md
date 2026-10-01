@@ -98,7 +98,7 @@ The current reference-Legendre normalization uses a congruence
 Reference-face orthonormality is not physical-face orthonormality. On a
 straight edge of length L, the corresponding physical modal mass matrix is
 `(L/2) I`. Reuse the existing
-[normalization and modal-transfer helpers](../../../hdgfem/backends/legendre_face_bsr.py).
+[normalization and modal-transfer helpers](../../../hdgfem/linalg/gpu/legendre_face_bsr.py).
 
 For a same-mesh p step, E injects the low modes and fills higher modes with
 zero. `E^T A E` is the principal modal block of the already condensed

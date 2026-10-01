@@ -112,6 +112,7 @@ def _validate_local_schur_factors(cached_raw, *, num_elements: int, nel: int, lo
 
 
 from hdgfem.hdg.cuda.raw_source import (
+    RAW_COOP_LU_FACTOR,
     RAW_TRACE_ORIENTATION_HELPERS as _RAW_TRACE_ORIENTATION_HELPERS,
     RAW_COOPERATIVE_SOLVES,
 )
@@ -932,7 +933,7 @@ _RAW_ASSEMBLY_COOP_TEMPLATE = r"""
         }
         __syncthreads();
 #else
-        factor_diffusion_schur_lu_coop_raw(schur_matrix, pivots);
+        factor_local_lu_coop_raw(schur_matrix, pivots);
 #if RAW_WRITE_CACHED_FACTORS
         for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
             schur_lu_cache[element * NEL * NEL + idx] = schur_matrix[idx];
@@ -1712,52 +1713,7 @@ extern "C" __global__ void reconstruct_diffusion_raw(
 """
 
 
-_RAW_RECONSTRUCT_COOP_TEMPLATE = r"""
-__device__ __forceinline__ void factor_diffusion_reconstruct_lu_coop_raw(
-        double* __restrict__ schur_lu,
-        int* __restrict__ pivots)
-{
-    const int tid = threadIdx.x;
-    for (int k = 0; k < NEL; ++k) {
-        if (tid == 0) {
-            int pivot = k;
-            double max_value = fabs(schur_lu[k * NEL + k]);
-            for (int i = k + 1; i < NEL; ++i) {
-                const double value = fabs(schur_lu[i * NEL + k]);
-                if (value > max_value) {
-                    max_value = value;
-                    pivot = i;
-                }
-            }
-            pivots[k] = pivot;
-            if (pivot != k) {
-                for (int j = 0; j < NEL; ++j) {
-                    const double tmp = schur_lu[k * NEL + j];
-                    schur_lu[k * NEL + j] = schur_lu[pivot * NEL + j];
-                    schur_lu[pivot * NEL + j] = tmp;
-                }
-            }
-            double diagonal = schur_lu[k * NEL + k];
-            if (fabs(diagonal) < 1.0e-30) {
-                diagonal = diagonal >= 0.0 ? 1.0e-30 : -1.0e-30;
-                schur_lu[k * NEL + k] = diagonal;
-            }
-            for (int i = k + 1; i < NEL; ++i) {
-                schur_lu[i * NEL + k] /= diagonal;
-            }
-        }
-        __syncthreads();
-
-        const int width = NEL - k - 1;
-        for (int idx = tid; idx < width * width; idx += blockDim.x) {
-            const int i = k + 1 + idx / width;
-            const int j = k + 1 + idx - (idx / width) * width;
-            schur_lu[i * NEL + j] -= schur_lu[i * NEL + k] * schur_lu[k * NEL + j];
-        }
-        __syncthreads();
-    }
-}
-
+_RAW_RECONSTRUCT_COOP_TEMPLATE = RAW_COOP_LU_FACTOR + r"""
 __device__ __forceinline__ void solve_diffusion_lu_column_raw(
         const double* __restrict__ factor,
         const int* __restrict__ pivots,
@@ -1953,7 +1909,7 @@ extern "C" __global__ void reconstruct_diffusion_raw_coop(
     }
     __syncthreads();
 #else
-    factor_diffusion_reconstruct_lu_coop_raw(schur_matrix, pivots);
+    factor_local_lu_coop_raw(schur_matrix, pivots);
 #endif
     solve_diffusion_lu_column_raw(schur_matrix, pivots, red_rhs);
 

@@ -91,7 +91,7 @@ The simulation settings match the earlier comparison: FP64, unit disk, signed Ga
 
 ### Reproduction and adopted settings
 
-Production defaults are centralized in `hdgfem/linalg/face_hp_multigrid.py::scalar_p0_amgx_config`. The tuning driver anchors the old three-parameter baseline explicitly, so future changes to the production default do not silently relabel the baseline. The original driver and helper used for this study are preserved with the evidence.
+Production defaults are centralized in `hdgfem/linalg/multigrid/policy.py::scalar_p0_amgx_config`. The tuning driver anchors the old three-parameter baseline explicitly, so future changes to the production default do not silently relabel the baseline. The original driver and helper used for this study are preserved with the evidence.
 
 ```sh
 CUDA_PATH=/usr/local/cuda-13.0 HDGFEM_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.tune_poisson_p0_amgx --order 6 --num-steps 100 --configs artifacts/poisson_p0_tuning_20260913/validation_configs.json --output-dir artifacts/poisson_p0_tuning_20260913/validate_p6_new

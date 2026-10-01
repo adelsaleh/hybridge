@@ -30,7 +30,7 @@ __device__ __forceinline__ double raw_trace_orientation_sign(
 }
 """
 
-RAW_COOPERATIVE_SOLVES = r"""__device__ __forceinline__ void factor_diffusion_schur_lu_coop_raw(
+RAW_COOP_LU_FACTOR = r"""__device__ __forceinline__ void factor_local_lu_coop_raw(
         double* __restrict__ schur_lu,
         int* __restrict__ pivots)
 {
@@ -75,7 +75,10 @@ RAW_COOPERATIVE_SOLVES = r"""__device__ __forceinline__ void factor_diffusion_sc
     }
 }
 
-__device__ __forceinline__ void solve_diffusion_all_columns_coop_raw(
+"""
+
+# Cooperative multi-column triangular solves (need NCOLS / RAW_BATCH_COLS).
+RAW_COOP_COLUMN_SOLVES = r"""__device__ __forceinline__ void solve_diffusion_all_columns_coop_raw(
         const double* __restrict__ schur_lu,
         const int* __restrict__ pivots,
         double* __restrict__ columns)
@@ -149,6 +152,9 @@ __device__ __forceinline__ void solve_diffusion_column_batch_coop_raw(
 }
 
 """
+
+# Factor plus column solves, for kernels that define NCOLS and RAW_BATCH_COLS.
+RAW_COOPERATIVE_SOLVES = RAW_COOP_LU_FACTOR + RAW_COOP_COLUMN_SOLVES
 
 
 _WARP_LU_TEMPLATE = r"""

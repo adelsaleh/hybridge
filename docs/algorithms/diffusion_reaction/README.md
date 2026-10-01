@@ -17,9 +17,11 @@ elimination, reduced trace assembly, reconstruction, and postprocessing.
 ## Implementation Anchors
 
 - `hdgfem.solvers.diffusion_reaction`
-- `hdgfem.kernels.diffusion_reaction_fused`
-- `hdgfem.backends.diffusion_cupy`
-- `hdgfem.backends.diffusion_raw_cuda`
+- `hdgfem.mixed.local_numpy`
+- `hdgfem.mixed.numba` and `hdgfem.mixed.numba_kernels`
+- `hdgfem.mixed.cupy`
+- `hdgfem.mixed.raw_cuda.identity`
+- `hdgfem.mixed.postprocess.flux` and `hdgfem.mixed.postprocess.numba_kernels`
 
 Backend restrictions are maintained in
 [`../../reference/backend_capabilities.md`](../../reference/backend_capabilities.md),

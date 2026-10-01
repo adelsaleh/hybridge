@@ -192,8 +192,10 @@ The supported exception categories are:
   backend.
 
 Unsupported assembly/solve/reconstruction combinations raise
-`hdgfem.backends.UnsupportedBackendConfigurationError`, a stable
-`NotImplementedError` subclass. Its message identifies the rejected backend
+`hdgfem.runtime.errors.UnsupportedBackendConfigurationError`, a stable
+`NotImplementedError` subclass. It was previously exported from the removed
+`hdgfem.backends` package; the support table and validators are in
+`hdgfem.solvers.capabilities`. Its message identifies the rejected backend
 combination, gives an actionable alternative, and links to
 `docs/reference/backend_capabilities.md`. Backend preflight runs before coefficient
 sampling, optional-runtime imports, raw-CUDA launch setup, or matrix assembly.

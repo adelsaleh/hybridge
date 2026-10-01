@@ -25,14 +25,14 @@ remain to be established by the user.
 
 ## Existing functionality and scope
 
-The package already provides device mesh/reference mirrors in `backends/cupy.py`,
+The package already provides device mesh/reference mirrors in `core/device.py`,
 chunked callable projection through `CupyDGSpace.project_callable`, backend-aware
-profiles in `core/profiles.py`, and Numba element-parallel integration kernels.
+profiles in `cases/profiles.py`, and Numba element-parallel integration kernels.
 These do not provide bundled analytic coefficient sampling with an OOM-aware CPU
 fallback. Projection is deliberately not substituted for direct sampling: that
 would change the stress operator and source.
 
-`hdgfem.assembly.coefficient_sampling.CoefficientSampler` fills this narrower gap.
+`hdgfem.hdg.coefficient_sampling.CoefficientSampler` fills this narrower gap.
 It does not replace matrix integration, inversion, condensation, or solver kernels.
 The GPU performs the coefficient expressions; sampled outputs return to host
 because the present ADR preparation consumes NumPy arrays. This avoids retaining
@@ -42,7 +42,7 @@ GPU batching is not a host-memory or full-assembly memory-budget guarantee.
 ## Reusable callable contract
 
 ```python
-from hdgfem.assembly.coefficient_sampling import CoefficientSampler
+from hdgfem.hdg.coefficient_sampling import CoefficientSampler
 
 def coefficients(x, y, parameters):
     amplitude, = parameters
@@ -92,7 +92,7 @@ first GPU evaluation. Use warm repetitions for performance comparisons.
 
 ## Stress-case adapter
 
-`hdgfem.core.closed_loop_coefficients` supplies reusable scalar/array formulas for
+`hdgfem.cases.closed_loop_coefficients` supplies reusable scalar/array formulas for
 the corrugated-annulus family. Volume evaluation returns the symmetric tensor's
 three distinct entries, both velocity components, and the manufactured source
 together, sharing one geometry evaluation. Faces request only velocity. The old

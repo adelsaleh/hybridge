@@ -28,8 +28,8 @@ algorithm, API, backend, or release contracts.
   and post-processing.
 - [`package_reorganization.md`](package_reorganization.md): one-way package
   layering and reorganization by HDG operator family (transport AR; mixed DR and
-  ADR, where DR is ADR at β = 0), shared-helper consolidation, and the
-  divergence bugs to fix first.
+  ADR, where DR is ADR at β = 0), shared-helper consolidation, the divergence
+  bugs fixed first, the implemented layout, and its status.
 
 ## Ownership And Lifecycle
 

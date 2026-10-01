@@ -40,7 +40,7 @@ available. Same-mesh differences measure temporal sensitivity. They include
 interaction with spatial dissipation and do not establish spatial convergence.
 
 For the scalar field and its actual numerical trace, the shared
-[`ScalarHDGGram`](../../../hdgfem/assembly/hdg_gram.py) evaluator computes
+[`ScalarHDGGram`](../../../hdgfem/hdg/gram.py) evaluator computes
 
 \[
 Z=\tfrac12\|\rho_h\|_{L^2}^2,\qquad

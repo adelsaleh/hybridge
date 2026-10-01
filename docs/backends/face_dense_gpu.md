@@ -18,22 +18,24 @@ and
 
 The face-dense solver does **not** depend on AMGX or PyAMGX:
 
-- `hdgfem.assembly.face_dense` owns fixed-slot face assembly, boundary
-  elimination/penalty normalization, reference matvecs, and validation
-  materialization.
+- `hdgfem.mixed.face_dense` owns fixed-slot face topology, face assembly, and
+  boundary elimination/penalty normalization.
+- `hdgfem.linalg.face_dense` owns `FaceDenseSystem`, reference matvecs,
+  residuals, and validation materialization.
+- `hdgfem.solvers.diffusion_face_dense` builds the face-dense diffusion system
+  from the mixed local solvers.
 - `hdgfem.linalg.gmres`, `additive_schwarz`, `block_jacobi`, and `polynomial`
   provide NumPy reference algorithms.
-- `hdgfem.backends.cupy_face_dense` owns the CuPy operator and its raw/fused
+- `hdgfem.linalg.gpu.face_dense` owns the CuPy operator and its raw/fused
   device variants.
-- `hdgfem.backends.cupy_gmres` owns restarted device GMRES.
-- `hdgfem.backends.cupy_preconditionners` owns face block-Jacobi and
-  element-patch additive Schwarz. The historical module spelling is retained
-  to avoid silently changing the imported API.
-- `hdgfem.backends.cupy_polynomial` owns Arnoldi/harmonic-Ritz setup and the
+- `hdgfem.linalg.gpu.gmres` owns restarted device GMRES.
+- `hdgfem.linalg.gpu.preconditioners` owns face block-Jacobi and
+  element-patch additive Schwarz.
+- `hdgfem.linalg.gpu.polynomial` owns Arnoldi/harmonic-Ritz setup and the
   polynomial preconditioner.
-- `hdgfem.backends.cublas_batched` supplies optional batched dense inverses;
-  `hdgfem.backends.cupy_solver` composes the production-oriented experimental
-  interface and convergence safeguards.
+- `hdgfem.linalg.gpu.cublas_batched` supplies optional batched dense inverses;
+  `hdgfem.linalg.gpu.production_gmres` composes the production-oriented
+  experimental interface and convergence safeguards.
 
 CuPy supplies device arrays and kernel compilation, while cuBLAS is used for
 selected dense operations. AMGX enters only as an independently timed

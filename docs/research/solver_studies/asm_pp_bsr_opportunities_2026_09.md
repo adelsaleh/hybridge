@@ -166,7 +166,7 @@ A future setup would:
    orthonormal native BSR operator. This avoids reassembling the PDE or
    importing the branch's legacy trace basis.
 3. Reuse the shared batched factorization/inversion machinery in
-   [cublas_batched.py](../../../hdgfem/backends/cublas_batched.py), with local
+   [cublas_batched.py](../../../hdgfem/linalg/gpu/cublas_batched.py), with local
    inverse and SPD checks. Batch the setup to control its temporary memory.
 4. Assemble the inverse blocks into the existing BSR pattern, using the
    existing face incidence/assembly formalism. A face-row owner can accumulate

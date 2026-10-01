@@ -58,7 +58,7 @@ research algorithm and must not be inferred from the current ordering API.
 - `hdgfem.linalg.ordering`
 - `hdgfem.linalg.upwind_block_gs`
 - `hdgfem.linalg.upwind_block_gs_on_the_fly`
-- `hdgfem.linalg.upwind_block_gs_cupy`
+- `hdgfem.linalg.gpu.upwind_block_gs`
 
 Dated Krylov, ILU, and upwind-GS comparisons are retained in
 [`../../research/solver_studies/advection_reaction_2026_07.md`](../../research/solver_studies/advection_reaction_2026_07.md).

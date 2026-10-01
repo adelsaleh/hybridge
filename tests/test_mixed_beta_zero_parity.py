@@ -151,7 +151,8 @@ def _solve_pair(backend: str, trace_basis: str, order: int, case: str, flux_spac
 HOST_CASES = pytest.mark.parametrize("case", tuple(COEFFICIENT_CASES))
 HOST_ORDERS = pytest.mark.parametrize("order", ORDERS)
 HOST_BASES = pytest.mark.parametrize("trace_basis", TRACE_BASES)
-HOST_BACKENDS = pytest.mark.parametrize("backend", ("numpy", "numba"))
+# Host references use Numba only (the NumPy reference assembly is too slow for routine tests).
+HOST_BACKENDS = pytest.mark.parametrize("backend", ("numba",))
 
 
 @HOST_BACKENDS

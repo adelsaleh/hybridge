@@ -399,13 +399,13 @@ configuration values, not mathematical requirements or universal optima.
 
 Paths are relative to the repository root.
 \begin{itemize}
-\item \code{hdgfem/linalg/face_hp_multigrid.py}:
+\item \code{hdgfem/linalg/multigrid/face_hp.py}:
 \code{FaceBlockPmgPrototype} constructs and applies the production p-hierarchy
 (despite its historical class name); \code{AmgxScalarVcycle} wraps the scalar
 cycle; \code{FaceBlockHpMgPcgSolver} owns coordinate transforms, PCGF, checks,
 and persistent workspaces; \code{_pcgf_beta} defines the recurrence.
-\item \code{hdgfem/linalg/face_hp_policy.py}: baseline and override policies.
-\item \code{hdgfem/backends/legendre_face_bsr.py}:
+\item \code{hdgfem/linalg/multigrid/policy.py}: baseline and override policies.
+\item \code{hdgfem/linalg/gpu/legendre_face_bsr.py}:
 \code{LegendreFaceBsrOperator}, \code{principal_modal_bsr_data}, and
 \code{modal_degree_schedule} implement BSR actions and nested extraction.
 \item \code{hdgfem/solvers/diffusion_reaction.py}: assembled action,
@@ -648,7 +648,7 @@ start of the restart cycle, solve the small least squares problem and update
 This accommodates changes and inner Krylov iterations in the preconditioner
 \cite{fgmres}. Do not reuse a left-preconditioned GMRES implementation as
 though it were flexible right-preconditioned GMRES. In particular the
-existing \code{cupy_gmres.py} interface and workspace need extension to
+existing \code{linalg/gpu/gmres.py} interface and workspace need extension to
 store $Z_m$ as well as $V_m$.
 
 Apply the same original-system acceptance contract \eqref{eq:acceptance}
@@ -687,7 +687,7 @@ Keep the current SPD path available. A separate nonsymmetric hierarchy can
 reuse modal/BSR primitives and patch extraction, while adding independent
 transfer storage, block sparse triple products, nonsymmetric local factors,
 a nonsymmetric AMG endpoint, and flexible right-preconditioned Arnoldi.
-The symmetric-part adapter in \code{face_hp_krylov.py} is a useful comparator,
+The symmetric-part adapter in \code{linalg/multigrid/krylov.py} is a useful comparator,
 not this algorithm.
 
 The accompanying small-matrix diagnostic verifies the ideal identities,

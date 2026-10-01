@@ -54,7 +54,7 @@ def prototype(mode, block, evidence, output):
             code, nel=kwargs['nel'], ntr=kwargs['ntr'],
             batch_cols=raw._batched_full_column_count(kwargs['nel'], kwargs['ntr'], kwargs['ncols']),
             block_size=block, mode=mode)
-        start = code.index('__device__ __forceinline__ void factor_diffusion_schur_lu_coop_raw')
+        start = code.index('__device__ __forceinline__ void factor_local_lu_coop_raw')
         stop = code.index('extern "C" __global__ void assemble_diffusion_raw_coop', start)
         untouched = code[start:stop]
         if untouched not in modified:

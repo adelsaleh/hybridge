@@ -80,7 +80,7 @@ Both request Gaussian-annulus k=3, p=6, mesh size `0.0068`, at least 150,000 tri
 
 The pure advection solver currently requires its velocity field in the transport DG space. Consequently periodic RT output is retained for higher-accuracy user diagnostics and output, while time integration continues with the standard degree-p Poisson flux. Cross-space device-resident advection coefficients are tracked in `TODO.md`.
 
-Implementation entry points are `hdgfem/linalg/face_hp_multigrid.py`, `hdgfem/backends/legendre_face_bsr.py`, `hdgfem/backends/diffusion_rt_postprocess_raw_cuda.py`, and `hdgfem/solvers/diffusion_reaction.py`. Retained performance evidence and rejected alternatives remain in the development plan.
+Implementation entry points are `hdgfem/linalg/multigrid/face_hp.py`, `hdgfem/linalg/multigrid/policy.py`, `hdgfem/linalg/gpu/legendre_face_bsr.py`, `hdgfem/mixed/postprocess/rt_raw_cuda.py`, and `hdgfem/solvers/diffusion_reaction.py`. Retained performance evidence and rejected alternatives remain in the development plan.
 
 ## Guiding-center diagnostics cadence
 
