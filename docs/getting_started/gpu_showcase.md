@@ -171,7 +171,7 @@ to GIF/MP4 encoders; `--save-rasters` is optional and is omitted for the extende
 ## Preview the README and manual locally
 
 ```bash
-python -m pip install markdown-it-py pygments matplotlib pillow
+python -m pip install markdown-it-py pygments matplotlib pillow imageio-ffmpeg
 python -m scripts.reports.render_docs_preview --output-dir /path/to/preview
 ```
 

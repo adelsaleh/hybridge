@@ -1,8 +1,9 @@
 """Render linked offline README/manual previews with embedded showcase videos.
 
 Run ``python -m scripts.reports.render_docs_preview --output-dir /path/to/preview``.
-Requires markdown-it-py, Pygments, Matplotlib and Pillow. Generated previews use
-browser color preferences, optional theme overrides and local copy controls.
+Requires markdown-it-py, Pygments, Matplotlib, Pillow and imageio-ffmpeg.
+Generated previews use browser color preferences, optional theme overrides
+and local copy controls.
 """
 
 from pathlib import Path
@@ -54,18 +55,24 @@ def render_markdown(source):
  return parser.renderer.render(tokens,parser.options,{})
 body=render_markdown(source)
 body=re.sub(r'(<pre\b.*?</pre>)',r'<div class="code-block"><button class="copy-code" type="button" aria-label="Copy code">Copy</button>\1</div>',body,flags=re.S)
-for asset,run in [('vortex_gas','signed_200mb'),('positive_density','positive_200mb')]:
+for asset in ('vortex_gas','positive_density'):
  media=root/'docs/getting_started/media'
  movie=media/f'{asset}.mp4'
  from PIL import Image
- with Image.open(media/f'{asset}.gif') as frame:
-  buffer=io.BytesIO();frame.convert('RGB').save(buffer,format='PNG')
+ import imageio_ffmpeg
+ reader=imageio_ffmpeg.read_frames(str(movie),pix_fmt='rgb24')
+ try:
+  info=next(reader)
+  frame=Image.frombytes('RGB',tuple(info['size']),next(reader))
+  buffer=io.BytesIO();frame.save(buffer,format='PNG')
+ finally:
+  reader.close()
  poster_url='data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
  player=('<div class="simulation-player"><video id="'+asset+'" controls playsinline preload="none" poster="'+poster_url+'" src="'+encoded(movie,'video/mp4')+'"></video>'
  '<button class="simulation-play" aria-label="Play simulation" onclick="this.previousElementSibling.play();this.hidden=true">▶</button></div>')
- target=f'docs/getting_started/media/{asset}.gif'
- body=re.sub(r'<img src="'+re.escape(target)+r'"[^>]*>',lambda _:player,body)
- body=re.sub(r'<p><a href="docs/getting_started/media/'+asset+r'\.mp4">.*?</a></p>','',body)
+ attachment=(r'<!-- showcase-video: '+re.escape(asset)+r' -->\s*'
+             r'<p>https://github.com/user-attachments/assets/[a-zA-Z0-9-]+</p>')
+ body=re.sub(attachment,lambda _:player,body)
 style='''body{margin:0;background:#f6f8fa;color:#24292f;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}main{max-width:1040px;margin:28px auto;padding:32px 42px;background:white;border:1px solid #d0d7de;border-radius:8px}h1,h2{line-height:1.25;border-bottom:1px solid #d8dee4;padding-bottom:.35em}h2{margin-top:32px}a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}code{font-size:85%;background:#eff1f3;padding:2px 5px;border-radius:4px}pre{overflow:auto;padding:16px;background:#f6f8fa;border-radius:6px;line-height:1.5}pre code{padding:0;background:none}table{border-collapse:collapse;width:100%;font-size:94%}td,th{border:1px solid #d0d7de;padding:8px 12px;text-align:left}tr:nth-child(even){background:#f6f8fa}img{max-width:100%}.equation{text-align:center;padding:8px 0}.equation img{width:auto;height:auto;max-width:100%}.code-block{position:relative;margin:16px 0}.code-block pre{margin:0;padding:12px 20px 12px 20px;white-space:pre;font:16px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}.code-block pre code{font:inherit}.copy-code{position:absolute;top:7px;right:7px;padding:3px 7px;border:1px solid #d0d7de;border-radius:5px;background:white;color:#57606a;font-size:11px;cursor:pointer}.copy-code:hover{color:#24292f;background:#eef1f4}.simulation-player{position:relative;display:block}.simulation-player video{display:block;width:100%}.simulation-play{position:absolute;bottom:48px;right:20px;border:1px solid #aaa;border-radius:50%;background:#ffffffc9;color:#333;width:34px;height:34px;cursor:pointer;font-size:13px}.simulation-play[hidden]{display:none}@media(max-width:700px){main{margin:0;padding:18px;border:0}table{display:block;overflow:auto}}'''+HtmlFormatter(style='friendly').get_style_defs('html[data-theme="light"] .highlight')+HtmlFormatter(style='github-dark').get_style_defs('html[data-theme="dark"] .highlight')
 
 style += """

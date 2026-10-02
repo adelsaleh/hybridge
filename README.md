@@ -9,18 +9,18 @@ fields, and assemble HDG solves through a common Python interface. Reusable
 solvers support both individual boundary-value problems and the repeated solves
 needed in time-dependent applications.
 
-![HDG simulation of interacting positive and negative vortices in a five-lobed star with a circular island](docs/getting_started/media/vortex_gas.gif)
+<!-- showcase-video: vortex_gas -->
 
-[▶ Play video](docs/getting_started/media/vortex_gas.mp4)
+https://github.com/user-attachments/assets/e67a723f-f34b-4c06-a7e6-16641e62185d
 
 *960 interacting vortices in a star with a circular island: 360,379 triangles,
 degree-6 HDG, and 10.1 million scalar unknowns. Vorticity and potential appear
 side by side with fixed colorbars.
 Recorded on an NVIDIA RTX PRO 5000 Blackwell using the application below.*
 
-![HDG evolution of initially positive guiding-center density and its potential on the same star-shaped domain](docs/getting_started/media/positive_density.gif)
+<!-- showcase-video: positive_density -->
 
-[▶ Play video](docs/getting_started/media/positive_density.mp4)
+https://github.com/user-attachments/assets/2ea0e59d-124b-40c0-89fe-9980ae3d0515
 
 *The same geometry with initially positive density: density and potential evolve
 side by side. Negative undershoots can occur with unlimited high-order HDG.
