@@ -536,6 +536,9 @@ def assemble_reduced_system_cuda(
     advection_stabilization=None,
 ) -> CudaAdvectionAssembly:
     """Assemble the boundary-eliminated advection trace system on device."""
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_coeffs)
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
     from hdgfem.hdg.stabilization import (

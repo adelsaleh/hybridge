@@ -49,8 +49,8 @@ assert result.converged and result.physical_residual_target_met
 
 ## Optional Dependency Groups
 
-The package metadata defines these pip-resolvable groups. The `pardiso` group
-is platform-specific; the other groups are portable:
+The package metadata defines these pip-resolvable groups. The `pardiso` and
+`holoviz` groups require a supported platform; the others are portable:
 
 | Extra | Contents | Purpose |
 |---|---|---|
@@ -58,6 +58,7 @@ is platform-specific; the other groups are portable:
 | `mesh` | gmsh | Recommended Gmsh geometry paths (optional dependency) |
 | `manufactured` | SymPy | Regenerate continuous n–Gamma manufactured forcing; not needed to evaluate committed data |
 | `plot` | Matplotlib, PyVista | Plotting and visualization |
+| `holoviz` | CUDA 13 Holoscan and CuPy, Matplotlib, Pillow, imageio-ffmpeg | NVIDIA GPU scalar panels and movie recording; see the [Holoviz guide](../backends/holoviz.md) |
 | `release` | build, twine | Distribution construction and metadata checks |
 | `pardiso` | pypardiso | Optional oneMKL PARDISO host direct solver |
 | `all` | test, mesh, and plot dependencies, including the Python 3.10 TOML backport | Repository development convenience |

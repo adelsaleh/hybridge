@@ -246,6 +246,16 @@ The measured machine-specific comparison is recorded in
 
 ### CuPy, Cupyx, and AMGX
 
+For a compact configuration using generic CUDA/AMGX/PyAMGX directories, see
+[Connect the GPU backends](README.md#connect-the-gpu-backends).
+
+The supported AMGX path uses our maintained
+[AMGX](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration) and
+[PyAMGX](https://github.com/adelsaleh/pyamgx/tree/quality-of-life) forks, with
+HDG block-system extensions and GPU diagnostics. See the
+[fork setup guide](docs/getting_started/forked_amgx_stack.md) for supported
+revisions and installation.
+
 CuPy/Cupyx and PyAMGX are separate optional GPU layers:
 
 ```text
@@ -928,9 +938,11 @@ assembled = solve_advection_reaction_hdg(
 The advection solver supports `trace_basis="legacy-lagrange"` and
 `trace_basis="legendre-modal"` across the NumPy, CuPy, Numba, and raw-CUDA
 assembly/reconstruction paths.  `trace_basis="bernstein"` remains unwired for
-advection.  Raw-CUDA advection currently accepts only
-`advection_stabilization=None`, which uses the upwind value
-`abs(beta_h . n)` inside the kernels.
+advection. With DG velocity fields or coefficient arrays, the default
+`advection_stabilization=None` selects conflict-averaged upwind, including the
+raw-CUDA kernels. Two analytic velocity callables keep standard sidewise
+upwinding. Select `"upwind"` or `ScaledUpwind(1.)` to request the original
+sidewise policy explicitly.
 
 ### Stateful Advection-Reaction Solver
 
@@ -1396,7 +1408,10 @@ add_advection_mats(local, space, beta_h, scale=-1.0)
 ```
 
 For advection-reaction, `stabilization` is the element-side trace stabilization
-`tau`.  `None` uses the upwind value `abs(beta_h . n)`.  NumPy and CuPy accept
+`tau`. The public transport default `None` uses conflict-averaged upwind for
+DG velocity fields and coefficient arrays, and standard sidewise upwind for
+two analytic callables. Explicit `"upwind"` or `ScaledUpwind(1.)` selects
+`abs(beta_h . n)` on each side. NumPy and CuPy accept
 scalars, callables, `DGField` objects, coefficient arrays, per-face constants,
 or already evaluated face-quadrature values. Callables are sampled directly;
 DG fields instead use coefficient contractions with the face reference tables
@@ -1405,7 +1420,8 @@ fused Numba path accepts `None`, scalars, or projected same-space
 `DGField`/coefficient data and evaluates DG `tau` on face quadrature inside the
 kernel.
 
-Raw-CUDA currently requires `advection_stabilization=None`. The complete
+Raw-CUDA supports the automatic default and explicit upwind, ScaledUpwind,
+lax-friedrichs, and conflict-averaged-upwind policies. The complete
 backend and boundary interaction is defined in
 [the advection boundary and stabilization contract](docs/reference/advection_boundary_stabilization.md).
 

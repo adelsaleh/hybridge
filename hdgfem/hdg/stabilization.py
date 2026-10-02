@@ -45,9 +45,26 @@ class ScaledUpwind:
         object.__setattr__(self, "factor", factor)
 
 
+def resolve_transport_stabilization(stabilization, beta):
+    """Select corrected upwind for DG velocities without sampling or transfers.
+
+    DG fields and coefficient arrays have discontinuous element semantics.
+    Two analytic callables keep sidewise upwind. Explicit policies override
+    the default; ``"upwind"`` requests the original unit-factor scheme.
+    """
+    from hdgfem.hdg.coefficients import _is_callable_beta
+
+    if isinstance(stabilization, str) and stabilization == "upwind":
+        return ScaledUpwind(1.)
+    if stabilization is None and beta is not None and not _is_callable_beta(beta):
+        return "conflict-averaged-upwind"
+    return stabilization
+
+
 def upwind_factor(stabilization):
     """Return the upwind multiplier, or None for an explicit tau policy."""
-    if stabilization is None or is_conflict_averaged_upwind(stabilization):
+    if (stabilization is None or is_conflict_averaged_upwind(stabilization)
+            or (isinstance(stabilization, str) and stabilization == "upwind")):
         return 1.0
     if isinstance(stabilization, ScaledUpwind):
         return stabilization.factor
@@ -56,7 +73,7 @@ def upwind_factor(stabilization):
     return None
 
 
-__all__ += ["ScaledUpwind", "upwind_factor"]
+__all__ += ["ScaledUpwind", "upwind_factor", "resolve_transport_stabilization"]
 
 
 def is_conflict_averaged_upwind(stabilization):

@@ -658,7 +658,8 @@ class AdvectionReactionHDGSolver:
             raw_matrix_format="bsr",
             zero_boundary_flux=True,
             raw_tsle_workspace=self._raw_cuda_tsle_workspace,
-            advection_stabilization=options.advection_stabilization,
+            advection_stabilization=hdg_stabilization.resolve_transport_stabilization(
+                options.advection_stabilization, self.beta),
             raw_cache_local_response=False,
         )
         if assembly.matrix_format != "bsr":
@@ -945,7 +946,10 @@ def solve_advection_reaction_hdg(
         the COO fallback.
     advection_stabilization
         Optional HDG advection stabilization :math:`\tau` on element faces.
-        ``None`` selects the upwind value ``abs(beta_h . n)``.  NumPy and CuPy
+        ``None`` selects conflict-averaged upwind for DG velocity fields or
+        coefficient arrays, and standard upwind for two analytic callables.
+        ``"upwind"`` or ``ScaledUpwind(1.)`` explicitly selects the original
+        sidewise value ``abs(beta_h . n)``. NumPy and CuPy
         accept scalars, callables, :class:`DGField` objects, same-space
         coefficient arrays, per-face constants, or face-quadrature values.
         Callables may use ``tau(x, y)`` or the element/face-aware
@@ -1009,6 +1013,8 @@ def solve_advection_reaction_hdg(
             ScaledUpwind,
             is_conflict_averaged_upwind,
         )
+    advection_stabilization = hdg_stabilization.resolve_transport_stabilization(
+        advection_stabilization, beta)
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
         operation=operation,

@@ -341,6 +341,9 @@ def reconstruct_advection_reaction_field_cupy(
     not retained by default. If explicitly cached, they are reused directly;
     otherwise reconstruction performs one fresh batched local solve.
     """
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field if beta_field is not None else beta_callables)
     cupy = require_cupy()
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_reference(trace_space, cspace)
@@ -692,6 +695,9 @@ def assemble_advection_reaction_trace_system_cupy(
 
     COO values and RHS remain device-resident unless ``transfer_trace_system`` is set.
     """
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field if beta_field is not None else beta_callables)
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)
@@ -795,6 +801,9 @@ def assemble_advection_reaction_trace_system_eliminated_cupy(
 
     Reduced COO values and RHS stay on-device unless explicitly transferred.
     """
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field if beta_field is not None else beta_callables)
     cupy = require_cupy()
     timings: dict[str, float] = {}
     cspace = as_cupy_space(space)

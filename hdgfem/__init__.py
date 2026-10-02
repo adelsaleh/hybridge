@@ -20,6 +20,10 @@ from hdgfem.core.mesh import (
     rectangle_mesh,
 )
 from hdgfem.core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from hdgfem.core.geometry import MeshDomain
+from hdgfem.core.projection import project_callable
+from hdgfem.core.time_integration import bdf2_transport_data
+from hdgfem.cases.profiles import sample_gaussian_blob_field
 from hdgfem.core.element_coefficients import ElementCoefficient
 from hdgfem.core.pointwise import PointwiseCoefficient, PointwiseLaw, pointwise_coefficient, pointwise_law
 from hdgfem.core.field_ops import (
@@ -124,6 +128,10 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
+    "MeshDomain",
+    "bdf2_transport_data",
+    "project_callable",
+    "sample_gaussian_blob_field",
     "AdvectionDiffusionReactionHDGOptions",
     "AdvectionDiffusionReactionHDGSolver",
     "AdvectionDiffusionReactionResult",

@@ -42,5 +42,7 @@ cupy_heavy_benchmark.json
 # Local environment, generated study output, and editor recovery files
 /.env
 /artifacts/
+/outputs/readme_showcase/
+/outputs/readme_preview/
 *.swp
 *.swo

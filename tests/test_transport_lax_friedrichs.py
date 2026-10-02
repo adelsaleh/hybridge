@@ -76,7 +76,7 @@ def test_only_recovered_presets_select_new_flux_and_cli_can_restore_upwind(varia
     assert config.transport_advection_stabilization=='conflict-averaged-upwind'
     _validate_config(config)
     args=build_parser().parse_args([name,'--transport-advection-stabilization','upwind','--dry-run'])
-    assert _runtime_config(config,args).transport_advection_stabilization is None
+    assert _runtime_config(config,args).transport_advection_stabilization == "upwind"
     assert preset_by_key('euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr').transport_advection_stabilization is None
 
 

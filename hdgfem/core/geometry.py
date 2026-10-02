@@ -157,6 +157,122 @@ class PolygonDomain:
         return np.concatenate(accepted)
 
 
+class MeshDomain:
+    """The area covered by a triangular mesh, including its holes.
+
+    Sampling selects triangles in proportion to their physical area, then
+    samples uniformly within each triangle. Clearance and membership use
+    every boundary segment, including island walls and disconnected pieces.
+    Geometry is a host-float64 snapshot; query temporaries have bounded size.
+    """
+
+    def __init__(self, mesh):
+        """Snapshot triangle and boundary geometry from a mesh-like object."""
+        from hdgfem.core.mesh import as_dg_mesh
+
+        self.mesh = as_dg_mesh(mesh)
+        self._triangles = np.array(
+            self.mesh.node_coords[self.mesh.triangles], dtype=np.float64, copy=True,
+        )
+        sides = self._triangles[:, 1:] - self._triangles[:, :1]
+        areas = np.abs(sides[:, 0, 0]*sides[:, 1, 1] - sides[:, 0, 1]*sides[:, 1, 0])/2
+        if not len(areas) or not np.all(np.isfinite(areas)) or np.any(areas <= 0):
+            raise ValueError("mesh must contain finite, nondegenerate triangles")
+        self._cumulative_area = np.cumsum(areas)
+        boundary = self.mesh.edges[self.mesh.bnd_edges_inds]
+        if not len(boundary):
+            raise ValueError("mesh must have boundary edges")
+        segments = np.array(self.mesh.node_coords[boundary], dtype=np.float64, copy=True)
+        self._boundary_start = segments[:, 0]
+        self._boundary_edges = segments[:, 1] - segments[:, 0]
+        self._boundary_length_sq = np.sum(self._boundary_edges**2, axis=1)
+        self._bounds = np.array((self._triangles.min(axis=(0, 1)), self._triangles.max(axis=(0, 1))))
+        for values in (self._triangles, self._cumulative_area, self._boundary_start,
+                       self._boundary_edges, self._boundary_length_sq, self._bounds):
+            values.setflags(write=False)
+
+    @property
+    def area(self) -> float:
+        """Return the total area of the fluid triangles."""
+        return float(self._cumulative_area[-1])
+
+    @property
+    def bounds(self) -> np.ndarray:
+        """Return lower and upper Cartesian corners in (x, y) order."""
+        return self._bounds.copy()
+
+    @staticmethod
+    def _points(points):
+        """Validate finite Cartesian points while retaining their batch shape."""
+        points = np.asarray(points, dtype=np.float64)
+        if points.ndim == 0 or points.shape[-1] != 2:
+            raise ValueError("points must have shape (..., 2)")
+        if not np.all(np.isfinite(points)):
+            raise ValueError("points must be finite")
+        return points
+
+    def contains(self, points) -> np.ndarray:
+        """Test the closed fluid domain, excluding the interiors of holes."""
+        points = self._points(points)
+        flat = points.reshape(-1, 2)
+        result = np.zeros(len(flat), dtype=bool)
+        for start in range(0, len(flat), 256):
+            x, y = flat[start:start+256, 0, None], flat[start:start+256, 1, None]
+            for edge_start in range(0, len(self._boundary_start), 512):
+                a = self._boundary_start[edge_start:edge_start+512]
+                edges = self._boundary_edges[edge_start:edge_start+512]
+                crossing = (a[:, 1] > y) != (a[:, 1]+edges[:, 1] > y)
+                denominator = np.where(edges[:, 1] != 0, edges[:, 1], 1.0)
+                intersection = a[:, 0] + (y-a[:, 1])*edges[:, 0]/denominator
+                result[start:start+256] ^= np.count_nonzero(crossing & (x < intersection), axis=1) % 2 == 1
+        result |= self.boundary_distance(flat) == 0
+        return result.reshape(points.shape[:-1])
+
+    def boundary_distance(self, points) -> np.ndarray:
+        """Return distance to the closest segment on any boundary component."""
+        points = self._points(points)
+        flat = points.reshape(-1, 2)
+        result = np.full(len(flat), np.inf)
+        for start in range(0, len(flat), 256):
+            for edge_start in range(0, len(self._boundary_start), 512):
+                edges = self._boundary_edges[edge_start:edge_start+512]
+                offset = flat[start:start+256, None, :] - self._boundary_start[edge_start:edge_start+512]
+                fraction = np.clip(
+                    np.sum(offset*edges, axis=2)/self._boundary_length_sq[edge_start:edge_start+512], 0, 1,
+                )
+                distance_sq = np.sum((offset-fraction[:, :, None]*edges)**2, axis=2)
+                result[start:start+256] = np.minimum(result[start:start+256], distance_sq.min(axis=1))
+        return np.sqrt(result).reshape(points.shape[:-1])
+
+    def sample_uniform(self, count: int, rng: np.random.Generator, *, clearance: float = 0.0):
+        """Sample uniformly in fluid area at least ``clearance`` from walls."""
+        if not np.isfinite(count) or int(count) != count or count < 1:
+            raise ValueError("count must be a positive integer")
+        if not np.isfinite(clearance) or clearance < 0:
+            raise ValueError("clearance must be finite and nonnegative")
+        if 2*clearance >= np.min(self._bounds[1]-self._bounds[0]):
+            raise ValueError("clearance leaves no eligible interior")
+        accepted, remaining = [], int(count)
+        budget = max(10000, 200*int(count))
+        while remaining and budget > 0:
+            size = min(max(64, 2*remaining), 512, budget)
+            indices = np.searchsorted(self._cumulative_area, rng.random(size)*self.area, side="right")
+            triangles = self._triangles[indices]
+            radial = np.sqrt(rng.random(size))[:, None]
+            fraction = rng.random(size)[:, None]
+            candidates = ((1-radial)*triangles[:, 0]
+                          + radial*((1-fraction)*triangles[:, 1]+fraction*triangles[:, 2]))
+            if clearance:
+                candidates = candidates[self.boundary_distance(candidates) > clearance]
+            selected = candidates[:remaining]
+            accepted.append(selected)
+            remaining -= len(selected)
+            budget -= size
+        if remaining:
+            raise ValueError("could not sample the requested wall clearance; reduce clearance")
+        return np.concatenate(accepted)
+
+
 def shaped_domain(
     kind: str, *, radius: float = 1.0, boundary_points: int = 1024,
     opening_angle: float = 60.0, inner_radius: float = 0.48,
@@ -193,7 +309,7 @@ def shaped_domain(
     return PolygonDomain(vertices)
 
 
-__all__ = ["DiskDomain", "PolygonDomain", "shaped_domain", "polygon_from_geo", "iter_geometry_path"]
+__all__ = ["DiskDomain", "MeshDomain", "PolygonDomain", "shaped_domain", "polygon_from_geo", "iter_geometry_path"]
 
 def iter_geometry_path():
     """Return the bundled user-supplied ITER wall geometry."""

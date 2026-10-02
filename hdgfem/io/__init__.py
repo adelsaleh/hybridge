@@ -13,6 +13,8 @@ from hdgfem.io.holoviz import (
     plot_solution_comparison_holoviz,
 )
 from hdgfem.io.live import AnalyticPanelField, DifferencePanelField, PyVistaFieldPanels
+from hdgfem.io.matplotlib import MatplotlibRasterPanels
+from hdgfem.io.movie import GifWriter
 from hdgfem.runtime.logging import format_elapsed_percent, timed_call
 from hdgfem.io.output import pretty_print_ncol
 from hdgfem.io.plot import (
@@ -37,6 +39,8 @@ __all__ = [
     "plot_diagnostic_panels",
     "plot_mode_history",
     "HolovizScalarPanels",
+    "MatplotlibRasterPanels",
+    "GifWriter",
     "AnalyticPanelField",
     "DifferencePanelField",
     "PyVistaFieldPanels",

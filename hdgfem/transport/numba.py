@@ -78,6 +78,9 @@ def assemble_local_advection_reaction_numba(
     path.  It does not cache local solvers; callers decide whether the computed
     inverse/local solver should be retained after reconstruction.
     """
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field)
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
@@ -278,6 +281,9 @@ def assemble_projected_trace_system_numba(
     rejected here.  Convert them through the owning :class:`DGSpace` before
     calling the solver.
     """
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field)
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 
@@ -407,6 +413,9 @@ def assemble_projected_trace_system_eliminated_numba(
         trace_space: DGTraceSpace | None = None,
 ) -> NumbaProjectedTraceAssembly:
     """Assemble the reduced trace system with boundary dofs eliminated in Numba."""
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field)
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
     if not NUMBA_AVAILABLE:
@@ -605,6 +614,9 @@ def reconstruct_projected_field_numba(
         trace_space: DGTraceSpace | None = None,
 ) -> DGField:
     """Recover element coefficients with the projected fused Numba backend."""
+    from hdgfem.hdg.stabilization import resolve_transport_stabilization
+    advection_stabilization = resolve_transport_stabilization(
+        advection_stabilization, beta_field)
     if not NUMBA_AVAILABLE:
         raise RuntimeError("assembly_backend='numba' requires numba")
 

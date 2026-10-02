@@ -1,5 +1,6 @@
 """Constant-step semi-implicit BDF2 with an SI-Euler first step."""
 from hdgfem.core.field_ops import perpendicular_vector_field
+from hdgfem.core.time_integration import bdf2_transport_data
 from .si_euler import SIEulerStepper
 
 
@@ -14,14 +15,20 @@ def _bdf2_transport_data(space, density, flux, dt, *, previous_density=None, pre
     """
     if (previous_density is None) != (previous_flux is None):
         raise ValueError("BDF2 requires both previous density and previous flux, or neither")
-    if previous_density is None:
-        return density, perpendicular_vector_field(flux, dt, space), float(dt)
-    source = (4.0 * density - previous_density) / 3.0
-    source.name = "rho_bdf2_source_h"
-    extrapolated_flux = 2.0 * flux - previous_flux
-    extrapolated_flux.name = "q_bdf2_extrapolated_h"
-    beta_scale = 2.0 * float(dt) / 3.0
-    return source, perpendicular_vector_field(extrapolated_flux, beta_scale, space), beta_scale
+    source, beta, scale = bdf2_transport_data(
+        density, perpendicular_vector_field(flux, 1.0, space), dt,
+        previous_field=previous_density,
+        previous_velocity=(None if previous_flux is None
+                           else perpendicular_vector_field(previous_flux, 1.0, space)),
+    )
+    # Preserve the existing private wrapper's startup identity and labels.
+    source = density if previous_density is None else source
+    if previous_density is not None:
+        source.name = "rho_bdf2_source_h"
+    beta.name = "beta_h"
+    for component, label in zip(beta.components, ("beta_h_x", "beta_h_y")):
+        component.name = label
+    return source, beta, scale
 
 
 

@@ -379,7 +379,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
     transport_stabilization = getattr(args, "transport_advection_stabilization", None)
     if transport_stabilization is not None:
         updates["transport_advection_stabilization"] = (
-            None if transport_stabilization == "upwind" else transport_stabilization
+            transport_stabilization
         )
     upwind_scale = getattr(args, "transport_upwind_factor", None)
     if upwind_scale is not None:
@@ -466,8 +466,9 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
     if config.time_scheme in {"h1-bdf3", "h2-bdf3", "imex-ark3"}:
         if config.time_scheme != "imex-ark3" and _hybrid_startup_method(config) not in {"si-euler-extrap3", "ssprk3"}:
             raise ValueError("hybrid startup must be si-euler-extrap3 or ssprk3")
-        if config.transport_advection_stabilization is not None:
-            raise ValueError(f"{config.time_scheme} requires the standard upwind stabilization")
+        from hdgfem.hdg.stabilization import upwind_factor
+        if upwind_factor(config.transport_advection_stabilization) != 1.:
+            raise ValueError(f"{config.time_scheme} requires unit-factor upwind or conflict-averaged-upwind stabilization")
         if config.transport_boundary_mode not in {"auto", "zero-flux", "eliminate"}:
             raise ValueError(f"{config.time_scheme} requires zero-flux or eliminated transport boundaries")
     from scripts.guiding_center.poisson.poisson_recovery import PoissonTauRecovery

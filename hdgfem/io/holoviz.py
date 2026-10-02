@@ -204,7 +204,8 @@ class HolovizScalarPanels:
     elapsed. The last image is re-presented periodically to service window
     events, and minimized-window drops are retried with the same owned image.
     Saving is synchronous and retains every requested frame. ``flush`` and
-    ``close`` drain accepted frames and propagate renderer errors.
+    ``close`` drain accepted frames and propagate renderer errors. Use the
+    viewer as a context manager to finish recordings even if a solve fails.
     """
 
     def __init__(
@@ -267,6 +268,23 @@ class HolovizScalarPanels:
             self._add_panel(index, sampler.geometry, space.mesh, show_mesh)
         self._app = _make_application(self)
         self._future = self._app.run_async()
+
+    def __enter__(self):
+        """Return the viewer, closing it when the context exits."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Finish recording without replacing an exception from the caller."""
+        if exc_value is None:
+            self.close()
+        else:
+            try:
+                self.close()
+            except BaseException as close_error:
+                add_note = getattr(exc_value, "add_note", None)
+                if callable(add_note):
+                    add_note(f"Holoviz cleanup also failed: {close_error!r}")
+        return False
 
     @property
     def samplers(self):
@@ -403,16 +421,36 @@ class HolovizScalarPanels:
         return self._enqueue(images, now=now, step=step, time_value=time_value, captions=captions)
 
     def update_fields(self, fields, *, step=0, time_value=0., limits=None, captions=None):
-        """Sample one DG field per panel with per-panel or shared limits."""
+        """Sample each panel with shared ``(lo, hi)`` or per-panel limits.
+
+        For differently scaled quantities, pass one ``(lo, hi)`` pair (or
+        ``None`` for automatic limits) per panel. Device scalar limits remain
+        resident; interpreting the structure does not download their values.
+        """
         fields = tuple(fields)
         if len(fields) != self.panel_count:
             raise ValueError(f"expected {self.panel_count} fields, got {len(fields)}")
+        if limits is None:
+            panel_limits = (None,) * self.panel_count
+        else:
+            limits = tuple(limits)
+            per_panel = bool(limits) and (
+                limits[0] is None or isinstance(limits[0], (tuple, list))
+                or getattr(limits[0], "ndim", 0) > 0)
+            if per_panel:
+                if len(limits) != self.panel_count:
+                    raise ValueError("one color-limit pair is required per panel")
+                panel_limits = limits
+            else:
+                if len(limits) != 2:
+                    raise ValueError("shared color limits must contain a lower and upper bound")
+                panel_limits = (limits,) * self.panel_count
         now = self._accept_frame()
         if now is None:
             return False
         with self.cp.cuda.Device(self.device_id):
-            images = [sampler.image(field, limits=limits)[0]
-                      for sampler, field in zip(self._samplers, fields)]
+            images = [sampler.image(field, limits=panel_limit)[0]
+                      for sampler, field, panel_limit in zip(self._samplers, fields, panel_limits)]
         return self._enqueue(images, now=now, step=step, time_value=time_value, captions=captions)
 
     def flush(self, timeout: float = 30.) -> None:
@@ -463,9 +501,11 @@ class HolovizScalarPanels:
                 try:
                     self._app.shutdown_async_executor(wait=self._future.done())
                 finally:
-                    if self._movie is not None:
-                        self._movie.close()
-                    self._closed = True
+                    try:
+                        if self._movie is not None:
+                            self._movie.close()
+                    finally:
+                        self._closed = True
 
 
 class GuidingCenterHolovizPanels(HolovizScalarPanels):

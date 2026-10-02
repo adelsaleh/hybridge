@@ -57,9 +57,9 @@ capturing NumPy-only operations.
 
 | Solver/path | Advection stabilization | Diffusion stabilization |
 | --- | --- | --- |
-| Advection-reaction NumPy/CuPy | None for upwind, scalar, callable, DGField, compatible incidence constants, or face table | Not applicable |
-| Advection-reaction Numba | None, scalar, or projected DGField; adapter/table driven | Not applicable |
-| Advection-reaction raw CUDA | Default upwind until its explicit prepared-table TODO lands | Not applicable |
+| Advection-reaction NumPy/CuPy | None selects conflict-averaged upwind for DG velocities, standard upwind for analytic callables; explicit upwind/ScaledUpwind/LF/conflict policy, scalar, callable, DGField, compatible incidence constants, or face table | Not applicable |
+| Advection-reaction Numba | None selects conflict-averaged upwind for DG velocities; explicit upwind/ScaledUpwind/LF/conflict policy, scalar, or projected DGField | Not applicable |
+| Advection-reaction raw CUDA | None selects conflict-averaged upwind; explicit upwind, ScaledUpwind, lax-friedrichs, or conflict-averaged-upwind | Not applicable |
 | Diffusion-reaction NumPy/Numba | Not applicable | Default GlobalLengthDiffusion; positive scalar, shape (K,), or shape (K,3) explicit inputs |
 | Diffusion-reaction CuPy/raw CUDA | Not applicable | Default GlobalLengthDiffusion resolved before dispatch, or an explicit positive scalar |
 | ADR NumPy/Numba/raw CUDA | None for sidewise abs(beta.n), or a supported prepared input | Default GlobalLengthDiffusion; positive scalar, shape (K,), shape (K,3), same-mesh DGField, geometry/incidence callable, or face quadrature samples; explicit legacy inverse-h remains supported |

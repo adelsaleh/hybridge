@@ -1,5 +1,7 @@
 # Getting Started
 
+- [`gpu_showcase.md`](gpu_showcase.md): run the GPU vortex-gas example, reproduce
+  the README animation, and inspect its numerical and recording parameters.
 - [`installation.md`](installation.md): dependency groups, wheel contents,
   optional runtimes, clean-install smoke tests, and CI qualification.
 - [`forked_amgx_stack.md`](forked_amgx_stack.md): mandatory AMGX/PyAMGX fork

@@ -26,10 +26,18 @@ separate default-change task is completed.
 
 ## Stabilization
 
-With side-normal flux `b = beta . n`, `advection_stabilization=None` selects
-the upwind value `tau = abs(b)`. Assembly uses both `tau` and
-`gamma = tau - b` on each element side. For an interior face, left and right
-contributions remain distinct under standard upwind.
+For advection-reaction transport, `advection_stabilization=None` selects
+**conflict-averaged upwind for DG velocity fields and coefficient arrays**.
+This includes the public functional/stateful solvers, Numba/CuPy adapters,
+raw-CUDA assembly, reconstruction, and the explicit transport residual. Selection
+uses the coefficient representation without sampling or host/device transfers.
+Two analytic velocity callables retain standard sidewise upwind.
+
+Request `advection_stabilization="upwind"` or `ScaledUpwind(1.)` to retain the
+original sidewise flux explicitly. With side-normal velocity `b = beta . n`,
+that choice uses `tau = abs(b)` and `gamma = tau - b`. Explicit stabilization
+policies override the automatic choice. ADR retains its separate stabilization
+contract.
 
 | Assembly backend | Boundary modes | Accepted explicit `tau` inputs | Ordering |
 |---|---|---|---|

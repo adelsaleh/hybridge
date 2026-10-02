@@ -196,9 +196,11 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             self.beta_volume[:, :, component] = b @ q.bas_of_quads
             self.beta_face[:, :, :, component] = xp.einsum("ki,fiq->kfq", b, self.face_basis)
         self.normal_flux[:] = xp.einsum("kfqd,kfd->kfq", self.beta_face, mesh.normals)
-        from hdgfem.hdg.stabilization import effective_advection_normal_flux
+        from hdgfem.hdg.stabilization import (effective_advection_normal_flux,
+                                              resolve_transport_stabilization)
         self.normal_flux[:] = effective_advection_normal_flux(
-            self.normal_flux, mesh, self.advection_stabilization, xp=xp)
+            self.normal_flux, mesh,
+            resolve_transport_stabilization(self.advection_stabilization, beta), xp=xp)
         self.normal_flux *= self.active_faces[:, :, None]
         xp.abs(self.normal_flux, out=self.tau)
         xp.subtract(self.tau, self.normal_flux, out=self.gamma)
