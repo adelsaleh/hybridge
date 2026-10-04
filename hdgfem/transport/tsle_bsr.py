@@ -34,8 +34,8 @@ Stages (one CUDA block per element in every stage)
 --------------------------------------------------
 1. ``advection_tsle_build``: runs the shared device routine
    ``assemble_projected_local_advection_raw`` and stores ``A_e``,
-   ``[B_e | f_e]``, and the per-face ``tau``/``gamma`` quadrature tables in
-   the global workspace.
+   ``[B_e | f_e]``, and the per-face quadrature-weighted ``tau``/``gamma``
+   tables in the global workspace.
 2. ``advection_tsle_solve``: reloads ``A_e`` into shared memory, factors it
    with the cooperative scaled-pivot LU, and overwrites the response in place
    with ``A_e^{-1} [B_e | f_e]``. The LU factors are discarded. The workspace
@@ -54,7 +54,8 @@ Device array layouts (all ``REAL_DTYPE`` = FP64, C order)
   after solve. It is returned as ``local_response`` for
   ``reconstruct_projected_advection_field_from_response_raw_cuda``.
 * ``face_flux``: ``(E, 2, 3, NQF)``, where ``[e, 0]`` is ``tau`` and
-  ``[e, 1]`` is ``gamma`` at each face quadrature node.
+  ``[e, 1]`` is ``gamma`` at each face quadrature node, both premultiplied by
+  the face Jacobian and quadrature weight (as stored by the shared routine).
 * ``data``: ``(num_blocks, NTR, NTR)`` face-BSR values over the pattern from
   ``build_reduced_csr_pattern_raw(..., matrix_format="bsr")``; ``rhs`` has
   shape ``(num_interior_edges * NTR,)``.
@@ -134,7 +135,7 @@ class RawAdvectionTsleWorkspace:
         and ``A_e^{-1} [B_e | f_e]`` after the solve stage.
     face_flux : cupy.ndarray or None
         ``(E, 2, 3, NQF)`` per-face ``tau`` (index 0) and ``gamma`` (index 1)
-        quadrature tables.
+        quadrature tables, premultiplied by face Jacobian and weight.
     signature : tuple of int or None
         ``(device, E, NEL, NCOLS, NQF)`` of the current allocation.
     """
@@ -396,9 +397,7 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
         const long long* __restrict__ edge_to_solve_edge,
         const int* __restrict__ side_bsr_block_pos,
         const int* __restrict__ diagonal_bsr_block_pos,
-        const double* __restrict__ jacs_el_fc,
         const double* __restrict__ face_basis,
-        const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
         const double* __restrict__ boundary_trace,
         const long long num_elements)
@@ -456,19 +455,19 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
         const bool row_positive = orientations[element * 3 + row_face];
         const int row_local_dof = raw_local_trace_dof(row_positive, row_dof);
         const double row_sign = raw_trace_orientation_sign(row_positive, row_dof);
-        const double face_jac = jacs_el_fc[element * 3 + row_face];
 
         // Lift row L_e[row, :] into shared memory, and the source part of
-        // the condensed RHS, lift . (A^-1 f).
+        // the condensed RHS, lift . (A^-1 f). face_flux already carries the
+        // face Jacobian and quadrature weight, and the row sign factors out.
         double rhs_value = 0.0;
         for (int i = 0; i < NEL; ++i) {
             double lift = 0.0;
             for (int qf = 0; qf < NQF; ++qf) {
-                const double mu = row_sign * trace_basis[row_local_dof * NQF + qf];
+                const double mu = trace_basis[row_local_dof * NQF + qf];
                 const double phi = face_basis[(row_face * NEL + i) * NQF + qf];
-                lift += face_jac * tau_face[row_face * NQF + qf]
-                    * face_weights[qf] * mu * phi;
+                lift = fma(tau_face[row_face * NQF + qf] * mu, phi, lift);
             }
+            lift *= row_sign;
             lift_rows[task * NEL + i] = lift;
             rhs_value += lift * response[i * NCOLS + (NCOLS - 1)];
         }
@@ -519,8 +518,8 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
                         * trace_basis[row_local_dof * NQF + qf];
                     const double mu_col = col_sign
                         * trace_basis[col_local_dof * NQF + qf];
-                    mass_value += face_jac * gamma_face[row_face * NQF + qf]
-                        * face_weights[qf] * mu_row * mu_col;
+                    mass_value = fma(gamma_face[row_face * NQF + qf] * mu_row,
+                                     mu_col, mass_value);
                 }
                 const long long out = (((long long)bsr_indptr[row_solve_edge]
                     + diagonal_pos) * NTR + row_dof) * NTR + col_dof;
@@ -1093,9 +1092,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         pattern.edge_to_solve_edge,
         pattern.side_csr_block_pos,
         pattern.mass_csr_block_pos,
-        cspace.mesh.jacs_el_fc,
         trace_ref.bas_of_bd_quads,
-        trace_ref.weights,
         trace_ref.bas1d_of_ref_edg_qds,
         boundary_trace_full.reshape(-1),
         np.int64(num_elements),

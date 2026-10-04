@@ -731,8 +731,9 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     //
     //   * tau_face:      |beta.n| on every face quadrature node, including
     //                    discontinuous fluxes when beta is DG-elementwise
-    //                    discontinuous.
-    //   * gamma_face:    tau - beta.n on every face quadrature node.
+    //                    discontinuous, premultiplied by face_jac * w_q.
+    //   * gamma_face:    tau - beta.n on every face quadrature node, with the
+    //                    same face_jac * w_q factor.
     //   * source column: M * source_coeffs.
     //   * volume matrix: beta . grad(phi_i) for every (i, j),
     //   * reaction mass: optional projected reaction field.
@@ -808,8 +809,11 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
                 gamma = 0.0;
             }
         }
-        tau_face[idx] = tau;
-        gamma_face[idx] = gamma;
+        // Store quadrature-weighted values: every consumer integrates
+        // face_jac * w_q * (tau or gamma), and a zero tau stays zero.
+        const double face_measure = jacs_el_fc[element * 3 + face] * face_weights[qf];
+        tau_face[idx] = tau * face_measure;
+        gamma_face[idx] = gamma * face_measure;
     }
     __syncthreads();
     // Source moments use the projected source coefficient vector: J * M * f_h.
@@ -867,22 +871,28 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     }
     __syncthreads();
 
-    // Upwind boundary mass: int_{faces} |beta.n| phi_i phi_j.  Each thread owns
-    // a matrix entry, so no atomics are needed inside the shared local matrix.
-    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
-        const int i = idx / NEL;
-        const int j = idx - i * NEL;
+    // Upwind boundary mass: int_{faces} |beta.n| phi_i phi_j.  The matrix is
+    // symmetric, so each thread owns one upper-triangle entry and writes it and
+    // its mirror; no atomics are needed inside the shared local matrix.  This
+    // halves the FP64 work, which bounds this kernel on FP64-limited devices.
+    for (int idx = tid; idx < NEL * (NEL + 1) / 2; idx += blockDim.x) {
+        int i = 0;
+        int j = idx;
+        while (j >= NEL - i) {
+            j -= NEL - i;
+            ++i;
+        }
+        j += i;
         double value = 0.0;
         for (int face = 0; face < 3; ++face) {
-            const double face_jac = jacs_el_fc[element * 3 + face];
-            for (int qf = 0; qf < NQF; ++qf) {
-                const double weight = face_jac * tau_face[face * NQF + qf] * face_weights[qf];
-                const double phi_i = face_basis[(face * NEL + i) * NQF + qf];
-                const double phi_j = face_basis[(face * NEL + j) * NQF + qf];
-                value += weight * phi_i * phi_j;
-            }
+            const double* phi_i = face_basis + (face * NEL + i) * NQF;
+            const double* phi_j = face_basis + (face * NEL + j) * NQF;
+            for (int qf = 0; qf < NQF; ++qf)
+                value = fma(tau_face[face * NQF + qf] * phi_i[qf], phi_j[qf], value);
         }
-        local_lu[idx] += value;
+        local_lu[i * NEL + j] += value;
+        if (i != j)
+            local_lu[j * NEL + i] += value;
     }
 
     // Local trace RHS columns: int_{face} (|beta.n| - beta.n) phi_i mu_j.  The
@@ -894,13 +904,11 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const int col = idx - i * (3 * NTR);
         const int face = col / NTR;
         const int trace_dof = col - face * NTR;
-        const double face_jac = jacs_el_fc[element * 3 + face];
         double value = 0.0;
         for (int qf = 0; qf < NQF; ++qf) {
-            const double weight = face_jac * gamma_face[face * NQF + qf] * face_weights[qf];
             const double phi_i = face_basis[(face * NEL + i) * NQF + qf];
             const double mu_j = trace_basis[trace_dof * NQF + qf];
-            value += weight * phi_i * mu_j;
+            value = fma(gamma_face[face * NQF + qf] * phi_i, mu_j, value);
         }
         local_rhs[i * NCOLS + col] = value;
     }
@@ -1353,7 +1361,6 @@ extern "C" __global__ void assemble_advection_raw_fused(
             const bool row_positive_lift = orientations[element * 3 + row_face];
             const int row_local_lift_dof = raw_local_trace_dof(row_positive_lift, row_dof);
             const double row_lift_sign = raw_trace_orientation_sign(row_positive_lift, row_dof);
-            const double lift_scale = jacs_el_fc[element * 3 + row_face];
 
             // This thread owns one Schur row for this element side.  Build the
             // tau-weighted global-orientation lift on the fly from face
@@ -1365,10 +1372,11 @@ extern "C" __global__ void assemble_advection_raw_fused(
             for (int i = 0; i < NEL; ++i) {
                 double lift = 0.0;
                 for (int qf = 0; qf < NQF; ++qf) {
-                    const double mu = row_lift_sign * trace_basis[row_local_lift_dof * NQF + qf];
+                    const double mu = trace_basis[row_local_lift_dof * NQF + qf];
                     const double phi_i = face_basis[(row_face * NEL + i) * NQF + qf];
-                    lift += lift_scale * tau_face[row_face * NQF + qf] * face_weights[qf] * mu * phi_i;
+                    lift = fma(tau_face[row_face * NQF + qf] * mu, phi_i, lift);
                 }
+                lift *= row_lift_sign;
 #if NEL >= 45
                 schur_lift_rows[task * NEL + i] = lift;
 #else
@@ -1413,7 +1421,6 @@ extern "C" __global__ void assemble_advection_raw_fused(
             const bool row_positive_mass = orientations[element * 3 + row_face];
             const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);
             const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);
-            const double mass_scale = jacs_el_fc[element * 3 + row_face];
             const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;
             for (int col_dof = 0; col_dof < NTR; ++col_dof) {
                 const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);
@@ -1422,7 +1429,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
                 for (int qf = 0; qf < NQF; ++qf) {
                     const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];
                     const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];
-                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;
+                    mass_value = fma(gamma_face[row_face * NQF + qf] * mu_row, mu_col, mass_value);
                 }
                 const long long out = mass_base + col_dof;
                 rows[out] = row_solve_edge * NTR + row_dof;
@@ -1848,8 +1855,8 @@ def _raw_fused_csr_template() -> str:
         1,
     )
     kernel = kernel.replace(
-        '            const bool row_positive_mass = orientations[element * 3 + row_face];\n            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n            const double mass_scale = jacs_el_fc[element * 3 + row_face];\n            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;\n            for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                for (int qf = 0; qf < NQF; ++qf) {\n                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                    mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                }\n                const long long out = mass_base + col_dof;\n                rows[out] = row_solve_edge * NTR + row_dof;\n                cols[out] = row_solve_edge * NTR + col_dof;\n                data[out] = mass_value;\n            }',
-        '            const int mass_block_pos = mass_csr_block_pos[row_solve_edge];\n            if (mass_block_pos >= 0) {\n                const bool row_positive_mass = orientations[element * 3 + row_face];\n                const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n                const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n                const double mass_scale = jacs_el_fc[element * 3 + row_face];\n                const long long row = row_solve_edge * NTR + row_dof;\n                for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                    const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                    const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                    double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                    for (int qf = 0; qf < NQF; ++qf) {\n                        const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                        const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                        mass_value += mass_scale * gamma_face[row_face * NQF + qf] * face_weights[qf] * mu_row * mu_col;\n                    }\n                    const long long out = (long long)csr_indptr[row] + ((long long)mass_block_pos * NTR + col_dof);\n                    atomicAdd(&data[out], mass_value);\n                }\n            }',
+        '            const bool row_positive_mass = orientations[element * 3 + row_face];\n            const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n            const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n            const long long mass_base = n_flux + side_id * NTR * NTR + row_dof * NTR;\n            for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                for (int qf = 0; qf < NQF; ++qf) {\n                    const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                    const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                    mass_value = fma(gamma_face[row_face * NQF + qf] * mu_row, mu_col, mass_value);\n                }\n                const long long out = mass_base + col_dof;\n                rows[out] = row_solve_edge * NTR + row_dof;\n                cols[out] = row_solve_edge * NTR + col_dof;\n                data[out] = mass_value;\n            }',
+        '            const int mass_block_pos = mass_csr_block_pos[row_solve_edge];\n            if (mass_block_pos >= 0) {\n                const bool row_positive_mass = orientations[element * 3 + row_face];\n                const int row_local_mass_dof = raw_local_trace_dof(row_positive_mass, row_dof);\n                const double row_mass_sign = raw_trace_orientation_sign(row_positive_mass, row_dof);\n                const long long row = row_solve_edge * NTR + row_dof;\n                for (int col_dof = 0; col_dof < NTR; ++col_dof) {\n                    const int col_local_mass_dof = raw_local_trace_dof(row_positive_mass, col_dof);\n                    const double col_mass_sign = raw_trace_orientation_sign(row_positive_mass, col_dof);\n                    double mass_value = (gauge_face && row_dof == col_dof) ? 1.0 : 0.0;\n                    for (int qf = 0; qf < NQF; ++qf) {\n                        const double mu_row = row_mass_sign * trace_basis[row_local_mass_dof * NQF + qf];\n                        const double mu_col = col_mass_sign * trace_basis[col_local_mass_dof * NQF + qf];\n                        mass_value = fma(gamma_face[row_face * NQF + qf] * mu_row, mu_col, mass_value);\n                    }\n                    const long long out = (long long)csr_indptr[row] + ((long long)mass_block_pos * NTR + col_dof);\n                    atomicAdd(&data[out], mass_value);\n                }\n            }',
         1,
     )
     return source[:start] + kernel + source[end:]
