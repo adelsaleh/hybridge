@@ -1,172 +1,232 @@
-# Reproducing the GPU turbulence showcase
+# Reproducing the GPU showcase
 
-The [README](../../README.md) shows two real degree-6 HDG calculations on the
-same star-shaped domain with a circular island. The
-[commented example](../../examples/gpu_vortex_gas.py) contains the mesh,
-initial field, coupled solves, and live Holoviz plot. The recording workflow
-adds Matplotlib colorbars, measurements, and file output.
+The [README](../../README.md) shows two degree-6 HDG calculations on the same
+five-lobed star with a circular island. The signed run is exactly the
+simulation of the [example script](../../examples/gpu_vortex_gas.py); the
+recorder `scripts/reports/record_gpu_showcase.py` builds the same solvers
+through `scripts/reports/gpu_showcase_setup.py`, runs the same time loop, and
+adds Matplotlib rendering, diagnostics, a final checkpoint, and provenance.
 
-## Problem and resolution
+## Problem
 
-The coupling is `−Δφ = ρ`, `q = −∇φ`, `u = (−q_y, q_x)`, and
-`∂tρ + div(ρu) = 0`. Constant-step semi-implicit BDF2 starts with one
-semi-implicit Euler step. Both walls have zero potential; transport uses the
-zero-flux boundary mode. The island has no independently prescribed circulation.
-Signed density describes Euler vorticity; initially positive density gives the
-guiding-center interpretation of the same equations.
+Both runs evolve a guiding-center plasma between grounded conducting walls:
+
+```text
+∂t ρ + div(ρ u) = 0,   -Δφ = ρ,   u = (∂y φ, -∂x φ),   φ = 0 on both walls.
+```
+
+The signed run holds equal amounts of positive and negative charge (a
+two-species plasma), the positive run one species. Both walls are
+equipotentials, so u·n = 0 there. The same equations are two-dimensional Euler
+flow in vorticity form, with one caveat for the island: with φ = 0 there, the
+circulation around the island equals −∫ h ρ dx, where h is harmonic with h = 1
+on the island and h = 0 on the outer wall, so it changes as charge moves
+relative to the island. A Kelvin-consistent Euler flow would instead hold that
+circulation fixed with a floating island potential φ = c(t).
 
 | Parameter | Both recordings |
 |---|---|
 | Outer wall | `r(θ) = 1 + 0.35 cos(5θ)`, 500 boundary points |
 | Island | Centered circle of radius `0.3` |
-| Mesh | Gmsh size `0.005`; **360,379 triangles** |
+| Mesh | Gmsh size `0.005`; **360,379** straight-sided triangles |
 | Approximation | Dubiner basis, **p = 6** |
-| Scalar unknowns | **10,090,612** |
-| Interior scalar trace unknowns | **3,774,995** |
-| Initial blobs | **960**, counts `(512, 256, 128, 64)` |
-| Core widths | `(0.008, 0.016, 0.024, 0.032)` |
-| Profile | Amplitude `4`, seed `17`, no uniform background |
+| Element unknowns per scalar field | **10,090,612** |
+| Interior trace unknowns per solve | **3,774,995** |
+| Initial charges | **960** Gaussians, counts `(512, 256, 128, 64)`, widths `(0.008, 0.016, 0.024, 0.032)` |
+| Profile | Amplitude `4`, seed `17`, cutoff and wall clearance **5 widths** |
+| Poisson stabilization | Library default `τ = κ/L_Ω`, with `L_Ω` twice the area over the boundary length; here **τ ≈ 1.913** |
 
-`MeshDomain` samples triangle interiors in proportion to area, with clearance
-from both walls. Gaussian supports are cut off at eight core widths. The
-signed profile balances positive and negative strengths at each scale; the
-positive profile uses positive strengths throughout. Saved centers and strengths
-are reused for refinement checks. The unlimited high-order discretization can
-produce negative undershoots from positive initial data. These values remain
-in the numerical fields and diagnostics; no clipping or flux limiter is applied.
+`MeshDomain` samples centers in proportion to triangle area, keeping each
+Gaussian's support, five widths, inside the fluid; every scale can start in
+the narrow necks between the lobes and the island. The signed profile balances
+positive and negative strengths at each scale. Both saved profiles,
+`initial_balanced_c5_h005.npz` and `initial_positive_c5_h005.npz`, are reused by
+every check below.
 
-The Poisson solver uses raw-CUDA face-BSR assembly and native face-block hp
-multigrid with an AMGX coarse solve. Transport uses fused raw-CUDA BSR assembly
-and AMGX. DG velocities select `conflict-averaged-upwind` by default, using the
-existing corrected face assembly to repair conflicting outflow classifications.
-The positive case reuses the guiding-center runner's bounded Jacobi, FGMRES, and residual
-correction retries. If those fail to converge, an unscaled nonsymmetric host
-PyPardiso solve recovers the same corrected discrete problem. Finite-element
-assembly stays in the fused raw-CUDA kernel; only the assembled trace system
-is downloaded to the host. The solve uses a verified
-16-thread MKL limit and measured CPU use. The accepted trace is uploaded for
-GPU reconstruction before either time history is committed. Recovery events,
-residuals, thread count, and CPU use are recorded in metadata. The signed case
-retains its original linear-solver policy without the host recovery.
+## Solvers
 
-Both request relative tolerance `1e-9` and absolute tolerance `1e-10`.
-Fields and warm-start traces remain on the GPU. The recording downloads sampled
-rasters for Matplotlib, with independent, fixed colorbars for density and
-potential. The live example uses Holoviz and independent panel ranges.
+The Poisson solve uses raw-CUDA face-BSR assembly and the native face-block
+hp-multigrid preconditioned CG with an AMGX coarse solve; its operator and
+local Cholesky factors are cached and only the right-hand side changes between
+steps. Transport uses fused raw-CUDA BSR assembly with AMGX and zero-flux
+walls. The discrete velocity is the rotated HDG flux, which is discontinuous
+across faces, so both outward traces of a face can point outward; the default
+`conflict-averaged-upwind` policy repairs those faces. Both solves request a
+relative tolerance of `1e-9` and an absolute tolerance of `1e-10`,
+warm-start from the previous trace, and keep fields on the GPU; only two sampled
+rasters per frame are downloaded for drawing.
 
-## Time-step and mesh checks
+The positive run reuses the guiding-center runner's bounded Jacobi, FGMRES,
+and residual-correction retries. If those were exhausted, an unscaled
+nonsymmetric host PyPardiso solve, under a verified 16-thread MKL limit with
+measured CPU use, would recover the same corrected discrete problem before
+either time history is committed; the metadata records any such event.
+The host recovery itself was exercised on 40,715 triangles at p = 6 by
+forcing the recovery branch: its field differed from the accepted GPU result by
+`8.53e-11` in relative coefficient norm, MKL reported 16 threads with about 16
+cores in use, and field and trace returned as device arrays with a physical
+residual of `4.57e-19` against a `1e-10` target.
+{{POSITIVE_RECOVERY_SENTENCE}}
 
-The selected steps are **0.00625 for signed vorticity** and **0.0015625 for
-initially positive density**. Each was compared with a half-step reference on
-the displayed mesh, using exactly the same initial profile. These checks used
-the original upwind policy; they predate the corrected positive-case recording:
+GPU reductions are not bitwise reproducible: repeating a solve changes the
+result by about `1e-13`. Over a long chaotic run such differences grow, so two
+recordings agree statistically and in their conservation diagnostics, not
+frame by frame.
 
-| Case / comparison endpoint | Density relative L2 difference | Potential relative L2 difference |
+## Checks behind the settings
+
+Every check starts from the saved profiles on the published mesh, and compares
+final states with `scripts/reports/compare_showcase_states.py` (physical DG L2
+norms on one mesh, shared sampled points across meshes).
+
+### Poisson stabilization
+
+`scripts/reports/probe_poisson_tau.py` solves the initial Poisson problem for
+each τ and compares the velocity with a degree-8 host reference on the same
+mesh (Numba assembly, 16-thread PyPardiso):
+
+| τ | Velocity error, all | Within 0.05 of a wall | Interior | Double-outflow face measure | Iterations |
+|---:|---:|---:|---:|---:|---:|
+| 1000 | 2.6e-5 / 7.4e-5 | 7.0e-5 / 1.3e-4 | 8.2e-9 / 6.0e-9 | 1.2e-7 / 7.2e-7 | 29 / 31 |
+| 100 | 2.6e-5 / 7.5e-5 | 7.1e-5 / 1.3e-4 | 8.3e-9 / 6.9e-9 | 1.2e-7 / 9.4e-7 | 29 / 30 |
+| 10 | 2.6e-5 / 7.5e-5 | 7.2e-5 / 1.3e-4 | 8.3e-9 / 7.0e-9 | 1.2e-7 / 9.4e-7 | 30 / 31 |
+| 1.913 (default) | 2.6e-5 / 7.5e-5 | 7.2e-5 / 1.3e-4 | 8.3e-9 / 7.0e-9 | 1.2e-7 / 9.4e-7 | 30 / 31 |
+| 1 | 2.6e-5 / 7.5e-5 | 7.2e-5 / 1.3e-4 | 8.3e-9 / 7.0e-9 | 1.2e-7 / 9.4e-7 | 30 / 31 |
+| 0.1 | 2.6e-5 / 7.5e-5 | 7.2e-5 / 1.3e-4 | 8.3e-9 / 7.0e-9 | 5.4e-3 / 2.0e-3 | 30 / 31 |
+
+For τ from 1 to 1000 the velocity is the same to about 2%, and the solver
+cost does not change; only τ = 0.1 degrades face compatibility. The error sits
+almost entirely next to the walls, four orders of magnitude above the
+interior. That is consistent with the weak corner singularities of a
+straight-sided wall, which curved boundary elements would remove; it is not a
+τ effect. Over a short run the choice is invisible too: τ = 1000 and the
+default τ differ at t = 1 by 1.3e-6 in density (signed) and at
+t = 0.5 by 1.8e-7 (positive), far below the time-step error.
+
+### Time step
+
+Each case was run with three halved time steps to a short endpoint:
+
+| Case | dt | Density difference to dt/2 | Potential difference | Enstrophy loss | Energy drift | min ρ |
+|---|---:|---:|---:|---:|---:|---:|
+| Signed, t = 1 | 0.00625 | 2.98% | 0.0122% | 0.2573% | 1.1e-04 | – |
+| Signed, t = 1 | 0.003125 | 1.18% | 0.0030% | 0.0603% | 2.4e-05 | – |
+| Signed, t = 1 | 0.0015625 | – | – | 0.0138% | 5.4e-06 | – |
+| Positive, t = 0.5 | 0.0015625 | 2.22% | 0.0019% | 0.0958% | 7.3e-06 | -0.814 |
+| Positive, t = 0.5 | 0.00078125 | 0.75% | 0.0005% | 0.0198% | 1.5e-06 | -0.25 |
+| Positive, t = 0.5 | 0.000390625 | – | – | 0.0041% | 3.4e-07 | -0.000348 |
+
+The potential converges at second order. The density, dominated by the
+positions of the smallest charges, shows an observed order of
+1.33 (signed) and 1.56 (positive); its
+Richardson-estimated error is 2.0% at the recorded signed step
+and 0.4% (extrapolated) at the recorded positive step. Enstrophy loss and
+energy drift fall by four for each halving, so at these times they are
+time-discretization errors. In the positive case the negative undershoots fall
+even faster: the extrapolated-velocity BDF2 step, not the high-order space
+discretization, produced most of them. The recordings therefore use
+**dt = 0.003125** (signed, half the step of the earlier GIF) and
+**dt = 0.000390625** (positive, a quarter).
+
+### Mesh
+
+A coarser mesh (h = 0.007, 197,624 triangles, 1.4 times the published size) was run with the finest time steps. At 475,012 shared points its states differ from the published mesh by 0.36% in density and 0.0023% in potential (signed, t = 1) and by 0.029% and 0.0019% (positive, t = 0.5). The signed enstrophy loss changes from 0.0138% to 0.0161% and the positive minimum from −0.00035 to −0.0066. These differences bound the coarser mesh's error; at degree 6 the published mesh's own error is much smaller, and well below the time-step errors above.
+
+These checks cover short intervals. They do not, and for a turbulent flow
+cannot, establish pointwise convergence of the whole recorded trajectory;
+the conservation diagnostics below are the long-time evidence.
+
+## Recorded runs
+
+| | Signed | Positive |
 |---|---:|---:|
-| Signed, `t = 1`, `dt = 0.00625` versus `0.003125` | 3.6673% | 0.01360% |
-| Positive, `t = 0.5`, `dt = 0.0015625` versus `0.00078125` | 3.1802% | 0.002636% |
+| Time step | 0.003125 | – |
+| Steps / final time | 5,080 / 15.9 | – |
+| Frames / playback | 1,271 / 53 s | – |
+| Wall time, s per step (with rendering) | 63 min, 0.74 | – |
+| GPU memory in use at finish | 29 GiB | – |
+| Change in total charge | 2.2e-13 | – |
+| Energy drift | 2.9e-4 | – |
+| Enstrophy loss | 29.9% | – |
+| Density range at the end | -17.7 to 13.2 | – |
+| Negative charge (share of total) | – | – |
+| MP4 size | 5.4 MB | – |
 
-These are physical volume L2 norms. At the selected steps, the short signed
-check lost **0.3357% enstrophy** with **+0.01462% energy drift**; the positive
-check lost **0.1551% enstrophy** with **+0.0009363% energy drift**.
-Here enstrophy is `½∫ρ²`, energy is `½∫|q_h|²`, and circulation is `∫ρ`.
+Circulation `∫ρ`, energy `½∫|q_h|²` and enstrophy `½∫ρ²` are computed on the
+device every frame. The signed charge balance is set by the profile, not by
+round-off. Energy is nearly conserved while enstrophy decays: the filaments of
+the forward enstrophy cascade reach the grid and are dissipated by upwinding,
+while energy gathers in fewer, larger vortices.
 
-A separate spatial comparison uses the half-step reference time steps and a
-coarser mesh (`h = 0.006`, 264,421 triangles). At the same endpoints, differences
-sampled at 100,000 common area-uniform fluid points were **0.09881% / 0.0004269%**
-for signed density / potential and **0.009302% / 0.0006889%** for positive density /
-potential. These sampled norms support the chosen mesh for this demonstration.
-The checks cover short intervals; they do not establish convergence of the
-entire extended turbulent trajectory.
+## Record the videos
 
-## Record both GIFs
-
-Use the [forked GPU stack](forked_amgx_stack.md), plus Matplotlib and Pillow.
-The recordings run without a desktop display. They use an NVIDIA RTX PRO 5000
-Blackwell with 48 GB VRAM, CUDA 13, and the existing AMGX 2.5 build. These
-commands do not build AMGX.
-
-From the repository root, run the two cases sequentially:
-
-```bash
-python -m scripts.reports.record_gpu_showcase \
-  --h 0.005 --dt 0.00625 --steps 100000 --every 2 \
-  --seconds 14400 --max-loss 0.5 --gif-mb 200 --fps 24 \
-  --movie --name signed_200mb
-
-python -m scripts.reports.record_gpu_showcase \
-  --strength-mode positive --h 0.005 --dt 0.0015625 \
-  --steps 100000 --every 4 --seconds 14400 --max-loss 0.5 \
-  --gif-mb 200 --fps 48 --movie --name positive_200mb
-```
-
-For refinement studies, pass `--profile PATH` to reuse the saved profile rather
-than resampling centers on a different mesh. Use a fresh `--name` for each run.
-
-The recorder stops before a real frame would exceed **200,000,000 bytes per
-GIF**. No padding, duplicated states, or interpolated states are added to fill
-the budget. Additional time and enstrophy limits guard the calculation; the
-metadata records which limit ended the run. The measured endpoint that would
-exceed a limit is excluded from the animation, so use `last_rendered` for its
-final displayed diagnostics.
-
-Both animations advance approximately **0.30 physical-time units per playback
-second**, matching the original README GIF. Solver time steps and playback
-speed are independent: the signed case captures every two steps at 24 FPS;
-the positive case captures every four steps at 48 FPS. GIF timing alternates
-between adjacent centisecond durations to preserve the requested average rate.
-
-Output lives in the ignored `outputs/readme_showcase/` directory: a GIF, optional
-MP4, latest PNG, JSON metadata, scalar JSONL diagnostics, saved initial profile,
-and optional sampled raster archives. The rasters permit recoloring without
-repeating the GPU solves. Each published GIF is 1600 × 800 pixels with two
-fields, physical boundaries, and colorbars. The accompanying evidence files
-record actual duration, runtime, size, conservation diagnostics, and calibration.
-
-The host recovery was exercised separately on 40,715 triangles at p = 6,
-after deliberately triggering the recovery branch. Its field differed from
-the accepted GPU result by `8.53e-11` in relative coefficient norm. MKL reported
-16 threads; observed peak process CPU use was approximately 16 cores. Both
-field and trace returned as device arrays, and the physical residual was
-`4.57e-19` against a `1e-10` target.
-
-The published signed recording ends at `t = 15.8625` (final solver state
-`t = 15.875`), took 32.4 minutes, and occupies 199.92 MB. The positive recording
-ends at `t = 6.41875` (final solver state `t = 6.425`), took 48.8 minutes, and
-occupies 199.94 MB. Each run saved one final endpoint checkpoint; these extended
-runs did not archive per-frame rasters.
-
-## Change the animation background without rerunning the simulation
-
-Both published animations use black coordinate boxes, with white outer
-figure margins and black labels/colorbar text. Physical wall outlines remain
-visible against the coordinate-box background. Density/potential color scales and frame
-timing are unchanged. For earlier runs recorded with `--save-rasters`, restyle
-the archived display samples on the CPU:
+The recordings need the [forked GPU stack](forked_amgx_stack.md),
+Matplotlib, Pillow and imageio-ffmpeg; they run without a display and do not
+build AMGX. From the repository root, sequentially:
 
 ```bash
-python -m scripts.reports.restyle_gpu_showcase \
-  outputs/readme_showcase/positive_corrected \
-  outputs/readme_showcase/positive_dark --background black --movie
+python -m scripts.reports.record_gpu_showcase --name signed_c5_dt003125 \
+  --strength-mode balanced --profile outputs/readme_showcase/initial_balanced_c5_h005.npz \
+  --cutoff 5 --h 0.005 --dt 0.003125 --steps 5080 --every 4 --fps 24 --movie \
+  --seconds 14400 --max-loss 0.9 --poisson-tau global
 
-python -m scripts.reports.restyle_gpu_showcase \
-  outputs/readme_showcase/signed_final \
-  outputs/readme_showcase/signed_dark --background black --movie
+python -m scripts.reports.record_gpu_showcase --name positive_c5_dt000390625 \
+  --strength-mode positive --profile outputs/readme_showcase/initial_positive_c5_h005.npz \
+  --cutoff 5 --h 0.005 --dt 0.000390625 --steps 16384 --every 16 --fps 48 --movie \
+  --seconds 25200 --max-loss 0.9 --poisson-tau global
 ```
 
-The command rebuilds only geometry for boundary outlines. It performs no
-finite-element assembly, linear solves, or time integration. The real recorded
-states are rendered from saved float32 display samples, and the resulting GIF
-still respects the 100 MB ceiling.
+A missing `--profile` file is sampled on the run's mesh and saved. Both videos
+advance **0.3 physical-time units per playback second**: the signed case draws
+every fourth step at 24 frames per second, the positive case every sixteenth
+step at 48. Frames are 1600 × 800 pixels with tick-free light-grey coordinate
+boxes, wall outlines and fixed colorbars. Signed charge uses a symmetric
+diverging map; positive density uses a sequential map from zero in which
+values below −1% of the color scale appear pink, so lost positivity stays
+visible. `--gif-mb` adds an optional byte-capped GIF; GIFs are not published.
+`--save-rasters` archives the sampled display rasters so that
+`scripts/reports/restyle_gpu_showcase.py` can repaint a run on the CPU; the
+published runs omit it to keep per-frame data off disk.
 
-Recordings always save one atomic `<name>.restart.npz` checkpoint at the final
-accepted time, including on a handled interruption. It contains full-precision
-endpoint coefficients, mesh and solver traces, with no sequence of DG states or
-previous-time coefficients. `--resume <checkpoint>` validates the mesh and run
-parameters, takes one Euler startup step, then resumes BDF2. Frames are streamed
-to GIF/MP4 encoders; `--save-rasters` is optional and is omitted for the extended
-200 MB recordings to avoid retaining per-frame snapshots.
+Output lives in the ignored `outputs/readme_showcase/` directory: the MP4, the
+latest PNG frame, JSON metadata with provenance (git revision and a digest of
+uncommitted code, PyAMGX and AMGX fork revisions from the loaded library,
+package versions), per-frame JSONL diagnostics, and one atomic full-precision
+`<name>.restart.npz` endpoint checkpoint. `--resume <checkpoint>` validates the
+mesh and every run parameter, takes one Euler startup step, then resumes BDF2.
 
+Publish a finished run into `docs/getting_started/media` with a poster frame
+at a chosen physical time:
+
+```bash
+python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/signed_c5_dt003125 \
+  --as vortex_gas --poster-time 6
+python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/positive_c5_dt000390625 \
+  --as positive_density --poster-time {{POSITIVE_POSTER_TIME}}
+```
+
+The published JSON files keep the run settings, diagnostics, provenance and
+media digests, without local paths.
+
+## Rerun the checks
+
+```bash
+python -m scripts.reports.probe_poisson_tau --name tau_probe_signed_c5 \
+  --profile outputs/readme_showcase/initial_balanced_c5_h005.npz --cutoff 5
+
+python -m scripts.reports.record_gpu_showcase --name chk_signed_global_h005_dt003125 \
+  --strength-mode balanced --profile outputs/readme_showcase/initial_balanced_c5_h005.npz \
+  --cutoff 5 --h 0.005 --dt 0.003125 --steps 320 --every 32 --seconds 7200 \
+  --max-loss 0.9 --poisson-tau global
+
+python -m scripts.reports.compare_showcase_states --output signed_dt.json --series \
+  outputs/readme_showcase/chk_signed_global_h005_dt00625.restart.npz \
+  outputs/readme_showcase/chk_signed_global_h005_dt003125.restart.npz \
+  outputs/readme_showcase/chk_signed_global_h005_dt0015625.restart.npz
+```
+
+Vary `--dt`, `--steps`, `--h`, `--strength-mode` and `--poisson-tau` for the other
+rows; `--pair A B` compares any two checkpoints, on one mesh or two.
 
 ## Preview the README and manual locally
 

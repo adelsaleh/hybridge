@@ -17,8 +17,12 @@ class MatplotlibRasterPanels:
     """
 
     def __init__(self, panels, bounds, *, title="", size=(1600, 800), dpi=100,
-                 boundary_mesh=None, font_size=14, background="white"):
-        """Create panels with colored coordinate boxes and white figure margins."""
+                 boundary_mesh=None, font_size=14, background="white", ticks=True):
+        """Create panels with colored coordinate boxes and white figure margins.
+
+        ``ticks=False`` removes coordinate ticks and labels from the field
+        panels, keeping their boxes; colorbars keep their ticks.
+        """
         if len(size) != 2 or any(int(n) != n or n < 2 for n in size):
             raise ValueError("size must contain two positive pixel counts")
         if not np.isfinite(dpi) or dpi <= 0:
@@ -37,6 +41,8 @@ class MatplotlibRasterPanels:
         self.figure.set_facecolor("white")
         for ax in self.figure.axes:
             ax.set_facecolor(color if ax.images else "white")
+            if ax.images and not ticks:
+                ax.set(xticks=[], yticks=[], xlabel="", ylabel="")
             ax.tick_params(colors=foreground)
             for spine in ax.spines.values():
                 spine.set_edgecolor(foreground)

@@ -1,9 +1,8 @@
 """Render linked offline README/manual previews with embedded showcase videos.
 
 Run ``python -m scripts.reports.render_docs_preview --output-dir /path/to/preview``.
-Requires markdown-it-py, Pygments, Matplotlib, Pillow and imageio-ffmpeg.
-Generated previews use browser color preferences, optional theme overrides
-and local copy controls.
+Requires markdown-it-py, Pygments, Matplotlib, Pillow and imageio-ffmpeg. Generated previews use
+browser color preferences, optional theme overrides and local copy controls.
 """
 
 from pathlib import Path
@@ -56,20 +55,28 @@ def render_markdown(source):
 body=render_markdown(source)
 body=re.sub(r'(<pre\b.*?</pre>)',r'<div class="code-block"><button class="copy-code" type="button" aria-label="Copy code">Copy</button>\1</div>',body,flags=re.S)
 for asset in ('vortex_gas','positive_density'):
+ # Map GitHub attachment embeds to offline players backed by local MP4s.
  media=root/'docs/getting_started/media'
  movie=media/f'{asset}.mp4'
- from PIL import Image
- import imageio_ffmpeg
- reader=imageio_ffmpeg.read_frames(str(movie),pix_fmt='rgb24')
- try:
-  info=next(reader)
-  frame=Image.frombytes('RGB',tuple(info['size']),next(reader))
-  buffer=io.BytesIO();frame.save(buffer,format='PNG')
- finally:
-  reader.close()
- poster_url='data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
+ poster=media/f'{asset}.png'
+ if poster.exists():
+  poster_url=encoded(poster,'image/png')
+ else:
+  from PIL import Image
+  import imageio_ffmpeg
+  reader=imageio_ffmpeg.read_frames(str(movie),pix_fmt='rgb24')
+  try:
+   info=next(reader)
+   frame=Image.frombytes('RGB',tuple(info['size']),next(reader))
+   buffer=io.BytesIO();frame.save(buffer,format='PNG')
+  finally:
+   reader.close()
+  poster_url='data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
  player=('<div class="simulation-player"><video id="'+asset+'" controls playsinline preload="none" poster="'+poster_url+'" src="'+encoded(movie,'video/mp4')+'"></video>'
  '<button class="simulation-play" aria-label="Play simulation" onclick="this.previousElementSibling.play();this.hidden=true">▶</button></div>')
+ link=(r'<a href="docs/getting_started/media/'+asset+r'\.mp4"><img src="docs/getting_started/media/'
+       +asset+r'\.png"[^>]*></a>')
+ body=re.sub(link,lambda _:player,body)
  attachment=(r'<!-- showcase-video: '+re.escape(asset)+r' -->\s*'
              r'<p>https://github.com/user-attachments/assets/[a-zA-Z0-9-]+</p>')
  body=re.sub(attachment,lambda _:player,body)

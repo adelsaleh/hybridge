@@ -12,7 +12,7 @@ the active roadmap. Detailed documents belong to one category below.
   and end-to-end Python examples.
 - [`getting_started/`](getting_started/): installation and first-use material.
 - [`getting_started/gpu_showcase.md`](getting_started/gpu_showcase.md): reproduce
-  the README's two turbulence animations and inspect its numerical checks.
+  the README's two guiding-center plasma videos and inspect their numerical checks.
 - [`../examples/`](../examples/): small host examples and the GPU vortex gas.
 
 ## Documentation Areas

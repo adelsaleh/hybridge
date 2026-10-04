@@ -54,6 +54,38 @@ class MovieWriter:
         self._closed = True
 
 
+def concatenate_movies(segments, target):
+    """Join MP4 segments from one writer without re-encoding; return the frame count.
+
+    Segments must share size, frame rate and codec settings (``MovieWriter``
+    output of one recording continued from a checkpoint). Timestamps restart
+    from each segment's end, so the frame cadence stays uniform, and the joined
+    frame count is checked against the sum of the segments.
+    """
+    import subprocess
+    import tempfile
+
+    import imageio_ffmpeg
+
+    segments = [Path(path).resolve() for path in segments]
+    target = Path(target)
+    if target.suffix.lower() != ".mp4" or len(segments) < 2:
+        raise ValueError("join at least two segments into an .mp4 target")
+    expected = sum(imageio_ffmpeg.count_frames_and_secs(str(path))[0] for path in segments)
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as listing:
+        listing.writelines(f"file '{path}'\n" for path in segments)
+    try:
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "concat",
+                        "-safe", "0", "-i", listing.name, "-c", "copy", "-movflags", "+faststart",
+                        str(target)], check=True)
+    finally:
+        Path(listing.name).unlink()
+    frames = imageio_ffmpeg.count_frames_and_secs(str(target))[0]
+    if frames != expected:
+        raise ValueError(f"joined movie has {frames} frames, segments have {expected}")
+    return frames
+
+
 class GifWriter:
     """Stream opaque frames with a fixed palette and an optional byte ceiling.
 

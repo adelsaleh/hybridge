@@ -37,26 +37,31 @@ def test_readme_local_links_and_showcase_assets_resolve():
 
 
 @pytest.mark.parametrize("name", ("vortex_gas", "positive_density"))
-def test_showcase_video_and_attachment_match_recording(name):
-    """Published MP4s retain their real cadence and have standalone GitHub embeds."""
+def test_published_showcase_video_matches_its_recording(name):
+    """Published videos match their recorded digest, size, cadence and run status."""
+    import hashlib
     import json
 
-    ffmpeg = pytest.importorskip("imageio_ffmpeg")
     path = ROOT / f"docs/getting_started/media/{name}.mp4"
     metadata = json.loads(path.with_suffix(".json").read_text())
-    assert 0 < path.stat().st_size < 10_000_000
-    reader = ffmpeg.read_frames(str(path), pix_fmt="rgb24")
+    assert metadata["status"] == "completed"
+    assert path.stat().st_size == metadata["mp4_bytes"] < 10_000_000
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == metadata["mp4_sha256"]
+    poster = ROOT / metadata["poster"]
+    assert poster.suffix == ".png"
+    assert hashlib.sha256(poster.read_bytes()).hexdigest() == metadata["poster_sha256"]
+    assert abs(metadata["simulation_time_per_playback_second"] - .3) < .01
+    assert "/home/" not in json.dumps(metadata)
+    ffmpeg = pytest.importorskip("imageio_ffmpeg")
+    reader = ffmpeg.read_frames(str(path))
     try:
         info = next(reader)
-        frame = next(reader)
     finally:
         reader.close()
     assert tuple(info["size"]) == (metadata["width"], metadata["height"])
-    assert len(frame) == metadata["width"] * metadata["height"] * 3
     assert info["fps"] == pytest.approx(metadata["fps"])
-    assert info["duration"] == pytest.approx(metadata["rendered_frames"] / metadata["fps"], abs=.03)
-    assert abs(metadata["last_rendered_time"] / info["duration"] - .3) < .002
-    readme = (ROOT / "README.md").read_text()
-    assert re.search(r"<!-- showcase-video: " + name + r" -->\n\n"
-                     r"https://github.com/user-attachments/assets/[a-zA-Z0-9-]+\n\n", readme)
-    assert ".gif)" not in readme
+
+
+def test_documentation_ships_no_gif_animations():
+    """Animations are published as MP4 with PNG posters; GIFs stay out of the repository."""
+    assert not sorted((ROOT / "docs").rglob("*.gif"))

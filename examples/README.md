@@ -29,9 +29,10 @@ compatibility paths rather than the preferred public spelling.
 ## GPU vortex gas
 
 [`gpu_vortex_gas.py`](gpu_vortex_gas.py) couples reusable Poisson and transport
-solvers to evolve signed vorticity in a five-lobed star with a circular island.
-It shows mesh generation, an initial field, the time loop, and paired Holoviz density/potential
-panels in one commented script.
+solvers to evolve a two-species guiding-center plasma, the electrostatic form
+of a two-dimensional vortex gas, in a five-lobed star around a grounded
+circular island. It shows mesh generation, an initial field, the BDF2 time
+loop, and paired Holoviz charge-density/potential panels in one commented script.
 
 ```bash
 python examples/gpu_vortex_gas.py
@@ -39,4 +40,4 @@ python examples/gpu_vortex_gas.py
 
 This example requires Gmsh and the CuPy, AMGX/PyAMGX, and Holoviz GPU runtimes.
 The [reproduction guide](../docs/getting_started/gpu_showcase.md) provides setup,
-numerical checks, and the recording parameters used for both README animations.
+numerical checks, and the recording parameters used for both README videos.

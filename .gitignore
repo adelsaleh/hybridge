@@ -46,3 +46,6 @@ cupy_heavy_benchmark.json
 /outputs/readme_preview/
 *.swp
 *.swo
+
+# Animations are published as MP4 with PNG posters, never GIF
+docs/**/*.gif

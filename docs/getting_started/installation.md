@@ -106,6 +106,34 @@ symmetric-positive-definite systems. Set `MKL_NUM_THREADS` plus
 included in `all` so the portable development install does not acquire a large
 platform-specific runtime.
 
+## GPU Runtime
+
+The GPU paths need Linux, an NVIDIA GPU supported by CUDA 13, the CUDA 13
+toolkit, CuPy built for CUDA 13, and the forked AMGX and PyAMGX builds. Build
+AMGX as described in [`forked_amgx_stack.md`](forked_amgx_stack.md). Then, in
+the virtual environment used for `hdgfem`, point the PyAMGX build at the
+toolkit and at the AMGX source and build trees:
+
+```bash
+export CUDA_PATH=/path/to/cuda-13
+export AMGX_DIR=/path/to/AMGX                  # Fork source, including headers.
+export AMGX_BUILD_DIR=/path/to/AMGX-build      # Build tree containing libamgxsh.so.
+export PATH="$CUDA_PATH/bin:$PATH"
+
+python -m pip install 'cupy-cuda13x>=14,<15' cython setuptools wheel
+python -m pip install --no-build-isolation --no-deps /path/to/pyamgx
+python -c "import hdgfem, cupy, pyamgx; print(cupy.cuda.runtime.getDeviceCount(), 'GPU(s)')"
+```
+
+PyAMGX records the AMGX build directory as its runtime library path, so
+`libamgxsh.so` needs no `LD_LIBRARY_PATH` entry. Add `$CUDA_PATH/lib64` only if
+the CUDA runtime libraries are not on the default loader path. Reinstall
+PyAMGX after rebuilding, moving, or changing the ABI of the AMGX library. Use a
+[CuPy wheel matching your CUDA toolkit](https://docs.cupy.dev/en/stable/install.html#installing-cupy-from-pypi).
+`hdgfem` finds these backends through ordinary imports and selects them through
+solver options; importing `hdgfem` itself needs none of them. The live
+Holoviz viewer additionally needs the `holoviz` extra.
+
 ## Install Smoke
 
 The release matrix contains a release-blocking `install-smoke` lane:
