@@ -75,6 +75,26 @@ def test_cholesky_factor_action_and_rejection():
     assert cholesky_factor_inplace(np.array([[np.nan]])) == -1
 
 
+def test_cholesky_status_survives_fast_math_parallel_callers():
+    """The ADR kernels call the factorization inside parallel fast-math loops.
+
+    Numba compiles the helper with the caller's fast-math flags there, so a
+    float NaN/Inf comparison would be folded away; the status must not change.
+    """
+    from numba import njit, prange
+
+    @njit(parallel=True, fastmath=True)
+    def factor_all(blocks, status):
+        for k in prange(blocks.shape[0]):
+            status[k] = cholesky_factor_inplace(blocks[k])
+
+    blocks = np.array([[[np.nan]], [[np.inf]], [[-np.inf]], [[4.]], [[-1.]]])
+    status = np.empty(len(blocks), dtype=np.int64)
+    factor_all(blocks, status)
+    assert status.tolist() == [-1, -1, -1, 0, 1]
+    assert cholesky_factor_inplace(np.array([[np.nan]])) == -1
+
+
 @pytest.mark.parametrize('kind', ['schur-lu', 'schur-cholesky'])
 @pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
 @pytest.mark.parametrize('order', [0, 2, 6])
