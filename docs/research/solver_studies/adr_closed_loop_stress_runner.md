@@ -7,7 +7,7 @@ solver comparisons or certify convergence of a user's numerical campaign.
 
 ## Plan and execute
 
-From `/home/adelsaleh/src/hdgfem`, inspect the default plan:
+From `/home/adelsaleh/src/hybridge`, inspect the default plan:
 
 ```bash
 .venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
@@ -22,7 +22,7 @@ p=6, and 50k/100k triangle targets: 60 solver comparisons plus separate profiles
 To execute that plan using the already installed ADR environment:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
@@ -66,7 +66,7 @@ For future exploratory square runs, use the same 60 strong-preset comparisons
 with six additional CPU direct checks (both mesh sizes):
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
@@ -190,7 +190,7 @@ assembly estimate of about 44.7 GiB at 150k/p6, above the default 80% budget
 on the recorded 47.2 GiB device. Live host RAM, VRAM and disk guards remain on.
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
@@ -392,7 +392,7 @@ For the original 50k-target trapping case (49,645 triangles, 511,574 trace DOFs)
 run this **after the active campaign finishes**, so CPU timing is uncontended:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 .venv/bin/python -B scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py \
   --spec run_outputs/solver_studies/adr_closed_loop_stress_main_v2/specs/assemble_stress_main_trap_t50000_p6.json \
   --output run_outputs/solver_studies/adr_pardiso_coarse_50k \

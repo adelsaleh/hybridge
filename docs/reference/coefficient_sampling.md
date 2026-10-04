@@ -125,7 +125,7 @@ post-solve error evaluation are not accelerated by this change.
 Non-compiling checks (safe during development, no actual GPU work):
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 \
   .venv/bin/python -B -m pytest -q tests/test_coefficient_sampling.py
 ```
@@ -143,7 +143,7 @@ The following commands explicitly compile/execute small coefficient kernels;
 they are provided for the user to run after the campaign, not executed by the agent:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 NUMBA_DISABLE_JIT=0 NUMBA_NUM_THREADS=24 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   HDGFEM_TEST_SAMPLING_JIT=1 .venv/bin/python -B -m pytest -q \
   tests/test_coefficient_sampling.py -k compiled_numba_parity

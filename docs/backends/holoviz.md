@@ -228,7 +228,7 @@ It has not been compiled or tested.
 Apply from a compatible Holoscan SDK source checkout:
 
 ```bash
-git apply /home/adelsaleh/src/hdgfem/patches/holoviz-poll-events-when-minimized.patch
+git apply /home/adelsaleh/src/hybridge/patches/holoviz-poll-events-when-minimized.patch
 ```
 
 The installed wheel statically incorporates GLFW without exporting its

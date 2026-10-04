@@ -82,7 +82,7 @@ Typesetting has **not been run**, in accordance with the workspace no-compilatio
 rule; the page count is unverified. To compile it yourself:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17
+cd /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
   -outdir=../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/typeset \
   main.tex
@@ -98,7 +98,7 @@ Rendering and auditing do not run solvers. Generate the oscillatory and focused
 comparison subsections first, then the combined section and portable ZIP:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python -B scripts/reports/make_closed_loop_stress_figures.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
@@ -128,7 +128,7 @@ The original `section.tex` and `main.tex` remain the detailed version.
 To typeset the synthesis locally:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17
+cd /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
   -outdir=../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/typeset_synthesis \
   main_synthesis.tex
@@ -168,7 +168,7 @@ The manuscript does not infer implementation optimality from these timings.
 Regenerate using saved data only (no solvers or TeX):
 
 ```bash
-cd ~/src/hdgfem
+cd ~/src/hybridge
 export PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg
 .venv/bin/python scripts/reports/make_adr_native_completion_report.py
 .venv/bin/python scripts/reports/make_oscillatory_adr_report.py
@@ -186,7 +186,7 @@ maximum-eight-page layout target, but its updated page count awaits typesetting.
 To refresh both PDFs yourself:
 
 ```bash
-cd ~/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17
+cd ~/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex main_synthesis.tex
 ```
 

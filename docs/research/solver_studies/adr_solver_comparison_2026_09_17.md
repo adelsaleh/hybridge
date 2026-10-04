@@ -227,7 +227,7 @@ adr_python() {
   HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
   HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
   HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
-    /home/adelsaleh/src/hdgfem/scripts/gpu/run_cuda13.sh python "$@"
+    /home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh python "$@"
 }
 adr_python scripts/run_adr_solver_comparison.py --degree 6 --mesh 32 \
   --output run_logs/new_screen

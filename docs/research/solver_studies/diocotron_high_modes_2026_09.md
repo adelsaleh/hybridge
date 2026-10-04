@@ -91,7 +91,7 @@ This distinguishes the two uses: m=64 is the stronger quantitative candidate; m=
 Each new preset uses h=0.008, DG p=6, dt=0.05, 1,400 steps (T=70), tau=128000, radial power 2, seed 1e-4, and every-step/stage diagnostics. These smaller-dt heavy runs have not been executed here. Use the existing runner for identical terminal/log verbosity and cached device solves.
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 source .env
 
 # Better resolved high-mode analysis candidate.
