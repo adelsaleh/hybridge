@@ -40,14 +40,15 @@
 - [ ] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied.
 - [ ] Make the project public as **HYBRIDGE** (HYBRIdizable Discontinuous Galerkin Environment) with the `0.1.0a2` alpha release. The GENCI/IDRIS H100 allocation request names HYBRIDGE in its published summary and links https://github.com/adelsaleh/hybridge; it is submitted only after this public release.
   - Decisions (2026-10-04):
-    - version `0.1.0a2`; the private `v0.1.0a1` tag and GitHub release (2026-08-05) stay as history;
+    - version `0.1.0a2`; the existing `v0.1.0a1` tag and GitHub release (2026-08-05) stay and become public with the repository;
     - BSD-3-Clause licence, with agreement from the contributors in the history (VRRodrigues has 38 commits; the repository has five collaborators);
     - publish `hybridge` to TestPyPI, then PyPI;
     - go public by renaming the existing `adelsaleh/hdgfem` repository, which keeps the collaborators, the open issue and URL redirects;
-    - remove machine-local artifacts and the diocotron data from the tree; history is not rewritten, and everything removed is preserved locally first.
+    - remove machine-local artifacts and the diocotron data from the tree; history is not rewritten, and everything removed is preserved locally first;
+    - `gpu_gmres_precondit` (VRRodrigues, 36 commits) stays a separate public branch of `hybridge`.
   - Phase 0, preserve before removing (local, no publication):
     - create `~/src/hybridge-archive/` outside every checkout;
-    - add a `git bundle` of every local and remote branch and tag, verified with `git bundle verify`;
+    - add a `git bundle` of every local and remote branch and tag, verified with `git bundle verify` (done 2026-10-04: `hdgfem-all-refs-2026-10-04.bundle`, 682 MB, all branches including `diocotron-dolfinx` and `gpu_gmres_precondit`, plus tag `v0.1.0a1`);
     - add a plain copy of every file the cleanup removes, at its repository-relative path, with a manifest (path, size, SHA-256, source commit);
     - include the `diocotron-dolfinx` branch's `projects/diocotron` data (576 MiB, commit `350fe41`), the strategy-A study, the tracked movies, and untracked local evidence (`outputs/`, `run_outputs/`, `artifacts/`, `run_logs/`);
     - later, mirror the same refs into a private GitHub archive repository as a second copy.
@@ -81,8 +82,10 @@
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;
     - delete `diocotron-dolfinx` from the main repository;
-    - agree with VRRodrigues where `gpu_gmres_precondit` (36 commits, in progress) lives before the switch;
-    - decide whether to delete the private `hdgfem 0.1.0a1` GitHub release (the tag stays);
+    - clean `gpu_gmres_precondit` in a cleanup commit on top of it, without rewriting it:
+      - the branch inherited from `master` (2026-07-18) the strategy-A diocotron study (`docs/strategyA_band_parameter_study/`, 191 files) and absolute `/home/...` paths in `README.md` and `MANUAL.md` (14 files in all); VRRodrigues changed none of them;
+      - make the commit in a detached temporary worktree, so the `~/src/hdgfem-gmres` checkout and its uncommitted work stay untouched;
+      - push it and tell VRRodrigues to pull;
     - rename the repository to `hybridge` and update local remotes;
     - tag `v0.1.0a2`, build and `twine check` the wheel and sdist, upload to TestPyPI, verify a clean install, then upload to PyPI and create the GitHub release with the artifacts;
     - switch visibility to public the same day, check the GENCI link, then submit the GENCI request.
