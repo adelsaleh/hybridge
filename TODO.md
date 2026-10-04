@@ -38,23 +38,54 @@
   - run: `pytest tests/test_documentation_structure.py`
   - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
 - [ ] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied.
-- [ ] Make the project public as **HYBRIDGE** (HYBRIdizable Discontinuous Galerkin Environment) with the alpha release, soon. Order: merge `package-reorganization` into `master`, rename, satisfy the preconditions above on the renamed branch, publish the alpha release from it, and switch the GitHub repository from private to public. The GENCI/IDRIS H100 allocation request names HYBRIDGE in its published summary and will be submitted only after this public release.
-  - Rename `hdgfem` → `hybridge` before going public, in one dedicated commit:
-    - the import package and the `pyproject.toml` project name (`hybridge` is free on PyPI as of 2026-10-03);
-    - the `HDGFEM_*` environment variables → `HYBRIDGE_*` (about 20 variables, e.g. `HDGFEM_PRECISION`, `HDGFEM_MAGMA_ROOT`, `HDGFEM_AMGX_*`, `HDGFEM_CUDA13_ROOT`), keeping the old names as deprecated fallbacks for one release;
-    - README, MANUAL, docs, scripts, run configs and tests (about 576 files mention `hdgfem`);
-    - the few `hdgfem` references in the pyamgx and AMGX forks, and the local CODEMAPs;
-    - finally the GitHub repository itself (GitHub redirects the old URL).
-    - Done 2026-10-04 (local only): the checkouts are now `~/src/hybridge` (master, holding the shared venv) and `~/src/hybridge-reorg`; `~/src/hdgfem-gmres` was deliberately left unchanged. The temporary compatibility symlinks were removed the same day.
-  - Lead the README with the project story:
-    - HYBRIDGE makes HDG methods accessible and usable by newcomers, in the spirit of FreeFEM and DOLFINx, with GPU assembly and solvers.
-    - It is the companion HDG project of SOLEDGE-HDG; its GPU results are meant to be transferred to SOLEDGE-HDG, first in 2D and eventually in 3D.
-    - Plasma turbulence (guiding center) is an application, not the identity.
-    - Avoid performance adjectives that go stale with hardware.
-  - Before switching visibility:
-    - add a `LICENSE` file and the `license` field in `pyproject.toml` (neither exists yet);
-    - confirm that no machine-specific files (`CODEMAP.md`, `AGENTS.md`), credentials or private data are tracked or present in history;
-    - verify the README install path from a fresh clone.
+- [ ] Make the project public as **HYBRIDGE** (HYBRIdizable Discontinuous Galerkin Environment) with the `0.1.0a2` alpha release. The GENCI/IDRIS H100 allocation request names HYBRIDGE in its published summary and links https://github.com/adelsaleh/hybridge; it is submitted only after this public release.
+  - Decisions (2026-10-04):
+    - version `0.1.0a2`; the private `v0.1.0a1` tag and GitHub release (2026-08-05) stay as history;
+    - BSD-3-Clause licence, with agreement from the contributors in the history (VRRodrigues has 38 commits; the repository has five collaborators);
+    - publish `hybridge` to TestPyPI, then PyPI;
+    - go public by renaming the existing `adelsaleh/hdgfem` repository, which keeps the collaborators, the open issue and URL redirects;
+    - remove machine-local artifacts and the diocotron data from the tree; history is not rewritten, and everything removed is preserved locally first.
+  - Phase 0, preserve before removing (local, no publication):
+    - create `~/src/hybridge-archive/` outside every checkout;
+    - add a `git bundle` of every local and remote branch and tag, verified with `git bundle verify`;
+    - add a plain copy of every file the cleanup removes, at its repository-relative path, with a manifest (path, size, SHA-256, source commit);
+    - include the `diocotron-dolfinx` branch's `projects/diocotron` data (576 MiB, commit `350fe41`), the strategy-A study, the tracked movies, and untracked local evidence (`outputs/`, `run_outputs/`, `artifacts/`, `run_logs/`);
+    - later, mirror the same refs into a private GitHub archive repository as a second copy.
+  - Phase 1, finish the branch (local):
+    - publish the full positive-density showcase (rerun started 2026-10-04); fill the Positive column, recovery sentence and poster time in `docs/getting_started/gpu_showcase.md` and the README caption; commit the `{{...}}` placeholder guard test;
+    - remove machine-local artifacts from the tree:
+      - make the absolute `/home/...` paths in 34 tracked files repository-relative;
+      - drop `outputs/movies/*.mp4`;
+      - review the 30 tracked `run_logs/` files and the 8 hash-named `run_configs/adr_unified_l5/meshes/*.npz` caches, keeping only what documented commands need on a fresh clone;
+    - remove the diocotron data from the tree: `docs/research/strategy_a_band_parameter_study/` (191 files, about 52 MB) and the two `outputs/movies/diocotron_*.mp4`. The torsion-equilibrium code, diocotron presets and derivation notes stay; fix the links and docs that cite the removed files;
+    - correct this item's old note: the pyamgx and AMGX forks no longer mention `hdgfem`;
+    - run the full sharded suite and the four alpha lanes in a clean worktree and compare per test with the 2026-10-04 baseline.
+  - Phase 2, hosted gate and merge (pushes need confirmation):
+    - push `package-reorganization` and open a PR to `master`. The `early-alpha` workflow (host Python 3.10/3.12 and package) must pass; the eight failures of the last hosted `master` run (2026-09-30) are fixed on this branch;
+    - fast-forward `master` (no divergence) and push it;
+    - set the GitHub default branch back to `master` (it is currently `package-reorganization`), delete the merged branch and retire the `~/src/hybridge-reorg` worktree;
+    - from then on the shared venv's editable install runs the reorganized code.
+  - Phase 3, rename `hdgfem` → `hybridge` in one dedicated commit on `master`:
+    - the import package, `pyproject.toml` name and version `0.1.0a2`, and about 558 files outside `vendor/`; `vendor/adr_gmres/hdgfem` stays a frozen study snapshot;
+    - the about 30 `HDGFEM_*` environment variables become `HYBRIDGE_*`, read through one helper that accepts the old names with a deprecation warning for one release;
+    - update the local CODEMAPs and AGENTS files, reinstall the editable venv, then rerun the suite and lanes.
+  - Phase 4, release content:
+    - a BSD-3-Clause `LICENSE` and the `license` field in `pyproject.toml`; optionally `AUTHORS`/`CITATION.cff`;
+    - lead the README with the project story:
+      - HYBRIDGE makes HDG methods accessible to newcomers, in the spirit of FreeFEM and DOLFINx, with GPU assembly and solvers;
+      - it is the companion HDG project of SOLEDGE-HDG, whose GPU results feed SOLEDGE-HDG, first in 2D and eventually in 3D;
+      - plasma turbulence is an application, not the identity;
+      - no performance adjectives;
+    - update `docs/releases/early_alpha.md` to `0.1.0a2`, with the hosted run URL; add release notes;
+    - confirm that no machine-specific files, credentials or private data are tracked; verify the README install path from a fresh clone.
+  - Phase 5, publication (outward steps; confirm each):
+    - mirror all refs to the private archive repository;
+    - delete `diocotron-dolfinx` from the main repository;
+    - agree with VRRodrigues where `gpu_gmres_precondit` (36 commits, in progress) lives before the switch;
+    - decide whether to delete the private `hdgfem 0.1.0a1` GitHub release (the tag stays);
+    - rename the repository to `hybridge` and update local remotes;
+    - tag `v0.1.0a2`, build and `twine check` the wheel and sdist, upload to TestPyPI, verify a clean install, then upload to PyPI and create the GitHub release with the artifacts;
+    - switch visibility to public the same day, check the GENCI link, then submit the GENCI request.
 
 
 Research studies in later sections inform future solver choices but do not block the first alpha unless they expose a correctness or resource-lifecycle defect in a supported path.
