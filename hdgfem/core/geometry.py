@@ -15,6 +15,7 @@ class DiskDomain:
     center: tuple[float, float] = (0.0, 0.0)
 
     def __post_init__(self):
+        """Validate the radius and center and store them as floats."""
         radius = float(self.radius)
         center = tuple(float(value) for value in self.center)
         if not np.isfinite(radius) or radius <= 0.0:
@@ -26,6 +27,7 @@ class DiskDomain:
 
     @property
     def area(self) -> float:
+        """Enclosed area ``pi * radius**2``."""
         return float(np.pi * self.radius**2)
 
     @property
@@ -35,6 +37,7 @@ class DiskDomain:
         return np.array((center - self.radius, center + self.radius))
 
     def _relative_points(self, points) -> np.ndarray:
+        """Return ``points`` of shape ``(..., 2)`` relative to the center."""
         points = np.asarray(points, dtype=np.float64)
         if points.ndim == 0 or points.shape[-1] != 2:
             raise ValueError("points must have shape (..., 2)")
@@ -77,6 +80,10 @@ class PolygonDomain:
     vertices: np.ndarray
 
     def __post_init__(self):
+        """Validate the vertices and store them counterclockwise and read-only.
+
+        At least three finite vertices with nonzero edges and enclosed area are required.
+        """
         vertices = np.array(self.vertices, dtype=np.float64, copy=True)
         if vertices.ndim != 2 or vertices.shape[1] != 2 or len(vertices) < 3:
             raise ValueError("vertices must have shape (n, 2), n >= 3")
@@ -93,6 +100,7 @@ class PolygonDomain:
 
     @property
     def area(self) -> float:
+        """Enclosed area by the shoelace formula, positive for the stored counterclockwise order."""
         vertices = self.vertices
         following = np.roll(vertices, -1, axis=0)
         return float(np.sum(vertices[:, 0]*following[:, 1] - vertices[:, 1]*following[:, 0])/2)

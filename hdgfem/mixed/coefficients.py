@@ -122,6 +122,7 @@ def constant_diffusion_components(diffusion):
 
 
 def _inverse(values, xp):
+    """Invert ``(a, b, c, d)`` 2x2 tensor samples after scaling each by its largest component."""
     scale = _scale(values, xp)
     scaled = values / scale[..., None]
     a, b, c, d = (scaled[..., j] for j in range(4))
@@ -138,6 +139,7 @@ def inverse_diffusion_values(values):
         inverse, finite = np.empty(values.shape, dtype=np.float64), []
 
         def invert(start, stop):
+            """Invert elements ``start:stop`` and record whether the result is finite."""
             inverse[start:stop] = _inverse(values[start:stop], np)
             finite.append(bool(np.all(np.isfinite(inverse[start:stop]))))
         _element_blocks(invert, values.shape[0])
@@ -171,6 +173,7 @@ def normal_diffusivity_on_faces(diffusion, space, *, trace_space=None, device=Fa
     values = sample_diffusion_tensor(diffusion, space, on_faces=True, trace_space=trace_space, device=device)
 
     def normal_maximum(values, normals):
+        """Largest normal component ``n.K.n`` over each face's quadrature points."""
         nx, ny = normals[..., 0, None], normals[..., 1, None]
         normal = values[..., 0]*nx*nx + (values[..., 1]+values[..., 2])*nx*ny + values[..., 3]*ny*ny
         return xp.max(normal, axis=-1)
@@ -179,6 +182,7 @@ def normal_diffusivity_on_faces(diffusion, space, *, trace_space=None, device=Fa
     out = np.empty(values.shape[:2], dtype=np.float64)
 
     def reduce(start, stop):
+        """Compute the face maxima of elements ``start:stop``."""
         out[start:stop] = normal_maximum(values[start:stop], normals[start:stop])
     _element_blocks(reduce, values.shape[0])
     return out
@@ -224,6 +228,7 @@ def diffusion_kinds(values):
     kinds = np.empty(values.shape[0], dtype=np.int64)
 
     def classify(start, stop):
+        """Classify the diffusion kind of elements ``start:stop``."""
         kinds[start:stop] = _diffusion_kinds(values[start:stop], np)
     _element_blocks(classify, values.shape[0])
     return kinds

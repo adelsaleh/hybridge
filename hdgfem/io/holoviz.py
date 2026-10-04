@@ -293,6 +293,7 @@ class HolovizScalarPanels:
 
     @property
     def _capture_enabled(self):
+        """Whether frames are captured for screenshots or a movie."""
         return self.screenshot_dir is not None or self._movie is not None
 
     def _add_panel(self, index, geometry, mesh, show_mesh):

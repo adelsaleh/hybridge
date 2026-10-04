@@ -381,6 +381,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
             native_metrics["solve.fb_hp_mg.physical_check"] = time.perf_counter() - checked_at
 
             def assembly_matvec(vector):
+                """Apply the original assembled device matrix to ``vector``."""
                 return _device_compressed_matvec(physical_matrix, vector, sparse, cp)
 
             native_result = owner._raw_cuda_fb_hp_mg_solver.solve(

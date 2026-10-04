@@ -32,6 +32,7 @@ _THREADS: int | None = None
 
 
 def _available_cpus() -> int:
+    """CPUs available to this process, from the affinity mask when supported."""
     return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
 
 
@@ -51,6 +52,7 @@ def set_host_threads(count: int | None) -> int:
 
 
 def _pool(threads: int) -> ThreadPoolExecutor:
+    """Return the shared thread pool, recreating it when the thread count changes."""
     global _POOL, _POOL_SIZE
     with _LOCK:
         if _POOL is None or _POOL_SIZE != threads:
@@ -111,6 +113,7 @@ def elementwise(function: Callable[..., np.ndarray], *arrays, min_chunk: int = P
     out = np.empty((rows,) + probe.shape[1:], dtype=probe.dtype)
 
     def evaluate(start, stop):
+        """Evaluate ``function`` on rows ``start:stop`` into ``out``."""
         out[start:stop] = function(*(a[start:stop] for a in arrays))
 
     _run_chunks(evaluate, chunks, threads)
@@ -129,6 +132,7 @@ def _run_chunks(function, chunks, threads: int | None = None) -> None:
         return
 
     def run(start, stop):
+        """Run one chunk with the worker flag set, so nested parallel helpers run serially."""
         _LOCAL.active = True
         try:
             function(start, stop)
@@ -156,6 +160,7 @@ def parallel_copy(array: np.ndarray, *, min_chunk: int = MIN_CHUNK) -> np.ndarra
         return out
 
     def copy(start, stop):
+        """Copy rows ``start:stop`` into ``out``."""
         out[start:stop] = array[start:stop]
 
     for_element_chunks(copy, array.shape[0], min_chunk=min_chunk)

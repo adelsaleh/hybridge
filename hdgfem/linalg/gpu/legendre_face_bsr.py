@@ -410,6 +410,7 @@ class _CusparseGenericCsrOperator(_CusparseGenericBsrOperator):
     """Generic CSR SpMV sharing BSR's descriptors and preallocation contract."""
 
     def __init__(self, indptr, indices, data, *, shape):
+        """Require one-dimensional CSR data, then set up the shared generic-SpMV descriptors."""
         if data.ndim != 1:
             raise ValueError("CSR data must be one-dimensional")
         super().__init__(indptr, indices, data, shape=shape)

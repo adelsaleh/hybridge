@@ -39,6 +39,7 @@ class ScaledUpwind:
     factor: float = 1.0
 
     def __post_init__(self):
+        """Require a finite, positive factor and store it as a float."""
         factor = float(self.factor)
         if not np.isfinite(factor) or factor <= 0:
             raise ValueError("upwind factor must be finite and positive")

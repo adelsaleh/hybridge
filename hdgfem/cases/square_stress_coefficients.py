@@ -18,6 +18,7 @@ try:
     from numba.extending import register_jitable
 except ImportError:
     def register_jitable(function):
+        """Return ``function`` unchanged when Numba is unavailable (plain NumPy evaluation)."""
         return function
 
 

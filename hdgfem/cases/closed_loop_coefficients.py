@@ -12,11 +12,17 @@ try:
     from numba.extending import register_jitable
 except ImportError:
     def register_jitable(function):
+        """Return ``function`` unchanged when Numba is unavailable (plain NumPy evaluation)."""
         return function
 
 
 @register_jitable
 def _geometry(x, y, hole_radius):
+    """Return the annular radius and the corrugated stream coordinate at ``(x, y)``.
+
+    ``(rho, rho_x, rho_y)`` is the radius normalized across the annulus width;
+    ``chi`` holds the stream coordinate and its first and second derivatives.
+    """
     r = np.hypot(x, y)
     phi = np.arctan2(y, x)
     width = 1+0.35*np.cos(9*phi)-hole_radius
@@ -45,6 +51,11 @@ def _geometry(x, y, hole_radius):
 
 @register_jitable
 def _velocity(x, y, radial, chi, parameters):
+    """Return ``(beta_x, beta_y)`` for variant ``parameters[4]`` from :func:`_geometry` data.
+
+    Variant 0 follows the closed level sets of ``chi``, 1 is a divergence-free
+    cross-stream field from a stream function, and 2 is the constant-direction control.
+    """
     _, _, scale, _, variant = parameters
     if variant == 2:
         c, s = np.cos(np.pi/7), np.sin(np.pi/7)

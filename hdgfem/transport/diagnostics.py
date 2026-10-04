@@ -28,6 +28,7 @@ class UpwindHDGTraceRankError(np.linalg.LinAlgError):
     """
 
     def __init__(self, edges, inflow_nodes, trace_dofs):
+        """Record the deficient edges, their inflow node counts and the trace size."""
         self.edges = list(edges)
         self.inflow_nodes = list(inflow_nodes)
         self.trace_dofs = int(trace_dofs)
@@ -195,6 +196,7 @@ def _transport_snapshot_arrays(assembly) -> dict:
         return {}
 
     def host(array):
+        """Return ``array`` as a NumPy array, downloading CuPy arrays."""
         return np.asarray(array.get() if hasattr(array, "get") else array)
 
     space, trace = assembly.cspace.host, assembly.trace_ref.host

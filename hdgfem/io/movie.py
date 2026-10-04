@@ -8,6 +8,7 @@ class MovieWriter:
     """Encode H.264 MP4 incrementally, retaining no frame history in memory."""
 
     def __init__(self, path, *, fps=20.):
+        """Validate the MP4 path and frame rate; the encoder starts on the first frame."""
         import imageio_ffmpeg
 
         self.path = Path(path)
@@ -23,6 +24,7 @@ class MovieWriter:
         imageio_ffmpeg.get_ffmpeg_exe()
 
     def append(self, image):
+        """Encode one uint8 RGBA frame; every frame must match the first frame's size."""
         import imageio_ffmpeg
 
         if self._closed:
@@ -48,6 +50,7 @@ class MovieWriter:
         self._encoder.send(np.ascontiguousarray(image))
 
     def close(self):
+        """Finish the encoder and refuse further frames."""
         if self._encoder is not None:
             self._encoder.close()
             self._encoder = None

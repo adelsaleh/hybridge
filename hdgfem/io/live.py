@@ -63,6 +63,7 @@ class AnalyticPanelField:
     """
 
     def __init__(self, space, function, name="exact"):
+        """Store the space, the analytic ``function(x, y)`` and the panel name."""
         self.space, self.function, self.name = space, function, str(name)
 
     def values_at_ref(self, reference_points):
@@ -76,6 +77,7 @@ class DifferencePanelField:
     """Duck-typed panel field ``field - reference`` (for example a DG field minus the exact solution)."""
 
     def __init__(self, field, reference, name="error"):
+        """Store the field, its reference and the panel name; the panel uses the field's space."""
         self.field, self.reference, self.name = field, reference, str(name)
         self.space = field.space
 
@@ -101,6 +103,7 @@ class PyVistaFieldPanels:
         off_screen=False, window_size=(1600, 700), screenshot_dir=None,
         screenshot_prefix="fields", show_grid=False, time_step=None, total_steps=None,
     ):
+        """Validate the panel layout, sample the plot points and create the PyVista plotter."""
         panels = tuple(panels)
         if not panels:
             raise ValueError("at least one panel is required")
@@ -169,6 +172,7 @@ class PyVistaFieldPanels:
 
     @staticmethod
     def _limits(values, options):
+        """Color limits from a robust percentile, symmetric about zero when requested."""
         return scalar_color_limits(
             values, percentile=options.get("robust_percentile", 95.0),
             symmetric=options.get("symmetric_clim", False),

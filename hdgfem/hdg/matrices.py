@@ -121,6 +121,7 @@ def boundary_mass_from_trace_stabilization(
     result = np.empty(_local_matrix_shape(test_space), dtype=REAL_DTYPE)
 
     def build(start, stop):
+        """Accumulate the weighted boundary mass blocks of elements ``start:stop``."""
         np.einsum(
             "Kf,Kfq,fiq,fjq->Kij",
             jacobians[start:stop],
@@ -155,6 +156,7 @@ def element_boundary_mats_from_trace_weight(
     blocks = result.reshape(count, test_space.el_dof, 3, trace_ref.edg_dof)
 
     def build(start, stop):
+        """Form the element-to-trace coupling blocks of elements ``start:stop``."""
         blocks[start:stop] = np.einsum(
             "Kf,Kfq,fiq,jq->Kifj",
             jacobians[start:stop],
@@ -190,6 +192,7 @@ def advection_trace_lift_from_stabilization(
     result = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, test_space.el_dof), dtype=REAL_DTYPE)
 
     def build(start, stop):
+        """Form the tau-weighted trace lift of elements ``start:stop`` in global orientation."""
         result[start:stop] = np.einsum(
             "Kf,Kfq,Kfaq,fiq,q->Kfai",
             mesh.jacs_el_fc[start:stop],
@@ -223,6 +226,7 @@ def advection_interior_trace_mass_blocks_from_weight(
     side_blocks = np.empty((mesh.num_tri, 3, trace_ref.edg_dof, trace_ref.edg_dof), dtype=REAL_DTYPE)
 
     def build(start, stop):
+        """Form the gamma-weighted trace mass blocks of each side of elements ``start:stop``."""
         oriented_trace = _oriented_trace_rows(mesh, trace_ref, start, stop)
         side_blocks[start:stop] = np.einsum(
             "Kf,Kfq,Kfaq,Kfbq,q->Kfab",

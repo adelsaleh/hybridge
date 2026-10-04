@@ -65,6 +65,10 @@ def _global_constants(function) -> dict:
         names.update(current.co_names)
         stack.extend(const for const in current.co_consts if inspect.iscode(const))
     def mathematical_constant(name, value):
+        """Whether ``value`` is the :mod:`math` or NumPy constant ``name``, such as ``pi``.
+
+        Such constants are not reported as frozen globals.
+        """
         return any(getattr(module, name, None) is value or (isinstance(getattr(module, name, None), float)
                                                            and getattr(module, name) == value)
                    for module in (math, np))
@@ -106,16 +110,19 @@ def _compile(function, arity: int, name: str):
 
 
 def _parameters(params) -> np.ndarray:
+    """Return ``params`` as a contiguous one-dimensional real array."""
     return np.ascontiguousarray(np.atleast_1d(np.asarray(params, dtype=REAL_DTYPE)).ravel())
 
 
 def _check_fields(mesh, fields, name: str) -> None:
+    """Require every field of a pointwise coefficient to live on ``mesh``."""
     for field in fields:
         if field.space.mesh.triangulation is not mesh.triangulation:
             raise ValueError(f"pointwise coefficient {name!r}: every field must live on the coefficient's mesh")
 
 
 def _arity(function, name: str) -> int:
+    """Return 3 for ``f(x, y, t)`` or 4 for ``f(x, y, t, v)``; reject any other signature."""
     try:
         parameters = inspect.signature(function).parameters.values()
     except (TypeError, ValueError):

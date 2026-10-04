@@ -26,6 +26,7 @@ class GaussianBlobField:
     """
 
     def __init__(self, centers, sigmas, strengths, *, cutoff=8.0, chunk_size=262144):
+        """Validate and freeze the blob data, then bin each width's blobs on a support grid."""
         centers = np.array(centers, dtype=np.float64, copy=True)
         if centers.ndim != 2 or centers.shape[1] != 2 or not len(centers):
             raise ValueError("centers must have shape (n, 2), n > 0")
@@ -92,6 +93,7 @@ class GaussianBlobField:
                        cutoff=cutoff, chunk_size=chunk_size)
 
     def _groups_for(self, xp):
+        """Return the per-width blob groups for ``xp``, copying them once per CUDA device."""
         if xp is np:
             return self._groups
         device = int(xp.cuda.Device().id)
@@ -103,6 +105,10 @@ class GaussianBlobField:
         return self._device_groups[device]
 
     def __call__(self, x, y):
+        """Sum the blobs at broadcastable ``(x, y)`` points on the host or the calling device.
+
+        Points are processed in chunks, and each visits only the blobs binned near it.
+        """
         xp = _array_module(x, y)
         x, y = xp.broadcast_arrays(xp.asarray(x, dtype=REAL_DTYPE), xp.asarray(y, dtype=REAL_DTYPE))
         shape = x.shape
@@ -166,6 +172,10 @@ class FFTGaussianBlobField:
 
     def __init__(self, source: GaussianBlobField, *, bounds, grid_shape,
                  chunk_size: int = 2097152):
+        """Check the FFT grid against the source blobs; grids are built lazily.
+
+        The spacing must be at most half the smallest sigma and the centers inside the bounds.
+        """
         if not isinstance(source, GaussianBlobField):
             raise TypeError("source must be a GaussianBlobField")
         if np.any(source.strengths < 0):
@@ -185,6 +195,7 @@ class FFTGaussianBlobField:
         self._device_grids = {}
 
     def _build_grid(self, xp):
+        """Deposit, convolve and clean the density grid with SciPy or CuPy (see the class notes)."""
         if xp is np:
             from scipy.signal import fftconvolve
         else:
@@ -232,6 +243,7 @@ class FFTGaussianBlobField:
         return xp.ascontiguousarray(grid, dtype=REAL_DTYPE)
 
     def _grid_for(self, xp):
+        """Return the cached grid for ``xp``, building it once on the host or per CUDA device."""
         if xp is np:
             if self._host_grid is None:
                 self._host_grid = self._build_grid(xp)
@@ -242,6 +254,10 @@ class FFTGaussianBlobField:
         return self._device_grids[device]
 
     def __call__(self, x, y):
+        """Evaluate the smoothed grid at broadcastable ``(x, y)`` points with B-spline weights.
+
+        Points are processed in chunks on the host or the calling device.
+        """
         xp = _array_module(x, y)
         if xp is np:
             from scipy.ndimage import map_coordinates
