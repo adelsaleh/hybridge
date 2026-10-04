@@ -239,12 +239,11 @@ GPUs.
 
 https://github.com/user-attachments/assets/2ea0e59d-124b-40c0-89fe-9980ae3d0515
 
-*The same domain with positive charge only. This partial recording reaches
-t = 2.63 (1.4 MB video); the full run continues to t = 6.4. Like-signed
-charge rolls up and merges into larger vortices. No limiter is applied: the
-density reaches −1.57 against a maximum of 21.1, and 0.12% of the total
-charge lies in negative regions, which are drawn in pink. The energy drifts
-by 7.2e-7.*
+*The same domain with positive charge only, from t = 0 to 6.4 (6.1 MB video,
+21 s of playback). Like-signed charge rolls up and merges into larger
+vortices. No limiter is applied: the density reaches −3.1 against a maximum of
+21.1, and 0.42% of the total charge lies in negative regions, which are drawn
+in pink. The total charge changes by 2.4e-11 and the energy drifts by 2.2e-6.*
 
 The [reproduction guide](docs/getting_started/gpu_showcase.md) gives the
 recording commands, the time-step, mesh, and stabilization checks behind both

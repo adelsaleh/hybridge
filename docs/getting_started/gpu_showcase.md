@@ -66,7 +66,8 @@ forcing the recovery branch: its field differed from the accepted GPU result by
 `8.53e-11` in relative coefficient norm, MKL reported 16 threads with about 16
 cores in use, and field and trace returned as device arrays with a physical
 residual of `4.57e-19` against a `1e-10` target.
-{{POSITIVE_RECOVERY_SENTENCE}}
+In the published positive run the bounded GPU retries always sufficed: it
+recorded no host recovery.
 
 GPU reductions are not bitwise reproducible: repeating a solve changes the
 result by about `1e-13`. Over a long chaotic run such differences grow, so two
@@ -140,17 +141,17 @@ the conservation diagnostics below are the long-time evidence.
 
 | | Signed | Positive |
 |---|---:|---:|
-| Time step | 0.003125 | – |
-| Steps / final time | 5,080 / 15.9 | – |
-| Frames / playback | 1,271 / 53 s | – |
-| Wall time, s per step (with rendering) | 63 min, 0.74 | – |
-| GPU memory in use at finish | 29 GiB | – |
-| Change in total charge | 2.2e-13 | – |
-| Energy drift | 2.9e-4 | – |
-| Enstrophy loss | 29.9% | – |
-| Density range at the end | -17.7 to 13.2 | – |
-| Negative charge (share of total) | – | – |
-| MP4 size | 5.4 MB | – |
+| Time step | 0.003125 | 0.000390625 |
+| Steps / final time | 5,080 / 15.9 | 16,384 / 6.4 |
+| Frames / playback | 1,271 / 53 s | 1,025 / 21 s |
+| Wall time, s per step (with rendering) | 63 min, 0.74 | 141 min, 0.52 |
+| GPU memory in use at finish | 29 GiB | 29 GiB |
+| Change in total charge | 2.2e-13 | 2.4e-11 |
+| Energy drift | 2.9e-4 | 2.2e-6 |
+| Enstrophy loss | 29.9% | 7.3% |
+| Density range at the end | -17.7 to 13.2 | -3.1 to 21.1 |
+| Negative charge (share of total) | – | 0.42% |
+| MP4 size | 5.4 MB | 6.1 MB |
 
 Circulation `∫ρ`, energy `½∫|q_h|²` and enstrophy `½∫ρ²` are computed on the
 device every frame. The signed charge balance is set by the profile, not by
@@ -202,7 +203,7 @@ at a chosen physical time:
 python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/signed_c5_dt003125 \
   --as vortex_gas --poster-time 6
 python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/positive_c5_dt000390625 \
-  --as positive_density --poster-time {{POSITIVE_POSTER_TIME}}
+  --as positive_density --poster-time 6
 ```
 
 The published JSON files keep the run settings, diagnostics, provenance and
