@@ -365,13 +365,20 @@ def test_heavy_h1_disk_preset_and_response_file(monkeypatch, capsys):
     assert 'h1-bdf3' in text and '1000' in text and '0.008' in text
 
 
-def test_residual_rejects_rank_deficient_inflow_before_finite_garbage_is_accepted():
-    """A p=6 trace supported at four nodes must fail even if LU returns finite values."""
+def test_residual_handles_converging_face_by_default_and_rejects_it_under_plain_upwind():
+    """A p=6 face whose sides both flow out over part of it.
+
+    The default conflict-averaged upwind gives it a full trace constraint; plain
+    upwind supports the trace at four nodes only and must fail even if LU would
+    return finite values.
+    """
     s = DGSpace(rectangle_mesh(1, 1), 6, basis_type="dub_orth")
     bx = s.project_callable(lambda x, y: x+.5)
     bx.coeffs[1] = s.constant(-1).coeffs[1]
-    residual = UpwindHDGTransportResidual(s)
     beta = VectorDGField((bx, s.zeros()))
+    for value in UpwindHDGTransportResidual(s).evaluate(s.constant(2), beta):
+        assert np.all(np.isfinite(getattr(value, "coeffs", value)))
+    residual = UpwindHDGTransportResidual(s, advection_stabilization="upwind")
     with pytest.raises(np.linalg.LinAlgError, match="rank-deficient active trace constraint"):
         residual.evaluate(s.constant(2), beta)
 
