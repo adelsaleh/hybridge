@@ -29,11 +29,13 @@ def superlu_gather_indices(perm_r, perm_c):
 
 
 def _check_status(status, operation):
+    """Raise when a cuSPARSE call returns a nonzero status."""
     if status:
         raise RuntimeError(f"{operation} failed with cuSPARSE status {status}")
 
 
 def _triangular_library():
+    """Load cuSPARSE and declare the ctypes signatures of the SpSV/SpSM calls used here."""
     from hdgfem.linalg.gpu.legendre_face_bsr import _load_cusparse
 
     lib = _load_cusparse()
@@ -56,6 +58,10 @@ def _triangular_library():
 
 class _TriangularAnalysis:
     def __init__(self, matrix, rhs, output, *, lower, method, reserve_bytes):
+        """Create the descriptors, buffer and analysis of one triangular solve with SpSV or SpSM.
+
+        The lower factor has a unit diagonal; the upper factor does not.
+        """
         from cupyx import cusparse as descriptors
         from cupy_backends.cuda.libs import cusparse
 
@@ -117,12 +123,14 @@ class _TriangularAnalysis:
             raise
 
     def _set_stream(self):
+        """Bind the cuSPARSE handle to the current CuPy stream through the native API."""
         # CuPy's setStream wrapper rejects capture even though these CUDA
         # triangular solve APIs support it. The installed native ABI does not.
         _check_status(self.lib.cusparseSetStream(self.handle, self.cp.cuda.get_current_stream().ptr),
                       "cuSPARSE set stream")
 
     def execute(self):
+        """Run the analyzed triangular solve into the zeroed output buffer."""
         # SpSM's output must be zero-initialized, including after a previous RHS.
         self.output.fill(0)
         self._set_stream()
@@ -132,6 +140,7 @@ class _TriangularAnalysis:
             _check_status(self.lib.cusparseSpSV_solve(*self.arguments), "SpSV solve")
 
     def close(self):
+        """Destroy the solve and matrix/vector descriptors and drop the work buffer."""
         if self.descr is not None:
             if self.method == "spsm":
                 self.backend.spSM_destroyDescr(self.descr)
@@ -157,6 +166,10 @@ class ReusableCuPyLUSolve:
     """
 
     def __init__(self, lower, upper, perm_r, perm_c, *, method="spsv", graph=False, reserve_bytes=0):
+        """Validate the CSR LU factors and permutations and prepare the cached triangular solves.
+
+        With ``graph=True`` the solve sequence is replayed from a CUDA graph.
+        """
         from cupyx.scipy.sparse import csr_matrix
 
         cp = self.cp = require_cupy()
@@ -219,6 +232,7 @@ class ReusableCuPyLUSolve:
             raise
 
     def _launch(self):
+        """Permute the input, apply the lower and upper solves and permute into the output."""
         cp = self.cp
         cp.take(self.input, self.rows, out=self.permuted)
         if self.method == "cupyx":
@@ -232,6 +246,10 @@ class ReusableCuPyLUSolve:
         cp.take(z, self.columns, out=self.output)
 
     def solve(self, rhs, *, out=None):
+        """Solve for a matching FP64 device RHS.
+
+        Returns ``out`` when given, else the internal buffer that the next solve overwrites.
+        """
         if self.closed:
             raise RuntimeError("LU solver is closed")
         if not isinstance(rhs, self.cp.ndarray) or rhs.shape != self.input.shape or rhs.dtype != self.input.dtype:
@@ -251,6 +269,7 @@ class ReusableCuPyLUSolve:
         return self.output
 
     def close(self):
+        """Synchronize the last stream and release the graph, analyses and work vectors."""
         if not self.closed:
             self._last_stream.synchronize()
             self.graph = None
@@ -263,7 +282,9 @@ class ReusableCuPyLUSolve:
             self.closed = True
 
     def __enter__(self):
+        """Return the solver for use in a ``with`` block."""
         return self
 
     def __exit__(self, *exc):
+        """Close the solver when the ``with`` block exits."""
         self.close()

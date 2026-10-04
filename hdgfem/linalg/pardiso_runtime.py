@@ -63,6 +63,7 @@ class ReusablePardisoSolver:
     """
 
     def __init__(self, *, threads=None):
+        """Start without a factorization; ``threads`` sets the MKL thread count for each call."""
         self.threads = threads
         self._solver = None
         self._rows = self._cols = None

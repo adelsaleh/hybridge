@@ -31,6 +31,7 @@ def _data_pointer(typingctx, array):
     signature = types.CPointer(types.float64)(array)
 
     def codegen(context, builder, sig, args):
+        """Emit the LLVM IR that loads the data pointer of the array argument."""
         return context.make_array(sig.args[0])(context, builder, args[0]).data
 
     return signature, codegen

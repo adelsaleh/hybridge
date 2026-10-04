@@ -26,6 +26,7 @@ def load_operator(path):
         raise ValueError('Invalid operator dimensions')
 
     def read(name, dtype, count):
+        """Read one raw export array, checking its byte size against ``count``."""
         file = Path(f'{base}.{name}.bin')
         dtype = np.dtype(dtype)
         if file.stat().st_size != count * dtype.itemsize:
@@ -74,6 +75,7 @@ def load_operator(path):
 
 
 def level_permutation(matrix, ordering):
+    """Return the identity or reverse Cuthill-McKee ordering of a square level operator."""
     if matrix.shape[0] != matrix.shape[1]:
         raise ValueError('Coarse-level ordering requires a square A')
     if ordering == 'original':
@@ -86,6 +88,7 @@ def level_permutation(matrix, ordering):
 
 
 def _permutation(p, size):
+    """Validate that ``p`` is a permutation of ``range(size)``."""
     p = np.asarray(p)
     if p.shape != (size,) or not np.array_equal(np.sort(p), np.arange(size)):
         raise ValueError('Invalid permutation')
@@ -93,6 +96,7 @@ def _permutation(p, size):
 
 
 def permute_operator(matrix, rows, cols):
+    """Return ``matrix[rows][:, cols]`` as sorted CSR."""
     rows, cols = _permutation(rows, matrix.shape[0]), _permutation(cols, matrix.shape[1])
     out = matrix[rows, :][:, cols].tocsr()
     out.sort_indices()
@@ -134,6 +138,7 @@ def verify_reconstruction(original, candidate, rows, cols):
 
 
 def storage_stats(csr, bsr):
+    """Compare CSR and BSR storage of one operator (entries, blocks, explicit zeros, bytes)."""
     b = bsr.blocksize[0]
     m, n = csr.shape
     br = np.repeat(np.arange(len(bsr.indptr)-1), np.diff(bsr.indptr))
@@ -154,6 +159,7 @@ def storage_stats(csr, bsr):
 
 
 def deterministic_vectors(size):
+    """Return three fixed test vectors: ones, alternating signs and a pseudo-random pattern."""
     i = np.arange(size, dtype=np.int64)
     return (np.ones(size), np.where(i % 2, -1., 1.),
             ((i*17 % 101).astype(np.float64)-50.) / 51.)

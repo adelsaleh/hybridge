@@ -153,6 +153,10 @@ class ScalarPositivityDiagnostics:
     """
 
     def __init__(self, space, *, backend="host", tolerance=1.e-12, chunk_size=8192):
+        """Precompute the Bernstein transform, sampling basis and quadrature tables of ``space``.
+
+        The tables live in the host or device workspace selected by ``backend``.
+        """
         from hdgfem.transport.residual import HDGTraceWorkspace
         from hdgfem.core.basis import evaluate_bernstein_basis
 
@@ -163,6 +167,7 @@ class ScalarPositivityDiagnostics:
         self.xp = xp = self.workspace.xp
         order = space.order
         def lattice(n):
+            """Equispaced order-``n`` lattice points of the reference triangle."""
             return np.array([(-1+2*i/n, -1+2*j/n)
                              for i in range(n+1) for j in range(n+1-i)], dtype=REAL_DTYPE)
         nodes = lattice(max(order, 1))

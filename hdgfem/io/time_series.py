@@ -39,6 +39,10 @@ def numeric_time_series(rows, *, exclude=()):
     do not define numeric histories.
     """
     def flatten(value, prefix=""):
+        """Yield ``(dotted name, value)`` for every numeric leaf of a nested record.
+
+        Booleans and excluded top-level keys are skipped.
+        """
         for key, item in value.items():
             name = f"{prefix}.{key}" if prefix else str(key)
             if not prefix and key in {*exclude, "time", "step"}:
@@ -62,6 +66,7 @@ def numeric_time_series(rows, *, exclude=()):
 
 
 def _figure(rows=3, columns=2, *, display=False):
+    """Create a white figure with a grid of axes, on screen with pyplot or off screen with Agg."""
     if display:
         from matplotlib import pyplot as plt
 
@@ -77,6 +82,7 @@ def _figure(rows=3, columns=2, *, display=False):
 
 
 def _style_axis(axis, title, ylabel):
+    """Apply the shared title, labels, grid and tick style to a time-series axis."""
     axis.set_title(title if "$" in title else textwrap.fill(title, 62), fontsize=10.5, fontweight="bold", loc="left")
     axis.set_xlabel(r"Time $t$", fontsize=10)
     axis.set_ylabel(ylabel, fontsize=10)

@@ -13,6 +13,7 @@ import numpy as np
 
 
 def _point_loop(function, parameters, x, y, out):
+    """Evaluate ``function`` at every element/quadrature point, in parallel over elements."""
     for element in prange(x.shape[0]):
         for q in range(x.shape[1]):
             values = function(x[element, q], y[element, q], parameters)
@@ -40,6 +41,7 @@ class CoefficientSampler:
     def __init__(self, *, backend="auto", device=0, chunk_points=131072,
                  memory_fraction=0.5, reserve_bytes=512*1024**2,
                  scratch_arrays=256):
+        """Validate the backend and batching limits; CuPy is probed lazily on first use."""
         if backend not in {"auto", "cupy", "numba", "numpy"}:
             raise ValueError("sampling backend must be auto, cupy, numba or numpy")
         if int(chunk_points) != chunk_points or chunk_points < 1:
@@ -59,6 +61,10 @@ class CoefficientSampler:
                           device_to_host_ms=0.0, sampled_points=0)
 
     def _gpu(self):
+        """Return CuPy when a usable device exists, else None.
+
+        The fallback reason is recorded in ``stats``; forced ``cupy`` mode raises instead.
+        """
         if self._gpu_checked:
             return self._cp
         self._gpu_checked = True
@@ -82,6 +88,7 @@ class CoefficientSampler:
         return cp
 
     def _cpu(self, function, parameters, x, y, out):
+        """Evaluate one host batch with NumPy, or with the compiled Numba point loop."""
         if self.backend == "numpy":
             start = perf_counter()
             values = function(x, y, parameters)
@@ -115,6 +122,10 @@ class CoefficientSampler:
         self.stats["cpu_batches"] += 1
 
     def _gpu_batch(self, cp, function, parameters, x, y, out):
+        """Evaluate one batch on the device and copy each component into ``out``.
+
+        Transfer and evaluation times are added to ``stats``.
+        """
         # Failed-batch arrays die when this frame unwinds, before OOM retry.
         sync = cp.cuda.get_current_stream().synchronize
         start = perf_counter()

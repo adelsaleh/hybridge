@@ -222,6 +222,7 @@ class CupyDGSpace:
         sync = cupy.cuda.get_current_stream().synchronize if timings is not None else None
 
         def section(key):
+            """Time one stage into ``timings``, or do nothing when timings are off."""
             return (nullcontext() if timings is None else
                     timed_section(None, 2, key, timings=timings, synchronize=sync))
 

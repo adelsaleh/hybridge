@@ -156,6 +156,7 @@ def _validate_amgx_block_configuration(config, block_dim: int) -> None:
         return
 
     def check(node, path: str) -> None:
+        """Reject ``CHEBYSHEV_POLY`` in a solver, preconditioner or smoother for block matrices."""
         solver_name = node.get("solver") if isinstance(node, dict) else node
         if isinstance(solver_name, str) and solver_name.upper() == "CHEBYSHEV_POLY":
             raise ValueError(
@@ -1083,6 +1084,7 @@ def solve_reduced_system_amgx_device(
                 }
 
     def attach_seed_metrics(result) -> None:
+        """Copy the retry seed's physical residual metrics onto ``result`` when both exist."""
         if result is None or seed_metrics is None:
             return
         result.amgx_retry_seed_label = seed_metrics["label"]
@@ -1356,6 +1358,7 @@ def solve_reduced_system_amgx_device(
     snapshot_writer = failure_snapshot or save_system_snapshot
 
     def save_failure_snapshot(path):
+        """Write a failure snapshot of this assembly with its initial guess and best solution."""
         return snapshot_writer(
             path, assembly, initial_guess=initial_guess, best_solution=best_solution,
         )

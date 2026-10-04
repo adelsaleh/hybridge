@@ -21,6 +21,7 @@ import threading
 
 
 def _receive(sock, size):
+    """Read exactly ``size`` bytes from ``sock``; raise EOFError if it closes first."""
     data = bytearray()
     while len(data) < size:
         part = sock.recv(size - len(data))
@@ -31,6 +32,7 @@ def _receive(sock, size):
 
 
 def _request(sock, byte_order):
+    """Read one complete X11 request, hiding an ``NV-GLX`` extension query from the client."""
     request = _receive(sock, 4)
     units = struct.unpack_from(byte_order + "H", request, 2)[0]
     offset = 4
@@ -51,6 +53,7 @@ def _request(sock, byte_order):
 
 
 def _shutdown(sock):
+    """Shut down both directions of ``sock``, ignoring an already closed socket."""
     try:
         sock.shutdown(socket.SHUT_RDWR)
     except OSError:
@@ -59,6 +62,7 @@ def _shutdown(sock):
 
 class _Handler(socketserver.BaseRequestHandler):
     def handle(self):
+        """Forward one client connection to the upstream X server, filtering its requests."""
         try:
             upstream = socket.create_connection(self.server.upstream, timeout=5)
         except OSError:
@@ -67,6 +71,7 @@ class _Handler(socketserver.BaseRequestHandler):
             upstream.settimeout(None)
 
             def replies():
+                """Relay server replies to the client until either side closes."""
                 try:
                     while data := upstream.recv(65536):
                         self.request.sendall(data)
@@ -97,6 +102,7 @@ class _Server(socketserver.ThreadingTCPServer):
 
 
 def _check_display(env):
+    """Require ``xdpyinfo`` and a reachable ``DISPLAY`` in ``env``."""
     try:
         check = subprocess.run(["xdpyinfo"], env=env, capture_output=True, timeout=10)
     except FileNotFoundError as exc:
@@ -150,6 +156,7 @@ def display_environment():
 
 
 def main(argv=None):
+    """Run the command through the filtering X11 proxy and return its exit status."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)

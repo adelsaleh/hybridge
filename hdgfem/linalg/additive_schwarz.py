@@ -512,6 +512,10 @@ def _bsr_patch_positions(
 def _gather_bsr_patch_matrices(
     matrix: bsr_matrix, faces: np.ndarray, positions: np.ndarray
 ) -> FaceAdditiveSchwarzLocalMatrices:
+    """Gather each patch's dense local matrix from the BSR blocks at ``positions``.
+
+    Absent faces get identity diagonal blocks.
+    """
     block_size = matrix.blocksize[0]
     width = faces.shape[1]
     local_size = width * block_size
@@ -544,6 +548,7 @@ def _assemble_bsr_patch_correction(
     indices: np.ndarray,
     indptr: np.ndarray,
 ) -> bsr_matrix:
+    """Sum the patch inverses into the BSR additive Schwarz correction operator."""
     block_size = matrix.blocksize[0]
     if local.block_size != block_size:
         raise ValueError("local block size does not match the matrix")

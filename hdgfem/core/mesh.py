@@ -568,6 +568,7 @@ class DGMesh:
         mapped = np.empty((self.num_tri, points.shape[0], 2), dtype=REAL_DTYPE)
 
         def map_chunk(start, stop):
+            """Map the reference points to physical coordinates for elements ``start:stop``."""
             matrices, vectors = self.aff_mats[start:stop], self.aff_vecs[start:stop]
             for row in range(2):
                 out = mapped[start:stop, :, row]
@@ -1067,6 +1068,7 @@ def gmsh_geo_mesh(mesh_size: float, *, path, **kwargs) -> DGMesh:
     content = path.read_bytes()
 
     def build(gmsh):
+        """Load the geometry into Gmsh with a uniform linear mesh size and its physical labels."""
         gmsh.merge(str(path))
         gmsh.model.geo.synchronize()
         gmsh.model.occ.synchronize()
