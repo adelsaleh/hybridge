@@ -23,6 +23,7 @@ from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.solvers.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
+    resolve_raw_local_assembly,
     validate_advection_backend_configuration,
 )
 from hdgfem.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
@@ -168,8 +169,8 @@ class AdvectionReactionHDGOptions:
     matrix_pattern_only: bool = False
     assembly_backend: AssemblyBackend = "numpy"
     trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange"
-    raw_local_assembly: Literal["precomputed", "fused", "split3"] = "precomputed"
-    raw_lu_mode: Literal["safe", "coop"] = "safe"
+    raw_local_assembly: Literal["precomputed", "fused", "split3", "auto"] = "precomputed"
+    raw_lu_mode: Literal["safe", "coop"] | None = None  # None: coop for fused/split3
     raw_block_size: RawCudaBlockSize = "auto"
     raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto"
     materialize_host_system: bool = False
@@ -218,6 +219,19 @@ def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> Ve
         f"assembly_backend='{backend}' requires beta to be a VectorDGField; "
         "wrap coefficient data with (space * space).field(...)."
     )
+
+
+def _with_implied_options(options: AdvectionReactionHDGOptions, explicit) -> AdvectionReactionHDGOptions:
+    """Zero-flux raw-CUDA assembly runs only in the fused or split3 kernels; imply auto.
+
+    ``"auto"`` resolves per order (split3 from p=8 on when BSR output allows,
+    fused otherwise). An explicitly passed ``raw_local_assembly`` is kept and
+    still validated.
+    """
+    if ("raw_local_assembly" not in explicit and options.boundary_mode == "zero-flux"
+            and normalize_assembly_backend(options.assembly_backend) == "raw-cuda"):
+        return options.with_overrides(raw_local_assembly="auto")
+    return options
 
 
 class AdvectionReactionHDGSolver:
@@ -280,6 +294,12 @@ class AdvectionReactionHDGSolver:
     that already projects coefficients into DG fields before solving.  It keeps
     performance-oriented drivers explicit without adding a separate coefficient
     ownership model.
+
+    Without an ``options`` object, raw-CUDA assembly with
+    ``boundary_mode="zero-flux"`` implies ``raw_local_assembly="auto"`` (split3
+    from p=8 on when face-BSR output allows, fused otherwise) unless another
+    kernel is passed. Solves warm-start from the previous
+    trace when no ``initial_guess`` is given.
     """
 
     def __init__(
@@ -296,6 +316,8 @@ class AdvectionReactionHDGSolver:
         """Initialize a reusable advection-reaction solver for one DG space."""
         self.space = space
         self.options = (options or AdvectionReactionHDGOptions()).with_overrides(**option_overrides)
+        if options is None:
+            self.options = _with_implied_options(self.options, option_overrides.keys())
 
         self.source = None
         self.beta = None
@@ -618,9 +640,13 @@ class AdvectionReactionHDGSolver:
             raise ValueError(
                 "tangent-boundary BSR assembly requires boundary_mode='zero-flux'"
             )
-        if options.raw_local_assembly not in {"fused", "split3"}:
+        local_assembly = resolve_raw_local_assembly(
+            options.raw_local_assembly, order=self.space.order, bsr_output=True,
+            raw_lu_mode=options.raw_lu_mode,
+        )
+        if local_assembly not in {"fused", "split3"}:
             raise ValueError(
-                "tangent-boundary BSR assembly requires raw_local_assembly='fused' or 'split3'"
+                "tangent-boundary BSR assembly requires raw_local_assembly='fused', 'split3', or 'auto'"
             )
         from hdgfem.core.device import as_cupy_trace_space
         from hdgfem.transport.cuda import assemble_reduced_system_cuda
@@ -637,7 +663,7 @@ class AdvectionReactionHDGSolver:
         beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
         block_size = (
             options.raw_block_size
-            if options.raw_local_assembly == "split3"
+            if local_assembly == "split3"
             else resolve_raw_cuda_block_size(
                 options.raw_block_size,
                 equation="advection-reaction",
@@ -653,7 +679,7 @@ class AdvectionReactionHDGSolver:
             trace_ref,
             backend="raw-cuda",
             raw_block_size=block_size,
-            raw_local_assembly=options.raw_local_assembly,
+            raw_local_assembly=local_assembly,
             raw_lu_mode=options.raw_lu_mode,
             raw_matrix_format="bsr",
             zero_boundary_flux=True,
@@ -820,8 +846,8 @@ def solve_advection_reaction_hdg(
         matrix_pattern_only: bool = False,
         assembly_backend: AssemblyBackend = "numpy",
         trace_basis: Literal["legacy-lagrange", "legendre-modal", "bernstein"] = "legacy-lagrange",
-        raw_local_assembly: Literal["precomputed", "fused", "split3"] = "precomputed",
-        raw_lu_mode: Literal["safe", "coop"] = "safe",
+        raw_local_assembly: Literal["precomputed", "fused", "split3", "auto"] = "precomputed",
+        raw_lu_mode: Literal["safe", "coop"] | None = None,
         raw_block_size: RawCudaBlockSize = "auto",
         raw_matrix_format: Literal["auto", "coo", "csr", "bsr"] = "auto",
         materialize_host_system: bool = False,
@@ -1015,6 +1041,20 @@ def solve_advection_reaction_hdg(
         )
     advection_stabilization = hdg_stabilization.resolve_transport_stabilization(
         advection_stabilization, beta)
+    if effective_backend == "raw-cuda":
+        raw_local_assembly = resolve_raw_local_assembly(
+            raw_local_assembly,
+            order=space.order,
+            bsr_output=(
+                ("" if solver is None else str(solver).lower()) in {"amgx", "pyamgx"}
+                and not requires_host_system
+                and matrix_pattern_dir is None
+                and not matrix_pattern_only
+                and str(raw_matrix_format).lower() in {"auto", "bsr"}
+            ),
+            raw_lu_mode=raw_lu_mode,
+            cache_operator=bool(cache_operator),
+        )
     operation = "assemble" if matrix_pattern_only else "solve"
     validate_advection_backend_configuration(
         operation=operation,

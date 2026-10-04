@@ -452,6 +452,51 @@ def _unsupported(
     )
 
 
+# Lowest order at which raw_local_assembly="auto" selects TSLE-BSR (split3).
+# On an RTX PRO 5000 Blackwell (117k-triangle star mesh, zero-flux transport,
+# bit-identical matrices) split3 was 24% faster than fused at p=8 and 44% at
+# p=9, and within 4% of it for p=4--7. Machine-specific: this is an
+# FP64-limited GPU, and in FP32 fused beats split3 at every order, so recheck
+# on FP64-capable GPUs against
+# docs/research/solver_studies/advection_assembly_baseline_2026_10_03.md.
+RAW_SPLIT3_MIN_ORDER = 8
+
+
+def resolve_raw_local_assembly(
+        raw_local_assembly: str,
+        *,
+        order: int,
+        bsr_output: bool,
+        raw_lu_mode: str | None = None,
+        cache_operator: bool = False,
+) -> str:
+    """Resolve ``raw_local_assembly="auto"`` for one raw-CUDA advection assembly.
+
+    ``"auto"`` selects ``"split3"`` from :data:`RAW_SPLIT3_MIN_ORDER` on when
+    its requirements hold (face-BSR output, cooperative LU, no operator
+    cache), and ``"fused"`` otherwise. Explicit values pass through.
+    """
+    if raw_local_assembly != "auto":
+        return raw_local_assembly
+    if (int(order) >= RAW_SPLIT3_MIN_ORDER and bsr_output
+            and raw_lu_mode in {None, "coop"} and not cache_operator):
+        return "split3"
+    return "fused"
+
+
+def resolve_raw_lu_mode(raw_lu_mode: str | None, raw_local_assembly: str) -> str:
+    """Resolve the default raw-CUDA advection LU policy for one local-assembly path.
+
+    ``None`` selects the cooperative LU wherever the kernel offers a choice
+    (``fused``, ``split3``, and ``auto``, which resolves to one of them); the
+    ``precomputed`` path keeps its fixed factorization, reported as ``"safe"``.
+    Explicit values pass through for validation.
+    """
+    if raw_lu_mode is None:
+        return "coop" if raw_local_assembly in {"fused", "split3", "auto"} else "safe"
+    return raw_lu_mode
+
+
 def validate_advection_backend_configuration(
     *,
     operation: Operation,
@@ -463,7 +508,7 @@ def validate_advection_backend_configuration(
     trace_ordering: str,
     materialize_host_solution: bool,
     raw_local_assembly: str,
-    raw_lu_mode: str,
+    raw_lu_mode: str | None,
     raw_matrix_format: str,
     requires_host_system: bool,
     advection_stabilization_is_default: bool,
@@ -509,8 +554,9 @@ def validate_advection_backend_configuration(
             raise ValueError(
                 "raw_local_assembly must be 'precomputed', 'fused', or 'split3'"
             )
-        if raw_lu_mode not in {"safe", "coop"}:
-            raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
+        if raw_lu_mode not in {None, "safe", "coop"}:
+            raise ValueError("raw_lu_mode must be None, 'safe', or 'coop'")
+        raw_lu_mode = resolve_raw_lu_mode(raw_lu_mode, raw_local_assembly)
         if raw_lu_mode == "coop" and raw_local_assembly not in {"fused", "split3"}:
             _unsupported(
                 "advection-reaction",

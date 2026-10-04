@@ -30,6 +30,7 @@ from hdgfem.transport.raw_cuda import (
     reconstruct_projected_advection_field_raw_cuda_fused,
     reconstruct_projected_advection_field_from_response_raw_cuda,
 )
+from hdgfem.solvers.capabilities import resolve_raw_lu_mode
 from hdgfem.transport.tsle_bsr import (
     RawAdvectionTsleWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,
@@ -526,7 +527,7 @@ def assemble_reduced_system_cuda(
     beta_dot_normal=None,
     raw_block_size: RawCudaBlockSize = "auto",
     raw_local_assembly: RawLocalAssembly = "precomputed",
-    raw_lu_mode: RawLuMode = "safe",
+    raw_lu_mode: RawLuMode | None = None,
     raw_matrix_format: str = "coo",
     zero_boundary_flux: bool = False,
     raw_response_workspace=None,
@@ -559,8 +560,9 @@ def assemble_reduced_system_cuda(
         reaction = _require_raw_dg_field(reaction, cspace, "reaction")
         if raw_local_assembly not in {"precomputed", "fused", "split3"}:
             raise ValueError("raw_local_assembly must be 'precomputed', 'fused', or 'split3'")
-        if raw_lu_mode not in {"safe", "coop"}:
-            raise ValueError("raw_lu_mode must be 'safe' or 'coop'")
+        if raw_lu_mode not in {None, "safe", "coop"}:
+            raise ValueError("raw_lu_mode must be None, 'safe', or 'coop'")
+        raw_lu_mode = resolve_raw_lu_mode(raw_lu_mode, raw_local_assembly)
         zero_boundary_flux = bool(zero_boundary_flux)
         eliminated_local_assembly = raw_local_assembly in {"fused", "split3"}
         if zero_boundary_flux and not eliminated_local_assembly:
@@ -859,7 +861,7 @@ def assemble_reduced_system(
     backend: str = "cupy",
     raw_block_size: RawCudaBlockSize = "auto",
     raw_local_assembly: str = "precomputed",
-    raw_lu_mode: str = "safe",
+    raw_lu_mode: str | None = None,
     raw_matrix_format: str = "coo",
     zero_boundary_flux: bool = False,
 ):

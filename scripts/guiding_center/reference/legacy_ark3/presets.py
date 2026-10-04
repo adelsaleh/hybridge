@@ -90,7 +90,7 @@ class GuidingCenterRunPreset:
     transport_trace_ordering_flux_tolerance: float = 0.0
     transport_ilu_permc_spec: str | None = None
     transport_raw_local_assembly: str = "precomputed"
-    transport_raw_lu_mode: str = "safe"
+    transport_raw_lu_mode: str | None = None  # None: solver default (coop for fused/split3)
     transport_raw_block_size: int | str = "auto"
     transport_raw_matrix_format: str = "auto"
     transport_materialize_host_system: bool = False

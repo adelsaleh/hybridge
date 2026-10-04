@@ -626,9 +626,10 @@ supports `p <= 8` under fused mode with `legacy-lagrange` and `legendre-modal`
 trace bases.  Default behavior is:
 
 ```text
---raw-lu-mode safe       stable baseline
---raw-lu-mode coop       optional cooperative LU stage
+--raw-lu-mode coop       cooperative LU (default for fused/split3)
+--raw-lu-mode safe       historical serial-handoff baseline
 --raw-local-assembly fused
+--raw-local-assembly auto   split3 from p=8 on (face-BSR, device AMGX), fused below
 --raw-matrix-format csr  direct reduced CSR emission when selected
 ```
 

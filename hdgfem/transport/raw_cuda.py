@@ -20,12 +20,13 @@ CuPy and fuses only the local solve/COO emission.  The fused-local path mirrors
 builds the element-local operator/RHS in shared memory, solves it, and emits the
 reduced trace matrix without ever materializing dense local tensors globally.
 
-The fused path also exposes two LU policies.  ``lu_mode="safe"`` is the
-default and keeps the historical, validated factorization ordering.  The
-experimental ``lu_mode="coop"`` path uses a shared-memory pivot reduction and
-parallel multiplier/trailing-update work while deliberately keeping row swaps on
-thread 0; earlier fully parallel row-swap variants reproduced illegal-address
-failures in the fused kernel.  The fused kernels are validated for legacy-lagrange and legendre-modal
+The fused path also exposes two LU policies.  ``lu_mode="coop"`` is the
+default: it uses a shared-memory pivot reduction and parallel
+multiplier/trailing-update work while deliberately keeping row swaps on thread
+0; earlier fully parallel row-swap variants reproduced illegal-address failures
+in the fused kernel.  ``lu_mode="safe"`` keeps the historical factorization
+ordering as a baseline; both select the same pivots, and coop measured 24--36%
+faster for p=4--9 on an FP64-limited Blackwell GPU.  The fused kernels are validated for legacy-lagrange and legendre-modal
 trace bases through p <= 7, with p=8--9 available for explicit experimental
 qualification, while the precomputed raw path keeps its original p <= 6 guard.
 """
@@ -2066,7 +2067,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         use_sparse_advection: bool,
         mass_is_diagonal: bool,
         block_size: RawCudaBlockSize = "auto",
-        lu_mode: str = 'safe',
+        lu_mode: str = 'coop',
         matrix_format: str = 'coo',
         zero_boundary_flux: bool = False,
         advection_stabilization=None,
@@ -2461,7 +2462,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         use_sparse_advection: bool,
         mass_is_diagonal: bool,
         block_size: RawCudaBlockSize = "auto",
-        lu_mode: str = 'safe',
+        lu_mode: str = 'coop',
         zero_boundary_flux: bool = False,
         advection_stabilization=None,
 ):

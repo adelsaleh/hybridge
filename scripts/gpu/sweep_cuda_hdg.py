@@ -275,7 +275,7 @@ def validate_runner_options(args: argparse.Namespace) -> None:
         raise SystemExit("diffusion runner does not support --trace-ordering")
     if args.raw_local_assembly != "precomputed":
         raise SystemExit("diffusion runner does not support --raw-local-assembly")
-    if args.raw_lu_mode != "safe":
+    if args.raw_lu_mode is not None:
         raise SystemExit("diffusion runner does not support --raw-lu-mode")
 
 
@@ -395,7 +395,8 @@ def run_case(case: SweepCase, args: argparse.Namespace, env: dict[str, str]) -> 
         if args.check_rtol is not None:
             cmd.extend(["--check-rtol", str(args.check_rtol)])
         cmd.extend(["--raw-local-assembly", args.raw_local_assembly])
-        cmd.extend(["--raw-lu-mode", args.raw_lu_mode])
+        if args.raw_lu_mode is not None:
+            cmd.extend(["--raw-lu-mode", args.raw_lu_mode])
         if args.trace_ordering != "none":
             cmd.extend(["--trace-ordering", args.trace_ordering])
     if args.amgx_tolerance is not None:
@@ -577,7 +578,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--amgx-maxiter", type=int, default=None, help="override runner AMGX max iterations")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="raw-cuda")
     parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3"), default="precomputed")
-    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
+    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default=None,
+                        help="advection local LU policy; default coop for fused/split3")
     parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
     parser.add_argument(
         "--raw-block-size",

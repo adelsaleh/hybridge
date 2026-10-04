@@ -63,9 +63,10 @@ path is instead HDGFEM's native [`FB-HP-MG-PCG`](face_hp_mg_pcg.md).
 
 The fused cooperative path builds local matrices from projected coefficients,
 performs local factorization and solves, eliminates known boundary columns, and
-emits the reduced operator. The `precomputed` local-assembly path and serial
-`safe` LU mode remain compatibility and debugging references while the
-cooperative path is qualified.
+emits the reduced operator. The default `raw_lu_mode=None` selects the
+cooperative LU (`coop`) for fused and split3 assembly. The `precomputed`
+local-assembly path and the explicit `safe` LU mode remain compatibility and
+debugging references until they are retired (see `TODO.md`).
 
 The explicit `raw_local_assembly="split3"` selector chooses TSLE-BSR, which
 separates build, cooperative LU/solve, and Schur/BSR scatter so each stage can

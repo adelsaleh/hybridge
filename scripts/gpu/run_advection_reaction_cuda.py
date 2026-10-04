@@ -19,6 +19,7 @@ if __package__ in {None, ""}:
 
 from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
 from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
+from hdgfem.solvers.capabilities import resolve_raw_lu_mode
 from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
 from hdgfem.core.space import DGSpace, VectorDGField
 from hdgfem.core.field_ops import solution_field
@@ -68,8 +69,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--error-volume-quad-1d", type=int, default=None)
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="raw-cuda")
-    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3"), default="precomputed")
-    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
+    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3", "auto"), default="precomputed",
+                        help="auto selects split3 from p=8 on when face-BSR output allows, fused otherwise")
+    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default=None,
+                        help="local LU policy; default coop for fused/split3")
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"), default="auto")
     parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
     parser.add_argument("--plot", action="store_true", help="show numerical/exact/error plots after the summary")
@@ -205,7 +208,7 @@ def _print_timing_rows(title: str, rows: list[tuple[str, float]], denominator: f
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    if args.assembly_backend == "raw-cuda" and args.raw_local_assembly != "split3":
+    if args.assembly_backend == "raw-cuda" and args.raw_local_assembly in {"precomputed", "fused"}:
         args.raw_block_size = resolve_raw_cuda_block_size(
             args.raw_block_size,
             equation="advection-reaction",
@@ -351,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         effective_matrix_format = (
             "bsr"
             if args.assembly_backend == "raw-cuda"
-            and args.raw_local_assembly in {"fused", "split3"}
+            and args.raw_local_assembly in {"fused", "split3", "auto"}
             and direct_device_amgx
             and not args.materialize_host_system
             else "coo"
@@ -416,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         ("backend", args.assembly_backend, "s"),
         ("global solver", args.solver, "s"),
         ("raw local", args.raw_local_assembly, "s"),
-        ("raw LU", args.raw_lu_mode, "s"),
+        ("raw LU", resolve_raw_lu_mode(args.raw_lu_mode, args.raw_local_assembly), "s"),
         ("raw block", str(args.raw_block_size), "s"),
         ("matrix", effective_matrix_format, "s"),
         ("host system", "yes" if result.solve_rhs is not None else "no", "s"),

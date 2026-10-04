@@ -99,7 +99,8 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
     parser.add_argument("--transport-trace-ordering", choices=("none", "upwind-scc"), default=None)
     parser.add_argument("--transport-trace-ordering-flux-tolerance", type=float, default=None)
     parser.add_argument("--transport-ilu-permc-spec", choices=("NATURAL", "MMD_ATA", "MMD_AT_PLUS_A", "COLAMD"), default=None)
-    parser.add_argument("--transport-raw-local-assembly", choices=("precomputed", "fused", "split3"), default=None)
+    parser.add_argument("--transport-raw-local-assembly", choices=("precomputed", "fused", "split3", "auto"), default=None,
+                        help="raw-CUDA local assembly; auto selects split3 from p=8 on, fused otherwise")
     parser.add_argument("--transport-raw-lu-mode", choices=("safe", "coop"), default=None)
     parser.add_argument("--transport-raw-block-size", choices=("auto", "1", "32", "64", "128"), default=None)
     parser.add_argument("--transport-raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default=None)

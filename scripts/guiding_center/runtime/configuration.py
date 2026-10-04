@@ -124,7 +124,7 @@ def _backend_profile_updates(profile: str) -> dict[str, Any]:
             "transport_solver_atol": _AMGX_DEFAULT_ATOL,
             "transport_scale_system": True,
             "transport_trace_basis": "legacy-lagrange",
-            "transport_raw_local_assembly": "fused",
+            "transport_raw_local_assembly": "auto",
             "transport_raw_matrix_format": "bsr",
             "transport_initial_guess": "initial-density-trace",
             "transport_materialize_host_solution": False,
@@ -479,8 +479,8 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
     if config.time_scheme == "imex-ark3":
         if config.transport_assembly_backend not in {"numpy", "raw-cuda"}:
             raise ValueError("IMEX-ARK3 operator reuse currently requires numpy or raw-cuda transport")
-        if config.transport_assembly_backend == "raw-cuda" and config.transport_raw_local_assembly != "fused":
-            raise ValueError("IMEX-ARK3 raw-cuda transport requires fused local assembly")
+        if config.transport_assembly_backend == "raw-cuda" and config.transport_raw_local_assembly not in {"fused", "auto"}:
+            raise ValueError("IMEX-ARK3 raw-cuda transport requires fused (or auto, which resolves to fused) local assembly")
         if config.transport_trace_ordering != "none" or config.transport_reuse_first_preconditioner:
             raise ValueError("IMEX-ARK3 manages per-step operator reuse; use no trace ordering or first-preconditioner override")
     if config.poisson_true_residual_every < 0:

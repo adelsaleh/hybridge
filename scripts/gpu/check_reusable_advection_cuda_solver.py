@@ -212,8 +212,9 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--solver", choices=("cupyx", "amgx", "both"), default="amgx")
     parser.add_argument("--assembly-backend", choices=("cupy", "raw-cuda"), default="cupy")
     parser.add_argument("--trace-basis", choices=("legacy-lagrange", "legendre-modal", "bernstein"), default="legacy-lagrange")
-    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3"), default="fused")
-    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default="safe")
+    parser.add_argument("--raw-local-assembly", choices=("precomputed", "fused", "split3", "auto"), default="fused")
+    parser.add_argument("--raw-lu-mode", choices=("safe", "coop"), default=None,
+                        help="local LU policy; default coop for fused/split3")
     parser.add_argument("--raw-block-size", choices=("auto", "1", "32", "64", "128"), default="auto")
     parser.add_argument("--raw-matrix-format", choices=("auto", "coo", "csr", "bsr"), default="auto")
     parser.add_argument("--case", default=DEFAULT_CASE, help="advection case key from the CUDA runner; test2_legacy_gpu3 aliases to test2 when absent")
