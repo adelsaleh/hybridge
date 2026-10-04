@@ -133,6 +133,19 @@ def test_local_markdown_links_resolve() -> None:
     assert not failures, "broken local Markdown links:\n" + "\n".join(failures)
 
 
+TEMPLATE_PLACEHOLDER = re.compile(r"\{\{[A-Z][A-Z0-9_]*\}\}")
+
+
+def test_documentation_has_no_unfilled_template_placeholders() -> None:
+    """Generated or staged text must be filled in before it is published."""
+    failures = [
+        f"{path.relative_to(ROOT)}: {placeholder}"
+        for path in _documentation_markdown()
+        for placeholder in TEMPLATE_PLACEHOLDER.findall(path.read_text(encoding="utf-8"))
+    ]
+    assert not failures, "unfilled placeholders:\n" + "\n".join(failures)
+
+
 def test_documented_script_and_config_paths_resolve() -> None:
     failures: list[str] = []
     for source in _documentation_markdown():
