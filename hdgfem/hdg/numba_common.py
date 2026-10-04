@@ -12,6 +12,41 @@ try:  # pragma: no cover - availability depends on the runtime environment.
 except ImportError:  # pragma: no cover
     nb = None
 from hdgfem.runtime.optional import njit
+import math
+
+
+def _python_is_finite_real(value):
+    """Whether ``value`` is finite, for interpreted calls (no Numba or JIT disabled)."""
+    return math.isfinite(value)
+
+
+if nb is None or nb.config.DISABLE_JIT:
+    is_finite_real = _python_is_finite_real
+else:
+    from llvmlite import ir as _llvm_ir
+    from numba.extending import intrinsic as _intrinsic
+
+    @_intrinsic
+    def is_finite_real(typingctx, value):
+        """Whether a float32/float64 ``value`` is finite, decided on its exponent bits.
+
+        Integer operations keep this exact when a ``parallel=True,
+        fastmath=True`` caller compiles the calling helper with fast-math
+        flags, under which LLVM may fold float NaN/Inf comparisons away.
+        """
+        if not isinstance(value, nb.types.Float):
+            return None
+        width = value.bitwidth
+        mask = 0x7F800000 if width == 32 else 0x7FF0000000000000
+
+        def codegen(context, builder, signature, args):
+            """Emit ``(bits(value) & exponent_mask) != exponent_mask``."""
+            int_type = _llvm_ir.IntType(width)
+            bits = builder.bitcast(args[0], int_type)
+            exponent = builder.and_(bits, _llvm_ir.Constant(int_type, mask))
+            return builder.icmp_unsigned("!=", exponent, _llvm_ir.Constant(int_type, mask))
+
+        return nb.types.boolean(value), codegen
 
 
 @njit(cache=True, inline="always")
@@ -101,6 +136,8 @@ def cholesky_factor_inplace(matrix, symmetry_rtol=1e-10):
 
     A negative status denotes nonfinite/asymmetric input; a positive status is
     the one-based failed pivot. Status returns permit safe use inside prange.
+    The finiteness test uses :func:`is_finite_real`, so it holds when a
+    fast-math caller compiles this helper.
     Only the lower triangle contains the resulting factor.
     """
     n = matrix.shape[0]
@@ -109,7 +146,7 @@ def cholesky_factor_inplace(matrix, symmetry_rtol=1e-10):
     for i in range(n):
         for j in range(n):
             value = matrix[i, j]
-            if not (-float('inf') < value < float('inf')):
+            if not is_finite_real(value):
                 return -1
             scale = max(scale, abs(value))
             error = max(error, abs(value - matrix[j, i]))
@@ -149,6 +186,7 @@ def cholesky_solve_inplace(factor, rhs):
 
 __all__ = [
     "cholesky_factor_inplace",
+    "is_finite_real",
     "cholesky_solve_inplace",
     "lu_factor_inplace",
     "lu_solve_inplace",
