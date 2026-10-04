@@ -100,7 +100,7 @@ python3 artifacts/poisson_p0_tuning_20260913/summarize.py
 
 Use p=4/5 and fresh output directories for the other orders. The first command is a simulation; the second only reads saved data. A reproduction after adoption uses the current default for the reference trajectory and the explicit old baseline for shadow comparisons; the original executed sources and hashes document the exact recorded run.
 
-Artifacts: [raw measurements, configuration sweeps, Nsight traces, attribution, and verification](../../../artifacts/poisson_p0_tuning_20260913/README.md). The three parameter changes require no AMGX rebuild.
+Artifacts: raw measurements, configuration sweeps, Nsight traces, attribution, and verification (`artifacts/poisson_p0_tuning_20260913/README.md`, local, untracked). The three parameter changes require no AMGX rebuild.
 
 ## Matched Euler vortex-gas comparison: 2026-09-13
 
@@ -221,7 +221,7 @@ An earlier p=6 state-1 qualification attempt (`p6/`) is excluded: the harness or
 
 For context, the native-driven reference trajectory has median linear-step wall times 164.88 / 218.28 / 306.68 ms at p=4/5/6 over states 9–79. Its transport stage medians are 55.92 / 96.04 / 161.06 ms and Poisson stage medians 109.63 / 122.07 / 145.37 ms. Those reference solves have their own warm-start history and are not the matched shadow samples. The benchmark process elapsed times include extra candidate solves and checks and must not be interpreted as production throughput. This short study establishes solver timing and algebraic parity, not long-time turbulence fidelity or temporal convergence.
 
-Artifacts: [`artifacts/poisson_backend_comparison_20260913`](../../../artifacts/poisson_backend_comparison_20260913/README.md), including raw samples, per-order configurations and completion/failure records, console logs, source/library hashes, `summary.json`, `summary.csv`, and an offline coverage/aggregation script. The driver reuses production runner, solver, predictor, basis, field-norm, and compilation-guard helpers:
+Artifacts: `artifacts/poisson_backend_comparison_20260913/` (local, untracked), including raw samples, per-order configurations and completion/failure records, console logs, source/library hashes, `summary.json`, `summary.csv`, and an offline coverage/aggregation script. The driver reuses production runner, solver, predictor, basis, field-norm, and compilation-guard helpers:
 
 ```sh
 CUDA_PATH=/usr/local/cuda-13.0 HDGFEM_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.benchmark_poisson_backends --order 6 --num-steps 100 --mesh-size 0.0068 --dt 0.01 --poisson-tau 1 --output-dir artifacts/poisson_backend_comparison_20260913/p6_new

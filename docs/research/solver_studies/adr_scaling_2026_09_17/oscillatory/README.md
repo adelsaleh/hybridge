@@ -94,20 +94,20 @@ square low-diffusion outcomes were reused; the new ladder adds 188 configuration
 All oscillatory material is now inside the preceding study's directories:
 
 - Documentation and TeX: this directory, with the original artifacts in `initial/`.
-- [Outputs](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/):
+- Outputs (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/`, local, untracked):
   `scaling/square`, `scaling/annulus`, `diagnostics`, `smoother_probe`, `meshes`,
   `initial` (original figures/ZIP) and `initial_runs` (original jobs/caches).
-- [Combined figure directory](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/):
+- Combined figure directory (`run_outputs/solver_studies/adr_scaling_2026_09_17/figures/oscillatory/`, local, untracked):
   mesh and order timing/iteration curves, accuracy curves and preserved geometry plots.
-- [Portable combined ZIP](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/adr_results_bundle.zip):
+- Portable combined ZIP (`run_outputs/solver_studies/adr_scaling_2026_09_17/adr_results_bundle.zip`, local, untracked):
   the full results section, data, selected meshes and source snapshots; large matrix
   caches remain in the local output directory.
 
 Legacy paths are compatibility symlinks. The [artifact migration inventory](migration.json)
-and [raw-output migration inventory](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/raw_migration.json)
+and raw-output migration inventory (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/raw_migration.json`, local, untracked)
 record the move. Raw file bytes and modification times are preserved. Original
 pre-migration documentation/figure bytes are also retained in
-[premerge_artifacts.zip](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/premerge_artifacts.zip);
+`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/premerge_artifacts.zip` (local, untracked);
 only document paths and heading levels were adjusted for incorporation.
 
 ## Reproduce or audit

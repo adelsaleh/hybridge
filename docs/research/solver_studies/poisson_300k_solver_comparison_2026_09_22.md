@@ -109,8 +109,8 @@ capture in `artifacts/full_bsr_convergence_20260914/p6_300k_controls`
 and its cached mesh. A missing kernel cache stops execution rather than
 compiling. The original BSR-vs-CSR assembly benchmark mode is unchanged.
 
-Sources: [full result summary](../../../run_outputs/solver_studies/poisson_300k_p6_20260922/summary.json),
-[arguments](../../../run_outputs/solver_studies/poisson_300k_p6_20260922/arguments.json),
+Sources: full result summary (`run_outputs/solver_studies/poisson_300k_p6_20260922/summary.json`, local, untracked),
+arguments (`run_outputs/solver_studies/poisson_300k_p6_20260922/arguments.json`, local, untracked),
 and each `pilot_*/` / `confirmation_*/` directory's `result.json` and
 `worker.log`. The original matrix-values SHA256 is
 `da78acca27b1aafa729f6a88cc6b635159c4d7229a53021ea49227939b28956d`.

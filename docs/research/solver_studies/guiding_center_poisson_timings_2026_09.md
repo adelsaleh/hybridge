@@ -11,12 +11,12 @@ compilation, simulation, or time integration was run. Solver code and defaults
 were not changed. Proposed speedups remain unmeasured.
 
 The reproducible evidence is in
-[summary.json](../../../artifacts/poisson_timing_investigation_20260913/summary.json)
-and [summary.csv](../../../artifacts/poisson_timing_investigation_20260913/summary.csv).
+`artifacts/poisson_timing_investigation_20260913/summary.json` (local, untracked)
+and `artifacts/poisson_timing_investigation_20260913/summary.csv` (local, untracked).
 JSON includes input paths, byte counts, SHA-256 hashes, distributions,
 startup/retry records, tau groups, and console statistics. Inspected source
 hashes are in
-[source_provenance.json](../../../artifacts/poisson_timing_investigation_20260913/source_provenance.json).
+`artifacts/poisson_timing_investigation_20260913/source_provenance.json` (local, untracked).
 The worktree was already extensively modified; current source hashes do not
 establish the source version that produced older logs.
 
@@ -204,8 +204,8 @@ path requires zero Dirichlet data.
 Nine synthetic small local-block cases for p=1,4,6 and tau=1,1,000,128,000
 verified source-map, adjoint-RHS, and reconstruction identities with relative
 error/residual below 1e-9. See
-[check_local_maps.py](../../../artifacts/poisson_timing_investigation_20260913/check_local_maps.py)
-and [results](../../../artifacts/poisson_timing_investigation_20260913/check_local_maps.json).
+`artifacts/poisson_timing_investigation_20260913/check_local_maps.py` (local, untracked)
+and results (`artifacts/poisson_timing_investigation_20260913/check_local_maps.json`, local, untracked).
 These validate algebra, not actual mesh conditioning, CUDA execution, FP32,
 or speed. Production changes still need those checks.
 

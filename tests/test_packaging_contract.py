@@ -36,12 +36,32 @@ def test_setuptools_discovers_every_hdgfem_subpackage() -> None:
     metadata = _metadata()
     assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["hdgfem*"]
 
+    directories = [
+        path for path in (ROOT / "hdgfem").rglob("*")
+        if path.is_dir() and "__pycache__" not in path.parts
+    ]
+    # Directories with Python modules must be packages so setuptools finds them.
     missing_init = [
-        path
-        for path in (ROOT / "hdgfem").rglob("*")
-        if path.is_dir() and "__pycache__" not in path.parts and not (path / "__init__.py").is_file()
+        path for path in directories
+        if any(path.glob("*.py")) and not (path / "__init__.py").is_file()
     ]
     assert not missing_init
+    # Data-only directories (such as core/geometries) must ship as package data.
+    package_data = metadata["tool"]["setuptools"]["package-data"]
+    undeclared = []
+    for path in directories:
+        if (path / "__init__.py").is_file():
+            continue
+        package = path.parent
+        while not (package / "__init__.py").is_file():
+            package = package.parent
+        owner = ".".join(package.relative_to(ROOT).parts)
+        patterns = package_data.get(owner, [])
+        for data_file in (item for item in path.rglob("*") if item.is_file()):
+            relative = data_file.relative_to(package)
+            if not any(relative.match(pattern) for pattern in patterns):
+                undeclared.append(f"{owner}: {relative.as_posix()}")
+    assert not undeclared
 
 
 def test_install_smoke_is_release_blocking_and_host_fast_locks_its_policy() -> None:

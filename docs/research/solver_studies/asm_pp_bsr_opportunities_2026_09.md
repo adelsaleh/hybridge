@@ -9,7 +9,7 @@ the coarse space remain separate, unvalidated proposals.
 
 ## September 14: completed fully BSR ASM diagnostic
 
-The [recorded comparison](../../../artifacts/asm_bsr_convergence_20260914/README.md)
+The recorded comparison (`artifacts/asm_bsr_convergence_20260914/README.md`, local, untracked)
 replays three captured p=6 guiding-center Poisson systems at each of 157,280
 and 315,425 triangles. Candidates use the same captured matrix, RHS, guess,
 physical acceptance threshold, and external PCGF implementation. ASM replaces
@@ -59,11 +59,11 @@ review and proposals below are retained with that qualification.
 The requested branch is `origin/gpu_gmres_precondit`, local snapshot
 `ea5ad26281f9e988194d9352399ccc4354a6633e`. No fetch or checkout was needed.
 Exact source copies and hashes are in the
-[branch manifest](../../../artifacts/gmres_bsr_inspiration_20260913/branch_manifest.json).
+branch manifest (`artifacts/gmres_bsr_inspiration_20260913/branch_manifest.json`, local, untracked).
 The current worktree was also inspected. Its `cupy_preconditionners.py` and
 `cupy_polynomial.py` have the same syntax trees as that branch after removing
 docstrings; the CUDA source strings and numerical application logic match.
-[Comparison evidence](../../../artifacts/gmres_bsr_inspiration_20260913/review_evidence.json)
+Comparison evidence (`artifacts/gmres_bsr_inspiration_20260913/review_evidence.json`, local, untracked)
 records the current hashes.
 
 The branch's matrix format is fixed-width face-block storage:
@@ -75,11 +75,11 @@ is required by its operator, ASM, or PP application.
 
 Relevant code:
 
-- [Branch face operator](../../../artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_face_dense.py): fixed-width layout, raw and fused operator kernels.
-- [Branch ASM](../../../artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_preconditionners.py): `_FUSED_ASM_KERNEL_SOURCE`, `build_face_additive_schwarz_incidence_slots`, and `CuPyFaceAdditiveSchwarzPreconditioner.apply_into`.
+- Branch face operator (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_face_dense.py`, local, untracked): fixed-width layout, raw and fused operator kernels.
+- Branch ASM (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_preconditionners.py`, local, untracked): `_FUSED_ASM_KERNEL_SOURCE`, `build_face_additive_schwarz_incidence_slots`, and `CuPyFaceAdditiveSchwarzPreconditioner.apply_into`.
 - [Local ASM matrices](../../../hdgfem/linalg/additive_schwarz.py): existing shared CPU formalism and inverse oracle.
-- [Branch PP](../../../artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_polynomial.py): harmonic-Ritz setup, real recurrence, and reusable buffers.
-- [Branch GMRES](../../../artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_gmres.py): left preconditioning, Arnoldi, and true residual recomputation.
+- Branch PP (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_polynomial.py`, local, untracked): harmonic-Ritz setup, real recurrence, and reusable buffers.
+- Branch GMRES (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_gmres.py`, local, untracked): left preconditioning, Arnoldi, and true residual recomputation.
 
 ## ASM and PP, as implemented
 
@@ -214,7 +214,7 @@ Current Chebyshev-2 pre/post smoothing has four block-Jacobi stages per V-cycle:
 one zero-start diagonal action and three full fused stages. The large p=6
 profile measured 4.4166 ms per cycle for these four stages, comprising
 87.297 ms full stages plus 5.452 ms zero-start work over 21 cycles.
-[Recorded timing evidence](../../../artifacts/native_hp_bsr_breakdown_20260913/README.md)
+Recorded timing evidence (`artifacts/native_hp_bsr_breakdown_20260913/README.md`, local, untracked)
 puts the full stages at 56.8% of native GPU time and 43.7% of the complete
 profiled Poisson call. Actual p=0 AMGX kernels are only 8.05% of native GPU time.
 
@@ -321,14 +321,14 @@ setup; it does not accelerate an already cached V-cycle by itself.
 
 ## Evidence produced in this review
 
-The [CPU diagnostic](../../../artifacts/gmres_bsr_inspiration_20260913/check_algebra.py)
+The CPU diagnostic (`artifacts/gmres_bsr_inspiration_20260913/check_algebra.py`, local, untracked)
 uses the existing face topology, global block assembler, boundary elimination,
 ASM builder and polynomial reference. It ran 20 ASM cases on 12- and
 24-triangle connectivity, q=2,3,5,6,7, with all faces active or Dirichlet faces
 eliminated and permuted free-face numbering. Matrices range from 26 to 301
 scalar unknowns. Inputs are synthetic SPD element matrices, not a PDE solve.
 
-[Results](../../../artifacts/gmres_bsr_inspiration_20260913/algebra_checks.json):
+Results (`artifacts/gmres_bsr_inspiration_20260913/algebra_checks.json`, local, untracked):
 
 - The assembled C has exactly A's BSR block pattern in all cases.
 - Largest relative difference from the existing ASM action: `2.7053e-16`.

@@ -24,7 +24,7 @@ suite/system identities to independently confirmed pilot-selected timings.
 Both portable bundles include `pardiso_lu/confirmed_timings.csv` and
 `pardiso_lu/comparisons.csv` for the CPU measurements and matched GPU records.
 
-The [portable bundle](../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/adr_results_bundle.zip)
+The portable bundle (`run_outputs/solver_studies/adr_scaling_2026_09_17/adr_results_bundle.zip`, local, untracked)
 contains the combined section, standalone wrapper, vector figures, measurements,
 validation records, geometric inputs and numerical source snapshots. The original
 oscillatory findings are preserved inside this study, including the 22,825-triangle
@@ -47,9 +47,9 @@ case, which was **not rerun**. Old oscillatory paths are compatibility symlinks.
 - [Focused comparison subsection](comparison/subsections.tex): 50 endpoint and
   144 scaling configurations, with all solver families shown in three figures
   and the largest-system table.
-- [Figures](../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures/):
+- Figures (`run_outputs/solver_studies/adr_scaling_2026_09_17/figures/`, local, untracked):
   PDF, SVG and PNG. Generated PDFs stay outside the documentation tree.
-- [Oscillatory raw outputs](../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/):
+- Oscillatory raw outputs (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/`, local, untracked):
   new scaling jobs, caches, diagnostics, meshes and preserved initial runs.
 
 The two CSV files use milliseconds. `mean`, `minimum` and `maximum` describe hot

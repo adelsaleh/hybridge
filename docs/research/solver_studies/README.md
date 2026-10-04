@@ -89,7 +89,7 @@ reproducibility but do not define current solver defaults or backend support.
 Raw reports and machine-readable outputs remain under [`../../../run_logs/`](../../../run_logs/).
 
 Guiding-center study artifacts are under
-[`run_outputs/guiding_center/convergence/`](../../../run_outputs/guiding_center/convergence/).
+`run_outputs/guiding_center/convergence/` (local, untracked).
 
 - [`diocotron_ark3_2026_09.md`](diocotron_ark3_2026_09.md): smooth-first disk
   instability, radial eigenvalue references, every-stage positivity, invariants,
