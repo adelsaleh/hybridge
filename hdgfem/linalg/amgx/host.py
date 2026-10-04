@@ -56,6 +56,46 @@ def initialize_pyamgx_once():
     return amgx
 
 
+_PYAMGX_DTYPE_SUPPORT: dict[str, bool] = {}
+
+
+def pyamgx_supports_real_dtype(dtype) -> bool:
+    """Whether the loaded PyAMGX binding accepts ``dtype`` arrays in its matching mode.
+
+    The default build of the PyAMGX fork hard-codes float64 arrays, so FP32
+    (``dFFI``) needs the mode-aware binding from
+    ``scripts/dev/build_pyamgx_precision.py``. The probe uploads one tiny
+    vector once per process per dtype. Only the binding's dtype rejection
+    counts as unsupported; any other failure propagates.
+    """
+    dtype = np.dtype(dtype)
+    if dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise ValueError("PyAMGX real arrays are float32 or float64")
+    if dtype.str not in _PYAMGX_DTYPE_SUPPORT:
+        amgx = initialize_pyamgx_once()
+        mode = "dFFI" if dtype == np.dtype(np.float32) else "dDDI"
+        objects = []
+        try:
+            config = amgx.Config().create_from_dict({"config_version": 2, "solver": {"solver": "BICGSTAB"}})
+            objects.append(config)
+            resources = amgx.Resources().create_simple(config)
+            objects.append(resources)
+            vector = amgx.Vector().create(resources, mode=mode)
+            objects.append(vector)
+            try:
+                vector.upload(np.zeros(2, dtype=dtype), block_dim=1)
+                supported = True
+            except ValueError as error:
+                if "dtype" not in str(error):
+                    raise
+                supported = False
+        finally:
+            for item in reversed(objects):
+                item.destroy()
+        _PYAMGX_DTYPE_SUPPORT[dtype.str] = supported
+    return _PYAMGX_DTYPE_SUPPORT[dtype.str]
+
+
 def default_pyamgx_config(*, tolerance: float, maxiter: int | None, verbose: bool | int = 0) -> dict[str, Any]:
     """Return the default AMGX BICGSTAB+AMG configuration."""
     monitor = int(bool(verbose) and int(verbose) >= 3)
