@@ -28,6 +28,7 @@ import numpy as np
 from hdgfem.hdg import condensation as hdg_assembly
 from hdgfem.solvers.capabilities import (
     normalize_assembly_backend,
+    normalize_solver_backend,
     normalize_trace_basis,
     validate_diffusion_backend_configuration,
 )
@@ -466,6 +467,22 @@ def _reduced_result_from_full_trace_system(trace_system, space: DGSpace) -> tupl
     return reduced, reduction
 
 
+def _with_implied_options(options: DiffusionReactionHDGOptions, explicit) -> DiffusionReactionHDGOptions:
+    """Fill options that the selected solver or assembly admits only one value for.
+
+    ``fb-hp-mg-pcg`` runs on legendre-modal traces without system scaling, and
+    raw-CUDA, CuPy and Numba assembly eliminate boundary traces. Explicitly
+    passed values are kept, so an incompatible request still fails validation.
+    """
+    implied = {}
+    if normalize_solver_backend(options.solver) == "fb-hp-mg-pcg":
+        implied.update(trace_basis="legendre-modal", scale_system=False)
+    if normalize_assembly_backend(options.assembly_backend) in {"raw-cuda", "cupy", "numba"}:
+        implied["boundary_mode"] = "eliminate"
+    implied = {key: value for key, value in implied.items() if key not in explicit}
+    return options.with_overrides(**implied) if implied else options
+
+
 class DiffusionReactionHDGSolver:
     r"""Stateful HDG solver/cache for scalar diffusion-reaction problems.
 
@@ -486,6 +503,13 @@ class DiffusionReactionHDGSolver:
     ``cache_device_matrix=True`` and only the RHS/boundary data changes, the
     cached Numba operator path also reuses the Cupyx device CSR matrix across
     solves.
+
+    Given ``source`` and ``boundary_condition`` without ``reaction``, the
+    reaction is zero (pure diffusion, e.g. Poisson). Without an ``options``
+    object, options that the chosen solver or assembly admits only one value
+    for are implied unless passed: ``solver="fb-hp-mg-pcg"`` uses
+    ``trace_basis="legendre-modal"`` and ``scale_system=False``, and raw-CUDA,
+    CuPy or Numba assembly uses ``boundary_mode="eliminate"``.
     """
 
     def __init__(
@@ -501,6 +525,8 @@ class DiffusionReactionHDGSolver:
         """Initialize a reusable diffusion-reaction solver for one DG space."""
         self.space = space
         self.options = (options or DiffusionReactionHDGOptions()).with_overrides(**option_overrides)
+        if options is None:
+            self.options = _with_implied_options(self.options, option_overrides.keys())
 
         self.source = None
         self.reaction = None
@@ -510,6 +536,8 @@ class DiffusionReactionHDGSolver:
 
         self.clear_cache()
 
+        if reaction is _UNSET and source is not _UNSET and boundary_condition is not _UNSET:
+            reaction = space.zeros()
         provided = (
             source is not _UNSET,
             reaction is not _UNSET,
@@ -517,7 +545,8 @@ class DiffusionReactionHDGSolver:
         )
         if any(provided):
             if not all(provided):
-                raise ValueError("source, reaction, and boundary_condition must be provided together")
+                raise ValueError("source and boundary_condition must be provided together, "
+                                 "with an optional reaction")
             self.set_problem(source, reaction, boundary_condition)
 
     @property
@@ -685,6 +714,15 @@ class DiffusionReactionHDGSolver:
     def close(self) -> None:
         """Release persistent device solver state owned by this instance."""
         self.clear_cache()
+
+    def __enter__(self):
+        """Return the solver; :meth:`close` runs when the ``with`` block exits."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Release device state without suppressing a caller exception."""
+        self.close()
+        return False
 
     def __del__(self):
         """Best-effort release of persistent AMGX retry state."""
@@ -1127,15 +1165,16 @@ class DiffusionReactionHDGSolver:
                 "assembly_backend='raw-cuda' requires solver='amgx' or "
                 "solver='fb-hp-mg-pcg' for direct device solves"
             )
+        native_requested = normalized_solver == "fb-hp-mg-pcg"
         matrix_format = str(options.raw_matrix_format).lower()
         if matrix_format == "auto":
-            matrix_format = "bsr"
+            # fb-hp-mg-pcg needs face-BSR; repeated AMGX solves are correct only with CSR.
+            matrix_format = "bsr" if native_requested else "csr"
         if matrix_format not in {"csr", "bsr"}:
             raise ValueError(
                 "assembly_backend='raw-cuda' with DiffusionReactionHDGSolver.solve "
                 "requires raw_matrix_format='auto', 'csr', or 'bsr'"
             )
-        native_requested = normalized_solver == "fb-hp-mg-pcg"
         native_policy = str(options.fb_hp_mg_preconditioner_policy).replace(
             "_", "-"
         ).lower()
@@ -1235,7 +1274,7 @@ class DiffusionReactionHDGSolver:
                 float(options.stabilization),
                 self.space,
                 trace_basis=trace_basis,
-                matrix_format=options.raw_matrix_format,
+                matrix_format=matrix_format,
                 block_size=raw_block_size,
                 trace_ref=trace_ref,
                 cache_local_factors=cache_local_factors,

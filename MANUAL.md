@@ -700,7 +700,12 @@ evaluates both operands on the receiving space quadrature. Same-mesh fields may
 have different polynomial orders or bases. `solution_field` and
 `solution_trace` preserve device-backed results when available, so unsteady
 applications can feed solver outputs into the next solve without recreating the
-old runner-specific extraction helpers. Scalar error reports, field
+old runner-specific extraction helpers. Every solve result also exposes the
+solution directly as `result.field`; after a device-resident solve it is a lazy
+device-backed field that downloads only when host coefficients are read.
+Results own their arrays, so a later solve never overwrites an earlier result.
+Reusable solvers warm-start from their previous trace when no `initial_guess`
+is passed, and work as context managers that call `close()` on exit. Scalar error reports, field
 combinations, trace projections, drift metrics, solver summaries, AMGX config
 loading, and plotting comparisons follow the same ownership rule: reusable
 numerics live under `hdgfem`; scripts select cases and present results.

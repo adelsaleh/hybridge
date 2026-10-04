@@ -402,6 +402,9 @@ def transport_velocity_diagnostics(
     Boundary normal flux and interior jumps use the actual polygonal mesh
     normals. Jumps sum the two outward normal traces at aligned quadrature
     points. Divergence is the physical, elementwise polynomial derivative.
+    Double-outflow (both outward traces nonnegative, positive sum) and
+    double-inflow fractions classify aligned interior nodes exactly as
+    conflict-averaged upwinding does, by face measure and by face count.
     Maxima are sampled, not rigorous bounds. If passed a stage coefficient
     beta=c*v, every absolute norm is scaled by abs(c).
 
@@ -456,6 +459,18 @@ def transport_velocity_diagnostics(
     jumps[mesh.bnd_edges_inds] = 0.0
     jump_weights = mesh.edge_jacs[:, None] * xp.asarray(trace.weights)
 
+    # Upwind classification of the two outward traces at aligned interior
+    # nodes. Double outflow is what conflict-averaged upwinding repairs.
+    slots = mesh.edge_side_indices[mesh.int_edges_inds]
+    sides = normal.reshape(-1, t.size)
+    side_orientations = mesh.orientations.reshape(-1)
+    left = xp.where(side_orientations[slots[:, 0], None], sides[slots[:, 0]], sides[slots[:, 0], ::-1])
+    right = xp.where(side_orientations[slots[:, 1], None], sides[slots[:, 1]], sides[slots[:, 1], ::-1])
+    double_outflow = (left >= 0) & (right >= 0) & ((left + right) > 0)
+    double_inflow = (left < 0) & (right < 0)
+    interior_weights = jump_weights[mesh.int_edges_inds]
+    interior_measure = xp.sum(interior_weights)
+
     divergence = xp.zeros((mesh.num_tri, quad.Krf_w.size), dtype=coefficients[0].dtype)
     speed_squared = xp.zeros_like(divergence)
     for axis, coeff in enumerate(coefficients):
@@ -473,6 +488,12 @@ def transport_velocity_diagnostics(
         "velocity_boundary_normal_relative_l2": boundary_l2 / xp.maximum(boundary_speed_l2, xp.finfo(coefficients[0].dtype).tiny),
         "velocity_normal_jump_l2": xp.sqrt(xp.sum(jump_weights * jumps**2)),
         "velocity_normal_jump_linf": xp.max(xp.abs(jumps)),
+        "velocity_double_outflow_measure_fraction":
+            xp.sum(interior_weights * double_outflow) / interior_measure,
+        "velocity_double_outflow_face_fraction":
+            xp.mean(xp.any(double_outflow, axis=1).astype(coefficients[0].dtype)),
+        "velocity_double_inflow_measure_fraction":
+            xp.sum(interior_weights * double_inflow) / interior_measure,
         "velocity_divergence_l2": xp.sqrt(xp.sum(volume_weights * divergence**2)),
         "velocity_divergence_linf": xp.max(xp.abs(divergence)),
         "velocity_speed_linf": xp.max(cell_speed),

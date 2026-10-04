@@ -185,15 +185,20 @@ def vector_field_linear_combination(
 
 def perpendicular_vector_field(
         flux: VectorDGField,
-        scale: float,
-        space: DGSpace,
+        scale: float = 1.0,
+        space: DGSpace | None = None,
         *,
         name: str = "beta_h",
 ) -> VectorDGField:
-    """Return ``scale * (-q_y, q_x)`` while preserving device residency."""
+    """Return ``scale * (-q_y, q_x)`` while preserving device residency.
+
+    ``space`` defaults to the flux components' space.
+    """
     if flux.dim != 2:
         raise ValueError(f"perpendicular_vector_field expects two components; got {flux.dim}")
     qx, qy = flux.components
+    if space is None:
+        space = qx.space
     return VectorDGField(
         (
             field_linear_combination(space, [(-float(scale), qy)], name=f"{name}_x"),

@@ -64,6 +64,33 @@ class GaussianBlobField:
             data = np.column_stack((points, amplitudes)).astype(REAL_DTYPE)
             self._groups.append((float(width), support, lower, shape, keys, indices, data))
 
+    def save(self, path, *, amplitude=None):
+        """Write centers, widths, strengths and cutoff for exact reuse on any mesh.
+
+        ``amplitude`` records the sampling amplitude so :meth:`load` can rescale
+        strengths without resampling centers.
+        """
+        extra = {} if amplitude is None else {"amplitude": float(amplitude)}
+        np.savez(path, centers=self.centers, sigmas=self.sigmas,
+                 strengths=self.strengths, cutoff=self.cutoff, **extra)
+
+    @classmethod
+    def load(cls, path, *, amplitude=None, chunk_size=262144):
+        """Read a profile written by :meth:`save`.
+
+        Files without a stored cutoff use the historical default of eight.
+        ``amplitude`` rescales strengths relative to the stored amplitude
+        (four, the sampler default, when none is stored).
+        """
+        with np.load(path, allow_pickle=False) as data:
+            strengths = np.asarray(data["strengths"], dtype=np.float64)
+            if amplitude is not None:
+                saved = float(data["amplitude"]) if "amplitude" in data else 4.0
+                strengths = strengths * (float(amplitude) / saved)
+            cutoff = float(data["cutoff"]) if "cutoff" in data else 8.0
+            return cls(data["centers"], data["sigmas"], strengths,
+                       cutoff=cutoff, chunk_size=chunk_size)
+
     def _groups_for(self, xp):
         if xp is np:
             return self._groups

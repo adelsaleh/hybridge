@@ -17,6 +17,7 @@ from hdgfem.runtime.precision import REAL_DTYPE
 
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Sequence
+import weakref
 import numpy as np
 from hdgfem.core.mesh import DGMesh, as_dg_mesh
 from hdgfem.core.quadrature import ReferenceElementData, _lagrange_basis, _legendre_gauss_lobatto
@@ -31,6 +32,33 @@ def _cache_key(points: np.ndarray) -> tuple[int, tuple[int, ...], str]:
     """
     array = np.asarray(points)
     return id(array), array.shape, array.dtype.str
+
+
+def _identity_cached(cache: dict, points: np.ndarray, tabulate: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
+    """Tabulate at ``points``, reusing a result only while that array object lives.
+
+    ``id()`` values are recycled once an array is freed, so a bare identity
+    key would hand a later, different temporary the values of an earlier one.
+    Each entry therefore keeps a weak reference that must still name
+    ``points``, and is dropped when its array is collected.
+    """
+    key = _cache_key(points)
+    entry = cache.get(key)
+    if entry is not None and entry[0]() is points:
+        return entry[1]
+    values = tabulate(points)
+
+    def forget(reference, key=key):
+        """Drop this entry once its array dies, unless the key was reused."""
+        current = cache.get(key)
+        if current is not None and current[0] is reference:
+            del cache[key]
+
+    try:
+        cache[key] = (weakref.ref(points, forget), values)
+    except TypeError:
+        pass
+    return values
 
 
 def _normalize_callable_values(values, num_elements: int, num_points: int) -> np.ndarray:
@@ -419,8 +447,9 @@ class DGSpace:
             volume_degree=volume_degree,
         )
         self.name = str(name)
-        self._basis_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
-        self._gradient_cache: dict[tuple[int, tuple[int, ...], str], np.ndarray] = {}
+        # Identity-keyed tabulations guarded by weak references (_identity_cached).
+        self._basis_cache: dict[tuple[int, tuple[int, ...], str], tuple[weakref.ref, np.ndarray]] = {}
+        self._gradient_cache: dict[tuple[int, tuple[int, ...], str], tuple[weakref.ref, np.ndarray]] = {}
         self._degree_elevation_cache: dict[int, np.ndarray] = {}
         self._mapped_quad_points: np.ndarray | None = None
         self._layout = DGCoefficientLayout(
@@ -660,17 +689,12 @@ class DGSpace:
 
         Reference points are coordinates on the reference triangle.  Passing
         the space's own quadrature array returns the precomputed reference
-        table; other arrays are cached by identity for repeated evaluations.
+        table; other arrays are cached by identity while they stay alive.
         """
         points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.quad_data.Krf_quads:
             return self.quad_data.phi
-        key = _cache_key(points)
-        values = self._basis_cache.get(key)
-        if values is None:
-            values = self.reference.basis_at(points)
-            self._basis_cache[key] = values
-        return values
+        return _identity_cached(self._basis_cache, points, self.reference.basis_at)
 
     def degree_elevation_matrix_from(self, source: "DGSpace") -> np.ndarray:
         """Map ``source`` coefficients exactly into this higher-degree space.
@@ -711,12 +735,7 @@ class DGSpace:
         points = np.asarray(reference_points, dtype=REAL_DTYPE)
         if points is self.quad_data.Krf_quads:
             return self.quad_data.gphi
-        key = _cache_key(points)
-        values = self._gradient_cache.get(key)
-        if values is None:
-            values = self.reference.gradients_at(points)
-            self._gradient_cache[key] = values
-        return values
+        return _identity_cached(self._gradient_cache, points, self.reference.gradients_at)
 
     def mass(self) -> np.ndarray:
         r"""Return local mass matrices :math:`\int_K \phi_i\phi_j\,dx`.

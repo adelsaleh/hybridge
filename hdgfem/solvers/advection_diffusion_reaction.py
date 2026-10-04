@@ -754,6 +754,15 @@ class AdvectionDiffusionReactionHDGSolver:
         """Release persistent device solver state owned by this instance."""
         self.clear_cache()
 
+    def __enter__(self):
+        """Return the solver; :meth:`close` runs when the ``with`` block exits."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Release device state without suppressing a caller exception."""
+        self.close()
+        return False
+
     def __del__(self):
         """Best-effort release of persistent AMGX solvers."""
         try:

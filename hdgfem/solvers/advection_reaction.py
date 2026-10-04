@@ -98,7 +98,12 @@ class AdvectionReactionTimings:
 
 @dataclass(frozen=True)
 class AdvectionReactionResult:
-    """Container returned by :func:`solve_advection_reaction_hdg`."""
+    """Container returned by :func:`solve_advection_reaction_hdg`.
+
+    ``field`` is the solution as a :class:`DGField`; for device-resident
+    solves it is backed by ``field_device`` and downloads only when host
+    coefficients are read. It is None only for assembly-only results.
+    """
 
     field: DGField | None
     trace: np.ndarray | None
@@ -538,6 +543,15 @@ class AdvectionReactionHDGSolver:
         self._raw_cuda_factor_workspace = RawAdvectionFactorWorkspace()
         self._raw_cuda_response_workspace = None
         self.clear_cache()
+
+    def __enter__(self):
+        """Return the solver; :meth:`close` runs when the ``with`` block exits."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Release device state without suppressing a caller exception."""
+        self.close()
+        return False
 
     def __del__(self):
         """Best-effort release of persistent AMGX retry state."""
@@ -2171,6 +2185,7 @@ def solve_advection_reaction_hdg(
     trace_device = None
 
     if effective_backend == "raw-cuda":
+        from hdgfem.core.device import field_from_cupy_coefficients
         from hdgfem.runtime.optional import asnumpy, require_cupy
         from hdgfem.transport.cuda import reconstruct_advection_field_cuda
         from hdgfem.hdg.condensation_device import reconstruct_trace_cupy
@@ -2203,10 +2218,12 @@ def solve_advection_reaction_hdg(
             detail_timings["raw.host_solution_materialization"] = materialize_elapsed
             reconstruction += materialize_elapsed
         else:
-            field = None
+            # Device-resident result: the field stays on the GPU until read.
+            field = field_from_cupy_coefficients(space, uh_cp, device=int(uh_cp.device.id), name="u_h")
             trace = None
     else:
         if effective_backend == "cupy":
+            from hdgfem.core.device import field_from_cupy_coefficients
             from hdgfem.runtime.optional import asnumpy, require_cupy
             from hdgfem.transport.cupy import (
                             expand_boundary_trace_cupy,
@@ -2263,7 +2280,7 @@ def solve_advection_reaction_hdg(
                 detail_timings["cupy.host_solution_materialization"] = materialize_elapsed
                 reconstruction += materialize_elapsed
             else:
-                field = None
+                field = field_from_cupy_coefficients(space, uh_cp, device=int(uh_cp.device.id), name="u_h")
                 trace = None
         else:
             can_use_projected_reconstruction = effective_backend == "numba"

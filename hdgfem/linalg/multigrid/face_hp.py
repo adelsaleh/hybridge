@@ -1105,7 +1105,8 @@ class FaceBlockHpMgPcgSolver:
         ).reshape(-1)
         self.solve_count += 1
         result = FaceBlockHpMgPcgResult(
-            solution=self._assembly_solution,
+            # Results own their solution; the workspace is reused by the next solve.
+            solution=self._assembly_solution.copy(),
             converged=converged,
             iterations=iterations,
             residual_norm=residual_norm,

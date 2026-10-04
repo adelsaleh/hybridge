@@ -134,7 +134,24 @@ occur no earlier than the following release.
   explicit `initial_guess=` argument applies only to that call and is not stored
   in the option dataclass.
 - A successful `solve(...)` returns the canonical result object and stores the
-  same object plus its principal artifacts on the solver instance.
+  same object plus its principal artifacts on the solver instance. Result
+  arrays are owned by the result: a later solve on the same solver never
+  overwrites them. `result.field` is always the solution field; for
+  device-resident solves it is a lazy device-backed `DGField`
+  (`field.coefficients_materialized` reports whether host coefficients exist).
+- Without an explicit `initial_guess=`, reusable advection and diffusion solves
+  warm-start from the solver's previous reduced trace.
+- Reusable solvers are context managers; leaving a `with` block calls
+  `close()`, releasing persistent device state, and never suppresses an
+  exception.
+- Without an `options` object, constructors fill options that the selected
+  solver or assembly admits only one value for, unless passed explicitly:
+  diffusion `solver="fb-hp-mg-pcg"` implies `trace_basis="legendre-modal"`
+  and `scale_system=False`; raw-CUDA, CuPy or Numba diffusion assembly implies
+  `boundary_mode="eliminate"`; raw-CUDA advection with
+  `boundary_mode="zero-flux"` implies `raw_local_assembly="fused"`. A diffusion
+  constructor given `source` and `boundary_condition` without `reaction` uses a
+  zero reaction.
 - The cache-reset, coefficient-setter, and space-setter methods exposed by each
   class retain their documented invalidation behavior. Call `clear_cache()`
   after mutating a stored coefficient object externally.

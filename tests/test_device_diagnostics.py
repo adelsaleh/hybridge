@@ -232,7 +232,9 @@ def test_runner_records_fields_growth_and_residuals_without_field_downloads(
             recorder.record(actual)
     finally:
         recorder.close()
-    expected_shapes = [((18,), 144), ((10,), 80)]
+    # One packed download each: field diagnostics, then the velocity face
+    # diagnostics (including the three upwind-classification fractions).
+    expected_shapes = [((18,), 144), ((13,), 104)]
     if manufactured:
         expected_shapes.extend([((4,), 32), ((4,), 32)])
     assert downloads == expected_shapes * 2

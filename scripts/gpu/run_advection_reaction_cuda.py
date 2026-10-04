@@ -346,7 +346,8 @@ def main(argv: list[str] | None = None) -> int:
     total = time.perf_counter() - run_start
     solve = result.global_solve_result
     global_dof = result.solve_rhs.size if result.solve_rhs is not None else space.layout.reduced_trace_vector_size
-    host_solution_state = "yes" if result.field is not None and result.trace is not None else "no"
+    host_solution_state = ("yes" if result.trace is not None and result.field is not None
+                           and result.field.coefficients_materialized else "no")
     device_solution_state = "yes" if getattr(result, "field_device", None) is not None and getattr(result, "trace_device", None) is not None else "no"
     effective_matrix_format = args.raw_matrix_format
     if effective_matrix_format == "auto":

@@ -233,7 +233,9 @@ def test_cupy_reconstruction_consumes_device_trace_without_local_caches(boundary
     assert downloads == 0
     monkeypatch.setattr(cp, "asnumpy", original_asnumpy)
 
-    assert cupy_result.field is None
+    # The field is device-backed: no host coefficients until they are read.
+    assert not cupy_result.field.coefficients_materialized
+    assert cupy_result.field.device_coefficients_materialized()
     assert cupy_result.trace is None
     assert cupy_result.field_device is not None
     assert cupy_result.trace_device is not None
@@ -1964,7 +1966,7 @@ def test_advection_reaction_raw_cuda_amgx_solver_smoke(raw_matrix_format, monkey
     assert "preconditioner: AMG / CLASSICAL / PMIS / ILU0 / W-cycle / pre/post=4/4" in output
     assert "convergence: RELATIVE_INI_CORE" in output
 
-    assert result.field is None
+    assert not result.field.coefficients_materialized
     assert result.trace is None
     assert result.field_device is not None
     assert result.trace_device is not None
