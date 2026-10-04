@@ -65,6 +65,31 @@ def require_cupy_device():
     return cupy
 
 
+def require_cutensor():
+    """Return ``cupyx.cutensor`` with the cuTENSOR library loaded.
+
+    CuPy 14 preloads ``libcutensor.so.2`` from the ``cutensor-cu13`` wheel
+    through cuda-pathfinder but not ``libcutensorMg.so.2``, which its cuTENSOR
+    binding also links; the import then fails unless the wheel directory is on
+    the loader path. Loading ``cutensorMg`` through cuda-pathfinder first
+    resolves both by soname.
+    """
+    require_cupy()
+    try:
+        from cuda.pathfinder import load_nvidia_dynamic_lib
+
+        load_nvidia_dynamic_lib("cutensorMg")
+    except Exception:  # pragma: no cover - install dependent; the import reports it.
+        pass
+    try:
+        from cupyx import cutensor
+    except ImportError as error:  # pragma: no cover - install dependent.
+        raise RuntimeError(
+            "cuTENSOR is unavailable; install the cutensor-cu13 wheel"
+        ) from error
+    return cutensor
+
+
 def device_arrays_overlap(first: Any, second: Any) -> bool:
     """Return whether two contiguous device arrays overlap in memory."""
     if int(first.device.id) != int(second.device.id):

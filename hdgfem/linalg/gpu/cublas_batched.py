@@ -225,7 +225,105 @@ def invert_batched_cublas(
     )
 
 
+@dataclass
+class BatchedLUWorkspace:
+    """Reusable pivots, status flags, and pointer arrays for batched LU solves.
+
+    The pointer arrays are tied to the buffers they were built for; they are
+    rebuilt whenever the matrix or right-hand-side buffer, shape, or dtype
+    changes. Shared by the cuBLAS and MAGMA batched solvers.
+    """
+
+    pivots: Any | None = None
+    info: Any | None = None
+    matrix_pointers: Any | None = None
+    rhs_pointers: Any | None = None
+    pivot_pointers: Any | None = None
+    signature: tuple | None = None
+
+    def ensure(self, cp: Any, matrices: Any, rhs: Any) -> None:
+        """Allocate or refresh the arrays for ``matrices`` and ``rhs``."""
+        signature = (
+            int(matrices.data.ptr), matrices.shape, str(matrices.dtype),
+            int(rhs.data.ptr), rhs.shape,
+        )
+        if signature == self.signature:
+            return
+        batch, size = int(matrices.shape[0]), int(matrices.shape[1])
+        self.pivots = cp.empty((batch, size), dtype=cp.int32)
+        self.info = cp.zeros(batch, dtype=cp.int32)
+        self.matrix_pointers = _device_pointer_array(cp, matrices)
+        self.rhs_pointers = _device_pointer_array(cp, rhs)
+        self.pivot_pointers = _device_pointer_array(cp, self.pivots)
+        self.signature = signature
+
+
+def validate_batched_lu_operands(cp: Any, matrices: Any, rhs: Any) -> tuple[int, int, int]:
+    """Check the column-major batched LU layout and return ``(batch, n, nrhs)``."""
+    if not isinstance(matrices, cp.ndarray) or not isinstance(rhs, cp.ndarray):
+        raise TypeError("matrices and rhs must be CuPy arrays")
+    if matrices.ndim != 3 or matrices.shape[1] != matrices.shape[2]:
+        raise ValueError("matrices must have shape (batch, n, n)")
+    if rhs.ndim != 3 or rhs.shape[0] != matrices.shape[0] or rhs.shape[2] != matrices.shape[1]:
+        raise ValueError("rhs must have shape (batch, nrhs, n)")
+    if matrices.dtype not in (cp.float32, cp.float64) or rhs.dtype != matrices.dtype:
+        raise TypeError("matrices and rhs must share float32 or float64")
+    if not (matrices.flags.c_contiguous and rhs.flags.c_contiguous):
+        raise ValueError("matrices and rhs must be C-contiguous")
+    return int(matrices.shape[0]), int(matrices.shape[1]), int(rhs.shape[1])
+
+
+def lu_solve_batched_cublas(
+    matrices: Any,
+    rhs: Any,
+    *,
+    trans: bool = False,
+    workspace: BatchedLUWorkspace | None = None,
+    check_info: bool = True,
+    label: str = "batched matrices",
+) -> BatchedLUWorkspace:
+    """Solve ``A_b X_b = B_b`` in place with cuBLAS ``getrf/getrsBatched``.
+
+    Layout: ``matrices[b]`` holds ``A_b`` in column-major order (the bytes of
+    its C-order transpose) and ``rhs[b]``, shaped ``(nrhs, n)``, holds ``B_b``
+    column-major. With ``trans=True`` the stored matrix is used transposed,
+    which solves with a C-order ``matrices[b]`` directly. The matrices are
+    overwritten by their LU factors and ``rhs`` by the solutions, on the
+    current CuPy stream.
+
+    ``check_info=False`` skips the host copy of the per-batch status (and its
+    stream synchronization), for timing; the statuses stay in
+    ``workspace.info``.
+    """
+    cp = require_cupy_device()
+    from cupy_backends.cuda.libs import cublas
+
+    batch, size, nrhs = validate_batched_lu_operands(cp, matrices, rhs)
+    workspace = BatchedLUWorkspace() if workspace is None else workspace
+    workspace.ensure(cp, matrices, rhs)
+    handle = cp.cuda.device.get_cublas_handle()
+    single = matrices.dtype == cp.float32
+    getrf = cublas.sgetrfBatched if single else cublas.dgetrfBatched
+    getrs = cublas.sgetrsBatched if single else cublas.dgetrsBatched
+    getrf(handle, size, int(workspace.matrix_pointers.data.ptr), size,
+          int(workspace.pivots.data.ptr), int(workspace.info.data.ptr), batch)
+    if check_info:
+        _copy_and_check_info(cp, workspace.info, stage="getrfBatched", label=label)
+    # getrsBatched reports only argument errors, through a host integer.
+    status = np.zeros(1, dtype=np.int32)
+    getrs(handle, cublas.CUBLAS_OP_T if trans else cublas.CUBLAS_OP_N,
+          size, nrhs, int(workspace.matrix_pointers.data.ptr), size,
+          int(workspace.pivots.data.ptr), int(workspace.rhs_pointers.data.ptr),
+          size, status.ctypes.data, batch)
+    if status[0]:
+        raise RuntimeError(f"{label} getrsBatched rejected argument {-int(status[0])}")
+    return workspace
+
+
 __all__ = [
+    "BatchedLUWorkspace",
     "CuBLASBatchedInverseResult",
     "invert_batched_cublas",
+    "lu_solve_batched_cublas",
+    "validate_batched_lu_operands",
 ]

@@ -20,14 +20,21 @@ REAL_ITEMSIZE = np.dtype(REAL_DTYPE).itemsize
 AMGX_MODE = "dFFI" if PRECISION == "float32" else "dDDI"
 
 
-def cuda_source(source: str) -> str:
-    """Specialize real-valued CUDA templates, including constants and math.
+def specialize_real_source(source: str, dtype) -> str:
+    """Specialize a double-precision CUDA template to ``dtype``.
 
-Specialization happens after the existing assembly/layout substitutions. Float
-suffixes prevent C++ literals from promoting FP32 arithmetic back to FP64.
-"""
-    if PRECISION == "float64":
+    ``float64`` returns the source unchanged. ``float32`` replaces ``double``,
+    switches the listed math calls to their ``f`` forms, and suffixes floating
+    literals so that C++ promotion cannot move FP32 arithmetic back to FP64.
+    Apply it after the assembly/layout substitutions. Unlike
+    :func:`cuda_source`, the target does not depend on ``HDGFEM_PRECISION``,
+    which lets mixed-precision paths compile FP32 kernels in an FP64 process.
+    """
+    dtype = np.dtype(dtype)
+    if dtype == np.float64:
         return source
+    if dtype != np.float32:
+        raise ValueError(f"unsupported CUDA real type {dtype}")
     source = re.sub(r"\bdouble\b", "float", source)
     source = re.sub(
         r"\b(fabs|sqrt|rsqrt|fmax|fmin|pow|exp|log|sin|cos|hypot|copysign)\s*\(",
@@ -37,6 +44,15 @@ suffixes prevent C++ literals from promoting FP32 arithmetic back to FP64.
         r"(?<![\w.])((?:\d+\.\d*|\.\d+)(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+)(?![\w.])",
         r"\1f", source,
     )
+
+
+def cuda_source(source: str) -> str:
+    """Specialize real-valued CUDA templates, including constants and math.
+
+Specialization happens after the existing assembly/layout substitutions. Float
+suffixes prevent C++ literals from promoting FP32 arithmetic back to FP64.
+"""
+    return specialize_real_source(source, REAL_DTYPE)
 
 
 def real_raw_kernel(source: str, name: str, **kwargs):

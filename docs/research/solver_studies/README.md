@@ -3,6 +3,11 @@
 These documents preserve dated measurements and conclusions. They support
 reproducibility but do not define current solver defaults or backend support.
 
+- [Advection assembly baseline, RTX PRO 5000 Blackwell](advection_assembly_baseline_2026_10_03.md):
+  native fused/split3, hybrid and pure-library (cuTENSOR/cuBLAS/MAGMA)
+  assembly for p=4--9 in FP64 and FP32, stage-2 batched LU alone, the machine
+  and software stack, predictions for FP64-capable GPUs and H100 steps.
+
 - [Raw CUDA ADR tensor assembly and reconstruction](raw_cuda_adr_tensor_2026_09_28.md):
   FP64 parity, native stationary CSR/BSR solves and matched assembly timings.
 
