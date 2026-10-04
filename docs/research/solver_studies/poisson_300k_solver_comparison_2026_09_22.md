@@ -92,8 +92,8 @@ From the repository root, use a **new empty output directory**:
 
 ```bash
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
+HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
 scripts/gpu/run_cuda13.sh .venv/bin/python -u -B \
   -m scripts.diffusion_reaction.compare_cuda_bsr_csr \

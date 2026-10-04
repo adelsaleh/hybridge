@@ -144,7 +144,7 @@ CUDA 13 cannot compile the Pascal/Volta kernels needed for P100/V100. Plan for a
 compatible CUDA 12.x environment on those nodes; K80 requires an older stack.
 The runner must preflight CuPy, AMGX and both HDGFEM source trees, and must not
 invoke installation or build scripts. Source paths must be configurable; no
-`/home/adelsaleh` paths or local matrix caches may be required on AMU.
+machine-specific home-directory paths or local matrix caches may be required on AMU.
 
 ### Confirmed AMGX compatibility constraint
 

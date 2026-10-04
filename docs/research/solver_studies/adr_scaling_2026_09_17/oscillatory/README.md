@@ -118,25 +118,25 @@ installation or time integration is involved. `--resume` reads completed jobs,
 including failures; use a new output directory for a fresh campaign.
 
 ```bash
-cd /home/adelsaleh/src/hdgfem-gmres
+cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 export HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0
-export HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13
-export HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13
+export HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13
+export HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13
 
-/home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh \
+scripts/gpu/run_cuda13.sh \
   python -m scripts.run_oscillatory_adr_scaling --geometries square --resume \
-  --output /home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square
+  --output run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square
 
-/home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh \
+scripts/gpu/run_cuda13.sh \
   python -m scripts.run_oscillatory_adr_scaling --geometries annulus --resume \
-  --mesh-manifest /home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/meshes/meshes.json \
-  --output /home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus
+  --mesh-manifest run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/meshes/meshes.json \
+  --output run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus
 
-/home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh \
+scripts/gpu/run_cuda13.sh \
   python -m scripts.audit_oscillatory_adr_scaling \
-  --study-root /home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory \
-  --output /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/validation.json
+  --study-root run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory \
+  --output docs/research/solver_studies/adr_scaling_2026_09_17/oscillatory/validation.json
 ```
 
 Run the CPU derivative/ADR checks with:

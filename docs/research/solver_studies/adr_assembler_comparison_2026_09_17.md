@@ -106,8 +106,8 @@ python vendor/adr_gmres/scripts/compare_adr_assemblers.py \
 ## AMGX readiness and remaining work
 
 The installed CUDA/AMGX guard passes using `/usr/local/cuda-13.0`,
-`/home/adelsaleh/src/AMGX-build-cuda13`, and
-`/home/adelsaleh/src/AMGX-install-cuda13`. The configured source is
+`~/src/AMGX-build-cuda13`, and
+`~/src/AMGX-install-cuda13`. The configured source is
 `AMGX-hdg-cuda13` at 583084b; the PyAMGX source checkout is at 81efd1e.
 No native build or package install was performed.
 

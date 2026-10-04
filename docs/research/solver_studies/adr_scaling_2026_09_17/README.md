@@ -82,7 +82,7 @@ Typesetting has **not been run**, in accordance with the workspace no-compilatio
 rule; the page count is unverified. To compile it yourself:
 
 ```bash
-cd /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
+cd docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
   -outdir=../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/typeset \
   main.tex
@@ -98,7 +98,7 @@ Rendering and auditing do not run solvers. Generate the oscillatory and focused
 comparison subsections first, then the combined section and portable ZIP:
 
 ```bash
-cd /home/adelsaleh/src/hybridge
+# from the repository root
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python -B scripts/reports/make_closed_loop_stress_figures.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
@@ -107,7 +107,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python scripts/reports/make_adr_named_comparison_report.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python scripts/reports/make_adr_scaling_section.py \
-  --campaign /home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917 \
+  --campaign ~/src/hdgfem-gmres/run_logs/adr_scaling_20260917 \
   --output docs/research/solver_studies/adr_scaling_2026_09_17
 ```
 
@@ -128,7 +128,7 @@ The original `section.tex` and `main.tex` remain the detailed version.
 To typeset the synthesis locally:
 
 ```bash
-cd /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
+cd docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
   -outdir=../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/typeset_synthesis \
   main_synthesis.tex

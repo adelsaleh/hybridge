@@ -3,6 +3,11 @@
 These documents preserve dated measurements and conclusions. They support
 reproducibility but do not define current solver defaults or backend support.
 
+- [Advection-reaction AMGX configuration findings](adv_rea_amgx_config_2026_07_20.md) and
+  [raw CUDA fused cooperative LU findings](raw_cuda_fused_coop_lu_2026_07_20.md):
+  July 2026 p=6--8 AMGX configuration, tolerance and modal-trace sweeps, and
+  fused raw-CUDA matrix-level parity and reconstruction checks.
+
 - [Advection assembly baseline, RTX PRO 5000 Blackwell](advection_assembly_baseline_2026_10_03.md):
   native fused/split3, hybrid and pure-library (cuTENSOR/cuBLAS/MAGMA)
   assembly for p=4--9 in FP64 and FP32, stage-2 batched LU alone, the machine
@@ -86,7 +91,7 @@ reproducibility but do not define current solver defaults or backend support.
   star-with-hole vortex-gas CFL, enstrophy and HDG H1 diagnostics;
   [machine-readable samples](guiding_center_temporal_cfl_samples_2026_09.csv).
 
-Raw reports and machine-readable outputs remain under [`../../../run_logs/`](../../../run_logs/).
+Raw reports and machine-readable outputs remain under `run_logs/` (local, untracked).
 
 Guiding-center study artifacts are under
 `run_outputs/guiding_center/convergence/` (local, untracked).

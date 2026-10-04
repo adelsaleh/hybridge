@@ -1947,9 +1947,9 @@ python -m scripts.torsion_equilibrium.dolfinx.dolfinx_torsion_initialized_newton
 parameter-study line.  In this repository it refers to the studies and scripts
 around choosing torsion and nonlinear density-window parameters for the same
 semilinear guiding-center equilibrium solve, not to a separate core HDG solver
-family.  The relevant Markdown docs are
-`docs/research/strategy_a_band_parameter_study/strategyA_band_parameter_study.md` and
-`docs/research/strategy_a_band_parameter_study/recommended_strategyA_parameters.md`.
+family.  The study's tables, frames and parameter recommendations are not
+distributed with the repository; its runners remain under
+`scripts/torsion_equilibrium/dolfinx/`.
 
 Two DOLFINx diagnostic variants are worth knowing about:
 

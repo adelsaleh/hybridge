@@ -41,14 +41,14 @@ retained beside the final results for audit.
 The user ran this one AMGX build; no PyAMGX rebuild was needed. For reproduction:
 
 ```bash
-cmake --build /home/adelsaleh/src/AMGX-build-cuda13 --target amgxsh --parallel 2
+cmake --build ~/src/AMGX-build-cuda13 --target amgxsh --parallel 2
 ```
 
 After the build, run the saved-system experiment from the existing environment:
 
 ```bash
-source /home/adelsaleh/src/hybridge/.env
-cd /home/adelsaleh/src/hybridge
+source .env
+# from the repository root
 scripts/gpu/run_cuda13.sh .venv/bin/python -m scripts.guiding_center.poisson.benchmark_hybrid_hierarchy_bsr \
   --output-dir artifacts/hybrid_hierarchy_bsr_feasibility_20260914
 ```

@@ -76,12 +76,12 @@ Original meshes, specs, source snapshots, job logs, cached systems and solutions
 Example rerun of the selected fine case, on this machine with the existing prebuilt dependencies:
 
 ```sh
-cd /home/adelsaleh/src/hdgfem-gmres
+cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
-/home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
+HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
   --output run_logs/adr_oscillatory_star_fine_rerun \
   --cases cellular7_anisotropic cellular7_weak \
   --mesh-path run_logs/adr_oscillatory_geometry_20260918/star_h0.02.npz \
@@ -91,9 +91,9 @@ HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
 To re-audit and regenerate the report from the archived campaigns, without solver runs:
 
 ```sh
-cd /home/adelsaleh/src/hdgfem-gmres
-/home/adelsaleh/src/hybridge/.venv/bin/python -m scripts.audit_oscillatory_adr_study
-cd /home/adelsaleh/src/hybridge
+cd ~/src/hdgfem-gmres
+.venv/bin/python -m scripts.audit_oscillatory_adr_study
+# from the repository root
 .venv/bin/python scripts/reports/make_oscillatory_adr_report.py
 ```
 

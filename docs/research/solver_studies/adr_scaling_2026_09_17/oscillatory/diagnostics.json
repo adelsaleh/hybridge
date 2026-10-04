@@ -1170,7 +1170,7 @@
         "note": "Master native hp-BSR hierarchy on symmetric part, Bernstein coordinate transforms, GMRES on unchanged full ADR operator; not native PCGF on ADR.",
         "operator_sha256": "86742703a56451704aafe9edeab05fa66e3714baa863bc9000fbc88305bac0ba",
         "worker_sha256": "f1451b93d33168d0261717a613c3b2e8170b7c7155929b14fecebe92ff88b5d4",
-        "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target99458_p6",
+        "matrix_cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target99458_p6",
         "matrix_format": "bsr",
         "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
         "complete_preconditioner": {
@@ -1423,7 +1423,7 @@
   "quadrature": [
     {
       "case": "cellular7_high",
-      "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
+      "original_spec": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
       "volume_points_1d": [
         14,
         28
@@ -1443,7 +1443,7 @@
     },
     {
       "case": "cellular7_directional",
-      "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
+      "original_spec": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
       "volume_points_1d": [
         14,
         28
@@ -1467,7 +1467,7 @@
       "case": "cellular7_high",
       "n": 64,
       "p": 6,
-      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
+      "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
       "trace_dofs": 82495,
       "matrix_sha256": "a3f0ed254eb3315cc9e78fc6de1c31bda7fc8f72b565ff64ce52bbdc0ee20f76",
       "norm1": 20.787596997650553,
@@ -1483,7 +1483,7 @@
       "case": "cellular7_weak",
       "n": 64,
       "p": 6,
-      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
+      "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
       "trace_dofs": 82495,
       "matrix_sha256": "5932412428246a12f44890e025f8084465c869da8dad700e16969d75ff0cf5e6",
       "norm1": 0.05296334886175356,
@@ -1499,7 +1499,7 @@
       "case": "cellular7_directional",
       "n": 64,
       "p": 6,
-      "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
+      "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
       "trace_dofs": 82495,
       "matrix_sha256": "1d1d22ccffd0f88e29fa50d561c63d9a149b5dd8419d6acb65e63a37b64a0375",
       "norm1": 17.711308128614505,
@@ -1580,7 +1580,7 @@
       ],
       "requested_repeats": 1,
       "solves_per_setup": 2,
-      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
+      "matrix_cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
       "matrix_format": "bsr",
       "worker_sha256": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
       "operator_sha256": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",
@@ -1758,7 +1758,7 @@
       ],
       "requested_repeats": 1,
       "solves_per_setup": 2,
-      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
+      "matrix_cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target8192_p6",
       "matrix_format": "bsr",
       "worker_sha256": "544008cb98df90bf2a3591080cf16cda297f33d294c2d438a24b6928885f5445",
       "operator_sha256": "46819e4350bdfe251dd6de19250393845e4dbdb7bcd2aa766a65fdecf52da27e",

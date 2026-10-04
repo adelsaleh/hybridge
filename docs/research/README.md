@@ -9,10 +9,9 @@ package behavior.
   diocotron benchmark on noncircular domains.
 - [`torsion_initialized_equilibrium/`](torsion_initialized_equilibrium/):
   residual accounting and closed-loop/reduced-space optimization derivations.
-- [`strategy_a_band_parameter_study/`](strategy_a_band_parameter_study/):
-  semilinear-equilibrium parameter study, recommendations, tables, and plots.
-- [`../../run_logs/`](../../run_logs/): raw benchmark logs and variability
-  studies.
+- `run_logs/` (local, untracked): raw benchmark logs and variability studies;
+  the July 2026 AMGX and raw-CUDA findings notes are dated records in
+  [`solver_studies/`](solver_studies/).
 
 Paths under `artifacts/` and `run_outputs/` quoted in these studies, marked
 "local, untracked", name the machine-local evidence directories where the

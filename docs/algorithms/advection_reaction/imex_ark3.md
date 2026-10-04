@@ -154,11 +154,11 @@ operator reuse flags, aggregate costs, and embedded absolute/relative L2 error.
 `imex_ark3_embedded_error_relative` divides by the primary density L2 norm.
 These are diagnostic estimates; the runner does not automatically change dt.
 
-From `/home/adelsaleh/src/hybridge`, this machine's CUDA/AMGX environment is:
+From the repository root, this machine's CUDA/AMGX environment is:
 
 ```bash
 export CUDA_PATH=/usr/local/cuda-13.0
-export LD_LIBRARY_PATH=/home/adelsaleh/src/AMGX-build-cuda13:/home/adelsaleh/src/AMGX-install-cuda13/lib:$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=~/src/AMGX-build-cuda13:~/src/AMGX-install-cuda13/lib:$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HDGFEM_PRECISION=float64
 
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \

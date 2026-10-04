@@ -1,7 +1,7 @@
 {
  "title": "Advection-reaction assembly baseline, RTX PRO 5000 Blackwell, 2026-10-03",
  "machine": {
-  "host": "mrsm2p2isfin-s02",
+  "host": "local-workstation",
   "gpu": {
    "name": "NVIDIA RTX PRO 5000 Blackwell",
    "major": 12,
@@ -27,7 +27,7 @@
   "cutensor": 20800,
   "magma": {
    "version": "2.10.0",
-   "library": "/home/adelsaleh/src/magma-build-cuda13/lib/libmagma.so"
+   "library": "~/src/magma-build-cuda13/lib/libmagma.so"
   },
   "git_commit": "cb3dcb119de584ddcca18bae309152fe4ba4a482",
   "git_dirty": true,
