@@ -127,7 +127,7 @@ capability would need to handle negative cell averages as well as nodal
 undershoots; simple pointwise clipping would change mass and the method.
 
 Raw measurements, input hashes, plots, and fit reports are in
-[`../../../artifacts/diocotron_validation/`](../../../artifacts/diocotron_validation/):
+`../../../artifacts/diocotron_validation/` (`artifacts/diocotron_validation/`, local, untracked):
 `smooth_screening/report.md`, `sharp_screening/report.md`,
 `smooth_projection.json`, and `projection_q32.json`.
 

@@ -54,9 +54,9 @@ RHS by `1e-40` gave relative linearity errors below `5.6e-16`.
 
 ## Evidence and reproduction
 
-- [Confirmation records](../../../run_outputs/solver_studies/iter_repeated_poisson_shared_confirmation_20260924/results.json)
+- Confirmation records (`run_outputs/solver_studies/iter_repeated_poisson_shared_confirmation_20260924/results.json`, local, untracked)
   include all samples, matrix/RHS hashes, numerical gates and source hashes.
-- [Initial policy screen](../../../run_outputs/solver_studies/iter_repeated_poisson_20260924/probe.json)
+- Initial policy screen (`run_outputs/solver_studies/iter_repeated_poisson_20260924/probe.json`, local, untracked)
   used one captured physical RHS and two algebraic perturbations. Standard
   order-2 smoothing took about 0.234 s and order-1 about 0.192 s, versus
   robust's 1.15 s, for the nearby algebraic samples. This screen selected the
@@ -101,7 +101,7 @@ storage. FP32 still needs 53.1 TiB. The machine has about 125.3 GiB host RAM
 and 47.8 GiB GPU memory. The requested dense-inverse trial was therefore
 rejected before allocation; the user agreed to examine sparse LU instead.
 
-See [memory-gate record](../../../run_outputs/solver_studies/iter_repeated_poisson_20260924/inverse_memory_gate.json).
+See memory-gate record (`run_outputs/solver_studies/iter_repeated_poisson_20260924/inverse_memory_gate.json`, local, untracked).
 
 ## Sparse LU follow-up
 
@@ -142,7 +142,7 @@ not establish a universal optimum; this follow-up shows no improvement from
 24 threads for the measured PyPardiso wrapper path. Matrix and RHS hashes
 match exactly across the two runs.
 
-See the [24-thread records](../../../run_outputs/solver_studies/iter_poisson_lu_24threads_20260924/pardiso/result.json).
+See the 24-thread records (`run_outputs/solver_studies/iter_poisson_lu_24threads_20260924/pardiso/result.json`, local, untracked).
 To repeat that configuration, use `--threads 24` and a new output directory in
 the reproduction command below.
 
@@ -162,8 +162,8 @@ independent host validation is excluded from both timings. This compares the
 implemented solver paths, not intrinsic CPU/GPU triangular-solve throughput.
 The full Poisson-path comparison remains the changed-source experiment above.
 
-- [Verified parallel LU and matched GPU control](../../../run_outputs/solver_studies/iter_poisson_lu_parallel_control_20260924/summary.json)
-- [Original PyPardiso run](../../../run_outputs/solver_studies/iter_poisson_lu_20260924/pardiso/result.json)
+- Verified parallel LU and matched GPU control (`run_outputs/solver_studies/iter_poisson_lu_parallel_control_20260924/summary.json`, local, untracked)
+- Original PyPardiso run (`run_outputs/solver_studies/iter_poisson_lu_20260924/pardiso/result.json`, local, untracked)
 
 PyPardiso exposes an opaque MKL factor handle, not transferable `L` and `U`
 arrays. Intel's documented [`pardiso_export`](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/pardiso-export.html)

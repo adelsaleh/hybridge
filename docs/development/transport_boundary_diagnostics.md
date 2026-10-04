@@ -22,8 +22,7 @@ one mode. Root-split quadrature or a shared numerical normal velocity restores
 full rank in saved-face tests. A production flux remedy has not yet been
 implemented or validated.
 
-See the [matrix evidence, small face experiments and replay record](
-../../artifacts/transport_diagnostics_20260912/README.md). The device failure
+See the matrix evidence, small face experiments and replay record (`artifacts/transport_diagnostics_20260912/README.md`, local, untracked). The device failure
 path now preserves a system archive for host-only analysis without replay.
 This confirms the BDF2 failure mechanism; the earlier predictor failures below
 were not replayed and retain their original evidence limits.
@@ -74,7 +73,7 @@ change.
 
 ## Evidence at the failed predictor
 
-The [preserved failure report](../../artifacts/transport_diagnostics_20260911/predictor_step555_failure.json)
+The preserved failure report (`artifacts/transport_diagnostics_20260911/predictor_step555_failure.json`, local, untracked)
 was read from the workspace output produced on 2026-09-11. It records predictor
 step 555, t=5.55, of the original radius-0.96 vortex gas. All six attempts returned
 finite iterates and missed the physical residual target; there was no BJ CUDA
@@ -94,7 +93,7 @@ The boundary leakage remains about **0.089%**, rather than suddenly increasing.
 Interior divergence and normal jumps increased by about a factor of four.
 This weakens a sudden boundary-tangency-loss explanation; it does not exclude
 an accumulated discrete compatibility problem. The
-[accepted-step evidence](../../artifacts/transport_diagnostics_20260911/accepted_step_diagnostics.json)
+accepted-step evidence (`artifacts/transport_diagnostics_20260911/accepted_step_diagnostics.json`, local, untracked)
 also preserves the values at step 550.
 
 The trace matrix has 530,264 unknowns and 18,507,888 stored scalar entries. Its
@@ -143,7 +142,7 @@ recomputes `b-A*x` for validation. Each attempt records physical and solver
 residuals separately; correction acceptance uses the combined solution and
 original RHS. No convergence tolerance was relaxed.
 
-A [reproducible 56-unknown comparison](../../artifacts/transport_diagnostics_20260911/scaling_probe.py)
+A reproducible 56-unknown comparison (`artifacts/transport_diagnostics_20260911/scaling_probe.py`, local, untracked)
 used nonsymmetric 7x7 blocks, row multipliers from 1e-4 to 1e4, FP64, zero guesses,
 and a fresh preconditioner for each solve. All six solves converged:
 
@@ -153,7 +152,7 @@ and a fresh preconditioner for each solve. All six solves converged:
 | PBICGSTAB + BJ | 8 / 9 | 6.25e-13 / 1.55e-13 |
 | FGMRES + DILU | 7 / 8 | 2.03e-11 / 1.11e-13 |
 
-The [raw results](../../artifacts/transport_diagnostics_20260911/scaling_probe.json)
+The raw results (`artifacts/transport_diagnostics_20260911/scaling_probe.json`, local, untracked)
 show improved solution accuracy here, without an iteration-count improvement.
 This synthetic example is not a performance prediction for the vortex gas.
 
@@ -192,7 +191,7 @@ observations above came from reading existing workspace output.
 
 The focused FP64 suite passed all 115 tests. The FP32 diagnostic, direct-solve
 and native preconditioner suite passed all 70 tests. Test logs are retained
-with the [investigation artifacts](../../artifacts/transport_diagnostics_20260911/README.md).
+with the investigation artifacts (`artifacts/transport_diagnostics_20260911/README.md`, local, untracked).
 
 Documentation links pass. The repository area-inventory check still flags the
 existing `docs/diocotron` directory, which was not changed by this work.

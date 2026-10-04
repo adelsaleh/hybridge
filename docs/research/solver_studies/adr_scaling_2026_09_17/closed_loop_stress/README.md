@@ -9,8 +9,8 @@ campaign: **8/60 passed**, all on the orthogonal control; **0/36 AMGX passes**.
 The tables include all 60 final physical residuals and setup/fresh/reused timings
 for the eight converged configurations. Failed warmup costs are not ranked.
 
-Source records: [campaign manifest](../../../../../run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k/manifest.json)
-and [individual jobs](../../../../../run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k/jobs/).
+Source records: campaign manifest (`run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k/manifest.json`, local, untracked)
+and individual jobs (`run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k/jobs/`, local, untracked).
 The report uses actual meshes of 98,699 and 148,848 triangles, PP degree 96,
 restart 150, and a 2,000-iteration cap. Setup/fresh statistics are medians;
 reused time is the mean second solve across three measured setups. The
@@ -53,7 +53,7 @@ PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=
   .venv/bin/python -B scripts/reports/make_closed_loop_stress_figures.py
 ```
 
-Outputs are [PDF, SVG, PNG and analytic provenance](../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/figures/closed_loop_stress/).
+Outputs are PDF, SVG, PNG and analytic provenance (`run_outputs/solver_studies/adr_scaling_2026_09_17/figures/closed_loop_stress/`, local, untracked).
 The package's publication styling/export and mesh-overlay helpers supply the
 portable formats. The array-only `hdgfem.io.figures.add_matplotlib_mesh` accepts
 `node_coords`/`triangles` and optional `(xmin, xmax, ymin, ymax)` bounds; the

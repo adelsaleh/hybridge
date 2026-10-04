@@ -17,8 +17,8 @@ This initial study is preserved inside the [combined oscillatory study](../READM
 ## Report and evidence
 
 - [Insertable LaTeX section](section.tex), with a [standalone wrapper](preview.tex); intended to fit within the requested 3–4-page limit. Typesetting and actual pagination have not been checked: compilation is left to the user under the workspace rule.
-- [Portable report bundle](../../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/adr_oscillatory_bundle.zip), including PDF/SVG/PNG figures, TeX, data, source snapshots and exact mesh arrays.
-- [Geometry and fields](../../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/geometry_fields.png) and [solver heatmap](../../../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/solver_comparison.png).
+- Portable report bundle (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/adr_oscillatory_bundle.zip`, local, untracked), including PDF/SVG/PNG figures, TeX, data, source snapshots and exact mesh arrays.
+- Geometry and fields (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/geometry_fields.png`, local, untracked) and solver heatmap (`run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/initial/figures/solver_comparison.png`, local, untracked).
 - [Tabular results](comparison.csv), [full measurements/configurations](results.data.json), [verification audit](verification.json) and [figure hashes](figure_hashes.json).
 - The earlier [h/p scaling section](../../README.md) retains the larger smooth ADR campaign, including high diffusion and native hp-BSR. This note adds the combined geometry/coefficient stress case.
 

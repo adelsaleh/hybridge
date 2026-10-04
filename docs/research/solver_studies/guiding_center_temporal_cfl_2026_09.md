@@ -117,10 +117,10 @@ recursive-residual underestimate and checks recovery to the true solution.
 
 Raw logs, configurations, norms, raster snapshots, final coefficients and traces,
 and the execution manifest are in
-[`run_outputs/guiding_center/convergence/all_schemes_20260912/`](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/).
+`run_outputs/guiding_center/convergence/all_schemes_20260912/` (local, untracked).
 The exact orchestration and analysis scripts are
-[`run_study.py`](../../../artifacts/temporal_cfl_20260912/run_study.py) and
-[`analyze_study.py`](../../../artifacts/temporal_cfl_20260912/analyze_study.py).
+`artifacts/temporal_cfl_20260912/run_study.py` (local, untracked) and
+`artifacts/temporal_cfl_20260912/analyze_study.py` (local, untracked).
 
 ## Manufactured convergence
 
@@ -157,13 +157,13 @@ At dt=0.005, the potential errors are:
 All ten error measures and their rates, including separate gradient and face
 errors, are in the [machine-readable table](guiding_center_temporal_cfl_samples_2026_09.csv).
 
-![Manufactured errors](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/manufactured_errors.png)
+!Manufactured errors (`run_outputs/guiding_center/convergence/all_schemes_20260912/manufactured_errors.png`, local, untracked)
 
 Sampled cell CFL ranges from approximately 4.716 at dt=0.04 to 0.590 at
 dt=0.005. All these smooth manufactured runs completed; this establishes no
 universal CFL stability threshold for vortex gas.
 
-![Manufactured CFL sensitivity](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/manufactured_cfl.png)
+!Manufactured CFL sensitivity (`run_outputs/guiding_center/convergence/all_schemes_20260912/manufactured_cfl.png`, local, untracked)
 
 ## Gas outcomes and diffusion
 
@@ -187,20 +187,20 @@ BDF2 loses much less enstrophy than SI Euler at the same dt, at similar per-step
 cost. PC can retain more enstrophy, but its coarsest run fails. Energy conservation
 and a small linear residual alone do not establish adequate temporal resolution.
 
-![Gas histories](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/gas_histories.png)
+!Gas histories (`run_outputs/guiding_center/convergence/all_schemes_20260912/gas_histories.png`, local, untracked)
 
 The all-scheme field comparison uses the latest diagnostic time shared by all
 nine runs. This avoids comparing a failed run's early state with T=5 states.
 
-![Matched gas fields](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/gas_fields_common_time.png)
+!Matched gas fields (`run_outputs/guiding_center/convergence/all_schemes_20260912/gas_fields_common_time.png`, local, untracked)
 
 Completed fields at T=5 and their dt=0.01 minus dt=0.005 differences are also
 saved. Empty panels indicate runs that did not reach that endpoint. Color
 scales are fixed across panels; they are clipped as stated on the figures.
 
-![Gas fields at T=5](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/gas_fields_T5.png)
+!Gas fields at T=5 (`run_outputs/guiding_center/convergence/all_schemes_20260912/gas_fields_T5.png`, local, untracked)
 
-![Temporal field differences at T=5](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/gas_field_differences_T5.png)
+!Temporal field differences at T=5 (`run_outputs/guiding_center/convergence/all_schemes_20260912/gas_field_differences_T5.png`, local, untracked)
 
 ## HDG diagnostic and trace localization
 
@@ -230,7 +230,7 @@ useful for comparing resolved volume structure. The unweighted-in-velocity
 the upwind flux's own velocity-weighted dissipation.
 
 Full per-face coordinates, adjacent elements, amplitudes and contributions are
-in [trace_face_analysis.json](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/trace_face_analysis.json).
+in `run_outputs/guiding_center/convergence/all_schemes_20260912/trace_face_analysis.json` (local, untracked).
 
 ## Same-mesh temporal differences
 
@@ -266,7 +266,7 @@ localized weak mode has relative matrix action 3.23e-17. This directly supports
 a deficient trace-coupling explanation for this solve failure; a globally small
 normal-flux jump norm would not exclude such a local defect.
 
-The [failure diagnostics and matrix snapshot](../../../run_outputs/guiding_center/convergence/all_schemes_20260912/vortex-gas_predictor-corrector_dt0p02/runs/) preserve this evidence. This is not
+The failure diagnostics and matrix snapshot (`run_outputs/guiding_center/convergence/all_schemes_20260912/vortex-gas_predictor-corrector_dt0p02/runs/`, local, untracked) preserve this evidence. This is not
 a measurement of a universal BDF2 or PC CFL stability boundary. Positive
 rescaling by dt changes coefficient magnitudes, but does not supply the missing
 inflow sampling directions for a fixed velocity field. Changing dt also changes

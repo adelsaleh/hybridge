@@ -22,3 +22,7 @@
   scope, skip policy, and acceptance requirements.
 - [`../releases/early_alpha.md`](../releases/early_alpha.md): current candidate
   evidence and unresolved gates.
+
+Paths under `artifacts/` and `run_outputs/` marked "local, untracked" name
+Git-ignored, machine-local evidence directories that are not distributed with
+the repository.

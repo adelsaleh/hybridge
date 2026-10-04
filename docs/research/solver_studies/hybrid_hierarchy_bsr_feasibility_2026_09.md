@@ -32,8 +32,8 @@ Only offline copies are reordered and packed into BSR. The fine level retains
 its original ordering and BSR operator. Each mesh reproduced the saved hybrid
 iteration sequence 16/13/12 and passed physical-residual/reference checks.
 
-[Full per-mesh comparison tables](../../../artifacts/hybrid_hierarchy_bsr_feasibility_20260914/report.md)
-and [machine-readable summary/provenance](../../../artifacts/hybrid_hierarchy_bsr_feasibility_20260914/summary.json)
+Full per-mesh comparison tables (`artifacts/hybrid_hierarchy_bsr_feasibility_20260914/report.md`, local, untracked)
+and machine-readable summary/provenance (`artifacts/hybrid_hierarchy_bsr_feasibility_20260914/summary.json`, local, untracked)
 include every block size, ordering, storage component, timing sample and
 projection. Raw exports, failed-path diagnostics and cold profiling passes are
 retained beside the final results for audit.
