@@ -915,10 +915,25 @@ Execution protocol (approved 2026-09-29):
   - the last full sharded suite matched the baseline outcome for every test,
     apart from the six deliberately deleted DR primal-port tests and a known
     flaky Cholesky test that now passes.
-- [ ] Split the remaining large solver modules into per-backend stage drivers.
+- [x] Split the remaining large solver modules into per-backend stage drivers.
   After the reorganization they hold orchestration only, but the DR solver
   class is ~1.9k lines and the AR functional solver ~1.6k. Keep public names
-  and the layering ratchet.
+  and the layering ratchet. Done 2026-10-04:
+  - DR: the stateful raw-CUDA device solve moved to
+    `solvers/diffusion_raw_cuda.solve_raw_cuda_device_amgx` and the RHS-only
+    NumPy/Numba re-solves to `solvers/diffusion_host`, beside the existing
+    `solvers/diffusion_device` CuPy path; the solver class keeps thin
+    delegating methods (`diffusion_reaction.py` 2,981 → 1,932 lines).
+  - AR: `solve_advection_reaction_hdg` builds one
+    `solvers/advection_stages.TransportAssemblyInputs`, calls the assembly and
+    reconstruction drivers of `solvers/advection_host` (NumPy, Numba),
+    `solvers/advection_cupy` or `solvers/advection_raw_cuda` (which also holds
+    the device AMGX solve), and unpacks a `TransportAssembly` /
+    `TransportReconstruction`; cached-operator RHS updates go through
+    `advection_stages.reuse_cached_transport_operator`. The function went from
+    ~1,610 to ~1,010 lines, ~200 of them docstring.
+  - Branch bodies moved verbatim, so numerics are unchanged; the full sharded
+    suite matched the pre-split outcome for every test.
 - [ ] Optional raw-CUDA DR→ADR kernel unification (phase 6.4 remainder). Give
   the ADR tensor kernels a β = 0 Cholesky variant, RHS-only reuse and compact
   caches, then replace the DR identity-κ raw kernels only if they are not

@@ -22,6 +22,7 @@ import hdgfem.linalg.amgx.device_solver as amgx_device_solver
 import hdgfem.core.device as core_device
 from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgResult
 from hdgfem.solvers import diffusion_reaction
+from hdgfem.solvers import diffusion_raw_cuda as raw_cuda_driver
 
 
 @pytest.fixture(params=("standard", "fast"))
@@ -85,7 +86,7 @@ def poisson_handoff(monkeypatch, request):
     monkeypatch.setattr(diffusion_cupy, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(core_device, "as_cupy_space", lambda _: cspace)
     monkeypatch.setattr(diffusion_cupy, "build_trace_reference", lambda *args: None)
-    monkeypatch.setattr(diffusion_reaction, "audit_arrays", lambda *args: None)
+    monkeypatch.setattr(raw_cuda_driver, "audit_arrays", lambda *args: None)
     monkeypatch.setattr(gpu_sparse, "_assembly_device_csr_matrix", lambda *args: matrix)
     physical_matvec = Mock(side_effect=lambda a, x, *args: a @ x)
     monkeypatch.setattr(gpu_sparse, "_device_compressed_matvec", physical_matvec)
@@ -105,7 +106,7 @@ def poisson_handoff(monkeypatch, request):
         lambda **kwargs: (np.zeros((1, 1)), np.zeros((1, 3)), 0.0),
     )
     monkeypatch.setattr(core_device, "field_from_cupy_coefficients", lambda space, coefficients, **kwargs: coefficients)
-    monkeypatch.setattr(diffusion_reaction, "VectorDGField", lambda components, **kwargs: components)
+    monkeypatch.setattr(raw_cuda_driver, "VectorDGField", lambda components, **kwargs: components)
 
     def run_native(solution, *, converged):
         # A native convergence claim may differ from the original-matrix gate
