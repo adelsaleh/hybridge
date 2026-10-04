@@ -53,18 +53,20 @@
     - include the `diocotron-dolfinx` branch's `projects/diocotron` data (576 MiB, commit `350fe41`), the strategy-A study, the tracked movies, and untracked local evidence (`outputs/`, `run_outputs/`, `artifacts/`, `run_logs/`);
     - later, mirror the same refs into a private GitHub archive repository as a second copy.
   - Phase 1, finish the branch (local):
-    - publish the full positive-density showcase (rerun started 2026-10-04); fill the Positive column, recovery sentence and poster time in `docs/getting_started/gpu_showcase.md` and the README caption; commit the `{{...}}` placeholder guard test;
-    - remove machine-local artifacts from the tree:
-      - make the absolute `/home/...` paths in 34 tracked files repository-relative;
-      - drop `outputs/movies/*.mp4`;
-      - review the 30 tracked `run_logs/` files and the 8 hash-named `run_configs/adr_unified_l5/meshes/*.npz` caches, keeping only what documented commands need on a fresh clone;
-    - remove the diocotron data from the tree: `docs/research/strategy_a_band_parameter_study/` (191 files, about 52 MB) and the two `outputs/movies/diocotron_*.mp4`. The torsion-equilibrium code, diocotron presets and derivation notes stay; fix the links and docs that cite the removed files;
-    - correct this item's old note: the pyamgx and AMGX forks no longer mention `hdgfem`;
+    - [x] publish the full positive-density showcase. Done 2026-10-04 (`5b5b58e`): one segment from the clean `79e9cdf` tree, 16,384 steps to t = 6.4, no host recovery. The Positive column, recovery sentence, poster time (6) and README caption are filled, and a docs test rejects leftover double-brace template placeholders. Still open: upload the new MP4 as a GitHub attachment (issue #1 hosts the README videos) and replace the README's old `user-attachments` URL;
+    - [x] remove machine-local artifacts from the tree. Done 2026-10-04:
+      - 223 files were first copied, hash-verified, to `~/src/hybridge-archive/removed-from-tree/` with a manifest;
+      - absolute home-directory paths in 34 files (docs and run-provenance JSON/CSV) are now repository-relative or `~/...`, and one recorded workstation hostname is anonymized;
+      - `outputs/movies/*.mp4` and the raw `run_logs/` sweep files are gone, and `/outputs/` is ignored;
+      - the two July findings notes moved to `docs/research/solver_studies/` as dated records;
+      - the `run_configs/adr_unified_l5/meshes/*.npz` files stay: they are campaign inputs listed in `inventory.json`, not caches;
+    - [x] remove the diocotron data from the tree. Done 2026-10-04: `docs/research/strategy_a_band_parameter_study/` (191 files) and the two diocotron movies; MANUAL and the research index no longer point at them;
     - run the full sharded suite and the four alpha lanes in a clean worktree and compare per test with the 2026-10-04 baseline.
   - Phase 2, hosted gate and merge (pushes need confirmation):
     - push `package-reorganization` and open a PR to `master`. The `early-alpha` workflow (host Python 3.10/3.12 and package) must pass; the eight failures of the last hosted `master` run (2026-09-30) are fixed on this branch;
     - fast-forward `master` (no divergence) and push it;
-    - set the GitHub default branch back to `master` (it is currently `package-reorganization`), delete the merged branch and retire the `~/src/hybridge-reorg` worktree;
+    - set the GitHub default branch back to `master` (it is currently `package-reorganization`) and delete the merged branch;
+    - before retiring the `~/src/hybridge-reorg` worktree, move its untracked local evidence (`outputs/`, about 12 GB, `run_outputs/`, untracked `run_logs/`) into `~/src/hybridge-archive/`;
     - from then on the shared venv's editable install runs the reorganized code.
   - Phase 3, rename `hdgfem` → `hybridge` in one dedicated commit on `master`:
     - the import package, `pyproject.toml` name and version `0.1.0a2`, and about 558 files outside `vendor/`; `vendor/adr_gmres/hdgfem` stays a frozen study snapshot;

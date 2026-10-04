@@ -174,7 +174,7 @@ The September 24 large run ended during factorization after its last heartbeat
 at 22:54:49 Paris time (2 h 36 min elapsed, 33.35 GiB RSS). It produced no
 completed factor cache or GPU timing. Its termination reason was not recorded.
 
-From `/home/adelsaleh/src/hybridge`, run:
+From the repository root, run:
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \

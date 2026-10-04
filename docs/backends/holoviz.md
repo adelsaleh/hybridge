@@ -189,7 +189,7 @@ frames fixes the minimized-frame queue deadlock but does not release this lock.
 
 The source patch is retained in
 [pyamgx-release-gil.patch](../../patches/pyamgx-release-gil.patch) and has been
-applied to `/home/adelsaleh/src/pyamgx-hdg-cuda13`. It releases the GIL around
+applied to `~/src/pyamgx-hdg-cuda13`. It releases the GIL around
 native setup and both solve variants, then reacquires it for error handling.
 The AMGX print callback explicitly acquires the GIL before calling Python.
 This does not make concurrent access to the same AMGX handles safe: keep
@@ -198,10 +198,10 @@ solver resources and vectors on the solver thread.
 The installed binary is unchanged until the user rebuilds the binding:
 
 ```bash
-AMGX_DIR=/home/adelsaleh/src/AMGX-hdg-cuda13 \
-AMGX_BUILD_DIR=/home/adelsaleh/src/AMGX-build-cuda13 \
+AMGX_DIR=~/src/AMGX-hdg-cuda13 \
+AMGX_BUILD_DIR=~/src/AMGX-build-cuda13 \
 .venv/bin/python -m pip install --no-build-isolation --no-deps --force-reinstall \
-  /home/adelsaleh/src/pyamgx-hdg-cuda13
+  ~/src/pyamgx-hdg-cuda13
 ```
 
 Restart the simulation process after rebuilding. This reuses the existing
@@ -228,7 +228,7 @@ It has not been compiled or tested.
 Apply from a compatible Holoscan SDK source checkout:
 
 ```bash
-git apply /home/adelsaleh/src/hybridge/patches/holoviz-poll-events-when-minimized.patch
+git apply patches/holoviz-poll-events-when-minimized.patch
 ```
 
 The installed wheel statically incorporates GLFW without exporting its

@@ -131,7 +131,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917/jobs/advection_dominated_n223_p6_asm_gmres.solution.npy",
+      "peer_solution": "~/src/hdgfem-gmres/run_logs/adr_scaling_20260917/jobs/advection_dominated_n223_p6_asm_gmres.solution.npy",
       "trace_dofs": 1041187,
       "triangles": 99458,
       "neighbors_sha256": "b1a6e2c99ceadf1a7ea75abcaf9b5b2e30ba5d1186745bfb03a85f9b50a90b75",
@@ -144,7 +144,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_solver_large_p6_20260917/cache/advection_dominated_n223_p6",
+      "matrix_cache": "~/src/hdgfem-gmres/run_logs/adr_solver_large_p6_20260917/cache/advection_dominated_n223_p6",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -295,7 +295,7 @@
       "worst_true_relative_residual": 1.916616301581751e-12,
       "peak_process_rss_kib": 9994760,
       "system_id": "b99e0a6cac305e572346a4c2db79bd977d24b8c90410168031ffc676b147f782",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p6_b99e0a6cac30_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p6_b99e0a6cac30_standard.json"
     },
     "reused": false
   },
@@ -431,7 +431,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_scaling_20260917/jobs/anisotropic_n223_p6_asm_gmres.solution.npy",
+      "peer_solution": "~/src/hdgfem-gmres/run_logs/adr_scaling_20260917/jobs/anisotropic_n223_p6_asm_gmres.solution.npy",
       "trace_dofs": 1041187,
       "triangles": 99458,
       "neighbors_sha256": "b1a6e2c99ceadf1a7ea75abcaf9b5b2e30ba5d1186745bfb03a85f9b50a90b75",
@@ -444,7 +444,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_solver_large_p6_20260917/cache/anisotropic_n223_p6",
+      "matrix_cache": "~/src/hdgfem-gmres/run_logs/adr_solver_large_p6_20260917/cache/anisotropic_n223_p6",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -595,7 +595,7 @@
       "worst_true_relative_residual": 7.74695208137525e-12,
       "peak_process_rss_kib": 9985408,
       "system_id": "7920ac51ca2d637b7058fe6bc976320b11c84102c223a004e51168d9684171d6",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_anisotropic_p6_7920ac51ca2d_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_anisotropic_p6_7920ac51ca2d_standard.json"
     },
     "reused": false
   },
@@ -736,7 +736,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/jobs/square_cellular7_directional_target99458_p6_asm_d48.solution.npy",
+      "peer_solution": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/jobs/square_cellular7_directional_target99458_p6_asm_d48.solution.npy",
       "trace_dofs": 1041187,
       "triangles": 99458,
       "neighbors_sha256": "b1a6e2c99ceadf1a7ea75abcaf9b5b2e30ba5d1186745bfb03a85f9b50a90b75",
@@ -749,7 +749,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target99458_p6",
+      "matrix_cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/square/cache/square_cellular7_directional_target99458_p6",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -900,7 +900,7 @@
       "worst_true_relative_residual": 6.25525149454086e-12,
       "peak_process_rss_kib": 9996992,
       "system_id": "667ca4ca7d9870b9f287b9a3cba115c383e2a3f291917c644e6f578c9c1a8e24",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_cellular7_directional_p6_667ca4ca7d98_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_cellular7_directional_p6_667ca4ca7d98_standard.json"
     },
     "reused": false
   },
@@ -1041,7 +1041,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/jobs/annulus_cellular7_directional_target99458_p6_asm_d48.solution.npy",
+      "peer_solution": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/jobs/annulus_cellular7_directional_target99458_p6_asm_d48.solution.npy",
       "trace_dofs": 1043392,
       "triangles": 99984,
       "neighbors_sha256": "a353a60545be358e1ae5470e48dac8ed200f0ff191497c7a8969863f4d1b774f",
@@ -1054,7 +1054,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target99458_p6",
+      "matrix_cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target99458_p6",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -1205,7 +1205,7 @@
       "worst_true_relative_residual": 8.392947333264213e-12,
       "peak_process_rss_kib": 10025676,
       "system_id": "db838ae03b8fe20d8366a22ce5430c72868e9e3c4a7d25d2396b00eeea9869e3",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_annulus_cellular7_directional_p6_db838ae03b8f_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_annulus_cellular7_directional_p6_db838ae03b8f_standard.json"
     },
     "reused": false
   },
@@ -1346,7 +1346,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/jobs/mt_p3_asm_pp_raw_fused_d18.solution.npy",
+      "peer_solution": "~/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/jobs/mt_p3_asm_pp_raw_fused_d18.solution.npy",
       "trace_dofs": 999940,
       "triangles": 167042,
       "neighbors_sha256": "5cd49ac17dde7e5eb08e4f58b87cf5723218ed3beec128f96e9f0f135a4b242f",
@@ -1359,7 +1359,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_performance_full_20260918/cache/advection_dominated_n289_p3",
+      "matrix_cache": "~/src/hdgfem-gmres/run_logs/adr_performance_full_20260918/cache/advection_dominated_n289_p3",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -1510,7 +1510,7 @@
       "worst_true_relative_residual": 3.5284704679621406e-12,
       "peak_process_rss_kib": 3963036,
       "system_id": "c0f037c4f666021daf71fa7a46b65caf0d6457277272cee9b3579e2d842c92df",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p3_c0f037c4f666_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p3_c0f037c4f666_standard.json"
     },
     "reused": false
   },
@@ -1646,7 +1646,7 @@
       "requested_repeats": 1,
       "requested_warmups": 1,
       "solves_per_setup": 2,
-      "peer_solution": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/jobs/mt_p4_asm_pp_raw_fused_d18.solution.npy",
+      "peer_solution": "~/src/hdgfem-gmres/run_logs/adr_named_comparison_vv_mt_tr_20260919/jobs/mt_p4_asm_pp_raw_fused_d18.solution.npy",
       "trace_dofs": 1003625,
       "triangles": 134162,
       "neighbors_sha256": "3b67ff4559612008ea3184a117b0836758470ed7165aabb5dcac5d5db1e2b7b8",
@@ -1659,7 +1659,7 @@
         "gpu": "NVIDIA RTX PRO 5000 Blackwell"
       },
       "worker_sha256": "bc7df0325e431f719ec7cee9186422a16744f0cfb6e62c4a55594b986e20c5b1",
-      "matrix_cache": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_performance_full_20260918/cache/advection_dominated_n259_p4",
+      "matrix_cache": "~/src/hdgfem-gmres/run_logs/adr_performance_full_20260918/cache/advection_dominated_n259_p4",
       "matrix_format": "bsr",
       "adapter_sha256": "6947637e8e245372d51f6eb149be5ec660d1be5ff4074e5029798e293360117e",
       "complete_preconditioner": {
@@ -1810,7 +1810,7 @@
       "worst_true_relative_residual": 1.4069162929225687e-12,
       "peak_process_rss_kib": 5310260,
       "system_id": "59e6fb19e8082d41509c977a421baa71853d398e92eb37c97b9c0fc49e800ea3",
-      "result_path": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p4_59e6fb19e808_standard.json"
+      "result_path": "run_outputs/solver_studies/adr_scaling_2026_09_17/native_hp_completion_2026_09_21/profiles/profile_square_advection_dominated_p4_59e6fb19e808_standard.json"
     },
     "reused": false
   }

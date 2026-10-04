@@ -2170,125 +2170,125 @@
         "solves_per_setup": 2,
         "assembly_warmup": 1,
         "assembly_repeats": 3,
-        "previous_square": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
+        "previous_square": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
         "preserved_22825_jobs": {
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
             "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
             "mtime_ns": 1789727022974003116
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
             "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
             "mtime_ns": 1789727002523857471
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
             "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
             "mtime_ns": 1789727067634688353
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
             "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
             "mtime_ns": 1789727059797792282
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
             "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
             "mtime_ns": 1789727010210320151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
             "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
             "mtime_ns": 1789726991061990981
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
             "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
             "mtime_ns": 1789727135014008865
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
             "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
             "mtime_ns": 1789727108485466850
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
             "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
             "mtime_ns": 1789726980858273354
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
             "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
             "mtime_ns": 1789726985285201661
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
             "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
             "mtime_ns": 1789726996692613693
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
             "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
             "mtime_ns": 1789727043741876151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
             "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
             "mtime_ns": 1789727070408144049
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
             "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
             "mtime_ns": 1789727012933773635
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
             "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
             "mtime_ns": 1789727093581636143
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
             "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
             "mtime_ns": 1789727012935787807
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
             "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
             "mtime_ns": 1789726996694118264
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
             "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
             "mtime_ns": 1789727059799994547
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
             "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
             "mtime_ns": 1789727043743685691
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
             "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
             "mtime_ns": 1789727002525243548
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
             "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
             "mtime_ns": 1789726985285768342
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
             "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
             "mtime_ns": 1789727108488136151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
             "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
             "mtime_ns": 1789727093584354527
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
             "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
             "mtime_ns": 1789726973524742997
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
             "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
             "mtime_ns": 1789726980859144029
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
             "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
             "mtime_ns": 1789726991063562341
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
             "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
             "mtime_ns": 1789727022975780155
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
             "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
             "mtime_ns": 1789727067635394392
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
             "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
             "mtime_ns": 1789727010211188090
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
             "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
             "mtime_ns": 1789727070410359367
           }
@@ -2658,7 +2658,7 @@
             "mesh_sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
             "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
             "target_triangles": 2048,
-            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
+            "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
             "sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
             "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
           },
@@ -2681,7 +2681,7 @@
             "mesh_sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
             "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
             "target_triangles": 8192,
-            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
+            "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
             "sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
             "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
           },
@@ -2704,7 +2704,7 @@
             "mesh_sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
             "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
             "target_triangles": 32768,
-            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
+            "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
             "sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
             "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
           },
@@ -2727,7 +2727,7 @@
             "mesh_sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
             "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
             "target_triangles": 99458,
-            "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
+            "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
             "sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
             "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400."
           }
@@ -3311,125 +3311,125 @@
         "solves_per_setup": 2,
         "assembly_warmup": 1,
         "assembly_repeats": 3,
-        "previous_square": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
+        "previous_square": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_square_p6_20260918",
         "preserved_22825_jobs": {
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
             "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
             "mtime_ns": 1789727022974003116
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
             "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
             "mtime_ns": 1789727002523857471
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
             "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
             "mtime_ns": 1789727067634688353
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
             "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
             "mtime_ns": 1789727059797792282
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
             "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
             "mtime_ns": 1789727010210320151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
             "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
             "mtime_ns": 1789726991061990981
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
             "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
             "mtime_ns": 1789727135014008865
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
             "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
             "mtime_ns": 1789727108485466850
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
             "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
             "mtime_ns": 1789726980858273354
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
             "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
             "mtime_ns": 1789726985285201661
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
             "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
             "mtime_ns": 1789726996692613693
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
             "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
             "mtime_ns": 1789727043741876151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
             "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
             "mtime_ns": 1789727070408144049
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
             "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
             "mtime_ns": 1789727012933773635
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
             "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
             "mtime_ns": 1789727093581636143
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
             "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
             "mtime_ns": 1789727012935787807
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
             "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
             "mtime_ns": 1789726996694118264
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
             "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
             "mtime_ns": 1789727059799994547
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
             "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
             "mtime_ns": 1789727043743685691
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
             "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
             "mtime_ns": 1789727002525243548
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
             "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
             "mtime_ns": 1789726985285768342
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
             "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
             "mtime_ns": 1789727108488136151
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
             "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
             "mtime_ns": 1789727093584354527
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
             "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
             "mtime_ns": 1789726973524742997
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
             "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
             "mtime_ns": 1789726980859144029
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
             "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
             "mtime_ns": 1789726991063562341
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
             "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
             "mtime_ns": 1789727022975780155
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
             "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
             "mtime_ns": 1789727067635394392
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
             "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
             "mtime_ns": 1789727010211188090
           },
-          "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+          "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
             "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
             "mtime_ns": 1789727070410359367
           }
@@ -3458,7 +3458,7 @@
       "mesh_sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
       "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
       "target_triangles": 2048,
-      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
+      "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target2048.npz",
       "sha256": "885dff133b4ef1d28155aded8ec36ed12ad77fcae3fe9c7101aa21ddaef76032",
       "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
       "quality": {
@@ -3492,7 +3492,7 @@
       "mesh_sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
       "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
       "target_triangles": 8192,
-      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
+      "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target8192.npz",
       "sha256": "da6dc7e5339532b87a79d1ead13947aac0ae85c0d7dbb8cdd91bf96f0e360060",
       "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
       "quality": {
@@ -3526,7 +3526,7 @@
       "mesh_sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
       "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
       "target_triangles": 32768,
-      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
+      "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target32768.npz",
       "sha256": "5cc9fd5a50bde11be4144e71f57f7d2294b85aca6889b92b7ca7c08dd048f760",
       "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
       "quality": {
@@ -3560,7 +3560,7 @@
       "mesh_sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
       "note": "Affine triangles; sampled polygonal outer wall and polygonal approximation to circular hole. Exact Dirichlet trace is imposed on every discrete boundary edge.",
       "target_triangles": 99458,
-      "path": "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
+      "path": "~/src/hdgfem-gmres/run_logs/adr_oscillatory_scaling_geometry_20260918/star_target99458.npz",
       "sha256": "f3f709c807e403ebe3d9da6720c6ce5bc83659bd8b62c8d78098b3702f9ae4ba",
       "selection": "Closest canonical Gmsh mesh within 3% of the prior square count, at most 100,000 triangles. The coarsest polygon has 220 outer segments because 400 segments force over 3,000 triangles; other levels retain 400.",
       "quality": {
@@ -3577,15 +3577,15 @@
     }
   ],
   "binaries": {
-    "/home/adelsaleh/src/AMGX-build-cuda13/libamgxsh.so": {
+    "~/src/AMGX-build-cuda13/libamgxsh.so": {
       "sha256": "f19780cea8929352c8d3cf97ed2a2f43a23180a9932e9ba95a0af4cb1b056023",
       "size_bytes": 150015696
     },
-    "/home/adelsaleh/src/AMGX-install-cuda13/lib/libamgxsh.so": {
+    "~/src/AMGX-install-cuda13/lib/libamgxsh.so": {
       "sha256": "e006ecb3df8e7901450e6540ae14706222b9a642c88fcacce63b62568eca52f7",
       "size_bytes": 149469856
     },
-    "/home/adelsaleh/src/hdgfem/.venv/lib/python3.12/site-packages/pyamgx.cpython-312-x86_64-linux-gnu.so": {
+    ".venv/lib/python3.12/site-packages/pyamgx.cpython-312-x86_64-linux-gnu.so": {
       "sha256": "0fa650106c352469750088d2594b4e66c2baf6a1824252fee2364db327fc2841",
       "size_bytes": 2012640
     }
@@ -3626,7 +3626,7 @@
     "quadrature": [
       {
         "case": "cellular7_high",
-        "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
+        "original_spec": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_high_target8192_p6.json",
         "volume_points_1d": [
           14,
           28
@@ -3646,7 +3646,7 @@
       },
       {
         "case": "cellular7_directional",
-        "original_spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
+        "original_spec": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/specs/assemble_annulus_cellular7_directional_target8192_p6.json",
         "volume_points_1d": [
           14,
           28
@@ -3670,7 +3670,7 @@
         "case": "cellular7_high",
         "n": 64,
         "p": 6,
-        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
+        "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_high_target8192_p6",
         "trace_dofs": 82495,
         "matrix_sha256": "a3f0ed254eb3315cc9e78fc6de1c31bda7fc8f72b565ff64ce52bbdc0ee20f76",
         "norm1": 20.787596997650553,
@@ -3686,7 +3686,7 @@
         "case": "cellular7_weak",
         "n": 64,
         "p": 6,
-        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
+        "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_weak_target8192_p6",
         "trace_dofs": 82495,
         "matrix_sha256": "5932412428246a12f44890e025f8084465c869da8dad700e16969d75ff0cf5e6",
         "norm1": 0.05296334886175356,
@@ -3702,7 +3702,7 @@
         "case": "cellular7_directional",
         "n": 64,
         "p": 6,
-        "cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
+        "cache": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/scaling/annulus/cache/annulus_cellular7_directional_target8192_p6",
         "trace_dofs": 82495,
         "matrix_sha256": "1d1d22ccffd0f88e29fa50d561c63d9a149b5dd8419d6acb65e63a37b64a0375",
         "norm1": 17.711308128614505,
@@ -3719,123 +3719,123 @@
   "moved_raw_files_unchanged": 943,
   "preserved_22825_jobs_unchanged": true,
   "preserved_22825_jobs": {
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_fgmres.json": {
       "sha256": "7f0e034f4f3e670b4b8325b200f955e0a372722b19492a9f0f415cbb6918f071",
       "mtime_ns": 1789727022974003116
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_pbicgstab.json": {
       "sha256": "67b4edbd7348793914d4ffca184be0f50dedcee3624a9807cbc13a946e92bd79",
       "mtime_ns": 1789727002523857471
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_anisotropic_n107_p6.json": {
       "sha256": "076eefb313589fe3a01ca1639d316f9ac3c5ed53c5aac600f3f9fee85bc52ab4",
       "mtime_ns": 1789727067634688353
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
       "sha256": "f6f00175eb57eaa6f7fd9a6acb6e2209ee88b94b496ea81db0c417c31baa60fd",
       "mtime_ns": 1789727059797792282
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_cellular7_weak_n107_p6.json": {
       "sha256": "19400b7447463b7051a4168bdb66e68ad244ce47895c18625426ba40e1d11696",
       "mtime_ns": 1789727010210320151
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_amg_fgmres.json": {
       "sha256": "88cb156b7d02b28316f7cae10af40c37e749db5adcc9c8200d4a7c622b9a2a82",
       "mtime_ns": 1789726991061990981
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
       "sha256": "bdb2e2ffc568762661a70a297329ce6a70e90c21398c88ff0a213bc6774045dd",
       "mtime_ns": 1789727135014008865
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_asm_d24.json": {
       "sha256": "6b9b30026620dd13306d20a21da5eb0defaf44f4b8a171393bec9a830443f187",
       "mtime_ns": 1789727108485466850
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/assemble_advection_dominated_n107_p6.json": {
       "sha256": "da1b19cca6dd20a714717c3406d6d206685a0aa3fd3f0205185abf2af3bdfc9e",
       "mtime_ns": 1789726980858273354
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
       "sha256": "5fae22668c0dd40f41616c2d90631d142d1cbbd4e385f8a44c960d42c9b12267",
       "mtime_ns": 1789726985285201661
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/advection_dominated_n107_p6_asm_d24.json": {
       "sha256": "447ef2907ce5f42f36063792867ab8be4c280901d9526574ff754e9a1574678c",
       "mtime_ns": 1789726996692613693
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_asm_d24.json": {
       "sha256": "e83f186e9ee176e20562067a31940bc7833665a053469b756219492422426bfa",
       "mtime_ns": 1789727043741876151
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
       "sha256": "90157cc274264269008a795fe8aa3d69643272019be535667d92d98d39482d41",
       "mtime_ns": 1789727070408144049
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
       "sha256": "60e231d6c5c193ced726d916134f43b7d1b8c5573e8864855c50b5f7faf791e6",
       "mtime_ns": 1789727012933773635
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/jobs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
       "sha256": "e3c9dc7e4ee5946edbe2a530e3460b1ab40d5a69bab95f51c5f95ae6bf083094",
       "mtime_ns": 1789727093581636143
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_fgmres.json": {
       "sha256": "e8e951ac9951f0865e405296933d7c4fcebac19d683ad03bc31002cc0df661ce",
       "mtime_ns": 1789727012935787807
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_pbicgstab.json": {
       "sha256": "3cd7b4890387f5cd580572493458c30d30602ebdf4013a1b2b6b7ebf85a2107c",
       "mtime_ns": 1789726996694118264
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_anisotropic_n107_p6.json": {
       "sha256": "feb42ed01625c8f30f2c0e79c5c688a1bdd817540c1f8fc75b20ff308b64424b",
       "mtime_ns": 1789727059799994547
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_amg_pbicgstab.json": {
       "sha256": "661d1b11a2ab131034e7de4517786249301fb2d1d0985c0d022f0961cb927cc2",
       "mtime_ns": 1789727043743685691
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_cellular7_weak_n107_p6.json": {
       "sha256": "7318d1895ebf690b97b532ac2c4db5f0caf9da491fe542b312efa35d1a14ff06",
       "mtime_ns": 1789727002525243548
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_amg_fgmres.json": {
       "sha256": "d20fb474fe4c1afea52f871f8a3ef97d66b98a5190e989e362345a2f29103f7a",
       "mtime_ns": 1789726985285768342
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_pbicgstab.json": {
       "sha256": "54c57a50ebb58fd992f3fdeb6e88f67c04a0265bb0d1c7187a9c6d9a16a3f5e7",
       "mtime_ns": 1789727108488136151
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_asm_d24.json": {
       "sha256": "116f96e4e077428e5ed3bb7adfc87bfab40a958f0df2fb06737dccb34615ed4c",
       "mtime_ns": 1789727093584354527
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/assemble_advection_dominated_n107_p6.json": {
       "sha256": "fc46acfe8e48dd116d3b8f566bc530f7aff7583b8907596862c0a894dce08756",
       "mtime_ns": 1789726973524742997
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_dilu_pbicgstab.json": {
       "sha256": "4af347523662bf9465350ba916e59305626e28e6c46266691a763c22359ea27f",
       "mtime_ns": 1789726980859144029
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/advection_dominated_n107_p6_asm_d24.json": {
       "sha256": "1f6e8b9366d852a5fb433f82dba630c7f66070a3fc1a7daa29927eacf7f517be",
       "mtime_ns": 1789726991063562341
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_asm_d24.json": {
       "sha256": "b37b1f5da9c716fbd59856a306635fac1b460409101b12bde011eac8d8f3e3f4",
       "mtime_ns": 1789727022975780155
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_dilu_pbicgstab.json": {
       "sha256": "5fee9e008ce98e4ee7c4fcea1f5758c98a1250b64e9b1be73e38c26264e4db01",
       "mtime_ns": 1789727067635394392
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_weak_n107_p6_dilu_pbicgstab.json": {
       "sha256": "ba26e6494fbf389463806b7335cbc893b6f8a6dd26d14d84da8ffc9c93b40f23",
       "mtime_ns": 1789727010211188090
     },
-    "/home/adelsaleh/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
+    "~/src/hdgfem-gmres/run_logs/adr_oscillatory_star_h0.02_p6_20260918/specs/cellular7_anisotropic_n107_p6_amg_fgmres.json": {
       "sha256": "89a3c61404af04f57f61e59f4812f046cc58e59b39868adb90ce397804d89e05",
       "mtime_ns": 1789727070410359367
     }
@@ -3843,7 +3843,7 @@
   "cpu_tests": {
     "passed": 23,
     "deselected": 9,
-    "log": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/checks/cpu_tests.log",
+    "log": "run_outputs/solver_studies/adr_scaling_2026_09_17/oscillatory/checks/cpu_tests.log",
     "log_sha256": "ec8435d519a568b29ba7a9390333d5d421b37a601d628d76a0b846911215f184",
     "command": "python -m pytest -q tests/test_oscillatory_adr_cases.py tests/test_adv_diff_rea.py -k 'not gpu'"
   },

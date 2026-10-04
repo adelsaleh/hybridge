@@ -1,8 +1,13 @@
 # Advection-Reaction AMGX Config Findings - 2026-07-20
 
+> Historical record of 2026-07-20, moved from `run_logs/` on 2026-10-04. Its runner,
+> run_adv_rea_gpu4_hdg.py, was later replaced by the runners under `scripts/gpu/`;
+> the raw sweep files it cites are local, untracked evidence that is not
+> distributed with the repository.
+
 ## Scope
 
-This note records focused AMGX configuration tests for `scripts/run_adv_rea_gpu4_hdg.py` after the raw fused CUDA assembly work. The primary target was the existing production-style p6 advection-reaction case:
+This note records focused AMGX configuration tests for the then-current runner run_adv_rea_gpu4_hdg.py after the raw fused CUDA assembly work. The primary target was the existing production-style p6 advection-reaction case:
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
@@ -15,18 +20,18 @@ HDGFEM_GPU4_AMGX_MONITOR=0 \
 ```
 
 For modal trace sanity checks, I used `--assembly-backend cupy` in this AMGX sweep to keep the AMGX comparison focused and repeatable. A follow-up fused-raw modal parity check was performed afterward and is documented in
-`run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`.
+[`raw_cuda_fused_coop_lu_2026_07_20.md`](raw_cuda_fused_coop_lu_2026_07_20.md).
 
 ## Logs
 
 Raw benchmark output and parsed JSON/CSV logs are preserved in:
 
-- `run_logs/adv_rea_amgx_config_sweep_20260720_162358.json`: p6/ms0.01 legacy-lagrange raw-fused config sweep.
-- `run_logs/adv_rea_amgx_config_sweep_20260720_162757.json`: p6/ms0.006 legacy-lagrange raw-fused config sweep.
-- `run_logs/adv_rea_amgx_config_sweep_20260720_163011.json`: p6/ms0.005 legacy-lagrange raw-fused stress comparison.
-- `run_logs/adv_rea_amgx_tolerance_sweep_20260720_163230.json`: p6/ms0.01 baseline tolerance sweep.
-- `run_logs/adv_rea_amgx_modal_cupy_sweep_20260720_163342.json`: p6/ms0.01 legendre-modal CuPy assembly sanity comparison.
-- `run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`: fused raw CUDA p<=8 matrix-level parity (including `legendre-modal`) and reconstruction checks.
+- `run_logs/adv_rea_amgx_config_sweep_20260720_162358.json` (local, untracked): p6/ms0.01 legacy-lagrange raw-fused config sweep.
+- `run_logs/adv_rea_amgx_config_sweep_20260720_162757.json` (local, untracked): p6/ms0.006 legacy-lagrange raw-fused config sweep.
+- `run_logs/adv_rea_amgx_config_sweep_20260720_163011.json` (local, untracked): p6/ms0.005 legacy-lagrange raw-fused stress comparison.
+- `run_logs/adv_rea_amgx_tolerance_sweep_20260720_163230.json` (local, untracked): p6/ms0.01 baseline tolerance sweep.
+- `run_logs/adv_rea_amgx_modal_cupy_sweep_20260720_163342.json` (local, untracked): p6/ms0.01 legendre-modal CuPy assembly sanity comparison.
+- [`raw_cuda_fused_coop_lu_2026_07_20.md`](raw_cuda_fused_coop_lu_2026_07_20.md): fused raw CUDA p<=8 matrix-level parity (including `legendre-modal`) and reconstruction checks.
 
 The runner now prints `AMGX status` and `AMGX iterations` in the solver summary, and the sweep parser treats `AMGX iterations` as an integer.
 
@@ -81,7 +86,7 @@ p6/ms0.01, `legendre-modal`, `volume_quad_1d=14`, CuPy assembly:
 | baseline BICGSTAB ILU0 W4 | success | 465 | 1.0283 | 8.531e-13 | 2.511e-12 | 4.408e-11 | 7.4413 |
 | BICGSTAB L1 aggressive | success | 466 | 1.0320 | 7.702e-13 | 3.147e-12 | 1.286e-11 | 7.4031 |
 
-This check used CuPy assembly deliberately to isolate the AMG configuration. Fused raw CUDA modal parity is documented separately with matrix-level parity/reconstruction checks in `run_logs/raw_cuda_fused_coop_lu_findings_20260720.md`.
+This check used CuPy assembly deliberately to isolate the AMG configuration. Fused raw CUDA modal parity is documented separately with matrix-level parity/reconstruction checks in [`raw_cuda_fused_coop_lu_2026_07_20.md`](raw_cuda_fused_coop_lu_2026_07_20.md).
 
 ## Recommendation
 

@@ -214,20 +214,20 @@ The unused installed AMGX library differs from the library loaded from the
 build directory. Binary paths, hashes, repository states, worker hashes,
 exact configurations, measurements and failures are retained in
 [`adr_solver_comparison_2026_09_17.data.json`](adr_solver_comparison_2026_09_17.data.json).
-Raw local artifacts are under `/home/adelsaleh/src/hdgfem-gmres/run_logs/`.
+Raw local artifacts are under `~/src/hdgfem-gmres/run_logs/`.
 
 Use new output directories when replaying the commands below. Each Python
 command runs through the existing guard; this shell function does not build
 anything:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem-gmres
+cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 adr_python() {
   HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-  HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
-  HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
-    /home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh python "$@"
+  HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+  HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+    scripts/gpu/run_cuda13.sh python "$@"
 }
 adr_python scripts/run_adr_solver_comparison.py --degree 6 --mesh 32 \
   --output run_logs/new_screen

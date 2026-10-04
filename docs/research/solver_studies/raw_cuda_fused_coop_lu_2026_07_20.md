@@ -1,12 +1,17 @@
 # Raw CUDA Fused Cooperative LU Findings - 2026-07-20
 
+> Historical record of 2026-07-20, moved from `run_logs/` on 2026-10-04. Its runner,
+> run_adv_rea_gpu4_hdg.py, was later replaced by the runners under `scripts/gpu/`;
+> the raw sweep files it cites are local, untracked evidence that is not
+> distributed with the repository.
+
 ## Scope
 
 This note records the fused Raw CUDA advection-reaction update that followed the
 2026-07-19 serial/cooperative baseline work. The implementation is in:
 
 - `hdgfem/backends/cupy_adv_rea_raw.py`
-- `scripts/run_adv_rea_gpu4_hdg.py`
+- run_adv_rea_gpu4_hdg.py (the then-current runner)
 
 The focus was to reduce fused local-kernel cost, add an opt-in cooperative LU
 stage, document the CUDA synchronization contract, and extend the fused raw path
