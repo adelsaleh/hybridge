@@ -386,6 +386,17 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Keep Numba advection-reaction assembly kernels table-driven for stabilization: callers must pass `None`, scalars, or projected `DGField` inputs instead of Python callables.
 - [x] Make raw-CUDA advection-reaction reject explicit `advection_stabilization` inputs before device setup, instead of silently ignoring them.
 - [ ] Extend raw-CUDA advection-reaction assembly to consume evaluated per-element/per-face stabilization tables once the raw kernel tau path is wired.
+- [ ] Make the default advection stabilization depend on the continuity of the advection field, in every backend and in the transport residual. Explicit `advection_stabilization` values keep overriding the default.
+  - A discontinuous `VectorDGField` (element-wise DG velocity; its normal component is two-valued on interior faces) defaults to `conflict-averaged-upwind`, so converging seams keep their trace coupling.
+  - A continuous advection field defaults to classical sidewise upwind (`tau=|beta.n|`) and calls the classical assembly, without the conflict gather/averaging or the inactive-face gauge. This covers analytic callables, constants, and future CG or `H(div)`-conforming fields, whose normal component is single-valued across interior faces (see the Continuous-Galerkin Electric Field Study).
+  - Current state (2026-10-04): `hdg.stabilization.resolve_transport_stabilization` already maps DG fields to `conflict-averaged-upwind` and two callables to classical upwind. Only NumPy/CuPy accept callables, though. Numba and raw-CUDA require a `VectorDGField`, so a continuous field reaches them only as a DG projection and always takes the averaged kernels (Numba `tau_kind == 4`, raw-CUDA `RAW_CONFLICT_AVERAGED_UPWIND`).
+  - Continuity must be declared by the input type or an explicit flag carried to the kernels, not inferred from measured jumps. A DG projection of a continuous function still jumps at `O(h^(p+1))` and must stay on the averaged path; a numerical threshold would flip policies at nearly tangent faces.
+  - Report the resolved policy in solver results and diagnostics, so a run states which assembly it used.
+  - Acceptance:
+    - resolution tests for each input type × backend (NumPy, Numba, CuPy, raw-CUDA COO/CSR/BSR, host/device residual);
+    - on a continuous field, classical and averaged assembly agree to round-off (no conflicting faces), and the classical path is not slower;
+    - the discontinuous fixture (`scripts/advection_reaction/diagnose_discontinuous_trace.py`) keeps full rank on the default;
+    - `docs/reference/advection_boundary_stabilization.md`, the capability matrix and MANUAL state the rule.
 - [ ] Make boundary elimination the production/default boundary treatment and retire the penalty method from performance-oriented solver paths; keep penalty mode only as a legacy/educational option with explicit documentation.
 - [ ] Add an advection-reaction solver mode where boundary conditions are forced only on an input boundary subset.
 - [x] Define a tangent/nearly-tangent advection-reaction boundary mode where the numerical flux on exterior boundary faces is set to zero. In this mode boundary trace values are not required, boundary trace DOFs are omitted/decoupled from the reduced trace solve, and the semantics are distinct from both penalty boundaries and exact Dirichlet boundary elimination. Boundary subsets remain a separate follow-up.
