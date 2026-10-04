@@ -38,6 +38,23 @@
   - run: `pytest tests/test_documentation_structure.py`
   - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
 - [ ] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied.
+- [ ] Make the project public as **HYBRIDGE** (HYBRIdizable Discontinuous Galerkin Environment) with the alpha release, soon. Order: merge `package-reorganization` into `master`, rename, satisfy the preconditions above on the renamed branch, publish the alpha release from it, and switch the GitHub repository from private to public. The GENCI/IDRIS H100 allocation request names HYBRIDGE in its published summary and will be submitted only after this public release.
+  - Rename `hdgfem` → `hybridge` before going public, in one dedicated commit:
+    - the import package and the `pyproject.toml` project name (`hybridge` is free on PyPI as of 2026-10-03);
+    - the `HDGFEM_*` environment variables → `HYBRIDGE_*` (about 20 variables, e.g. `HDGFEM_PRECISION`, `HDGFEM_MAGMA_ROOT`, `HDGFEM_AMGX_*`, `HDGFEM_CUDA13_ROOT`), keeping the old names as deprecated fallbacks for one release;
+    - README, MANUAL, docs, scripts, run configs and tests (about 576 files mention `hdgfem`);
+    - the few `hdgfem` references in the pyamgx and AMGX forks, and the local CODEMAPs;
+    - finally the GitHub repository itself (GitHub redirects the old URL).
+    - Done 2026-10-04 (local only): the checkouts are now `~/src/hybridge` (master, holding the shared venv) and `~/src/hybridge-reorg`; `~/src/hdgfem-gmres` was deliberately left unchanged. The temporary compatibility symlinks were removed the same day.
+  - Lead the README with the project story:
+    - HYBRIDGE makes HDG methods accessible and usable by newcomers, in the spirit of FreeFEM and DOLFINx, with GPU assembly and solvers.
+    - It is the companion HDG project of SOLEDGE-HDG; its GPU results are meant to be transferred to SOLEDGE-HDG, first in 2D and eventually in 3D.
+    - Plasma turbulence (guiding center) is an application, not the identity.
+    - Avoid performance adjectives that go stale with hardware.
+  - Before switching visibility:
+    - add a `LICENSE` file and the `license` field in `pyproject.toml` (neither exists yet);
+    - confirm that no machine-specific files (`CODEMAP.md`, `AGENTS.md`), credentials or private data are tracked or present in history;
+    - verify the README install path from a fresh clone.
 
 
 Research studies in later sections inform future solver choices but do not block the first alpha unless they expose a correctness or resource-lifecycle defect in a supported path.
@@ -648,7 +665,7 @@ as separate commits.
 Execution protocol (approved 2026-09-29):
 
 - **Start.** Begin only after the concurrent uncommitted work in the main
-  checkout is committed. Work in a separate git worktree (`../hdgfem-reorg`)
+  checkout is committed. Work in a separate git worktree (`../hybridge-reorg`)
   on branch `package-reorganization`, created from that commit, so agents
   editing the main checkout are never affected.
 - **Commits and CODEMAP.** Use one commit series per phase, in plan order. Each
@@ -665,7 +682,7 @@ Execution protocol (approved 2026-09-29):
   master. Do not push.
 
 - [x] Set up the reorganization worktree and branch after the pending work is
-  committed. Done 2026-09-30: `../hdgfem-reorg` on `package-reorganization` from
+  committed. Done 2026-09-30: `../hybridge-reorg` on `package-reorganization` from
   `8bb2d4d`.
 - [x] Resolve the plan's open decisions before phase 2. Decided 2026-09-29 (details
   in the plan):

@@ -657,7 +657,7 @@ full mesh-points-by-vortices allocation. This cutoff defines initial data;
 it does not limit or clip the evolving field.
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 source .env
 
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \

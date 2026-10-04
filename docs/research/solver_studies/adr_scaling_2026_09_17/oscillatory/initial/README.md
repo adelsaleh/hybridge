@@ -81,7 +81,7 @@ source run_logs/adr_baseline_20260917/environment.sh
 HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
 HDGFEM_AMGX_BUILD_ROOT=/home/adelsaleh/src/AMGX-build-cuda13 \
 HDGFEM_AMGX_INSTALL_ROOT=/home/adelsaleh/src/AMGX-install-cuda13 \
-/home/adelsaleh/src/hdgfem/scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
+/home/adelsaleh/src/hybridge/scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
   --output run_logs/adr_oscillatory_star_fine_rerun \
   --cases cellular7_anisotropic cellular7_weak \
   --mesh-path run_logs/adr_oscillatory_geometry_20260918/star_h0.02.npz \
@@ -92,8 +92,8 @@ To re-audit and regenerate the report from the archived campaigns, without solve
 
 ```sh
 cd /home/adelsaleh/src/hdgfem-gmres
-/home/adelsaleh/src/hdgfem/.venv/bin/python -m scripts.audit_oscillatory_adr_study
-cd /home/adelsaleh/src/hdgfem
+/home/adelsaleh/src/hybridge/.venv/bin/python -m scripts.audit_oscillatory_adr_study
+cd /home/adelsaleh/src/hybridge
 .venv/bin/python scripts/reports/make_oscillatory_adr_report.py
 ```
 

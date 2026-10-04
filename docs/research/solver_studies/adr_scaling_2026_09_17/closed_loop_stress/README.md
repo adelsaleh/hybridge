@@ -48,7 +48,7 @@ main-level record and never generates a replacement mesh. The sibling campaign
 `--normalization-dir PATH` overrides it:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python -B scripts/reports/make_closed_loop_stress_figures.py
 ```
@@ -72,7 +72,7 @@ No LaTeX compilation was run for this addition, so pagination awaits the user's
 build. To typeset both documents:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem/docs/research/solver_studies/adr_scaling_2026_09_17
+cd /home/adelsaleh/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
   -outdir=../../../../run_outputs/solver_studies/adr_scaling_2026_09_17/typeset \
   main.tex main_synthesis.tex
@@ -88,7 +88,7 @@ all residual/timing cells
 against the original job JSON. No solver, JIT or TeX build is needed:
 
 ```bash
-cd /home/adelsaleh/src/hdgfem
+cd /home/adelsaleh/src/hybridge
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/test_closed_loop_stress_report.py
 ```

@@ -27,7 +27,7 @@ archives; its results will be considered separately when it finishes.
 
 ## Commands
 
-From `/home/adelsaleh/src/hdgfem`, inspect the plan without writing files or
+From `/home/adelsaleh/src/hybridge`, inspect the plan without writing files or
 starting a solver:
 
 ```bash

@@ -7,12 +7,12 @@ GMRES with AMGX is to qualify the existing ADR runners on this machine.
 The baseline is `gpu_gmres_precondit` at
 `d44acce873b18daa6507e0c89b20a9e4e5ab913e`, checked out in
 `/home/adelsaleh/src/hdgfem-gmres`. The original
-`/home/adelsaleh/src/hdgfem` worktree remains on `master` with its uncommitted
+`/home/adelsaleh/src/hybridge` worktree remains on `master` with its uncommitted
 work preserved. No assembler or solver code was changed for this baseline.
 
 ## Environment
 
-The tests reuse `/home/adelsaleh/src/hdgfem/.venv/bin/python` without installing
+The tests reuse `/home/adelsaleh/src/hybridge/.venv/bin/python` without installing
 or replacing packages. Python is 3.12.3, NumPy 2.5.3, SciPy 1.18.1,
 Numba 0.67.0, CuPy CUDA 13 package 14.2.0, and pytest 9.1.1.
 The GPU is an NVIDIA RTX PRO 5000 Blackwell with approximately 48 GiB VRAM;
