@@ -34,7 +34,7 @@ from dolfinx import fem, mesh as dolfinx_mesh, plot as dolfinx_plot
 from dolfinx.fem import petsc as fem_petsc
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DIO_DIR = REPO_ROOT / "scripts" / "diocotron_dolfinx"
+DIO_DIR = REPO_ROOT / "scripts" / "torsion_equilibrium" / "dolfinx"
 for candidate in (REPO_ROOT, DIO_DIR):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))

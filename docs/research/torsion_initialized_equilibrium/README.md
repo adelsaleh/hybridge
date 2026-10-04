@@ -11,6 +11,9 @@ does not define the public HDGFEM solver API.
 - [`reduced_space_window_optimization.tex`](reduced_space_window_optimization.tex)
   derives reduced sensitivities, constrained parameter directions, and the
   DOLFINx implementation strategy.
+- [`stationarity_report_2026_08_20.md`](stationarity_report_2026_08_20.md)
+  records the 2026-08-20 equilibrium handoff, its Poisson re-solve and a
+  preliminary spatial refinement check.
 
-The associated implementation lives under `scripts/diocotron_hdg/` and
-`scripts/diocotron_dolfinx/`. Generated PDFs are not tracked.
+The associated implementation lives under `scripts/torsion_equilibrium/hdg/` and
+`scripts/torsion_equilibrium/dolfinx/`. Generated PDFs are not tracked.
