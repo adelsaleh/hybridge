@@ -56,6 +56,19 @@ described below, with FGMRES/`MULTICOLOR_DILU` reserved for the final attempt.
   @run_configs/guiding_center/euler_vortex_gas_si_bdf2_p6_h0068_dt005_t50.args
 ```
 
+#### SI-BDF3
+
+Identical to the SI-BDF2 preset (mesh, `dt=0.05`, solvers, Poisson policy)
+except for the integrator: one transport and one Poisson solve per step with
+third-order extrapolated drift. Step 1 is Richardson-extrapolated SI Euler
+(three transport and two Poisson solves), step 2 is SI-BDF2. The BDF3 timestep
+has not been qualified for this case.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/euler_vortex_gas_si_bdf3_p6_h0068_dt005_t50.args
+```
+
 ### Shaped geometries
 
 #### Horseshoe — IMEX-ARK3, 360 vortices
@@ -149,6 +162,23 @@ these user-run turbulence cases, not a new mesh/time-step qualification.
   --verbosity 3
 ```
 
+### Unit disk — SI-BDF3, h=0.0068, dt=0.005, T=50
+
+Same mesh, initial data, timestep, robust Poisson policy and positivity
+auditing as the SI-BDF2 preset; only the integrator differs. The Richardson
+startup step and BDF3 itself are not positivity preserving, and no limiter
+is applied, so watch the reported negative parts.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_si_bdf3_p6_h0068_dt0005_t50_raw_cuda_bsr.args \
+  --positivity-diagnostics \
+  --diagnostics-every 10 --plot-diagnostics \
+  --plot-every 100 \
+  --diagnostics-prefix positive_turbulence_disc_si_bdf3_p6_h0068_dt0005_t50 \
+  --verbosity 3
+```
+
 ### ITER — FFT-generated positive blobs, SI-BDF2
 
 11,520 positive blobs on a cached `2048 x 4096` FFT grid, with DG p=6,
@@ -162,6 +192,21 @@ empty wall band; GPU speedup remains unmeasured.
   --diagnostics-every 10 --plot-diagnostics \
   --plot-every 1 \
   --diagnostics-prefix positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50 \
+  --verbosity 3
+```
+
+### ITER — FFT-generated positive blobs, SI-BDF3
+
+The SI-BDF2 FFT preset above with the SI-BDF3 integrator; mesh, FFT grid,
+timestep and solvers are unchanged.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_iter_fft_si_bdf3_p6_h014_dt0005_t50_raw_cuda_bsr.args \
+  --positivity-diagnostics \
+  --diagnostics-every 10 --plot-diagnostics \
+  --plot-every 1 \
+  --diagnostics-prefix positive_turbulence_iter_fft_si_bdf3_p6_h014_dt0005_t50 \
   --verbosity 3
 ```
 
@@ -233,6 +278,16 @@ env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
 ```bash
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args
+```
+
+### m=64 — SI-BDF3, dt=0.5, T=400
+
+Same mesh, `fast` Poisson policy and retries as the SI-BDF2 preset; only the
+integrator differs. At this large `dt` the BDF3 stability margin is untested.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf3_p6_h0068_dt05_t400.args
 ```
 
 ### m=64 — SI-BDF2 with Holoviz over SSH X11 forwarding

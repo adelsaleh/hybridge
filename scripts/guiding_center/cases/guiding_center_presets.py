@@ -851,6 +851,26 @@ PRESETS[_ITER_FFT_KEY] = replace(
     diagnostics_prefix=_ITER_FFT_KEY,
 )
 
+# SI-BDF3 counterparts of the positive-turbulence SI-BDF2 presets. Mesh,
+# initial data, dt, solvers and positivity checks are unchanged; only the
+# integrator differs (Richardson SI-Euler, then SI-BDF2 startup steps).
+for _bdf2_key, _geometry_label in (
+    ("positive_turbulence_si_bdf2_p6_h0068_dt0005_t50_raw_cuda_bsr", "unit disk, 360 blobs, h=0.0068"),
+    (_ITER_FFT_KEY, "ITER wall, 11,520 FFT blobs, h=0.014"),
+):
+    _key = _bdf2_key.replace("_si_bdf2_", "_si_bdf3_")
+    PRESETS[_key] = replace(
+        PRESETS[_bdf2_key],
+        description=(
+            f"Positive guiding-center turbulence ({_geometry_label}) with SI-BDF3: "
+            "Richardson-extrapolated SI-Euler and SI-BDF2 startup steps, p=6, dt=0.005 "
+            "to T=50. Same mesh, solvers and positivity checks as the SI-BDF2 preset; "
+            "no limiter. User-run trial; BDF3 timestep stability is not yet qualified."
+        ),
+        time_scheme="si-bdf3",
+        diagnostics_prefix=_key,
+    )
+
 # Additional user-run geometries share the existing ARK3 device solver stack.
 for _geometry, _mesh_size, _minimum, _counts, _sigmas in (
     ("horseshoe", 0.0048, 150000, (192, 96, 48, 24), (0.004, 0.008, 0.016, 0.032)),
@@ -1168,7 +1188,7 @@ for _case_name, _source_key, _dt, _steps, _time_suffix in (
     ("diocotron_gaussian_m64", "diocotron_gaussian_m64_ark3_p6_h008_dt005_t70",
      0.5, 800, "dt05_t400"),
 ):
-    for _scheme in ("si-euler", "predictor-corrector", "si-bdf2"):
+    for _scheme in ("si-euler", "predictor-corrector", "si-bdf2", "si-bdf3"):
         _key = f"{_case_name}_{_scheme.replace('-', '_')}_p6_h0068_{_time_suffix}"
         PRESETS[_key] = replace(
             PRESETS[_source_key],
@@ -1190,6 +1210,12 @@ for _case_name, _source_key, _dt, _steps, _time_suffix in (
 _DIOCOTRON_BDF2_FAST_KEY = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"
 PRESETS[_DIOCOTRON_BDF2_FAST_KEY] = replace(
     PRESETS[_DIOCOTRON_BDF2_FAST_KEY],
+    poisson_fb_hp_mg_preconditioner_policy="fast",
+)
+# The m=64 SI-BDF3 run mirrors the BDF2 Poisson policy.
+_DIOCOTRON_BDF3_KEY = "diocotron_gaussian_m64_si_bdf3_p6_h0068_dt05_t400"
+PRESETS[_DIOCOTRON_BDF3_KEY] = replace(
+    PRESETS[_DIOCOTRON_BDF3_KEY],
     poisson_fb_hp_mg_preconditioner_policy="fast",
 )
 

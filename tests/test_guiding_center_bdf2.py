@@ -272,7 +272,7 @@ def test_bdf2_holoviz_preset_and_convergence_selection():
     assert config.diagnostics_prefix == name
     assert _selected_schemes("si-bdf2") == ("si-bdf2",)
     assert _selected_schemes("both") == ("si-euler", "predictor-corrector")
-    assert _selected_schemes("all") == ("si-euler", "predictor-corrector", "si-bdf2", "h1-bdf3", "h2-bdf3", "imex-ark3")
+    assert _selected_schemes("all") == ("si-euler", "predictor-corrector", "si-bdf2", "si-bdf3", "h1-bdf3", "h2-bdf3", "imex-ark3")
 
 
 def test_bdf2_response_file_and_dt_override_without_launch(monkeypatch, capsys):

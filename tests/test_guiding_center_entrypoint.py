@@ -15,6 +15,7 @@ TESTED_PRESETS = {
     "si-euler": "euler_vortex_gas_si_euler_p6_h008_dt005_t50_raw_cuda_bsr",
     "predictor-corrector": "euler_vortex_gas_predictor_corrector_p6_h008_dt005_t50_raw_cuda_bsr",
     "si-bdf2": "euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr",
+    "si-bdf3": "euler_vortex_gas_si_bdf3_p6_h0068_dt005_t50",
     "h1-bdf3": "euler_vortex_gas_h1_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr",
     "h2-bdf3": "euler_vortex_gas_h2_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr",
     "imex-ark3": "euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr",

@@ -1,0 +1,3 @@
+# diocotron_gaussian_m64: si bdf3, p=6, h=0.0068, 150k+ triangles.
+# Richardson SI-Euler then SI-BDF2 startup steps; fast Poisson policy as SI-BDF2.
+--preset diocotron_gaussian_m64_si_bdf3_p6_h0068_dt05_t400

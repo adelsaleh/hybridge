@@ -24,7 +24,7 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
         recovery_verbosity=_verbosity_level(config), recovery_record=recovery_record,
         phase_verbosity=_phase_verbosity(config), detail_verbosity=_detail_verbosity(config),
     )
-    if config.time_scheme == "si-bdf2":
+    if config.time_scheme in {"si-bdf2", "si-bdf3"}:
         options["use_postprocessed_flux"] = config.transport_electric_field == "postprocessed"
     if issubclass(stepper_type, SIEulerStepper):
         return stepper_type(space, config.dt, density, poisson_result, density_trace,

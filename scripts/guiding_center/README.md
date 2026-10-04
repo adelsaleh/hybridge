@@ -18,7 +18,7 @@ and shared diagnostics and I/O.
 | Directory | Contents |
 |---|---|
 | `cases/` | Case definitions and curated run presets. |
-| `time_schemes/` | SI Euler, predictor-corrector, SI BDF2, H1/H2-BDF3, IMEX-ARK3, and their common registry and stage data. |
+| `time_schemes/` | SI Euler, predictor-corrector, SI BDF2, SI BDF3, H1/H2-BDF3, IMEX-ARK3, and their common registry and stage data. |
 | `runtime/` | CLI arguments, configuration, stepper construction, execution, diagnostics, plotting policy, and terminal logging. |
 | `poisson/` | Poisson-tau recovery, backend comparisons, AMGX tuning, saved-system replays, and hierarchy product measurements. |
 | `diagnostics/` | Diocotron analysis/reference spectra, preflight checks, timing analysis, and visualization smoke checks. |
@@ -29,16 +29,36 @@ and shared diagnostics and I/O.
 
 The time-scheme registry drives both `--time-scheme` choices and execution. Every
 scheme has its own module; SI BDF2 and predictor-corrector reuse SI Euler's
-stage-solve and accepted-history handling. All return the same
-`GuidingCenterStep` result. H1/H2 share their existing BDF3 histories and
-third-order startup. ARK3 retains its frozen transport operator. All six schemes
-support bounded Poisson-tau recovery. No standalone plain BDF3 method is added.
+stage-solve and accepted-history handling, and SI BDF3 extends SI BDF2. All
+return the same `GuidingCenterStep` result. H1/H2 share their existing BDF3
+histories and third-order startup. ARK3 retains its frozen transport operator.
+All seven schemes support bounded Poisson-tau recovery.
+
+SI BDF3 is the plain one-solve analogue of SI BDF2: one linear transport solve
+with third-order extrapolated drift, then the endpoint Poisson solve,
+
+```text
+(I + 6 dt/11 A(3 v_n - 3 v_(n-1) + v_(n-2))) rho_(n+1)
+    = (18 rho_n - 9 rho_(n-1) + 2 rho_(n-2)) / 11.
+```
+
+The temporal algebra is `hdgfem.core.time_integration.bdf3_transport_data`. Its
+startup keeps third order: step 1 is Richardson-extrapolated SI Euler
+(`2 E(dt/2) - E(dt)`: three transport and two Poisson solves), step 2 is SI BDF2.
+A plain Euler/BDF2 ramp would limit the global order to two. The extrapolated
+first step is not positivity preserving. Recovered drift
+(`--transport-electric-field postprocessed`, `--poisson-order-offset -1`) works
+as for SI BDF2. Per-step records add `bdf3_startup`, `bdf3_startup_method`
+(`si-euler-extrap2`, `si-bdf2`, or none) and `transport_time_order`. Canned
+scalar checks in `tests/test_guiding_center_bdf3.py` measure global order 3. No
+PDE timestep-stability qualification has been made; BDF3 is only A(alpha)-stable.
 
 | `--time-scheme` | Scheme module | Tested vortex-gas preset |
 |---|---|---|
 | `si-euler` | `si_euler.py` | `euler_vortex_gas_si_euler_p6_h008_dt005_t50_raw_cuda_bsr` |
 | `predictor-corrector` | `predictor_corrector.py` | `euler_vortex_gas_predictor_corrector_p6_h008_dt005_t50_raw_cuda_bsr` |
 | `si-bdf2` | `si_bdf2.py` | `euler_vortex_gas_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr` |
+| `si-bdf3` | `si_bdf3.py` | `euler_vortex_gas_si_bdf3_p6_h0068_dt005_t50` |
 | `h1-bdf3` | `h1_bdf3.py` | `euler_vortex_gas_h1_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr` |
 | `h2-bdf3` | `h2_bdf3.py` | `euler_vortex_gas_h2_bdf3_p6_h008_dt0005_t50_raw_cuda_bsr` |
 | `imex-ark3` | `imex_ark3.py` | `euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr` |
@@ -46,7 +66,12 @@ support bounded Poisson-tau recovery. No standalone plain BDF3 method is added.
 These are the existing tested presets and response files. Their timesteps,
 startup policies, stabilization and solver settings are preserved. The H1/H2
 and ARK3 rows use `dt=0.005`, `poisson_tau=1000`, and 10,000 steps to `T=50`;
-the lower-order rows use their existing `dt=0.05` configurations. Host accuracy
+the lower-order rows use their existing `dt=0.05` configurations. SI BDF3
+presets mirror the corresponding SI-BDF2 presets field for field, except the
+scheme and output prefix: `euler_vortex_gas_si_bdf3_p6_h0068_dt005_t50`,
+`positive_turbulence_si_bdf3_p6_h0068_dt0005_t50_raw_cuda_bsr`,
+`positive_turbulence_iter_fft_si_bdf3_p6_h014_dt0005_t50_raw_cuda_bsr` and
+`diocotron_gaussian_m64_si_bdf3_p6_h0068_dt05_t400` (see `example_runs.md`). Host accuracy
 and diocotron presets remain available through `--list-presets`, which now
 shows each preset's scheme and timestep.
 
@@ -417,7 +442,7 @@ and this experiment does not select a production preset.
 
 ## Poisson-tau fallback for every scheme
 
-SI Euler, predictor-corrector, SI BDF2, H1-BDF3, H2-BDF3, and IMEX-ARK3 all
+SI Euler, predictor-corrector, SI BDF2, SI BDF3, H1-BDF3, H2-BDF3, and IMEX-ARK3 all
 retry numerical transport failures through the same backend-independent tau
 policy. This includes direct-factorization failures and iterative nonconvergence,
 as well as diagnosed active trace-rank loss. Capacity, configuration, and
@@ -432,7 +457,8 @@ unaccepted timestep. Accepted densities and time remain unchanged on exhaustion.
 The increased tau persists after success; `--poisson-tau-max-retries 0` disables
 recovery.
 
-BDF2 rebuilds its accepted flux history; H1 rebuilds the Poisson-derived residual
+BDF2 rebuilds its accepted flux history; SI BDF3 rebuilds both accepted flux
+levels; H1 rebuilds the Poisson-derived residual
 history; H2 rebuilds its drift history. Startup and predictor/corrector stages
 also participate. IMEX-ARK3 rebuilds its frozen operator and all stage residuals.
 The shared replay orchestration is in `time_schemes/recovery.py`; tau policy and

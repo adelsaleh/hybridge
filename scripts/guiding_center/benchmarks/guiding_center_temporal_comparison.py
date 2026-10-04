@@ -43,8 +43,8 @@ def prepare_vortex_comparison(*, preset=DEFAULT_VORTEX_PRESET, scheme="si-bdf2",
     base = preset_by_key(preset)
     if base.case not in {"euler_vortex_gas", "euler_star_vortex_gas"}:
         raise ValueError("vortex-gas comparison requires an Euler vortex-gas preset")
-    if scheme not in {"si-euler", "si-bdf2", "predictor-corrector", "h1-bdf3", "h2-bdf3", "imex-ark3"}:
-        raise ValueError("vortex-gas comparison supports si-euler, si-bdf2, predictor-corrector, h1-bdf3, h2-bdf3 and imex-ark3")
+    if scheme not in {"si-euler", "si-bdf2", "si-bdf3", "predictor-corrector", "h1-bdf3", "h2-bdf3", "imex-ark3"}:
+        raise ValueError("vortex-gas comparison supports si-euler, si-bdf2, si-bdf3, predictor-corrector, h1-bdf3, h2-bdf3 and imex-ark3")
     dts = tuple(float(dt) for dt in dts)
     if len(dts) < 2 or any(not math.isfinite(dt) or dt <= 0 for dt in dts):
         raise ValueError("comparison requires at least two finite, positive dts")

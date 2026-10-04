@@ -23,7 +23,7 @@ from scripts.guiding_center.cases.guiding_center_cases import case_definition_by
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.runner import run_guiding_center_case
 
-SCHEMES = ("si-euler", "predictor-corrector", "si-bdf2", "h1-bdf3", "h2-bdf3", "imex-ark3")
+SCHEMES = ("si-euler", "predictor-corrector", "si-bdf2", "si-bdf3", "h1-bdf3", "h2-bdf3", "imex-ark3")
 BASE_ERROR_KEYS = ("rho_l2_error", "rho_linf_error", "phi_l2_error", "phi_linf_error")
 HDG_ERROR_KEYS = tuple(f"{field}_{norm}_error" for field in ("rho", "phi")
                        for norm in ("gradient_l2", "trace_mismatch", "hdg_h1"))
@@ -128,7 +128,7 @@ def plot_convergence(rows: list[dict[str, Any]], output: Path, *, show: bool = F
     keys = [key for key in labels if any(row.get(key) is not None for row in rows)]
     if not keys:
         raise ValueError("no error metrics to plot")
-    styles = {"si-euler": "o-", "predictor-corrector": "s-", "si-bdf2": "^-", "h1-bdf3": "d-", "h2-bdf3": "v-", "imex-ark3": "x-"}
+    styles = {"si-euler": "o-", "predictor-corrector": "s-", "si-bdf2": "^-", "si-bdf3": "<-", "h1-bdf3": "d-", "h2-bdf3": "v-", "imex-ark3": "x-"}
     nrows = (len(keys) + 1) // 2
     figure, axes = plt.subplots(nrows, 2, figsize=(11, 3.5*nrows), squeeze=False, constrained_layout=True)
     for axis in axes.flat[len(keys):]:
@@ -156,7 +156,7 @@ def plot_convergence(rows: list[dict[str, Any]], output: Path, *, show: bool = F
             coarse_dt = float(refs[0])
             axis.loglog(refs, reference_scale * refs / coarse_dt, "k--", alpha=0.55, label=r"$O(\Delta t)$")
             axis.loglog(refs, reference_scale * (refs / coarse_dt) ** 2, "k:", alpha=0.65, label=r"$O(\Delta t^2)$")
-            if any(row["scheme"] in {"h1-bdf3", "h2-bdf3", "imex-ark3"} for row in rows):
+            if any(row["scheme"] in {"si-bdf3", "h1-bdf3", "h2-bdf3", "imex-ark3"} for row in rows):
                 axis.loglog(refs, reference_scale * (refs / coarse_dt) ** 3, "k-.", alpha=0.65, label=r"$O(\Delta t^3)$")
         axis.set_xlabel(r"$\Delta t$")
         axis.set_ylabel(labels[error_key])
@@ -213,7 +213,7 @@ def run_temporal_convergence(
     show_plot: bool = False,
 ) -> tuple[list[dict[str, Any]], Path, Path]:
     if scheme not in {*SCHEMES, "both", "all"}:
-        raise ValueError("scheme must be 'si-euler', 'predictor-corrector', 'si-bdf2', 'h1-bdf3', 'h2-bdf3', 'imex-ark3', 'both', or 'all'")
+        raise ValueError("scheme must be 'si-euler', 'predictor-corrector', 'si-bdf2', 'si-bdf3', 'h1-bdf3', 'h2-bdf3', 'imex-ark3', 'both', or 'all'")
     if final_time <= 0.0:
         raise ValueError("final_time must be positive")
     output_path = Path(output_dir)

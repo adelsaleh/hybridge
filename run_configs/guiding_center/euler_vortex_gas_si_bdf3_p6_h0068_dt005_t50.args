@@ -1,0 +1,3 @@
+# euler_vortex_gas: si bdf3, p=6, h=0.0068, 150k+ triangles.
+# Richardson SI-Euler then SI-BDF2 startup steps; same dt as the SI-BDF2 preset.
+--preset euler_vortex_gas_si_bdf3_p6_h0068_dt005_t50

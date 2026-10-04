@@ -6,6 +6,7 @@ endpoint_postprocess=...)`` and return a :class:`GuidingCenterStep`.
 from .stage_support import GuidingCenterStep
 from .si_euler import SIEulerStepper
 from .si_bdf2 import SIBDF2Stepper
+from .si_bdf3 import SIBDF3Stepper
 from .predictor_corrector import PredictorCorrectorStepper
 from .h1_bdf3 import H1BDF3Stepper
 from .h2_bdf3 import H2BDF3Stepper
@@ -13,11 +14,11 @@ from .imex_ark3 import IMEXARK3Stepper
 
 STEPPERS = {
     stepper.scheme: stepper for stepper in (
-        SIEulerStepper, PredictorCorrectorStepper, SIBDF2Stepper,
+        SIEulerStepper, PredictorCorrectorStepper, SIBDF2Stepper, SIBDF3Stepper,
         H1BDF3Stepper, H2BDF3Stepper, IMEXARK3Stepper,
     )
 }
 
-__all__ = ["GuidingCenterStep", "SIEulerStepper", "SIBDF2Stepper",
+__all__ = ["GuidingCenterStep", "SIEulerStepper", "SIBDF2Stepper", "SIBDF3Stepper",
            "PredictorCorrectorStepper", "H1BDF3Stepper", "H2BDF3Stepper",
            "IMEXARK3Stepper", "STEPPERS"]

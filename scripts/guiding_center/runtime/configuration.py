@@ -423,11 +423,11 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
     if config.transport_electric_field not in {"raw", "postprocessed"}:
         raise ValueError("transport_electric_field must be raw or postprocessed")
     if config.poisson_order_offset or config.transport_electric_field == "postprocessed":
-        if config.time_scheme != "si-bdf2":
-            raise ValueError("reduced-order Poisson and recovered transport drift currently require si-bdf2")
+        if config.time_scheme not in {"si-bdf2", "si-bdf3"}:
+            raise ValueError("reduced-order Poisson and recovered transport drift currently require si-bdf2 or si-bdf3")
     if config.transport_electric_field == "postprocessed":
         if config.poisson_order_offset != -1:
-            raise ValueError("recovered BDF2 drift requires poisson_order_offset=-1 to fit density DG(p)")
+            raise ValueError("recovered BDF drift requires poisson_order_offset=-1 to fit density DG(p)")
         if config.poisson_hdg_postprocess not in {"flux", "both"}:
             raise ValueError("recovered transport drift requires Poisson flux postprocessing on every solve")
         if config.poisson_flux_postprocess_every:

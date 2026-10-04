@@ -1,0 +1,6 @@
+# Positive guiding-center turbulence on the unit disk: 360 compact Gaussian blobs.
+# 150k minimum triangles; DG p=6, h=0.0068, SI-BDF3 dt=0.005 to T=50.
+# Startup: one Richardson-extrapolated SI-Euler step, then one SI-BDF2 step.
+# Positivity is checked initially and every 10 accepted endpoints; no limiter.
+# Robust Poisson: PCGF-first native/hybrid/CSR ladder, then one FGMRES/DILU try.
+--preset positive_turbulence_si_bdf3_p6_h0068_dt0005_t50_raw_cuda_bsr

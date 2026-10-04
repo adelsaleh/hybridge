@@ -125,7 +125,7 @@ def _add_solver_arguments(parser: ArgumentParser) -> None:
 def build_parser() -> GuidingCenterArgumentParser:
     """Build the single case CLI without constructing a mesh or solver."""
     parser = GuidingCenterArgumentParser(
-        description="Run fixed-mesh guiding-center cases with SI Euler, predictor-corrector, SI BDF2, H1/H2-BDF3, or IMEX-ARK3.",
+        description="Run fixed-mesh guiding-center cases with SI Euler, predictor-corrector, SI BDF2/BDF3, H1/H2-BDF3, or IMEX-ARK3.",
         formatter_class=RawDescriptionHelpFormatter,
         fromfile_prefix_chars="@",
         epilog=(
@@ -156,9 +156,9 @@ def build_parser() -> GuidingCenterArgumentParser:
     parser.add_argument("--transport-trace-basis", choices=("legacy-lagrange", "legendre-modal"), default=None)
     parser.add_argument("--order", "-p", type=int, default=None)
     parser.add_argument("--poisson-order-offset", type=int, choices=(-1, 0), default=None,
-                        help="Poisson degree relative to density degree (BDF2 supports -1)")
+                        help="Poisson degree relative to density degree (SI-BDF2/BDF3 support -1)")
     parser.add_argument("--transport-electric-field", choices=("raw", "postprocessed"), default=None,
-                        help="electric field supplying BDF2 drift on every Poisson solve")
+                        help="electric field supplying SI-BDF2/BDF3 drift on every Poisson solve")
     parser.add_argument("--volume-quadrature", choices=("auto", "symmetric", "duffy"), default=None)
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)

@@ -26,7 +26,7 @@ def run_label(config):
         model = config.case.replace("_", " ")
     scheme = {
         "imex-ark3": "IMEX-ARK3", "si-euler": "SI Euler",
-        "predictor-corrector": "Predictor-corrector", "si-bdf2": "SI BDF2",
+        "predictor-corrector": "Predictor-corrector", "si-bdf2": "SI BDF2", "si-bdf3": "SI BDF3",
         "h1-bdf3": "H1-BDF3", "h2-bdf3": "H2-BDF3",
     }.get(config.time_scheme, config.time_scheme)
     return f"{model} | {scheme}"

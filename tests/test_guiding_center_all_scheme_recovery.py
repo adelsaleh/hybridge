@@ -11,7 +11,7 @@ from hdgfem.linalg.results import (
 from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
 from scripts.guiding_center.time_schemes import STEPPERS
 from scripts.guiding_center.time_schemes import (
-    si_euler, si_bdf2, predictor_corrector, hybrid_bdf3, imex_ark3, recovery, stage_support,
+    si_euler, si_bdf2, si_bdf3, predictor_corrector, hybrid_bdf3, imex_ark3, recovery, stage_support,
 )
 from scripts.guiding_center.poisson.poisson_recovery import is_transport_solve_failure
 
@@ -39,7 +39,25 @@ class CannedField(np.ndarray):
 def canned_field_operations(monkeypatch):
     def perpendicular(flux, scale, space, **kwargs):
         return scale*CannedField([-flux[1], flux[0]])
-    for module in (si_euler, si_bdf2, predictor_corrector, hybrid_bdf3, imex_ark3, recovery):
+    def vector(value):
+        value.components = ()  # The wrappers relabel components; canned drifts have none.
+        return value
+    def bdf2(field, velocity, dt, *, previous_field=None, previous_velocity=None):
+        if previous_field is None:
+            return field.copy(), vector(dt*velocity), dt
+        return ((4*field-previous_field)/3,
+                vector((2*dt/3)*(2*velocity-previous_velocity)), 2*dt/3)
+    def bdf3(field, velocity, dt, *, previous_field=None, previous_velocity=None,
+             older_field=None, older_velocity=None):
+        if older_field is None:
+            return bdf2(field, velocity, dt, previous_field=previous_field,
+                        previous_velocity=previous_velocity)
+        return ((18*field-9*previous_field+2*older_field)/11,
+                vector((6*dt/11)*(3*velocity-3*previous_velocity+older_velocity)), 6*dt/11)
+    # Canned arrays are not DGFields; keep the package algebra's weights.
+    monkeypatch.setattr(si_bdf2, 'bdf2_transport_data', bdf2)
+    monkeypatch.setattr(si_bdf3, 'bdf3_transport_data', bdf3)
+    for module in (si_euler, si_bdf2, si_bdf3, predictor_corrector, hybrid_bdf3, imex_ark3, recovery):
         for name, function in {
             'perpendicular_vector_field': perpendicular,
             'solution_field': lambda result, space, **kw: result.field,
@@ -48,7 +66,7 @@ def canned_field_operations(monkeypatch):
         }.items():
             if hasattr(module, name):
                 monkeypatch.setattr(module, name, function)
-    for module in (predictor_corrector, stage_support):
+    for module in (predictor_corrector, si_bdf3, stage_support):
         monkeypatch.setattr(module, 'trace_linear_combination',
                             lambda terms: sum(w*v for w, v in terms))
     monkeypatch.setattr(predictor_corrector, 'solver_result_metrics', lambda *a: {})
@@ -94,16 +112,19 @@ def problem(scheme, *, tau=1., history=False, retries=4, fail_call=None, fail_er
     initial = p.result(density)
     options = dict(density_boundary=lambda t: None, potential_boundary=lambda t: t,
                    poisson_solver=p, poisson_tau_max_retries=retries, recovery_record=events.append)
-    if scheme in ('si-euler', 'si-bdf2', 'predictor-corrector'):
+    if scheme in ('si-euler', 'si-bdf2', 'si-bdf3', 'predictor-corrector'):
         stepper = STEPPERS[scheme](p.space, .1, density, initial, density.copy(), **options)
     else:
         if scheme != 'imex-ark3':
             options['startup_method'] = startup
         stepper = STEPPERS[scheme](p.space, .1, density, initial, CannedResidual(), **options)
-    if history and scheme == 'si-bdf2':
+    if history and scheme in ('si-bdf2', 'si-bdf3'):
         stepper.time = .2
         stepper.previous_density = CannedField([1.5])
         stepper.previous_flux = p.result(stepper.previous_density).flux
+    if history and scheme == 'si-bdf3':
+        stepper.older_density = CannedField([1.])
+        stepper.older_flux = p.result(stepper.older_density).flux
     if history and scheme in ('h1-bdf3', 'h2-bdf3'):
         stepper.time = .2
         stepper.densities = [density, CannedField([1.5]), CannedField([1.])]
@@ -123,7 +144,9 @@ def problem(scheme, *, tau=1., history=False, retries=4, fail_call=None, fail_er
 
 
 CASES = [(scheme, False, 1) for scheme in STEPPERS]
-CASES += [('predictor-corrector', False, 2), ('si-bdf2', True, 1)]
+CASES += [('predictor-corrector', False, 2), ('si-bdf2', True, 1), ('si-bdf3', True, 1)]
+# SI-BDF3 startup: full Euler path, then both half steps.
+CASES += [('si-bdf3', False, stage) for stage in (2, 3)]
 CASES += [(scheme, True, stage) for scheme, stages in [('h1-bdf3', (1,)), ('h2-bdf3', (1, 2))]
           for stage in stages]
 CASES += [(scheme, False, stage) for scheme in ('h1-bdf3', 'h2-bdf3') for stage in (2, 3, 4, 5, 6)]
@@ -162,14 +185,14 @@ def test_every_transport_stage_replays_with_rebuilt_poisson_history(scheme, hist
 @pytest.mark.parametrize('scheme', list(STEPPERS))
 def test_exhaustion_restores_accepted_state_and_later_call_rebuilds(scheme):
     stepper, p, solve, calls, events = problem(scheme, retries=2, fail_call='always',
-                                             history=scheme in ('si-bdf2', 'h1-bdf3', 'h2-bdf3'))
+                                             history=scheme in ('si-bdf2', 'si-bdf3', 'h1-bdf3', 'h2-bdf3'))
     saved = stepper.__dict__.copy()
     with pytest.raises(LinearSolveConvergenceError):
         stepper.advance(p, solve)
     assert p.invalidations == [2., 4.]
     assert events[-1]['status'] == 'exhausted'
     for key in ('density', 'densities', 'drifts', 'residuals', 'rhs', 'time', 'potential_trace',
-                'previous_density', 'previous_flux', 'poisson_result'):
+                'previous_density', 'previous_flux', 'older_density', 'older_flux', 'poisson_result'):
         if key in saved:
             assert stepper.__dict__[key] is saved[key]
     def success(*args, **kwargs):
