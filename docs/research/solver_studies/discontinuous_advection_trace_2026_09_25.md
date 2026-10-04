@@ -1,5 +1,16 @@
 # Discontinuous Advection Trace Rank Diagnosis
 
+> **Update 2026-10-04.** DG-field velocities now default to
+> `conflict-averaged-upwind` (`hdg.stabilization.resolve_transport_stabilization`),
+> so the fixture's default (`standard`) scenario assembles at full rank in
+> NumPy, Numba, CuPy and raw CUDA. The plain-upwind matrices recorded below
+> are reproduced by the diagnostic's explicit `upwind` scenario
+> (`advection_stabilization="upwind"`); `reaction-20` also uses plain upwind.
+> The tests now assert the full-rank default and keep the plain-upwind defect
+> as a characterization. The transport residual
+> (`transport.residual.UpwindHDGTransportResidual`) raises its rank-deficiency
+> error only under explicit plain upwind.
+
 The singular fixture is caused by a double-outflow interior face under standard
 sidewise upwind. The existing `conflict-averaged-upwind` policy repairs this
 fixture in NumPy, Numba, CuPy, and raw CUDA. No additional numerical kernel or

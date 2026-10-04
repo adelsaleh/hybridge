@@ -1,4 +1,4 @@
-"""Host assembly-only diagnosis of the original discontinuous-velocity fixture."""
+"""Host assembly-only checks of the discontinuous-velocity fixture and its seam traces."""
 
 import numpy as np
 import pytest
@@ -19,28 +19,34 @@ def forbid_global_solve(monkeypatch):
 @pytest.mark.parametrize("degree", [1, 2, 3])
 @pytest.mark.parametrize("trace_basis", ["legacy-lagrange", "legendre-modal"])
 @pytest.mark.parametrize("boundary_mode", ["eliminate", "penalty"])
-def test_averaging_repairs_the_fixture_in_numpy_and_numba(degree, trace_basis, boundary_mode):
+def test_default_stabilization_handles_the_converging_seam_in_numpy_and_numba(
+        degree, trace_basis, boundary_mode):
+    """DG velocities default to conflict-averaged upwind, which keeps every seam trace."""
     options = dict(degree=degree, trace_basis=trace_basis, boundary_mode=boundary_mode)
-    original = assemble_fixture(**options)
+    default = assemble_fixture(**options)
     averaged = assemble_fixture(**options, scenario="averaged")
-    broken, repaired = diagnose(original), diagnose(averaged)
-    for case in (broken, repaired):
+    upwind = assemble_fixture(**options, scenario="upwind")
+    handled, broken = diagnose(default), diagnose(upwind)
+    for case in (handled, broken):
         assert case["assembly_only"]
         assert case["local_min_rcond"] > 1.e-12
         assert case["reaction_min"] > 1.98
+    assert handled["advection_stabilization"] == "conflict-averaged-upwind"
+    np.testing.assert_array_equal(default.matrix().toarray(), averaged.matrix().toarray())
+    np.testing.assert_array_equal(default.result.solve_rhs, averaged.result.solve_rhs)
+    assert handled["matrix_zero_columns"] == 0
+    assert handled["row_scaled_rank"] == handled["matrix_size"]
+    assert handled["seam_local_coupling_abs_max"] > 0.
+    assert handled["trace_inflow_diagnostics"]["no_inflow_faces"] == 0
+    # The original unit-factor upwind stays selectable and still orphans the
+    # seam: both sides flow out, so its p+1 trace columns vanish.
     assert broken["matrix_zero_rows"] == 0
     assert broken["matrix_zero_column_samples"] == broken["seam_trace_columns"]
     assert broken["matrix_zero_columns"] == degree + 1
     assert broken["row_scaled_rank"] == broken["matrix_size"] - degree - 1
     assert broken["seam_local_coupling_abs_max"] == broken["seam_column_abs_max"] == 0.
     assert broken["trace_inflow_diagnostics"]["double_outflow_faces"] == 1
-    assert repaired["matrix_zero_columns"] == 0
-    assert repaired["row_scaled_rank"] == repaired["matrix_size"]
-    assert repaired["seam_local_coupling_abs_max"] > 0.
-    assert repaired["trace_inflow_diagnostics"]["no_inflow_faces"] == 0
-    for first, second in zip(original.beta.components, averaged.beta.components, strict=True):
-        np.testing.assert_array_equal(first.coeffs, second.coeffs)
-    for host in (original, averaged):
+    for host in (default, upwind):
         compiled_path = assemble_fixture(**options, backend="numba", scenario=host.scenario)
         np.testing.assert_allclose(compiled_path.matrix().toarray(), host.matrix().toarray(), rtol=2.e-11, atol=2.e-12)
         np.testing.assert_allclose(compiled_path.result.solve_rhs, host.result.solve_rhs, rtol=2.e-11, atol=2.e-12)
@@ -52,6 +58,7 @@ def test_averaging_repairs_the_fixture_in_numpy_and_numba(degree, trace_basis, b
 @pytest.mark.parametrize("trace_basis", ["legacy-lagrange", "legendre-modal"])
 @pytest.mark.parametrize("boundary_mode", ["eliminate", "penalty"])
 def test_positive_reaction_does_not_replace_missing_face_inflow(trace_basis, boundary_mode):
+    """Under plain upwind a larger reaction cannot restore the orphaned seam trace."""
     options = dict(degree=3, trace_basis=trace_basis, boundary_mode=boundary_mode)
     stronger = diagnose(assemble_fixture(**options, scenario="reaction-20"))
     continuous = diagnose(assemble_fixture(**options, scenario="continuous"))

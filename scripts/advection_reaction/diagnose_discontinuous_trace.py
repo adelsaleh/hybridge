@@ -26,7 +26,11 @@ from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
 
 
 AVERAGED = "conflict-averaged-upwind"
-SCENARIOS = ("standard", "averaged", "reaction-20", "continuous")
+# "standard" uses the default stabilization, which resolves to conflict-averaged
+# upwind for DG velocities; "upwind" is the original unit-factor scheme, whose
+# converging seam loses its inflow trace. "reaction-20" keeps that defect with a
+# larger reaction, and "continuous" removes the jump.
+SCENARIOS = ("standard", "averaged", "upwind", "reaction-20", "continuous")
 
 
 def discontinuous_advection_fields(space: DGSpace):
@@ -53,7 +57,7 @@ class FixtureAssembly:
     reaction: object
     result: object
     trace_basis: str
-    policy: str | None
+    policy: object
     scenario: str
 
     def matrix(self):
@@ -67,7 +71,10 @@ class FixtureAssembly:
 
 def assemble_fixture(*, degree=3, trace_basis="legacy-lagrange", backend="numpy",
                      boundary_mode="eliminate", scenario="standard", nx=2):
-    """Assemble the original fixture or one controlled variation; never solve."""
+    """Assemble the fixture or one controlled variation; never solve.
+
+    ``policy`` records the resolved stabilization the assembly used.
+    """
     if scenario not in SCENARIOS:
         raise ValueError(f"Unknown diagnostic scenario: {scenario}")
     if degree not in (1, 2, 3) or nx not in (1, 2):
@@ -75,7 +82,7 @@ def assemble_fixture(*, degree=3, trace_basis="legacy-lagrange", backend="numpy"
     space = DGSpace(rectangle_mesh(nx, 1, xlim=(-1., 1.), ylim=(0., 1.)), degree,
                     basis_type="dub_orth", volume_quad_1d=2 * degree + 2)
     _, _, source, reaction, beta, boundary = discontinuous_advection_fields(space)
-    policy = AVERAGED if scenario == "averaged" else None
+    policy = {"averaged": AVERAGED, "upwind": "upwind", "reaction-20": "upwind"}.get(scenario)
     if scenario == "reaction-20":
         reaction = space.constant(20., name="reaction_h")
     elif scenario == "continuous":
@@ -88,6 +95,7 @@ def assemble_fixture(*, degree=3, trace_basis="legacy-lagrange", backend="numpy"
         materialize_host_system=True, verbose=False,
     )
     result = solver.assemble_trace_system()
+    policy = hdg_stabilization.resolve_transport_stabilization(policy, beta)
     return FixtureAssembly(space, beta, reaction, result, trace_basis, policy, scenario)
 
 
@@ -131,7 +139,7 @@ def diagnose(assembly: FixtureAssembly):
     report.update(
         scenario=assembly.scenario, backend=result.assembly_backend, degree=space.order,
         trace_basis=assembly.trace_basis, boundary_mode=result.boundary_mode,
-        triangles=mesh.num_tri, advection_stabilization=assembly.policy or "upwind",
+        triangles=mesh.num_tri, advection_stabilization=str(assembly.policy),
         row_scaled_rank=int(np.count_nonzero(singular > tolerance)),
         row_scaled_svd_tolerance=float(tolerance),
         row_scaled_smallest_singular_value=float(singular[-1]),

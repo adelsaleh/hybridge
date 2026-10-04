@@ -50,13 +50,19 @@ def test_residual_device_parity_residency_and_owned_history(cp, order, basis, bo
     assert not actual.coefficients_materialized
 
 
-def test_device_rejects_structurally_singular_face(cp):
+def test_device_handles_converging_face_by_default_and_rejects_it_under_plain_upwind(cp):
     space = DGSpace(rectangle_mesh(1, 1), 6, basis_type="dub_orth")
     bx = space.project_callable(lambda x, y: x+.5)
     bx.coeffs[1] = space.constant(-1).coeffs[1]
-    residual = UpwindHDGTransportResidual(space, backend="device")
+    beta = VectorDGField((bx, space.zeros()))
+    device = UpwindHDGTransportResidual(space, backend="device").evaluate(space.constant(2), beta)
+    host = UpwindHDGTransportResidual(space).evaluate(space.constant(2), beta)
+    for actual, expected in zip(device, host, strict=True):
+        actual, expected = getattr(actual, "coeffs", actual), getattr(expected, "coeffs", expected)
+        np.testing.assert_allclose(cp.asnumpy(cp.asarray(actual)), np.asarray(expected), rtol=1e-12, atol=1e-12)
+    residual = UpwindHDGTransportResidual(space, backend="device", advection_stabilization="upwind")
     with pytest.raises(np.linalg.LinAlgError, match="rank-deficient active trace constraint"):
-        residual.evaluate(space.constant(2), VectorDGField((bx, space.zeros())))
+        residual.evaluate(space.constant(2), beta)
 
 
 @pytest.mark.parametrize("scheme", ["h1-bdf3", "h2-bdf3"])
