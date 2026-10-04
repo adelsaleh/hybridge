@@ -62,10 +62,10 @@ def test_options_object_disables_inference():
     assert hdg.DiffusionReactionHDGSolver(_space(), options=options).options == options
 
 
-def test_raw_zero_flux_transport_implies_the_fused_kernel():
+def test_raw_zero_flux_transport_implies_auto_local_assembly():
     implied = hdg.AdvectionReactionHDGSolver(
         _space(), assembly_backend="raw-cuda", boundary_mode="zero-flux").options
-    assert implied.raw_local_assembly == "fused"
+    assert implied.raw_local_assembly == "auto"
     explicit = hdg.AdvectionReactionHDGSolver(
         _space(), assembly_backend="raw-cuda", boundary_mode="zero-flux",
         raw_local_assembly="split3").options
