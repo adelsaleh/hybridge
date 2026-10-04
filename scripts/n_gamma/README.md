@@ -13,6 +13,9 @@ explicitly (there is no default):
 These modules provide data and meshes for the
 [D-BDF2 plan](../../docs/development/plans/n_gamma_d_bdf2.md); the stepper
 lives in `stepper.py` and the runner in `run_d_bdf2.py`.
+`plot_manufactured_solution.py` is a standalone Matplotlib (Qt) animation of
+an early analytic density/momentum pair on `(-1,1)^2`; it does not use the
+case registry.
 
 ```python
 from scripts.n_gamma.cases import get_case

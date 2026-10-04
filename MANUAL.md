@@ -385,7 +385,7 @@ config so `poisson_solver_atol` controls the AMGX stop target directly.
 
 ### DOLFINx
 
-DOLFINx is optional and only used by scripts under `scripts/diocotron_dolfinx/`
+DOLFINx is optional and only used by scripts under `scripts/torsion_equilibrium/dolfinx/`
 for continuous-Galerkin comparison diagnostics on the guiding-center equilibrium
 problem.  Prefer a separate environment so its MPI/PETSc stack does not
 constrain the normal `hdgfem` environment:
@@ -1530,7 +1530,7 @@ Schur complement with an edge-block Jacobi preconditioner.
 Focused checks:
 
 ```bash
-python -m scripts.hdg_gram.hdg_gram_matrix_test --order 2 --nx 2 --ny 2
+python -m scripts.dev.check_hdg_gram_matrix --order 2 --nx 2 --ny 2
 python -m pytest tests/test_hdg_gram.py
 ```
 
@@ -1905,7 +1905,7 @@ semilinear elliptic equation of the form
 ```
 
 The native HDG runner is
-`scripts/diocotron_hdg/hdg_torsion_initialized_newton.py`.  It uses a
+`scripts/torsion_equilibrium/hdg/hdg_torsion_initialized_newton.py`.  It uses a
 torsion-initialized Newton method: solve torsion design fields, build a density
 window, solve a Poisson initializer `phiDesign`, and then apply damped Newton
 continuation to the semilinear HDG residual.
@@ -1913,7 +1913,7 @@ continuation to the semilinear HDG residual.
 Typical HDG diagnostic run:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m scripts.torsion_equilibrium.hdg.hdg_torsion_initialized_newton \
   --star-n 260 --order 4 --hdg-tau 20 -v 2 \
   --residual-norm euclid --newton-shift-mode none
 ```
@@ -1924,7 +1924,7 @@ Important controls include `--alphaT1`, `--alphaT2`, `--betaPhi1`,
 `--skip-petsc`.  Runs create timestamped output under
 `run_logs/hdg_torsion_initialized_newton/` unless `--run-dir` is provided.
 
-The DOLFINx scripts under `scripts/diocotron_dolfinx/` implement
+The DOLFINx scripts under `scripts/torsion_equilibrium/dolfinx/` implement
 continuous-Galerkin diagnostics for the same semilinear equilibrium problem.
 They can be used to compare CG and HDG on the same mesh, but they are not
 replacements for the HDG package solver path.
@@ -1932,12 +1932,12 @@ replacements for the HDG package solver path.
 Fair CG/HDG comparison workflow:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m scripts.torsion_equilibrium.hdg.hdg_torsion_initialized_newton \
   --run-tag hdg_star260_p2_mumps_clean \
   --star-n 260 --order 2 --hdg-tau 10 \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
-python -m scripts.diocotron_dolfinx.dolfinx_torsion_initialized_newton \
+python -m scripts.torsion_equilibrium.dolfinx.dolfinx_torsion_initialized_newton \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
   --mesh run_logs/hdg_torsion_initialized_newton/<hdg-run>/initial_mesh.msh \
   --order 2 --linear-solver mumps --terminal-every 1
@@ -2054,7 +2054,7 @@ Run a cheap guiding-center HDG smoke test only when that optional path is being
 changed:
 
 ```bash
-python -m scripts.diocotron_hdg.hdg_torsion_initialized_newton \
+python -m scripts.torsion_equilibrium.hdg.hdg_torsion_initialized_newton \
   --star-n 20 --mesh-size 0.5 --order 1 --max-it 1 --skip-petsc \
   --no-plot-initial --no-plot-design --no-plot-newton --no-plot-final
 ```

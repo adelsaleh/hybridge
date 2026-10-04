@@ -66,7 +66,7 @@ from mpi4py import MPI
 
 from dolfinx import fem, geometry, plot as dolfinx_plot
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_DIR = Path(__file__).resolve().parent
 for path in (REPO_ROOT, SCRIPT_DIR):
     if str(path) not in sys.path:

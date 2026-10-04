@@ -5,7 +5,7 @@ Date: 2026-07-12
 This study checks how the torsion-initialized Newton band parameters
 `alphaT1`, `alphaT2`, `betaPhi1`, and `betaPhi2` affect the agreement between
 the torsion-designed density band and the final converged equilibrium density
-band in `scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py`.
+band in `scripts/torsion_equilibrium/dolfinx/dolfinx_torsion_initialized_newton.py`.
 
 ## Setup
 
@@ -169,11 +169,11 @@ semilinear `phi` thresholds.
 The separate v2 Dolfinx runner
 
 ```text
-scripts/diocotron_dolfinx/dolfinx_torsion_initialized_window_fit_newton.py
+scripts/torsion_equilibrium/dolfinx/dolfinx_torsion_initialized_window_fit_newton.py
 ```
 
 has no `--phi-window-source` switch.  The fitted path is unconditional.  The
-original v1 runner, `scripts/diocotron_dolfinx/dolfinx_torsion_initialized_newton.py`,
+original v1 runner, `scripts/torsion_equilibrium/dolfinx/dolfinx_torsion_initialized_newton.py`,
 keeps the previous `phi-design` and `torsion` window-source interface.  In v2,
 the fitted mode keeps the torsion-designed density `rhoDesign=f(T;c1T,c2T)`
 unchanged, solves the Poisson initializer `-Delta phiDesign=rhoDesign`, and

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DOLFINx fixed-mesh torsion-initialized Newton v2 comparison runner.
+"""DOLFINx fixed-mesh torsion-initialized Newton comparison runner.
 
 This script mirrors the legacy scalar CG/P2 FreeFEM runner on a fixed mesh.  It uses
 continuous Lagrange elements of user-selected order, solves the torsion
@@ -10,11 +10,6 @@ initializer, and then applies the same epsilon-continuation Newton loop for
 
 The intended comparison workflow is to pass the exact ``initial_mesh.msh``
 saved by ``hdg_torsion_initialized_newton.py`` via ``--mesh``.
-
-Compared with ``dolfinx_torsion_initialized_newton.py``, this v2 runner
-has a single semilinear-window path: it fits the ``phi`` window to the
-torsion-designed density on Dolfinx/Basix quadrature samples before starting
-the Newton continuation.
 
 Verbosity levels are intentionally coarse:
 
@@ -44,7 +39,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import basix
 import basix.ufl
 import meshio
 import numpy as np
@@ -55,11 +49,11 @@ from petsc4py import PETSc
 from dolfinx import fem, mesh, plot as dolfinx_plot
 from dolfinx.fem import petsc as fem_petsc
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_initialized_window_fit_newton"
+DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "run_logs" / "dolfinx_torsion_initialized_newton"
 
 
 @dataclass
@@ -67,6 +61,8 @@ class TorsionParameters:
     alpha_t1: float = 0.60
     alpha_t2: float = 0.70
     eps_t_ratio: float = 0.06
+    beta_phi1: float = 0.60
+    beta_phi2: float = 0.70
     eps_phi_ratios: tuple[float, ...] = (0.11, 0.08, 0.06)
     rho_amp: float = 1.0
     max_it: int = 70
@@ -82,23 +78,6 @@ class TorsionParameters:
     stagnation_tol: float = 1.0e-5
     active_threshold: float = 0.05
     plateau_threshold: float = 0.90
-
-
-@dataclass
-class PhiWindowFitResult:
-    """Diagnostic record for a fitted semilinear phi-window."""
-
-    c1: float
-    c2: float
-    eps_ratio: float
-    objective_l2: float
-    objective_rel: float
-    grid_points: int
-    refine_points: int
-    refine_passes: int
-    histogram_bins: int
-    sample_count: int
-    elapsed: float
 
 
 def root_print(comm: MPI.Comm, message: str) -> None:
@@ -130,25 +109,6 @@ def window_derivative_ufl(values, c1: float, c2: float, eps: float, amp: float):
     return float(amp) * (s1 * (1.0 - s1) - s2 * (1.0 - s2)) / float(eps)
 
 
-def logistic_numpy(z: np.ndarray, eps: float) -> np.ndarray:
-    """Evaluate the clipped logistic used by the UFL window on NumPy arrays."""
-    zz = np.asarray(z, dtype=np.float64) / float(eps)
-    out = np.empty_like(zz)
-    out[zz > 50.0] = 1.0
-    out[zz < -50.0] = 0.0
-    mask = (zz >= -50.0) & (zz <= 50.0)
-    out[mask] = 1.0 / (1.0 + np.exp(-zz[mask]))
-    return out
-
-
-def window_numpy(values: np.ndarray, c1: float, c2: float, eps: float, amp: float) -> np.ndarray:
-    """Evaluate the two-sided nonlinear window on NumPy arrays."""
-    return float(amp) * (
-        logistic_numpy(values - float(c1), eps)
-        - logistic_numpy(values - float(c2), eps)
-    )
-
-
 def allreduce_scalar(comm: MPI.Comm, value: float, op=MPI.SUM) -> float:
     return float(comm.allreduce(float(value), op=op))
 
@@ -172,12 +132,7 @@ def assemble_scalar(comm: MPI.Comm, form) -> float:
     return allreduce_scalar(comm, fem.assemble_scalar(fem.form(form)), op=MPI.SUM)
 
 
-def read_mesh_with_meshio(
-        path: Path,
-        comm: MPI.Comm,
-        *,
-        ghost_mode: mesh.GhostMode = mesh.GhostMode.none,
-):
+def read_mesh_with_meshio(path: Path, comm: MPI.Comm):
     """Read a triangular Gmsh mesh without h5py-backed XDMF conversion."""
     if comm.rank == 0:
         msh = meshio.read(path)
@@ -194,26 +149,13 @@ def read_mesh_with_meshio(
         triangles = np.empty((0, 3), dtype=np.int64)
 
     coordinate_element = basix.ufl.element("Lagrange", "triangle", 1, shape=(2,))
-    partitioner = (
-        mesh.create_cell_partitioner(ghost_mode, 2)
-        if comm.size > 1
-        else None
-    )
-    domain = mesh.create_mesh(
-        comm, triangles, coordinate_element, points, partitioner=partitioner
-    )
+    domain = mesh.create_mesh(comm, triangles, coordinate_element, points)
     domain.topology.create_connectivity(domain.topology.dim - 1, domain.topology.dim)
     domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim - 1)
     return domain
 
 
-def load_or_generate_mesh(
-        args: argparse.Namespace,
-        run_dir: Path,
-        comm: MPI.Comm,
-        *,
-        ghost_mode: mesh.GhostMode = mesh.GhostMode.none,
-):
+def load_or_generate_mesh(args: argparse.Namespace, run_dir: Path, comm: MPI.Comm):
     """Load a fixed mesh, or generate the smooth-star mesh on rank zero.
 
     Mesh generation is intentionally delegated to a short subprocess.  The
@@ -223,7 +165,7 @@ def load_or_generate_mesh(
     """
     if args.mesh is not None:
         mesh_path = args.mesh.resolve()
-        domain = read_mesh_with_meshio(mesh_path, comm, ghost_mode=ghost_mode)
+        domain = read_mesh_with_meshio(mesh_path, comm)
         return domain, mesh_path, "file"
 
     mesh_path = run_dir / "initial_mesh.msh"
@@ -259,7 +201,7 @@ def load_or_generate_mesh(
             env=env,
         )
     comm.barrier()
-    domain = read_mesh_with_meshio(mesh_path, comm, ghost_mode=ghost_mode)
+    domain = read_mesh_with_meshio(mesh_path, comm)
     return domain, mesh_path, "smooth_star"
 
 
@@ -373,289 +315,6 @@ def update_interpolated(target: fem.Function, expression) -> None:
     target.x.scatter_forward()
 
 
-def quadrature_samples_for_fit(
-        phi_design: fem.Function,
-        rho_design: fem.Function,
-        *,
-        quadrature_degree: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Sample ``phiDesign`` and ``rhoDesign`` at weighted cell quadrature points.
-
-    The mesh is affine triangular in this workflow, so the physical quadrature
-    weight is the reference quadrature weight times ``abs(det(J))`` for each
-    cell.  Values are evaluated by tabulating the same Basix element used by the
-    Dolfinx function space and multiplying by local cell coefficients.
-    """
-    V = phi_design.function_space
-    if rho_design.function_space is not V:
-        raise ValueError("phi_design and rho_design must use the same function space")
-    domain = V.mesh
-    if domain.topology.dim != 2:
-        raise ValueError("fitted torsion-initialized window currently expects a 2D triangle mesh")
-
-    q_points, q_weights = basix.make_quadrature(basix.CellType.triangle, int(quadrature_degree))
-    basis = V.element.basix_element.tabulate(0, q_points)[0, :, :, 0]
-    cell_dofs = np.asarray(V.dofmap.list, dtype=np.int64)
-    geometry_dofs = np.asarray(domain.geometry.dofmaps[0], dtype=np.int64)
-    x = np.asarray(domain.geometry.x, dtype=np.float64)
-
-    phi_coeffs = np.asarray(phi_design.x.array, dtype=np.float64)
-    rho_coeffs = np.asarray(rho_design.x.array, dtype=np.float64)
-    phi_chunks: list[np.ndarray] = []
-    rho_chunks: list[np.ndarray] = []
-    weight_chunks: list[np.ndarray] = []
-
-    for start in range(0, cell_dofs.shape[0], 2048):
-        stop = min(start + 2048, cell_dofs.shape[0])
-        cdofs = cell_dofs[start:stop]
-        gdofs = geometry_dofs[start:stop]
-
-        phi_local = phi_coeffs[cdofs] @ basis.T
-        rho_local = rho_coeffs[cdofs] @ basis.T
-
-        coords = x[gdofs, :2]
-        j0 = coords[:, 1, :] - coords[:, 0, :]
-        j1 = coords[:, 2, :] - coords[:, 0, :]
-        det_j = np.abs(j0[:, 0] * j1[:, 1] - j0[:, 1] * j1[:, 0])
-        weights = det_j[:, None] * q_weights[None, :]
-
-        phi_chunks.append(np.ravel(phi_local))
-        rho_chunks.append(np.ravel(rho_local))
-        weight_chunks.append(np.ravel(weights))
-
-    if not phi_chunks:
-        return (
-            np.empty(0, dtype=np.float64),
-            np.empty(0, dtype=np.float64),
-            np.empty(0, dtype=np.float64),
-        )
-    return (
-        np.ascontiguousarray(np.concatenate(phi_chunks)),
-        np.ascontiguousarray(np.concatenate(rho_chunks)),
-        np.ascontiguousarray(np.concatenate(weight_chunks)),
-    )
-
-
-def _fit_objective_local(
-        phi_values: np.ndarray,
-        rho_values: np.ndarray,
-        weights: np.ndarray,
-        *,
-        c1: float,
-        c2: float,
-        eps_ratio: float,
-        rho_amp: float,
-) -> float:
-    width = float(c2) - float(c1)
-    if width <= 0.0:
-        return math.inf
-    eps = float(eps_ratio) * width
-    predicted = window_numpy(phi_values, c1, c2, eps, rho_amp)
-    diff = predicted - rho_values
-    return float(np.dot(weights, diff * diff))
-
-
-def _fit_histogram_objective(
-        bin_centers: np.ndarray,
-        weight_sums: np.ndarray,
-        weighted_rho_sums: np.ndarray,
-        weighted_rho2_sum: float,
-        *,
-        c1: float,
-        c2: float,
-        eps_ratio: float,
-        rho_amp: float,
-) -> float:
-    width = float(c2) - float(c1)
-    if width <= 0.0:
-        return math.inf
-    eps = float(eps_ratio) * width
-    predicted = window_numpy(bin_centers, c1, c2, eps, rho_amp)
-    return float(
-        np.dot(weight_sums, predicted * predicted)
-        - 2.0 * np.dot(weighted_rho_sums, predicted)
-        + weighted_rho2_sum
-    )
-
-
-def _fit_exact_objective_global(
-        comm: MPI.Comm,
-        phi_values: np.ndarray,
-        rho_values: np.ndarray,
-        weights: np.ndarray,
-        *,
-        c1: float,
-        c2: float,
-        eps_ratio: float,
-        rho_amp: float,
-) -> float:
-    local = _fit_objective_local(
-        phi_values,
-        rho_values,
-        weights,
-        c1=c1,
-        c2=c2,
-        eps_ratio=eps_ratio,
-        rho_amp=rho_amp,
-    )
-    return allreduce_scalar(comm, local, op=MPI.SUM)
-
-
-def _fit_histograms_global(
-        comm: MPI.Comm,
-        phi_values: np.ndarray,
-        rho_values: np.ndarray,
-        weights: np.ndarray,
-        *,
-        upper: float,
-        bins: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Build weighted global histograms used by the phi-window fit search."""
-    bins = max(64, int(bins))
-    edges = np.linspace(0.0, float(upper), bins + 1, dtype=np.float64)
-    centers = 0.5 * (edges[:-1] + edges[1:])
-    clipped_phi = np.clip(phi_values, 0.0, float(upper))
-    local_weights, _ = np.histogram(clipped_phi, bins=edges, weights=weights)
-    local_weighted_rho, _ = np.histogram(clipped_phi, bins=edges, weights=weights * rho_values)
-    local_rho2 = np.array([np.dot(weights, rho_values * rho_values)], dtype=np.float64)
-
-    global_weights = np.empty_like(local_weights, dtype=np.float64)
-    global_weighted_rho = np.empty_like(local_weighted_rho, dtype=np.float64)
-    global_rho2 = np.empty_like(local_rho2, dtype=np.float64)
-    comm.Allreduce(local_weights, global_weights, op=MPI.SUM)
-    comm.Allreduce(local_weighted_rho, global_weighted_rho, op=MPI.SUM)
-    comm.Allreduce(local_rho2, global_rho2, op=MPI.SUM)
-    return centers, global_weights, global_weighted_rho, float(global_rho2[0])
-
-
-def fit_phi_window_to_torsion_design(
-        phi_design: fem.Function,
-        rho_design: fem.Function,
-        *,
-        rho_design_l2: float,
-        phi_design_max: float,
-        eps_ratio: float,
-        rho_amp: float,
-        quadrature_degree: int,
-        grid_points: int,
-        refine_points: int,
-        refine_passes: int,
-        histogram_bins: int,
-) -> PhiWindowFitResult:
-    """Fit ``c1Phi,c2Phi`` so ``f(phiDesign)`` matches ``rhoDesign`` in L2.
-
-    The search is deliberately low-dimensional and deterministic: a coarse
-    triangular grid over ``0 < c1 < c2 < max(phiDesign)`` is followed by a few
-    rectangular refinement passes around the best pair.  All objective values
-    are computed from pre-sampled quadrature arrays, avoiding repeated UFL form
-    assembly during the fit.
-    """
-    start_time = time.perf_counter()
-    comm = phi_design.function_space.mesh.comm
-    grid_points = max(4, int(grid_points))
-    refine_points = max(3, int(refine_points))
-    refine_passes = max(0, int(refine_passes))
-    phi_values, rho_values, weights = quadrature_samples_for_fit(
-        phi_design,
-        rho_design,
-        quadrature_degree=int(quadrature_degree),
-    )
-    sample_count = int(comm.allreduce(phi_values.size, op=MPI.SUM))
-    local_phi_max = float(np.max(phi_values)) if phi_values.size else -math.inf
-    sample_phi_max = float(comm.allreduce(local_phi_max, op=MPI.MAX))
-    upper = max(float(phi_design_max), sample_phi_max)
-    if upper <= 0.0 or not math.isfinite(upper):
-        raise ValueError("cannot fit phi window because max(phiDesign) is non-positive")
-    bin_centers, weight_sums, weighted_rho_sums, weighted_rho2_sum = _fit_histograms_global(
-        comm,
-        phi_values,
-        rho_values,
-        weights,
-        upper=upper,
-        bins=histogram_bins,
-    )
-
-    min_width = max(1.0e-8 * upper, 1.0e-12)
-    candidates = np.linspace(0.0, upper, grid_points + 2, dtype=np.float64)[1:-1]
-    best_c1 = 0.60 * upper
-    best_c2 = 0.70 * upper
-    best_obj = math.inf
-
-    for i, c1 in enumerate(candidates[:-1]):
-        for c2 in candidates[i + 1:]:
-            if c2 - c1 < min_width:
-                continue
-            obj = _fit_histogram_objective(
-                bin_centers,
-                weight_sums,
-                weighted_rho_sums,
-                weighted_rho2_sum,
-                c1=float(c1),
-                c2=float(c2),
-                eps_ratio=eps_ratio,
-                rho_amp=rho_amp,
-            )
-            if obj < best_obj:
-                best_obj = obj
-                best_c1 = float(c1)
-                best_c2 = float(c2)
-
-    spacing = upper / (grid_points + 1)
-    for _ in range(refine_passes):
-        c1_lo = max(0.0, best_c1 - spacing)
-        c1_hi = min(best_c2 - min_width, best_c1 + spacing)
-        c2_lo = max(best_c1 + min_width, best_c2 - spacing)
-        c2_hi = min(upper, best_c2 + spacing)
-        if not (c1_hi > c1_lo and c2_hi > c2_lo):
-            break
-        c1_values = np.linspace(c1_lo, c1_hi, refine_points, dtype=np.float64)
-        c2_values = np.linspace(c2_lo, c2_hi, refine_points, dtype=np.float64)
-        for c1 in c1_values:
-            for c2 in c2_values:
-                if c2 - c1 < min_width:
-                    continue
-                obj = _fit_histogram_objective(
-                    bin_centers,
-                    weight_sums,
-                    weighted_rho_sums,
-                    weighted_rho2_sum,
-                    c1=float(c1),
-                    c2=float(c2),
-                    eps_ratio=eps_ratio,
-                    rho_amp=rho_amp,
-                )
-                if obj < best_obj:
-                    best_obj = obj
-                    best_c1 = float(c1)
-                    best_c2 = float(c2)
-        spacing /= max(refine_points - 1, 2)
-
-    exact_obj = _fit_exact_objective_global(
-        comm,
-        phi_values,
-        rho_values,
-        weights,
-        c1=best_c1,
-        c2=best_c2,
-        eps_ratio=eps_ratio,
-        rho_amp=rho_amp,
-    )
-    objective_l2 = math.sqrt(max(exact_obj, 0.0))
-    return PhiWindowFitResult(
-        c1=best_c1,
-        c2=best_c2,
-        eps_ratio=float(eps_ratio),
-        objective_l2=objective_l2,
-        objective_rel=objective_l2 / max(float(rho_design_l2), 1.0e-30),
-        grid_points=grid_points,
-        refine_points=refine_points,
-        refine_passes=refine_passes,
-        histogram_bins=max(64, int(histogram_bins)),
-        sample_count=sample_count,
-        elapsed=time.perf_counter() - start_time,
-    )
-
-
 def residual_vector_norm(R_form, bc, comm: MPI.Comm) -> float:
     r = fem_petsc.assemble_vector(fem.form(R_form))
     fem_petsc.set_bc(r, [bc])
@@ -761,7 +420,6 @@ class PyVistaTorsionPlotter:
         self.comm = comm
         self.frame_counter = 0
         self.frame_dir = args.frame_dir or (run_dir / "frames")
-        self._live_plotter = None
         if comm.rank == 0 and args.save_frames:
             self.frame_dir.mkdir(parents=True, exist_ok=True)
 
@@ -788,15 +446,6 @@ class PyVistaTorsionPlotter:
                 break
             if entered.wait(0.05):
                 break
-
-    def _close_live_plotter(self) -> None:
-        if self._live_plotter is None:
-            return
-        try:
-            self._live_plotter.close()
-        except Exception:
-            pass
-        self._live_plotter = None
 
     @staticmethod
     def _function_grid(function: fem.Function, *, scalar_name: str):
@@ -885,17 +534,6 @@ class PyVistaTorsionPlotter:
             if save_path is not None:
                 plotter.screenshot(str(save_path))
             if show and not self.args.plot_off_screen:
-                plot_mode = getattr(self.args, "plot_mode", "blocking")
-                if plot_mode == "nonblocking":
-                    self._close_live_plotter()
-                    plotter.show(interactive_update=True, auto_close=False)
-                    try:
-                        plotter.update()
-                    except Exception:
-                        pass
-                    self._live_plotter = plotter
-                    return
-                self._close_live_plotter()
                 plotter.show(interactive_update=True, auto_close=False)
                 self._wait_for_enter(plotter)
             plotter.close()
@@ -981,6 +619,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--quad-degree", type=int, default=None)
     parser.add_argument("--alphaT1", dest="alpha_t1", type=float, default=None)
     parser.add_argument("--alphaT2", dest="alpha_t2", type=float, default=None)
+    parser.add_argument("--betaPhi1", dest="beta_phi1", type=float, default=None)
+    parser.add_argument("--betaPhi2", dest="beta_phi2", type=float, default=None)
+    parser.add_argument(
+        "--phi-window-source",
+        choices=("phi-design", "torsion"),
+        default="phi-design",
+        help=(
+            "scale the nonlinear phi window by max(phiDesign), or reuse the "
+            "absolute torsion thresholds alphaT1*Tmax and alphaT2*Tmax"
+        ),
+    )
+    parser.add_argument(
+        "--phi-window-torsion-width-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "when --phi-window-source=torsion, use "
+            "c2Phi-c1Phi = scale * (alphaT2-alphaT1) * Tmax"
+        ),
+    )
+    parser.add_argument(
+        "--phi-window-torsion-shift-scale",
+        type=float,
+        default=0.0,
+        help=(
+            "when --phi-window-source=torsion, shift both nonlinear-window "
+            "edges by scale * (alphaT2-alphaT1) * Tmax before applying the "
+            "torsion width scale"
+        ),
+    )
     parser.add_argument(
         "--eps-t-ratio",
         dest="eps_t_ratio",
@@ -997,30 +665,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "comma-separated nonlinear epsilon continuation ratios; each "
             "epsPhi = ratio * (c2Phi-c1Phi). Example: 0.11,0.08,0.06"
         ),
-    )
-    parser.add_argument(
-        "--fit-window-eps-ratio",
-        type=float,
-        default=None,
-        help=(
-            "epsilon ratio used while fitting the phi-window; defaults to the "
-            "first nonlinear continuation ratio"
-        ),
-    )
-    parser.add_argument("--fit-window-grid", type=int, default=64)
-    parser.add_argument("--fit-window-refine-grid", type=int, default=25)
-    parser.add_argument("--fit-window-refine-passes", type=int, default=2)
-    parser.add_argument(
-        "--fit-window-bins",
-        type=int,
-        default=4096,
-        help="weighted phiDesign histogram bins used to accelerate fitted-window search",
-    )
-    parser.add_argument(
-        "--fit-window-quad-degree",
-        type=int,
-        default=None,
-        help="quadrature degree used for the fitted phi-window objective",
     )
     parser.add_argument("--rho-amp", type=float, default=None)
     parser.add_argument("--max-it", type=int, default=None)
@@ -1043,7 +687,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--verbosity", "-v", type=int, choices=(0, 1, 2, 3), default=1)
     parser.add_argument("--verbose-ls", action="store_true")
     parser.add_argument("--plot", action="store_true", help="show PyVista plot windows at enabled stages")
-    parser.add_argument("--plot-mode", choices=("blocking", "nonblocking"), default="blocking")
     parser.add_argument("--plot-off-screen", action="store_true", help="render plot windows off-screen")
     parser.add_argument("--plot-window-width", type=int, default=1600)
     parser.add_argument("--plot-window-height", type=int, default=700)
@@ -1065,8 +708,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def params_from_args(args: argparse.Namespace) -> TorsionParameters:
     params = TorsionParameters()
     for attr in (
-            "alpha_t1", "alpha_t2", "eps_t_ratio", "rho_amp",
-            "max_it", "tol_res", "tol_newton",
+            "alpha_t1", "alpha_t2", "eps_t_ratio", "beta_phi1", "beta_phi2",
+            "rho_amp", "max_it", "tol_res", "tol_newton",
     ):
         value = getattr(args, attr)
         if value is not None:
@@ -1075,22 +718,12 @@ def params_from_args(args: argparse.Namespace) -> TorsionParameters:
         params.eps_phi_ratios = tuple(float(x.strip()) for x in args.eps_phi_ratios.split(",") if x.strip())
     if not (params.alpha_t2 > params.alpha_t1):
         raise ValueError("require alphaT2 > alphaT1")
+    if not (params.beta_phi2 > params.beta_phi1):
+        raise ValueError("require betaPhi2 > betaPhi1")
     if not (params.eps_t_ratio > 0.0):
         raise ValueError("require eps_t_ratio > 0")
     if not params.eps_phi_ratios or any(ratio <= 0.0 for ratio in params.eps_phi_ratios):
         raise ValueError("require positive eps phi continuation ratios")
-    if args.fit_window_eps_ratio is not None and args.fit_window_eps_ratio <= 0.0:
-        raise ValueError("require positive --fit-window-eps-ratio")
-    if args.fit_window_grid < 4:
-        raise ValueError("require --fit-window-grid >= 4")
-    if args.fit_window_refine_grid < 3:
-        raise ValueError("require --fit-window-refine-grid >= 3")
-    if args.fit_window_refine_passes < 0:
-        raise ValueError("require --fit-window-refine-passes >= 0")
-    if args.fit_window_bins < 64:
-        raise ValueError("require --fit-window-bins >= 64")
-    if args.fit_window_quad_degree is not None and args.fit_window_quad_degree <= 0:
-        raise ValueError("require positive --fit-window-quad-degree")
     return params
 
 
@@ -1113,7 +746,7 @@ def run_strategy(args: argparse.Namespace) -> int:
     frame_every = args.frame_every if args.frame_every is not None else args.plot_newton_every
     total_start = time.perf_counter()
 
-    root_print(comm, "========== START STRATEGY A DOLFINX NOADAPT TORSION NEWTON V2 ==========")
+    root_print(comm, "========== START STRATEGY A DOLFINX NOADAPT TORSION NEWTON ==========")
     root_print(comm, f"RUN_TAG {run_tag}")
     root_print(comm, f"RUN_DIR {run_dir}")
     root_print(comm, f"NEWTON_CSV {newton_csv}")
@@ -1218,31 +851,13 @@ def run_strategy(args: argparse.Namespace) -> int:
         verbosity=args.verbosity,
     )
     _, phi_design_max = global_minmax(comm, phi_design)
-    fit_eps_ratio = (
-        float(args.fit_window_eps_ratio)
-        if args.fit_window_eps_ratio is not None
-        else float(params.eps_phi_ratios[0])
-    )
-    fit_quad_degree = (
-        int(args.fit_window_quad_degree)
-        if args.fit_window_quad_degree is not None
-        else qdeg
-    )
-    fit_result = fit_phi_window_to_torsion_design(
-        phi_design,
-        rho_design,
-        rho_design_l2=rho_design_l2,
-        phi_design_max=phi_design_max,
-        eps_ratio=fit_eps_ratio,
-        rho_amp=params.rho_amp,
-        quadrature_degree=fit_quad_degree,
-        grid_points=args.fit_window_grid,
-        refine_points=args.fit_window_refine_grid,
-        refine_passes=args.fit_window_refine_passes,
-        histogram_bins=args.fit_window_bins,
-    )
-    c1_phi = fit_result.c1
-    c2_phi = fit_result.c2
+    if args.phi_window_source == "torsion":
+        torsion_width = c2_t - c1_t
+        c1_phi = c1_t + float(args.phi_window_torsion_shift_scale) * torsion_width
+        c2_phi = c1_phi + float(args.phi_window_torsion_width_scale) * torsion_width
+    else:
+        c1_phi = params.beta_phi1 * phi_design_max
+        c2_phi = params.beta_phi2 * phi_design_max
     width_phi = c2_phi - c1_phi
     u.x.array[:] = phi_design.x.array
     u.x.scatter_forward()
@@ -1250,18 +865,10 @@ def run_strategy(args: argparse.Namespace) -> int:
     root_print(comm, f"PHI_DESIGN max={phi_design_max:.6e} rhoDesignMass={rho_design_mass:.6e} rhoDesignMax={rho_design_max:.6e}")
     root_print(
         comm,
-        "PHI_WINDOW mode=fitted_torsion_design "
+        f"PHI_WINDOW source={args.phi_window_source} "
+        f"torsionShiftScale={args.phi_window_torsion_shift_scale:.6e} "
+        f"torsionWidthScale={args.phi_window_torsion_width_scale:.6e} "
         f"c1Phi={c1_phi:.6e} c2Phi={c2_phi:.6e} widthPhi={width_phi:.6e}",
-    )
-    root_print(
-        comm,
-        f"PHI_WINDOW_FIT epsRatio={fit_result.eps_ratio:.6e} "
-        f"objectiveL2={fit_result.objective_l2:.6e} "
-        f"objectiveRel={fit_result.objective_rel:.6e} "
-        f"c1OverPhiMax={c1_phi / max(phi_design_max, 1.0e-30):.6e} "
-        f"c2OverPhiMax={c2_phi / max(phi_design_max, 1.0e-30):.6e} "
-        f"samples={fit_result.sample_count} bins={fit_result.histogram_bins} "
-        f"time={fit_result.elapsed:.3f}",
     )
 
     fieldnames = [
@@ -1548,14 +1155,8 @@ def run_strategy(args: argparse.Namespace) -> int:
                     )
                 if args.plot_newton and args.plot_newton_every > 0 and k % args.plot_newton_every == 0:
                     plotter.emit(
-                        [T, rho_design, phi_design, u, rho],
-                        [
-                            "Torsion T",
-                            "rhoDesign",
-                            "phiDesign",
-                            f"Newton phi ieps={ieps} k={k}",
-                            "rho=f(phi)",
-                        ],
+                        [u, rho],
+                        [f"Newton phi ieps={ieps} k={k}", "rho=f(phi)"],
                         stage="ACCEPT",
                         ieps=ieps,
                         k=k,
@@ -1604,8 +1205,8 @@ def run_strategy(args: argparse.Namespace) -> int:
                 newton_handle.flush()
             if args.plot_newton and frame_every is not None and frame_every > 0:
                 plotter.emit(
-                    [T, rho_design, phi_design, u, rho],
-                    ["Torsion T", "rhoDesign", "phiDesign", f"Epsilon end phi ieps={ieps}", "rho=f(phi)"],
+                    [u, rho, rho_design],
+                    [f"Epsilon end phi ieps={ieps}", "rho=f(phi)", "rhoDesign"],
                     stage="EPS_END",
                     ieps=ieps,
                     k=-1,
@@ -1653,7 +1254,7 @@ def run_strategy(args: argparse.Namespace) -> int:
     )
     root_print(comm, f"FINAL_STATUS {final_status}")
     root_print(comm, f"TIME_TOTAL {elapsed:.3f}")
-    root_print(comm, "========== END STRATEGY A DOLFINX NOADAPT TORSION NEWTON V2 ==========")
+    root_print(comm, "========== END STRATEGY A DOLFINX NOADAPT TORSION NEWTON ==========")
 
     if comm.rank == 0:
         with summary_path.open("w", encoding="utf-8") as handle:
@@ -1676,22 +1277,13 @@ def run_strategy(args: argparse.Namespace) -> int:
             handle.write(f"c2T {c2_t}\n")
             handle.write(f"epsTRatio {params.eps_t_ratio}\n")
             handle.write(f"epsT {eps_t}\n")
-            handle.write(f"phiDesignMax {phi_design_max}\n")
-            handle.write(f"rhoDesignMass {rho_design_mass}\n")
-            handle.write(f"rhoDesignMax {rho_design_max}\n")
-            handle.write(f"rhoDesignL2 {rho_design_l2}\n")
-            handle.write("phiWindowMode fitted_torsion_design\n")
+            handle.write(f"betaPhi1 {params.beta_phi1}\n")
+            handle.write(f"betaPhi2 {params.beta_phi2}\n")
+            handle.write(f"phiWindowSource {args.phi_window_source}\n")
+            handle.write(f"phiWindowTorsionShiftScale {args.phi_window_torsion_shift_scale}\n")
+            handle.write(f"phiWindowTorsionWidthScale {args.phi_window_torsion_width_scale}\n")
             handle.write(f"c1Phi {c1_phi}\n")
             handle.write(f"c2Phi {c2_phi}\n")
-            handle.write(f"fitWindowEpsRatio {fit_result.eps_ratio}\n")
-            handle.write(f"fitWindowObjectiveL2 {fit_result.objective_l2}\n")
-            handle.write(f"fitWindowObjectiveRel {fit_result.objective_rel}\n")
-            handle.write(f"fitWindowGrid {fit_result.grid_points}\n")
-            handle.write(f"fitWindowRefineGrid {fit_result.refine_points}\n")
-            handle.write(f"fitWindowRefinePasses {fit_result.refine_passes}\n")
-            handle.write(f"fitWindowBins {fit_result.histogram_bins}\n")
-            handle.write(f"fitWindowSamples {fit_result.sample_count}\n")
-            handle.write(f"fitWindowTime {fit_result.elapsed}\n")
             handle.write(f"epsPhiRatios {','.join(str(ratio) for ratio in params.eps_phi_ratios)}\n")
             handle.write(f"epsPhi {final_eps_phi}\n")
             handle.write(f"resEuclid {final_metrics['resEuclid']}\n")
