@@ -42,6 +42,12 @@ def test_alpha_matrix_pytest_targets_exist() -> None:
             for argument in command[command.index("-q") + 1 :]:
                 path = Path(argument.split("::", 1)[0])
                 assert path.is_file(), f"missing {lane.name} target: {argument}"
+                if "::" in argument:
+                    # A renamed test must fail here, not when the lane runs.
+                    name = argument.split("::")[1].split("[", 1)[0]
+                    assert f"def {name}(" in path.read_text(encoding="utf-8"), (
+                        f"missing {lane.name} test: {argument}"
+                    )
 
 
 def test_host_fast_lane_cannot_collect_device_suites() -> None:
@@ -106,7 +112,7 @@ def test_alpha_matrix_runner_dry_run_is_device_independent() -> None:
         stderr=subprocess.PIPE,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "test_advection_reaction_raw_cuda_csr_amgx_solver_smoke" in completed.stdout
+    assert "test_advection_reaction_raw_cuda_amgx_solver_smoke" in completed.stdout
 
 
 def test_scheduled_dry_run_exposes_gmsh_parity_environment() -> None:

@@ -83,8 +83,8 @@ GPU_SMOKE_TARGETS = (
     "tests/test_cupy_backend.py::test_advection_reaction_modal_trace_all_backends_match_numpy",
     "tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_zero_flux_matches_numba",
     "tests/test_cupy_backend.py::test_cupyx_solver_matches_direct_small_system",
-    "tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_csr_amgx_solver_smoke",
-    "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_raw_cuda_csr_amgx_full_solve_stays_device_resident",
+    "tests/test_cupy_backend.py::test_advection_reaction_raw_cuda_amgx_solver_smoke",
+    "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident",
     "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_assembly_backends_match_numpy_for_p_le_6[2-rectangle-1x1]",
     "tests/test_diffusion_reaction_assembly_parity.py::test_diffusion_modal_assembly_backends_match_numpy_for_p_le_6[2-rectangle-1x1]",
 )

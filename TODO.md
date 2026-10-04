@@ -61,7 +61,10 @@
       - the two July findings notes moved to `docs/research/solver_studies/` as dated records;
       - the `run_configs/adr_unified_l5/meshes/*.npz` files stay: they are campaign inputs listed in `inventory.json`, not caches;
     - [x] remove the diocotron data from the tree. Done 2026-10-04: `docs/research/strategy_a_band_parameter_study/` (191 files) and the two diocotron movies; MANUAL and the research index no longer point at them;
-    - run the full sharded suite and the four alpha lanes in a clean worktree and compare per test with the 2026-10-04 baseline.
+    - [x] run the full sharded suite and the four alpha lanes in a clean worktree. Done 2026-10-04 on the cleaned branch:
+      - full suite: 3,658 passed, 389 skipped, 0 failed (two GPU shards still abort at interpreter exit with the known AMGX `Cuda failure`, after writing their results);
+      - lanes: `host-fast` 824 passed, `cpu-parity` 136 passed, `install-smoke` passed (wheel build, install outside the checkout, public solve), `gpu-smoke` 272 passed;
+      - `gpu-smoke` first named two tests renamed months earlier (`…raw_cuda_csr_amgx_solver_smoke`, `…raw_cuda_csr_amgx_full_solve_stays_device_resident`); the lane now uses the current names, and the lane-target test checks that each test function exists.
   - Phase 2, hosted gate and merge (pushes need confirmation):
     - push `package-reorganization` and open a PR to `master`. The `early-alpha` workflow (host Python 3.10/3.12 and package) must pass; the eight failures of the last hosted `master` run (2026-09-30) are fixed on this branch;
     - fast-forward `master` (no divergence) and push it;
