@@ -190,10 +190,10 @@ def test_runner_adapter_preserves_vorticity_policy(monkeypatch):
         screenshot_dir=None, screenshot_prefix="case", include_potential=True, density_is_vorticity=True,
     )
     panels, options = calls[0]
-    assert [p[0] for p in panels] == ["Vorticity", "Potential"]
-    assert panels[0][2] == dict(scalar_name="vorticity", cmap="RdBu_r", symmetric_clim=True,
+    assert [p[0] for p in panels] == ["Density", "Potential"]
+    assert panels[0][2] == dict(scalar_name="density", cmap="RdBu_r", symmetric_clim=True,
                                 fixed_clim=True, robust_percentile=100.)
-    assert options["window_size"] == (3750, 1625)
+    assert options["window_size"] == (1500, 650)
     adapter.update("new rho", "new phi", step=3, time_value=.3)
     assert calls[1] == (["new rho", "new phi"], dict(step=3, time_value=.3))
     adapter.close()

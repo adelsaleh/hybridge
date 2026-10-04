@@ -257,6 +257,7 @@ def test_hybrid_runner_with_canned_solvers_only(monkeypatch, tmp_path, capfd, ve
     class Poisson:
         def __init__(self, space, source, **kwargs):
             self.space, self.source = space, source
+            self.options = SimpleNamespace(stabilization=1.0)
         def set_source(self, source):
             self.source = source
         def set_boundary_condition(self, boundary):
@@ -277,7 +278,7 @@ def test_hybrid_runner_with_canned_solvers_only(monkeypatch, tmp_path, capfd, ve
     })
     monkeypatch.setattr(runner, 'audit_arrays', lambda *a: None)
     monkeypatch.setattr(runner, '_compute_diagnostics', lambda **kw: {
-        'step': kw['step'], 'time': kw['time_value'], 'mass': 0, 'q_l2': 1,
+        'step': kw['step'], 'time': kw['time_value'], 'mass': 0, 'q_l2': 1, 'enstrophy': 1,
         'mass_relative_drift': 0., 'energy_from_q_l2': .5, 'energy_relative_drift': 0., **kw['extra'],
     })
     snapshots = []
