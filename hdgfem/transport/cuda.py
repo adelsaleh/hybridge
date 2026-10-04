@@ -29,8 +29,8 @@ from hdgfem.transport.raw_cuda import (
     reconstruct_projected_advection_field_raw_cuda,
     reconstruct_projected_advection_field_raw_cuda_fused,
     reconstruct_projected_advection_field_from_response_raw_cuda,
+    resolve_raw_lu_mode,
 )
-from hdgfem.solvers.capabilities import resolve_raw_lu_mode
 from hdgfem.transport.tsle_bsr import (
     RawAdvectionTsleWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_bsr,

@@ -2659,8 +2659,22 @@ def solve_cached_advection_source_raw(source_moments, local_response, factors, c
     return solved
 
 
+def resolve_raw_lu_mode(raw_lu_mode: str | None, raw_local_assembly: str) -> str:
+    """Resolve the default raw-CUDA advection LU policy for one local-assembly path.
+
+    ``None`` selects the cooperative LU wherever the kernel offers a choice
+    (``fused``, ``split3``, and ``auto``, which resolves to one of them); the
+    ``precomputed`` path keeps its fixed factorization, reported as ``"safe"``.
+    Explicit values pass through for validation.
+    """
+    if raw_lu_mode is None:
+        return "coop" if raw_local_assembly in {"fused", "split3", "auto"} else "safe"
+    return raw_lu_mode
+
+
 __all__ = [
     "RawAdvectionAssemblyResult",
+    "resolve_raw_lu_mode",
     "RawAdvectionFactorWorkspace",
     "solve_cached_advection_source_raw",
     "build_reduced_csr_pattern_cupy_reference",

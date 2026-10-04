@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
+from hdgfem.transport.raw_cuda import resolve_raw_lu_mode
 
 
 Equation = Literal["advection-reaction", "advection-diffusion-reaction", "diffusion-reaction"]
@@ -482,19 +483,6 @@ def resolve_raw_local_assembly(
             and raw_lu_mode in {None, "coop"} and not cache_operator):
         return "split3"
     return "fused"
-
-
-def resolve_raw_lu_mode(raw_lu_mode: str | None, raw_local_assembly: str) -> str:
-    """Resolve the default raw-CUDA advection LU policy for one local-assembly path.
-
-    ``None`` selects the cooperative LU wherever the kernel offers a choice
-    (``fused``, ``split3``, and ``auto``, which resolves to one of them); the
-    ``precomputed`` path keeps its fixed factorization, reported as ``"safe"``.
-    Explicit values pass through for validation.
-    """
-    if raw_lu_mode is None:
-        return "coop" if raw_local_assembly in {"fused", "split3", "auto"} else "safe"
-    return raw_lu_mode
 
 
 def validate_advection_backend_configuration(
