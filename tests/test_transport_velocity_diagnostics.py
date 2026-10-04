@@ -57,7 +57,7 @@ def test_divergence_uses_physical_gradients_and_beta_scaling():
     for key in metrics:
         if key.endswith("backend"):
             continue
-        factor = 1 if key.endswith("relative_l2") else 0.125
+        factor = 1 if key.endswith(("relative_l2", "_fraction")) else 0.125
         assert scaled[key] == pytest.approx(factor * metrics[key], abs=TOL)
 
 

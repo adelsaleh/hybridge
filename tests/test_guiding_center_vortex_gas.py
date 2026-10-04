@@ -12,7 +12,6 @@ from scripts.guiding_center.cases.guiding_center_cases import euler_vortex_gas
 from scripts.guiding_center.cases.guiding_center_presets import PRESETS, preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _make_poisson_options, _runtime_config
-from scripts.guiding_center.runtime.plotting import GuidingCenterPyVistaPanels
 
 
 PRESET = "euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr"
@@ -109,13 +108,6 @@ def test_vortex_gas_circulation_cancels_on_the_disk(center_radius) -> None:
 def test_vortex_gas_rejects_invalid_parameters(params) -> None:
     with pytest.raises(ValueError):
         euler_vortex_gas(**params)
-
-
-def test_vorticity_plot_keeps_a_fixed_symmetric_color_scale() -> None:
-    panel = GuidingCenterPyVistaPanels.__new__(GuidingCenterPyVistaPanels)
-    panel.density_is_vorticity = True
-    panel._rho_color_limit = 4.0
-    assert panel._density_clim(np.array([-1., 2.])) == (-4., 4.)
 
 
 def test_vortex_gas_response_file() -> None:

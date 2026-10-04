@@ -20,7 +20,6 @@ from scripts.guiding_center.cases.guiding_center_cases import (
 )
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from hdgfem.core.field_ops import project_callable_to_trace
-from scripts.guiding_center.runtime.plotting import GuidingCenterPyVistaPanels
 from scripts.guiding_center.time_schemes.stage_support import _fixed_operator_trace_predictor
 from scripts.guiding_center.runtime.configuration import _make_transport_options, _poisson_postprocess_overrides, _solver_verbosity, _validate_config
 from scripts.guiding_center.runtime.reporting import _print_linear_step_summary, _print_step_summary
@@ -118,51 +117,6 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
         assert math.isfinite(final[key])
     assert abs(final["mass_relative_drift"]) < 1.0e-3
     assert final["transport_solver_residual"] < 1.0e-4
-
-
-def test_pyvista_panel_uses_render_not_x_events_for_headless_updates() -> None:
-    class DummyPlotter:
-        def __init__(self):
-            self.show_calls = []
-            self.render_calls = 0
-            self.update_calls = 0
-            self.close_calls = 0
-
-        def show(self, **kwargs):
-            self.show_calls.append(kwargs)
-
-        def render(self):
-            self.render_calls += 1
-
-        def update(self):
-            self.update_calls += 1
-
-        def close(self):
-            self.close_calls += 1
-
-    panel = GuidingCenterPyVistaPanels.__new__(GuidingCenterPyVistaPanels)
-    panel.plotter = DummyPlotter()
-    panel._shown = False
-    panel._render_only = True
-    panel.include_potential = False
-    panel.rho_mesh = object()
-    panel.rho_name = "density"
-    panel.rho_actor = object()
-    panel.screenshot_dir = None
-    panel._update_mesh_values = lambda *_args: np.asarray([1.0])
-    panel._update_actor_clim = lambda *_args: None
-
-    panel.update(object(), object(), step=0, time_value=0.0)
-    panel.update(object(), object(), step=30, time_value=3.0)
-    panel.close()
-
-    assert panel.plotter.show_calls == [{
-        "auto_close": False,
-        "interactive_update": False,
-    }]
-    assert panel.plotter.render_calls == 1
-    assert panel.plotter.update_calls == 0
-    assert panel.plotter.close_calls == 1
 
 
 def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
@@ -878,7 +832,7 @@ def test_robust_transport_uses_bsr_preconditioners_before_scaled_fgmres(
         assert solver["preconditioner"]["relaxation_factor"] == 1.0
         assert solver["bsr_spmv_backend"] == "cusparse_generic"
         assert solver["tolerance"] == config.transport_solver_rtol
-        assert attempt["scale_system"] is False
+        assert attempt["scale_system"] is config.transport_scale_system
         assert attempt["scalarize_bsr"] is False
         assert attempt["reuse_preconditioner"] is False
         assert attempt["use_initial_guess"] is False

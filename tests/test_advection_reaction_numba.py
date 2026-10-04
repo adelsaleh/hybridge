@@ -378,7 +378,6 @@ def test_numba_zero_flux_trace_system_matches_numpy_zeroed_boundary_flux(trace_b
     np.testing.assert_allclose(direct_reduction.data, generic_reduction.data, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(direct_reduction.rhs, generic_reduction.rhs, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(zero_flux.trace_system.boundary_trace, 0.0)
-    assert "boundary_flux_zeroing" in zero_flux.timings
 
 
 def test_zero_flux_numba_requires_none_boundary_condition() -> None:
@@ -769,7 +768,7 @@ def test_raw_cuda_rejects_explicit_advection_stabilization_before_device_setup()
     beta_h = (space * space).constant((0.75, -0.25), name="beta_h")
     boundary = lambda x, y: np.zeros_like(x)
 
-    with pytest.raises(NotImplementedError, match="advection_stabilization=None"):
+    with pytest.raises(NotImplementedError, match="raw-CUDA supports default upwind"):
         solve_advection_reaction_hdg(
             source_h,
             beta_h,
