@@ -765,9 +765,10 @@ python -m projects.diocotron.dolfinx.equiband \
 ```
 
 The tiny disk is a correctness comparison, not a reason to prefer two
-ranks. Benchmark representative meshes. The MUMPS rank map in
-[AGENTS.md](../../../AGENTS.md) is preliminary evidence for the **existing**
-torsion reduced optimizer; it is not a measured scaling table for this module.
+ranks. Benchmark representative meshes. The machine-specific MUMPS rank map
+measured for the **existing** torsion reduced optimizer is preliminary
+evidence for that optimizer; it is not a measured scaling table for this
+module.
 
 ## Execution layout and performance
 

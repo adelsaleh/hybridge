@@ -116,7 +116,7 @@ must cost less than the original degree-p Poisson solve. A local method is not
 acceptable merely because it avoids another global solve. Both convergence
 and total cost must be established before selecting a replacement preset.
 
-The existing [native BSR timing study](../../artifacts/native_hp_bsr_breakdown_20260913/README.md)
+The existing native BSR timing study (local, untracked: `artifacts/native_hp_bsr_breakdown_20260913/`)
 provides an indicative budget on an identical 315,425-triangle mesh (both node
 and connectivity hashes match). Complete cached Poisson calls, averaged over
 steps 5–12 of each `samples.jsonl`, took:
@@ -158,7 +158,7 @@ increasing the upwind factor. Exactly inactive faces receive a zero-trace
 algebraic gauge; partially deficient active faces still fail strictly.
 The volume field is unchanged: this is a face-flux repair, not an H(div)
 reconstruction or an energy-conservation guarantee.
-See the [failure diagnosis and validation command](../../artifacts/recovered_drift_rank_20260917/README.md).
+See the failure diagnosis and validation command (local, untracked: `artifacts/recovered_drift_rank_20260917/`).
 Poisson tau is unchanged. Other presets retain their original flux, and
 `--transport-advection-stabilization upwind` restores it for comparison.
 
@@ -415,13 +415,13 @@ an order for trigonometric data, but did not robustly retain that gain for
 polynomial data. Imposing the Poisson source on that fit did not repair the
 failure. These fits have not been selected as the production recovery.
 
-Further [independent small-patch checks on Gmsh meshes](../../artifacts/recovery_small_patch_20260916/README.md)
+Further independent small-patch checks on Gmsh meshes (local, untracked: `artifacts/recovery_small_patch_20260916/`)
 cover vertex fits, numerical normal-flux/interior-moment fits, and source-
 constrained zero-curl fits over one, four or eight elements. Polynomial
 reproduction passed, but the numerical HDG inputs still did not demonstrate
 an additional electric-field order. They remain diagnostic experiments.
 
-[Local HDG-response fits and structured-mesh comparisons](../../artifacts/recovery_hdg_response_20260916/README.md)
+Local HDG-response fits and structured-mesh comparisons (local, untracked: `artifacts/recovery_hdg_response_20260916/`)
 also remain unqualified. Accounting for the discrete HDG response on eight-
 element patches reduced errors but did not demonstrate the extra order.
 Structured-mesh sine tests showed apparent seventh-order slopes, but polynomial
@@ -430,7 +430,7 @@ also failed to establish the requested gain. These results do not change the
 production mesh or select a recovery method.
 
 
-[Compact enriched corrections and a reconstructed-operator experiment](../../artifacts/recovery_reconstructed_operator_20260916/README.md)
+Compact enriched corrections and a reconstructed-operator experiment (local, untracked: `artifacts/recovery_reconstructed_operator_20260916/`)
 separate two further possibilities. Independent 4-, 8-, and 12-triangle
 corrections retain the original field order. Reconstructing missing trace
 modes inside the global operator gives near-seventh-order fields on a refined
