@@ -78,6 +78,12 @@
     - the import package, `pyproject.toml` name and version `0.1.0a2`, and about 558 files outside `vendor/`; `vendor/adr_gmres/hdgfem` stays a frozen study snapshot;
     - the about 30 `HDGFEM_*` environment variables become `HYBRIDGE_*`, read through one helper that accepts the old names with a deprecation warning for one release;
     - update the local CODEMAPs and AGENTS files, reinstall the editable venv, then rerun the suite and lanes.
+    - [x] Done 2026-10-05 in `a1be5d6` (575 files), made on branch `hybridge-rename` and fast-forwarded into `master`:
+      - `hybridge.runtime.env.getenv` reads the six package settings, with the `HDGFEM_*` fallback and a warning; scripts and tests use plain `HYBRIDGE_*` names;
+      - the vendored snapshot, JSON/CSV run records, the `hdgfem-gmres` checkout name, the mesh-cache magic and this item stay as recorded;
+      - verified on a clean checkout: full suite 3,660 passed, 0 failed once the venv provides `hybridge`; lanes `host-fast` 825, `cpu-parity` 136, `install-smoke` (wheel `hybridge-0.1.0a2`), `gpu-smoke` 272;
+      - the shared venv now has `hybridge 0.1.0a2` installed editable from `~/src/hybridge`; the stale `hdgfem` distribution is removed;
+      - the machine-local CODEMAPs, AGENTS files and the fork CODEMAPs' shared section are renamed, with the old copies archived.
   - Phase 4, release content:
     - a BSD-3-Clause `LICENSE` and the `license` field in `pyproject.toml`; optionally `AUTHORS`/`CITATION.cff`;
     - lead the README with the project story:
