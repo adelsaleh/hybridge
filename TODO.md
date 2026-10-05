@@ -84,15 +84,17 @@
       - verified on a clean checkout: full suite 3,660 passed, 0 failed once the venv provides `hybridge`; lanes `host-fast` 825, `cpu-parity` 136, `install-smoke` (wheel `hybridge-0.1.0a2`), `gpu-smoke` 272;
       - the shared venv now has `hybridge 0.1.0a2` installed editable from this checkout; the stale `hdgfem` distribution is removed;
       - the machine-local CODEMAPs, AGENTS files and the fork CODEMAPs' shared section are renamed, with the old copies archived.
-  - Phase 4, release content:
-    - a BSD-3-Clause `LICENSE` and the `license` field in `pyproject.toml`; optionally `AUTHORS`/`CITATION.cff`;
-    - lead the README with the project story:
-      - HYBRIDGE makes HDG methods accessible to newcomers, in the spirit of FreeFEM and DOLFINx, with GPU assembly and solvers;
-      - it is the companion HDG project of SOLEDGE-HDG, whose GPU results feed SOLEDGE-HDG, first in 2D and eventually in 3D;
-      - plasma turbulence is an application, not the identity;
-      - no performance adjectives;
-    - update `docs/releases/early_alpha.md` to `0.1.0a2`, with the hosted run URL; add release notes;
-    - confirm that no machine-specific files, credentials or private data are tracked; verify the README install path from a fresh clone.
+  - Phase 4, release content (committed locally on `master`, 2026-10-05; not pushed yet):
+    - [x] BSD-3-Clause `LICENSE`, PEP 639 license metadata, `AUTHORS.md` (authors, collaborators, acknowledgements, laboratories);
+    - [x] README led by the project story (newcomers, FreeFEM/DOLFINx spirit, companion of SOLEDGE-HDG, plasma as one application); the first solve shows primal postprocessing with a light/dark comparison figure;
+    - [x] showcase as transparent light/dark posters linking to the issue that hosts the videos; vortex gas at 2× speed; positive density from the KKT run (`positivity-kkt` branch, not in this release); no MP4 in the repository;
+    - [x] `docs/releases/early_alpha.md` at `0.1.0a2` with the hosted run URLs; release notes in `docs/releases/0.1.0a2.md`;
+    - [x] no machine-local paths in any tracked file; every Markdown link resolves in a clean checkout; external links answer or are Crossref-verified DOIs;
+    - [x] verified on a clean checkout of `f823485`: docs, showcase, plotting, packaging, documented-example, layering and env tests pass (44);
+    - [ ] post the four published videos (`outputs/readme_showcase/published/`) as four comments in issue #1 (light and dark per video); then point each poster at its comment;
+    - [ ] Schwander's and Capasso's emails in `AUTHORS.md` (not publicly listed);
+    - [ ] verify the README install path from a fresh clone;
+    - [ ] push `master` (the user pushes).
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;
     - delete `diocotron-dolfinx` from the main repository;
@@ -102,7 +104,8 @@
       - push it and tell VRRodrigues to pull;
     - rename the repository to `hybridge` and update local remotes;
     - tag `v0.1.0a2`, build and `twine check` the wheel and sdist, upload to TestPyPI, verify a clean install, then upload to PyPI and create the GitHub release with the artifacts;
-    - switch visibility to public the same day, check the GENCI link, then submit the GENCI request.
+    - switch visibility to public the same day, check the GENCI link, then submit the GENCI request;
+    - protect `master` once public: collaborators keep write access, but changes reach `master` only through reviewed pull requests (admin bypass).
 
 
 Research studies in later sections inform future solver choices but do not block the first alpha unless they expose a correctness or resource-lifecycle defect in a supported path.
