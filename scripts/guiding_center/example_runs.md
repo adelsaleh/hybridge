@@ -230,6 +230,53 @@ env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
   --verbosity 3
 ```
 
+### README star with island — SI-BDF2 with device KKT positivity and Holoviz
+
+The initial data of the README positive-density video: the saved 960-blob
+profile (`run_configs/guiding_center/profiles/readme_positive_c5_h005.npz`,
+cutoff 5) in the five-lobed star around a circular island, `h=0.005`
+(360,379 triangles), DG p=6, and the README run's global-length Poisson tau.
+SI-BDF2 runs with `dt=0.0015625` to `T=6.4` (4,096 steps), four times the
+video's step.
+
+Every transported density is projected onto nonnegativity before its endpoint
+Poisson solve, so the drift, the BDF2 history, the diagnostics and the plots
+all see the projected density. The projection is the mass-conserving KKT
+least-distance projection at the 33 volume-quadrature and 28 p-lattice points
+of each element; it runs as a CUDA kernel on the device-resident coefficients.
+`rho_h(0)` is not corrected. The initial Poisson and first transport solves
+only see its moments, which are those of the exact nonnegative density, so the
+first correction acts on `rho_h(dt)`. The plan and the static study are in
+`docs/development/plans/positivity_kkt_bdf2.md`.
+
+The preset sets verbosity 3, positivity diagnostics every 4 steps, and Holoviz
+density and potential plots every 4 steps, 0.00625 time units per frame as in
+the video. Each step prints one `KKT positivity` line: flagged elements,
+negative-mean elements, Zhang-Shu fallbacks, the minimum before and after,
+the relative correction, the returned mass fraction and the projection time.
+On stored unprojected states the kernel took about 0.1 s at `t=0.5` and
+0.25 s at `t=6.4`.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz.args
+```
+
+Over `ssh -Y`, as in the ITER Holoviz example above:
+
+```bash
+env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/usr/local/cuda-13.0 \
+  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
+  @run_configs/guiding_center/positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz.args
+```
+
+Append `--dt 0.000390625 --num-steps 16384 --plot-every 16` to use the video's
+step and frame spacing. Append `--density-positivity none --diagnostics-prefix
+positive_turbulence_star_si_bdf2_none_p6_h005_dt0015625_t6p4` for the same run
+without projection.
+
 ## Gaussian-annulus diocotron
 
 ### m=64 — IMEX-ARK3, dt=0.5, T=400

@@ -57,6 +57,7 @@ DEVELOPMENT_PLAN_CONTENTS = {
     "n_gamma_d_bdf2.md",
     "raw_cuda_adr_tensor.md",
     "package_reorganization.md",
+    "positivity_kkt_bdf2.md",
 }
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(

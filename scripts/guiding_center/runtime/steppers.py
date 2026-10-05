@@ -12,7 +12,7 @@ from .configuration import (
 
 def make_stepper(config, case, space, density, poisson_result, density_trace,
                  potential_trace, *, transport_boundary_mode, poisson_solver,
-                 positivity=None, recovery_record=None):
+                 positivity=None, recovery_record=None, density_projector=None):
     """Initialize the selected algorithm using the tested preset's policies."""
     stepper_type = STEPPERS[config.time_scheme]
     options = dict(
@@ -28,7 +28,8 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
         options["use_postprocessed_flux"] = config.transport_electric_field == "postprocessed"
     if issubclass(stepper_type, SIEulerStepper):
         return stepper_type(space, config.dt, density, poisson_result, density_trace,
-                            potential_trace=potential_trace, **options)
+                            potential_trace=potential_trace, density_projector=density_projector,
+                            **options)
 
     from hdgfem.transport.residual import HDGTraceWorkspace, UpwindHDGTransportResidual
 

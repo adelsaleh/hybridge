@@ -317,6 +317,8 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "diagnostics_prefix": args.diagnostics_prefix,
         "positivity_diagnostics": getattr(args, "positivity_diagnostics", None),
         "positivity_tolerance": getattr(args, "positivity_tolerance", None),
+        "density_positivity": getattr(args, "density_positivity", None),
+        "density_positivity_points": getattr(args, "density_positivity_points", None),
         "diocotron_diagnostics": getattr(args, "diocotron_diagnostics", None),
         "diocotron_radial_points": getattr(args, "diocotron_radial_points", None),
         "diocotron_angular_points": getattr(args, "diocotron_angular_points", None),
@@ -434,6 +436,12 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             raise ValueError("recovered transport drift uses continuous postprocessing; set poisson_flux_postprocess_every=0")
     if not math.isfinite(config.positivity_tolerance) or config.positivity_tolerance < 0:
         raise ValueError("positivity_tolerance must be finite and nonnegative")
+    if config.density_positivity not in {"none", "kkt"}:
+        raise ValueError("density_positivity must be 'none' or 'kkt'")
+    if config.density_positivity_points not in {"quadrature+lattice", "quadrature+lattice+dense"}:
+        raise ValueError("density_positivity_points must be quadrature+lattice or quadrature+lattice+dense")
+    if config.density_positivity != "none" and config.time_scheme not in {"si-euler", "si-bdf2"}:
+        raise ValueError("density_positivity='kkt' currently supports si-euler and si-bdf2 only")
     if config.diocotron_radial_points < 2:
         raise ValueError("diocotron_radial_points must be at least 2")
     if config.diocotron_angular_points is not None and config.diocotron_angular_points < 2:

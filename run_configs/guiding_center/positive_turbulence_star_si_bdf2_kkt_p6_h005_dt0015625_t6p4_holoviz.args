@@ -1,0 +1,8 @@
+# README positive-density showcase initial data with KKT positivity preservation:
+# 960 saved positive Gaussian blobs (cutoff 5) in the five-lobed star around a circular
+# island, h=0.005 (360,379 triangles), DG p=6, SI-BDF2 dt=0.0015625 to T=6.4.
+# Each transported density is projected (device kernel) onto nonnegativity at the volume
+# quadrature and p-lattice points with exact mass conservation; rho_h(0) is not
+# corrected, since the first solves only see its moments. Verbosity 3 prints the
+# projector report every step. Holoviz density and potential every 4 steps.
+--preset positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz

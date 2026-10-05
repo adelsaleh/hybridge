@@ -109,6 +109,10 @@ class GuidingCenterRunPreset:
     transport_direct_fallback: str = "none"
     positivity_diagnostics: bool = False
     positivity_tolerance: float = 1.0e-12
+    # KKT projection of every accepted density onto nonnegativity at element points, with
+    # exact mass conservation (hdgfem.transport.positivity); SI-Euler and SI-BDF2 only.
+    density_positivity: str = "none"
+    density_positivity_points: str = "quadrature+lattice"
     diocotron_diagnostics: bool = False
     diocotron_radial_points: int = 32
     diocotron_angular_points: int | None = None
@@ -870,6 +874,48 @@ for _bdf2_key, _geometry_label in (
         time_scheme="si-bdf3",
         diagnostics_prefix=_key,
     )
+
+# README showcase initial data (five-lobed star around a circular island, the saved
+# 960-blob positive profile with cutoff 5, h=0.005 and 360,379 triangles) with the
+# KKT positivity projection on the device. dt is four times the published video's:
+# positivity no longer limits it. One plotted frame per 4 steps keeps the video's
+# 0.00625 time units per frame; --dt 0.000390625 --num-steps 16384 --plot-every 16
+# reproduces the video's step exactly.
+_README_POSITIVE_KEY = "positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz"
+PRESETS[_README_POSITIVE_KEY] = replace(
+    PRESETS["positive_turbulence_si_bdf2_p6_h0068_dt0005_t50_raw_cuda_bsr"],
+    description=(
+        "README positive-density showcase case with KKT positivity preservation: "
+        "960 positive Gaussian blobs (saved profile, cutoff 5) in the five-lobed star "
+        "around a circular island, h=0.005 (360,379 triangles), p=6, SI-BDF2 with "
+        "dt=0.0015625 to T=6.4. Every transported density is projected onto nonnegativity "
+        "at the volume quadrature and p-lattice points with exact mass conservation "
+        "(device kernel); rho_h(0) is not corrected, the first solves seeing only its "
+        "moments. Holoviz shows density and potential every 4 steps."
+    ),
+    case_params={
+        "geometry": "smooth-star",
+        "profile_path": "run_configs/guiding_center/profiles/readme_positive_c5_h005.npz",
+        "amplitude": 4.0,
+        "cutoff": 5.0,
+    },
+    mesh_size=0.005,
+    minimum_triangles=300000,
+    # The README run's global-length Poisson tau, kappa / (2|Omega| / |dOmega|), on this mesh.
+    poisson_tau=1.9132979258049199,
+    dt=0.0015625,
+    num_steps=4096,
+    density_positivity="kkt",
+    density_positivity_points="quadrature+lattice",
+    positivity_diagnostics=True,
+    diagnostics_every=4,
+    verbosity=3,
+    plot_every=4,
+    plot_backend="holoviz",
+    plot_potential=True,
+    plot_show_mesh=False,
+    diagnostics_prefix=_README_POSITIVE_KEY,
+)
 
 # Additional user-run geometries share the existing ARK3 device solver stack.
 for _geometry, _mesh_size, _minimum, _counts, _sigmas in (

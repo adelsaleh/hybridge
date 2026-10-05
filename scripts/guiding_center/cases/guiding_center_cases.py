@@ -450,6 +450,7 @@ def positive_turbulence(
         geometry: str = "disc",
         geometry_params: dict | None = None,
         fft_grid_shape: tuple[int, int] | list[int] | None = None,
+        profile_path: str | None = None,
 ) -> GuidingCenterCase:
     r"""Nonnegative multiscale guiding-center density / Euler vorticity.
 
@@ -465,13 +466,41 @@ def positive_turbulence(
     ``fft_grid_shape=(nx, ny)`` selects an approximate FFT-convolved field
     with smooth nonnegative grid reconstruction. Additional center clearance
     preserves the requested zero-density wall band after grid spreading.
+
+    ``geometry="smooth-star"`` is the README showcase domain: a five-lobed
+    star around a circular island (``geometry_params`` override the radius,
+    lobe amplitude, mode, island radius, boundary points and Gmsh threads).
+    It requires ``profile_path``, a profile saved by
+    :meth:`hdgfem.cases.profiles.GaussianBlobField.save` (relative paths are
+    taken from the repository root); the stored blobs are reused exactly and
+    their cutoff must equal ``cutoff``. ``counts``, ``sigmas``, ``seed`` and
+    ``wall_gap`` then only describe how that profile was sampled.
     """
     from hdgfem.core.geometry import DiskDomain, shaped_domain
     from hdgfem.cases.profiles import sample_gaussian_blob_field
 
     counts, sigmas = tuple(counts), tuple(sigmas)
     geometry_params = dict(geometry_params or {})
-    if geometry == "disc":
+    if geometry == "smooth-star":
+        from pathlib import Path
+        from hdgfem.cases.profiles import GaussianBlobField
+
+        if profile_path is None or fft_grid_shape is not None:
+            raise ValueError("smooth-star positive turbulence requires profile_path and no FFT grid")
+        geometry_params = {"radius": 1.0, "amplitude": 0.35, "mode": 5, "hole_radius": 0.3,
+                           "boundary_points": 500, "num_threads": 16, **geometry_params}
+        path = Path(profile_path)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[3] / path
+        if not path.is_file():
+            raise FileNotFoundError(f"saved Gaussian-blob profile not found: {path}")
+        density = GaussianBlobField.load(path, amplitude=amplitude)
+        if density.cutoff != float(cutoff):
+            raise ValueError(f"{path} was sampled with cutoff {density.cutoff:g}, not {cutoff:g}")
+        widths, counts = np.unique(density.sigmas, return_counts=True)
+        counts, sigmas = tuple(int(n) for n in counts), tuple(float(w) for w in widths)
+        domain_label = "five-lobed star around a circular island (README showcase profile)"
+    elif geometry == "disc":
         if geometry_params:
             raise ValueError("geometry_params are only supported for shaped domains")
         domain = DiskDomain()
@@ -479,15 +508,18 @@ def positive_turbulence(
     else:
         domain = shaped_domain(geometry, **geometry_params)
         domain_label = "ITER" if geometry == "iter" else geometry
-    density = sample_gaussian_blob_field(
-        domain, counts, sigmas,
-        amplitude=amplitude,
-        seed=seed,
-        cutoff=cutoff,
-        wall_clearance=wall_gap,
-        strength_mode="positive",
-        fft_grid_shape=fft_grid_shape,
-    )
+    if profile_path is not None and geometry != "smooth-star":
+        raise ValueError("profile_path is only supported with geometry='smooth-star'")
+    if geometry != "smooth-star":
+        density = sample_gaussian_blob_field(
+            domain, counts, sigmas,
+            amplitude=amplitude,
+            seed=seed,
+            cutoff=cutoff,
+            wall_clearance=wall_gap,
+            strength_mode="positive",
+            fft_grid_shape=fft_grid_shape,
+        )
     return GuidingCenterCase(
         key="positive_turbulence",
         description=(
@@ -512,6 +544,7 @@ def positive_turbulence(
             "wall_gap": float(wall_gap),
             "geometry": geometry_params,
             "geometry_name": geometry,
+            **({"profile_path": str(profile_path)} if profile_path is not None else {}),
             **({"initial_profile": "fft_gaussian",
                 "fft_grid_shape": density.grid_shape,
                 "fft_grid_spacing": tuple(float(value) for value in density.spacing),

@@ -7,8 +7,15 @@ import numpy as np
 class MovieWriter:
     """Encode H.264 MP4 incrementally, retaining no frame history in memory."""
 
-    def __init__(self, path, *, fps=20.):
-        """Validate the MP4 path and frame rate; the encoder starts on the first frame."""
+    def __init__(self, path, *, fps=20., fragmented=False):
+        """Validate the MP4 path and frame rate; the encoder starts on the first frame.
+
+        ``fragmented`` writes a fragmented MP4, flushing a fragment at least every
+        second of video, so it stays playable while it is written or after the
+        process is killed (minus the last second); remux it
+        with ``ffmpeg -c copy -movflags +faststart`` for web delivery. The default
+        moves the index to the front on close, so the file is valid only once closed.
+        """
         import imageio_ffmpeg
 
         self.path = Path(path)
@@ -17,6 +24,7 @@ class MovieWriter:
         if not np.isfinite(fps) or fps <= 0:
             raise ValueError("movie FPS must be finite and positive")
         self.fps = float(fps)
+        self.fragmented = bool(fragmented)
         self._encoder = None
         self._shape = None
         self._closed = False
@@ -42,7 +50,9 @@ class MovieWriter:
                 output_params=["-crf", "23", "-preset", "veryfast", "-threads", "2",
                                "-bf", "0", "-g", str(max(1, round(self.fps * 2))),
                                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-                               "-movflags", "+faststart"],
+                               *(["-movflags", "+frag_keyframe+empty_moov+default_base_moof",
+                                  "-frag_duration", "1000000", "-flush_packets", "1"]
+                                 if self.fragmented else ["-movflags", "+faststart"])],
             )
             self._encoder.send(None)
         if image.shape != self._shape:
