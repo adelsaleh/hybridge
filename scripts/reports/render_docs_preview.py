@@ -1,7 +1,7 @@
-"""Render linked offline README/manual previews with embedded showcase videos.
+"""Render linked offline README/manual previews with embedded theme posters and figures.
 
 Run ``python -m scripts.reports.render_docs_preview --output-dir /path/to/preview``.
-Requires markdown-it-py, Pygments, Matplotlib, Pillow and imageio-ffmpeg. Generated previews use
+Requires markdown-it-py, Pygments and Matplotlib. Generated previews use
 browser color preferences, optional theme overrides and local copy controls.
 """
 
@@ -56,38 +56,26 @@ def render_markdown(source):
  return parser.renderer.render(tokens,parser.options,{})
 body=render_markdown(source)
 body=re.sub(r'(<pre\b.*?</pre>)',r'<div class="code-block"><button class="copy-code" type="button" aria-label="Copy code">Copy</button>\1</div>',body,flags=re.S)
-for asset in ('vortex_gas','positive_density'):
- # Map GitHub attachment embeds to offline players backed by local MP4s.
- media=root/'docs/getting_started/media'
- movie=media/f'{asset}.mp4'
- poster=media/f'{asset}.png'
- if poster.exists():
-  poster_url=encoded(poster,'image/png')
- else:
-  from PIL import Image
-  import imageio_ffmpeg
-  reader=imageio_ffmpeg.read_frames(str(movie),pix_fmt='rgb24')
-  try:
-   info=next(reader)
-   frame=Image.frombytes('RGB',tuple(info['size']),next(reader))
-   buffer=io.BytesIO();frame.save(buffer,format='PNG')
-  finally:
-   reader.close()
-  poster_url='data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
- player=('<div class="simulation-player"><video id="'+asset+'" controls playsinline preload="none" poster="'+poster_url+'" src="'+encoded(movie,'video/mp4')+'"></video>'
- '<button class="simulation-play" aria-label="Play simulation" onclick="this.previousElementSibling.play();this.hidden=true">▶</button></div>')
- link=(r'<a href="docs/getting_started/media/'+asset+r'\.mp4"><img src="docs/getting_started/media/'
-       +asset+r'\.png"[^>]*></a>')
- body=re.sub(link,lambda _:player,body)
- attachment=(r'<!-- showcase-video: '+re.escape(asset)+r' -->\s*'
-             r'<p>https://github.com/user-attachments/assets/[a-zA-Z0-9-]+</p>')
- body=re.sub(attachment,lambda _:player,body)
+published=root/'outputs/readme_showcase/published'
+def poster_link(match):
+ # Theme posters open the published local video when present, else GitHub's issue page.
+ name,theme=match.group(2),match.group(3)
+ movie=published/f'{name}_{theme}.mp4'
+ return ('<a href="'+(movie.as_uri() if movie.exists() else match.group(1))+'"><img src="docs/getting_started/media/'
+         +name+'_'+theme+'.png#gh-'+theme+'-mode-only"')
+body=re.sub(r'<a href="(https://github\.com/[^"]+/issues/\d+)"><img src="docs/getting_started/media/(\w+?)_(light|dark)\.png#gh-(?:light|dark)-mode-only"',poster_link,body)
+def theme_image(match):
+ # Embed repository PNGs; GitHub's #gh-*-mode-only images show for one page theme.
+ source='src="'+encoded(root/match.group(1),'image/png')+'"'
+ return source+(' data-theme-only="'+match.group(2)+'"' if match.group(2) else '')
+body=re.sub(r'src="(docs/getting_started/media/[\w.-]+\.png)(?:#gh-(light|dark)-mode-only)?"',theme_image,body)
 style='''body{margin:0;background:#f6f8fa;color:#24292f;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}main{max-width:1040px;margin:28px auto;padding:32px 42px;background:white;border:1px solid #d0d7de;border-radius:8px}h1,h2{line-height:1.25;border-bottom:1px solid #d8dee4;padding-bottom:.35em}h2{margin-top:32px}a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}code{font-size:85%;background:#eff1f3;padding:2px 5px;border-radius:4px}pre{overflow:auto;padding:16px;background:#f6f8fa;border-radius:6px;line-height:1.5}pre code{padding:0;background:none}table{border-collapse:collapse;width:100%;font-size:94%}td,th{border:1px solid #d0d7de;padding:8px 12px;text-align:left}tr:nth-child(even){background:#f6f8fa}img{max-width:100%}.equation{text-align:center;padding:8px 0}.equation img{width:auto;height:auto;max-width:100%}.code-block{position:relative;margin:16px 0}.code-block pre{margin:0;padding:12px 20px 12px 20px;white-space:pre;font:16px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}.code-block pre code{font:inherit}.copy-code{position:absolute;top:7px;right:7px;padding:3px 7px;border:1px solid #d0d7de;border-radius:5px;background:white;color:#57606a;font-size:11px;cursor:pointer}.copy-code:hover{color:#24292f;background:#eef1f4}.simulation-player{position:relative;display:block}.simulation-player video{display:block;width:100%}.simulation-play{position:absolute;bottom:48px;right:20px;border:1px solid #aaa;border-radius:50%;background:#ffffffc9;color:#333;width:34px;height:34px;cursor:pointer;font-size:13px}.simulation-play[hidden]{display:none}@media(max-width:700px){main{margin:0;padding:18px;border:0}table{display:block;overflow:auto}}'''+HtmlFormatter(style='friendly').get_style_defs('html[data-theme="light"] .highlight')+HtmlFormatter(style='github-dark').get_style_defs('html[data-theme="dark"] .highlight')
 
 style += """
 @media(max-width:700px){.code-block pre{font-size:13px;padding-left:12px;padding-right:12px}}
 .preview-nav{display:flex;gap:18px;font-size:14px;border-bottom:1px solid #d0d7de;padding-bottom:10px;margin-bottom:22px}html[data-theme="dark"] .preview-nav{border-color:#30363d}h2,h3{scroll-margin-top:20px}details.manual-contents{padding:12px 16px;border:1px solid #d0d7de;border-radius:6px;margin:20px 0}details.manual-contents summary{cursor:pointer}html[data-theme="dark"] details.manual-contents{border-color:#30363d}
 html{color-scheme:light}html[data-theme="dark"]{color-scheme:dark}
+html[data-theme="light"] img[data-theme-only="dark"],html[data-theme="dark"] img[data-theme-only="light"]{display:none}
 .theme-bar{position:fixed;right:14px;top:14px;z-index:10}.theme-toggle{border:1px solid #d0d7de;border-radius:6px;width:34px;height:34px;padding:0;background:#f6f8fa;color:#57606a;cursor:pointer;font-size:18px;box-shadow:0 1px 5px #0002}
 .code-block pre{padding-top:18px;padding-bottom:18px;line-height:1.6;border:1px solid #e5e9ef}
 html[data-theme="light"] .highlight{background:#f6f8fa;color:#24292f}

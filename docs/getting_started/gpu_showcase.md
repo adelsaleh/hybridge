@@ -6,6 +6,10 @@ simulation of the [example script](../../examples/gpu_vortex_gas.py); the
 recorder `scripts/reports/record_gpu_showcase.py` builds the same solvers
 through `scripts/reports/gpu_showcase_setup.py`, runs the same time loop, and
 adds Matplotlib rendering, diagnostics, a final checkpoint, and provenance.
+The published positive run also applies a KKT positivity projection after each
+transport step. It was recorded on the `positivity-kkt` development branch,
+which is not part of this release; see
+[the positive run with KKT positivity](#the-positive-run-with-kkt-positivity).
 
 ## Problem
 
@@ -76,7 +80,8 @@ frame by frame.
 
 ## Checks behind the settings
 
-Every check starts from the saved profiles on the published mesh, and compares
+These checks ran without the KKT projection. Every check starts from the saved
+profiles on the published mesh, and compares
 final states with `scripts/reports/compare_showcase_states.py` (physical DG L2
 norms on one mesh, shared sampled points across meshes).
 
@@ -139,25 +144,53 @@ the conservation diagnostics below are the long-time evidence.
 
 ## Recorded runs
 
-| | Signed | Positive |
+| | Signed | Positive, with KKT |
 |---|---:|---:|
 | Time step | 0.003125 | 0.000390625 |
 | Steps / final time | 5,080 / 15.9 | 16,384 / 6.4 |
-| Frames / playback | 1,271 / 53 s | 1,025 / 21 s |
-| Wall time, s per step (with rendering) | 63 min, 0.74 | 141 min, 0.52 |
-| GPU memory in use at finish | 29 GiB | 29 GiB |
+| Frames / playback | 1,271 / 26 s (2× speed) | 1,025 / 21 s |
+| Wall time, s per step (with rendering) | 63 min, 0.74 | 152 min, 0.56 (two segments) |
+| GPU memory in use at finish | 29 GiB | 28 GiB |
 | Change in total charge | 2.2e-13 | 2.4e-11 |
-| Energy drift | 2.9e-4 | 2.2e-6 |
-| Enstrophy loss | 29.9% | 7.3% |
-| Density range at the end | -17.7 to 13.2 | -3.1 to 21.1 |
-| Negative charge (share of total) | – | 0.42% |
-| MP4 size | 5.4 MB | 6.1 MB |
+| Energy drift | 2.9e-4 | -4.1e-5 |
+| Enstrophy loss | 29.9% | 8.2% |
+| Density range at the end | -17.7 to 13.2 | -7e-16 to 21.1 |
+| Negative charge (share of total) | – | below 1.3e-9 throughout |
+| Published videos, light / dark | 5.4 / 5.0 MB | 6.3 / 6.4 MB |
 
 Circulation `∫ρ`, energy `½∫|q_h|²` and enstrophy `½∫ρ²` are computed on the
 device every frame. The signed charge balance is set by the profile, not by
 round-off. Energy is nearly conserved while enstrophy decays: the filaments of
 the forward enstrophy cascade reach the grid and are dissipated by upwinding,
-while energy gathers in fewer, larger vortices.
+while energy gathers in fewer, larger vortices. The KKT projection removes a
+little energy and enstrophy whenever it acts: without it, the same positive run
+drifted by +2.2e-6 in energy and lost 7.3% of its enstrophy, with the density
+reaching -3.1 and 0.42% of the charge in negative regions.
+
+### The positive run with KKT positivity
+
+The run was recorded on the `positivity-kkt` branch (base `a11a741` with
+uncommitted changes; the run metadata keeps their diff digest). The KKT
+projection was committed afterwards as `5da4901`. It was stopped at step 5,273
+and resumed from its checkpoint. Before the restart (t ≤ 2.06) the projection
+constrained the density at element quadrature and lattice points; between
+them a denser diagnostic sampling still found values down to -2.88 (t = 1.6).
+From the restart on, a denser point set was added and no sampled value was
+negative. No displayed pixel ever fell below the pink threshold. On that
+branch:
+
+```bash
+python -m scripts.reports.record_gpu_showcase --name positive_kkt_c5_dt000390625 \
+  --strength-mode positive --profile run_configs/guiding_center/profiles/readme_positive_c5_h005.npz \
+  --cutoff 5 --h 0.005 --dt 0.000390625 --steps 16384 --every 16 --fps 48 --movie \
+  --seconds 43200 --max-loss 0.9 --poisson-tau global \
+  --density-positivity kkt --density-positivity-points quadrature+lattice
+```
+
+The continuation used `--name positive_kkt_c5_dt000390625_part2 --resume
+outputs/readme_showcase/positive_kkt_c5_dt000390625.restart.npz --steps 11111
+--density-positivity-points quadrature+lattice+dense` with the same other
+settings.
 
 ## Record the videos
 
@@ -177,10 +210,10 @@ python -m scripts.reports.record_gpu_showcase --name positive_c5_dt000390625 \
   --seconds 25200 --max-loss 0.9 --poisson-tau global
 ```
 
-A missing `--profile` file is sampled on the run's mesh and saved. Both videos
-advance **0.3 physical-time units per playback second**: the signed case draws
-every fourth step at 24 frames per second, the positive case every sixteenth
-step at 48. Frames are 1600 × 800 pixels with tick-free light-grey coordinate
+A missing `--profile` file is sampled on the run's mesh and saved. Both
+recordings advance **0.3 physical-time units per playback second**: the signed
+case draws every fourth step at 24 frames per second, the positive case every
+sixteenth step at 48. The signed video is published at twice that speed. Frames are 1600 × 800 pixels with tick-free light-grey coordinate
 boxes, wall outlines and fixed colorbars. Signed charge uses a symmetric
 diverging map; positive density uses a sequential map from zero in which
 values below −1% of the color scale appear pink, so lost positivity stays
@@ -196,18 +229,25 @@ package versions), per-frame JSONL diagnostics, and one atomic full-precision
 `<name>.restart.npz` endpoint checkpoint. `--resume <checkpoint>` validates the
 mesh and every run parameter, takes one Euler startup step, then resumes BDF2.
 
-Publish a finished run into `docs/getting_started/media` with a poster frame
-at a chosen physical time:
+Publish a finished run, or a run and its continuations:
 
 ```bash
 python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/signed_c5_dt003125 \
-  --as vortex_gas --poster-time 6
-python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/positive_c5_dt000390625 \
-  --as positive_density --poster-time 6
+  --as vortex_gas --poster-time 6 --speed 2
+python -m scripts.reports.publish_gpu_showcase outputs/readme_showcase/positive_kkt_c5_dt000390625 \
+  outputs/readme_showcase/positive_kkt_c5_dt000390625_part2 --as positive_density --poster-time 6
 ```
 
-The published JSON files keep the run settings, diagnostics, provenance and
-media digests, without local paths.
+The tool checks each seam (a continuation's restart frame, off the frame
+cadence, is dropped) and writes light and dark MP4s to the ignored
+`outputs/readme_showcase/published/` for upload as GitHub attachments. Into
+`docs/getting_started/media` it writes transparent light and dark posters with a
+play button, and a JSON record with the run settings, diagnostics, provenance
+and the digests of all four files, without local paths. The dark movie and the
+posters redraw labels, colorbars and the fill from the rebuilt Matplotlib
+layout (`scripts/reports/showcase_media.py`); field pixels keep their recorded
+colors. The README shows the poster matching the reader's theme, and each
+poster links to the issue where the videos play.
 
 ## Rerun the checks
 
@@ -232,12 +272,15 @@ rows; `--pair A B` compares any two checkpoints, on one mesh or two.
 ## Preview the README and manual locally
 
 ```bash
-python -m pip install markdown-it-py pygments matplotlib pillow imageio-ffmpeg
+python -m pip install markdown-it-py pygments matplotlib
 python -m scripts.reports.render_docs_preview --output-dir /path/to/preview
 ```
 
 Open `hybridge-readme-portable.html` in that directory. It links to
-`hybridge-manual.html`; keep both files together when copying them. Videos and
-equations are embedded for offline viewing. Videos start paused and do not loop.
+`hybridge-manual.html`; keep both files together when copying them. Posters,
+figures and equations are embedded for offline viewing; posters open the
+published videos when `outputs/readme_showcase/published/` holds them.
 The theme follows the browser preference, with a small Auto/Light/Dark override.
 Repository source links resolve against the checkout where the preview was built.
+`python -m scripts.reports.make_readme_first_solve_figure` regenerates the
+README's first-solve figure from the README's own code block.

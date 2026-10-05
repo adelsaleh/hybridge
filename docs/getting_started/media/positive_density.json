@@ -1,7 +1,7 @@
 {
   "h": 0.005,
   "dt": 0.000390625,
-  "steps": 16384,
+  "steps": 11111,
   "every": 16,
   "fps": 48.0,
   "width": 1600,
@@ -36,9 +36,10 @@
     ],
     [
       0.0,
-      0.1756163445738923
+      0.17561634457388905
     ]
   ],
+  "density_positivity": "kkt",
   "checkpoint_step": 16384,
   "gpu": "NVIDIA RTX PRO 5000 Blackwell",
   "status": "completed",
@@ -46,79 +47,94 @@
   "trace_dofs": 3774995,
   "scalar_dofs": 10090612,
   "completed_steps": 16384,
-  "wall_seconds": 8466.909345422988,
-  "device_used_gib_at_finish": 28.549072265625,
+  "wall_seconds": 9092.889124054054,
+  "device_used_gib_at_finish": 28.12286376953125,
   "rendered_frames": 1025,
   "playback_seconds": 21.354166666666668,
   "simulation_time_per_playback_second": 0.2997073170731707,
   "projection_relative_l2": 5.978475130093796e-07,
   "transport_recovery_policy": "guiding-center-amgx-robust-then-host-pypardiso",
+  "transport_host_recoveries": 0,
   "advection_stabilization": "conflict-averaged-upwind",
   "initial_velocity": {
-    "velocity_boundary_normal_l2": 0.005155647055505314,
-    "velocity_boundary_normal_linf": 0.07341845583425577,
-    "velocity_boundary_speed_l2": 1.8712382190614905,
-    "velocity_boundary_normal_relative_l2": 0.002755206153330441,
-    "velocity_normal_jump_l2": 0.005401006095783825,
-    "velocity_normal_jump_linf": 0.07770949957101858,
+    "velocity_boundary_normal_l2": 0.0051556470555092805,
+    "velocity_boundary_normal_linf": 0.07341845583424822,
+    "velocity_boundary_speed_l2": 1.871238219061485,
+    "velocity_boundary_normal_relative_l2": 0.002755206153332569,
+    "velocity_normal_jump_l2": 0.005401006095788795,
+    "velocity_normal_jump_linf": 0.07770949957105522,
     "velocity_double_outflow_measure_fraction": 9.35938484643133e-07,
     "velocity_double_outflow_face_fraction": 7.41722836718989e-06,
     "velocity_double_inflow_measure_fraction": 8.584901642332974e-07,
-    "velocity_divergence_l2": 0.3776655923258734,
-    "velocity_divergence_linf": 213.00677978446382,
-    "velocity_speed_linf": 1.4285525864187991,
-    "velocity_max_speed_over_min_edge": 420.4185508487923,
+    "velocity_divergence_l2": 0.37766559232618746,
+    "velocity_divergence_linf": 213.00677978447203,
+    "velocity_speed_linf": 1.4285525864188224,
+    "velocity_max_speed_over_min_edge": 420.41855084882224,
     "velocity_diagnostics_backend": "cuda"
   },
   "final_velocity": {
-    "velocity_boundary_normal_l2": 0.005390588057292701,
-    "velocity_boundary_normal_linf": 0.08247164719505784,
-    "velocity_boundary_speed_l2": 1.9470364144730652,
-    "velocity_boundary_normal_relative_l2": 0.0027686118334625904,
-    "velocity_normal_jump_l2": 0.005692582880273232,
-    "velocity_normal_jump_linf": 0.08785038803563361,
-    "velocity_double_outflow_measure_fraction": 3.7676831343647243e-06,
-    "velocity_double_outflow_face_fraction": 6.304644112111406e-05,
-    "velocity_double_inflow_measure_fraction": 2.3448917728346747e-06,
-    "velocity_divergence_l2": 0.3989310890118876,
-    "velocity_divergence_linf": 241.1646524731451,
-    "velocity_speed_linf": 1.4975261483311642,
-    "velocity_max_speed_over_min_edge": 433.6759698776084,
+    "velocity_boundary_normal_l2": 0.005390149117473496,
+    "velocity_boundary_normal_linf": 0.082465964329281,
+    "velocity_boundary_speed_l2": 1.947008931303338,
+    "velocity_boundary_normal_relative_l2": 0.002768425470891549,
+    "velocity_normal_jump_l2": 0.00568333720830762,
+    "velocity_normal_jump_linf": 0.08784494890932915,
+    "velocity_double_outflow_measure_fraction": 1.885262548055341e-06,
+    "velocity_double_outflow_face_fraction": 4.0794756019544395e-05,
+    "velocity_double_inflow_measure_fraction": 2.427540336187755e-06,
+    "velocity_divergence_l2": 0.39816209510805795,
+    "velocity_divergence_linf": 241.14854956785206,
+    "velocity_speed_linf": 1.4974363891394304,
+    "velocity_max_speed_over_min_edge": 433.82039610882134,
     "velocity_diagnostics_backend": "cuda"
   },
   "final": {
     "step": 16384,
     "time": 6.4,
-    "circulation": 5.985382432801841,
-    "enstrophy": 13.716188641018634,
-    "energy": 0.2734983110800158,
-    "minimum": -3.108725077963711,
-    "maximum": 21.110105419358224,
-    "potential_minimum": 4.256127983584949e-06,
-    "potential_maximum": 0.17165417065218033,
+    "circulation": 5.9853824328018765,
+    "enstrophy": 13.584076039337548,
+    "energy": 0.2734865635708391,
+    "minimum": -6.897102996995471e-16,
+    "maximum": 21.10991158616977,
+    "potential_minimum": 4.260482150863311e-06,
+    "potential_maximum": 0.17165854900503144,
     "poisson_iterations": 20,
-    "transport_iterations": 23,
-    "elapsed": 8466.224868413003,
-    "velocity_divergence_l2": 0.3989310890118876,
-    "velocity_normal_jump_l2": 0.005692582880273232,
-    "velocity_double_outflow_measure_fraction": 3.7676831343647243e-06,
-    "velocity_boundary_normal_relative_l2": 0.0027686118334625904,
-    "rho_min_checked": -6.088887014597657,
-    "rho_max_checked": 21.111173992426163,
-    "rho_bernstein_lower_bound": -116.39111880548035,
-    "rho_bernstein_upper_bound": 124.87532838741596,
-    "rho_cell_average_min": -2.786155479231348,
-    "rho_negative_mass_quadrature": 0.024942325277246314,
-    "rho_negative_l2_quadrature": 0.10628551794904581,
-    "rho_negative_cells_sampled": 119419.0,
-    "positivity_status": "violated",
+    "transport_iterations": 17,
+    "elapsed": 6281.133673958015,
+    "velocity_divergence_l2": 0.39816209510805795,
+    "velocity_normal_jump_l2": 0.00568333720830762,
+    "velocity_double_outflow_measure_fraction": 1.885262548055341e-06,
+    "velocity_boundary_normal_relative_l2": 0.002768425470891549,
+    "rho_min_checked": -1.5274792100940676e-15,
+    "rho_max_checked": 21.111087506437126,
+    "rho_bernstein_lower_bound": -81.5447197623163,
+    "rho_bernstein_upper_bound": 115.00925324848247,
+    "rho_cell_average_min": 1.1699442170281312e-10,
+    "rho_negative_mass_quadrature": 4.762818991139262e-21,
+    "rho_negative_l2_quadrature": 7.039134016914454e-19,
+    "rho_negative_cells_sampled": 0.0,
+    "positivity_status": "inconclusive",
     "positivity_tolerance": 1e-12,
     "positivity_backend": "device",
-    "enstrophy_loss": 0.0725738614094944,
-    "energy_drift": 2.2429203172524836e-06
+    "positivity_flagged": 20687,
+    "positivity_projected": 20687,
+    "positivity_constant": 0,
+    "positivity_fallback": 0,
+    "positivity_negative_mean_projected": 0,
+    "positivity_negative_mean_zeroed": 0,
+    "positivity_negligible": 0,
+    "positivity_max_iterations": 241,
+    "positivity_min_before": -0.40368637675530306,
+    "positivity_min_after": -1.5274792100940676e-15,
+    "positivity_correction_relative": 9.42144039099054e-05,
+    "positivity_mass_returned": 0.0,
+    "positivity_projection_time": 0.02489790297113359,
+    "enstrophy_loss": 0.08150671318362523,
+    "energy_drift": -4.070994281912821e-05,
+    "circulation_drift": -3.971267759084185e-12
   },
   "provenance": {
-    "recorded": "2026-10-04T14:42:51+00:00",
+    "recorded": "2026-10-05T15:13:02+00:00",
     "python": "3.12.3",
     "packages": {
       "numpy": "2.5.3",
@@ -134,10 +150,10 @@
       "pyamgx": "0.1"
     },
     "code": {
-      "git_head": "79e9cdfbc46ff7859311ae03a6fe7ab4b39b20a7",
-      "git_branch": "package-reorganization",
-      "git_dirty_entries": 0,
-      "code_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "git_head": "a11a7419796950fc59fdc79d8330fede9daf9412",
+      "git_branch": "positivity-kkt",
+      "git_dirty_entries": 26,
+      "code_diff_sha256": "f718e248a8de515bc12f930f8f786138f4cdf16693402d588ea236b2c8c9adac"
     },
     "gpu_stack": {
       "pyamgx_revision": "a44d224d8b92f94b8d004794805528dfe3e8b460",
@@ -151,11 +167,139 @@
     "cuda_runtime": 13020,
     "cuda_driver": 13000
   },
-  "published_movie": "docs/getting_started/media/positive_density.mp4",
-  "mp4_bytes": 6064752,
-  "mp4_sha256": "f202a6918b90bb9d03c88377a44e9717a46261ce7d556beec8999e895f07dbe8",
-  "poster": "docs/getting_started/media/positive_density.png",
+  "segments": [
+    {
+      "first_step": 0,
+      "last_rendered_step": 5264,
+      "checkpoint_step": 5273,
+      "rendered_frames": 330,
+      "restart_frames_dropped": 0,
+      "wall_seconds": 2810.4110440580407,
+      "status": "interrupted",
+      "restart_startup": null,
+      "density_positivity_points": "quadrature+lattice",
+      "positivity_projection": {
+        "points": "quadrature+lattice",
+        "steps": 5273,
+        "max_flagged": 36222,
+        "max_correction_relative": 7.017825748076009e-05,
+        "max_mass_returned": 3.741687015975311e-09,
+        "seconds": 52.94029423396569
+      },
+      "provenance": {
+        "recorded": "2026-10-05T14:25:58+00:00",
+        "python": "3.12.3",
+        "packages": {
+          "numpy": "2.5.3",
+          "scipy": "1.18.1",
+          "numba": "0.67.0",
+          "cupy-cuda13x": "14.2.0",
+          "gmsh": "4.15.2",
+          "matplotlib": "3.11.1",
+          "pillow": "12.3.0",
+          "imageio-ffmpeg": "0.6.0",
+          "holoscan-cu13": "4.6.0",
+          "pypardiso": "0.4.7",
+          "pyamgx": "0.1"
+        },
+        "code": {
+          "git_head": "a11a7419796950fc59fdc79d8330fede9daf9412",
+          "git_branch": "positivity-kkt",
+          "git_dirty_entries": 26,
+          "code_diff_sha256": "f718e248a8de515bc12f930f8f786138f4cdf16693402d588ea236b2c8c9adac"
+        },
+        "gpu_stack": {
+          "pyamgx_revision": "a44d224d8b92f94b8d004794805528dfe3e8b460",
+          "pyamgx_dirty": false,
+          "amgx_library": "libamgxsh.so",
+          "amgx_library_bytes": 151633152,
+          "amgx_library_modified": "2026-09-28T11:21:52+00:00",
+          "amgx_revision": "c564f9d866eaff427bac17fddaaeeb5c3bbad2d0",
+          "amgx_dirty": false
+        },
+        "cuda_runtime": 13020,
+        "cuda_driver": 13000
+      }
+    },
+    {
+      "first_step": 5273,
+      "last_rendered_step": 16384,
+      "checkpoint_step": 16384,
+      "rendered_frames": 696,
+      "restart_frames_dropped": 1,
+      "wall_seconds": 6282.478079996014,
+      "status": "completed",
+      "restart_startup": "exact BDF2 history",
+      "density_positivity_points": "quadrature+lattice+dense",
+      "positivity_projection": {
+        "points": "quadrature+lattice+dense",
+        "steps": 11111,
+        "max_flagged": 34328,
+        "max_correction_relative": 0.00030441828468099046,
+        "max_mass_returned": 1.120214468942835e-08,
+        "seconds": 211.58966489054728
+      },
+      "provenance": {
+        "recorded": "2026-10-05T15:13:02+00:00",
+        "python": "3.12.3",
+        "packages": {
+          "numpy": "2.5.3",
+          "scipy": "1.18.1",
+          "numba": "0.67.0",
+          "cupy-cuda13x": "14.2.0",
+          "gmsh": "4.15.2",
+          "matplotlib": "3.11.1",
+          "pillow": "12.3.0",
+          "imageio-ffmpeg": "0.6.0",
+          "holoscan-cu13": "4.6.0",
+          "pypardiso": "0.4.7",
+          "pyamgx": "0.1"
+        },
+        "code": {
+          "git_head": "a11a7419796950fc59fdc79d8330fede9daf9412",
+          "git_branch": "positivity-kkt",
+          "git_dirty_entries": 26,
+          "code_diff_sha256": "f718e248a8de515bc12f930f8f786138f4cdf16693402d588ea236b2c8c9adac"
+        },
+        "gpu_stack": {
+          "pyamgx_revision": "a44d224d8b92f94b8d004794805528dfe3e8b460",
+          "pyamgx_dirty": false,
+          "amgx_library": "libamgxsh.so",
+          "amgx_library_bytes": 151633152,
+          "amgx_library_modified": "2026-09-28T11:21:52+00:00",
+          "amgx_revision": "c564f9d866eaff427bac17fddaaeeb5c3bbad2d0",
+          "amgx_dirty": false
+        },
+        "cuda_runtime": 13020,
+        "cuda_driver": 13000
+      }
+    }
+  ],
+  "playback_speed": 1.0,
+  "playback_fps": 48.0,
+  "restart_frames_dropped": 1,
+  "videos": {
+    "light": {
+      "file": "positive_density_light.mp4",
+      "bytes": 6342553,
+      "sha256": "9bdc260bb5e0d5a9df5b9f3f190e2c3c8aef7a78236c13d29103f4847fe7e78d"
+    },
+    "dark": {
+      "file": "positive_density_dark.mp4",
+      "bytes": 6405216,
+      "sha256": "3340eaf6fe4cb2df6773c3ec806fe18beede4d448ec30469b55cecd20aad9572"
+    }
+  },
+  "posters": {
+    "light": {
+      "path": "docs/getting_started/media/positive_density_light.png",
+      "sha256": "b8f545758fa9a1bafe236ec6e478afd4c0dee32e2ca06c83b67de4f5d242f012"
+    },
+    "dark": {
+      "path": "docs/getting_started/media/positive_density_dark.png",
+      "sha256": "4bf87b342bfcd32109d5a1a6f6f8e99873b93824c7820bdb7195722da6ff1790"
+    }
+  },
   "poster_time": 6.0,
-  "poster_sha256": "8624a0d0a66b870ee75ff134227b4633405a37aa3d1a36470f0dd64f399d7631",
-  "seconds_per_step": 0.5167791348524773
+  "seconds_per_step": 0.5549859084505648
 }
