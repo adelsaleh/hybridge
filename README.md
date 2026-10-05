@@ -134,12 +134,12 @@ solve moves the charge.
 
 **Model.** With Γ the outer wall and the island boundary,
 
-$$
+```math
 \partial_t\rho+\nabla\cdot(\rho\mathbf{u})=0,\qquad
 -\Delta\phi=\rho,\qquad
 \mathbf{u}=(\partial_y\phi,\,-\partial_x\phi),\qquad
 \phi|_\Gamma=0,
-$$
+```
 
 so that u·n = 0 on both walls. In the Euler reading, a zero island potential
 lets the circulation around the island follow the charge distribution; a
@@ -150,22 +150,22 @@ floating island potential.
 extrapolated velocity, then recovers the new potential (one Euler step starts
 the second-order scheme):
 
-$$
+```math
 \frac{3\rho^{n+1}-4\rho^{n}+\rho^{n-1}}{2\Delta t}
 +\nabla\cdot\left(\rho^{n+1}\mathbf{u}^{*}\right)=0,\qquad
 \mathbf{u}^{*}=2\mathbf{u}^{n}-\mathbf{u}^{n-1},\qquad
 -\Delta\phi^{n+1}=\rho^{n+1}.
-$$
+```
 
 The velocity is the rotated HDG flux, and dividing the transport step by its
 leading coefficient gives the form the solver receives:
 
-$$
+```math
 \mathbf{u}_h=(-q_{h,y},\,q_{h,x}),\quad \mathbf{q}_h\approx-\nabla\phi_h,\qquad
 \rho^{n+1}+\nabla\cdot(\boldsymbol{\beta}\,\rho^{n+1})=s,\quad
 \boldsymbol{\beta}=\frac{2\Delta t}{3}\mathbf{u}^{*},\quad
 s=\frac{4\rho^{n}-\rho^{n-1}}{3}.
-$$
+```
 
 `bdf2_transport_data` returns `s` and `beta`, so the reaction coefficient is one.
 

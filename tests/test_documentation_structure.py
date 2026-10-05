@@ -146,6 +146,28 @@ def test_documentation_has_no_unfilled_template_placeholders() -> None:
     assert not failures, "unfilled placeholders:\n" + "\n".join(failures)
 
 
+GITHUB_UNSAFE_INLINE_MATH = re.compile(r"\\[,;:!{}\\]|\*")
+
+
+def test_root_guides_use_github_safe_math() -> None:
+    """GitHub applies Markdown escapes inside $...$ and $$...$$ before MathJax.
+
+    `\\,` loses its backslash and `^{*}` turns into emphasis, so display math
+    must use fenced ```math blocks, and inline math with such sequences must
+    use the $`...`$ form, both of which reach MathJax verbatim.
+    """
+    failures = []
+    for path in ROOT_GUIDES[:2]:
+        prose = re.sub(r"```.*?```", "", path.read_text(encoding="utf-8"), flags=re.S)
+        prose = re.sub(r"\$`.*?`\$|`[^`\n]*`", "", prose)
+        if "$$" in prose:
+            failures.append(f"{path.name}: $$ display math")
+        for formula in re.findall(r"(?<![\\$])\$([^$\n]+?)\$", prose):
+            if GITHUB_UNSAFE_INLINE_MATH.search(formula):
+                failures.append(f"{path.name}: inline ${formula}$")
+    assert not failures, "math GitHub would mangle:\n" + "\n".join(failures)
+
+
 def test_documented_script_and_config_paths_resolve() -> None:
     failures: list[str] = []
     for source in _documentation_markdown():
