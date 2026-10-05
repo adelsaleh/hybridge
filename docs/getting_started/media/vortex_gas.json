@@ -39,6 +39,7 @@
       0.07257454637504576
     ]
   ],
+  "checkpoint_step": 5080,
   "gpu": "NVIDIA RTX PRO 5000 Blackwell",
   "status": "completed",
   "triangles": 360379,
@@ -48,8 +49,8 @@
   "wall_seconds": 3778.738071611,
   "device_used_gib_at_finish": 29.1033935546875,
   "rendered_frames": 1271,
-  "playback_seconds": 52.958333333333336,
-  "simulation_time_per_playback_second": 0.2997639653815893,
+  "playback_seconds": 26.479166666666668,
+  "simulation_time_per_playback_second": 0.5995279307631786,
   "projection_relative_l2": 9.488762485433969e-07,
   "transport_recovery_policy": "none",
   "advection_stabilization": "conflict-averaged-upwind",
@@ -139,11 +140,31 @@
     "cuda_runtime": 13020,
     "cuda_driver": 13000
   },
-  "published_movie": "docs/getting_started/media/vortex_gas.mp4",
-  "mp4_bytes": 5439090,
-  "mp4_sha256": "78484402dba6ab1bc647bc7a80831f24394fc3cce71a591c937b2f854d86b7b6",
-  "poster": "docs/getting_started/media/vortex_gas.png",
+  "playback_speed": 2.0,
+  "playback_fps": 48.0,
+  "restart_frames_dropped": 0,
+  "videos": {
+    "light": {
+      "file": "vortex_gas_light.mp4",
+      "bytes": 5439098,
+      "sha256": "1fe475acdf27561b55a41d13b4bfd37fcc5641bcc93ed2f396830cf9b817b995"
+    },
+    "dark": {
+      "file": "vortex_gas_dark.mp4",
+      "bytes": 4952266,
+      "sha256": "051cca0a0a0820693e311fa1a700178d2ef64b730d254957ce86ea200bfd0bb2"
+    }
+  },
+  "posters": {
+    "light": {
+      "path": "docs/getting_started/media/vortex_gas_light.png",
+      "sha256": "bbb9c3f8cb1d79b8ddd837cffbe62e80bd68ad23c17e19c77e1a916304349174"
+    },
+    "dark": {
+      "path": "docs/getting_started/media/vortex_gas_dark.png",
+      "sha256": "cb350a28748fb9699a7fcd0cdb9fb0170b3973ee68e5777e547aaf894c227242"
+    }
+  },
   "poster_time": 6.0,
-  "poster_sha256": "c415b212a775de388263e3dd7bcb1c9d0f87c4ce3e5b27251eaa90268a9d7c38",
   "seconds_per_step": 0.7438460770887796
 }
