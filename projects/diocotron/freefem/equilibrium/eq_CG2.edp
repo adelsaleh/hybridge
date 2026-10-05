@@ -1,0 +1,265 @@
+// ================================================================
+// Designed annular / localized density from torsion levels.
+//
+// Step 1:
+//	 Solve torsion:
+//		 -Delta T = 1, T=0 on boundary.
+//
+// Step 2:
+//	 Choose two torsion levels:
+//		 c1 = alpha1 max(T)
+//		 c2 = alpha2 max(T)
+//
+// Step 3:
+//	 Build a smooth density band:
+//		 rho = sigma((T-c1)/eps) - sigma((T-c2)/eps)
+//
+// Step 4:
+//	 Recompute a Poisson-consistent potential:
+//		 -Delta phi = rho, phi=0 on boundary.
+//
+// This does not solve -Delta phi = f(phi) exactly.
+// It is a designed approximate equilibrium.
+// The key diagnostic is:
+//		 defect = Eperp.grad(rho)
+//		        = -dy(phi)*dx(rho) + dx(phi)*dy(rho)
+// ================================================================
+
+load "gmsh"
+load "iovtk"
+
+// ----------------------------
+// User parameters
+// ----------------------------
+int bLabel = 1;
+int plt = 1;
+
+// Mesh file generated from your .geo.
+string meshFile = "iter_wall.mesh";
+
+// Band parameters in torsion-level space.
+// Smaller alpha2-alpha1 gives a thinner band in T-space.
+real alpha1 = 0.7;
+real alpha2 = 0.75;
+
+// Smoothness relative to level width.
+// Smaller epsRatio gives sharper edges.
+real epsRatio = 0.14;
+
+// Optional density amplitude.
+real rhoAmp = 1.0;
+
+// Output names.
+string outMesh = "equilibrium_mesh.msh";
+string outRhoDof = "rho_dof.txt";
+string outPhiDof = "phi_dof.txt";
+string outVTK = "designed_torsion_band_equilibrium.vtu";
+
+// ----------------------------
+// Mesh and FE spaces
+// ----------------------------
+mesh Th = gmshload(meshFile);
+
+fespace Vh(Th, P2);
+Vh T, phi, rho, v, tmp;
+Vh defect, gradRhoNorm, gradPhiNorm;
+
+cout << endl;
+cout << "========== START DESIGNED TORSION BAND ==========" << endl;
+cout << "MESH nt=" << Th.nt << " ndof=" << Vh.ndof << " bLabel=" << bLabel << endl;
+
+// ----------------------------
+// Torsion solve: -Delta T = 1
+// ----------------------------
+problem Torsion(T, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		dx(T)*dx(v)
+		+ dy(T)*dy(v)
+	)
+	- int2d(Th)(
+		1.0*v
+	)
+	+ on(bLabel, T=0);
+
+Torsion;
+
+real Tmax = T[].max;
+real Tmin = T[].min;
+
+if (Tmax <= 1e-14)
+{
+	cout << "ERROR Tmax too small. Check boundary label bLabel=" << bLabel << endl;
+	exec("exit 1");
+}
+
+real c1 = alpha1*Tmax;
+real c2 = alpha2*Tmax;
+real width = c2-c1;
+real eps = epsRatio*width;
+
+cout << "TORSION "
+	<< "Tmin=" << Tmin << " "
+	<< "Tmax=" << Tmax << " "
+	<< "alpha1=" << alpha1 << " "
+	<< "alpha2=" << alpha2 << " "
+	<< "c1=" << c1 << " "
+	<< "c2=" << c2 << " "
+	<< "width=" << width << " "
+	<< "epsRatio=" << epsRatio << " "
+	<< "eps=" << eps
+	<< endl;
+
+// ----------------------------
+// Stable logistic functions
+// ----------------------------
+func real sigma(real z)
+{
+	real zz = z/eps;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real windowFun(real s)
+{
+	return rhoAmp*(sigma(s-c1) - sigma(s-c2));
+}
+
+// ----------------------------
+// Designed density rho = G(T)
+// ----------------------------
+rho = windowFun(T);
+
+cout << "RHO_DESIGN "
+	<< "rhoMin=" << rho[].min << " "
+	<< "rhoMax=" << rho[].max << " "
+	<< "rhoMass=" << int2d(Th)(rho)
+	<< endl;
+
+// ----------------------------
+// Recompute Poisson-consistent phi
+//
+// -Delta phi = rho, phi=0.
+// ----------------------------
+varf a(u,v)
+	=
+	int2d(Th)(
+		dx(u)*dx(v)
+		+ dy(u)*dy(v)
+	)
+	+ on(bLabel, u=0);
+
+varf m(u,v)
+	=
+	int2d(Th)(
+		u*v
+	);
+
+matrix K = a(Vh,Vh);
+matrix M = m(Vh,Vh);
+
+tmp[] = M*rho[];
+phi[] = K^-1*tmp[];
+
+cout << "PHI_POISSON "
+	<< "phiMin=" << phi[].min << " "
+	<< "phiMax=" << phi[].max << " "
+	<< "phiL2=" << sqrt(int2d(Th)(phi^2)) << " "
+	<< "energy=" << sqrt(int2d(Th)(dx(phi)^2 + dy(phi)^2))
+	<< endl;
+
+// ----------------------------
+// Approximate stationarity diagnostic.
+//
+// For exact guiding-center equilibrium:
+//	 Eperp.grad(rho) = 0
+//
+// Here:
+//	 Eperp = (-dy(phi), dx(phi))
+//	 defect = -dy(phi)*dx(rho) + dx(phi)*dy(rho)
+// ----------------------------
+defect = -dy(phi)*dx(rho) + dx(phi)*dy(rho);
+
+real defectL2 = sqrt(int2d(Th)(defect^2));
+real rhoL2 = sqrt(int2d(Th)(rho^2));
+real gradRhoL2 = sqrt(int2d(Th)(dx(rho)^2 + dy(rho)^2));
+real gradPhiL2 = sqrt(int2d(Th)(dx(phi)^2 + dy(phi)^2));
+
+real normalizedDefect =
+	defectL2 / max(gradRhoL2*gradPhiL2, 1e-30);
+
+cout << "STATIONARITY_DEFECT "
+	<< "defectL2=" << defectL2 << " "
+	<< "gradRhoL2=" << gradRhoL2 << " "
+	<< "gradPhiL2=" << gradPhiL2 << " "
+	<< "normalizedDefect=" << normalizedDefect
+	<< endl;
+
+// ----------------------------
+// Width diagnostics in T-space.
+// These are not exact physical thicknesses, but useful.
+// ----------------------------
+Vh active, plateau;
+Vh gradTNorm;
+gradTNorm = sqrt(dx(T)^2 + dy(T)^2);
+active = (rho > 0.05*rhoAmp);
+plateau = (rho > 0.90*rhoAmp);
+
+cout << "BAND_DIAG "
+	<< "activeArea_rho_gt_005=" << int2d(Th)(active) << " "
+	<< "plateauArea_rho_gt_090=" << int2d(Th)(plateau) << " "
+	<< "plateauFraction=" << int2d(Th)(plateau)/max(int2d(Th)(active), 1e-30)
+	<< endl;
+
+// ----------------------------
+// Plots
+// ----------------------------
+if (plt == 1)
+{
+	plot(Th, wait=true, cmm="Mesh");
+
+	plot(T, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Torsion T");
+
+	plot(rho, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Designed density rho = G(T)");
+
+	plot(phi, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Poisson potential phi from rho");
+
+	plot(defect, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Stationarity defect Eperp.grad(rho)");
+}
+
+// ----------------------------
+// Save for simulation
+// ----------------------------
+savemesh(Th, outMesh);
+
+{
+	ofstream frho(outRhoDof);
+	frho << rho[];
+}
+
+{
+	ofstream fphi(outPhiDof);
+	fphi << phi[];
+}
+
+savevtk(outVTK, Th, T, rho, phi, defect, gradTNorm,
+	dataname="T rho phi defect gradTNorm");
+
+cout << "EXPORT "
+	<< outMesh << " "
+	<< outRhoDof << " "
+	<< outPhiDof << " "
+	<< outVTK
+	<< endl;
+
+cout << "========== END DESIGNED TORSION BAND ==========" << endl;

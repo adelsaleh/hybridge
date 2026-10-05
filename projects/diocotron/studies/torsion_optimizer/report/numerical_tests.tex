@@ -1,0 +1,21 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{pdflscape}
+\usepackage[margin=1in]{geometry}
+
+% Resolve generated inputs when compiled either from the repository root or
+% from this file's directory.
+\makeatletter
+\def\input@path{{./}{projects/diocotron/studies/torsion_optimizer/report/}}
+\makeatother
+\graphicspath{{./}{projects/diocotron/studies/torsion_optimizer/report/}}
+\setlength{\emergencystretch}{1em}
+
+\begin{document}
+\input{numerical_tests_section.tex}
+\input{successful_numerical_tests.tex}
+\end{document}

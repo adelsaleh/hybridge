@@ -1,0 +1,38 @@
+# Canonical non-star-shaped horseshoe from the existing DOLFINx studies.
+# The cubic mesh is generated or loaded from the deterministic script cache.
+# The P4 torsion/CG3 recovered-gradient pair resolves the weak center direction
+# much more reliably than the old P2/CG1 combination.  This configuration is
+# a fine 1024-ray target case; use CLI overrides for refinement studies.
+schema_version = 2
+geometry = "horseshoe"
+geometry_degree = 3
+radius = 1.16
+mesh_size = 0.007
+degree = 2
+torsion_degree = 4
+recovered_gradient_degree = 3
+quadrature_degree = 16
+number_of_rays = 1024
+samples_per_ray = 400
+max_ray_steps = 4096
+ray_tolerance = 1e-10
+backend = "hybrid"
+threads = 1
+target_distance = 0.45
+distance_tolerance = 1e-4
+
+[geometry_parameters]
+gap_half_angle = 0.48
+outer_radius = 1.16
+inner_radius = 0.46
+outer_points = 170
+inner_points = 130
+cap_points = 28
+x_shift = 0.10
+y_scale = 0.92
+
+[band]
+kind = "logistic"
+threshold_width_delta = 0.001
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.01

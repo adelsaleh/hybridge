@@ -1,0 +1,35 @@
+# Reproducible curved-horseshoe reference validated at 256/512/1024 rays.
+# The canonical cubic h=0.03 mesh is generated or loaded from the cache.
+schema_version = 2
+geometry = "horseshoe"
+geometry_degree = 3
+radius = 1.16
+mesh_size = 0.03
+degree = 2
+torsion_degree = 4
+recovered_gradient_degree = 3
+quadrature_degree = 16
+number_of_rays = 1024
+samples_per_ray = 400
+max_ray_steps = 4096
+ray_tolerance = 1e-10
+backend = "hybrid"
+threads = 1
+target_distance = 0.85
+distance_tolerance = 1e-4
+
+[geometry_parameters]
+gap_half_angle = 0.48
+outer_radius = 1.16
+inner_radius = 0.46
+outer_points = 170
+inner_points = 130
+cap_points = 28
+x_shift = 0.10
+y_scale = 0.92
+
+[band]
+kind = "logistic"
+threshold_width_delta = 0.003
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.08

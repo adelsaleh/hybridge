@@ -1,0 +1,1242 @@
+{
+  "asset_format": "png",
+  "figures": [
+    {
+      "caption": "Canonical geometries, torsion fields, thin near-wall target bands at normalized torsion levels 0.15--0.20, and target potentials.",
+      "case_ids": [
+        "geometry_overview-horseshoe-aac211eea16e",
+        "geometry_overview-iter-c4f89a5de292",
+        "geometry_overview-pacman-ee766bf43747",
+        "geometry_overview-smooth_star-7d68eedfcb26"
+      ],
+      "file": "geometry_target_overview.png",
+      "id": "geometry_targets",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Equilibrium density and potential, with terminal failures retained.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_v3-iter-6c99c035c109",
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "file": "equilibrium_outcomes.png",
+      "id": "equilibrium_outcomes",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Torsion-level robustness status maps.",
+      "case_ids": [
+        "robustness-horseshoe-1746060e5038",
+        "robustness-horseshoe-88225d37e8f1",
+        "robustness-horseshoe-9024cd46706c",
+        "robustness-horseshoe-a556d4f88e9b",
+        "robustness-horseshoe-ad4bf8be1288",
+        "robustness-horseshoe-d0efb69bde75",
+        "robustness-horseshoe-d986b567c3f2",
+        "robustness-horseshoe-e2018eb1fda5",
+        "robustness-iter-9725facb210c",
+        "robustness-pacman-f1b9c60089d5",
+        "robustness-smooth_star-bc43f8564809",
+        "robustness-smooth_star-f6b6828e6995"
+      ],
+      "file": "robustness_status_maps.png",
+      "id": "robustness",
+      "stage": "preliminary",
+      "status": "partial"
+    },
+    {
+      "caption": "Certified area, leakage, and final threshold width.",
+      "case_ids": [
+        "robustness-pacman-f1b9c60089d5",
+        "robustness-smooth_star-bc43f8564809"
+      ],
+      "file": "robustness_metrics_summary.png",
+      "id": "robustness_metrics",
+      "stage": "preliminary",
+      "status": "partial"
+    },
+    {
+      "caption": "Threshold, band-width, smoothing, and discrepancy evolution.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_v3-iter-6c99c035c109",
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "file": "threshold_evolution.png",
+      "id": "threshold_history",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Newton residual and Krylov work.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_v3-iter-6c99c035c109",
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "file": "newton_ksp_diagnostics.png",
+      "id": "newton_ksp",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Initialization, homotopy, optimization, and projection time.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_v3-iter-6c99c035c109",
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "file": "phase_timing_breakdown.png",
+      "id": "phase_timing",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Smooth-star h-convergence within P2, P4, and P6, with the matched-DOF mesh sizes shown explicitly. Higher p is not intrinsically less accurate; at fixed global DOFs it currently uses a much coarser linear boundary mesh.",
+      "case_ids": [
+        "mesh_order-smooth_star-da3cdf832f27",
+        "mesh_order-smooth_star-8f50decd5c28",
+        "mesh_order-smooth_star-3a23a60f39f8",
+        "mesh_order-smooth_star-f30cb6799d16",
+        "mesh_order-smooth_star-c7bdf6989e97",
+        "mesh_order-smooth_star-46a385e3d511",
+        "mesh_order-smooth_star-f91bd9d617cc",
+        "mesh_order-smooth_star-bfae6d282ba5"
+      ],
+      "file": "hp_convergence_summary.png",
+      "id": "hp_convergence",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Relative field errors against runtime; labels give global DOFs.",
+      "case_ids": [
+        "mesh_order-smooth_star-da3cdf832f27",
+        "mesh_order-smooth_star-8f50decd5c28",
+        "mesh_order-smooth_star-3a23a60f39f8",
+        "mesh_order-smooth_star-f30cb6799d16",
+        "mesh_order-smooth_star-c7bdf6989e97",
+        "mesh_order-smooth_star-46a385e3d511",
+        "mesh_order-smooth_star-f91bd9d617cc",
+        "mesh_order-smooth_star-bfae6d282ba5"
+      ],
+      "file": "matched_cost_accuracy.png",
+      "id": "matched_cost",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Fixed-p enrichment on the same linear triangulation: P4/P6 threshold agreement is shown explicitly. Nonmonotone external-reference errors include optimizer branch/stopping differences and do not mean higher p is intrinsically worse.",
+      "case_ids": [
+        "fixed_mesh_p-smooth_star-8d370e350512",
+        "fixed_mesh_p-smooth_star-9e7ca70fd7f1",
+        "fixed_mesh_p-smooth_star-e2e82e5a40cd"
+      ],
+      "file": "fixed_p_enrichment.png",
+      "id": "fixed_p_enrichment",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Epsilon--width coupling and transition resolution.",
+      "case_ids": [
+        "coercivity-iter-a7085a87da4b",
+        "coercivity-smooth_star-bf9b70d4a494",
+        "fixed_mesh_p-smooth_star-8d370e350512",
+        "fixed_mesh_p-smooth_star-9e7ca70fd7f1",
+        "fixed_mesh_p-smooth_star-e2e82e5a40cd",
+        "homotopy_robustness-smooth_star-0074cfe647d2",
+        "homotopy_robustness-smooth_star-05ce0cf4bbba",
+        "homotopy_robustness-smooth_star-24c677ddf51e",
+        "horseshoe_band_screen_v3-horseshoe-141f7407f3cd",
+        "initialization_policy_v3-pacman-ffc084570d2a",
+        "inner_newton_accuracy-smooth_star-554f023511cf",
+        "inner_newton_accuracy-smooth_star-76c3bac4d7e1",
+        "inner_newton_accuracy-smooth_star-925bf1497f3e",
+        "inner_newton_accuracy-smooth_star-9d43a4d3b53d",
+        "inner_newton_policy_v3-smooth_star-16bcc42e8b5a",
+        "inner_newton_policy_v3-smooth_star-1dc228248b35",
+        "inner_newton_policy_v3-smooth_star-c0cfa6d89bfb",
+        "mesh_order-smooth_star-327e4c9a188a",
+        "mesh_order-smooth_star-3a23a60f39f8",
+        "mesh_order-smooth_star-46a385e3d511",
+        "mesh_order-smooth_star-8f50decd5c28",
+        "mesh_order-smooth_star-bfae6d282ba5",
+        "mesh_order-smooth_star-c7bdf6989e97",
+        "mesh_order-smooth_star-da3cdf832f27",
+        "mesh_order-smooth_star-f30cb6799d16",
+        "mesh_order-smooth_star-f91bd9d617cc",
+        "mumps_parent-horseshoe-04bb2ccdad44",
+        "mumps_parent-horseshoe-6f688a438224",
+        "mumps_parent-iter-0f4430ed9fd2",
+        "mumps_parent-pacman-0a2c19983157",
+        "mumps_parent-pacman-bddb202f569c",
+        "mumps_parent-smooth_star-21345849dc41",
+        "reference_fit_rescue-pacman-f21d7db196dd",
+        "robustness-pacman-f1b9c60089d5",
+        "robustness-smooth_star-bc43f8564809",
+        "strong_scaling-smooth_star-6fca5d975ef7",
+        "strong_scaling-smooth_star-877cd226375e",
+        "strong_scaling-smooth_star-bb4763acfd26",
+        "strong_scaling-smooth_star-c2f9249d8213",
+        "strong_scaling-smooth_star-cbb21f772e53",
+        "trajectory-pacman-f64373773ee3",
+        "trajectory-smooth_star-4ee334333e4c",
+        "trajectory-smooth_star-d9d44c40e110",
+        "trajectory_candidate-horseshoe-0ece12c40d74",
+        "trajectory_candidate-horseshoe-9e9172e39927",
+        "trajectory_candidate-iter-9aecf30783ce",
+        "trajectory_candidate-pacman-a23c820ffe43",
+        "trajectory_fit_rescue-iter-12c57975d4d5",
+        "trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450",
+        "trajectory_iter_window_fit_high_newton_v3-iter-8997eebadb46",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_v3-iter-6c99c035c109",
+        "trajectory_v3-pacman-4d5357771618",
+        "trajectory_v3-pacman-822f380f34d3"
+      ],
+      "file": "epsilon_transition_resolution.png",
+      "id": "epsilon_transition",
+      "stage": "preliminary",
+      "status": "partial"
+    },
+    {
+      "caption": "Continuation success, work, and runtime.",
+      "case_ids": [
+        "homotopy_robustness-horseshoe-998378159a67",
+        "homotopy_robustness-horseshoe-ee38e14727ec",
+        "homotopy_robustness-horseshoe-3479aa798da8",
+        "homotopy_robustness-smooth_star-24c677ddf51e",
+        "homotopy_robustness-smooth_star-05ce0cf4bbba",
+        "homotopy_robustness-smooth_star-0074cfe647d2"
+      ],
+      "file": "homotopy_robustness.png",
+      "id": "homotopy_robustness",
+      "stage": "preliminary",
+      "status": "partial"
+    },
+    {
+      "caption": "Inexact intermediate-state errors relative to tight MUMPS references: state and sensitivity fields, reduced gradient, threshold step, acceptance decisions, and work.",
+      "case_ids": [
+        "inner_newton_policy_v3-smooth_star-16bcc42e8b5a",
+        "inner_newton_policy_v3-smooth_star-1dc228248b35",
+        "inner_newton_policy_v3-smooth_star-c0cfa6d89bfb"
+      ],
+      "file": "inner_newton_accuracy.png",
+      "id": "inner_newton",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Threshold-space plateau diagnostics.",
+      "case_ids": [
+        "robustness-horseshoe-9024cd46706c",
+        "trajectory_v3-horseshoe-b52bd3f19442",
+        "trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450",
+        "mumps_parent-horseshoe-04bb2ccdad44"
+      ],
+      "file": "threshold_optimization_plateaus.png",
+      "id": "threshold_plateau",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Strong scaling, efficiency, and phase breakdown.",
+      "case_ids": [
+        "strong_scaling-smooth_star-6fca5d975ef7",
+        "strong_scaling-smooth_star-bb4763acfd26",
+        "strong_scaling-smooth_star-cbb21f772e53",
+        "strong_scaling-smooth_star-877cd226375e",
+        "strong_scaling-smooth_star-c2f9249d8213"
+      ],
+      "file": "strong_scaling_summary.png",
+      "id": "strong_scaling",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Capped-trial coercivity and rejected-trial cost.",
+      "case_ids": [
+        "coercivity-iter-00e414212819",
+        "coercivity-iter-a7085a87da4b",
+        "coercivity-smooth_star-bf9b70d4a494"
+      ],
+      "file": "coercivity_diagnostics.png",
+      "id": "coercivity",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Smooth Star equilibrium formation for torsion levels $[0.45,0.5]$: selected seed, intermediate homotopy, early and middle accepted states, late or restored-best state, and final projection; PDE-converged with a retained geometric plateau.  Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c"
+      ],
+      "file": "band_evolution_smooth_star_0p45_0p5.png",
+      "geometry": "smooth_star",
+      "group": "storyboard_pair",
+      "id": "band_evolution",
+      "pair_order": 1,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Guiding-center stationarity and timestep sensitivity.",
+      "case_ids": [
+        "stationarity-smooth_star-6ce7055318b0",
+        "stationarity-smooth_star-38dd724eb893",
+        "stationarity-smooth_star-1b85efeba822",
+        "stationarity-smooth_star-ec7534f2197c",
+        "stationarity_flagship-smooth_star-65e498420564"
+      ],
+      "file": "guiding_center_stationarity.png",
+      "id": "stationarity",
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Automatic initialization comparison: original and value-only fast H-minus-one searches, same-run window-fit fallback, continuation success, and nonlinear work.",
+      "case_ids": [
+        "initialization_policy_v3-pacman-ffc084570d2a"
+      ],
+      "file": "initialization_homotopy_summary.png",
+      "id": "initialization",
+      "stage": "preliminary",
+      "status": "partial"
+    },
+    {
+      "caption": "Smooth Star design fields for torsion levels $[0.45,0.5]$: torsion, target density, and target potential.  The design is shown once; orange dashed curves mark its fixed band boundaries.",
+      "case_ids": [
+        "geometry_overview-smooth_star-e71962c6ec4d"
+      ],
+      "file": "design_fields_smooth_star_0p45_0p5.png",
+      "geometry": "smooth_star",
+      "group": "storyboard_pair",
+      "id": "design_fields_smooth_star",
+      "pair_order": 0,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Pacman design fields for torsion levels $[0.6,0.695]$: torsion, target density, and target potential.  The design is shown once; orange dashed curves mark its fixed band boundaries.",
+      "case_ids": [
+        "geometry_overview-pacman-73e88dfff494"
+      ],
+      "file": "design_fields_pacman_0p6_0p695.png",
+      "geometry": "pacman",
+      "group": "storyboard_pair",
+      "id": "design_fields_pacman",
+      "pair_order": 0,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Pacman equilibrium formation for torsion levels $[0.6,0.695]$: selected seed, intermediate homotopy, early and middle accepted states, late or restored-best state, and final projection; PDE-converged with a retained geometric plateau.  Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band.",
+      "case_ids": [
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "file": "band_evolution_pacman_0p6_0p695.png",
+      "geometry": "pacman",
+      "group": "storyboard_pair",
+      "id": "band_evolution_pacman",
+      "pair_order": 1,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Horseshoe design fields for torsion levels $[0.2,0.295]$: torsion, target density, and target potential.  The design is shown once; orange dashed curves mark its fixed band boundaries.",
+      "case_ids": [
+        "geometry_overview-horseshoe-7ab26ebe5ed8"
+      ],
+      "file": "design_fields_horseshoe_0p2_0p295.png",
+      "geometry": "horseshoe",
+      "group": "storyboard_pair",
+      "id": "design_fields_horseshoe",
+      "pair_order": 0,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Horseshoe equilibrium formation for torsion levels $[0.2,0.295]$: selected seed, intermediate homotopy, early and middle accepted states, late or restored-best state, and final projection; PDE-converged with a retained geometric plateau.  Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-b52bd3f19442"
+      ],
+      "file": "band_evolution_horseshoe_0p2_0p295.png",
+      "geometry": "horseshoe",
+      "group": "storyboard_pair",
+      "id": "band_evolution_horseshoe",
+      "pair_order": 1,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Iter design fields for torsion levels $[0.25,0.345]$: torsion, target density, and target potential.  The design is shown once; orange dashed curves mark its fixed band boundaries.",
+      "case_ids": [
+        "geometry_overview-iter-69e6a3cfe0ac"
+      ],
+      "file": "design_fields_iter_0p25_0p345.png",
+      "geometry": "iter",
+      "group": "storyboard_pair",
+      "id": "design_fields_iter",
+      "pair_order": 0,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Iter equilibrium formation for torsion levels $[0.25,0.345]$: selected seed, intermediate homotopy, early and middle accepted states, late or restored-best state, and final projection; PDE-converged with retained capped trials.  Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band.",
+      "case_ids": [
+        "trajectory_v3-iter-6c99c035c109"
+      ],
+      "file": "band_evolution_iter_0p25_0p345.png",
+      "geometry": "iter",
+      "group": "storyboard_pair",
+      "id": "band_evolution_iter",
+      "pair_order": 1,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory-smooth_star-4ee334333e4c; state=completed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory-smooth_star-4ee334333e4c"
+      ],
+      "failure_reason": "state=completed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_000_smooth_star_0p45_0p5_trajectory-smooth_star-4ee334333e4c.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory-smooth_star-4ee334333e4c",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory_homotopy_tolerance_v3-smooth_star-3d948ec9d961; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-3d948ec9d961"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_001_smooth_star_0p45_0p5_trajectory_homotopy_tolerance_v3-smooth_star-3d948ec9d961.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-3d948ec9d961",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory_homotopy_tolerance_v3-smooth_star-667b42e5844b; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-667b42e5844b"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_002_smooth_star_0p45_0p5_trajectory_homotopy_tolerance_v3-smooth_star-667b42e5844b.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-667b42e5844b",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.6,0.7]$ (case trajectory_homotopy_tolerance_v3-smooth_star-6befe58e8b70; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-6befe58e8b70"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_003_smooth_star_0p6_0p7_trajectory_homotopy_tolerance_v3-smooth_star-6befe58e8b70.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-6befe58e8b70",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory_homotopy_tolerance_v3-smooth_star-776e06d5fc23; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-776e06d5fc23"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_004_smooth_star_0p45_0p5_trajectory_homotopy_tolerance_v3-smooth_star-776e06d5fc23.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-776e06d5fc23",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.6,0.7]$ (case trajectory_homotopy_tolerance_v3-smooth_star-90988afeef54; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-90988afeef54"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_005_smooth_star_0p6_0p7_trajectory_homotopy_tolerance_v3-smooth_star-90988afeef54.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-90988afeef54",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.6,0.7]$ (case trajectory_homotopy_tolerance_v3-smooth_star-f029111e143f; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-smooth_star-f029111e143f"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_006_smooth_star_0p6_0p7_trajectory_homotopy_tolerance_v3-smooth_star-f029111e143f.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-smooth_star-f029111e143f",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory_v3-smooth_star-45704de10c51; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-smooth_star-45704de10c51"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_007_smooth_star_0p45_0p5_trajectory_v3-smooth_star-45704de10c51.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-smooth_star-45704de10c51",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for smooth star at torsion levels $[0.45,0.5]$ (case trajectory_v3-smooth_star-9a751cf89697; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-smooth_star-9a751cf89697"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_008_smooth_star_0p45_0p5_trajectory_v3-smooth_star-9a751cf89697.png",
+      "geometry": "smooth_star",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-smooth_star-9a751cf89697",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.6,0.7]$ (case trajectory-pacman-f64373773ee3; state=failed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory-pacman-f64373773ee3"
+      ],
+      "failure_reason": "state=failed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_009_pacman_0p6_0p7_trajectory-pacman-f64373773ee3.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory-pacman-f64373773ee3",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.35,0.55]$ (case trajectory_candidate-pacman-2c721469f3bd; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-pacman-2c721469f3bd"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_010_pacman_0p35_0p55_trajectory_candidate-pacman-2c721469f3bd.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-pacman-2c721469f3bd",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.05,0.25]$ (case trajectory_candidate-pacman-39c11e1119bf; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-pacman-39c11e1119bf"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_011_pacman_0p05_0p25_trajectory_candidate-pacman-39c11e1119bf.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-pacman-39c11e1119bf",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.125,0.175]$ (case trajectory_candidate-pacman-618faf2e713d; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-pacman-618faf2e713d"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_012_pacman_0p125_0p175_trajectory_candidate-pacman-618faf2e713d.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-pacman-618faf2e713d",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.6,0.7]$ (case trajectory_fit_rescue-pacman-ac0fca245f66; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_fit_rescue-pacman-ac0fca245f66"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_013_pacman_0p6_0p7_trajectory_fit_rescue-pacman-ac0fca245f66.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_fit_rescue-pacman-ac0fca245f66",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.6,0.695]$ (case trajectory_v3-pacman-4d5357771618; state=completed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-pacman-4d5357771618"
+      ],
+      "failure_reason": "state=completed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_014_pacman_0p6_0p695_trajectory_v3-pacman-4d5357771618.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-pacman-4d5357771618",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.6,0.695]$ (case trajectory_v3-pacman-822f380f34d3; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-pacman-822f380f34d3"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_015_pacman_0p6_0p695_trajectory_v3-pacman-822f380f34d3.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-pacman-822f380f34d3",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.25,0.325]$ (case trajectory_v3-pacman-8271196a68ca; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-pacman-8271196a68ca"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_016_pacman_0p25_0p325_trajectory_v3-pacman-8271196a68ca.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-pacman-8271196a68ca",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.25,0.325]$ (case trajectory_v3-pacman-902559067277; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-pacman-902559067277"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_017_pacman_0p25_0p325_trajectory_v3-pacman-902559067277.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-pacman-902559067277",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for pacman at torsion levels $[0.6,0.695]$ (case trajectory_v3-pacman-ccbabe8664b8; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-pacman-ccbabe8664b8"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_018_pacman_0p6_0p695_trajectory_v3-pacman-ccbabe8664b8.png",
+      "geometry": "pacman",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-pacman-ccbabe8664b8",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.7]$ (case trajectory-horseshoe-2d70b6ab8bf2; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory-horseshoe-2d70b6ab8bf2"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_019_horseshoe_0p6_0p7_trajectory-horseshoe-2d70b6ab8bf2.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory-horseshoe-2d70b6ab8bf2",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.3]$ (case trajectory_candidate-horseshoe-0ece12c40d74; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-0ece12c40d74"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_020_horseshoe_0p2_0p3_trajectory_candidate-horseshoe-0ece12c40d74.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-0ece12c40d74",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.05,0.25]$ (case trajectory_candidate-horseshoe-7b66eb2dac47; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-7b66eb2dac47"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_021_horseshoe_0p05_0p25_trajectory_candidate-horseshoe-7b66eb2dac47.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-7b66eb2dac47",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.3]$ (case trajectory_candidate-horseshoe-7c6c5e411075; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-7c6c5e411075"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_022_horseshoe_0p2_0p3_trajectory_candidate-horseshoe-7c6c5e411075.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-7c6c5e411075",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.75,0.95]$ (case trajectory_candidate-horseshoe-961c350b20b3; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-961c350b20b3"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_023_horseshoe_0p75_0p95_trajectory_candidate-horseshoe-961c350b20b3.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-961c350b20b3",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.3]$ (case trajectory_candidate-horseshoe-9e9172e39927; state=completed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-9e9172e39927"
+      ],
+      "failure_reason": "state=completed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_024_horseshoe_0p2_0p3_trajectory_candidate-horseshoe-9e9172e39927.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-9e9172e39927",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.35,0.55]$ (case trajectory_candidate-horseshoe-a1b396c5c8fc; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-a1b396c5c8fc"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_025_horseshoe_0p35_0p55_trajectory_candidate-horseshoe-a1b396c5c8fc.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-a1b396c5c8fc",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.125,0.175]$ (case trajectory_candidate-horseshoe-d534d7b293dc; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-horseshoe-d534d7b293dc"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_026_horseshoe_0p125_0p175_trajectory_candidate-horseshoe-d534d7b293dc.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-horseshoe-d534d7b293dc",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.7]$ (case trajectory_fit_rescue-horseshoe-0e8fda738374; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_fit_rescue-horseshoe-0e8fda738374"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_027_horseshoe_0p6_0p7_trajectory_fit_rescue-horseshoe-0e8fda738374.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_fit_rescue-horseshoe-0e8fda738374",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.295]$ (case trajectory_homotopy_tolerance_v3-horseshoe-1fe114c7e89b; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-horseshoe-1fe114c7e89b"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_028_horseshoe_0p2_0p295_trajectory_homotopy_tolerance_v3-horseshoe-1fe114c7e89b.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-horseshoe-1fe114c7e89b",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.295]$ (case trajectory_homotopy_tolerance_v3-horseshoe-82108791db49; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-horseshoe-82108791db49"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_029_horseshoe_0p2_0p295_trajectory_homotopy_tolerance_v3-horseshoe-82108791db49.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-horseshoe-82108791db49",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.295]$ (case trajectory_homotopy_tolerance_v3-horseshoe-d029b6ba1cb4; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_homotopy_tolerance_v3-horseshoe-d029b6ba1cb4"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_030_horseshoe_0p2_0p295_trajectory_homotopy_tolerance_v3-horseshoe-d029b6ba1cb4.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_homotopy_tolerance_v3-horseshoe-d029b6ba1cb4",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.4,0.5]$ (case trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450; state=completed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450"
+      ],
+      "failure_reason": "state=completed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_031_horseshoe_0p4_0p5_trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_band_candidate_v3-horseshoe-dfba417fa450",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.425,0.5]$ (case trajectory_horseshoe_branch_continuation_v3-horseshoe-028c899b6017; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_branch_continuation_v3-horseshoe-028c899b6017"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_032_horseshoe_0p425_0p5_trajectory_horseshoe_branch_continuation_v3-horseshoe-028c899b6017.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_branch_continuation_v3-horseshoe-028c899b6017",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.42,0.48]$ (case trajectory_horseshoe_branch_continuation_v3-horseshoe-04f6b69ef1f4; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_branch_continuation_v3-horseshoe-04f6b69ef1f4"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_033_horseshoe_0p42_0p48_trajectory_horseshoe_branch_continuation_v3-horseshoe-04f6b69ef1f4.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_branch_continuation_v3-horseshoe-04f6b69ef1f4",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.425,0.475]$ (case trajectory_horseshoe_branch_continuation_v3-horseshoe-1a9938c9a27a; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_branch_continuation_v3-horseshoe-1a9938c9a27a"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_034_horseshoe_0p425_0p475_trajectory_horseshoe_branch_continuation_v3-horseshoe-1a9938c9a27a.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_branch_continuation_v3-horseshoe-1a9938c9a27a",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.4,0.475]$ (case trajectory_horseshoe_branch_continuation_v3-horseshoe-27ee3ac2605d; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_branch_continuation_v3-horseshoe-27ee3ac2605d"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_035_horseshoe_0p4_0p475_trajectory_horseshoe_branch_continuation_v3-horseshoe-27ee3ac2605d.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_branch_continuation_v3-horseshoe-27ee3ac2605d",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.415,0.49]$ (case trajectory_horseshoe_branch_continuation_v3-horseshoe-d944f5d36024; state=planned; classification=incomplete). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_horseshoe_branch_continuation_v3-horseshoe-d944f5d36024"
+      ],
+      "failure_reason": "state=planned; classification=incomplete",
+      "file": "failed_band_evolution_036_horseshoe_0p415_0p49_trajectory_horseshoe_branch_continuation_v3-horseshoe-d944f5d36024.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_horseshoe_branch_continuation_v3-horseshoe-d944f5d36024",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.7]$ (case trajectory_rescue-horseshoe-36a04ba8a51c; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_rescue-horseshoe-36a04ba8a51c"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_037_horseshoe_0p6_0p7_trajectory_rescue-horseshoe-36a04ba8a51c.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_rescue-horseshoe-36a04ba8a51c",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.7]$ (case trajectory_rescue-horseshoe-aeafd218049f; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_rescue-horseshoe-aeafd218049f"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_038_horseshoe_0p6_0p7_trajectory_rescue-horseshoe-aeafd218049f.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_rescue-horseshoe-aeafd218049f",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.695]$ (case trajectory_v3-horseshoe-268ba1b20759; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-268ba1b20759"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_039_horseshoe_0p6_0p695_trajectory_v3-horseshoe-268ba1b20759.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-268ba1b20759",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.695]$ (case trajectory_v3-horseshoe-77ab99c2da6f; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-77ab99c2da6f"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_040_horseshoe_0p6_0p695_trajectory_v3-horseshoe-77ab99c2da6f.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-77ab99c2da6f",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.295]$ (case trajectory_v3-horseshoe-b52bd3f19442; state=completed; classification=geometrically_unsuccessful_pde_converged). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-b52bd3f19442"
+      ],
+      "failure_reason": "state=completed; classification=geometrically_unsuccessful_pde_converged",
+      "file": "failed_band_evolution_041_horseshoe_0p2_0p295_trajectory_v3-horseshoe-b52bd3f19442.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-b52bd3f19442",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.2,0.295]$ (case trajectory_v3-horseshoe-b9fa3deecb1e; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-b9fa3deecb1e"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_042_horseshoe_0p2_0p295_trajectory_v3-horseshoe-b9fa3deecb1e.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-b9fa3deecb1e",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.695]$ (case trajectory_v3-horseshoe-c1c418afef7a; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-c1c418afef7a"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_043_horseshoe_0p6_0p695_trajectory_v3-horseshoe-c1c418afef7a.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-c1c418afef7a",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for horseshoe at torsion levels $[0.6,0.695]$ (case trajectory_v3-horseshoe-f95e112ebc4d; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-horseshoe-f95e112ebc4d"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_044_horseshoe_0p6_0p695_trajectory_v3-horseshoe-f95e112ebc4d.png",
+      "geometry": "horseshoe",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-horseshoe-f95e112ebc4d",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.6,0.7]$ (case trajectory-iter-ef35b47caeda; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory-iter-ef35b47caeda"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_045_iter_0p6_0p7_trajectory-iter-ef35b47caeda.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory-iter-ef35b47caeda",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.35,0.55]$ (case trajectory_candidate-iter-9a9d9ae4682b; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-iter-9a9d9ae4682b"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_046_iter_0p35_0p55_trajectory_candidate-iter-9a9d9ae4682b.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-iter-9a9d9ae4682b",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.05,0.25]$ (case trajectory_candidate-iter-9aecf30783ce; state=completed; classification=pde_converged_with_capped_trials). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-iter-9aecf30783ce"
+      ],
+      "failure_reason": "state=completed; classification=pde_converged_with_capped_trials",
+      "file": "failed_band_evolution_047_iter_0p05_0p25_trajectory_candidate-iter-9aecf30783ce.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-iter-9aecf30783ce",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.125,0.175]$ (case trajectory_candidate-iter-bcf30a64c685; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-iter-bcf30a64c685"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_048_iter_0p125_0p175_trajectory_candidate-iter-bcf30a64c685.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-iter-bcf30a64c685",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.75,0.95]$ (case trajectory_candidate-iter-c24757c6210b; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_candidate-iter-c24757c6210b"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_049_iter_0p75_0p95_trajectory_candidate-iter-c24757c6210b.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_candidate-iter-c24757c6210b",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.6,0.7]$ (case trajectory_fit_rescue-iter-12c57975d4d5; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_fit_rescue-iter-12c57975d4d5"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_050_iter_0p6_0p7_trajectory_fit_rescue-iter-12c57975d4d5.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_fit_rescue-iter-12c57975d4d5",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.6,0.7]$ (case trajectory_iter_window_fit_high_newton_v3-iter-8997eebadb46; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_iter_window_fit_high_newton_v3-iter-8997eebadb46"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_051_iter_0p6_0p7_trajectory_iter_window_fit_high_newton_v3-iter-8997eebadb46.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_iter_window_fit_high_newton_v3-iter-8997eebadb46",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.6,0.7]$ (case trajectory_rescue-iter-298b59ece73a; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_rescue-iter-298b59ece73a"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_052_iter_0p6_0p7_trajectory_rescue-iter-298b59ece73a.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_rescue-iter-298b59ece73a",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.6,0.7]$ (case trajectory_rescue-iter-cee449f0dc48; state=failed; classification=pde_failure). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_rescue-iter-cee449f0dc48"
+      ],
+      "failure_reason": "state=failed; classification=pde_failure",
+      "file": "failed_band_evolution_053_iter_0p6_0p7_trajectory_rescue-iter-cee449f0dc48.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_rescue-iter-cee449f0dc48",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.25,0.345]$ (case trajectory_v3-iter-109f296352a3; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-iter-109f296352a3"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_054_iter_0p25_0p345_trajectory_v3-iter-109f296352a3.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-iter-109f296352a3",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.25,0.345]$ (case trajectory_v3-iter-36a0dd3d08e1; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-iter-36a0dd3d08e1"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_055_iter_0p25_0p345_trajectory_v3-iter-36a0dd3d08e1.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-iter-36a0dd3d08e1",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.25,0.345]$ (case trajectory_v3-iter-6c99c035c109; state=completed; classification=pde_converged_with_capped_trials). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-iter-6c99c035c109"
+      ],
+      "failure_reason": "state=completed; classification=pde_converged_with_capped_trials",
+      "file": "failed_band_evolution_056_iter_0p25_0p345_trajectory_v3-iter-6c99c035c109.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-iter-6c99c035c109",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "actual"
+    },
+    {
+      "caption": "Supplemental failed/partial trajectory evidence for iter at torsion levels $[0.25,0.345]$ (case trajectory_v3-iter-ee30a07d5cd9; state=deferred; classification=deferred). The case is retained regardless of PDE or geometric success. Orange dashed curves are the fixed target band and blue solid curves are the moving equilibrium band; when state recovery is impossible, the PNG records the reason.",
+      "case_ids": [
+        "trajectory_v3-iter-ee30a07d5cd9"
+      ],
+      "failure_reason": "state=deferred; classification=deferred",
+      "file": "failed_band_evolution_057_iter_0p25_0p345_trajectory_v3-iter-ee30a07d5cd9.png",
+      "geometry": "iter",
+      "group": "failed_storyboard",
+      "id": "failed_storyboard_trajectory_v3-iter-ee30a07d5cd9",
+      "pair_order": 2,
+      "stage": "preliminary",
+      "status": "diagnostic_only"
+    },
+    {
+      "id": "direct_window_fit_iter_design",
+      "file": "iter_0p6_0p7_direct_window_fit_design.png",
+      "caption": "Direct fitted-window Newton control for ITER torsion levels $[0.60,0.70]$: target torsion, density, and Poisson-potential design fields, shown once. The P4 mesh has 71,661 global degrees of freedom and the solve uses four-rank MUMPS.",
+      "status": "actual",
+      "case_ids": [
+        "standalone-window-fit-iter-0p6-0p7-p4-71661-4r-mumps"
+      ],
+      "stage": "preliminary",
+      "group": "standalone_control"
+    },
+    {
+      "id": "direct_window_fit_iter_storyboard",
+      "file": "iter_0p6_0p7_direct_window_fit_storyboard.png",
+      "caption": "Direct fitted-window Newton evolution for ITER torsion levels $[0.60,0.70]$ at continuation ratios $0.11$ and $0.08$. Complete MPI fields are gathered on rank zero and rendered without mesh edges. This is failed evidence: the two stages ended after repeated line-search rejection at residuals $2.9613\\times10^{-2}$ and $2.9678\\times10^{-2}$, respectively, before the 160-iteration cap.",
+      "status": "failed_evidence",
+      "case_ids": [
+        "standalone-window-fit-iter-0p6-0p7-p4-71661-4r-mumps"
+      ],
+      "stage": "preliminary",
+      "group": "standalone_control"
+    }
+  ],
+  "format": "hdgfem_torsion_optimizer_figure_registry_v1",
+  "generated_utc": "2026-08-26T18:31:52Z",
+  "stage": "preliminary"
+}

@@ -1,0 +1,105 @@
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  mpirun --bind-to core --map-by core -n 8 \
+  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  projects/diocotron/dolfinx/torsion/optimization/h1_projection.py \
+    --run-tag horseshoe_0p8_0p9_h1_projection_highdof_interactive \
+    --mesh projects/diocotron/runs/torsion_optimizer/meshes/horseshoe-p4-dof200000.msh \
+    --order 4 \
+    --quad-degree 16 \
+    --alpha-t1 0.8 \
+    --alpha-t2 0.9 \
+    --rho-amp 1.0 \
+    --center-min 0.0005 \
+    --center-max 0.025 \
+    --width-min 0.00005 \
+    --width-max 0.003 \
+    --eps-ratio 0.01 \
+    --leakage-max 0.30 \
+    --missing-max 0.70 \
+    --init-leakage 0.24 \
+    --init-refine-max-it 120 \
+    --init-refine-ftol 1e-13 \
+    --init-topology-repair \
+    --init-topology-repair-samples 24 \
+    --init-shortlist 3 \
+    --init-candidate-max-newton-it 12 \
+    --init-width-perturbation 0.08 \
+    --init-center-perturbation 0.03 \
+    --init-shrink-factor 0.70 \
+    --init-fallback-stages 16 \
+    --init-min-coverage 0.01 \
+    --init-homotopy-fallback \
+    --init-homotopy-initial-step 0.10 \
+    --init-homotopy-min-step 1e-3 \
+    --init-homotopy-max-step 0.10 \
+    --init-homotopy-step-shrink 0.5 \
+    --init-homotopy-step-grow 1.5 \
+    --init-homotopy-easy-newton-it 6 \
+    --init-homotopy-max-stages 64 \
+    --init-homotopy-predictor \
+    --init-homotopy-threshold-steps-per-stage 3 \
+    --init-homotopy-threshold-max-trials 4 \
+    --init-homotopy-threshold-trust-radius 0.05 \
+    --init-homotopy-threshold-trust-min 1e-5 \
+    --init-homotopy-threshold-trust-max 0.25 \
+    --init-homotopy-threshold-edge-step-fraction 0.20 \
+    --init-homotopy-threshold-rescue-attempts 1 \
+    --init-homotopy-threshold-stagnation-atol 1e-6 \
+    --init-homotopy-threshold-stagnation-rtol 1e-2 \
+    --linear-solver mumps \
+    --linear-rtol 1e-13 \
+    --linear-atol 1e-15 \
+    --newton-tol 1e-12 \
+    --max-newton-it 1200 \
+    --trial-max-newton-it 60 \
+    --tol-step 1e-14 \
+    --beta-ls 0.5 \
+    --armijo-c 1e-6 \
+    --max-backtrack 60 \
+    --alpha-min 1e-12 \
+    --trust-radius 0.01 \
+    --trust-radius-min 1e-5 \
+    --trust-radius-max 0.50 \
+    --trust-shrink 0.5 \
+    --trust-grow 2.0 \
+    --acceptance-eta 0.10 \
+    --acceptance-grow-eta 0.75 \
+    --gn-regularization 1e-10 \
+    --functional-stagnation-atol 1e-6 \
+    --functional-stagnation-rtol 1e-2 \
+    --functional-stagnation-patience 2 \
+    --kkt-tol 1e-6 \
+    --active-tol 1e-7 \
+    --constraint-tol 1e-9 \
+    --max-opt-it 60 \
+    --max-trials-per-iteration 12 \
+    --branch-overlap-min 0.80 \
+    --branch-topology-guard \
+    --branch-topology-core-level 0.50 \
+    --branch-topology-bridge-level 0.25 \
+    --branch-topology-min-component-fraction 0.02 \
+    --predictor-correction-absolute 0.05 \
+    --predictor-correction-factor 2.0 \
+    --predictor-max-change 5.0 \
+    --verify-window-derivatives \
+    --verify-reduced-derivatives \
+    --fd-relative-step 2e-6 \
+    --fd-signal-factor 20 \
+    --plot \
+    --plot-mode nonblocking \
+    --plot-design \
+    --plot-design-hold-seconds 5.5 \
+    --plot-fields state \
+    --plot-initial-candidates \
+    --plot-homotopy-stages \
+    --plot-accepted-states \
+    --plot-final \
+    --plot-final-blocking \
+    --no-plot-mesh-edges \
+    --plot-window-width 1500 \
+    --plot-window-height 1000 \
+    --write-xdmf \
+    --make-plots \
+    --save-terminal-log \
+    --fail-on-nonconvergence \
+    -vv

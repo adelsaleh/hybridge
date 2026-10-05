@@ -1,0 +1,152 @@
+include "getARGV.idp"
+load "lapack"
+load "msh3"
+load "gmsh"
+
+real dt = getARGV("-dt", 0.5);  // time step    
+real endt = getARGV("-endt", 50);   // end time for simualtion
+int k = getARGV("-k", 3);
+real eps = getARGV("-eps", 0.05);
+real r0 = getARGV("-r0", 0.45);
+real sigma = getARGV("-sigma", 0.03);
+real visc = getARGV("-visc", 0.0);
+int nn = getARGV("-nn", 150);
+int plt = getARGV("-plot", 0);
+//border a(t=0, 2*pi){x=cos(t); y=sin(t); label=1;}
+string domainType = ARGV[ARGV.n-1];
+mesh Th;
+if(domainType == "disc"){
+    real r1 = 0.5;
+    real r2 = 1;
+    border outer(t = 0, 2*pi ){x = r2 * cos(t); y = r2 * sin(t); label=0;};
+    Th = buildmesh(outer(nn));
+} else if(domainType == "rectangle") {
+    border b1(t = 0, 1) { 
+      x = -1 + 2*t;
+      y = -1;
+      label = 0;
+    }
+    border b2(t = 0, 1) { 
+      x = 1;
+      y = -1 + 2*t;
+      label = 0;
+    }
+    border b3(t = 0, 1) { 
+      x = 1 - 2*t;
+      y = 1;
+      label = 0;
+    }
+    border b4(t = 0, 1) { 
+      x = -1;
+      y = 1 - 2*t;
+      label = 0;
+    }
+    Th = buildmesh(b1(nn)+b2(nn)+b3(nn)+b4(nn));
+} else if(domainType=="triangle"){
+    border b1(t = 0, 1) { 
+      x = t;
+      y = 0;
+      label = 0;
+    }
+    border b2(t = 0, 1) { 
+      x = 1-t;
+      y = t;
+      label = 0;
+    }
+    border b3(t = 0, 1) { 
+      x = 0;
+      y = 1-t;
+      label = 0;
+    }
+    Th = buildmesh(b1(nn)+b2(nn)+b3(nn));
+}
+
+if (plt==1) {
+    plot(Th, wait=true);
+}
+
+meshS ThS = movemesh23(Th, transfo = [x, y, 0]);
+savegmsh(ThS, "../ffdisc");
+fespace Vh(Th, P2);
+Vh rho1, rho, rhoEq, phi, phiEq, u, v, uh, phi0, rho0, tmp, uold, phiHalf, rhoHalf;
+varf a(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + on(0, u=0);
+varf b(u,v) = int2d(Th)(u*v) + on(0,u=0);
+matrix K = a(Vh,Vh);
+matrix M = b(Vh,Vh);
+set(M,solver=sparsesolver);
+set(K,solver=sparsesolver);
+
+//problem density(rho1,v) = int2d(Th)(rho1*v/dt) - int2d(Th)(rho*v/dt) 
+//          + int2d(Th)(-dx(phi)*rho1*dy(v)+dy(phi)*rho1*dx(v))
+//          + int2d(Th)(visc*(dx(rho1)*dx(v)+dy(rho1)*dy(v)))
+//          + on(1,rho1=0) + on(2,rho1=0);
+
+
+problem density(rho1,v) = int2d(Th)(rho1*v) - int2d(Th)(rho*v) 
+            + int2d(Th)(dt/2*rho1*(-dy(phiHalf)*dx(v)+dx(phiHalf)*dy(v)))
+            + int2d(Th)(dt/2*rho*(-dy(phiHalf)*dx(v)+dx(phiHalf)*dy(v)))
+            + on(0,rho1=0);
+
+problem density3(rho1,v) = int2d(Th)(rho1*v) - int2d(Th)(rho*v) 
+            + int2d(Th)(dt/3*rho1*(-dy(phiHalf)*dx(v)+dx(phiHalf)*dy(v)))
+            + int2d(Th)(dt/3*rho*(-dy(phiHalf)*dx(v)+dx(phiHalf)*dy(v)))
+            + int2d(Th)(dt/3*rhoHalf*(-dy(phiHalf)*dx(v)+dx(phiHalf)*dy(v)))
+            + on(0,rho1=0);
+
+problem densityHalfExplicit(rhoHalf,v) = int2d(Th)(rhoHalf * v)-int2d(Th)(rho * v)
+            + int2d(Th)(dt/2*rho*(-dy(phi)*dx(v)+dx(phi)*dy(v)))
+            + on(0,rhoHalf=0);
+
+problem densityHalfImplicit(rhoHalf,v) = int2d(Th)(rhoHalf * v)-int2d(Th)(rho * v)
+            + int2d(Th)(dt/2*rhoHalf*(-dy(phi)*dx(v)+dx(phi)*dy(v)))
+            + on(0,rhoHalf=0);
+
+//rho = ((sqrt(x^2 + y^2) > 0.3) && (sqrt(x^2 + y^2) < 0.5)) ? 1+ 0.1*cos(4*atan(y/x)) : 0;
+//rho = (x*x + y*y >= 0.17 & x*x + y*y <= 0.25 );
+rhoEq = exp(-(sqrt(x^2+y^2)-r0)^2/(2*sigma^2));
+rho = (1+eps*cos(k*atan2(y, x)))*rhoEq; // initialize rho to pertrurbed equilibrium
+//real sm = 0.45; 
+//real sp =  0.5;
+//real sb = (sm + sp) / 2;
+//real sd = (sp - sm) / 2;
+//real p = 50;
+//rhoEq = (sqrt(x^2+y^2) >= sm & sqrt(x^2+y^2) <= sb);
+//rho = rhoEq*(1+eps*cos(k*atan2(y, x)))*exp(-((sqrt(x^2+y^2) - sb) / sd)^p);
+rho0 = rho;
+if(plt==1){
+    plot(rho, fill=true, wait=true, value=true);
+}
+
+tmp[] = M * rho0[];
+phi0[] = K^-1 * tmp[];
+tmp[] = M * rhoEq[];
+phiEq[] = K^-1 * tmp[];
+
+real mass0 = int2d(Th)(rho0);  
+real enrg0 = sqrt(int2d(Th)(dx(phi0)^2+dy(phi0)^2));
+
+ofstream file("out/dat_cg_xo2_to2_k" + k + "eps" + eps + ".txt");
+file << "dt " + dt + "n_el" + Vh.nt + "eps " + eps + " k " + k + " dof " + Vh.ndof << endl;
+for(real t=0.0; t<endt; t+=dt){ 
+    tmp[] = M * rho[];  
+    phi[] = K^-1 * tmp[];
+    if(t>0.0){
+        real instb  = sqrt(int2d(Th)((phi-phiEq)^2));
+        real relElecEnErr = abs(sqrt(int2d(Th)(dx(phi)^2+dy(phi)^2))-sqrt(int2d(Th)(dx(phi0)^2+dy(phi0)^2)))/enrg0; 
+        real relMassErr = abs(int2d(Th)(rho-rho0)/mass0);
+        string str  = t + " " + instb + " " + relElecEnErr + " " + relMassErr;  
+        file << str << endl;
+        cout << str << endl;;
+    }
+    //densityHalfImplicit;  
+    densityHalfImplicit;    
+    tmp[] = M * rhoHalf[];
+    phiHalf[] = K^-1 * tmp[];
+    density3;
+    if(plt==1){ 
+        plot(rho1, fill=true, value=true, dim=2, wait=false,
+        cmm = "P2,\t\t\t pred_corr,\t\t\tnb_el=" + Th.nt + "\t\t\teps = " + eps + "\t\t\tmode=" + k + "\t\t\tvisc=" 
+            + visc + "\t\t\tdt=" + dt + "\t\t\titeration " + t/dt + "\t\t\tt =" + t);
+    }
+    rho = rho1;
+}

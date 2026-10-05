@@ -1,0 +1,1822 @@
+// ================================================================
+// Strategy A with mesh adaptation: torsion-designed initializer
+// + semilinear Newton + adaptmesh following the moving rho=f(phi) band.
+//
+// This version adds:
+//	- command-line input for essentially all parameters except the hard-coded
+//	  epsPhi continuation list;
+//	- compact terminal logging at every Newton/adaptation step;
+//	- machine-readable CSV logs in ../logs;
+//	- human-readable log in ../logs;
+//	- metrics and outputs in ../out, ../vtk, ../msh, ../logs;
+//	- exact unshifted weak residual metrics for -Delta u = f(u)
+//	  without muShift/lambda;
+//	- strong-form validation residual ||dxx(u)+dyy(u)+f(u)||_{L2}.
+//	  For P2 this is computable elementwise and is used as diagnostic by default.
+//
+// Recommended run:
+//	FreeFem++ -v 0 strategyA_adaptive_torsion_newton_logged.edp
+// ================================================================
+
+include "getARGV.idp"
+load "gmsh"
+load "iovtk"
+
+// Suppress FreeFEM solver chatter as much as possible.
+// You should also run FreeFem++ with -v 0.
+verbosity = getARGV("-verbosity", 0);
+
+// ----------------------------
+// User-input parameters
+// ----------------------------
+int bLabel = getARGV("-bLabel", 1);
+
+int plt = getARGV("-plot", 1);
+int plotInitial = getARGV("-plotInitial", 1);
+int plotDesign = getARGV("-plotDesign", 1);
+int plotDuringNewton = getARGV("-plotNewton", 1);
+int plotAdaptOverlay = getARGV("-plotAdapt", 1);
+int plotFinal = getARGV("-plotFinal", 1);
+int verboseLS = getARGV("-verboseLS", 0);
+
+int terminalEvery = getARGV("-terminalEvery", 1);
+int terminalDetailed = getARGV("-terminalDetailed", 0);
+
+string meshFile = getARGV("-mesh", "../msh/iter.msh");
+
+string outDir = getARGV("-outDir", "../out");
+string vtkDir = getARGV("-vtkDir", "../vtk");
+string mshDir = getARGV("-mshDir", "../msh");
+string logDir = getARGV("-logDir", "../logs");
+string runTag = getARGV("-runTag", "strategyA_adaptive_torsion_newton");
+
+// Torsion-designed band parameters.
+// epsTRatio is intentionally hard-coded by request.
+real alphaT1 = getARGV("-alphaT1", 0.6);
+real alphaT2 = getARGV("-alphaT2", 0.65);
+real epsTRatio = 0.06;
+real rhoAmp = getARGV("-rhoAmp", 1.0);
+
+// Semilinear f(phi) window parameters from phiDesign scale.
+real betaPhi1 = getARGV("-betaPhi1", 0.6);
+real betaPhi2 = getARGV("-betaPhi2", 0.65);
+
+// Continuation in epsilon for the semilinear f(phi).
+// Kept hard-coded by request.
+int nEpsPhi = 3;
+real[int] epsPhiRatioList(nEpsPhi);
+epsPhiRatioList[0] = 0.10;
+epsPhiRatioList[1] = 0.08;
+epsPhiRatioList[2] = 0.06;
+
+// Newton parameters.
+int maxIt = getARGV("-maxIt", 70);
+real tolRes = getARGV("-tolRes", 1e-10);
+real tolNewton = getARGV("-tolNewton", 1e-10);
+real betaLS = getARGV("-betaLS", 0.5);
+real armijoC = getARGV("-armijoC", 1e-6);
+real alphaMin = getARGV("-alphaMin", 1e-7);
+int maxBacktrack = getARGV("-maxBacktrack", 30);
+
+// Strong residual diagnostic.
+// For P2, dxx(u)+dyy(u)+f(u) is meaningful elementwise, but it is more
+// mesh-sensitive than the weak H^{-1}_h residual. Default: validation only.
+// Set -useStrongResidualArmijo 1 to use strongResL2 in the Armijo merit.
+int useStrongResidualArmijo = getARGV("-useStrongResidualArmijo", 0);
+
+// Shifted Newton stabilization.
+real muShift = getARGV("-muShift", 2.0);
+real muMin = getARGV("-muMin", 0.20);
+real muMax = getARGV("-muMax", 30.0);
+
+// Branch preservation: only prevent collapse. Do not force annularity.
+real massFloorFraction = getARGV("-massFloorFraction", 0.01);
+real rhoMaxFloor = getARGV("-rhoMaxFloor", 0.02);
+
+// Repeated stagnation stop.
+int maxStagnation = getARGV("-maxStagnation", 5);
+real stagnationTol = getARGV("-stagnationTol", 1e-5);
+
+// Band metrics thresholds.
+real activeThreshold = getARGV("-activeThreshold", 0.05);
+real plateauThreshold = getARGV("-plateauThreshold", 0.90);
+
+// ----------------------------
+// Mesh adaptation parameters
+// ----------------------------
+int useAdaptMesh = getARGV("-adapt", 1);
+int adaptAfterLastEps = getARGV("-adaptAfterLastEps", 0);
+
+real adaptErr = getARGV("-adaptErr", 0.008);
+real adaptErrG = getARGV("-adaptErrG", 0.001);
+real adaptHMin = getARGV("-adaptHMin", 0.003);
+real adaptHMax = getARGV("-adaptHMax", 0.15);
+real adaptRatio = getARGV("-adaptRatio", 1.4);
+real adaptAnisoMax = getARGV("-adaptAnisoMax", 5.0);
+int adaptNbVx = getARGV("-adaptNbVx", 500000);
+int adaptNbSmooth = getARGV("-adaptNbSmooth", 3);
+
+// Default 0 because this solver now owns the useful logs.
+int adaptVerbosity = getARGV("-adaptVerbosity", 0);
+
+// local h target near the band: h ~ adaptSafety * epsPhi/max|grad phi|.
+real adaptSafety = getARGV("-adaptSafety", 0.25);
+
+// Outputs.
+string outMesh = mshDir + "/" + runTag + "_equilibrium_mesh.msh";
+string outRhoDof = outDir + "/" + runTag + "_rho_dof.txt";
+string outPhiDof = outDir + "/" + runTag + "_phi_dof.txt";
+string outVTK = vtkDir + "/" + runTag + "_final.vtu";
+string csvLogFile = logDir + "/" + runTag + "_newton.csv";
+string adaptLogFile = logDir + "/" + runTag + "_adapt.csv";
+string humanLogFile = logDir + "/" + runTag + ".log";
+string summaryFile = outDir + "/" + runTag + "_summary.txt";
+
+// Try to create output directories.
+exec("mkdir -p " + outDir);
+exec("mkdir -p " + vtkDir);
+exec("mkdir -p " + mshDir);
+exec("mkdir -p " + logDir);
+
+// ----------------------------
+// Timing and log streams
+// ----------------------------
+real tGlobal = clock();
+real tBlock;
+real tSolve;
+real tResidual;
+real tAdapt;
+real tStep;
+
+ofstream csvlog(csvLogFile);
+ofstream adaptlog(adaptLogFile);
+ofstream humanlog(humanLogFile);
+ofstream summary(summaryFile);
+
+// On most FreeFEM builds these stream methods work.
+// If your build complains, comment out the next four lines.
+csvlog.precision(16);
+adaptlog.precision(16);
+humanlog.precision(16);
+summary.precision(16);
+
+csvlog
+	<< "record,runTag,ieps,epsPhiRatio,epsPhi,k,nt,ndof,"
+	<< "resEuclid,resHm1,resHm1RelEnergy,resHm1RelRho,poissonRelL2,poissonRelH1,"
+	<< "strongResL2,strongResRelEnergy,strongResRelRho,strongResMaxAbs,"
+	<< "nd,alpha,bt,muShift,minU,maxU,maxRho,massRho,rhoL2,energyPhi,J,"
+	<< "activeArea,plateauArea,plateauFrac,relRhoDesign,annularPhiMinusC2,"
+	<< "defectL2,normalizedDefect,gradRhoL2,solveTime,stepTime,status"
+	<< endl;
+
+adaptlog
+	<< "record,runTag,ieps,ntOld,ndofOld,ntNew,ndofNew,epsPhi,"
+	<< "maxGradPhi,hTarget,hMinUsed,hMax,err,errg,ratio,anisomax,"
+	<< "rhoMassBefore,rhoMaxBefore,rhoMassAfter,rhoMaxAfter,"
+	<< "massRelChange,maxRhoRelChange,adaptTime,status"
+	<< endl;
+
+cout << endl;
+cout << "========== START STRATEGY A ADAPTIVE TORSION NEWTON ==========" << endl;
+cout << "RUN_TAG " << runTag << endl;
+cout << "CSV_LOG " << csvLogFile << endl;
+cout << "ADAPT_LOG " << adaptLogFile << endl;
+cout << "HUMAN_LOG " << humanLogFile << endl;
+cout << "SUMMARY " << summaryFile << endl;
+
+humanlog << "START runTag=" << runTag << endl;
+humanlog << "meshFile=" << meshFile << endl;
+humanlog << "outDir=" << outDir << " vtkDir=" << vtkDir << " mshDir=" << mshDir << " logDir=" << logDir << endl;
+humanlog << "alphaT1=" << alphaT1 << " alphaT2=" << alphaT2 << " epsTRatio=" << epsTRatio << " rhoAmp=" << rhoAmp << endl;
+humanlog << "betaPhi1=" << betaPhi1 << " betaPhi2=" << betaPhi2 << endl;
+humanlog << "epsPhiRatios=" << epsPhiRatioList[0] << "," << epsPhiRatioList[1] << "," << epsPhiRatioList[2] << endl;
+humanlog << "adapt=" << useAdaptMesh << " adaptErr=" << adaptErr << " adaptHMin=" << adaptHMin << " adaptHMax=" << adaptHMax << endl;
+humanlog << "useStrongResidualArmijo=" << useStrongResidualArmijo << endl;
+
+// ----------------------------
+// Mesh and FE spaces
+// ----------------------------
+tBlock = clock();
+mesh Th = gmshload(meshFile);
+cout << "MESH nt=" << Th.nt << " loadTime=" << clock()-tBlock << endl;
+humanlog << "MESH nt=" << Th.nt << " loadTime=" << clock()-tBlock << endl;
+
+if (plt == 1 && plotInitial == 1)
+{
+	plot(Th, wait=true, cmm="Initial mesh");
+}
+
+tBlock = clock();
+fespace Vh(Th, P2);
+Vh T, phiDesign, rhoDesign, rhoFromPhi;
+Vh u, du, v, uTrial, uOld, tmp, phiCheck;
+Vh defectDesign, defectFinal, gradTNorm, gradPhiMag, strongResidualField;
+Vh activeDesign, plateauDesign, activeFinal, plateauFinal;
+
+real[int] rr(Vh.ndof);
+real[int] zz(Vh.ndof);
+
+cout << "SPACE ndof=" << Vh.ndof << " allocTime=" << clock()-tBlock << endl;
+humanlog << "SPACE ndof=" << Vh.ndof << " allocTime=" << clock()-tBlock << endl;
+
+// ----------------------------
+// Torsion solve
+// ----------------------------
+problem Torsion(T, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		dx(T)*dx(v)
+		+ dy(T)*dy(v)
+	)
+	- int2d(Th)(
+		1.0*v
+	)
+	+ on(bLabel, T=0);
+
+tSolve = clock();
+Torsion;
+real torsionTime = clock()-tSolve;
+
+real Tmax = T[].max;
+real Tmin = T[].min;
+
+if (Tmax <= 1e-14)
+{
+	cout << "ERROR Tmax_too_small check_bLabel=" << bLabel << endl;
+	humanlog << "ERROR Tmax_too_small check_bLabel=" << bLabel << endl;
+	exec("exit 1");
+}
+
+real c1T = alphaT1*Tmax;
+real c2T = alphaT2*Tmax;
+real widthT = c2T-c1T;
+real epsT = epsTRatio*widthT;
+
+cout << "TORSION Tmax=" << Tmax << " c1T=" << c1T << " c2T=" << c2T << " epsT=" << epsT << endl;
+
+humanlog
+	<< "TORSION "
+	<< "Tmin=" << Tmin << " "
+	<< "Tmax=" << Tmax << " "
+	<< "alphaT1=" << alphaT1 << " "
+	<< "alphaT2=" << alphaT2 << " "
+	<< "c1T=" << c1T << " "
+	<< "c2T=" << c2T << " "
+	<< "widthT=" << widthT << " "
+	<< "epsTRatio=" << epsTRatio << " "
+	<< "epsT=" << epsT << " "
+	<< "time=" << torsionTime
+	<< endl;
+
+// ----------------------------
+// Torsion-window functions g_T
+// ----------------------------
+func real sigmaT(real z)
+{
+	real zz = z/epsT;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real gT(real s)
+{
+	return rhoAmp*(sigmaT(s-c1T) - sigmaT(s-c2T));
+}
+
+rhoDesign = gT(T);
+
+if (plt == 1 && plotDesign == 1)
+{
+	plot(Th, rhoDesign, fill=true, value=true, wait=true, nbiso=50,
+		cmm="Design rho with mesh overlay");
+}
+
+gradTNorm = sqrt(dx(T)^2 + dy(T)^2);
+activeDesign = (rhoDesign > activeThreshold*rhoAmp);
+plateauDesign = (rhoDesign > plateauThreshold*rhoAmp);
+
+real rhoDesignMass = int2d(Th)(rhoDesign);
+real rhoDesignL2 = sqrt(int2d(Th)(rhoDesign^2));
+
+cout
+	<< "RHO_DESIGN "
+	<< "mass=" << rhoDesignMass << " "
+	<< "max=" << rhoDesign[].max << " "
+	<< "activeArea=" << int2d(Th)(activeDesign) << " "
+	<< "plateauArea=" << int2d(Th)(plateauDesign)
+	<< endl;
+
+humanlog
+	<< "RHO_DESIGN "
+	<< "rhoMin=" << rhoDesign[].min << " "
+	<< "rhoMax=" << rhoDesign[].max << " "
+	<< "rhoMass=" << rhoDesignMass << " "
+	<< "rhoL2=" << rhoDesignL2 << " "
+	<< "activeArea=" << int2d(Th)(activeDesign) << " "
+	<< "plateauArea=" << int2d(Th)(plateauDesign) << " "
+	<< "plateauFraction=" << int2d(Th)(plateauDesign)/max(int2d(Th)(activeDesign), 1e-30)
+	<< endl;
+
+// ----------------------------
+// Poisson solve for phiDesign
+// ----------------------------
+varf a(uu,vv)
+	=
+	int2d(Th)(
+		dx(uu)*dx(vv)
+		+ dy(uu)*dy(vv)
+	)
+	+ on(bLabel, uu=0);
+
+varf m(uu,vv)
+	=
+	int2d(Th)(
+		uu*vv
+	);
+
+matrix K = a(Vh,Vh);
+matrix M = m(Vh,Vh);
+
+tmp[] = M*rhoDesign[];
+phiDesign[] = K^-1*tmp[];
+
+real phiDesignMax = phiDesign[].max;
+real phiDesignMin = phiDesign[].min;
+real phiDesignL2 = sqrt(int2d(Th)(phiDesign^2));
+real phiDesignEnergy = sqrt(int2d(Th)(dx(phiDesign)^2 + dy(phiDesign)^2));
+
+defectDesign = -dy(phiDesign)*dx(rhoDesign) + dx(phiDesign)*dy(rhoDesign);
+real defectDesignL2 = sqrt(int2d(Th)(defectDesign^2));
+real gradRhoDesignL2 = sqrt(int2d(Th)(dx(rhoDesign)^2 + dy(rhoDesign)^2));
+real normalizedDefectDesign = defectDesignL2/max(gradRhoDesignL2*phiDesignEnergy, 1e-30);
+
+cout
+	<< "PHI_DESIGN "
+	<< "max=" << phiDesignMax << " "
+	<< "energy=" << phiDesignEnergy << " "
+	<< "normalizedDefect=" << normalizedDefectDesign
+	<< endl;
+
+humanlog
+	<< "PHI_DESIGN "
+	<< "phiMin=" << phiDesignMin << " "
+	<< "phiMax=" << phiDesignMax << " "
+	<< "phiL2=" << phiDesignL2 << " "
+	<< "energy=" << phiDesignEnergy << " "
+	<< "defectL2=" << defectDesignL2 << " "
+	<< "normalizedDefect=" << normalizedDefectDesign
+	<< endl;
+
+if (phiDesignMax <= 1e-14)
+{
+	cout << "ERROR phiDesignMax_too_small cannot_define_phi_window" << endl;
+	humanlog << "ERROR phiDesignMax_too_small cannot_define_phi_window" << endl;
+	exec("exit 1");
+}
+
+// ----------------------------
+// Define semilinear f(phi) levels from phiDesign scale.
+// ----------------------------
+real c1Phi = betaPhi1*phiDesignMax;
+real c2Phi = betaPhi2*phiDesignMax;
+real widthPhi = c2Phi-c1Phi;
+real epsPhi = epsPhiRatioList[0]*widthPhi;
+
+cout
+	<< "PHI_WINDOW "
+	<< "c1Phi=" << c1Phi << " "
+	<< "c2Phi=" << c2Phi << " "
+	<< "widthPhi=" << widthPhi << " "
+	<< "initialEpsPhi=" << epsPhi
+	<< endl;
+
+humanlog
+	<< "PHI_WINDOW "
+	<< "betaPhi1=" << betaPhi1 << " "
+	<< "betaPhi2=" << betaPhi2 << " "
+	<< "c1Phi=" << c1Phi << " "
+	<< "c2Phi=" << c2Phi << " "
+	<< "widthPhi=" << widthPhi << " "
+	<< "initialEpsPhi=" << epsPhi << " "
+	<< "initAnnularCheck=" << phiDesignMax-c2Phi
+	<< endl;
+
+// ----------------------------
+// Semilinear f(phi), derivative, and primitive F(phi).
+// ----------------------------
+func real sigmaPhi(real z)
+{
+	real zz = z/epsPhi;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real sigmaPhiP(real z)
+{
+	real S = sigmaPhi(z);
+	return S*(1.0-S)/epsPhi;
+}
+
+func real softPlusPhi(real z)
+{
+	real zz = z/epsPhi;
+
+	if (zz > 50.0)
+		return z;
+
+	if (zz < -50.0)
+		return epsPhi*exp(zz);
+
+	return epsPhi*log(1.0 + exp(zz));
+}
+
+func real ffun(real s)
+{
+	return rhoAmp*(sigmaPhi(s-c1Phi) - sigmaPhi(s-c2Phi));
+}
+
+func real dffun(real s)
+{
+	return rhoAmp*(sigmaPhiP(s-c1Phi) - sigmaPhiP(s-c2Phi));
+}
+
+func real Ffun(real s)
+{
+	return rhoAmp*(softPlusPhi(s-c1Phi) - softPlusPhi(s-c2Phi));
+}
+
+// Initial guess for Newton is the designed Poisson potential.
+u = phiDesign;
+rhoFromPhi = ffun(u);
+
+real initRelRhoDesign = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+cout
+	<< "INIT_MATCH "
+	<< "fPhiMax=" << rhoFromPhi[].max << " "
+	<< "fPhiMass=" << int2d(Th)(rhoFromPhi) << " "
+	<< "relRhoDesign=" << initRelRhoDesign
+	<< endl;
+
+// ----------------------------
+// Residual and shifted Newton problem.
+// ResidualForm is the exact unshifted equation residual:
+//	int grad(u).grad(v) - int f(u)v.
+// It does not include muShift.
+// ----------------------------
+varf ResidualForm(unused, vv)
+	=
+	int2d(Th)(
+		dx(u)*dx(vv)
+		+ dy(u)*dy(vv)
+		- ffun(u)*vv
+	)
+	+ on(bLabel, unused=0);
+
+func real residualNorm()
+{
+	real[int] r = ResidualForm(0, Vh);
+	return sqrt(r'*r);
+}
+
+problem NewtonStep(du, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		(1.0 + muShift)*(dx(du)*dx(v) + dy(du)*dy(v))
+		- dffun(u)*du*v
+	)
+	+ int2d(Th)(
+		dx(u)*dx(v)
+		+ dy(u)*dy(v)
+		- ffun(u)*v
+	)
+	+ on(bLabel, du=0);
+
+// ----------------------------
+// Metrics storage and macro.
+// ----------------------------
+real resEuclid = 0.0;
+real resHm1 = 0.0;
+real resHm1RelEnergy = 0.0;
+real resHm1RelRho = 0.0;
+real poissonRelL2 = 0.0;
+real poissonRelH1 = 0.0;
+real strongResL2 = 0.0;
+real strongResRelEnergy = 0.0;
+real strongResRelRho = 0.0;
+real strongResMaxAbs = 0.0;
+real rhoL2Now = 0.0;
+real energyPhiNow = 0.0;
+real JNow = 0.0;
+real activeAreaNow = 0.0;
+real plateauAreaNow = 0.0;
+real plateauFracNow = 0.0;
+real relRhoDesignNow = 0.0;
+real defectL2Now = 0.0;
+real gradRhoL2Now = 0.0;
+real normalizedDefectNow = 0.0;
+real rrzzLocal = 0.0;
+
+// Log initial constructed state.
+/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+
+csvlog
+	<< "SETUP" << ","
+	<< runTag << ","
+	<< "NA,NA," << epsPhi << ",NA,"
+	<< Th.nt << ","
+	<< Vh.ndof << ","
+	<< resEuclid << ","
+	<< resHm1 << ","
+	<< resHm1RelEnergy << ","
+	<< resHm1RelRho << ","
+	<< poissonRelL2 << ","
+	<< poissonRelH1 << ","
+		<< strongResL2 << ","
+		<< strongResRelEnergy << ","
+		<< strongResRelRho << ","
+		<< strongResMaxAbs << ","
+	<< "NA,NA,NA,"
+	<< muShift << ","
+	<< u[].min << ","
+	<< u[].max << ","
+	<< rhoFromPhi[].max << ","
+	<< int2d(Th)(rhoFromPhi) << ","
+	<< rhoL2Now << ","
+	<< energyPhiNow << ","
+	<< JNow << ","
+	<< activeAreaNow << ","
+	<< plateauAreaNow << ","
+	<< plateauFracNow << ","
+	<< relRhoDesignNow << ","
+	<< u[].max-c2Phi << ","
+	<< defectL2Now << ","
+	<< normalizedDefectNow << ","
+	<< gradRhoL2Now << ","
+	<< "NA,NA,"
+	<< "INITIAL"
+	<< endl;
+
+// ================================================================
+// Continuation in epsPhi
+// ================================================================
+for (int ieps = 0; ieps < nEpsPhi; ieps++)
+{
+	real epsPhiRatio = epsPhiRatioList[ieps];
+	epsPhi = epsPhiRatio*widthPhi;
+
+	muShift = max(muShift, 2.0);
+	/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+
+	real massInitial = int2d(Th)(rhoFromPhi);
+	real maxRhoInitial = rhoFromPhi[].max;
+	real massFloor = massFloorFraction*max(massInitial, rhoDesignMass);
+	real res = resEuclid;
+
+	cout
+		<< "EPS_START "
+		<< "ieps=" << ieps
+		<< " epsRatio=" << epsPhiRatio
+		<< " epsPhi=" << epsPhi
+		<< " nt=" << Th.nt
+		<< " ndof=" << Vh.ndof
+		<< " resH-1=" << resHm1
+		<< " strongL2=" << strongResL2
+		<< " mass=" << massInitial
+		<< endl;
+
+	humanlog
+		<< "EPS_START "
+		<< "ieps=" << ieps << " "
+		<< "epsPhiRatio=" << epsPhiRatio << " "
+		<< "epsPhi=" << epsPhi << " "
+		<< "c1Phi=" << c1Phi << " "
+		<< "c2Phi=" << c2Phi << " "
+		<< "muShift=" << muShift << " "
+		<< "minU=" << u[].min << " "
+		<< "maxU=" << u[].max << " "
+		<< "maxRho=" << maxRhoInitial << " "
+		<< "massRho=" << massInitial << " "
+		<< "massFloor=" << massFloor << " "
+		<< "resHm1=" << resHm1 << " "
+		<< "poissonRelL2=" << poissonRelL2 << " "
+		<< "strongResL2=" << strongResL2
+		<< endl;
+
+	csvlog
+		<< "EPS_START" << ","
+		<< runTag << ","
+		<< ieps << ","
+		<< epsPhiRatio << ","
+		<< epsPhi << ","
+		<< "NA,"
+		<< Th.nt << ","
+		<< Vh.ndof << ","
+		<< resEuclid << ","
+		<< resHm1 << ","
+		<< resHm1RelEnergy << ","
+		<< resHm1RelRho << ","
+		<< poissonRelL2 << ","
+		<< poissonRelH1 << ","
+		<< strongResL2 << ","
+		<< strongResRelEnergy << ","
+		<< strongResRelRho << ","
+		<< strongResMaxAbs << ","
+		<< "NA,NA,NA,"
+		<< muShift << ","
+		<< u[].min << ","
+		<< u[].max << ","
+		<< rhoFromPhi[].max << ","
+		<< int2d(Th)(rhoFromPhi) << ","
+		<< rhoL2Now << ","
+		<< energyPhiNow << ","
+		<< JNow << ","
+		<< activeAreaNow << ","
+		<< plateauAreaNow << ","
+		<< plateauFracNow << ","
+		<< relRhoDesignNow << ","
+		<< u[].max-c2Phi << ","
+		<< defectL2Now << ","
+		<< normalizedDefectNow << ","
+		<< gradRhoL2Now << ","
+		<< "NA,NA,"
+		<< "EPS_START"
+		<< endl;
+
+	int rejectCount = 0;
+	int stagnationCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		tStep = clock();
+
+		tSolve = clock();
+		NewtonStep;
+		real newtonSolveTime = clock()-tSolve;
+
+		real nd = sqrt(int2d(Th)(
+			dx(du)^2 + dy(du)^2
+		));
+
+		/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+		res = resEuclid;
+
+		if (res < tolRes || nd < tolNewton)
+		{
+							csvlog
+					<< "NEWTON" << ","
+					<< runTag << ","
+					<< ieps << ","
+					<< epsPhiRatio << ","
+					<< epsPhi << ","
+					<< k << ","
+					<< Th.nt << ","
+					<< Vh.ndof << ","
+					<< resEuclid << ","
+					<< resHm1 << ","
+					<< resHm1RelEnergy << ","
+					<< resHm1RelRho << ","
+					<< poissonRelL2 << ","
+					<< poissonRelH1 << ","
+					<< strongResL2 << ","
+					<< strongResRelEnergy << ","
+					<< strongResRelRho << ","
+					<< strongResMaxAbs << ","
+					<< nd << ","
+					<< 0 << ","
+					<< 0 << ","
+					<< muShift << ","
+					<< u[].min << ","
+					<< u[].max << ","
+					<< rhoFromPhi[].max << ","
+					<< int2d(Th)(rhoFromPhi) << ","
+					<< rhoL2Now << ","
+					<< energyPhiNow << ","
+					<< JNow << ","
+					<< activeAreaNow << ","
+					<< plateauAreaNow << ","
+					<< plateauFracNow << ","
+					<< relRhoDesignNow << ","
+					<< u[].max-c2Phi << ","
+					<< defectL2Now << ","
+					<< normalizedDefectNow << ","
+					<< gradRhoL2Now << ","
+					<< newtonSolveTime << ","
+					<< clock()-tStep << ","
+					<< "CONVERGED"
+					<< endl;
+
+			if ((terminalEvery > 0 && k % terminalEvery == 0) || 1)
+			{
+									cout
+						<< "STEP "
+						<< "ieps=" << ieps
+						<< " k=" << k
+						<< " resH-1=" << resHm1
+						<< " resE=" << resEuclid
+						<< " pRel=" << poissonRelL2
+						<< " strongL2=" << strongResL2
+						<< " alpha=" << 0
+						<< " bt=" << 0
+						<< " mu=" << muShift
+						<< " maxU=" << u[].max
+						<< " maxRho=" << rhoFromPhi[].max
+						<< " mass=" << int2d(Th)(rhoFromPhi)
+						<< " relDesign=" << relRhoDesignNow
+						<< " status=CONVERGED"
+						<< endl;
+			}
+
+			break;
+		}
+
+		if (int2d(Th)(rhoFromPhi) < massFloor || rhoFromPhi[].max < rhoMaxFloor)
+		{
+						csvlog
+				<< "NEWTON" << ","
+				<< runTag << ","
+				<< ieps << ","
+				<< epsPhiRatio << ","
+				<< epsPhi << ","
+				<< k << ","
+				<< Th.nt << ","
+				<< Vh.ndof << ","
+				<< resEuclid << ","
+				<< resHm1 << ","
+				<< resHm1RelEnergy << ","
+				<< resHm1RelRho << ","
+				<< poissonRelL2 << ","
+				<< poissonRelH1 << ","
+				<< strongResL2 << ","
+				<< strongResRelEnergy << ","
+				<< strongResRelRho << ","
+				<< strongResMaxAbs << ","
+				<< nd << ","
+				<< 0 << ","
+				<< 0 << ","
+				<< muShift << ","
+				<< u[].min << ","
+				<< u[].max << ","
+				<< rhoFromPhi[].max << ","
+				<< int2d(Th)(rhoFromPhi) << ","
+				<< rhoL2Now << ","
+				<< energyPhiNow << ","
+				<< JNow << ","
+				<< activeAreaNow << ","
+				<< plateauAreaNow << ","
+				<< plateauFracNow << ","
+				<< relRhoDesignNow << ","
+				<< u[].max-c2Phi << ","
+				<< defectL2Now << ","
+				<< normalizedDefectNow << ","
+				<< gradRhoL2Now << ","
+				<< newtonSolveTime << ","
+				<< clock()-tStep << ","
+				<< "RESET_TO_DESIGN"
+				<< endl;
+						cout
+				<< "STEP "
+				<< "ieps=" << ieps
+				<< " k=" << k
+				<< " resH-1=" << resHm1
+				<< " resE=" << resEuclid
+				<< " pRel=" << poissonRelL2
+				<< " strongL2=" << strongResL2
+				<< " alpha=" << 0
+				<< " bt=" << 0
+				<< " mu=" << muShift
+				<< " maxU=" << u[].max
+				<< " maxRho=" << rhoFromPhi[].max
+				<< " mass=" << int2d(Th)(rhoFromPhi)
+				<< " relDesign=" << relRhoDesignNow
+				<< " status=RESET_TO_DESIGN"
+				<< endl;
+
+			u = phiDesign;
+			muShift = min(muMax, 1.5*muShift);
+			rejectCount++;
+
+			if (rejectCount >= 5)
+			{
+				cout << "EPS_STOP ieps=" << ieps << " reason=too_many_branch_rejections" << endl;
+				humanlog << "EPS_STOP ieps=" << ieps << " reason=too_many_branch_rejections" << endl;
+				break;
+			}
+
+			continue;
+		}
+
+		real alpha = 1.0;
+		real resOld = res;
+		real meritOld = resOld;
+		if (useStrongResidualArmijo == 1)
+			meritOld = strongResL2;
+		uOld = u;
+		bool accepted = false;
+		int nBacktrack = 0;
+
+		while (alpha >= alphaMin && nBacktrack <= maxBacktrack)
+		{
+			uTrial = uOld + alpha*du;
+			u = uTrial;
+			rhoFromPhi = ffun(u);
+
+			real trialMass = int2d(Th)(rhoFromPhi);
+			real trialMaxRho = rhoFromPhi[].max;
+			real trialMaxU = u[].max;
+			real trialRelRhoDesign = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+			bool branchOK =
+				(trialMass >= massFloor)
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			real resNew = residualNorm();
+			real strongResNew = sqrt(int2d(Th)((dxx(u) + dyy(u) + ffun(u))^2));
+			real meritNew = resNew;
+			if (useStrongResidualArmijo == 1)
+				meritNew = strongResNew;
+
+			if (verboseLS == 1)
+			{
+				cout
+					<< "LS "
+					<< "ieps=" << ieps
+					<< " k=" << k
+					<< " alpha=" << alpha
+					<< " resNew=" << resNew
+					<< " strongNew=" << strongResNew
+					<< " meritNew=" << meritNew
+					<< " resOld=" << resOld
+					<< " mass=" << trialMass
+					<< " maxRho=" << trialMaxRho
+					<< " maxU=" << trialMaxU
+					<< " relRhoDesign=" << trialRelRhoDesign
+					<< " branchOK=" << branchOK
+					<< endl;
+			}
+
+			if (branchOK && meritNew <= (1.0 - armijoC*alpha)*meritOld)
+			{
+				res = resNew;
+				accepted = true;
+				/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+
+									csvlog
+						<< "NEWTON" << ","
+						<< runTag << ","
+						<< ieps << ","
+						<< epsPhiRatio << ","
+						<< epsPhi << ","
+						<< k << ","
+						<< Th.nt << ","
+						<< Vh.ndof << ","
+						<< resEuclid << ","
+						<< resHm1 << ","
+						<< resHm1RelEnergy << ","
+						<< resHm1RelRho << ","
+						<< poissonRelL2 << ","
+						<< poissonRelH1 << ","
+						<< strongResL2 << ","
+						<< strongResRelEnergy << ","
+						<< strongResRelRho << ","
+						<< strongResMaxAbs << ","
+						<< nd << ","
+						<< alpha << ","
+						<< nBacktrack << ","
+						<< muShift << ","
+						<< u[].min << ","
+						<< u[].max << ","
+						<< rhoFromPhi[].max << ","
+						<< int2d(Th)(rhoFromPhi) << ","
+						<< rhoL2Now << ","
+						<< energyPhiNow << ","
+						<< JNow << ","
+						<< activeAreaNow << ","
+						<< plateauAreaNow << ","
+						<< plateauFracNow << ","
+						<< relRhoDesignNow << ","
+						<< u[].max-c2Phi << ","
+						<< defectL2Now << ","
+						<< normalizedDefectNow << ","
+						<< gradRhoL2Now << ","
+						<< newtonSolveTime << ","
+						<< clock()-tStep << ","
+						<< "ACCEPT"
+						<< endl;
+									cout
+						<< "STEP "
+						<< "ieps=" << ieps
+						<< " k=" << k
+						<< " resH-1=" << resHm1
+						<< " resE=" << resEuclid
+						<< " pRel=" << poissonRelL2
+						<< " strongL2=" << strongResL2
+						<< " alpha=" << alpha
+						<< " bt=" << nBacktrack
+						<< " mu=" << muShift
+						<< " maxU=" << u[].max
+						<< " maxRho=" << rhoFromPhi[].max
+						<< " mass=" << int2d(Th)(rhoFromPhi)
+						<< " relDesign=" << relRhoDesignNow
+						<< " status=ACCEPT"
+						<< endl;
+
+				break;
+			}
+
+			alpha *= betaLS;
+			nBacktrack++;
+		}
+
+		if (!accepted)
+		{
+			u = uOld;
+			/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+			res = resOld;
+
+						csvlog
+				<< "NEWTON" << ","
+				<< runTag << ","
+				<< ieps << ","
+				<< epsPhiRatio << ","
+				<< epsPhi << ","
+				<< k << ","
+				<< Th.nt << ","
+				<< Vh.ndof << ","
+				<< resEuclid << ","
+				<< resHm1 << ","
+				<< resHm1RelEnergy << ","
+				<< resHm1RelRho << ","
+				<< poissonRelL2 << ","
+				<< poissonRelH1 << ","
+				<< strongResL2 << ","
+				<< strongResRelEnergy << ","
+				<< strongResRelRho << ","
+				<< strongResMaxAbs << ","
+				<< nd << ","
+				<< alpha << ","
+				<< nBacktrack << ","
+				<< muShift << ","
+				<< u[].min << ","
+				<< u[].max << ","
+				<< rhoFromPhi[].max << ","
+				<< int2d(Th)(rhoFromPhi) << ","
+				<< rhoL2Now << ","
+				<< energyPhiNow << ","
+				<< JNow << ","
+				<< activeAreaNow << ","
+				<< plateauAreaNow << ","
+				<< plateauFracNow << ","
+				<< relRhoDesignNow << ","
+				<< u[].max-c2Phi << ","
+				<< defectL2Now << ","
+				<< normalizedDefectNow << ","
+				<< gradRhoL2Now << ","
+				<< newtonSolveTime << ","
+				<< clock()-tStep << ","
+				<< "FAIL_LS"
+				<< endl;
+						cout
+				<< "STEP "
+				<< "ieps=" << ieps
+				<< " k=" << k
+				<< " resH-1=" << resHm1
+				<< " resE=" << resEuclid
+				<< " pRel=" << poissonRelL2
+				<< " strongL2=" << strongResL2
+				<< " alpha=" << alpha
+				<< " bt=" << nBacktrack
+				<< " mu=" << muShift
+				<< " maxU=" << u[].max
+				<< " maxRho=" << rhoFromPhi[].max
+				<< " mass=" << int2d(Th)(rhoFromPhi)
+				<< " relDesign=" << relRhoDesignNow
+				<< " status=FAIL_LS"
+				<< endl;
+
+			muShift = min(muMax, 2.0*muShift);
+
+			humanlog
+				<< "SHIFT "
+				<< "ieps=" << ieps << " "
+				<< "k=" << k << " "
+				<< "newMu=" << muShift << " "
+				<< "reason=fail_ls"
+				<< endl;
+
+			rejectCount++;
+
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "EPS_STOP ieps=" << ieps << " reason=too_many_failed_steps" << endl;
+				humanlog << "EPS_STOP ieps=" << ieps << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+
+			continue;
+		}
+
+		rejectCount = 0;
+
+		if (nBacktrack <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (nBacktrack >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-res)/max(resOld, 1e-30);
+
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+
+			humanlog
+				<< "SHIFT "
+				<< "ieps=" << ieps << " "
+				<< "k=" << k << " "
+				<< "newMu=" << muShift << " "
+				<< "reason=stagnation"
+				<< endl;
+
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "EPS_STOP ieps=" << ieps << " reason=repeated_stagnation" << endl;
+				humanlog << "EPS_STOP ieps=" << ieps << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+
+		if (plotDuringNewton == 1 && k % 5 == 0)
+		{
+			plot(u, fill=true, value=true, wait=false, nbiso=50,
+				cmm="Newton iterate u");
+
+			rhoFromPhi = ffun(u);
+			plot(Th, rhoFromPhi, fill=true, value=true, wait=false, nbiso=50,
+				cmm="Newton rho=f(u) with mesh overlay, eps=" + epsPhiRatio + ", H-1=" + resHm1);
+		}
+	}
+
+	/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+
+	cout
+		<< "EPS_END "
+		<< "ieps=" << ieps
+		<< " resH-1=" << resHm1
+		<< " poissonRel=" << poissonRelL2
+		<< " strongL2=" << strongResL2
+		<< " mass=" << int2d(Th)(rhoFromPhi)
+		<< " maxRho=" << rhoFromPhi[].max
+		<< endl;
+
+	humanlog
+		<< "EPS_END "
+		<< "ieps=" << ieps << " "
+		<< "epsPhiRatio=" << epsPhiRatio << " "
+		<< "epsPhi=" << epsPhi << " "
+		<< "minU=" << u[].min << " "
+		<< "maxU=" << u[].max << " "
+		<< "maxRho=" << rhoFromPhi[].max << " "
+		<< "massRho=" << int2d(Th)(rhoFromPhi) << " "
+		<< "relRhoDesign=" << relRhoDesignNow << " "
+		<< "annularPhiMinusC2=" << u[].max-c2Phi << " "
+		<< "resHm1=" << resHm1 << " "
+		<< "poissonRelL2=" << poissonRelL2 << " "
+		<< "strongResL2=" << strongResL2
+		<< endl;
+
+	csvlog
+		<< "EPS_END" << ","
+		<< runTag << ","
+		<< ieps << ","
+		<< epsPhiRatio << ","
+		<< epsPhi << ","
+		<< "NA,"
+		<< Th.nt << ","
+		<< Vh.ndof << ","
+		<< resEuclid << ","
+		<< resHm1 << ","
+		<< resHm1RelEnergy << ","
+		<< resHm1RelRho << ","
+		<< poissonRelL2 << ","
+		<< poissonRelH1 << ","
+		<< strongResL2 << ","
+		<< strongResRelEnergy << ","
+		<< strongResRelRho << ","
+		<< strongResMaxAbs << ","
+		<< "NA,NA,NA,"
+		<< muShift << ","
+		<< u[].min << ","
+		<< u[].max << ","
+		<< rhoFromPhi[].max << ","
+		<< int2d(Th)(rhoFromPhi) << ","
+		<< rhoL2Now << ","
+		<< energyPhiNow << ","
+		<< JNow << ","
+		<< activeAreaNow << ","
+		<< plateauAreaNow << ","
+		<< plateauFracNow << ","
+		<< relRhoDesignNow << ","
+		<< u[].max-c2Phi << ","
+		<< defectL2Now << ","
+		<< normalizedDefectNow << ","
+		<< gradRhoL2Now << ","
+		<< "NA,NA,"
+		<< "EPS_END"
+		<< endl;
+
+	// ------------------------------------------------------------
+	// Mesh adaptation between continuation stages.
+	// ------------------------------------------------------------
+	if (useAdaptMesh == 1 && (ieps < nEpsPhi-1 || adaptAfterLastEps == 1))
+	{
+		tAdapt = clock();
+		rhoFromPhi = ffun(u);
+		gradPhiMag = sqrt(dx(u)^2 + dy(u)^2);
+
+		real maxGradPhi = gradPhiMag[].max;
+		real hTarget = adaptSafety*epsPhi/max(maxGradPhi, 1e-12);
+		real hMinUsed = max(adaptHMin, min(adaptHMax, hTarget));
+		real ntOld = Th.nt;
+		real ndofOld = Vh.ndof;
+		real rhoMassBeforeAdapt = int2d(Th)(rhoFromPhi);
+		real rhoMaxBeforeAdapt = rhoFromPhi[].max;
+
+		cout
+			<< "ADAPT_START "
+			<< "ieps=" << ieps
+			<< " nt=" << ntOld
+			<< " ndof=" << ndofOld
+			<< " hMinUsed=" << hMinUsed
+			<< " hMax=" << adaptHMax
+			<< " err=" << adaptErr
+			<< endl;
+
+		if (plt == 1 && plotAdaptOverlay == 1)
+		{
+			plot(Th, rhoFromPhi, fill=true, value=true, wait=false, nbiso=60,
+				cmm="Before adapt: rho=f(u) with mesh overlay");
+		}
+
+		Th = adaptmesh(
+			Th,
+			rhoFromPhi,
+			u,
+			err=adaptErr,
+			errg=adaptErrG,
+			hmin=hMinUsed,
+			hmax=adaptHMax,
+			nbvx=adaptNbVx,
+			ratio=adaptRatio,
+			anisomax=adaptAnisoMax,
+			nbsmooth=adaptNbSmooth,
+			verbosity=adaptVerbosity
+		);
+
+		// Important: interpolate/rebind all FE functions after adaptmesh.
+		T = T;
+		phiDesign = phiDesign;
+		rhoDesign = rhoDesign;
+		u = u;
+		du = 0;
+		uTrial = u;
+		uOld = u;
+		rhoFromPhi = ffun(u);
+		gradTNorm = sqrt(dx(T)^2 + dy(T)^2);
+		activeDesign = (rhoDesign > activeThreshold*rhoAmp);
+		plateauDesign = (rhoDesign > plateauThreshold*rhoAmp);
+
+		// Rebuild matrices on adapted mesh.
+		K = a(Vh,Vh);
+		M = m(Vh,Vh);
+
+		// Refresh design norms/diagnostics on the adapted mesh.
+		rhoDesignMass = int2d(Th)(rhoDesign);
+		rhoDesignL2 = sqrt(int2d(Th)(rhoDesign^2));
+		phiDesignMax = phiDesign[].max;
+		phiDesignMin = phiDesign[].min;
+
+		real ntNew = Th.nt;
+		real ndofNew = Vh.ndof;
+		real rhoMassAfterAdapt = int2d(Th)(rhoFromPhi);
+		real rhoMaxAfterAdapt = rhoFromPhi[].max;
+		real massRelChange = abs(rhoMassAfterAdapt-rhoMassBeforeAdapt)/max(abs(rhoMassBeforeAdapt), 1e-30);
+		real maxRhoRelChange = abs(rhoMaxAfterAdapt-rhoMaxBeforeAdapt)/max(abs(rhoMaxBeforeAdapt), 1e-30);
+		real adaptTime = clock()-tAdapt;
+
+		cout
+			<< "ADAPT_DONE "
+			<< "ieps=" << ieps
+			<< " ntNew=" << ntNew
+			<< " ndofNew=" << ndofNew
+			<< " massRelChange=" << massRelChange
+			<< " time=" << adaptTime
+			<< endl;
+
+		humanlog
+			<< "ADAPT_DONE "
+			<< "ieps=" << ieps << " "
+			<< "ntOld=" << ntOld << " "
+			<< "ndofOld=" << ndofOld << " "
+			<< "ntNew=" << ntNew << " "
+			<< "ndofNew=" << ndofNew << " "
+			<< "epsPhi=" << epsPhi << " "
+			<< "maxGradPhi=" << maxGradPhi << " "
+			<< "hTarget=" << hTarget << " "
+			<< "hMinUsed=" << hMinUsed << " "
+			<< "hMax=" << adaptHMax << " "
+			<< "err=" << adaptErr << " "
+			<< "rhoMassAfter=" << rhoMassAfterAdapt << " "
+			<< "rhoMaxAfter=" << rhoMaxAfterAdapt << " "
+			<< "massRelChange=" << massRelChange << " "
+			<< "time=" << adaptTime
+			<< endl;
+
+		adaptlog
+			<< "ADAPT" << ","
+			<< runTag << ","
+			<< ieps << ","
+			<< ntOld << ","
+			<< ndofOld << ","
+			<< ntNew << ","
+			<< ndofNew << ","
+			<< epsPhi << ","
+			<< maxGradPhi << ","
+			<< hTarget << ","
+			<< hMinUsed << ","
+			<< adaptHMax << ","
+			<< adaptErr << ","
+			<< adaptErrG << ","
+			<< adaptRatio << ","
+			<< adaptAnisoMax << ","
+			<< rhoMassBeforeAdapt << ","
+			<< rhoMaxBeforeAdapt << ","
+			<< rhoMassAfterAdapt << ","
+			<< rhoMaxAfterAdapt << ","
+			<< massRelChange << ","
+			<< maxRhoRelChange << ","
+			<< adaptTime << ","
+			<< "ADAPT_DONE"
+			<< endl;
+
+		if (plt == 1 && plotAdaptOverlay == 1)
+		{
+			plot(Th, rhoFromPhi, fill=true, value=true, wait=false, nbiso=60,
+				cmm="After adapt: rho=f(u) with adapted mesh overlay");
+		}
+
+		savevtk(vtkDir + "/" + runTag + "_adapt_stage_" + ieps + ".vtu", Th, u, rhoFromPhi, rhoDesign, phiDesign,
+			dataname="phi rho rhoDesign phiDesign");
+	}
+}
+
+// ----------------------------
+// Final solution and diagnostics
+// ----------------------------
+/* inline ComputeMetrics */
+rhoFromPhi = ffun(u);
+activeFinal = (rhoFromPhi > activeThreshold*rhoAmp);
+plateauFinal = (rhoFromPhi > plateauThreshold*rhoAmp);
+
+rr.resize(Vh.ndof);
+zz.resize(Vh.ndof);
+rr = 0.0;
+zz = 0.0;
+rr = ResidualForm(0, Vh);
+resEuclid = sqrt(rr'*rr);
+zz = K^-1*rr;
+
+rrzzLocal = rr'*zz;
+if (rrzzLocal < 0.0)
+	rrzzLocal = abs(rrzzLocal);
+
+resHm1 = sqrt(rrzzLocal);
+
+tmp[] = M*rhoFromPhi[];
+phiCheck[] = K^-1*tmp[];
+
+rhoL2Now = sqrt(int2d(Th)(rhoFromPhi^2));
+energyPhiNow = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+
+resHm1RelEnergy = resHm1/max(energyPhiNow, 1e-30);
+resHm1RelRho = resHm1/max(rhoL2Now, 1e-30);
+
+poissonRelL2 = sqrt(int2d(Th)((phiCheck-u)^2))/max(sqrt(int2d(Th)(u^2)), 1e-30);
+poissonRelH1 = sqrt(int2d(Th)(
+	(dx(phiCheck-u))^2
+	+ (dy(phiCheck-u))^2
+))/max(energyPhiNow, 1e-30);
+
+strongResidualField = dxx(u) + dyy(u) + ffun(u);
+strongResL2 = sqrt(int2d(Th)(strongResidualField^2));
+strongResRelEnergy = strongResL2/max(energyPhiNow, 1e-30);
+strongResRelRho = strongResL2/max(rhoL2Now, 1e-30);
+strongResMaxAbs = max(abs(strongResidualField[].min), abs(strongResidualField[].max));
+
+JNow = 0.5*int2d(Th)(dx(u)^2 + dy(u)^2) - int2d(Th)(Ffun(u));
+
+activeAreaNow = int2d(Th)(activeFinal);
+plateauAreaNow = int2d(Th)(plateauFinal);
+plateauFracNow = plateauAreaNow/max(activeAreaNow, 1e-30);
+
+relRhoDesignNow = sqrt(int2d(Th)((rhoFromPhi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+
+defectFinal = -dy(u)*dx(rhoFromPhi) + dx(u)*dy(rhoFromPhi);
+defectL2Now = sqrt(int2d(Th)(defectFinal^2));
+gradRhoL2Now = sqrt(int2d(Th)(dx(rhoFromPhi)^2 + dy(rhoFromPhi)^2));
+normalizedDefectNow = defectL2Now/max(gradRhoL2Now*energyPhiNow, 1e-30);
+
+
+cout
+	<< "FINAL "
+	<< "resH-1=" << resHm1
+	<< " poissonRel=" << poissonRelL2
+	<< " strongL2=" << strongResL2
+	<< " maxPhi=" << u[].max
+	<< " maxRho=" << rhoFromPhi[].max
+	<< " mass=" << int2d(Th)(rhoFromPhi)
+	<< " relDesign=" << relRhoDesignNow
+	<< endl;
+
+humanlog
+	<< "FINAL "
+	<< "resEuclid=" << resEuclid << " "
+	<< "resHm1=" << resHm1 << " "
+	<< "resHm1RelEnergy=" << resHm1RelEnergy << " "
+	<< "resHm1RelRho=" << resHm1RelRho << " "
+	<< "poissonRelL2=" << poissonRelL2 << " "
+	<< "poissonRelH1=" << poissonRelH1 << " "
+	<< "strongResL2=" << strongResL2 << " "
+	<< "strongResRelEnergy=" << strongResRelEnergy << " "
+	<< "strongResRelRho=" << strongResRelRho << " "
+	<< "strongResMaxAbs=" << strongResMaxAbs << " "
+	<< "minPhi=" << u[].min << " "
+	<< "maxPhi=" << u[].max << " "
+	<< "c1Phi=" << c1Phi << " "
+	<< "c2Phi=" << c2Phi << " "
+	<< "epsPhi=" << epsPhi << " "
+	<< "maxRho=" << rhoFromPhi[].max << " "
+	<< "massRho=" << int2d(Th)(rhoFromPhi) << " "
+	<< "relRhoDesign=" << relRhoDesignNow << " "
+	<< "annularCheckMaxPhiMinusC2=" << u[].max-c2Phi << " "
+	<< "normalizedDefect=" << normalizedDefectNow << " "
+	<< "J=" << JNow
+	<< endl;
+
+humanlog
+	<< "FINAL_BAND "
+	<< "activeArea=" << activeAreaNow << " "
+	<< "plateauArea=" << plateauAreaNow << " "
+	<< "plateauFraction=" << plateauFracNow
+	<< endl;
+
+csvlog
+	<< "FINAL" << ","
+	<< runTag << ","
+	<< "NA,NA,"
+	<< epsPhi << ","
+	<< "NA,"
+	<< Th.nt << ","
+	<< Vh.ndof << ","
+	<< resEuclid << ","
+	<< resHm1 << ","
+	<< resHm1RelEnergy << ","
+	<< resHm1RelRho << ","
+	<< poissonRelL2 << ","
+	<< poissonRelH1 << ","
+		<< strongResL2 << ","
+		<< strongResRelEnergy << ","
+		<< strongResRelRho << ","
+		<< strongResMaxAbs << ","
+	<< "NA,NA,NA,"
+	<< muShift << ","
+	<< u[].min << ","
+	<< u[].max << ","
+	<< rhoFromPhi[].max << ","
+	<< int2d(Th)(rhoFromPhi) << ","
+	<< rhoL2Now << ","
+	<< energyPhiNow << ","
+	<< JNow << ","
+	<< activeAreaNow << ","
+	<< plateauAreaNow << ","
+	<< plateauFracNow << ","
+	<< relRhoDesignNow << ","
+	<< u[].max-c2Phi << ","
+	<< defectL2Now << ","
+	<< normalizedDefectNow << ","
+	<< gradRhoL2Now << ","
+	<< "NA,NA,"
+	<< "FINAL"
+	<< endl;
+
+summary
+	<< "runTag " << runTag << endl
+	<< "meshFile " << meshFile << endl
+	<< "nt " << Th.nt << endl
+	<< "ndof " << Vh.ndof << endl
+	<< "alphaT1 " << alphaT1 << endl
+	<< "alphaT2 " << alphaT2 << endl
+	<< "epsTRatio " << epsTRatio << endl
+	<< "betaPhi1 " << betaPhi1 << endl
+	<< "betaPhi2 " << betaPhi2 << endl
+	<< "c1Phi " << c1Phi << endl
+	<< "c2Phi " << c2Phi << endl
+	<< "epsPhi " << epsPhi << endl
+	<< "resEuclid " << resEuclid << endl
+	<< "resHm1 " << resHm1 << endl
+	<< "resHm1RelEnergy " << resHm1RelEnergy << endl
+	<< "resHm1RelRho " << resHm1RelRho << endl
+	<< "poissonRelL2 " << poissonRelL2 << endl
+	<< "poissonRelH1 " << poissonRelH1 << endl
+	<< "strongResL2 " << strongResL2 << endl
+	<< "strongResRelEnergy " << strongResRelEnergy << endl
+	<< "strongResRelRho " << strongResRelRho << endl
+	<< "strongResMaxAbs " << strongResMaxAbs << endl
+	<< "massRho " << int2d(Th)(rhoFromPhi) << endl
+	<< "maxRho " << rhoFromPhi[].max << endl
+	<< "activeArea " << activeAreaNow << endl
+	<< "plateauArea " << plateauAreaNow << endl
+	<< "plateauFrac " << plateauFracNow << endl
+	<< "relRhoDesign " << relRhoDesignNow << endl
+	<< "annularPhiMinusC2 " << u[].max-c2Phi << endl
+	<< "normalizedDefect " << normalizedDefectNow << endl
+	<< "J " << JNow << endl
+	<< "timeTotal " << clock()-tGlobal << endl;
+
+if (plt == 1 && plotFinal == 1)
+{
+	plot(T, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Torsion T");
+
+	plot(Th, rhoDesign, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Designed rhoDesign = g_T(T), mesh overlay");
+
+	plot(phiDesign, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Poisson initializer phiDesign");
+
+	plot(u, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final semilinear phi");
+
+	plot(Th, rhoFromPhi, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final semilinear rho=f(phi), mesh overlay");
+
+	plot(defectFinal, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final stationarity defect");
+}
+
+// ----------------------------
+// Save fields for simulation.
+// ----------------------------
+savemesh(Th, outMesh);
+
+{
+	ofstream frho(outRhoDof);
+	frho << rhoFromPhi[];
+}
+
+{
+	ofstream fphi(outPhiDof);
+	fphi << u[];
+}
+
+savevtk(outVTK, Th, T, rhoDesign, phiDesign, u, rhoFromPhi, defectDesign, defectFinal, gradTNorm, phiCheck,
+	dataname="T rhoDesign phiDesign phiFinal rhoFinal defectDesign defectFinal gradTNorm phiCheck");
+
+cout << "EXPORT mesh=" << outMesh << " rho=" << outRhoDof << " phi=" << outPhiDof << " vtk=" << outVTK << endl;
+cout << "TIME_TOTAL " << clock()-tGlobal << endl;
+cout << "========== END STRATEGY A ADAPTIVE TORSION NEWTON ==========" << endl;
+
+humanlog << "EXPORT mesh=" << outMesh << " rho=" << outRhoDof << " phi=" << outPhiDof << " vtk=" << outVTK << endl;
+humanlog << "TIME_TOTAL " << clock()-tGlobal << endl;
+humanlog << "END runTag=" << runTag << endl;

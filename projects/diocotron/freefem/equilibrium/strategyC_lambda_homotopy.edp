@@ -1,0 +1,825 @@
+// ================================================================
+// Strategy C: homotopy from designed torsion band to semilinear equilibrium.
+//
+// 1. Solve torsion potential T:
+//		-Delta T = 1, T=0 on boundary.
+//
+// 2. Build designed localized band:
+//		rhoDesign = g_T(T)
+//		          = sigma_T(T-c1T) - sigma_T(T-c2T).
+//
+// 3. Compute Poisson-consistent initializer:
+//		-Delta phiDesign = rhoDesign, phiDesign=0.
+//
+// 4. Define a fixed semilinear window:
+//		f(phi) = sigma_phi(phi-c1Phi) - sigma_phi(phi-c2Phi),
+//		with c1Phi,c2Phi chosen from phiDesign scale.
+//
+// 5. Homotopy continuation:
+//		-Delta u = (1-lambda)*rhoDesign + lambda*f(u),
+//		lambda: 0 -> 1.
+//
+// At lambda=0, u=phiDesign exactly.
+// At lambda=1, u solves the true semilinear equilibrium.
+// ================================================================
+
+load "gmsh"
+load "iovtk"
+
+// ----------------------------
+// Parameters
+// ----------------------------
+int bLabel = 1;
+int plt = 1;
+int plotDuringNewton = 1;
+int verboseLS = 0;
+
+// Mesh file.
+//string meshFile = "iter_wall.mesh";
+string meshFile = "iter.msh";
+
+// Torsion-designed band parameters.
+real alphaT1 = 0.80;
+real alphaT2 = 0.85;
+real epsTRatio = 0.12;
+real rhoAmp = 1.0;
+
+// Semilinear f(phi) window parameters from phiDesign scale.
+// Suggested first Strategy C test: betaPhi1=0.72, betaPhi2=0.84.
+real betaPhi1 = 0.72;
+real betaPhi2 = 0.84;
+
+// Fixed semilinear smoothing for first Strategy C test.
+// Keep fixed while lambda-continuing. Sharpen later only if the branch survives.
+real epsPhiRatio = 0.16;
+
+// Lambda continuation.
+int nLambda = 11;
+real[int] lambdaList(nLambda);
+lambdaList[0] = 0.00;
+lambdaList[1] = 0.05;
+lambdaList[2] = 0.10;
+lambdaList[3] = 0.20;
+lambdaList[4] = 0.35;
+lambdaList[5] = 0.50;
+lambdaList[6] = 0.65;
+lambdaList[7] = 0.80;
+lambdaList[8] = 0.90;
+lambdaList[9] = 0.95;
+lambdaList[10] = 1.00;
+
+// Newton parameters.
+int maxIt = 70;
+real tolRes = 1e-8;
+real tolNewton = 1e-10;
+real betaLS = 0.5;
+real armijoC = 1e-6;
+real alphaMin = 1e-7;
+int maxBacktrack = 30;
+
+// Shifted Newton stabilization.
+real muShift = 2.0;
+real muMin = 0.20;
+real muMax = 40.0;
+
+// Branch preservation.
+// Keep weak, because lambda-continuation should guide branch tracking.
+// Increase designRelLimitAbs/designRelGrowth if too strict.
+real massFloorFraction = 0.005;
+real rhoMaxFloor = 0.01;
+
+// Optional closeness limiter to prevent immediate branch jumps.
+// Set useDesignLimiter=0 if it prevents convergence.
+int useDesignLimiter = 1;
+real designRelGrowth = 1.50;
+real designRelLimitAbs = 0.35;
+
+// Repeated stagnation stop.
+int maxStagnation = 5;
+real stagnationTol = 1e-5;
+
+// Outputs.
+string outMesh = "equilibrium_mesh.msh";
+string outRhoDof = "rho_dof.txt";
+string outPhiDof = "phi_dof.txt";
+string outVTK = "strategyC_lambda_homotopy.vtu";
+
+// ----------------------------
+// Timing
+// ----------------------------
+real tGlobal = clock();
+real tBlock;
+real tSolve;
+real tResidual;
+
+// ----------------------------
+// Header
+// ----------------------------
+cout << endl;
+cout << "========== START STRATEGY C LAMBDA HOMOTOPY ==========" << endl;
+cout << "C_HEADER "
+	<< "ilam lambda k res nd alpha bt muShift "
+	<< "minU maxU maxRho massRho relRhoDesign defectNorm annularPhiMinusC2 status"
+	<< endl;
+
+// ----------------------------
+// Mesh and FE spaces
+// ----------------------------
+tBlock = clock();
+mesh Th = gmshload(meshFile);
+cout << "MESH nt=" << Th.nt << " loadTime=" << clock()-tBlock << endl;
+
+tBlock = clock();
+fespace Vh(Th, P2);
+Vh T, phiDesign, rhoDesign, rhoSemi, rhoHom;
+Vh u, du, v, uTrial, uOld, tmp;
+Vh defectDesign, defectFinal, defectCurrent, gradTNorm;
+Vh activeDesign, plateauDesign, activeCurrent, plateauCurrent;
+cout << "SPACE ndof=" << Vh.ndof << " allocTime=" << clock()-tBlock << endl;
+
+// ----------------------------
+// Torsion solve
+// ----------------------------
+problem Torsion(T, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		dx(T)*dx(v)
+		+ dy(T)*dy(v)
+	)
+	- int2d(Th)(
+		1.0*v
+	)
+	+ on(bLabel, T=0);
+
+tSolve = clock();
+Torsion;
+real torsionTime = clock()-tSolve;
+
+real Tmax = T[].max;
+real Tmin = T[].min;
+
+if (Tmax <= 1e-14)
+{
+	cout << "ERROR Tmax_too_small check_bLabel=" << bLabel << endl;
+	exec("exit 1");
+}
+
+real c1T = alphaT1*Tmax;
+real c2T = alphaT2*Tmax;
+real widthT = c2T-c1T;
+real epsT = epsTRatio*widthT;
+
+cout << "TORSION "
+	<< "Tmin=" << Tmin << " "
+	<< "Tmax=" << Tmax << " "
+	<< "alphaT1=" << alphaT1 << " "
+	<< "alphaT2=" << alphaT2 << " "
+	<< "c1T=" << c1T << " "
+	<< "c2T=" << c2T << " "
+	<< "widthT=" << widthT << " "
+	<< "epsTRatio=" << epsTRatio << " "
+	<< "epsT=" << epsT << " "
+	<< "time=" << torsionTime
+	<< endl;
+
+// ----------------------------
+// Torsion-window functions g_T.
+// ----------------------------
+func real sigmaT(real z)
+{
+	real zz = z/epsT;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real gT(real s)
+{
+	return rhoAmp*(sigmaT(s-c1T) - sigmaT(s-c2T));
+}
+
+rhoDesign = gT(T);
+gradTNorm = sqrt(dx(T)^2 + dy(T)^2);
+activeDesign = (rhoDesign > 0.05*rhoAmp);
+plateauDesign = (rhoDesign > 0.90*rhoAmp);
+
+real rhoDesignMass = int2d(Th)(rhoDesign);
+real rhoDesignL2 = sqrt(int2d(Th)(rhoDesign^2));
+real activeDesignArea = int2d(Th)(activeDesign);
+real plateauDesignArea = int2d(Th)(plateauDesign);
+
+cout << "RHO_DESIGN "
+	<< "rhoMin=" << rhoDesign[].min << " "
+	<< "rhoMax=" << rhoDesign[].max << " "
+	<< "rhoMass=" << rhoDesignMass << " "
+	<< "rhoL2=" << rhoDesignL2 << " "
+	<< "activeArea=" << activeDesignArea << " "
+	<< "plateauArea=" << plateauDesignArea << " "
+	<< "plateauFraction=" << plateauDesignArea/max(activeDesignArea, 1e-30)
+	<< endl;
+
+// ----------------------------
+// Poisson solve for phiDesign.
+// ----------------------------
+varf a(uu,vv)
+	=
+	int2d(Th)(
+		dx(uu)*dx(vv)
+		+ dy(uu)*dy(vv)
+	)
+	+ on(bLabel, uu=0);
+
+varf m(uu,vv)
+	=
+	int2d(Th)(
+		uu*vv
+	);
+
+matrix K = a(Vh,Vh);
+matrix M = m(Vh,Vh);
+
+tmp[] = M*rhoDesign[];
+phiDesign[] = K^-1*tmp[];
+
+real phiDesignMax = phiDesign[].max;
+real phiDesignMin = phiDesign[].min;
+real phiDesignL2 = sqrt(int2d(Th)(phiDesign^2));
+real phiDesignEnergy = sqrt(int2d(Th)(dx(phiDesign)^2 + dy(phiDesign)^2));
+
+defectDesign = -dy(phiDesign)*dx(rhoDesign) + dx(phiDesign)*dy(rhoDesign);
+real defectDesignL2 = sqrt(int2d(Th)(defectDesign^2));
+real gradRhoDesignL2 = sqrt(int2d(Th)(dx(rhoDesign)^2 + dy(rhoDesign)^2));
+real normalizedDefectDesign = defectDesignL2/max(gradRhoDesignL2*phiDesignEnergy, 1e-30);
+
+cout << "PHI_DESIGN "
+	<< "phiMin=" << phiDesignMin << " "
+	<< "phiMax=" << phiDesignMax << " "
+	<< "phiL2=" << phiDesignL2 << " "
+	<< "energy=" << phiDesignEnergy << " "
+	<< "defectL2=" << defectDesignL2 << " "
+	<< "normalizedDefect=" << normalizedDefectDesign
+	<< endl;
+
+if (phiDesignMax <= 1e-14)
+{
+	cout << "ERROR phiDesignMax_too_small cannot_define_phi_window" << endl;
+	exec("exit 1");
+}
+
+// ----------------------------
+// Define semilinear f(phi) levels from phiDesign scale.
+// ----------------------------
+real c1Phi = betaPhi1*phiDesignMax;
+real c2Phi = betaPhi2*phiDesignMax;
+real widthPhi = c2Phi-c1Phi;
+real epsPhi = epsPhiRatio*widthPhi;
+
+if (widthPhi <= 1e-14)
+{
+	cout << "ERROR widthPhi_too_small check_betaPhi" << endl;
+	exec("exit 1");
+}
+
+cout << "PHI_WINDOW "
+	<< "betaPhi1=" << betaPhi1 << " "
+	<< "betaPhi2=" << betaPhi2 << " "
+	<< "c1Phi=" << c1Phi << " "
+	<< "c2Phi=" << c2Phi << " "
+	<< "widthPhi=" << widthPhi << " "
+	<< "epsPhiRatio=" << epsPhiRatio << " "
+	<< "epsPhi=" << epsPhi << " "
+	<< "initAnnularCheck=" << phiDesignMax-c2Phi
+	<< endl;
+
+// ----------------------------
+// Semilinear f(phi) and derivative.
+// ----------------------------
+func real sigmaPhi(real z)
+{
+	real zz = z/epsPhi;
+
+	if (zz > 50.0)
+		return 1.0;
+
+	if (zz < -50.0)
+		return 0.0;
+
+	return 1.0/(1.0 + exp(-zz));
+}
+
+func real sigmaPhiP(real z)
+{
+	real S = sigmaPhi(z);
+	return S*(1.0-S)/epsPhi;
+}
+
+func real ffun(real s)
+{
+	return rhoAmp*(sigmaPhi(s-c1Phi) - sigmaPhi(s-c2Phi));
+}
+
+func real dffun(real s)
+{
+	return rhoAmp*(sigmaPhiP(s-c1Phi) - sigmaPhiP(s-c2Phi));
+}
+
+// Initial u is exact lambda=0 solution.
+u = phiDesign;
+rhoSemi = ffun(u);
+
+real initRelRhoDesign = sqrt(int2d(Th)((rhoSemi-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+cout << "INIT_MATCH "
+	<< "fPhiMin=" << rhoSemi[].min << " "
+	<< "fPhiMax=" << rhoSemi[].max << " "
+	<< "fPhiMass=" << int2d(Th)(rhoSemi) << " "
+	<< "relRhoDesign=" << initRelRhoDesign
+	<< endl;
+
+// Current lambda is global for FreeFEM forms.
+real lambda = 0.0;
+
+// ----------------------------
+// Homotopy density, residual and shifted Newton problem.
+//
+// R_lambda(u;v)
+// = int grad(u).grad(v)
+//   - int ((1-lambda)*rhoDesign + lambda*f(u))*v.
+//
+// Newton:
+// ((1+mu)K - lambda*f'(u)M) du = -R_lambda(u)
+// ----------------------------
+varf ResidualForm(unused, vv)
+	=
+	int2d(Th)(
+		dx(u)*dx(vv)
+		+ dy(u)*dy(vv)
+		- ((1.0-lambda)*rhoDesign + lambda*ffun(u))*vv
+	)
+	+ on(bLabel, unused=0);
+
+func real residualNorm()
+{
+	real[int] r = ResidualForm(0, Vh);
+	return sqrt(r'*r);
+}
+
+problem NewtonStep(du, v, solver=sparsesolver)
+	=
+	int2d(Th)(
+		(1.0 + muShift)*(dx(du)*dx(v) + dy(du)*dy(v))
+		- lambda*dffun(u)*du*v
+	)
+	+ int2d(Th)(
+		dx(u)*dx(v)
+		+ dy(u)*dy(v)
+		- ((1.0-lambda)*rhoDesign + lambda*ffun(u))*v
+	)
+	+ on(bLabel, du=0);
+
+// ----------------------------
+// Helper diagnostics via macro.
+// ----------------------------
+macro UpdateDensities() {
+	rhoSemi = ffun(u);
+	rhoHom = (1.0-lambda)*rhoDesign + lambda*rhoSemi;
+	defectCurrent = -dy(u)*dx(rhoHom) + dx(u)*dy(rhoHom);
+} //
+
+// ================================================================
+// Lambda continuation.
+// ================================================================
+for (int ilam = 0; ilam < nLambda; ilam++)
+{
+	lambda = lambdaList[ilam];
+
+	muShift = max(muShift, 2.0);
+	UpdateDensities;
+
+	real massInitial = int2d(Th)(rhoHom);
+	real maxRhoInitial = rhoHom[].max;
+	real massFloor = massFloorFraction*max(massInitial, rhoDesignMass);
+	real relRhoDesignStart = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+	real defectNormStart = sqrt(int2d(Th)(defectCurrent^2))
+		/
+		max(
+			sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2))
+			*
+			sqrt(int2d(Th)(dx(u)^2 + dy(u)^2)),
+			1e-30
+		);
+
+	tResidual = clock();
+	real res = residualNorm();
+
+	cout << "LAMBDA_START "
+		<< ilam << " "
+		<< lambda << " "
+		<< "res=" << res << " "
+		<< "mass=" << massInitial << " "
+		<< "maxRho=" << maxRhoInitial << " "
+		<< "relRhoDesign=" << relRhoDesignStart << " "
+		<< "defectNorm=" << defectNormStart << " "
+		<< "maxU=" << u[].max << " "
+		<< "annularPhiMinusC2=" << u[].max-c2Phi << " "
+		<< "resTime=" << clock()-tResidual
+		<< endl;
+
+	int rejectCount = 0;
+	int stagnationCount = 0;
+
+	for (int k = 0; k < maxIt; k++)
+	{
+		tSolve = clock();
+		NewtonStep;
+		real newtonSolveTime = clock()-tSolve;
+
+		real nd = sqrt(int2d(Th)(
+			dx(du)^2 + dy(du)^2
+		));
+
+		UpdateDensities;
+
+		real maxu = u[].max;
+		real minu = u[].min;
+		real maxrho = rhoHom[].max;
+		real massrho = int2d(Th)(rhoHom);
+		real relRhoDesign = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+		real defectNorm = sqrt(int2d(Th)(defectCurrent^2))
+			/
+			max(
+				sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2))
+				*
+				sqrt(int2d(Th)(dx(u)^2 + dy(u)^2)),
+				1e-30
+			);
+
+		if (res < tolRes || nd < tolNewton)
+		{
+			cout << "C_LOG "
+				<< ilam << " "
+				<< lambda << " "
+				<< k << " "
+				<< res << " "
+				<< nd << " "
+				<< 0 << " "
+				<< 0 << " "
+				<< muShift << " "
+				<< minu << " "
+				<< maxu << " "
+				<< maxrho << " "
+				<< massrho << " "
+				<< relRhoDesign << " "
+				<< defectNorm << " "
+				<< maxu-c2Phi << " "
+				<< "CONVERGED"
+				<< endl;
+			break;
+		}
+
+		if (massrho < massFloor || maxrho < rhoMaxFloor)
+		{
+			cout << "C_LOG "
+				<< ilam << " "
+				<< lambda << " "
+				<< k << " "
+				<< res << " "
+				<< nd << " "
+				<< 0 << " "
+				<< 0 << " "
+				<< muShift << " "
+				<< minu << " "
+				<< maxu << " "
+				<< maxrho << " "
+				<< massrho << " "
+				<< relRhoDesign << " "
+				<< defectNorm << " "
+				<< maxu-c2Phi << " "
+				<< "RESET_TO_PREVIOUS"
+				<< endl;
+
+			u = phiDesign;
+			muShift = min(muMax, 1.5*muShift);
+			rejectCount++;
+
+			if (rejectCount >= 5)
+			{
+				cout << "LAMBDA_STOP " << ilam << " reason=too_many_branch_rejections" << endl;
+				break;
+			}
+
+			continue;
+		}
+
+		real alpha = 1.0;
+		real resOld = res;
+		uOld = u;
+		bool accepted = false;
+		int nBacktrack = 0;
+
+		while (alpha >= alphaMin && nBacktrack <= maxBacktrack)
+		{
+			uTrial = uOld + alpha*du;
+			u = uTrial;
+			UpdateDensities;
+
+			real trialMass = int2d(Th)(rhoHom);
+			real trialMaxRho = rhoHom[].max;
+			real trialMaxU = u[].max;
+			real trialRelRhoDesign = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+			real trialDefectNorm = sqrt(int2d(Th)(defectCurrent^2))
+				/
+				max(
+					sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2))
+					*
+					sqrt(int2d(Th)(dx(u)^2 + dy(u)^2)),
+					1e-30
+				);
+
+			bool branchOK =
+				(trialMass >= massFloor)
+				&& (trialMaxRho >= rhoMaxFloor);
+
+			if (useDesignLimiter == 1)
+			{
+				real designLimit = designRelGrowth*relRhoDesignStart + designRelLimitAbs*lambda;
+				branchOK = branchOK && (trialRelRhoDesign <= designLimit);
+			}
+
+			real resNew = residualNorm();
+
+			if (verboseLS == 1)
+			{
+				cout << "C_LS "
+					<< "ilam=" << ilam
+					<< " lambda=" << lambda
+					<< " k=" << k
+					<< " alpha=" << alpha
+					<< " resNew=" << resNew
+					<< " resOld=" << resOld
+					<< " mass=" << trialMass
+					<< " maxRho=" << trialMaxRho
+					<< " maxU=" << trialMaxU
+					<< " relRhoDesign=" << trialRelRhoDesign
+					<< " defectNorm=" << trialDefectNorm
+					<< " branchOK=" << branchOK
+					<< endl;
+			}
+
+			if (branchOK && resNew <= (1.0 - armijoC*alpha)*resOld)
+			{
+				res = resNew;
+				accepted = true;
+
+				cout << "C_LOG "
+					<< ilam << " "
+					<< lambda << " "
+					<< k << " "
+					<< res << " "
+					<< nd << " "
+					<< alpha << " "
+					<< nBacktrack << " "
+					<< muShift << " "
+					<< u[].min << " "
+					<< u[].max << " "
+					<< trialMaxRho << " "
+					<< trialMass << " "
+					<< trialRelRhoDesign << " "
+					<< trialDefectNorm << " "
+					<< trialMaxU-c2Phi << " "
+					<< "ACCEPT"
+					<< endl;
+
+				break;
+			}
+
+			alpha *= betaLS;
+			nBacktrack++;
+		}
+
+		if (!accepted)
+		{
+			u = uOld;
+			UpdateDensities;
+
+			real relRhoDesignFail = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+			real defectNormFail = sqrt(int2d(Th)(defectCurrent^2))
+				/
+				max(
+					sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2))
+					*
+					sqrt(int2d(Th)(dx(u)^2 + dy(u)^2)),
+					1e-30
+				);
+
+			cout << "C_LOG "
+				<< ilam << " "
+				<< lambda << " "
+				<< k << " "
+				<< resOld << " "
+				<< nd << " "
+				<< alpha << " "
+				<< nBacktrack << " "
+				<< muShift << " "
+				<< u[].min << " "
+				<< u[].max << " "
+				<< rhoHom[].max << " "
+				<< int2d(Th)(rhoHom) << " "
+				<< relRhoDesignFail << " "
+				<< defectNormFail << " "
+				<< u[].max-c2Phi << " "
+				<< "FAIL_LS"
+				<< endl;
+
+			muShift = min(muMax, 2.0*muShift);
+			cout << "SHIFT " << ilam << " " << k << " newMu=" << muShift << " reason=fail_ls" << endl;
+			rejectCount++;
+
+			if (rejectCount >= 5 || muShift >= muMax)
+			{
+				cout << "LAMBDA_STOP " << ilam << " reason=too_many_failed_steps" << endl;
+				break;
+			}
+
+			continue;
+		}
+
+		rejectCount = 0;
+
+		if (nBacktrack <= 1)
+		{
+			muShift = max(muMin, 0.85*muShift);
+		}
+		else if (nBacktrack >= 8)
+		{
+			muShift = min(muMax, 1.5*muShift);
+		}
+
+		real relDrop = abs(resOld-res)/max(resOld, 1e-30);
+
+		if (relDrop < stagnationTol)
+		{
+			stagnationCount++;
+			muShift = min(muMax, 1.25*muShift);
+			cout << "SHIFT " << ilam << " " << k << " newMu=" << muShift << " reason=stagnation" << endl;
+
+			if (stagnationCount >= maxStagnation)
+			{
+				cout << "LAMBDA_STOP " << ilam << " reason=repeated_stagnation" << endl;
+				break;
+			}
+		}
+		else
+		{
+			stagnationCount = 0;
+		}
+
+		if (plotDuringNewton == 1 && k % 5 == 0)
+		{
+			plot(u, fill=true, value=true, wait=false, nbiso=50,
+				cmm="Strategy C Newton u");
+
+			UpdateDensities;
+			plot(rhoHom, fill=true, value=true, wait=false, nbiso=50,
+				cmm="Strategy C rhoHom lambda=" + lambda + " res=" + res);
+		}
+	}
+
+	UpdateDensities;
+	real resEnd = residualNorm();
+	real relRhoDesignEnd = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+	real defectNormEnd = sqrt(int2d(Th)(defectCurrent^2))
+		/
+		max(
+			sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2))
+			*
+			sqrt(int2d(Th)(dx(u)^2 + dy(u)^2)),
+			1e-30
+		);
+
+	activeCurrent = (rhoHom > 0.05*rhoAmp);
+	plateauCurrent = (rhoHom > 0.90*rhoAmp);
+
+	cout << "LAMBDA_END "
+		<< ilam << " "
+		<< lambda << " "
+		<< "res=" << resEnd << " "
+		<< "maxRho=" << rhoHom[].max << " "
+		<< "massRho=" << int2d(Th)(rhoHom) << " "
+		<< "relRhoDesign=" << relRhoDesignEnd << " "
+		<< "defectNorm=" << defectNormEnd << " "
+		<< "activeArea=" << int2d(Th)(activeCurrent) << " "
+		<< "plateauArea=" << int2d(Th)(plateauCurrent) << " "
+		<< "plateauFraction=" << int2d(Th)(plateauCurrent)/max(int2d(Th)(activeCurrent), 1e-30) << " "
+		<< "maxU=" << u[].max << " "
+		<< "annularPhiMinusC2=" << u[].max-c2Phi
+		<< endl;
+
+	if (plt == 1)
+	{
+		plot(rhoHom, fill=true, value=true, wait=true, nbiso=60,
+			cmm="Strategy C rhoHom at lambda=" + lambda);
+
+		plot(u, fill=true, value=true, wait=true, nbiso=60,
+			cmm="Strategy C u at lambda=" + lambda);
+	}
+}
+
+// ----------------------------
+// Final solution and diagnostics.
+//
+// For lambda=1, rhoHom=rhoSemi=f(u).
+// If the homotopy stopped early, rhoHom is the last homotopy density.
+// We export rhoHom for consistency with the solved equation.
+// ----------------------------
+lambda = lambdaList[nLambda-1];
+UpdateDensities;
+
+real finalResidual = residualNorm();
+real finalRelRhoDesign = sqrt(int2d(Th)((rhoHom-rhoDesign)^2))/max(rhoDesignL2, 1e-30);
+real defectFinalL2 = sqrt(int2d(Th)(defectCurrent^2));
+real gradRhoFinalL2 = sqrt(int2d(Th)(dx(rhoHom)^2 + dy(rhoHom)^2));
+real gradPhiFinalL2 = sqrt(int2d(Th)(dx(u)^2 + dy(u)^2));
+real normalizedDefectFinal = defectFinalL2/max(gradRhoFinalL2*gradPhiFinalL2, 1e-30);
+
+activeCurrent = (rhoHom > 0.05*rhoAmp);
+plateauCurrent = (rhoHom > 0.90*rhoAmp);
+
+cout << "FINAL "
+	<< "lambda=" << lambda << " "
+	<< "res=" << finalResidual << " "
+	<< "minPhi=" << u[].min << " "
+	<< "maxPhi=" << u[].max << " "
+	<< "c1Phi=" << c1Phi << " "
+	<< "c2Phi=" << c2Phi << " "
+	<< "epsPhi=" << epsPhi << " "
+	<< "maxRhoHom=" << rhoHom[].max << " "
+	<< "massRhoHom=" << int2d(Th)(rhoHom) << " "
+	<< "maxRhoSemi=" << rhoSemi[].max << " "
+	<< "massRhoSemi=" << int2d(Th)(rhoSemi) << " "
+	<< "relRhoDesign=" << finalRelRhoDesign << " "
+	<< "annularCheckMaxPhiMinusC2=" << u[].max-c2Phi << " "
+	<< "normalizedDefect=" << normalizedDefectFinal
+	<< endl;
+
+cout << "FINAL_BAND "
+	<< "activeArea=" << int2d(Th)(activeCurrent) << " "
+	<< "plateauArea=" << int2d(Th)(plateauCurrent) << " "
+	<< "plateauFraction=" << int2d(Th)(plateauCurrent)/max(int2d(Th)(activeCurrent), 1e-30)
+	<< endl;
+
+if (plt == 1)
+{
+	plot(T, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Torsion T");
+
+	plot(rhoDesign, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Designed rhoDesign = g_T(T)");
+
+	plot(phiDesign, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Poisson initializer phiDesign");
+
+	plot(u, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final Strategy C phi");
+
+	plot(rhoHom, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final Strategy C rhoHom");
+
+	plot(rhoSemi, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final semilinear rhoSemi=f(phi)");
+
+	plot(defectCurrent, fill=true, value=true, wait=true, nbiso=60,
+		cmm="Final stationarity defect");
+}
+
+// ----------------------------
+// Save fields for simulation.
+// ----------------------------
+savemesh(Th, outMesh);
+
+{
+	ofstream frho(outRhoDof);
+	frho << rhoHom[];
+}
+
+{
+	ofstream fphi(outPhiDof);
+	fphi << u[];
+}
+
+savevtk(outVTK, Th, T, rhoDesign, phiDesign, u, rhoHom, rhoSemi, defectDesign, defectCurrent, gradTNorm,
+	dataname="T rhoDesign phiDesign phiFinal rhoHom rhoSemi defectDesign defectFinal gradTNorm");
+
+cout << "EXPORT "
+	<< outMesh << " "
+	<< outRhoDof << " "
+	<< outPhiDof << " "
+	<< outVTK
+	<< endl;
+
+cout << "TIME_TOTAL " << clock()-tGlobal << endl;
+cout << "========== END STRATEGY C LAMBDA HOMOTOPY ==========" << endl;
