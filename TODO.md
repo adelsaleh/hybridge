@@ -565,6 +565,23 @@ This remains the highest-priority new shared-API design project after the unstea
 - [ ] After the SciPy/PyPardiso host study, add reusable PETSc `Mat`/`KSP`/`PC` contexts for fixed Poisson and changing transport operators. Qualify single-rank configurations first, then root-assembled and distributed MPI runs over 2, 4, 8, 12, and 24 ranks with Hypre/MUMPS candidates; record sparsity-pattern and value reuse, setup/solve time, true residuals, peak memory, and parity with the matched Gaussian-annulus k=3 (`sigma=0.03`, `eps=0.05`) reference before selecting any production preset.
 ### Density Transport Study
 
+- [ ] Keep the positive-turbulence density nonnegative under SI-BDF2 without lowering the order, following the [positivity plan](docs/development/plans/positivity_kkt_bdf2.md) (`docs/development/plans/positivity_kkt_bdf2.md`; evidence: [static study](docs/research/solver_studies/positivity_projection_static_2026_10_05.md)).
+  - Done 2026-10-05 (branch `positivity-kkt`, kept out of the 0.1.0a2 release):
+    - `hdgfem/transport/positivity.DensityPositivityProjector`: host Numba and device warp-per-element CUDA paths;
+    - SI-Euler/SI-BDF2 hook (`density_positivity="kkt"`, `--density-positivity kkt`) correcting every transported density;
+      rho_h(0) stays uncorrected, since the first solves only see its moments (those of the exact density);
+    - the README-case preset `positive_turbulence_star_si_bdf2_kkt_p6_h005_dt0015625_t6p4_holoviz`;
+    - `tests/test_density_positivity.py`.
+    - Phase 2 manufactured order gates passed
+      ([results](docs/research/solver_studies/positivity_order_gates_2026_10_05.md),
+      `scripts/guiding_center/diagnostics/positivity_order_gates.py`).
+      The dt order was 1.97 (rotation) and 1.98 (coupled translating vortex).
+      The h order was 4.33 at p = 3 and 6.83 at p = 6 (steady ring).
+      Each matched the unconstrained runs, with errors within 1.1 times.
+  - Open:
+    - the full-size positive-case three-dt check to t = 0.5 with the projection (GPU, user-run);
+    - Phase 3 kernel tuning (100–250 ms per projection on recorded 360k-triangle states, target ≤ 5% of a step) and the dt study.
+
 - [ ] Build one reproducible benchmark matrix for density transport in the perturbed diocotron equilibrium, with a manufactured case used only for calibration. Compare the production raw-CUDA/AMGX HDG path, pure-host HDG sparse direct, `upwind-scc + ILU + Krylov`, and `upwind-scc + upwGS + Krylov`, plus a pure-DG host baseline on matched meshes, polynomial orders, time steps, tolerances, and time integrators. Record setup, assembly, graph/order construction, preconditioner/factorization, solve, reconstruction, total step time, peak memory, true residual, mass/energy drift, and density/potential error or equilibrium drift.
 - [ ] Instrument graph evolution before designing the direct solver. For HDG use the active trace-edge physics graph; for pure DG build and verify the element/block dependency graph from the assembled upwind operator. Per step, record changed directed edges, SCC count/size distribution, largest-SCC fraction, condensation-DAG depth and width, critical-path estimate, permutation churn, and graph-build time. Treat matrix-block coverage as a hard correctness gate: the existing physics SCC ordering is not itself a solver and cannot define an exact direct solve if assembled couplings are absent from its graph.
 - [ ] Implement a pure-host, Numba-only, level-synchronous SCC upwind direct reference for the pure-DG transport operator, keeping SciPy sparse direct only as an external correctness/timing reference. Pack SCC/block maps and couplings contiguously, cache graph data and pivoted local block factorizations with explicit invalidation when the velocity or matrix values change, reuse work buffers, and verify solution parity plus the unscaled true residual on singleton, cyclic, boundary, and changing-velocity cases.

@@ -10,9 +10,8 @@ def run_label(config):
         model = "Positive guiding-center turbulence"
         geometry = parameters.get("geometry", "disc")
         if geometry != "disc":
-            geometry = {"iter": "ITER", "horseshoe": "Horseshoe", "pacman": "Pac-Man"}.get(
-                geometry, geometry
-            )
+            geometry = {"iter": "ITER", "horseshoe": "Horseshoe", "pacman": "Pac-Man",
+                        "smooth-star": "star with island"}.get(geometry, geometry)
             model += f" ({geometry})"
     elif config.case == "euler_shaped_vortex_gas":
         geometry = parameters.get("geometry", "horseshoe")
@@ -29,4 +28,6 @@ def run_label(config):
         "predictor-corrector": "Predictor-corrector", "si-bdf2": "SI BDF2", "si-bdf3": "SI BDF3",
         "h1-bdf3": "H1-BDF3", "h2-bdf3": "H2-BDF3",
     }.get(config.time_scheme, config.time_scheme)
+    if getattr(config, "density_positivity", "none") == "kkt":
+        scheme += " + KKT positivity"
     return f"{model} | {scheme}"

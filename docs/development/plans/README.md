@@ -30,6 +30,9 @@ algorithm, API, backend, or release contracts.
   layering and reorganization by HDG operator family (transport AR; mixed DR and
   ADR, where DR is ADR at β = 0), shared-helper consolidation, the divergence
   bugs fixed first, the implemented layout, and its status.
+- [`positivity_kkt_bdf2.md`](positivity_kkt_bdf2.md): mass-conserving KKT
+  projection of guiding-center densities onto nonnegativity at element points
+  for SI-BDF2, why it keeps the convergence order, its cost, and the gates.
 
 ## Ownership And Lifecycle
 

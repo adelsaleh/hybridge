@@ -8,6 +8,16 @@ reproducibility but do not define current solver defaults or backend support.
   July 2026 p=6--8 AMGX configuration, tolerance and modal-trace sweeps, and
   fused raw-CUDA matrix-level parity and reconstruction checks.
 
+- [Positivity projection, static study](positivity_projection_static_2026_10_05.md):
+  where SI-BDF2 undershoots come from in the positive showcase, KKT projection
+  of recorded states, element-solver robustness, and the spatial order kept by
+  point constraints but lost by Bernstein constraints.
+
+- [Positivity projection, order gates](positivity_order_gates_2026_10_05.md):
+  manufactured SI-BDF2 runs with and without the KKT projection. A rotating
+  bump checks the dt order, and a steady ring the h order. A translating
+  nonnegative vortex couples the scheme to the HDG Poisson drift.
+
 - [Advection assembly baseline, RTX PRO 5000 Blackwell](advection_assembly_baseline_2026_10_03.md):
   native fused/split3, hybrid and pure-library (cuTENSOR/cuBLAS/MAGMA)
   assembly for p=4--9 in FP64 and FP32, stage-2 batched LU alone, the machine

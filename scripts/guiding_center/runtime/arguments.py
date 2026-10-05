@@ -213,6 +213,11 @@ def build_parser() -> GuidingCenterArgumentParser:
     parser.add_argument("--positivity-diagnostics", action=BooleanOptionalAction, default=None,
                         help="Measure polynomial bounds, negative mass, and every ARK stage; no limiter.")
     parser.add_argument("--positivity-tolerance", type=float)
+    parser.add_argument("--density-positivity", choices=("none", "kkt"), default=None,
+                        help="KKT projection of each SI-Euler/SI-BDF2 density onto nonnegativity at element "
+                             "points, conserving mass (device kernel for device runs).")
+    parser.add_argument("--density-positivity-points", choices=("quadrature+lattice", "quadrature+lattice+dense"),
+                        default=None, help="Points where the projection enforces nonnegativity.")
     parser.add_argument("--diocotron-diagnostics", action=BooleanOptionalAction, default=None,
                         help="Cache polar Fourier potential diagnostics for a disk diocotron_k run.")
     parser.add_argument("--diocotron-radial-points", type=int,

@@ -273,6 +273,21 @@ def run_guiding_center_case(
     )
     _report_projection_timings(config, initial_projection_timings, initial_density_projection_time,
                                label="initial_density_projection", prefix=config.diagnostics_prefix or preset_key)
+    density_projector = None
+    if config.density_positivity == "kkt":
+        from hdgfem.transport.positivity import DensityPositivityProjector
+        projector_backend = "device" if projection_backend == "cupy" else "host"
+        density_projector, _ = timed_call(
+            f"[gc:init] preparing KKT positivity projector ({projector_backend}, {config.density_positivity_points})",
+            _detail_verbosity(config),
+            lambda: DensityPositivityProjector(space, points=config.density_positivity_points,
+                                               backend=projector_backend))
+        # rho_h(0) is left uncorrected: the initial Poisson and first transport solves
+        # only see its moments, which are those of the exact nonnegative density, so
+        # the first correction is the post-processing of rho_h(dt).
+        if _phase_verbosity(config):
+            print("[gc:init] KKT positivity: rho_h(0) is not corrected; the first solves use the "
+                  "exact density's moments and the first correction acts on rho_h(dt)", flush=True)
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
@@ -311,6 +326,10 @@ def run_guiding_center_case(
             flush=True,
         )
 
+    # The L2 projection rho_h(0) has the exact initial density's moments against every
+    # DG(p) test function, and the same-mesh L2 transfer keeps them on a DG(p-1)
+    # Poisson space: the initial Poisson RHS is the callable's.
+    initial_poisson_source = project_same_mesh_field(rho_field, poisson_space)
     equilibrium_potential = None
     equilibrium_density = None
     equilibrium_potential_l2 = None
@@ -362,7 +381,7 @@ def run_guiding_center_case(
         poisson_initial_guess = solution_trace(equilibrium_result, poisson_space, reduced=False)
         # Keep the configured preconditioner policy for every scheme: a tau
         # change invalidates factors/hierarchies through with_options().
-        poisson_solver.set_source(project_same_mesh_field(rho_field, poisson_space))
+        poisson_solver.set_source(initial_poisson_source)
         poisson_solver.set_boundary_condition(case.potential_boundary_at(0.0))
 
     if poisson_solver is None:
@@ -371,7 +390,7 @@ def run_guiding_center_case(
             _detail_verbosity(config),
             lambda: DiffusionReactionHDGSolver(
                 poisson_space,
-                source=project_same_mesh_field(rho_field, poisson_space),
+                source=initial_poisson_source,
                 reaction=zero_reaction,
                 boundary_condition=case.potential_boundary_at(0.0),
                 options=poisson_options,
@@ -432,6 +451,7 @@ def run_guiding_center_case(
         config, case, space, rho_field, poisson_result, density_trace, potential_trace,
         transport_boundary_mode=transport_boundary_mode, poisson_solver=poisson_solver,
         positivity=positivity, recovery_record=record_poisson_recovery,
+        density_projector=density_projector,
     )
     if hasattr(stage_stepper, "initial_poisson_result"):
         poisson_result = stage_stepper.initial_poisson_result

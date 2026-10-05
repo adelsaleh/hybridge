@@ -4,8 +4,14 @@ The mesh, initial profile and solvers come from
 ``scripts/reports/gpu_showcase_setup.py`` and match
 ``examples/gpu_vortex_gas.py``; recording and validation controls stay out of
 that short example. ``--movie`` writes an MP4 of two Matplotlib panels and
-``--gif-mb`` optionally adds a byte-capped GIF. Every run records its code,
-environment and GPU-stack provenance. Run as
+``--gif-mb`` optionally adds a byte-capped GIF. ``--density-positivity kkt``
+(positive case) projects every transported density onto nonnegativity, with
+the device KKT projector, before its endpoint Poisson solve. Every run records
+its code, environment and GPU-stack provenance, one timing line per step
+(``<name>_steps.jsonl``) and periodic full-history checkpoints, so ``--resume``
+continues BDF2 exactly. SIGINT/SIGTERM or a ``<name>.stop`` file ends the run
+after the current step with a final checkpoint; ``--live-movie`` keeps the MP4
+playable while it is written. Run as
 ``python -m scripts.reports.record_gpu_showcase``.
 """
 
@@ -17,6 +23,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import signal
 import time
 import threading
 
@@ -25,6 +32,7 @@ import numpy as np
 import hdgfem as hdg
 from hdgfem.diagnostics import transport_velocity_diagnostics
 from hdgfem.io import HolovizScalarPanels
+from hdgfem.transport.positivity import POINT_SETS, DensityPositivityProjector
 from scripts.reports.gpu_showcase_setup import (
     COUNTS, ORDER, SEED, SIGMAS, poisson_solver, resolve_tau, showcase_mesh,
     showcase_profile, showcase_space, transport_solver)
@@ -140,15 +148,22 @@ def file_sha256(path):
     return digest.hexdigest()
 
 
-def save_restart(path, space, rho, potential, velocity, trace, step, args, tau, color_limits=None):
-    """Atomically preserve only the full-precision final endpoint, not its history."""
+def save_restart(path, space, rho, potential, velocity, trace, step, args, tau, color_limits=None,
+                 previous_rho=None, previous_velocity=None, reference=None):
+    """Atomically preserve the full-precision endpoint and, when present, its BDF2 history.
+
+    Version 2 adds the previous density and velocity, so a resumed run takes the
+    same BDF2 step the uninterrupted run would, and the t = 0 references of the
+    drift diagnostics. Version 1 files (endpoint only) still resume with Euler.
+    """
     import cupy as cp
     from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
     cspace = as_cupy_space(space)
     def coefficients(field):
         return cp.asnumpy(as_cupy_coefficients(field, cspace))
-    arrays = dict(version=1, step=step, dt=args.dt, h=args.h, order=ORDER,
-                  strength_mode=args.strength_mode, background=args.background,
+    arrays = dict(version=2, step=step, dt=args.dt, h=args.h, order=ORDER,
+                  strength_mode=args.strength_mode, density_positivity=args.density_positivity,
+                  background=args.background,
                   amplitude=args.amplitude, cutoff=args.cutoff, poisson_tau=tau,
                   node_coords=space.mesh.node_coords, triangles=space.mesh.triangles,
                   rho=coefficients(rho), phi=coefficients(potential.field),
@@ -157,6 +172,12 @@ def save_restart(path, space, rho, potential, velocity, trace, step, args, tau, 
         arrays[f"velocity_{index}"] = coefficients(component)
     if trace is not None:
         arrays["transport_trace"] = cp.asnumpy(cp.asarray(trace))
+    if previous_rho is not None and previous_velocity is not None:
+        arrays["previous_rho"] = coefficients(previous_rho)
+        for index, component in enumerate(previous_velocity.components):
+            arrays[f"previous_velocity_{index}"] = coefficients(component)
+    for key, value in (reference or {}).items():
+        arrays[f"reference_{key}"] = float(value)
     if color_limits is not None:
         arrays["color_limits"] = np.asarray(color_limits, dtype=float)
     path = Path(path)
@@ -208,13 +229,14 @@ def record(args):
     start_step = 0
     if args.resume:
         restart = np.load(args.resume, allow_pickle=False)
-        if int(restart["version"]) != 1:
+        if int(restart["version"]) not in (1, 2):
             raise ValueError("unsupported restart version")
         # Checkpoints written before the cutoff and tau options used these values.
-        defaults = dict(cutoff=8., poisson_tau=1000.)
+        defaults = dict(cutoff=8., poisson_tau=1000., density_positivity="none")
         requested = dict(dt=args.dt, h=args.h, strength_mode=args.strength_mode,
                          background=args.background, amplitude=args.amplitude,
-                         cutoff=args.cutoff, poisson_tau=tau)
+                         cutoff=args.cutoff, poisson_tau=tau,
+                         density_positivity=args.density_positivity)
         for key, value in requested.items():
             saved = restart[key].item() if key in restart else defaults[key]
             if saved != value:
@@ -247,7 +269,17 @@ def record(args):
     metadata["advection_stabilization"] = transport_recovery_options.get("advection_stabilization", "conflict-averaged-upwind")
     transport = transport_solver(space, **transport_recovery_options)
     previous_rho = previous_velocity = trace = None
+    # rho_h(0) stays uncorrected: the first solves only see its moments, which are
+    # those of the nonnegative profile. Each transported density is projected.
+    projector = projection = None
+    if args.density_positivity == "kkt":
+        projector = DensityPositivityProjector(space, points=args.density_positivity_points, backend="device")
+        metadata["positivity_projection"] = dict(points=args.density_positivity_points, steps=0,
+            max_flagged=0, max_correction_relative=0., max_mass_returned=0., seconds=0.)
     one = space.constant(1.)  # Reaction of the scaled BDF2 transport step.
+    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    cspace = as_cupy_space(space)
+    reference_mass, jacobians = cspace.quad_data.MKrf, cspace.mesh.aff_jacs
     rows = []
     positivity = None
     if args.strength_mode == "positive":
@@ -257,13 +289,31 @@ def record(args):
     potential = velocity = None
     transport_iterations = None
     accepted_step = start_step
+    reference = {}  # t = 0 enstrophy/energy/circulation, carried through resumes
+    stop_file = prefix.with_suffix(".stop")
+    stop_request = {}
+
     def checkpoint():
+        """Atomically write the accepted state with its BDF2 history."""
         if potential is not None and velocity is not None:
+            start = time.perf_counter()
             path = prefix.with_suffix(".restart.npz")
             save_restart(path, space, rho, potential, velocity, trace, accepted_step, args, tau,
-                         metadata.get("color_limits"))
+                         metadata.get("color_limits"), previous_rho, previous_velocity, reference)
             metadata["restart_checkpoint"] = display_path(path)
             metadata["checkpoint_step"] = accepted_step
+            metadata["checkpoint_seconds"] = time.perf_counter() - start
+            print(f"[checkpoint] step={accepted_step} t={accepted_step*args.dt:.6f} -> {display_path(path)} "
+                  f"({metadata['checkpoint_seconds']:.1f}s)", flush=True)
+
+    def request_stop(signum, frame):
+        """First signal: stop after the current step; a second one interrupts at once."""
+        if stop_request:
+            raise KeyboardInterrupt
+        stop_request["signal"] = signal.Signals(signum).name
+        print(f"[stop] {stop_request['signal']} received: finishing step, then checkpoint", flush=True)
+
+    previous_handlers = {sig: signal.signal(sig, request_stop) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
         potential = poisson.solve(initial_guess=(
             cp.asarray(restart["poisson_trace"], blocking=True) if restart is not None else None))
@@ -274,8 +324,16 @@ def record(args):
             def restored(key):
                 return field_from_cupy_coefficients(space, cp.asarray(restart[key], blocking=True), name=key)
             velocity = VectorDGField(tuple(restored(f"velocity_{i}") for i in range(2)))
-            # Endpoint-only restart: use one Euler step to rebuild BDF2 history.
-            metadata["restart_startup"] = "Euler, then BDF2"
+            if "previous_rho" in restart:
+                # Full history: the next step is the BDF2 step of the uninterrupted run.
+                previous_rho = restored("previous_rho")
+                previous_velocity = VectorDGField(tuple(restored(f"previous_velocity_{i}") for i in range(2)))
+                metadata["restart_startup"] = "exact BDF2 history"
+            else:
+                # Endpoint-only restart: use one Euler step to rebuild BDF2 history.
+                metadata["restart_startup"] = "Euler, then BDF2"
+            reference.update({key.removeprefix("reference_"): float(restart[key])
+                              for key in restart.files if key.startswith("reference_")})
             if "transport_trace" in restart:
                 trace = cp.asarray(restart["transport_trace"], blocking=True)
             restart.close()
@@ -300,13 +358,18 @@ def record(args):
             row.update({key: velocity_values[key] for key in VELOCITY_ROW_KEYS})
             if positivity is not None:
                 row.update(positivity.measure(rho))
+            if projection is not None:
+                row.update(projection)
             if not all(math.isfinite(row[key]) for key in (
                 "circulation", "enstrophy", "energy", "minimum", "maximum",
                 "potential_minimum", "potential_maximum")):
                 raise FloatingPointError("nonfinite field diagnostics; refusing to render the state")
-            if rows:
-                row.update(enstrophy_loss=1-row["enstrophy"]/rows[0]["enstrophy"],
-                           energy_drift=row["energy"]/rows[0]["energy"]-1)
+            if not reference:
+                reference.update(enstrophy=row["enstrophy"], energy=row["energy"],
+                                 circulation=row["circulation"])
+            row.update(enstrophy_loss=1-row["enstrophy"]/reference["enstrophy"],
+                       energy_drift=row["energy"]/reference["energy"]-1,
+                       circulation_drift=row["circulation"]/reference["circulation"]-1)
             rows.append(row)
             with prefix.with_suffix(".jsonl").open("a") as handle:
                 handle.write(json.dumps(row)+"\n")
@@ -391,7 +454,7 @@ def record(args):
                 if args.movie:
                     from hdgfem.io.movie import MovieWriter
 
-                    mp4 = MovieWriter(prefix.with_suffix(".mp4"), fps=args.fps)
+                    mp4 = MovieWriter(prefix.with_suffix(".mp4"), fps=args.fps, fragmented=args.live_movie)
                     stack.callback(mp4.close)
                 frame = panels.capture()
                 if gif is not None and not gif.append(frame):
@@ -414,14 +477,33 @@ def record(args):
                 viewer.update_fields((rho,), limits=(-limit, limit), captions=("t = 0.00",))
                 metadata.update(last_rendered_step=0, last_rendered_time=0.)
             metadata["completed_steps"] = start_step
+            steps_log = prefix.with_name(prefix.name + "_steps.jsonl").open("a")
+            stack.callback(steps_log.close)
+            loop_started = time.perf_counter()
+
+            def clock():
+                """Synchronized wall clock, so phase times include their GPU work."""
+                cp.cuda.runtime.deviceSynchronize()
+                return time.perf_counter()
+
+            def solver_timings(prefix_key, result):
+                timings = getattr(result, "timings", None)
+                return {} if timings is None else {
+                    f"{prefix_key}_{name}_seconds": float(getattr(timings, name, 0.) or 0.)
+                    for name in ("assembly", "solve", "reconstruction", "total")}
+
             for step in range(start_step+1, final_step+1):
                 if time.perf_counter()-started >= args.seconds:
                     metadata["status"] = "time_budget"
                     break
-                cp.cuda.runtime.deviceSynchronize()
+                if stop_request or stop_file.exists():
+                    metadata["status"] = "interrupted"
+                    metadata["stop_reason"] = stop_request.get("signal", f"stop file {display_path(stop_file)}")
+                    break
+                step_started = clock()
                 rhs, beta, _ = hdg.bdf2_transport_data(rho, velocity, args.dt,
                     previous_field=previous_rho, previous_velocity=previous_velocity)
-                cp.cuda.runtime.deviceSynchronize()
+                beta_done = clock()
                 if args.strength_mode == "positive":
                     transport.set_problem(rhs, beta, one, None)
                     result = solve_positive_transport(
@@ -430,21 +512,70 @@ def record(args):
                     # The example's call; only a resumed run seeds its first guess.
                     guess = dict(initial_guess=trace) if trace is not None and step == start_step+1 else {}
                     result = transport.solve(source=rhs, beta=beta, reaction=one, **guess)
+                transport_done = clock()
                 transport_iterations = result.global_solve_result.iteration_count
-                next_rho = result.field
+                next_rho = transported = result.field
+                if projector is not None:
+                    next_rho, projection = projector.project(next_rho, name="rho_h")
+                    summary = metadata["positivity_projection"]
+                    summary.update(steps=summary["steps"] + 1,
+                        max_flagged=max(summary["max_flagged"], projection["positivity_flagged"]),
+                        max_correction_relative=max(summary["max_correction_relative"],
+                                                    projection["positivity_correction_relative"]),
+                        max_mass_returned=max(summary["max_mass_returned"],
+                                              projection["positivity_mass_returned"]),
+                        seconds=summary["seconds"] + projection["positivity_projection_time"])
+                projection_done = clock()
                 next_potential = poisson.set_source(next_rho).solve()
-                previous_rho, previous_velocity, rho = rho, velocity, next_rho
-                potential = next_potential
-                velocity = hdg.perpendicular_vector_field(potential.flux)
-                trace = hdg.solution_trace(result, space)
-                accepted_step = step
+                next_velocity = hdg.perpendicular_vector_field(next_potential.flux)
+                next_trace = hdg.solution_trace(result, space)
+                poisson_done = clock()
+                # Commit the whole accepted state at once, so an interrupt never splits it.
+                previous_rho, previous_velocity, rho, potential, velocity, trace, accepted_step = (
+                    rho, velocity, next_rho, next_potential, next_velocity, next_trace, step)
                 metadata["completed_steps"] = step
+                if projector is not None:
+                    # KKT dissipation: exact enstrophy change and first-order energy change
+                    # (E = 1/2 int rho phi with zero wall potential; the dropped term is
+                    # 1/2 int d G d, quadratic in the correction d).
+                    before = as_cupy_coefficients(transported, cspace)
+                    after = as_cupy_coefficients(rho, cspace)
+                    correction = after - before
+                    mass_times = lambda c: jacobians[:, None] * (c @ reference_mass)
+                    enstrophy_change = .5 * float(cp.sum(mass_times(after) * after - mass_times(before) * before))
+                    energy_change = float(cp.sum(mass_times(correction)
+                                                 * as_cupy_coefficients(potential.field, cspace)))
+                    reference["kkt_enstrophy_total"] = reference.get("kkt_enstrophy_total", 0.) + enstrophy_change
+                    reference["kkt_energy_total"] = reference.get("kkt_energy_total", 0.) + energy_change
+                    projection = dict(projection, kkt_enstrophy_change=enstrophy_change,
+                                      kkt_energy_change=energy_change,
+                                      kkt_enstrophy_total=reference["kkt_enstrophy_total"],
+                                      kkt_energy_total=reference["kkt_energy_total"],
+                                      kkt_enstrophy_total_relative=reference["kkt_enstrophy_total"]/reference["enstrophy"],
+                                      kkt_energy_total_relative=reference["kkt_energy_total"]/reference["energy"])
+                    summary = metadata["positivity_projection"]
+                    summary.update(enstrophy_total=reference["kkt_enstrophy_total"],
+                                   energy_total=reference["kkt_energy_total"])
+                timing = dict(step=step, time=step*args.dt,
+                              transport_iterations=transport_iterations,
+                              poisson_iterations=potential.global_solve_result.iteration_count,
+                              bdf2_data_seconds=beta_done-step_started,
+                              transport_seconds=transport_done-beta_done,
+                              projection_seconds=projection_done-transport_done,
+                              poisson_seconds=poisson_done-projection_done,
+                              **solver_timings("transport", result), **solver_timings("poisson", potential))
+                if projection is not None:
+                    timing.update(projection)
+                measured = rendered = checkpointed = 0.
                 if step % args.every == 0 or step == final_step:
+                    measure_started = clock()
                     row = measure(step)
+                    measured = clock() - measure_started
                     print(json.dumps(row), flush=True)
                     if abs(row["enstrophy_loss"]) > args.max_loss:
                         metadata["status"] = "enstrophy_limit"
                         break
+                    render_started = clock()
                     if viewer:
                         viewer.update_fields((rho,), step=step, time_value=step*args.dt,
                             limits=(-limit, limit), captions=(f"t = {step*args.dt:.2f}",))
@@ -466,7 +597,26 @@ def record(args):
                         save_rasters(images, step)
                         if frames % 25 == 0:
                             Image.fromarray(frame).save(prefix.with_suffix(".png"))
+                    rendered = time.perf_counter() - render_started
                     save()
+                if args.checkpoint_every and step % args.checkpoint_every == 0:
+                    checkpoint_started = time.perf_counter()
+                    checkpoint()
+                    save()
+                    checkpointed = time.perf_counter() - checkpoint_started
+                timing.update(diagnostics_seconds=measured, render_seconds=rendered,
+                              checkpoint_seconds=checkpointed, step_seconds=time.perf_counter()-step_started)
+                steps_log.write(json.dumps(timing) + "\n")
+                steps_log.flush()
+                done = step - start_step
+                remaining = (time.perf_counter()-loop_started) / done * (final_step-step)
+                kkt = ("" if projection is None else
+                       f" | KKT {projection['positivity_flagged']} flagged, min {projection['positivity_min_before']:.1e}"
+                       f" -> {projection['positivity_min_after']:.0e}, {timing['projection_seconds']*1e3:.0f} ms")
+                print(f"[step {step}/{final_step}] t={step*args.dt:.5f} | transport {transport_iterations} it "
+                      f"{timing['transport_seconds']:.2f}s | Poisson {timing['poisson_iterations']} it "
+                      f"{timing['poisson_seconds']:.2f}s{kkt} | step {timing['step_seconds']:.2f}s | "
+                      f"ETA {remaining/3600:.2f} h", flush=True)
             else:
                 metadata["status"] = "completed"
             if rows[-1]["step"] != metadata["completed_steps"]:
@@ -498,6 +648,8 @@ def record(args):
         metadata.update(status="failed", error=repr(error))
         raise
     finally:
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
         cleanup_error = None
         for label, finish in (("final checkpoint", checkpoint), ("metadata save", save), ("transport close", transport.close),
                               ("Poisson close", poisson.close)):
@@ -545,6 +697,10 @@ def main():
     parser.add_argument("--checkpoint", action="store_true", default=True,
                         help="compatibility flag: full final checkpoints are always saved")
     parser.add_argument("--resume", help="continue from a full .restart.npz checkpoint")
+    parser.add_argument("--checkpoint-every", type=int, default=512,
+                        help="also write the atomic full-history checkpoint every N steps (0: only at the end)")
+    parser.add_argument("--live-movie", action="store_true",
+                        help="write a fragmented MP4 that stays playable while recording or after a kill")
     parser.add_argument("--plot-background", default="#dfe3e8",
                         help="Matplotlib color of the coordinate boxes around the domain")
     parser.add_argument("--negative-color", default="#ff2d55",
@@ -553,6 +709,9 @@ def main():
                         help="positive case: flag density below -threshold * color limit")
     parser.add_argument("--profile")
     parser.add_argument("--strength-mode", choices=("balanced", "positive"), default="balanced")
+    parser.add_argument("--density-positivity", choices=("none", "kkt"), default="none",
+                        help="positive case: KKT-project every transported density before its Poisson solve")
+    parser.add_argument("--density-positivity-points", choices=POINT_SETS, default=POINT_SETS[0])
     parser.add_argument("--background", type=float, default=0.)
     parser.add_argument("--amplitude", type=float, default=4.)
     parser.add_argument("--output", default="outputs/readme_showcase")
@@ -561,12 +720,14 @@ def main():
     from matplotlib.colors import is_color_like
 
     if (any(not math.isfinite(value) or value <= 0 for value in (args.h, args.dt, args.seconds))
-            or args.steps < 1 or args.every < 1):
+            or args.steps < 1 or args.every < 1 or args.checkpoint_every < 0):
         parser.error("h, dt, steps, every and seconds must be positive")
     if not math.isfinite(args.max_loss) or not 0 < args.max_loss < 1:
         parser.error("max-loss must lie strictly between zero and one")
     if not math.isfinite(args.background) or args.background < 0:
         parser.error("background must be finite and nonnegative")
+    if args.density_positivity == "kkt" and args.strength_mode != "positive":
+        parser.error("density-positivity kkt needs the positive strength mode")
     if not math.isfinite(args.amplitude) or args.amplitude <= 0:
         parser.error("amplitude must be finite and positive")
     if not math.isfinite(args.cutoff) or args.cutoff <= 0:
