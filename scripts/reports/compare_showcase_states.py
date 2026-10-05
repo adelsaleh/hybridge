@@ -18,8 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
-from hdgfem.core.field_ops import field_linear_combination
-from hdgfem.io.raster import RasterGeometry
+from hybridge.core.field_ops import field_linear_combination
+from hybridge.io.raster import RasterGeometry
 from scripts.reports.gpu_showcase_setup import showcase_mesh, showcase_space
 
 FIELDS = ("rho", "phi")

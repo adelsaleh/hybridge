@@ -34,7 +34,7 @@
 }
 
 \title{Upwind SCC Graph Ordering for HDG Trace Systems}
-\author{\code{hdgfem.linalg.ordering}}
+\author{\code{hybridge.linalg.ordering}}
 \date{}
 
 \begin{document}
@@ -71,7 +71,7 @@ degrees of freedom, denoted here by
 \]
 The graph-ordering module does not alter element assembly, mesh connectivity,
 or numerical fluxes.  It only computes a permutation of trace unknown indices.
-The convention matches \code{hdgfem.linalg.system.solve_global_system}:
+The convention matches \code{hybridge.linalg.system.solve_global_system}:
 \[
   A_{\pi} = A[\pi, \pi], \qquad b_{\pi} = b[\pi],
 \]
@@ -507,7 +507,7 @@ matrix_patterns/*_after_upwind.png
 
 \section{Summary}
 
-The ordering in \code{hdgfem.linalg.ordering} is a block-level flow ordering:
+The ordering in \code{hybridge.linalg.ordering} is a block-level flow ordering:
 construct local inflow-to-outflow dependencies, compress cycles with SCCs,
 topologically order the acyclic component graph, and lift the result to trace
 dofs.  The graph construction is inexpensive and mostly independent of

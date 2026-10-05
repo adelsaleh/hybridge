@@ -146,6 +146,6 @@ performance qualification here. None is selected automatically.
 The numerical sources were unchanged throughout benchmark collection. Their
 SHA-256 hashes, recorded after collection, are:
 
-- `hdgfem/backends/numba.py`: `1df0e2fad89b8cb9681aa7e113d3eba17d199b2f1bfcd00ab99c644c8de153e9`
-- `hdgfem/kernels/diffusion_reaction_fused.py`: `4dba8f6db239396c1c3db8836b098c7767be6d754ecf0162d9ca0e5f2ea897a0`
-- `hdgfem/kernels/common.py`: `656977195abba567ee251c27b8fd6d9917d9ea13b09283226360634044ecd78d`
+- `hybridge/backends/numba.py`: `1df0e2fad89b8cb9681aa7e113d3eba17d199b2f1bfcd00ab99c644c8de153e9`
+- `hybridge/kernels/diffusion_reaction_fused.py`: `4dba8f6db239396c1c3db8836b098c7767be6d754ecf0162d9ca0e5f2ea897a0`
+- `hybridge/kernels/common.py`: `656977195abba567ee251c27b8fd6d9917d9ea13b09283226360634044ecd78d`

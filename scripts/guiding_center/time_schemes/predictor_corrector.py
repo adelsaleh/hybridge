@@ -1,8 +1,8 @@
 """Midpoint/Crank-Nicolson predictor-corrector for guiding-center transport."""
 from time import perf_counter
 
-from hdgfem.core.field_ops import perpendicular_vector_field, trace_linear_combination
-from hdgfem.diagnostics.solver import solver_result_metrics
+from hybridge.core.field_ops import perpendicular_vector_field, trace_linear_combination
+from hybridge.diagnostics.solver import solver_result_metrics
 from .si_euler import SIEulerStepper
 from .stage_support import GuidingCenterStep
 

@@ -6,10 +6,10 @@ import numpy as np
 import scipy.sparse
 import pytest
 
-from hdgfem import DGMesh, DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.runtime.precision import REAL_DTYPE
-from hdgfem.linalg.system import solve_global_system
-from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
+from hybridge import DGMesh, DGSpace, VectorDGField, rectangle_mesh
+from hybridge.runtime.precision import REAL_DTYPE
+from hybridge.linalg.system import solve_global_system
+from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
 from scripts.advection_reaction.cases import CASE_DEFINITIONS, test2 as adv_rea_test2
 from scripts.advection_reaction.diagnose_discontinuous_trace import (
     discontinuous_advection_fields as _discontinuous_advection_fields,
@@ -103,20 +103,20 @@ def _projected_test2_fields(space: DGSpace):
 
 
 def test_cupy_backend_imports_without_optional_runtime():
-    backend = importlib.import_module("hdgfem.transport.cupy")
+    backend = importlib.import_module("hybridge.transport.cupy")
     assert hasattr(backend, "require_cupy")
     assert hasattr(backend, "assemble_advection_reaction_trace_system_cupy")
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_constant_source_reaction_helpers_do_not_materialize_fields():
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.transport.cuda import reaction_mass_cupy as adv_reaction_mass_cupy
-    from hdgfem.hdg.coefficients_device import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.transport.cuda import reaction_mass_cupy as adv_reaction_mass_cupy
+    from hybridge.hdg.coefficients_device import (
             source_moments_cupy as adv_source_moments_cupy,
         )
-    from hdgfem.mixed.cupy import (
+    from hybridge.mixed.cupy import (
             reaction_mass_cupy as diff_reaction_mass_cupy,
             source_moments_cupy as diff_source_moments_cupy,
         )
@@ -189,7 +189,7 @@ def test_advection_reaction_cupy_assembly_matches_numpy():
 @pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
 @pytest.mark.parametrize("preconditioner", (None, "cupyx_ilu1"))
 def test_cupy_reconstruction_consumes_device_trace_without_local_caches(boundary_mode, trace_basis, preconditioner, monkeypatch):
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -375,7 +375,7 @@ def test_cupy_callable_stabilization_reconstructs_projected_problem():
 def test_cupy_dg_stabilization_uses_device_coefficients_and_field_space_reference_table():
     import cupy as cp
 
-    from hdgfem.core.device import as_cupy_space
+    from hybridge.core.device import as_cupy_space
 
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 3, basis_type="dub_orth")
@@ -767,9 +767,9 @@ def test_advection_reaction_raw_cuda_discontinuous_beta_matrix_matches_numpy(
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_matches_direct_small_system(monkeypatch):
-    import hdgfem.transport.cupy as cupy_backend
-    import hdgfem.linalg.gpu.sparse as gpu_sparse
-    import hdgfem.runtime.optional as runtime_optional
+    import hybridge.transport.cupy as cupy_backend
+    import hybridge.linalg.gpu.sparse as gpu_sparse
+    import hybridge.runtime.optional as runtime_optional
 
     upload_count = 0
     download_count = 0
@@ -818,9 +818,9 @@ def test_cupyx_solver_matches_direct_small_system(monkeypatch):
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_cupyx_solver_keeps_solution_on_device_unless_host_copy_requested(monkeypatch):
-    import hdgfem.transport.cupy as cupy_backend
-    import hdgfem.linalg.gpu.sparse as gpu_sparse
-    import hdgfem.runtime.optional as runtime_optional
+    import hybridge.transport.cupy as cupy_backend
+    import hybridge.linalg.gpu.sparse as gpu_sparse
+    import hybridge.runtime.optional as runtime_optional
 
     download_count = 0
     original_download = runtime_optional.asnumpy
@@ -902,9 +902,9 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy():
     keeps the same modal index and applies the parity sign ``(-1)**j`` instead
     of reversing the dof order used by nodal trace bases.
     """
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.transport.cuda import (
             TIMINGS,
             assemble_reduced_system,
             beta_dot_normal_from_coeffs,
@@ -958,9 +958,9 @@ def test_raw_cuda_fused_modal_trace_assembly_matches_cupy_discontinuous_beta():
     uses a different projected beta on a shared face. This exercises the explicit
     left/right-sided trace weights introduced for discontinuous advection fields.
     """
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.transport.cuda import (
             TIMINGS,
             assemble_reduced_system,
             beta_dot_normal_from_coeffs,
@@ -1065,12 +1065,12 @@ def test_advection_reaction_raw_cuda_solver_returns_host_result():
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="CuPy/Cupyx sparse runtime is unavailable")
 def test_raw_reduced_csr_pattern_matches_cupy_reference():
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.transport.raw_cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.transport.raw_cuda import (
             assert_reduced_csr_patterns_equal,
             build_reduced_csr_pattern_cupy_reference,
         )
-    from hdgfem.hdg.cuda.pattern import build_reduced_csr_pattern_raw
+    from hybridge.hdg.cuda.pattern import build_reduced_csr_pattern_raw
 
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
@@ -1085,13 +1085,13 @@ def test_raw_reduced_csr_pattern_matches_cupy_reference():
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 @pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
 def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )
-    from hdgfem.core.device import as_cupy_trace_space
+    from hybridge.core.device import as_cupy_trace_space
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 1, xlim=(-1.0, 1.0), ylim=(0.0, 1.0))
@@ -1181,13 +1181,13 @@ def test_raw_fused_csr_assembly_matches_coo_discontinuous_beta(trace_basis):
     ],
 )
 def test_raw_fused_csr_and_bsr_assembly_match_coo(trace_basis, raw_lu_mode, order):
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy, require_cupyx_sparse
+    from hybridge.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )
-    from hdgfem.core.device import as_cupy_trace_space
+    from hybridge.core.device import as_cupy_trace_space
 
     cp = require_cupy()
     sparse = require_cupyx_sparse()
@@ -1337,13 +1337,13 @@ def test_advection_reaction_raw_cuda_zero_flux_matches_numba(trace_basis):
 
 @pytest.mark.skipif(not _cupyx_runtime_available(), reason="Cupyx sparse runtime is unavailable")
 def test_raw_fused_zero_flux_csr_assembly_matches_coo():
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy, require_cupyx_sparse
+    from hybridge.transport.cuda import (
             assemble_reduced_system_cuda,
             project_callable_cupy,
         )
-    from hdgfem.core.device import as_cupy_trace_space
+    from hybridge.core.device import as_cupy_trace_space
 
     cp = require_cupy()
     sparse = require_cupyx_sparse()
@@ -1414,8 +1414,8 @@ def test_raw_fused_zero_flux_csr_assembly_matches_coo():
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_space_field_keeps_coefficients_device_backed_until_host_access():
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1)
@@ -1435,8 +1435,8 @@ def test_cupy_space_field_keeps_coefficients_device_backed_until_host_access():
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_field_arithmetic_preserves_device_residency_and_lazy_constants():
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1)
@@ -1498,8 +1498,8 @@ def test_field_arithmetic_preserves_device_residency_and_lazy_constants():
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_project_callable_returns_device_backed_field_matching_host_projection():
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -1526,8 +1526,8 @@ def test_cupy_project_callable_returns_device_backed_field_matching_host_project
 def test_cuda_row_scaling_uses_row_max_for_near_zero_diagonal():
     import cupyx.scipy.sparse as sparse
 
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
 
     cp = require_cupy()
     matrix = sparse.csr_matrix(
@@ -1558,10 +1558,10 @@ def test_cuda_row_scaling_uses_row_max_for_near_zero_diagonal():
 def test_cuda_row_scaling_restore_round_trip():
     import cupyx.scipy.sparse as sparse
 
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.linalg.gpu.sparse import symmetric_scale_cupy_csr_in_place
-    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
-    from hdgfem.linalg.gpu.sparse import _restore_scaled_csr_rows_in_place
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.linalg.gpu.sparse import symmetric_scale_cupy_csr_in_place
+    from hybridge.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
+    from hybridge.linalg.gpu.sparse import _restore_scaled_csr_rows_in_place
 
     cp = require_cupy()
     matrix_host = np.asarray(
@@ -1610,13 +1610,13 @@ def test_cuda_row_scaling_restore_round_trip():
 def test_cuda_bsr_left_scaling_matches_scalar_csr_and_restores_values():
     import cupyx.scipy.sparse as sparse
 
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.linalg.gpu.sparse import (
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.linalg.gpu.sparse import (
             _DeviceBsrMatrixView,
             _diagonal_scale_bsr_rows_in_place,
             _restore_left_scaled_bsr_rows_in_place,
         )
-    from hdgfem.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
+    from hybridge.linalg.gpu.sparse import diagonal_scale_cupy_csr_rows_in_place as _diagonal_scale_csr_rows_in_place
 
     cp = require_cupy()
     matrix_host = np.asarray(
@@ -1670,9 +1670,9 @@ def test_cuda_bsr_left_scaling_matches_scalar_csr_and_restores_values():
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materialization():
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.mixed.cupy import source_moments_cupy
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.mixed.cupy import source_moments_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(1, 1)
@@ -1692,9 +1692,9 @@ def test_cupy_diffusion_helpers_accept_device_backed_dgfield_without_host_materi
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_guiding_center_field_diagnostics_stays_on_device_and_matches_host():
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.diagnostics.guiding_center import guiding_center_field_diagnostics
+    from hybridge.core.device import as_cupy_space
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.diagnostics.guiding_center import guiding_center_field_diagnostics
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -1750,7 +1750,7 @@ def test_guiding_center_field_diagnostics_stays_on_device_and_matches_host():
 
 
 def test_coefficient_field_projects_callable_through_package_api():
-    from hdgfem.core.field_ops import coefficient_field
+    from hybridge.core.field_ops import coefficient_field
 
     mesh = rectangle_mesh(1, 1)
     space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=5)
@@ -1767,7 +1767,7 @@ def test_coefficient_field_projects_callable_through_package_api():
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy runtime is unavailable")
 def test_reusable_advection_solver_assembles_tangent_boundary_raw_cuda_bsr() -> None:
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 
     mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, 2, basis_type="dub_orth", volume_quad_1d=6)
@@ -1810,16 +1810,16 @@ def test_p6_face_bsr_fgmres_dilu_fallback_scalarizes_only_on_device() -> None:
     import cupy as cp
     import cupyx.scipy.sparse as sparse
 
-    from hdgfem.linalg.gpu.sparse import (
+    from hybridge.linalg.gpu.sparse import (
             _assembly_device_csr_matrix,
             _device_compressed_matvec,
             _scalarize_device_bsr_matrix,
         )
-    from hdgfem.linalg.amgx.device_solver import (
+    from hybridge.linalg.amgx.device_solver import (
             _solve_reduced_system_amgx_device_once,
             PyAMGXCsrDeviceSolver,
         )
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 
     mesh = rectangle_mesh(1, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, 6, basis_type="dub_orth", volume_quad_1d=14)
@@ -1913,7 +1913,7 @@ def test_p6_face_bsr_fgmres_dilu_fallback_scalarizes_only_on_device() -> None:
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 @pytest.mark.parametrize("raw_matrix_format", ("csr", "bsr"))
 def test_advection_reaction_raw_cuda_amgx_solver_smoke(raw_matrix_format, monkeypatch, capsys):
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     full_array_downloads = 0

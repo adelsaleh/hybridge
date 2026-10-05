@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-import hdgfem.linalg.system as system
-import hdgfem.linalg.direct as linalg_direct
-from hdgfem.linalg import (
+import hybridge.linalg.system as system
+import hybridge.linalg.direct as linalg_direct
+from hybridge.linalg import (
     LinearSolveConvergenceError,
     LinearSolveError,
     clear_pypardiso_cache,

@@ -78,9 +78,9 @@ Example rerun of the selected fine case, on this machine with the existing prebu
 ```sh
 cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
-HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
+HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
 scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
   --output run_logs/adr_oscillatory_star_fine_rerun \
   --cases cellular7_anisotropic cellular7_weak \

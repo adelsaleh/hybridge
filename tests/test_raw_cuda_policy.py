@@ -1,12 +1,12 @@
 import pytest
 
-from hdgfem.hdg.cuda.launch import (
+from hybridge.hdg.cuda.launch import (
     recommended_raw_cuda_block_size,
     resolve_raw_cuda_block_size,
     triangle_element_dof,
 )
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGOptions
+from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 
 
 def test_solver_options_default_to_automatic_launch_selection():

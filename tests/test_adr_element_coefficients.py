@@ -5,10 +5,10 @@ Bounded stationary checks only: no time integration.
 import numpy as np
 import pytest
 
-from hdgfem import (DGMesh, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref,
+from hybridge import (DGMesh, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref,
                     rectangle_mesh, solve_advection_diffusion_reaction_hdg)
-from hdgfem.mixed.adr_preparation import prepare_adr_data
-from hdgfem.hdg.coefficients import _face_quadrature_values_from_scalar_input
+from hybridge.mixed.adr_preparation import prepare_adr_data
+from hybridge.hdg.coefficients import _face_quadrature_values_from_scalar_input
 
 TABLES = ('beta_dot_normal', 'beta_values', 'source_rhs', 'reaction_values', 'tau_total', 'gamma')
 
@@ -154,7 +154,7 @@ def test_device_field_evaluation_matches_host(cp):
 @pytest.mark.parametrize('order', [2, 3])  # p=2: NQ == NEL, values must not pass as moments
 @pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
 def test_device_preparation_is_resident_and_matches_host(cp, basis, order):
-    from hdgfem.mixed.coefficients_device import prepare_adr_data_cupy
+    from hybridge.mixed.coefficients_device import prepare_adr_data_cupy
     space = distorted_space(order)
     trace = space.trace_space(basis)
     n, gamma, _ = fields(space)
@@ -171,9 +171,9 @@ def test_device_preparation_is_resident_and_matches_host(cp, basis, order):
 
 
 def test_device_source_and_reaction_arrays(cp):
-    from hdgfem.hdg import condensation as hdg
-    from hdgfem.mixed.coefficients_device import _source_moments
-    from hdgfem.hdg.coefficients_device import volume_samples_cupy
+    from hybridge.hdg import condensation as hdg
+    from hybridge.mixed.coefficients_device import _source_moments
+    from hybridge.hdg.coefficients_device import volume_samples_cupy
     space = distorted_space(3)
     values = space.project_callable(lambda x, y: 1. + x*y).values()
     moments = hdg.source_moments(values, space)

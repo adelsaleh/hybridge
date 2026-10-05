@@ -62,7 +62,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hdgfem.runtime.threads import host_threads, set_host_threads
+from hybridge.runtime.threads import host_threads, set_host_threads
 from scripts.n_gamma.cases import CASE_NAMES, get_case  # noqa: E402
 from scripts.n_gamma.cases.forcing import C_S, D, MU  # noqa: E402
 from scripts.n_gamma.cases.geometry import BASELINE_SIZES, STRESS_POLYGONIZATIONS  # noqa: E402
@@ -155,7 +155,7 @@ def _amgx_config(name):
     """Load an AMGX JSON config (repository-relative or absolute); ``none`` keeps the built-in DILU."""
     if name is None or str(name).lower() == "none":
         return None
-    from hdgfem.linalg.amgx.config import load_amgx_config
+    from hybridge.linalg.amgx.config import load_amgx_config
     path = Path(name)
     config, _ = load_amgx_config(path if path.is_absolute() else ROOT/path)
     return config
@@ -269,7 +269,7 @@ def _compiled_coefficients(args, space, case):
 
 def run_single(spec: RunSpec, args, recorder: StudyRecorder | None) -> dict:
     """Mesh, initialize, step and measure one run; never raises on a rejected step."""
-    from hdgfem import DGSpace
+    from hybridge import DGSpace
     from scripts.n_gamma.stepper import NGammaBDF2Stepper, StepRejected
 
     started = time.perf_counter()

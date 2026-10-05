@@ -240,9 +240,9 @@ def test_holoviz_panels_sample_exact_numerical_and_error_on_device(monkeypatch):
     cp = pytest.importorskip('cupy')
     if cp.cuda.runtime.getDeviceCount() == 0:
         pytest.skip('No CUDA device')
-    import hdgfem.io
-    from hdgfem import DGSpace, rectangle_mesh
-    from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
+    import hybridge.io
+    from hybridge import DGSpace, rectangle_mesh
+    from hybridge.io.raster import DeviceRasterSampler, RasterGeometry
     from scripts.n_gamma.cases import get_case
     from scripts.n_gamma.plotting import LABELS, NGammaPanels
 
@@ -259,7 +259,7 @@ def test_holoviz_panels_sample_exact_numerical_and_error_on_device(monkeypatch):
             self.submitted.append((len(images), step, time_value))
         def close(self):
             self.closed = True
-    monkeypatch.setattr(hdgfem.io, 'HolovizScalarPanels', StubViewer)
+    monkeypatch.setattr(hybridge.io, 'HolovizScalarPanels', StubViewer)
     case = get_case('transient_baseline', geometry='cartesian')
     space = DGSpace(rectangle_mesh(3, 3, xlim=(-1., 1.), ylim=(-1., 1.)), 3, basis_type='dub_orth')
     density = space.project_callable(lambda x, y: case.density(x, y, .2))

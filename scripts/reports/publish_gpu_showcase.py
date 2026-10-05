@@ -136,7 +136,7 @@ def main():
     if len(movies) == 1:
         shutil.copyfile(movies[0], published_movie)
     else:
-        from hdgfem.io.movie import concatenate_movies
+        from hybridge.io.movie import concatenate_movies
         if concatenate_movies(movies, published_movie) != metadata["rendered_frames"]:
             raise SystemExit("joined movie frame count differs from the rendered frames")
     poster(published_movie, published_poster, frame_index)

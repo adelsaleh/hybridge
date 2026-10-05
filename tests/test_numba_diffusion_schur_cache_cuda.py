@@ -1,20 +1,20 @@
 """Small host/raw-CUDA factor-cache parity checks; no AMGX or time stepping.
 
-Set HDGFEM_CUDA_CACHE_ONLY=1 to forbid new CUDA compilation while permitting
+Set HYBRIDGE_CUDA_CACHE_ONLY=1 to forbid new CUDA compilation while permitting
 existing cached binaries. Missing cached kernels then fail explicitly.
 """
 import os
 import numpy as np
 import pytest
 from scipy.sparse import coo_matrix, csr_matrix
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.mixed.numba import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.mixed.numba import (
     build_diffusion_schur_cache_numba,
     assemble_projected_diffusion_trace_system_eliminated_numba,
     assemble_projected_diffusion_trace_rhs_eliminated_numba,
     reconstruct_projected_diffusion_local_unknowns_numba,
 )
-from hdgfem.linalg import expand_known_dofs
+from hybridge.linalg import expand_known_dofs
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def cp(monkeypatch):
     module = pytest.importorskip('cupy')
     if module.cuda.runtime.getDeviceCount() == 0:
         pytest.skip('No CUDA device')
-    if os.environ.get('HDGFEM_CUDA_CACHE_ONLY') == '1':
+    if os.environ.get('HYBRIDGE_CUDA_CACHE_ONLY') == '1':
         from cupy.cuda import compiler
         def forbidden(*args, **kwargs):
             """Reject compiler cache misses without launching compilation."""
@@ -41,8 +41,8 @@ def boundary(x, y):
 @pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
 @pytest.mark.parametrize('policy', ['none', 'schur-lu', 'schur-cholesky'])
 def test_numba_cached_matches_raw_cuda(cp, order, basis, policy):
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.mixed.cupy import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.mixed.cupy import (
             assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
             assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
             build_trace_reference,
@@ -51,7 +51,7 @@ def test_numba_cached_matches_raw_cuda(cp, order, basis, policy):
             source_moments_cupy,
             build_scalar_schur_cholesky_cache_cupy,
         )
-    from hdgfem.mixed.raw_cuda.identity import (
+    from hybridge.mixed.raw_cuda.identity import (
             reconstruct_projected_diffusion_field_raw_cuda,
         )
     space = DGSpace(rectangle_mesh(2, 1, xlim=(-1., 1.), ylim=(-0.4, 0.7)), order)

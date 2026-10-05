@@ -1,7 +1,7 @@
 # Installation And Release Qualification
 
 This document defines the bounded installation surface for the early-alpha
-package. It distinguishes the installable `hdgfem` library from repository-only
+package. It distinguishes the installable `hybridge` library from repository-only
 runners, benchmark data, AMGX configurations, and research scripts.
 
 The current package candidate is the PEP 440 prerelease `0.1.0a1`. Its local
@@ -27,7 +27,7 @@ python -m pip install -e '.[test]'
 python -m pytest
 ```
 
-The installed wheel contains the `hdgfem` package. The `scripts/`, `configs/`,
+The installed wheel contains the `hybridge` package. The `scripts/`, `configs/`,
 `run_configs/`, tests, and benchmark artifacts remain repository workflows and
 are intentionally not installed as package modules.
 
@@ -36,7 +36,7 @@ A minimal installed-API check is:
 ```python
 import numpy as np
 
-from hdgfem import DGSpace, rectangle_mesh, solve_global_system
+from hybridge import DGSpace, rectangle_mesh, solve_global_system
 
 space = DGSpace(rectangle_mesh(1, 1), 1, basis_type="dub_orth")
 rows = np.array([0, 0, 1, 1])
@@ -111,7 +111,7 @@ platform-specific runtime.
 The GPU paths need Linux, an NVIDIA GPU supported by CUDA 13, the CUDA 13
 toolkit, CuPy built for CUDA 13, and the forked AMGX and PyAMGX builds. Build
 AMGX as described in [`forked_amgx_stack.md`](forked_amgx_stack.md). Then, in
-the virtual environment used for `hdgfem`, point the PyAMGX build at the
+the virtual environment used for `hybridge`, point the PyAMGX build at the
 toolkit and at the AMGX source and build trees:
 
 ```bash
@@ -122,7 +122,7 @@ export PATH="$CUDA_PATH/bin:$PATH"
 
 python -m pip install 'cupy-cuda13x>=14,<15' cython setuptools wheel
 python -m pip install --no-build-isolation --no-deps /path/to/pyamgx
-python -c "import hdgfem, cupy, pyamgx; print(cupy.cuda.runtime.getDeviceCount(), 'GPU(s)')"
+python -c "import hybridge, cupy, pyamgx; print(cupy.cuda.runtime.getDeviceCount(), 'GPU(s)')"
 ```
 
 PyAMGX records the AMGX build directory as its runtime library path, so
@@ -130,8 +130,8 @@ PyAMGX records the AMGX build directory as its runtime library path, so
 the CUDA runtime libraries are not on the default loader path. Reinstall
 PyAMGX after rebuilding, moving, or changing the ABI of the AMGX library. Use a
 [CuPy wheel matching your CUDA toolkit](https://docs.cupy.dev/en/stable/install.html#installing-cupy-from-pypi).
-`hdgfem` finds these backends through ordinary imports and selects them through
-solver options; importing `hdgfem` itself needs none of them. The live
+`hybridge` finds these backends through ordinary imports and selects them through
+solver options; importing `hybridge` itself needs none of them. The live
 Holoviz viewer additionally needs the `holoviz` extra.
 
 ## Install Smoke
@@ -148,7 +148,7 @@ It performs these checks without network access:
    isolation;
 2. installs that wheel into a temporary target without dependencies;
 3. starts Python from outside the source tree;
-4. verifies that `hdgfem.__file__` is inside the temporary installed target;
+4. verifies that `hybridge.__file__` is inside the temporary installed target;
 5. runs a public sparse solve with normalized true-residual acceptance;
 6. constructs a DG mesh and space through package-level imports.
 

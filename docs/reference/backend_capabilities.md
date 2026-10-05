@@ -19,7 +19,7 @@ rows whose active phases say `device`, or say `device (optional host copy)`
 with host materialization disabled, are fully device resident.
 
 The Python source of truth is
-`hdgfem.solvers.capabilities.BACKEND_CAPABILITIES`. The generated block below
+`hybridge.solvers.capabilities.BACKEND_CAPABILITIES`. The generated block below
 is checked by `tests/test_backend_capabilities.py`.
 
 <!-- BEGIN GENERATED CAPABILITY MATRIX -->
@@ -84,7 +84,7 @@ is checked by `tests/test_backend_capabilities.py`.
 ## Enforcement
 
 Unsupported rows raise
-`hdgfem.runtime.errors.UnsupportedBackendConfigurationError`, a stable subclass of
+`hybridge.runtime.errors.UnsupportedBackendConfigurationError`, a stable subclass of
 `NotImplementedError`. The message identifies the equation, operation,
 assembly backend, sparse-solver family, reason, and this document. Invalid
 option values and unknown solver names remain `ValueError`.

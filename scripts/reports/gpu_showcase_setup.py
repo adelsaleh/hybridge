@@ -10,9 +10,9 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-import hdgfem as hdg
-from hdgfem.cases.profiles import GaussianBlobField
-from hdgfem.mixed.stabilization import resolve_diffusion_stabilization
+import hybridge as hdg
+from hybridge.cases.profiles import GaussianBlobField
+from hybridge.mixed.stabilization import resolve_diffusion_stabilization
 
 COUNTS = (512, 256, 128, 64)
 SIGMAS = (.008, .016, .024, .032)

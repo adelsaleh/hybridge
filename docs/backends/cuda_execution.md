@@ -21,7 +21,7 @@ scripts/gpu/run_cuda13.sh .venv/bin/python \
 The canonical `/tmp` aliases and advanced root overrides are documented in
 [`../getting_started/forked_amgx_stack.md`](../getting_started/forked_amgx_stack.md).
 
-Package imports remain lazy: importing `hdgfem` does not require CuPy, CUDA,
+Package imports remain lazy: importing `hybridge` does not require CuPy, CUDA,
 or PyAMGX.
 
 ## Standalone Runners
@@ -60,7 +60,7 @@ The hybrid direct-BSR path and its classical-AMG hierarchy lifecycle are
 documented in [`amgx_classical_bsr.md`](amgx_classical_bsr.md). Its retained
 fine operator is BSR, while transfer and coarse operators remain scalar CSR.
 For supported p=4--6 Legendre-modal Poisson systems, the default repeated-solve
-path is instead HDGFEM's native [`FB-HP-MG-PCG`](face_hp_mg_pcg.md).
+path is instead HYBRIDGE's native [`FB-HP-MG-PCG`](face_hp_mg_pcg.md).
 
 ## Advection-Reaction Modes
 
@@ -87,7 +87,7 @@ for earlier timings and the full support/reuse contract.
 
 ### Experimental tensorized TSLE
 
-`hdgfem/transport/tsle_tensor.py` keeps the split3 algebra and stages but
+`hybridge/transport/tsle_tensor.py` keeps the split3 algebra and stages but
 replaces the build and condensation kernels with library contractions
 (cuTENSOR or cuBLAS GEMMs against static reference tables) and offers three
 batched local LU solvers: the TSLE cooperative kernel, cuBLAS
@@ -97,10 +97,10 @@ face-BSR values accumulate in FP64. The module is not selectable through
 `raw_local_assembly` yet.
 
 Optional dependencies: cuTENSOR comes from the `cutensor-cu13` wheel, loaded
-through `hdgfem.runtime.optional.require_cutensor` because CuPy 14 does not
+through `hybridge.runtime.optional.require_cutensor` because CuPy 14 does not
 preload `libcutensorMg`. MAGMA (2.10 or newer for CUDA 13 and sm_120) is
-located through `HDGFEM_MAGMA_LIBRARY` or `HDGFEM_MAGMA_ROOT`
-(`hdgfem/linalg/gpu/magma_batched.py`).
+located through `HYBRIDGE_MAGMA_LIBRARY` or `HYBRIDGE_MAGMA_ROOT`
+(`hybridge/linalg/gpu/magma_batched.py`).
 
 ### Advection Assembly Configuration Guide (baseline: RTX PRO 5000 Blackwell)
 
@@ -111,14 +111,14 @@ GPUs, and the H100 reproduction steps are recorded in
 [`../research/solver_studies/advection_assembly_baseline_2026_10_03.md`](../research/solver_studies/advection_assembly_baseline_2026_10_03.md).
 
 The three implementation classes differ in how much dense work runs in
-HDGFEM's own kernels:
+HYBRIDGE's own kernels:
 
-- **Native:** HDGFEM raw kernels only. `fused` uses one kernel per element;
+- **Native:** HYBRIDGE raw kernels only. `fused` uses one kernel per element;
   `split3` (TSLE-BSR) uses build, cooperative-LU, and scatter kernels.
-- **Hybrid:** library contractions with HDGFEM's cooperative LU (tensorized
+- **Hybrid:** library contractions with HYBRIDGE's cooperative LU (tensorized
   TSLE with `local_solver="coop"`), or split3 with a library LU in stage 2.
 - **Pure library:** library contractions and library LU (tensorized TSLE with
-  `local_solver="magma"` or `"cublas"`). HDGFEM code is limited to the FP64
+  `local_solver="magma"` or `"cublas"`). HYBRIDGE code is limited to the FP64
   face-weight and coefficient-row kernels and the BSR scatter, which encode
   mesh topology, upwinding, and boundary elimination.
 
@@ -160,7 +160,7 @@ triangles.
 | 8 | 45.9 | 62.2 | **30.9** (cuBLAS) | 33.8 (cuTENSOR + MAGMA) | hybrid; pure library within 9% |
 | 9 | 84.5 | 107.6 | 49.7 (cuBLAS) | **46.9** (cuTENSOR + cuBLAS LU) | pure library |
 
-The fused and split3 columns run in the `HDGFEM_PRECISION=float32` package
+The fused and split3 columns run in the `HYBRIDGE_PRECISION=float32` package
 mode, and the contraction engine is named in parentheses. The native ranking
 reverses between precisions. In FP32, fused beats split3 at every order and
 runs 5.5--8.3x faster than in FP64; in FP64 on this card, split3 is 24% and 44%

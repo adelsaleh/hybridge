@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from hdgfem.linalg.multigrid.hierarchy_bsr import (
+from hybridge.linalg.multigrid.hierarchy_bsr import (
     load_operator,
     padded_bsr,
     permute_operator,

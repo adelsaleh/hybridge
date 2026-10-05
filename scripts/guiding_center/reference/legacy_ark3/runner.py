@@ -27,7 +27,7 @@ if __name__ == "__main__":
     configure_precision_cli()
 
 import numpy as np
-from hdgfem.runtime.precision import (
+from hybridge.runtime.precision import (
     REAL_DTYPE,
     PRECISION,
     AMGX_MODE,
@@ -36,24 +36,24 @@ from hdgfem.runtime.precision import (
     audit_arrays,
 )
 
-from hdgfem.core.field_ops import (
+from hybridge.core.field_ops import (
     perpendicular_vector_field,
     project_callable_to_trace,
     solution_field,
     solution_trace,
     trace_linear_combination,
 )
-from hdgfem.diagnostics.errors import evaluate_scalar_error
-from hdgfem.diagnostics.guiding_center import (
+from hybridge.diagnostics.errors import evaluate_scalar_error
+from hybridge.diagnostics.guiding_center import (
     guiding_center_field_diagnostics,
     transport_velocity_diagnostics,
 )
-from hdgfem.diagnostics.solver import (
+from hybridge.diagnostics.solver import (
     relative_drift,
     result_transfer_time,
     solver_result_metrics,
 )
-from hdgfem.linalg.amgx.config import load_amgx_config
+from hybridge.linalg.amgx.config import load_amgx_config
 from scripts.guiding_center.cases.guiding_center_cases import CASE_DEFINITIONS
 from scripts.guiding_center.reference.legacy_ark3.presets import (
     DEFAULT_PRESET,
@@ -268,7 +268,7 @@ class GuidingCenterPyVistaPanels:
         off_screen, screenshot_dir, screenshot_prefix, include_potential=False,
         density_is_vorticity=False,
     ):
-        from hdgfem.io import PyVistaFieldPanels
+        from hybridge.io import PyVistaFieldPanels
 
         self.include_potential = bool(include_potential)
         density_options = {"scalar_name": "density"}
@@ -308,7 +308,7 @@ def _make_plotter(
         density_is_vorticity=density_is_vorticity,
     )
     if config.plot_backend == "holoviz":
-        from hdgfem.io.holoviz import GuidingCenterHolovizPanels
+        from hybridge.io.holoviz import GuidingCenterHolovizPanels
         return GuidingCenterHolovizPanels(
             density_field, potential_field, width=config.plot_width, height=config.plot_height,
             max_fps=config.plot_max_fps, **options,
@@ -1045,7 +1045,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
 
 
 def _build_mesh(config: GuidingCenterRunPreset, case):
-    from hdgfem.core.mesh import (
+    from hybridge.core.mesh import (
         gmsh_disc_mesh, gmsh_rectangle_mesh, gmsh_smooth_star_mesh,
         gmsh_triangle_mesh, rectangle_mesh,
     )
@@ -1393,7 +1393,7 @@ def _solve_transport_stage(
         failure_path: Path,
 ):
     """Preserve diagnostics of the actual failed stage, then re-raise its error."""
-    from hdgfem.linalg.results import LinearSolveConvergenceError
+    from hybridge.linalg.results import LinearSolveConvergenceError
 
     try:
         return solver.solve(initial_guess=initial_guess)
@@ -1435,7 +1435,7 @@ def _solve_transport_stage(
 
 
 def _make_poisson_options(config: GuidingCenterRunPreset):
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 
     return DiffusionReactionHDGOptions(
         diffusion=1.0,
@@ -1478,7 +1478,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
 def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) -> dict:
     """Enable native divergence exits for transport, preserving explicit overrides."""
     if config is None:
-        from hdgfem.linalg.amgx.host import default_pyamgx_config
+        from hybridge.linalg.amgx.host import default_pyamgx_config
         config = default_pyamgx_config(tolerance=tolerance, maxiter=None)
     config = copy.deepcopy(config)
     solver = config.setdefault("solver", {})
@@ -1490,7 +1490,7 @@ def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) 
 
 
 def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGOptions
 
     retry_attempts = None
     primary_amgx_tolerance = (
@@ -1643,7 +1643,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
 def _print_run_summary(result: GuidingCenterRunResult) -> None:
     if _verbosity_level(result.config) < 1:
         return
-    from hdgfem.io.output import pretty_print_sections
+    from hybridge.io.output import pretty_print_sections
 
     final = result.diagnostics[-1]
     run_rows = [
@@ -1725,7 +1725,7 @@ def _initial_projection_backend(config: GuidingCenterRunPreset) -> str:
 
 def _project_initial_field(config: GuidingCenterRunPreset, space, function, *, name: str):
     """Project on the selected backend, keeping device coefficients resident."""
-    from hdgfem.core.projection import project_callable
+    from hybridge.core.projection import project_callable
 
     return project_callable(function, space,
         backend="device" if _initial_projection_backend(config) == "cupy" else "host",
@@ -1742,10 +1742,10 @@ def run_guiding_center_case(
     """Run a fixed-mesh guiding-center case with the selected time scheme."""
     _validate_config(config)
 
-    from hdgfem.core.space import DGSpace
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
-    from hdgfem.runtime.logging import timed_call
+    from hybridge.core.space import DGSpace
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+    from hybridge.runtime.logging import timed_call
     from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
@@ -1785,7 +1785,7 @@ def run_guiding_center_case(
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
-        from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
+        from hybridge.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity, _ = timed_call("[gc:init] caching positivity diagnostics", _detail_verbosity(config),
             lambda: ScalarPositivityDiagnostics(space,
                 backend="device" if projection_backend == "cupy" else "host",
@@ -1935,7 +1935,7 @@ def run_guiding_center_case(
 
     stage_stepper = None
     if config.time_scheme in {"h1-bdf3", "h2-bdf3", "imex-ark3"}:
-        from hdgfem.transport.residual import (
+        from hybridge.transport.residual import (
                     HDGTraceWorkspace,
                     UpwindHDGTransportResidual,
                 )

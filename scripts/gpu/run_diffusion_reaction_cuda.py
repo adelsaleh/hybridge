@@ -2,7 +2,7 @@
 """Package-backed CUDA diffusion-reaction HDG runner.
 
 All numerical assembly, AMGX solve, reconstruction, diagnostics, and plotting
-live in :mod:`hdgfem`; this module only translates CLI options into public API
+live in :mod:`hybridge`; this module only translates CLI options into public API
 calls and presents a benchmark-friendly summary.
 """
 
@@ -16,19 +16,19 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem import DGSpace, DiffusionReactionHDGSolver, evaluate_scalar_error
-from hdgfem.core.mesh import (
+from hybridge import DGSpace, DiffusionReactionHDGSolver, evaluate_scalar_error
+from hybridge.core.mesh import (
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
     gmsh_rectangle_mesh,
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.linalg.amgx.config import load_amgx_config
-from hdgfem.runtime.logging import format_elapsed_percent
-from hdgfem.io.output import pretty_print_sections
-from hdgfem.io.plot import resolve_field_plot_resolution, resolve_postprocessed_plot_resolution
+from hybridge.io.comparison import plot_sampled_solution_comparison
+from hybridge.linalg.amgx.config import load_amgx_config
+from hybridge.runtime.logging import format_elapsed_percent
+from hybridge.io.output import pretty_print_sections
+from hybridge.io.plot import resolve_field_plot_resolution, resolve_postprocessed_plot_resolution
 from scripts.diffusion_reaction.cases import case_definition_by_key
 
 
@@ -224,7 +224,7 @@ def _print_summary(
     ]
     if args.verbosity >= 2 and details:
         sections.append(("Backend details", [(key, value, ".5f") for key, value in sorted(details.items())]))
-    pretty_print_sections(sections, title="HDGFEM CUDA Diffusion-Reaction Solve Summary")
+    pretty_print_sections(sections, title="HYBRIDGE CUDA Diffusion-Reaction Solve Summary")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -236,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.assembly_backend == "raw-cuda" and args.plot_postprocess_primal:
         raise ValueError("raw-CUDA diffusion currently does not support HDG postprocessing; use --assembly-backend cupy")
     if args.show_cupy_config:
-        from hdgfem.runtime.optional import require_cupy
+        from hybridge.runtime.optional import require_cupy
 
         require_cupy().show_config()
 
@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         volume_quad_1d=args.volume_quad_1d,
         edge_quad_1d=args.edge_quad_1d,
     )
-    from hdgfem.mixed.stabilization import GlobalLengthDiffusion
+    from hybridge.mixed.stabilization import GlobalLengthDiffusion
 
     stabilization_mode = args.diffusion_stabilization_mode
     if args.tau is not None:

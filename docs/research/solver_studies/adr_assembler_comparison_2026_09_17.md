@@ -95,7 +95,7 @@ Environment details and package-version deviations are recorded in
 `docs/adr_machine_baseline_2026_09_17.md`.
 
 ```bash
-cd /path/to/hdgfem
+cd /path/to/hybridge
 python vendor/adr_gmres/scripts/compare_adr_assemblers.py \
   --master-root . \
   --output run_outputs/adr_assembly_comparison_repeat \

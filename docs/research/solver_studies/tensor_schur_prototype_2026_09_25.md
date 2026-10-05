@@ -59,7 +59,7 @@ From the repository root, use a fresh output directory for each run:
 ```sh
 .venv/bin/python scripts/diffusion_reaction/experiments/tensor_schur.py --order 6 --nx 128 --blocks 32 64 128 --modes fp64 tf32 tf32x3 --output /tmp/tensor-p6-new
 .venv/bin/python scripts/diffusion_reaction/experiments/tensor_schur.py --order 6 --nx 128 --reference-only --reference-dir /tmp/ref-p6-new --output /tmp/ref-p6-new
-HDGFEM_PRECISION=float32 .venv/bin/python scripts/diffusion_reaction/experiments/tensor_schur.py --order 6 --nx 128 --blocks 32 64 128 --modes fp32 --reference-dir /tmp/ref-p6-new --output /tmp/fp32-p6-new
+HYBRIDGE_PRECISION=float32 .venv/bin/python scripts/diffusion_reaction/experiments/tensor_schur.py --order 6 --nx 128 --blocks 32 64 128 --modes fp32 --reference-dir /tmp/ref-p6-new --output /tmp/fp32-p6-new
 ```
 
 Repeat for p=2 and p=4. Compute Sanitizer racecheck passed the p=6,

@@ -5,12 +5,12 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from hdgfem.transport.diagnostics import (
+from hybridge.transport.diagnostics import (
     analyze_transport_snapshot,
     save_transport_failure_snapshot,
     trace_inflow_diagnostics,
 )
-from hdgfem.linalg.failure_snapshot import trace_matrix_diagnostics
+from hybridge.linalg.failure_snapshot import trace_matrix_diagnostics
 
 
 @pytest.mark.parametrize('fmt', ['bsr', 'csr', 'coo'])
@@ -105,7 +105,7 @@ def test_snapshot_roundtrips_matrix_and_iterates_without_solver(tmp_path):
 
 
 def test_snapshot_survives_analysis_failure(tmp_path, monkeypatch):
-    import hdgfem.transport.diagnostics as diagnostics
+    import hybridge.transport.diagnostics as diagnostics
     def fail(_):
         raise RuntimeError('injected analysis failure')
     monkeypatch.setattr(diagnostics, 'analyze_transport_snapshot', fail)
@@ -155,7 +155,7 @@ def test_snapshot_detects_disconnected_mode_with_no_zero_rows_or_columns():
 @pytest.mark.parametrize('snapshot_fails', [False, True])
 def test_failed_stage_snapshot_preserves_original_solve_error(tmp_path, monkeypatch, snapshot_fails):
     import json
-    from hdgfem.linalg.results import LinearSolveConvergenceError
+    from hybridge.linalg.results import LinearSolveConvergenceError
     from scripts.guiding_center.runtime import runner
 
     error = LinearSolveConvergenceError('original solve failure')

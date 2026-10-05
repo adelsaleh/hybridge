@@ -4,7 +4,7 @@
 ``(x, y)`` with the plain divergence (weight ``W = 1``); ``"axisymmetric"``
 solves the toroidally symmetric model on ``(R, Z)`` multiplied by ``W = R``.
 One step performs exactly two linear scalar HDG ADR solves with two reusable
-:class:`hdgfem.AdvectionDiffusionReactionHDGSolver` objects:
+:class:`hybridge.AdvectionDiffusionReactionHDGSolver` objects:
 
 1. density ``n^{k+1}`` with reaction ``W*alpha``, frozen advection
    ``W*u* b_p`` and source ``W*(S_n + h_n)``;
@@ -37,7 +37,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from hdgfem import AdvectionDiffusionReactionHDGSolver, DGField, DGSpace, field_linear_combination
+from hybridge import AdvectionDiffusionReactionHDGSolver, DGField, DGSpace, field_linear_combination
 
 from . import coefficients as nc
 from .diagnostics import sampled_minimum
@@ -193,7 +193,7 @@ class NGammaBDF2Stepper:
     def _resident(self, field: DGField) -> DGField:
         """Cache a device copy so combinations and evaluations stay on the GPU."""
         if self.device and field.constant_value is None and not field.device_coefficients_materialized():
-            from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+            from hybridge.core.device import as_cupy_coefficients, as_cupy_space
             as_cupy_coefficients(field, as_cupy_space(field.space))
         return field
 

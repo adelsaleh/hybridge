@@ -7,12 +7,12 @@ from scripts.diffusion_reaction.experiments.test7_fused_backend import (
     assemble_test7_tensor_trace_system_eliminated_numba,
     reconstruct_test7_tensor_local_unknowns_numba,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.reduction import expand_known_dofs
-from hdgfem.linalg.system import solve_global_system
-from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
-from hdgfem.mixed.local_numpy import split_diffusion_unknowns
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.reduction import expand_known_dofs
+from hybridge.linalg.system import solve_global_system
+from hybridge.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
+from hybridge.mixed.local_numpy import split_diffusion_unknowns
 from scripts.diffusion_reaction.cases import tensor_sine_diffusion_reaction_case
 
 

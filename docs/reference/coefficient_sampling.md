@@ -15,8 +15,8 @@ From the common workspace directory, inspect and apply the remaining small patch
 
 ```bash
 cd ~/src
-git apply --check hdgfem/patches/adr_gpu_first_coefficient_sampling_20260922.patch
-git apply hdgfem/patches/adr_gpu_first_coefficient_sampling_20260922.patch
+git apply --check hybridge/patches/adr_gpu_first_coefficient_sampling_20260922.patch
+git apply hybridge/patches/adr_gpu_first_coefficient_sampling_20260922.patch
 ```
 
 No build, JIT compilation, CUDA numerical execution, or campaign was launched
@@ -32,7 +32,7 @@ These do not provide bundled analytic coefficient sampling with an OOM-aware CPU
 fallback. Projection is deliberately not substituted for direct sampling: that
 would change the stress operator and source.
 
-`hdgfem.hdg.coefficient_sampling.CoefficientSampler` fills this narrower gap.
+`hybridge.hdg.coefficient_sampling.CoefficientSampler` fills this narrower gap.
 It does not replace matrix integration, inversion, condensation, or solver kernels.
 The GPU performs the coefficient expressions; sampled outputs return to host
 because the present ADR preparation consumes NumPy arrays. This avoids retaining
@@ -42,7 +42,7 @@ GPU batching is not a host-memory or full-assembly memory-budget guarantee.
 ## Reusable callable contract
 
 ```python
-from hdgfem.hdg.coefficient_sampling import CoefficientSampler
+from hybridge.hdg.coefficient_sampling import CoefficientSampler
 
 def coefficients(x, y, parameters):
     amplitude, = parameters
@@ -92,7 +92,7 @@ first GPU evaluation. Use warm repetitions for performance comparisons.
 
 ## Stress-case adapter
 
-`hdgfem.cases.closed_loop_coefficients` supplies reusable scalar/array formulas for
+`hybridge.cases.closed_loop_coefficients` supplies reusable scalar/array formulas for
 the corrugated-annulus family. Volume evaluation returns the symmetric tensor's
 three distinct entries, both velocity components, and the manufactured source
 together, sharing one geometry evaluation. Faces request only velocity. The old
@@ -145,10 +145,10 @@ they are provided for the user to run after the campaign, not executed by the ag
 ```bash
 # from the repository root
 NUMBA_DISABLE_JIT=0 NUMBA_NUM_THREADS=24 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  HDGFEM_TEST_SAMPLING_JIT=1 .venv/bin/python -B -m pytest -q \
+  HYBRIDGE_TEST_SAMPLING_JIT=1 .venv/bin/python -B -m pytest -q \
   tests/test_coefficient_sampling.py -k compiled_numba_parity
 
-HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 HDGFEM_TEST_SAMPLING_CUDA=1 \
+HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 HYBRIDGE_TEST_SAMPLING_CUDA=1 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B -m pytest -q \
   tests/test_coefficient_sampling.py -k cupy_parity
 ```

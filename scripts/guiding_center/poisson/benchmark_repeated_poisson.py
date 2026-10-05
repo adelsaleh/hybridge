@@ -18,13 +18,13 @@ from unittest.mock import patch
 import numpy as np
 from scipy import sparse
 
-from hdgfem import DGSpace, DiffusionReactionHDGSolver
-from hdgfem.core.device import (
+from hybridge import DGSpace, DiffusionReactionHDGSolver
+from hybridge.core.device import (
     as_cupy_coefficients,
     as_cupy_space,
     field_from_cupy_coefficients,
 )
-from hdgfem.runtime.optional import require_cupy
+from hybridge.runtime.optional import require_cupy
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
@@ -77,9 +77,9 @@ def run(args):
     if any(args.output.iterdir()):
         raise ValueError("Choose an empty output directory")
     root = Path(__file__).resolve().parents[3]
-    provenance_paths = [Path(__file__), root / "hdgfem/linalg/multigrid/policy.py",
-                        root / "hdgfem/linalg/multigrid/face_hp.py",
-                        root / "hdgfem/solvers/diffusion_reaction.py"]
+    provenance_paths = [Path(__file__), root / "hybridge/linalg/multigrid/policy.py",
+                        root / "hybridge/linalg/multigrid/face_hp.py",
+                        root / "hybridge/solvers/diffusion_reaction.py"]
     report = dict(status="running", config=asdict(config), policies=args.policies,
                   repeats=args.repeats, warmup=args.warmup, samples=[], cold=[], coarse_checks=[],
                   new_compilation_allowed=False, time_integration=False,

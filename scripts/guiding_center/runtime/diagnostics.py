@@ -3,13 +3,13 @@
 from __future__ import annotations
 import time
 from typing import Any
-from hdgfem.core.field_ops import perpendicular_vector_field
-from hdgfem.diagnostics.errors import evaluate_scalar_error
-from hdgfem.diagnostics.guiding_center import (
+from hybridge.core.field_ops import perpendicular_vector_field
+from hybridge.diagnostics.errors import evaluate_scalar_error
+from hybridge.diagnostics.guiding_center import (
     guiding_center_field_diagnostics,
     transport_velocity_diagnostics,
 )
-from hdgfem.diagnostics.solver import relative_drift
+from hybridge.diagnostics.solver import relative_drift
 
 
 def _electric_flux(poisson_result):

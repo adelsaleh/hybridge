@@ -107,7 +107,7 @@ def test_square_sampler_array_and_scalar_contract(variant):
     # Exercise the scalar kernel body as Python, not Numba compilation.
     out = np.empty((6, 3, 4))
     xb, yb = np.broadcast_arrays(x, y)
-    sys.modules["_hdgfem_coefficient_sampling"]._point_loop(
+    sys.modules["_hybridge_coefficient_sampling"]._point_loop(
         sampler.volume_function, sampler.parameters, xb, yb, out)
     np.testing.assert_allclose(out, expected, rtol=2e-14, atol=2e-12)
 
@@ -137,7 +137,7 @@ def fake_mesh_api(monkeypatch):
         return mesh
     def forbidden(*a, **kw):
         pytest.fail("square preparation called annular mesher")
-    monkeypatch.setitem(sys.modules, "hdgfem.core.mesh", SimpleNamespace(
+    monkeypatch.setitem(sys.modules, "hybridge.core.mesh", SimpleNamespace(
         gmsh_rectangle_mesh=rectangle, gmsh_smooth_star_mesh_with_background_sizes=forbidden,
         mesh_edge_min_max=lambda mesh: (2., np.sqrt(8))))
     return mesh, calls

@@ -11,13 +11,13 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.runtime.precision import AMGX_MODE, REAL_DTYPE
+from hybridge.runtime.precision import AMGX_MODE, REAL_DTYPE
 
 
 @pytest.fixture(scope="module")
 def amgx():
     pytest.importorskip("pyamgx")
-    from hdgfem.linalg.amgx.host import initialize_pyamgx_once
+    from hybridge.linalg.amgx.host import initialize_pyamgx_once
     return initialize_pyamgx_once()
 
 

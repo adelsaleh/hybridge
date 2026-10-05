@@ -184,7 +184,7 @@ def read_equilibrium_metadata(path: Path, comm: MPI.Comm) -> dict[str, Any]:
     error, metadata = comm.bcast(payload, root=0)
     if error is not None:
         raise RuntimeError(f"failed to read equilibrium checkpoint {path}: {error}")
-    if metadata.get("format") != "hdgfem_equilibrium_v1":
+    if metadata.get("format") != "hybridge_equilibrium_v1":
         raise ValueError(f"unsupported equilibrium checkpoint format {metadata.get('format')!r}")
     return metadata
 

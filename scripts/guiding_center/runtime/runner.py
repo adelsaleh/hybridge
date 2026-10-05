@@ -6,19 +6,19 @@ import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
-from hdgfem.runtime.precision import (
+from hybridge.runtime.precision import (
     PRECISION,
     AMGX_MODE,
     KERNEL_AUDIT,
     PIPELINE_AUDIT,
     audit_arrays,
 )
-from hdgfem.core.field_ops import project_callable_to_trace, solution_trace
-from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.diagnostics.guiding_center import transport_velocity_diagnostics
-from hdgfem.diagnostics.solver import result_transfer_time, solver_result_metrics
+from hybridge.core.field_ops import project_callable_to_trace, solution_trace
+from hybridge.core.transfer import project_same_mesh_field
+from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
+from hybridge.diagnostics.solver import result_transfer_time, solver_result_metrics
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
-from hdgfem.io.records import DiagnosticsRecorder, _json_safe
+from hybridge.io.records import DiagnosticsRecorder, _json_safe
 from scripts.guiding_center.runtime.configuration import (
     _detail_verbosity,
     _is_amgx_solver,
@@ -42,7 +42,7 @@ from scripts.guiding_center.runtime.reporting import (
 
 
 def _build_mesh(config: GuidingCenterRunPreset, case):
-    from hdgfem.core.mesh import (
+    from hybridge.core.mesh import (
         gmsh_disc_mesh, gmsh_polygon_mesh, gmsh_rectangle_mesh, gmsh_smooth_star_mesh,
         gmsh_triangle_mesh, rectangle_mesh,
     )
@@ -52,8 +52,8 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
         return rectangle_mesh(config.nx, config.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     log_mesh_cache = _phase_verbosity(config) >= 1
     if domain == "iter":
-        from hdgfem.core.geometry import iter_geometry_path
-        from hdgfem.core.mesh import gmsh_geo_mesh
+        from hybridge.core.geometry import iter_geometry_path
+        from hybridge.core.mesh import gmsh_geo_mesh
 
         return gmsh_geo_mesh(
             config.mesh_size, path=iter_geometry_path(),
@@ -61,7 +61,7 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
             log_cache=log_mesh_cache,
         )
     if domain in {"horseshoe", "pacman"}:
-        from hdgfem.core.geometry import shaped_domain
+        from hybridge.core.geometry import shaped_domain
 
         geometry = shaped_domain(domain, **case.parameters.get("geometry", {}))
         return gmsh_polygon_mesh(
@@ -117,7 +117,7 @@ def _initial_projection_backend(config: GuidingCenterRunPreset) -> str:
 
 def _project_initial_field(config: GuidingCenterRunPreset, space, function, *, name: str, timings=None):
     """Project on the selected backend, keeping device coefficients resident."""
-    from hdgfem.core.projection import project_callable
+    from hybridge.core.projection import project_callable
 
     return project_callable(function, space,
         backend="device" if _initial_projection_backend(config) == "cupy" else "host",
@@ -155,7 +155,7 @@ def _solve_transport_stage(
         failure_path: Path, diagnostics_enabled: bool = True,
 ):
     """Preserve diagnostics of the actual failed stage, then re-raise its error."""
-    from hdgfem.linalg.results import LinearSolveConvergenceError
+    from hybridge.linalg.results import LinearSolveConvergenceError
 
     try:
         return solver.solve(initial_guess=initial_guess)
@@ -214,10 +214,10 @@ def run_guiding_center_case(
         print(f"[gc] {model_label} | p={config.order} | dt={config.dt:g} "
               f"| T={config.dt * config.num_steps:g}", flush=True)
 
-    from hdgfem.core.space import DGSpace
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
-    from hdgfem.runtime.logging import timed_call
+    from hybridge.core.space import DGSpace
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+    from hybridge.runtime.logging import timed_call
     from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
@@ -276,7 +276,7 @@ def run_guiding_center_case(
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
-        from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
+        from hybridge.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity, _ = timed_call("[gc:init] caching positivity diagnostics", _detail_verbosity(config),
             lambda: ScalarPositivityDiagnostics(space,
                 backend="device" if projection_backend == "cupy" else "host",

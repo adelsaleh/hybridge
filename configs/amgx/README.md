@@ -8,7 +8,7 @@
 
 These JSON files are readable, reusable PyAMGX configurations for the CUDA HDG runners. The Python scripts keep embedded fallback copies, but load these files by default when present. Use `--amgx-config` to run an edited copy without changing source code.
 
-At guiding-center runner verbosity `-v 3`, HDGFEM enables AMGX solve
+At guiding-center runner verbosity `-v 3`, HYBRIDGE enables AMGX solve
 statistics. Transport defaults to `print_solve_stats_interval=10`; an explicit
 JSON value is preserved (use `1` for every iteration). The initial and final
 rows and any divergence exit reason are always printed when the table is
@@ -56,7 +56,7 @@ physical/scaled residuals. This is the FP32 guiding-center replacement for the
 stock unpreconditioned BiCGSTAB configuration, which can diverge in FP32.
 See the [FP32 run and validation notes](../../docs/development/fp32_guiding_center.md).
 
-## Advection-Reaction HDGFEM
+## Advection-Reaction HYBRIDGE
 
 Config: `adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json`
 
@@ -137,7 +137,7 @@ Additional raw-CSR preconditioner checks on 2026-07-21 used `p=6`, `ms=0.01`, `d
 
 Modal trace AMGX checks in that sweep used CuPy assembly deliberately. A follow-up validation ([raw CUDA fused cooperative LU findings](../../docs/research/solver_studies/raw_cuda_fused_coop_lu_2026_07_20.md)) validated fused raw CUDA modal trace behavior at matrix level through `p <= 8` before it is used for full modal production runs.
 
-Guiding-center device presets use `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`, whose JSON contains no inactive nested preconditioner. HDGFEM applies left row scaling and supplies the accepted density trace as the initial guess. The k100/k50 stress family uses an AMGX stopping tolerance of `1e-8` while independently retaining its `1e-11`/`5e-9` physical residual contract; a rejected primary first tries `PBICGSTAB` with one `JACOBI_L1` application (`adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json`), then one `BLOCK_JACOBI` application (`adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json`). Both start from zero, keep native BSR, inherit `transport_scale_system` (left row scaling in the device presets), use the configured transport relative tolerance, and rebuild their cheap preconditioner data for the current matrix. L1 uses `jacobi_l1_scalar_rows_for_blocks=1`; block Jacobi inverts the dense diagonal blocks. If both fail, the policy enters FGMRES with direct `MULTICOLOR_DILU` and the same scaling option, followed by at most two residual-correction solves. There is no repeated unpreconditioned retry. Because AMGX DILU is not enabled for the p=6 face block size, only that fallback expands face BSR to scalar CSR with a raw-CUDA device kernel. The stateful solver keeps the first DILU factors as a fixed FGMRES preconditioner, replaces matrix coefficients in place on later steps, and never materializes the matrix on host. On the 157,280-triangle p=6 case, the accepted primary reduced warm transport from 32 to 23 iterations and from about 0.366 s to 0.340 s; the fallback did not occur.
+Guiding-center device presets use `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`, whose JSON contains no inactive nested preconditioner. HYBRIDGE applies left row scaling and supplies the accepted density trace as the initial guess. The k100/k50 stress family uses an AMGX stopping tolerance of `1e-8` while independently retaining its `1e-11`/`5e-9` physical residual contract; a rejected primary first tries `PBICGSTAB` with one `JACOBI_L1` application (`adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json`), then one `BLOCK_JACOBI` application (`adv_rea_gpu4_hdg_pbicgstab_block_jacobi_bsr.json`). Both start from zero, keep native BSR, inherit `transport_scale_system` (left row scaling in the device presets), use the configured transport relative tolerance, and rebuild their cheap preconditioner data for the current matrix. L1 uses `jacobi_l1_scalar_rows_for_blocks=1`; block Jacobi inverts the dense diagonal blocks. If both fail, the policy enters FGMRES with direct `MULTICOLOR_DILU` and the same scaling option, followed by at most two residual-correction solves. There is no repeated unpreconditioned retry. Because AMGX DILU is not enabled for the p=6 face block size, only that fallback expands face BSR to scalar CSR with a raw-CUDA device kernel. The stateful solver keeps the first DILU factors as a fixed FGMRES preconditioner, replaces matrix coefficients in place on later steps, and never materializes the matrix on host. On the 157,280-triangle p=6 case, the accepted primary reduced warm transport from 32 to 23 iterations and from about 0.366 s to 0.340 s; the fallback did not occur.
 
 A recoverable block-Jacobi setup or solve exception advances immediately to the
 FGMRES/`MULTICOLOR_DILU` attempt. A CUDA device memory fault can leave the context
@@ -176,7 +176,7 @@ Zero-flux disk-tangent AMGX screen on 2026-07-27 used `scripts/gpu/run_advection
 - `adv_rea_gpu4_hdg_bicgstab_classical_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested L1 configuration is inactive.
 - `adv_rea_gpu4_hdg_bicgstab_cheb_l1_aggressive.json`: historical unpreconditioned BICGSTAB variant; nested Chebyshev/L1 configuration is inactive.
 - `adv_rea_gpu4_hdg_bicgstab_ilu0_amg_sweeps6.json`: historical unpreconditioned BICGSTAB variant; nested ILU0 sweep count is inactive.
-- `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`: explicit guiding-center unpreconditioned BICGSTAB primary; left scaling is applied by HDGFEM.
+- `adv_rea_gpu4_hdg_bicgstab_scaled_none.json`: explicit guiding-center unpreconditioned BICGSTAB primary; left scaling is applied by HYBRIDGE.
 - `adv_rea_gpu4_hdg_bicgstab_aggregation_dilu.json`: historical unpreconditioned BICGSTAB comparison; nested aggregation/DILU configuration is inactive.
 - `adv_rea_gpu4_hdg_fgmres_aggregation_dilu.json`: failed p6/ms0.01 FGMRES+DILU experiment.
 - `adv_rea_gpu4_hdg_fgmres_amg_d2.json`: failed p6/ms0.01 FGMRES+D2 experiment.
@@ -206,7 +206,7 @@ The advection runner uses the same AMGX config for CuPy, semi-fused raw, and ful
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  HDGFEM_CUDA_AMGX_MONITOR=0 \
+  HYBRIDGE_CUDA_AMGX_MONITOR=0 \
   .venv/bin/python -m scripts.gpu.run_advection_reaction_cuda \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly fused --raw-block-size 32 \
@@ -218,7 +218,7 @@ Use the semi-fused path to compare against the Raw CUDA kernel that receives mat
 
 ```bash
 LD_LIBRARY_PATH=/path/to/amgx/lib:$LD_LIBRARY_PATH \
-  HDGFEM_CUDA_AMGX_MONITOR=0 \
+  HYBRIDGE_CUDA_AMGX_MONITOR=0 \
   .venv/bin/python -m scripts.gpu.run_advection_reaction_cuda \
   -o 6 -ms 0.01 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly precomputed --raw-block-size 32 \
@@ -237,7 +237,7 @@ Working fused stress runs on the 24 GB Quadro RTX 6000:
 
 For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR conversion OOMs before AMGX setup. The next memory target is the global sparse conversion/solver path, not local fused assembly.
 
-## Advection-Diffusion-Reaction HDGFEM
+## Advection-Diffusion-Reaction HYBRIDGE
 
 - `adv_diff_rea_gpu4_hdg_fgmres_amg_block_graph_dense_dilu_bsr.json`: FGMRES
   (restart 75) preconditioned by one V-cycle of classical block-graph-dense AMG
@@ -251,7 +251,7 @@ For p6/ms0.004, fused assembly completes but the current CuPy COO-to-CSR convers
   upstream AMGX. The study reports that transferred block AMG does not rescue
   the cellular low-diffusion or directional-anisotropy oscillatory classes.
 
-## Diffusion-Reaction HDGFEM
+## Diffusion-Reaction HYBRIDGE
 
 Working configs:
 
@@ -381,7 +381,7 @@ Both standalone runners load the JSON config first, then apply these command-lin
 - `--amgx-tolerance`
 - `--amgx-maxiter`
 
-Set `HDGFEM_CUDA_AMGX_MONITOR=1` to enable AMGX residual/grid/timing prints for benchmark runs. Leave it unset for less noisy timing runs.
+Set `HYBRIDGE_CUDA_AMGX_MONITOR=1` to enable AMGX residual/grid/timing prints for benchmark runs. Leave it unset for less noisy timing runs.
 
 ## Modal Trace Warning
 

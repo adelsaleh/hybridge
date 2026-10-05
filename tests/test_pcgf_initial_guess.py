@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.multigrid.face_hp import solve_pcgf_prototype
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.linalg.multigrid.face_hp import solve_pcgf_prototype
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 
 

@@ -1,7 +1,7 @@
 # Raw CUDA tensor ADR shared-memory budget — 2026-09-29
 
 Scope: host-side sizing of the cooperative tensor ADR assembly/reconstruction
-workspace (`hdgfem/backends/adr_tensor_raw_cuda.py`) against its 48 KiB dynamic
+workspace (`hybridge/backends/adr_tensor_raw_cuda.py`) against its 48 KiB dynamic
 shared-memory limit, for p=0--6, every exact diffusion kind, and the default
 and overintegrated quadrature rules of the
 [n-Gamma D-BDF2 plan](../../development/plans/n_gamma_d_bdf2.md). No GPU
@@ -19,7 +19,7 @@ Regenerate (JSON beside this note):
 ```bash
 .venv/bin/python -m scripts.advection_diffusion_reaction.diagnostics.tensor_shared_memory_budget \
     --json docs/research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.json
-HDGFEM_PRECISION=float32 .venv/bin/python -m \
+HYBRIDGE_PRECISION=float32 .venv/bin/python -m \
     scripts.advection_diffusion_reaction.diagnostics.tensor_shared_memory_budget
 ```
 

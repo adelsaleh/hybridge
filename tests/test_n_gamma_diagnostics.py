@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh
+from hybridge import DGSpace, rectangle_mesh
 from scripts.n_gamma import diagnostics as nd
 
 

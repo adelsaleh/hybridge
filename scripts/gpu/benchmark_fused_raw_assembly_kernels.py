@@ -5,7 +5,7 @@ This is assembly-only: no global solve, simulation, or accuracy claim.  Both
 operators use the same structured triangular mesh and DG order. Supports fused
 COO/CSR/BSR, transport TSLE BSR, and diffusion Schur-LU construction/RHS reuse.  Run without
 Nsight for representative CUDA-event timings; under Nsight Compute, filter on
-the named assembly kernel and the ``hdgfem_raw_assembly`` NVTX range.  Nsight
+the named assembly kernel and the ``hybridge_raw_assembly`` NVTX range.  Nsight
 replay makes the wall/device timings printed during profiling meaningless.
 """
 
@@ -23,11 +23,11 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.transport.cuda import assemble_reduced_system_cuda
-from hdgfem.core.device import as_cupy_trace_space
-from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.mixed.cupy import (
+from hybridge.transport.cuda import assemble_reduced_system_cuda
+from hybridge.core.device import as_cupy_trace_space
+from hybridge.core.device import as_cupy_space, as_cupy_vector_coefficients
+from hybridge.runtime.optional import require_cupy
+from hybridge.mixed.cupy import (
     assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
     assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy,
     assemble_projected_diffusion_trace_rhs_cached_cupy,
@@ -35,8 +35,8 @@ from hdgfem.mixed.cupy import (
     build_trace_reference,
     reconstruct_compact_diffusion_field_cupy,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace, VectorDGField
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace, VectorDGField
 
 
 KERNEL_NAMES = {
@@ -99,7 +99,7 @@ def _make_assembler(case: str, space: DGSpace, args):
 
             return assemble_cholesky_rhs
         if args.phase == "reconstruction":
-            from hdgfem.mixed.raw_cuda.identity import (
+            from hybridge.mixed.raw_cuda.identity import (
                             reconstruct_projected_diffusion_field_raw_cuda,
                         )
             cp = require_cupy()
@@ -141,8 +141,8 @@ def _make_assembler(case: str, space: DGSpace, args):
     beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
 
     if case == "adr":
-        from hdgfem.mixed.adr_preparation import prepare_adr_data
-        from hdgfem.mixed.raw_cuda.adr_operator import (
+        from hybridge.mixed.adr_preparation import prepare_adr_data
+        from hybridge.mixed.raw_cuda.adr_operator import (
                     assemble_projected_adr_trace_operator_raw_cuda,
                 )
         host_trace = space.trace_space(args.trace_basis)
@@ -219,7 +219,7 @@ def main(argv=None):
     for _ in range(args.repeats):
         started = time.perf_counter()
         start_event.record()
-        cp.cuda.nvtx.RangePush("hdgfem_raw_assembly")
+        cp.cuda.nvtx.RangePush("hybridge_raw_assembly")
         try:
             result = assemble()
         finally:

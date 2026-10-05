@@ -32,7 +32,7 @@ def operator_hash(cache):
 def dispatch(spec, common):
     kind = spec["worker_kind"]
     if kind in ("native", "native_profile"):
-        # No branch hdgfem import may precede this adapter.
+        # No branch hybridge import may precede this adapter.
         from scripts.adr_native_hp_worker import measure
         result = measure(spec, master_root=Path(spec["master_root"]))
         if kind == "native_profile" and result.get("status") == "passed" and not result.get("profile_validation", {}).get("passed"):
@@ -65,7 +65,7 @@ def main():
     spec = json.loads(args.spec.read_text())
     spec["spec_path"] = str(args.spec.resolve())
     sys.path.insert(0, spec["branch_root"])
-    os.environ["HDGFEM_PRECISION"] = "float64"
+    os.environ["HYBRIDGE_PRECISION"] = "float64"
     from scripts.adr_performance_common import atomic_json, read_json
     from scripts import adr_performance_common as common
 

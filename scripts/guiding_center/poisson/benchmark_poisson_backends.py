@@ -17,11 +17,11 @@ import traceback
 
 import numpy as np
 
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.hdg.gram import field_l2_norm
-from hdgfem.diagnostics.solver import solver_result_metrics
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
-from hdgfem.mixed.postprocess.flux import _trace_basis_at
+from hybridge.runtime.optional import require_cupy
+from hybridge.hdg.gram import field_l2_norm
+from hybridge.diagnostics.solver import solver_result_metrics
+from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+from hybridge.mixed.postprocess.flux import _trace_basis_at
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
 from scripts.guiding_center.time_schemes.stage_support import _fixed_operator_trace_predictor

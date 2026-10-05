@@ -1,10 +1,10 @@
 # Holoviz plotting
 
-`hdgfem.io.holoviz` provides NVIDIA Holoviz panels for any scalar DG field.
+`hybridge.io.holoviz` provides NVIDIA Holoviz panels for any scalar DG field.
 The guiding-center runner uses them for live updates; the static helpers
-mirror the PyVista functions in `hdgfem.io.plot`:
+mirror the PyVista functions in `hybridge.io.plot`:
 
-| PyVista (`hdgfem.io.plot`) | Holoviz (`hdgfem.io.holoviz`) |
+| PyVista (`hybridge.io.plot`) | Holoviz (`hybridge.io.holoviz`) |
 |---|---|
 | `plot_field` | `plot_field_holoviz` |
 | `plot_fields` | `plot_fields_holoviz` (`share_clim` supported) |
@@ -47,7 +47,7 @@ For a fresh compatible Python environment, install prebuilt packages:
   'holoscan-cu13==4.6.0' 'cupy-cuda13x==14.2.0' matplotlib pillow
 ```
 
-HDGFEM also declares these dependencies in its optional `holoviz` extra.
+HYBRIDGE also declares these dependencies in its optional `holoviz` extra.
 The machine needs an NVIDIA driver with CUDA/Vulkan interoperability and a
 compatible CUDA 13 runtime/toolkit. See NVIDIA's
 [installation guidance](https://docs.nvidia.com/holoscan/sdk-user-guide/faq/faq).
@@ -109,7 +109,7 @@ can miss structures smaller than a pixel.
 
 ## Static smoke checks
 
-Run from the HDGFEM repository. These checks use tiny, changing synthetic DG
+Run from the HYBRIDGE repository. These checks use tiny, changing synthetic DG
 coefficient tables and do not run a PDE solve or time integrator:
 
 ```bash
@@ -256,7 +256,7 @@ From a live `ssh -Y` terminal, preserve the original SSH `DISPLAY` and
 `XAUTHORITY` and launch the command through:
 
 ```bash
-.venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+.venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \
   --verbosity 3 --plot-backend holoviz --plot-every 1
@@ -293,5 +293,5 @@ Holoviz color ranges start with 10% padding and remain unchanged while all
 sampled field values fit. An exceeded bound expands with fresh padding; ranges
 never shrink. Density and potential track independent ranges, and signed
 vorticity retains a symmetric range around zero. The shared
-`hdgfem.io.live.expanding_color_limits` helper supports NumPy and CuPy; Holoviz
+`hybridge.io.live.expanding_color_limits` helper supports NumPy and CuPy; Holoviz
 keeps extrema and range updates on the device without copying field coefficients.

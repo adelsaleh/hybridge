@@ -46,7 +46,7 @@ def load_common(branch_root):
 
 def native_policy_parameters(policy, tuning):
     """Read shared pure policy data without importing numerical modules."""
-    spec = importlib.util.spec_from_file_location("_adr_stress_hp_policy", ROOT/"hdgfem/linalg/multigrid/policy.py")
+    spec = importlib.util.spec_from_file_location("_adr_stress_hp_policy", ROOT/"hybridge/linalg/multigrid/policy.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.face_hp_mg_preconditioner_parameters(policy, overrides=tuning)
@@ -127,7 +127,7 @@ def sha256(path):
 def source_hashes(branch_root):
     """Fingerprint both implementations; refuse changed-code campaign resumes."""
     paths = list((ROOT/"scripts/advection_diffusion_reaction").rglob("*.py"))
-    paths += list((ROOT/"hdgfem").rglob("*.py"))
+    paths += list((ROOT/"hybridge").rglob("*.py"))
     paths += list((branch_root/"hdgfem").rglob("*.py"))
     paths += [branch_root/"scripts"/name for name in (
         "adr_performance_common.py", "adv_diff_rea_cases.py", "oscillatory_adr_cases.py",
@@ -257,7 +257,8 @@ def run_job(spec, kind, key, args, common):
     environment = dict(os.environ)
     environment.update({name: "1" for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")})
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    environment["HDGFEM_PRECISION"] = "float64"
+    # Workers may run the vendored snapshot, which reads the pre-rename name.
+    environment["HYBRIDGE_PRECISION"] = environment["HDGFEM_PRECISION"] = "float64"
     environment["NUMBA_NUM_THREADS"] = str(args.numba_threads)
     environment["NUMBA_THREADING_LAYER"] = args.numba_threading_layer
     command = [sys.executable, "-u", str(Path(__file__).with_name("closed_loop_stress_worker.py")), "--spec", str(specpath)]
@@ -309,7 +310,7 @@ def run_job(spec, kind, key, args, common):
 
 
 def execute(plan, args, common):
-    os.environ["HDGFEM_PRECISION"] = "float64"
+    os.environ["HYBRIDGE_PRECISION"] = os.environ["HDGFEM_PRECISION"] = "float64"
     from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import prepare_mesh
 
     out = args.output

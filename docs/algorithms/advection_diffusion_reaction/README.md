@@ -24,13 +24,13 @@ tensor diffusion with exact per-element specialization. See the
 [Numba ADR guide](../../backends/numba_adr.md) for coefficient formats,
 normal-diffusivity stabilization, validation and postprocessing limits.
 
-- `hdgfem.mixed.adr_preparation` and `hdgfem.mixed.adr_numpy`
-- `hdgfem.mixed.local_numpy` (shared mixed local inverse and trace assembler)
-- `hdgfem.mixed.adr_numba` and `hdgfem.mixed.adr_numba_kernels`
-- `hdgfem.mixed.raw_cuda.adr_operator` and `hdgfem.mixed.raw_cuda.tensor`
-- `hdgfem.mixed.postprocess.total_flux` and `hdgfem.mixed.postprocess.numba_kernels`
-- `hdgfem.solvers.advection_diffusion_reaction` and
-  `hdgfem.solvers.advection_diffusion_reaction_device`
+- `hybridge.mixed.adr_preparation` and `hybridge.mixed.adr_numpy`
+- `hybridge.mixed.local_numpy` (shared mixed local inverse and trace assembler)
+- `hybridge.mixed.adr_numba` and `hybridge.mixed.adr_numba_kernels`
+- `hybridge.mixed.raw_cuda.adr_operator` and `hybridge.mixed.raw_cuda.tensor`
+- `hybridge.mixed.postprocess.total_flux` and `hybridge.mixed.postprocess.numba_kernels`
+- `hybridge.solvers.advection_diffusion_reaction` and
+  `hybridge.solvers.advection_diffusion_reaction_device`
 
 Supported backend combinations remain defined by
 [`../../reference/backend_capabilities.md`](../../reference/backend_capabilities.md).

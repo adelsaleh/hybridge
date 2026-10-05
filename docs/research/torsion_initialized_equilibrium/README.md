@@ -2,7 +2,7 @@
 
 This collection contains application-specific derivations for the
 torsion-initialized semilinear equilibrium work. It is research material and
-does not define the public HDGFEM solver API.
+does not define the public HYBRIDGE solver API.
 
 - [`residual_accounting.tex`](residual_accounting.tex) explains the mixed HDG
   residual blocks, reported norms, and remeshing plateau.

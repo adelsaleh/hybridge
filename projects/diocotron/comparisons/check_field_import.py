@@ -7,7 +7,7 @@ Run this script with a Python environment containing DOLFINx, for example::
 
 The check writes generic named scalar fields, imports them without using
 DOLFINx data structures, permutes mesh nodes/cells, and projects into every
-supported HDGFEM DG basis.  It also exercises the ``rho``/``phi`` equilibrium
+supported HYBRIDGE DG basis.  It also exercises the ``rho``/``phi`` equilibrium
 convenience wrapper and its nonconverged-state policy.
 """
 
@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hdgfem.core import DGMesh, DGSpace  # noqa: E402
+from hybridge.core import DGMesh, DGSpace  # noqa: E402
 from projects.diocotron.dolfinx.checkpoint import (  # noqa: E402
     write_dolfinx_checkpoint_v2,
     write_equilibrium_checkpoint_v2,
@@ -197,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     temporary_directory = None
     if comm.rank == 0:
         if args.output is None:
-            temporary_directory = Path(tempfile.mkdtemp(prefix="hdgfem_dolfinx_import_"))
+            temporary_directory = Path(tempfile.mkdtemp(prefix="hybridge_dolfinx_import_"))
             generic_path = temporary_directory / "generic_fields.npz"
         else:
             generic_path = args.output.expanduser().resolve()

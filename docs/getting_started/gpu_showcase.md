@@ -236,8 +236,8 @@ python -m pip install markdown-it-py pygments matplotlib pillow imageio-ffmpeg
 python -m scripts.reports.render_docs_preview --output-dir /path/to/preview
 ```
 
-Open `hdgfem-readme-portable.html` in that directory. It links to
-`hdgfem-manual.html`; keep both files together when copying them. Videos and
+Open `hybridge-readme-portable.html` in that directory. It links to
+`hybridge-manual.html`; keep both files together when copying them. Videos and
 equations are embedded for offline viewing. Videos start paused and do not loop.
 The theme follows the browser preference, with a small Auto/Light/Dark override.
 Repository source links resolve against the checkout where the preview was built.

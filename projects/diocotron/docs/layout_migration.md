@@ -1,7 +1,7 @@
 # Layout migration
 
 The diocotron application is grouped by implementation under one scientific
-project. HDGFEM's general library, packaging, tests, and development tools
+project. HYBRIDGE's general library, packaging, tests, and development tools
 remain at the repository root. Numerical algorithms and CLI options are
 preserved; the Python module and file locations have changed.
 
@@ -56,14 +56,14 @@ portable v2 checkpoint format identifiers are unchanged.
 
 ## Verification ownership
 
-Root `tests/` retains the HDGFEM dependency and packaging contract checks.
+Root `tests/` retains the HYBRIDGE dependency and packaging contract checks.
 Application tests live under `projects/diocotron/tests/`, grouped by backend,
 studies, and comparisons. The DOLFINx checkpoint reader/writer can be imported
-without HDGFEM; HDG projection is isolated under `comparisons/`.
+without HYBRIDGE; HDG projection is isolated under `comparisons/`.
 
 The original standalone Newton experiment used a polygonal cosine-star mesh,
 while the newer canonical generator uses a spline/sine-star. Its former
-HDGFEM mesh dependency has been replaced by a local writer preserving the
+HYBRIDGE mesh dependency has been replaced by a local writer preserving the
 original OCC construction and Gmsh sizing options, rather than changing the
 experiment's geometry.
 

@@ -234,7 +234,7 @@ The default sweep measures five candidates:
 - `spsm-graph`: the same SpSM operations replayed through a CUDA graph.
 - `cupyx`: two ordinary `cupyx.scipy.sparse.linalg.spsolve_triangular` calls.
 
-The cached paths use `hdgfem.backends.cupy_triangular.ReusableCuPyLUSolve`.
+The cached paths use `hybridge.backends.cupy_triangular.ReusableCuPyLUSolve`.
 CuPy's high-level wrapper repeats analysis on each call; the reusable helper
 retains it. The native CUDA bindings also allow graph capture where CuPy's
 stream-setting wrapper rejects it. Which path wins depends on factor structure

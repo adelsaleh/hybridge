@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install hdgfem dependencies with pip.
+"""Install hybridge dependencies with pip.
 
 Run from a fresh clone with:
 

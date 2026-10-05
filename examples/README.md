@@ -1,7 +1,7 @@
 # Examples
 
 Small complete programs demonstrate the package API. Run them from the
-repository root after installing `hdgfem`.
+repository root after installing `hybridge`.
 
 ## Minimal host solves
 
@@ -21,9 +21,9 @@ python examples/diffusion_reaction_minimal.py
 The same source is explained in the
 [manual](../MANUAL.md#minimal-end-to-end-examples). Application code should
 follow these package-root imports, or use
-the full-name `hdgfem.solvers.advection_reaction` and
-`hdgfem.solvers.diffusion_reaction` facades. The abbreviated
-`hdgfem.solvers.adv_rea` and `hdgfem.solvers.diff_rea` module names remain
+the full-name `hybridge.solvers.advection_reaction` and
+`hybridge.solvers.diffusion_reaction` facades. The abbreviated
+`hybridge.solvers.adv_rea` and `hybridge.solvers.diff_rea` module names remain
 compatibility paths rather than the preferred public spelling.
 
 ## GPU vortex gas

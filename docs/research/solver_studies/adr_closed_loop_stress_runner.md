@@ -23,9 +23,9 @@ To execute that plan using the already installed ADR environment:
 
 ```bash
 # from the repository root
-HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
+HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --execute
@@ -67,9 +67,9 @@ with six additional CPU direct checks (both mesh sizes):
 
 ```bash
 # from the repository root
-HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
+HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --geometry square \
@@ -191,9 +191,9 @@ on the recorded 47.2 GiB device. Live host RAM, VRAM and disk guards remain on.
 
 ```bash
 # from the repository root
-HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
+HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k \
@@ -240,7 +240,7 @@ Before the large campaign, the user can run this small assembly-only compiled
 parity test (no global solve). This invokes Numba JIT on first use:
 
 ```bash
-cd /path/to/hdgfem/vendor/adr_gmres
+cd /path/to/hybridge/vendor/adr_gmres
 NUMBA_DISABLE_JIT=0 NUMBA_NUM_THREADS=8 OPENBLAS_NUM_THREADS=1 \
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
   ../../.venv/bin/python -B -m pytest -q -p no:cacheprovider \
@@ -381,12 +381,12 @@ numerical runs, separately from these no-build diagnostics.
 ## Direct solvability diagnostic on a cached coarse system
 
 `check_cached_adr_pardiso.py` reuses the existing
-`hdgfem.linalg.system.solve_pypardiso_system` backend (real nonsymmetric mode,
+`hybridge.linalg.system.solve_pypardiso_system` backend (real nonsymmetric mode,
 not SPD mode). It reads only the saved face blocks, neighbors, and eliminated
 RHS: no reassembly, JIT compilation, GPU work, or writes to the campaign cache.
 It pre-factorizes the existing backend's own PyPardiso instance to report
 analysis/factorization separately from solve time, then reuses those factors
-through the existing HDGFEM solve/residual-validation interface.
+through the existing HYBRIDGE solve/residual-validation interface.
 
 For the original 50k-target trapping case (49,645 triangles, 511,574 trace DOFs),
 run this **after the active campaign finishes**, so CPU timing is uncontended:

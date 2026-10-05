@@ -1,0 +1,1286 @@
+r"""Fused Numba kernels for diffusion-reaction HDG trace assembly.
+
+The kernels here consume already-built mixed local diffusion solvers.  They
+assemble the boundary-eliminated trace system directly, so prescribed Dirichlet
+trace coefficients are moved into the reduced RHS instead of being imposed by a
+large diagonal penalty.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+try:  # pragma: no cover - exercised only when numba is installed.
+    from numba import prange
+except ImportError:  # pragma: no cover
+    prange = range
+
+from hybridge.hdg.numba_common import (
+    lu_factor_inplace,
+    lu_solve_inplace,
+    cholesky_factor_inplace,
+)
+from hybridge.runtime.optional import njit
+from hybridge.mixed.numba_common import _finish_diffusion_condensation, _solve_mixed_columns
+
+from hybridge.hdg.numba_common import _trace_local_dof, _trace_orientation_sign
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _build_projected_diffusion_operator(
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        k_d0,
+        k_d1,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        d0_reference,
+        d1_reference,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        build_schur=True,
+):
+    """Build the condensed scalar diffusion operator for one element."""
+    nel = mass_matrix.shape[0]
+    aff00 = aff_mats[element, 0, 0]
+    aff01 = aff_mats[element, 0, 1]
+    aff10 = aff_mats[element, 1, 0]
+    aff11 = aff_mats[element, 1, 1]
+    jac = aff_jacs[element]
+
+    for i in range(nel):
+        for j in range(nel):
+            d0[i, j] = aff11 * d0_reference[i, j] - aff10 * d1_reference[i, j]
+            d1[i, j] = -aff01 * d0_reference[i, j] + aff00 * d1_reference[i, j]
+
+            if not build_schur:
+                reaction_value = 0.0
+            elif reaction_is_scalar:
+                reaction_value = reaction_scalar * jac * mass_matrix[i, j]
+            else:
+                weighted = 0.0
+                for k in range(nel):
+                    weighted += reaction_coeffs[element, k] * reaction_triples[k, i, j]
+                reaction_value = jac * weighted
+
+            normal_x_value = 0.0
+            normal_y_value = 0.0
+            tau_value = reaction_value
+            for face in range(3):
+                face_mass_value = face_element_mass[face, i, j]
+                face_scale = jacs_el_fc[element, face]
+                tau_value += tau[element, face] * face_scale * face_mass_value
+                normal_x_value += face_scale * normals[element, face, 0] * face_mass_value
+                normal_y_value += face_scale * normals[element, face, 1] * face_mass_value
+
+            mn0[i, j] = normal_x_value - d0[i, j]
+            mn1[i, j] = normal_y_value - d1[i, j]
+            schur_matrix[i, j] = tau_value
+
+    if not build_schur:
+        return
+
+    _finish_diffusion_condensation(
+        schur_matrix, d0, d1, mn0, mn1, k_d0, k_d1, mass_inverse, jac, 1.0,
+    )
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _projected_source_moment(source_data, source_kind, mass_matrix, element, i, nel):
+    """Evaluate one projected source moment on an element."""
+    if source_kind == 0:
+        return 0.0
+    if source_kind == 1:
+        return source_data[0, i]
+    value = 0.0
+    for k in range(nel):
+        value += source_data[element, k] * mass_matrix[k, i]
+    return value
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _build_projected_diffusion_rhs_columns(
+        rhs0,
+        rhs1,
+        rhs2,
+        element,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        face_element_trace,
+        source_coeffs,
+        source_kind,
+):
+    """Build local RHS columns for trace dofs plus one source column."""
+    nel = mass_matrix.shape[0]
+    ntr = face_element_trace.shape[2]
+    trace_cols = 3 * ntr
+    for i in range(nel):
+        for column in range(trace_cols + 1):
+            rhs0[i, column] = 0.0
+            rhs1[i, column] = 0.0
+            rhs2[i, column] = 0.0
+
+    jac = aff_jacs[element]
+    for i in range(nel):
+        source_value = _projected_source_moment(source_coeffs, source_kind, mass_matrix, element, i, nel)
+        rhs0[i, trace_cols] = jac * source_value
+
+    for face in range(3):
+        face_scale = jacs_el_fc[element, face]
+        normal_x = normals[element, face, 0]
+        normal_y = normals[element, face, 1]
+        for trace_dof in range(ntr):
+            column = face * ntr + trace_dof
+            for i in range(nel):
+                coupling = face_scale * face_element_trace[face, i, trace_dof]
+                rhs0[i, column] = tau[element, face] * coupling
+                rhs1[i, column] = normal_x * coupling
+                rhs2[i, column] = normal_y * coupling
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _assemble_projected_diffusion_local_columns(
+        local_columns,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        factor_kind=0,
+        factors=None,
+        factor_pivots=None,
+):
+    """Build solved local columns for projected diffusion-reaction assembly."""
+    nel = mass_matrix.shape[0]
+    ncols = local_columns.shape[1]
+    schur_matrix = np.empty((nel, nel), dtype=np.float64)
+    d0 = np.empty((nel, nel), dtype=np.float64)
+    d1 = np.empty((nel, nel), dtype=np.float64)
+    mn0 = np.empty((nel, nel), dtype=np.float64)
+    mn1 = np.empty((nel, nel), dtype=np.float64)
+    k_d0 = np.empty((nel, nel), dtype=np.float64)
+    k_d1 = np.empty((nel, nel), dtype=np.float64)
+    rhs0 = np.empty((nel, ncols), dtype=np.float64)
+    rhs1 = np.empty((nel, ncols), dtype=np.float64)
+    rhs2 = np.empty((nel, ncols), dtype=np.float64)
+    red_rhs = np.empty((nel, ncols), dtype=np.float64)
+    tmp1 = np.empty((nel, ncols), dtype=np.float64)
+    tmp2 = np.empty((nel, ncols), dtype=np.float64)
+    pivots = np.empty(nel, dtype=np.int64)
+
+    _build_projected_diffusion_operator(
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        k_d0,
+        k_d1,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        d0_reference,
+        d1_reference,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        factors is None,
+    )
+    _build_projected_diffusion_rhs_columns(
+        rhs0,
+        rhs1,
+        rhs2,
+        element,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        face_element_trace,
+        source_coeffs,
+        source_kind,
+    )
+    _solve_mixed_columns(
+        local_columns,
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        rhs0,
+        rhs1,
+        rhs2,
+        red_rhs,
+        tmp1,
+        tmp2,
+        pivots,
+        mass_inverse,
+        aff_jacs[element],
+        factor_kind,
+        factors,
+        factor_pivots,
+        element,
+    )
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _build_projected_tensor_diffusion_operator(
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        flux_lu,
+        flux_pivots,
+        flux_d_response,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        reaction_triples,
+        face_element_mass,
+        d0_reference,
+        d1_reference,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+):
+    """Build projected tensor local blocks and factor the flux mass block."""
+    nel = mass_matrix.shape[0]
+    aff00 = aff_mats[element, 0, 0]
+    aff01 = aff_mats[element, 0, 1]
+    aff10 = aff_mats[element, 1, 0]
+    aff11 = aff_mats[element, 1, 1]
+    jac = aff_jacs[element]
+
+    for i in range(nel):
+        for j in range(nel):
+            d0[i, j] = aff11 * d0_reference[i, j] - aff10 * d1_reference[i, j]
+            d1[i, j] = -aff01 * d0_reference[i, j] + aff00 * d1_reference[i, j]
+
+            if reaction_is_scalar:
+                reaction_value = reaction_scalar * jac * mass_matrix[i, j]
+            else:
+                weighted_reaction = 0.0
+                for k in range(nel):
+                    weighted_reaction += reaction_coeffs[element, k] * reaction_triples[k, i, j]
+                reaction_value = jac * weighted_reaction
+
+            normal_x_value = 0.0
+            normal_y_value = 0.0
+            tau_value = reaction_value
+            for face in range(3):
+                face_mass_value = face_element_mass[face, i, j]
+                face_scale = jacs_el_fc[element, face]
+                tau_value += tau[element, face] * face_scale * face_mass_value
+                normal_x_value += face_scale * normals[element, face, 0] * face_mass_value
+                normal_y_value += face_scale * normals[element, face, 1] * face_mass_value
+
+            mn0[i, j] = normal_x_value - d0[i, j]
+            mn1[i, j] = normal_y_value - d1[i, j]
+            schur_matrix[i, j] = tau_value
+
+            weighted00 = 0.0
+            weighted01 = 0.0
+            weighted10 = 0.0
+            weighted11 = 0.0
+            for k in range(nel):
+                triple = reaction_triples[k, i, j]
+                weighted00 += inv00_coeffs[element, k] * triple
+                weighted01 += inv01_coeffs[element, k] * triple
+                weighted10 += inv10_coeffs[element, k] * triple
+                weighted11 += inv11_coeffs[element, k] * triple
+            flux_lu[i, j] = jac * weighted00
+            flux_lu[i, nel + j] = jac * weighted01
+            flux_lu[nel + i, j] = jac * weighted10
+            flux_lu[nel + i, nel + j] = jac * weighted11
+
+    for i in range(nel):
+        for j in range(nel):
+            flux_d_response[i, j] = d0[i, j]
+            flux_d_response[nel + i, j] = d1[i, j]
+
+    lu_factor_inplace(flux_lu, flux_pivots)
+    lu_solve_inplace(flux_lu, flux_pivots, flux_d_response)
+
+    for i in range(nel):
+        for j in range(nel):
+            value = 0.0
+            for k in range(nel):
+                value += mn0[i, k] * flux_d_response[k, j]
+                value += mn1[i, k] * flux_d_response[nel + k, j]
+            schur_matrix[i, j] += value
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _solve_projected_tensor_diffusion_columns(
+        local_columns,
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        rhs0,
+        rhs1,
+        rhs2,
+        red_rhs,
+        flux_lu,
+        flux_pivots,
+        flux_rhs,
+        schur_pivots,
+):
+    """Apply the projected tensor mixed local inverse to all RHS columns."""
+    nel = d0.shape[0]
+    ncols = rhs0.shape[1]
+
+    for i in range(nel):
+        for column in range(ncols):
+            flux_rhs[i, column] = rhs1[i, column]
+            flux_rhs[nel + i, column] = rhs2[i, column]
+    lu_solve_inplace(flux_lu, flux_pivots, flux_rhs)
+
+    for i in range(nel):
+        for column in range(ncols):
+            value = rhs0[i, column]
+            for k in range(nel):
+                value += mn0[i, k] * flux_rhs[k, column]
+                value += mn1[i, k] * flux_rhs[nel + k, column]
+            red_rhs[i, column] = value
+
+    lu_factor_inplace(schur_matrix, schur_pivots)
+    lu_solve_inplace(schur_matrix, schur_pivots, red_rhs)
+
+    for i in range(nel):
+        for column in range(ncols):
+            local_columns[i, column] = red_rhs[i, column]
+
+    for i in range(nel):
+        for column in range(ncols):
+            value0 = 0.0
+            value1 = 0.0
+            for j in range(nel):
+                value0 += d0[i, j] * red_rhs[j, column]
+                value1 += d1[i, j] * red_rhs[j, column]
+            flux_rhs[i, column] = value0 - rhs1[i, column]
+            flux_rhs[nel + i, column] = value1 - rhs2[i, column]
+    lu_solve_inplace(flux_lu, flux_pivots, flux_rhs)
+
+    for i in range(nel):
+        for column in range(ncols):
+            local_columns[nel + i, column] = flux_rhs[i, column]
+            local_columns[2 * nel + i, column] = flux_rhs[nel + i, column]
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _assemble_projected_tensor_diffusion_local_columns(
+        local_columns,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+):
+    """Build solved local columns for projected tensor diffusion assembly."""
+    nel = mass_matrix.shape[0]
+    ncols = local_columns.shape[1]
+    two_nel = 2 * nel
+    schur_matrix = np.empty((nel, nel), dtype=np.float64)
+    d0 = np.empty((nel, nel), dtype=np.float64)
+    d1 = np.empty((nel, nel), dtype=np.float64)
+    mn0 = np.empty((nel, nel), dtype=np.float64)
+    mn1 = np.empty((nel, nel), dtype=np.float64)
+    flux_lu = np.empty((two_nel, two_nel), dtype=np.float64)
+    flux_d_response = np.empty((two_nel, nel), dtype=np.float64)
+    rhs0 = np.empty((nel, ncols), dtype=np.float64)
+    rhs1 = np.empty((nel, ncols), dtype=np.float64)
+    rhs2 = np.empty((nel, ncols), dtype=np.float64)
+    red_rhs = np.empty((nel, ncols), dtype=np.float64)
+    flux_rhs = np.empty((two_nel, ncols), dtype=np.float64)
+    flux_pivots = np.empty(two_nel, dtype=np.int64)
+    schur_pivots = np.empty(nel, dtype=np.int64)
+
+    _build_projected_tensor_diffusion_operator(
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        flux_lu,
+        flux_pivots,
+        flux_d_response,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        reaction_triples,
+        face_element_mass,
+        d0_reference,
+        d1_reference,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+    )
+    _build_projected_diffusion_rhs_columns(
+        rhs0,
+        rhs1,
+        rhs2,
+        element,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        face_element_trace,
+        source_coeffs,
+        source_kind,
+    )
+    _solve_projected_tensor_diffusion_columns(
+        local_columns,
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        rhs0,
+        rhs1,
+        rhs2,
+        red_rhs,
+        flux_lu,
+        flux_pivots,
+        flux_rhs,
+        schur_pivots,
+    )
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _diffusion_lift_dot(
+        local_columns,
+        oriented_lifts,
+        loc2oriented_face_coupling,
+        normals,
+        tau,
+        jacs_el_fc,
+        element,
+        face,
+        row_dof,
+        column,
+        nel,
+):
+    """Dot one oriented diffusion trace-lift row with a local solution column."""
+    oriented_face = loc2oriented_face_coupling[element, face]
+    scale = jacs_el_fc[element, face]
+    tau_scale = tau[element, face]
+    nx = normals[element, face, 0]
+    ny = normals[element, face, 1]
+    value = 0.0
+    for i in range(nel):
+        lift = scale * oriented_lifts[oriented_face, row_dof, i]
+        value += tau_scale * lift * local_columns[i, column]
+        value += nx * lift * local_columns[nel + i, column]
+        value += ny * lift * local_columns[2 * nel + i, column]
+    return value
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def assemble_projected_diffusion_trace_system_eliminated_kernel(
+        rows,
+        cols,
+        data,
+        rhs_indices,
+        rhs_values,
+        loc2glob_edge,
+        orientations,
+        loc2oriented_face_coupling,
+        interior_side_index,
+        edge_to_solve_edge,
+        valid_elements,
+        valid_faces,
+        side_flux_offsets,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        edge_mass,
+        oriented_lifts,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        boundary_trace,
+        trace_orientation_mode,
+        factor_kind=0,
+        factors=None,
+        factor_pivots=None,
+):
+    """Fully fused projected diffusion trace assembly with strong trace BCs."""
+    num_elements = loc2glob_edge.shape[0]
+    nel = mass_matrix.shape[0]
+    ntr = edge_mass.shape[0]
+    trace_cols = 3 * ntr
+
+    for element in prange(num_elements):
+        local_columns = np.empty((3 * nel, trace_cols + 1), dtype=np.float64)
+        _assemble_projected_diffusion_local_columns(
+            local_columns,
+            element,
+            aff_mats,
+            aff_jacs,
+            jacs_el_fc,
+            normals,
+            tau,
+            mass_matrix,
+            mass_inverse,
+            reaction_triples,
+            face_element_mass,
+            face_element_trace,
+            d0_reference,
+            d1_reference,
+            source_coeffs,
+            source_kind,
+            reaction_coeffs,
+            reaction_scalar,
+            reaction_is_scalar,
+            factor_kind,
+            factors,
+            factor_pivots,
+        )
+
+        for row_face in range(3):
+            rhs_base = (element * 3 + row_face) * ntr
+            side_id = interior_side_index[element, row_face]
+            row_edge = loc2glob_edge[element, row_face]
+            row_solve_edge = edge_to_solve_edge[row_edge]
+            if side_id < 0 or row_solve_edge < 0:
+                for row_dof in range(ntr):
+                    rhs_indices[rhs_base + row_dof] = 0
+                    rhs_values[rhs_base + row_dof] = 0.0
+                continue
+
+            side_base = side_flux_offsets[side_id]
+            for row_dof in range(ntr):
+                rhs_value = _diffusion_lift_dot(
+                    local_columns,
+                    oriented_lifts,
+                    loc2oriented_face_coupling,
+                    normals,
+                    tau,
+                    jacs_el_fc,
+                    element,
+                    row_face,
+                    row_dof,
+                    trace_cols,
+                    nel,
+                )
+
+                col_block_pos = 0
+                for col_face in range(3):
+                    col_edge = loc2glob_edge[element, col_face]
+                    col_solve_edge = edge_to_solve_edge[col_edge]
+                    col_is_positive = orientations[element, col_face]
+                    if col_solve_edge >= 0:
+                        for col_dof in range(ntr):
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
+                            column = col_face * ntr + local_col_dof
+                            schur_value = col_sign * _diffusion_lift_dot(
+                                local_columns,
+                                oriented_lifts,
+                                loc2oriented_face_coupling,
+                                normals,
+                                tau,
+                                jacs_el_fc,
+                                element,
+                                row_face,
+                                row_dof,
+                                column,
+                                nel,
+                            )
+                            out = side_base + (col_block_pos * ntr + row_dof) * ntr + col_dof
+                            rows[out] = row_solve_edge * ntr + row_dof
+                            cols[out] = col_solve_edge * ntr + col_dof
+                            data[out] = -schur_value
+                        col_block_pos += 1
+                    else:
+                        for col_dof in range(ntr):
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
+                            column = col_face * ntr + local_col_dof
+                            schur_value = col_sign * _diffusion_lift_dot(
+                                local_columns,
+                                oriented_lifts,
+                                loc2oriented_face_coupling,
+                                normals,
+                                tau,
+                                jacs_el_fc,
+                                element,
+                                row_face,
+                                row_dof,
+                                column,
+                                nel,
+                            )
+                            rhs_value += schur_value * boundary_trace[col_edge, col_dof]
+
+                rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
+                rhs_values[rhs_base + row_dof] = rhs_value
+
+    mass_offset = side_flux_offsets[side_flux_offsets.shape[0] - 1]
+    for side_pos in prange(valid_elements.shape[0]):
+        element = valid_elements[side_pos]
+        face = valid_faces[side_pos]
+        edge = loc2glob_edge[element, face]
+        solve_edge = edge_to_solve_edge[edge]
+        scale = tau[element, face] * jacs_el_fc[element, face]
+        base = mass_offset + side_pos * ntr * ntr
+        for i in range(ntr):
+            row = solve_edge * ntr + i
+            for j in range(ntr):
+                out = base + i * ntr + j
+                rows[out] = row
+                cols[out] = solve_edge * ntr + j
+                data[out] = scale * edge_mass[i, j]
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def assemble_projected_tensor_diffusion_trace_system_eliminated_kernel(
+        rows,
+        cols,
+        data,
+        rhs_indices,
+        rhs_values,
+        loc2glob_edge,
+        orientations,
+        loc2oriented_face_coupling,
+        interior_side_index,
+        edge_to_solve_edge,
+        valid_elements,
+        valid_faces,
+        side_flux_offsets,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        edge_mass,
+        oriented_lifts,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+        boundary_trace,
+        trace_orientation_mode,
+):
+    """Fully fused projected tensor-diffusion trace assembly with strong BCs."""
+    num_elements = loc2glob_edge.shape[0]
+    nel = mass_matrix.shape[0]
+    ntr = edge_mass.shape[0]
+    trace_cols = 3 * ntr
+
+    for element in prange(num_elements):
+        local_columns = np.empty((3 * nel, trace_cols + 1), dtype=np.float64)
+        _assemble_projected_tensor_diffusion_local_columns(
+            local_columns,
+            element,
+            aff_mats,
+            aff_jacs,
+            jacs_el_fc,
+            normals,
+            tau,
+            mass_matrix,
+            reaction_triples,
+            face_element_mass,
+            face_element_trace,
+            d0_reference,
+            d1_reference,
+            source_coeffs,
+            source_kind,
+            reaction_coeffs,
+            reaction_scalar,
+            reaction_is_scalar,
+            inv00_coeffs,
+            inv01_coeffs,
+            inv10_coeffs,
+            inv11_coeffs,
+        )
+
+        for row_face in range(3):
+            rhs_base = (element * 3 + row_face) * ntr
+            side_id = interior_side_index[element, row_face]
+            row_edge = loc2glob_edge[element, row_face]
+            row_solve_edge = edge_to_solve_edge[row_edge]
+            if side_id < 0 or row_solve_edge < 0:
+                for row_dof in range(ntr):
+                    rhs_indices[rhs_base + row_dof] = 0
+                    rhs_values[rhs_base + row_dof] = 0.0
+                continue
+
+            side_base = side_flux_offsets[side_id]
+            for row_dof in range(ntr):
+                rhs_value = _diffusion_lift_dot(
+                    local_columns,
+                    oriented_lifts,
+                    loc2oriented_face_coupling,
+                    normals,
+                    tau,
+                    jacs_el_fc,
+                    element,
+                    row_face,
+                    row_dof,
+                    trace_cols,
+                    nel,
+                )
+
+                col_block_pos = 0
+                for col_face in range(3):
+                    col_edge = loc2glob_edge[element, col_face]
+                    col_solve_edge = edge_to_solve_edge[col_edge]
+                    col_is_positive = orientations[element, col_face]
+                    if col_solve_edge >= 0:
+                        for col_dof in range(ntr):
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
+                            column = col_face * ntr + local_col_dof
+                            schur_value = col_sign * _diffusion_lift_dot(
+                                local_columns,
+                                oriented_lifts,
+                                loc2oriented_face_coupling,
+                                normals,
+                                tau,
+                                jacs_el_fc,
+                                element,
+                                row_face,
+                                row_dof,
+                                column,
+                                nel,
+                            )
+                            out = side_base + (col_block_pos * ntr + row_dof) * ntr + col_dof
+                            rows[out] = row_solve_edge * ntr + row_dof
+                            cols[out] = col_solve_edge * ntr + col_dof
+                            data[out] = -schur_value
+                        col_block_pos += 1
+                    else:
+                        for col_dof in range(ntr):
+                            local_col_dof = _trace_local_dof(col_is_positive, col_dof, ntr, trace_orientation_mode)
+                            col_sign = _trace_orientation_sign(col_is_positive, col_dof, trace_orientation_mode)
+                            column = col_face * ntr + local_col_dof
+                            schur_value = col_sign * _diffusion_lift_dot(
+                                local_columns,
+                                oriented_lifts,
+                                loc2oriented_face_coupling,
+                                normals,
+                                tau,
+                                jacs_el_fc,
+                                element,
+                                row_face,
+                                row_dof,
+                                column,
+                                nel,
+                            )
+                            rhs_value += schur_value * boundary_trace[col_edge, col_dof]
+
+                rhs_indices[rhs_base + row_dof] = row_solve_edge * ntr + row_dof
+                rhs_values[rhs_base + row_dof] = rhs_value
+
+    mass_offset = side_flux_offsets[side_flux_offsets.shape[0] - 1]
+    for side_pos in prange(valid_elements.shape[0]):
+        element = valid_elements[side_pos]
+        face = valid_faces[side_pos]
+        edge = loc2glob_edge[element, face]
+        solve_edge = edge_to_solve_edge[edge]
+        scale = tau[element, face] * jacs_el_fc[element, face]
+        base = mass_offset + side_pos * ntr * ntr
+        for i in range(ntr):
+            row = solve_edge * ntr + i
+            for j in range(ntr):
+                out = base + i * ntr + j
+                rows[out] = row
+                cols[out] = solve_edge * ntr + j
+                data[out] = scale * edge_mass[i, j]
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def assemble_projected_diffusion_trace_rhs_eliminated_kernel(
+        rhs_indices,
+        rhs_values,
+        loc2glob_edge,
+        orientations,
+        loc2oriented_face_coupling,
+        interior_side_index,
+        edge_to_solve_edge,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        oriented_lifts,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        boundary_trace,
+        trace_orientation_mode,
+        factor_kind=0,
+        factors=None,
+        factor_pivots=None,
+):
+    """Fully fused reduced RHS assembly for a cached projected trace matrix."""
+    num_elements = loc2glob_edge.shape[0]
+    nel = mass_matrix.shape[0]
+    ntr = face_element_trace.shape[2]
+    # Only eliminated faces enter this trace; free-edge values must be zero.
+    trace = np.zeros(loc2glob_edge.max() * ntr + ntr, dtype=np.float64)
+    for edge in range(edge_to_solve_edge.size):
+        if edge_to_solve_edge[edge] < 0:
+            for dof in range(ntr):
+                trace[edge * ntr + dof] = boundary_trace[edge, dof]
+    for element in prange(num_elements):
+        local_columns = _solve_projected_diffusion_element_rhs(
+            element, trace, loc2glob_edge, orientations, aff_mats, aff_jacs,
+            jacs_el_fc, normals, tau, mass_matrix, mass_inverse, reaction_triples,
+            face_element_mass, face_element_trace, d0_reference, d1_reference,
+            source_coeffs, source_kind, reaction_coeffs, reaction_scalar,
+            reaction_is_scalar, trace_orientation_mode, factor_kind, factors, factor_pivots)
+
+        for face in range(3):
+            base = (element * 3 + face) * ntr
+            edge = loc2glob_edge[element, face]
+            solve_edge = edge_to_solve_edge[edge]
+            for dof in range(ntr):
+                if interior_side_index[element, face] < 0 or solve_edge < 0:
+                    rhs_indices[base + dof] = 0
+                    rhs_values[base + dof] = 0.0
+                else:
+                    rhs_indices[base + dof] = solve_edge * ntr + dof
+                    rhs_values[base + dof] = _diffusion_lift_dot(
+                        local_columns, oriented_lifts, loc2oriented_face_coupling,
+                        normals, tau, jacs_el_fc, element, face, dof, 0, nel)
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _build_projected_diffusion_reconstruction_rhs(
+        rhs0,
+        rhs1,
+        rhs2,
+        element,
+        trace,
+        loc2glob_edge,
+        orientations,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        face_element_trace,
+        source_coeffs,
+        source_kind,
+        trace_orientation_mode,
+):
+    """Build one local RHS from source coefficients and the solved trace."""
+    nel = mass_matrix.shape[0]
+    ntr = face_element_trace.shape[2]
+    for i in range(nel):
+        rhs0[i, 0] = 0.0
+        rhs1[i, 0] = 0.0
+        rhs2[i, 0] = 0.0
+
+    jac = aff_jacs[element]
+    for i in range(nel):
+        source_value = _projected_source_moment(source_coeffs, source_kind, mass_matrix, element, i, nel)
+        rhs0[i, 0] = jac * source_value
+
+    for face in range(3):
+        edge = loc2glob_edge[element, face]
+        is_positive = orientations[element, face]
+        face_scale = jacs_el_fc[element, face]
+        normal_x = normals[element, face, 0]
+        normal_y = normals[element, face, 1]
+        for trace_dof in range(ntr):
+            local_trace_dof = _trace_local_dof(is_positive, trace_dof, ntr, trace_orientation_mode)
+            sign = _trace_orientation_sign(is_positive, trace_dof, trace_orientation_mode)
+            trace_value = sign * trace[edge * ntr + trace_dof]
+            for i in range(nel):
+                coupling = face_scale * face_element_trace[face, i, local_trace_dof] * trace_value
+                rhs0[i, 0] += tau[element, face] * coupling
+                rhs1[i, 0] += normal_x * coupling
+                rhs2[i, 0] += normal_y * coupling
+
+
+@njit(cache=True, inline="always", fastmath=True)
+def _solve_projected_diffusion_element_rhs(
+        element, trace, loc2glob_edge, orientations, aff_mats, aff_jacs,
+        jacs_el_fc, normals, tau, mass_matrix, mass_inverse, reaction_triples,
+        face_element_mass, face_element_trace, d0_reference, d1_reference,
+        source_coeffs, source_kind, reaction_coeffs, reaction_scalar,
+        reaction_is_scalar, trace_orientation_mode, factor_kind=0,
+        factors=None, factor_pivots=None):
+    """Solve one source-plus-trace RHS using shared mixed recovery algebra."""
+    nel = mass_matrix.shape[0]
+    local_columns = np.empty((3 * nel, 1), dtype=np.float64)
+    schur_matrix = np.empty((nel, nel), dtype=np.float64)
+    d0 = np.empty((nel, nel), dtype=np.float64)
+    d1 = np.empty((nel, nel), dtype=np.float64)
+    mn0 = np.empty((nel, nel), dtype=np.float64)
+    mn1 = np.empty((nel, nel), dtype=np.float64)
+    k_d0 = np.empty((nel, nel), dtype=np.float64)
+    k_d1 = np.empty((nel, nel), dtype=np.float64)
+    rhs0 = np.empty((nel, 1), dtype=np.float64)
+    rhs1 = np.empty((nel, 1), dtype=np.float64)
+    rhs2 = np.empty((nel, 1), dtype=np.float64)
+    red_rhs = np.empty((nel, 1), dtype=np.float64)
+    tmp1 = np.empty((nel, 1), dtype=np.float64)
+    tmp2 = np.empty((nel, 1), dtype=np.float64)
+    pivots = np.empty(nel, dtype=np.int64)
+
+    _build_projected_diffusion_operator(
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        k_d0,
+        k_d1,
+        element,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        d0_reference,
+        d1_reference,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        factors is None,
+    )
+    _build_projected_diffusion_reconstruction_rhs(
+        rhs0,
+        rhs1,
+        rhs2,
+        element,
+        trace,
+        loc2glob_edge,
+        orientations,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        face_element_trace,
+        source_coeffs,
+        source_kind,
+        trace_orientation_mode,
+    )
+    _solve_mixed_columns(
+        local_columns,
+        schur_matrix,
+        d0,
+        d1,
+        mn0,
+        mn1,
+        rhs0,
+        rhs1,
+        rhs2,
+        red_rhs,
+        tmp1,
+        tmp2,
+        pivots,
+        mass_inverse,
+        aff_jacs[element],
+        factor_kind,
+        factors,
+        factor_pivots,
+        element,
+    )
+    return local_columns
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def reconstruct_projected_diffusion_local_unknowns_kernel(
+        local_unknowns,
+        trace,
+        loc2glob_edge,
+        orientations,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        mass_inverse,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        trace_orientation_mode,
+        factor_kind=0,
+        factors=None,
+        factor_pivots=None,
+):
+    """Recover mixed local unknowns by solving projected local systems."""
+    num_elements = loc2glob_edge.shape[0]
+    nel = mass_matrix.shape[0]
+
+    for element in prange(num_elements):
+        local_columns = _solve_projected_diffusion_element_rhs(
+            element, trace, loc2glob_edge, orientations, aff_mats, aff_jacs,
+            jacs_el_fc, normals, tau, mass_matrix, mass_inverse, reaction_triples,
+            face_element_mass, face_element_trace, d0_reference, d1_reference,
+            source_coeffs, source_kind, reaction_coeffs, reaction_scalar,
+            reaction_is_scalar, trace_orientation_mode, factor_kind, factors, factor_pivots)
+        for i in range(3 * nel):
+            local_unknowns[element, i] = local_columns[i, 0]
+
+
+@njit(cache=True, parallel=True, fastmath=True)
+def reconstruct_projected_tensor_diffusion_local_unknowns_kernel(
+        local_unknowns,
+        trace,
+        loc2glob_edge,
+        orientations,
+        aff_mats,
+        aff_jacs,
+        jacs_el_fc,
+        normals,
+        tau,
+        mass_matrix,
+        reaction_triples,
+        face_element_mass,
+        face_element_trace,
+        d0_reference,
+        d1_reference,
+        source_coeffs,
+        source_kind,
+        reaction_coeffs,
+        reaction_scalar,
+        reaction_is_scalar,
+        inv00_coeffs,
+        inv01_coeffs,
+        inv10_coeffs,
+        inv11_coeffs,
+        trace_orientation_mode,
+):
+    """Recover mixed local unknowns from projected tensor local systems."""
+    num_elements = loc2glob_edge.shape[0]
+    nel = mass_matrix.shape[0]
+
+    for element in prange(num_elements):
+        local_columns = np.empty((3 * nel, 1), dtype=np.float64)
+        two_nel = 2 * nel
+        schur_matrix = np.empty((nel, nel), dtype=np.float64)
+        d0 = np.empty((nel, nel), dtype=np.float64)
+        d1 = np.empty((nel, nel), dtype=np.float64)
+        mn0 = np.empty((nel, nel), dtype=np.float64)
+        mn1 = np.empty((nel, nel), dtype=np.float64)
+        flux_lu = np.empty((two_nel, two_nel), dtype=np.float64)
+        flux_d_response = np.empty((two_nel, nel), dtype=np.float64)
+        rhs0 = np.empty((nel, 1), dtype=np.float64)
+        rhs1 = np.empty((nel, 1), dtype=np.float64)
+        rhs2 = np.empty((nel, 1), dtype=np.float64)
+        red_rhs = np.empty((nel, 1), dtype=np.float64)
+        flux_rhs = np.empty((two_nel, 1), dtype=np.float64)
+        flux_pivots = np.empty(two_nel, dtype=np.int64)
+        schur_pivots = np.empty(nel, dtype=np.int64)
+
+        _build_projected_tensor_diffusion_operator(
+            schur_matrix,
+            d0,
+            d1,
+            mn0,
+            mn1,
+            flux_lu,
+            flux_pivots,
+            flux_d_response,
+            element,
+            aff_mats,
+            aff_jacs,
+            jacs_el_fc,
+            normals,
+            tau,
+            mass_matrix,
+            reaction_triples,
+            face_element_mass,
+            d0_reference,
+            d1_reference,
+            reaction_coeffs,
+            reaction_scalar,
+            reaction_is_scalar,
+            inv00_coeffs,
+            inv01_coeffs,
+            inv10_coeffs,
+            inv11_coeffs,
+        )
+        _build_projected_diffusion_reconstruction_rhs(
+            rhs0,
+            rhs1,
+            rhs2,
+            element,
+            trace,
+            loc2glob_edge,
+            orientations,
+            aff_jacs,
+            jacs_el_fc,
+            normals,
+            tau,
+            mass_matrix,
+            face_element_trace,
+            source_coeffs,
+            source_kind,
+            trace_orientation_mode,
+        )
+        _solve_projected_tensor_diffusion_columns(
+            local_columns,
+            schur_matrix,
+            d0,
+            d1,
+            mn0,
+            mn1,
+            rhs0,
+            rhs1,
+            rhs2,
+            red_rhs,
+            flux_lu,
+            flux_pivots,
+            flux_rhs,
+            schur_pivots,
+        )
+        for i in range(3 * nel):
+            local_unknowns[element, i] = local_columns[i, 0]
+
+
+__all__ = [
+    "assemble_projected_diffusion_trace_rhs_eliminated_kernel",
+    "assemble_projected_diffusion_trace_system_eliminated_kernel",
+    "assemble_projected_tensor_diffusion_trace_system_eliminated_kernel",
+    "reconstruct_projected_diffusion_local_unknowns_kernel",
+    "reconstruct_projected_tensor_diffusion_local_unknowns_kernel",
+]
+
+
+@njit(cache=True, parallel=True)
+def factor_projected_diffusion_schur_kernel(
+        factors, pivots, status, factor_kind, aff_mats, aff_jacs,
+        jacs_el_fc, normals, tau, mass_matrix, mass_inverse,
+        reaction_triples, face_element_mass, d0_reference, d1_reference,
+        reaction_coeffs, reaction_scalar, reaction_is_scalar):
+    """Build persistent scalar Schur factors with element-private scratch."""
+    nel = mass_matrix.shape[0]
+    for element in prange(aff_jacs.size):
+        d0 = np.empty((nel, nel), dtype=np.float64)
+        d1 = np.empty((nel, nel), dtype=np.float64)
+        mn0 = np.empty((nel, nel), dtype=np.float64)
+        mn1 = np.empty((nel, nel), dtype=np.float64)
+        k_d0 = np.empty((nel, nel), dtype=np.float64)
+        k_d1 = np.empty((nel, nel), dtype=np.float64)
+        _build_projected_diffusion_operator(
+            factors[element], d0, d1, mn0, mn1, k_d0, k_d1, element,
+            aff_mats, aff_jacs, jacs_el_fc, normals, tau, mass_matrix,
+            mass_inverse, reaction_triples, face_element_mass,
+            d0_reference, d1_reference, reaction_coeffs, reaction_scalar,
+            reaction_is_scalar)
+        if factor_kind == 2:
+            status[element] = cholesky_factor_inplace(factors[element])
+        else:
+            lu_factor_inplace(factors[element], pivots[element])
+            status[element] = 0

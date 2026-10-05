@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.hdg import condensation as hdg
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.hdg import condensation as hdg
 
 cp = pytest.importorskip("cupy")
 
@@ -23,9 +23,9 @@ def _require_device():
 def test_device_source_moments_match_host_for_other_space_fields(source_order):
     """A same-mesh field of another order is sampled, not reused as coefficients."""
     _require_device()
-    from hdgfem.transport import cuda as advection_cuda
-    from hdgfem.mixed import cupy as diffusion_cupy
-    from hdgfem.core.device import as_cupy_space
+    from hybridge.transport import cuda as advection_cuda
+    from hybridge.mixed import cupy as diffusion_cupy
+    from hybridge.core.device import as_cupy_space
 
     mesh = rectangle_mesh(3, 2)
     space = DGSpace(mesh, 2)

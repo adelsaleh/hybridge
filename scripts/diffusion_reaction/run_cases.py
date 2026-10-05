@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, field, replace
 from math import isfinite
 from pathlib import Path
 from typing import Any
-from hdgfem.runtime.logging import (
+from hybridge.runtime.logging import (
     format_elapsed_percent as _timing_with_percent,
     timed_call as _timed_call,
 )
@@ -437,7 +437,7 @@ def _runtime_config(config: DiffusionReactionRunPreset, args) -> DiffusionReacti
 
 
 def _build_mesh(config: DiffusionReactionRunPreset, case):
-    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, \
+    from hybridge.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, \
         rectangle_mesh
 
     domain = config.domain
@@ -495,9 +495,9 @@ def _summarize_solve(
         config: DiffusionReactionRunPreset,
 ) -> float:
     import numpy as np
-    from hdgfem.diagnostics.errors import evaluate_scalar_error
-    from hdgfem.io.output import pretty_print_sections
-    from hdgfem.mixed.coefficients import is_identity_diffusion
+    from hybridge.diagnostics.errors import evaluate_scalar_error
+    from hybridge.io.output import pretty_print_sections
+    from hybridge.mixed.coefficients import is_identity_diffusion
 
     metrics = evaluate_scalar_error(result.field, exact).metrics
     l2_error = metrics.l2
@@ -526,7 +526,7 @@ def _summarize_solve(
         ("trace dofs", result.trace.size, ",d"),
     ]
     if config.diffusion_stabilization_mode == "global-length":
-        from hdgfem.mixed.stabilization import GlobalLengthDiffusion
+        from hybridge.mixed.stabilization import GlobalLengthDiffusion
 
         policy = GlobalLengthDiffusion(
             gamma_d=config.diffusion_stabilization_gamma,
@@ -787,10 +787,10 @@ def _main() -> None:
         _print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.field_ops import coefficient_field
-    from hdgfem.core.space import DGSpace
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
-    from hdgfem.mixed.stabilization import GlobalLengthDiffusion
+    from hybridge.core.field_ops import coefficient_field
+    from hybridge.core.space import DGSpace
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
+    from hybridge.mixed.stabilization import GlobalLengthDiffusion
 
     case = case_definition_by_key(config.case)
     problem = case.build(**config.case_params)
@@ -874,9 +874,9 @@ def _main() -> None:
     if config.plot:
         _configure_plot_gl_environment(config.plot_gl_mode)
 
-        from hdgfem.diagnostics.errors import evaluate_scalar_error
-        from hdgfem.io.comparison import plot_sampled_solution_comparison
-        from hdgfem.io.plot import resolve_postprocessed_plot_resolution
+        from hybridge.diagnostics.errors import evaluate_scalar_error
+        from hybridge.io.comparison import plot_sampled_solution_comparison
+        from hybridge.io.plot import resolve_postprocessed_plot_resolution
 
         plot_resolution = resolve_postprocessed_plot_resolution(
             config.plot_resolution,

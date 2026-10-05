@@ -32,7 +32,7 @@ not execute numerical kernels or establish numerical/build compatibility.
 
 ### Available entry point
 
-From the HDGFEM repository, create a plan without CUDA, meshes or solves:
+From the HYBRIDGE repository, create a plan without CUDA, meshes or solves:
 
 ```sh
 .venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
@@ -133,7 +133,7 @@ non-tensor FP64 throughput among GPUs actually allocated by the scheduler.
 Device memory is per CUDA device, not summed over boards or nodes. K80 is a
 dual-GPU board. Query actual memory: do not assume a V100 memory SKU.
 
-`hdgfem.backends.device_inventory` provides lazy, runtime-visible enumeration
+`hybridge.backends.device_inventory` provides lazy, runtime-visible enumeration
 and estimated FP64 peak ranking. It leaves CUDA_VISIBLE_DEVICES unchanged,
 uses allocation-local ordinals, records free memory, and restores the caller's
 selected device. Unknown throughput requires an explicit override rather than
@@ -142,7 +142,7 @@ Peak throughput is not a forecast of sparse-solver speed.
 
 CUDA 13 cannot compile the Pascal/Volta kernels needed for P100/V100. Plan for a
 compatible CUDA 12.x environment on those nodes; K80 requires an older stack.
-The runner must preflight CuPy, AMGX and both HDGFEM source trees, and must not
+The runner must preflight CuPy, AMGX and both HYBRIDGE source trees, and must not
 invoke installation or build scripts. Source paths must be configurable; no
 machine-specific home-directory paths or local matrix caches may be required on AMU.
 
@@ -180,7 +180,7 @@ below (or lower `--numba-threads` to the allocation). Prefer the larger VRAM SKU
 when available. The campaign uses one scheduler-visible GPU at a time, not a
 distributed solver. Do not unset the scheduler's `CUDA_VISIBLE_DEVICES`.
 
-Transfer the HDGFEM source tree, the patched `AMGX-hdg-cuda13` and
+Transfer the HYBRIDGE source tree, the patched `AMGX-hdg-cuda13` and
 `pyamgx-hdg-cuda13` **sources**, and `run_configs/adr_unified_l5/` with its meshes.
 The source-directory suffix does not require building with CUDA 13. Use a
 cluster-local Python 3.11+ environment with the study's numerical dependencies,
@@ -193,30 +193,30 @@ Set these absolute paths to the transferred trees and your CUDA-12 module.
 Use new build directories; do not overwrite the workstation's CUDA-13 build:
 
 ```sh
-export HDGFEM_SRC=/path/to/hdgfem
-export HDGFEM_GMRES_SRC="$HDGFEM_SRC/vendor/adr_gmres"
-export HDGFEM_CUDA12_ROOT=/path/to/cuda-12.x
-export HDGFEM_AMGX_SOURCE=/path/to/AMGX-hdg-cuda13
-export HDGFEM_PYAMGX_SOURCE=/path/to/pyamgx-hdg-cuda13
-export HDGFEM_AMGX_V100_BUILD=/path/to/AMGX-build-cuda12-v100
-export HDGFEM_PYAMGX_V100_BUILD=/path/to/pyamgx-build-cuda12-v100
-export HDGFEM_PYTHON="$HDGFEM_SRC/.venv/bin/python"
-export HDGFEM_BUILD_JOBS=8
+export HYBRIDGE_SRC=/path/to/hybridge
+export HYBRIDGE_GMRES_SRC="$HYBRIDGE_SRC/vendor/adr_gmres"
+export HYBRIDGE_CUDA12_ROOT=/path/to/cuda-12.x
+export HYBRIDGE_AMGX_SOURCE=/path/to/AMGX-hdg-cuda13
+export HYBRIDGE_PYAMGX_SOURCE=/path/to/pyamgx-hdg-cuda13
+export HYBRIDGE_AMGX_V100_BUILD=/path/to/AMGX-build-cuda12-v100
+export HYBRIDGE_PYAMGX_V100_BUILD=/path/to/pyamgx-build-cuda12-v100
+export HYBRIDGE_PYTHON="$HYBRIDGE_SRC/.venv/bin/python"
+export HYBRIDGE_BUILD_JOBS=8
 
-cmake -S "$HDGFEM_AMGX_SOURCE" -B "$HDGFEM_AMGX_V100_BUILD" \
-  -DCMAKE_CUDA_COMPILER="$HDGFEM_CUDA12_ROOT/bin/nvcc" \
-  -DCUDAToolkit_ROOT="$HDGFEM_CUDA12_ROOT" \
+cmake -S "$HYBRIDGE_AMGX_SOURCE" -B "$HYBRIDGE_AMGX_V100_BUILD" \
+  -DCMAKE_CUDA_COMPILER="$HYBRIDGE_CUDA12_ROOT/bin/nvcc" \
+  -DCUDAToolkit_ROOT="$HYBRIDGE_CUDA12_ROOT" \
   -DCMAKE_CUDA_ARCHITECTURES=70 \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_NO_MPI=ON
-cmake --build "$HDGFEM_AMGX_V100_BUILD" --target amgxsh \
-  --parallel "$HDGFEM_BUILD_JOBS"
+cmake --build "$HYBRIDGE_AMGX_V100_BUILD" --target amgxsh \
+  --parallel "$HYBRIDGE_BUILD_JOBS"
 
 (
-  cd "$HDGFEM_PYAMGX_SOURCE" || exit 1
-  AMGX_DIR="$HDGFEM_AMGX_SOURCE" AMGX_BUILD_DIR="$HDGFEM_AMGX_V100_BUILD" \
-    "$HDGFEM_PYTHON" setup.py build_ext \
-    --build-lib "$HDGFEM_PYAMGX_V100_BUILD" \
-    --build-temp "$HDGFEM_PYAMGX_V100_BUILD/objects"
+  cd "$HYBRIDGE_PYAMGX_SOURCE" || exit 1
+  AMGX_DIR="$HYBRIDGE_AMGX_SOURCE" AMGX_BUILD_DIR="$HYBRIDGE_AMGX_V100_BUILD" \
+    "$HYBRIDGE_PYTHON" setup.py build_ext \
+    --build-lib "$HYBRIDGE_PYAMGX_V100_BUILD" \
+    --build-temp "$HYBRIDGE_PYAMGX_V100_BUILD/objects"
 )
 ```
 
@@ -229,15 +229,15 @@ Activate the V100 libraries in the allocated job environment. Do not source
 the workstation's CUDA-13 environment or use `scripts/gpu/run_cuda13.sh`:
 
 ```sh
-export CUDA_PATH="$HDGFEM_CUDA12_ROOT"
-export CUDA_HOME="$HDGFEM_CUDA12_ROOT"
-export PATH="$HDGFEM_CUDA12_ROOT/bin:$PATH"
-export LD_LIBRARY_PATH="$HDGFEM_AMGX_V100_BUILD:$HDGFEM_CUDA12_ROOT/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export PYTHONPATH="$HDGFEM_PYAMGX_V100_BUILD${PYTHONPATH:+:$PYTHONPATH}"
-cd "$HDGFEM_SRC"
+export CUDA_PATH="$HYBRIDGE_CUDA12_ROOT"
+export CUDA_HOME="$HYBRIDGE_CUDA12_ROOT"
+export PATH="$HYBRIDGE_CUDA12_ROOT/bin:$PATH"
+export LD_LIBRARY_PATH="$HYBRIDGE_AMGX_V100_BUILD:$HYBRIDGE_CUDA12_ROOT/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONPATH="$HYBRIDGE_PYAMGX_V100_BUILD${PYTHONPATH:+:$PYTHONPATH}"
+cd "$HYBRIDGE_SRC"
 
-"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
-  --branch-root "$HDGFEM_GMRES_SRC" \
+"$HYBRIDGE_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+  --branch-root "$HYBRIDGE_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --preflight
 ```
@@ -245,8 +245,8 @@ cd "$HDGFEM_SRC"
 After preflight passes, launch:
 
 ```sh
-"$HDGFEM_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
-  --branch-root "$HDGFEM_GMRES_SRC" \
+"$HYBRIDGE_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+  --branch-root "$HYBRIDGE_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --maxiter 2000 \
   --assembly-backend auto --numba-threads 24 \

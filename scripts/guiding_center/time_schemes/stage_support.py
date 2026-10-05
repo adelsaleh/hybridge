@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import math
 from typing import Any
-from hdgfem.core.field_ops import trace_linear_combination
+from hybridge.core.field_ops import trace_linear_combination
 
 
 def closest_trace(candidates, target_time):

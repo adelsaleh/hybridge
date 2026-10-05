@@ -27,7 +27,7 @@ from typing import Any, Callable, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "configs" / "amgx"
 RUN_LOG_DIR = ROOT / "run_logs"
-TMP_CONFIG_DIR = Path("/tmp/hdgfem/amgx_sweeps")
+TMP_CONFIG_DIR = Path("/tmp/hybridge/amgx_sweeps")
 RUNNER_MODULE = "scripts.gpu.run_diffusion_reaction_cuda"
 DEFAULT_BASE_CONFIG = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json"
 CLASSICAL_CONFIG = CONFIG_DIR / "diff_rea_gpu4_hdg_pcgf_classical_amg.json"
@@ -668,7 +668,7 @@ def env_with_amgx(args: argparse.Namespace) -> dict[str, str]:
     if existing:
         paths.append(existing)
     env["LD_LIBRARY_PATH"] = ":".join(paths)
-    env["HDGFEM_CUDA_AMGX_MONITOR"] = "1" if args.monitor else "0"
+    env["HYBRIDGE_CUDA_AMGX_MONITOR"] = "1" if args.monitor else "0"
     return env
 
 

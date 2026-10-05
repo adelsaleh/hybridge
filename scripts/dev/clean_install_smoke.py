@@ -1,4 +1,4 @@
-"""Build, install, and exercise an hdgfem wheel outside the source tree."""
+"""Build, install, and exercise an hybridge wheel outside the source tree."""
 
 from __future__ import annotations
 
@@ -24,11 +24,11 @@ from pathlib import Path
 
 import numpy as np
 
-import hdgfem
-from hdgfem import DGSpace, rectangle_mesh, solve_global_system
+import hybridge
+from hybridge import DGSpace, rectangle_mesh, solve_global_system
 
-site_root = Path(os.environ["HDGFEM_SMOKE_SITE"]).resolve()
-module_path = Path(hdgfem.__file__).resolve()
+site_root = Path(os.environ["HYBRIDGE_SMOKE_SITE"]).resolve()
+module_path = Path(hybridge.__file__).resolve()
 module_path.relative_to(site_root)
 
 rows = np.array([0, 0, 1, 1], dtype=np.int64)
@@ -46,7 +46,7 @@ if space.mesh.num_tri != 2:
 print(
     json.dumps(
         {
-            "version": importlib.metadata.version("hdgfem"),
+            "version": importlib.metadata.version("hybridge"),
             "module": str(module_path),
             "solver_backend": solve.backend,
             "physical_relative_residual": solve.physical_relative_residual_norm,
@@ -83,17 +83,17 @@ def _run(
 
 
 def _built_wheel(wheel_dir: Path) -> Path:
-    wheels = tuple(wheel_dir.glob("hdgfem-*.whl"))
+    wheels = tuple(wheel_dir.glob("hybridge-*.whl"))
     if len(wheels) != 1:
-        raise RuntimeError(f"expected one hdgfem wheel, found {len(wheels)} in {wheel_dir}")
+        raise RuntimeError(f"expected one hybridge wheel, found {len(wheels)} in {wheel_dir}")
     return wheels[0]
 
 
 def _validate_wheel_contents(wheel: Path) -> None:
     with zipfile.ZipFile(wheel) as archive:
         members = tuple(archive.namelist())
-    if "hdgfem/__init__.py" not in members:
-        raise RuntimeError("built wheel does not contain hdgfem/__init__.py")
+    if "hybridge/__init__.py" not in members:
+        raise RuntimeError("built wheel does not contain hybridge/__init__.py")
     forbidden = tuple(
         member for member in members if member.startswith(("tests/", "scripts/", "configs/", "run_configs/"))
     )
@@ -107,8 +107,8 @@ def _stage_source(source_dir: Path) -> None:
     for filename in ("pyproject.toml", "README.md"):
         shutil.copy2(ROOT / filename, source_dir / filename)
     shutil.copytree(
-        ROOT / "hdgfem",
-        source_dir / "hdgfem",
+        ROOT / "hybridge",
+        source_dir / "hybridge",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
 
@@ -116,7 +116,7 @@ def _stage_source(source_dir: Path) -> None:
 def run_install_smoke(*, with_dependencies: bool = False) -> None:
     """Qualify a wheel install using either existing or isolated dependencies."""
     pip = _pip_prefix()
-    with tempfile.TemporaryDirectory(prefix="hdgfem-install-smoke-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="hybridge-install-smoke-") as temporary:
         work = Path(temporary)
         source_dir = work / "source"
         wheel_dir = work / "wheel"
@@ -152,7 +152,7 @@ def run_install_smoke(*, with_dependencies: bool = False) -> None:
         environment["PYTHONNOUSERSITE"] = "1"
         environment["PYTHONSAFEPATH"] = "1"
         environment["PYTHONPATH"] = str(site_dir)
-        environment["HDGFEM_SMOKE_SITE"] = str(site_dir)
+        environment["HYBRIDGE_SMOKE_SITE"] = str(site_dir)
         python_command = [sys.executable]
         if with_dependencies:
             python_command.append("-S")

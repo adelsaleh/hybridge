@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.gpu.cublas_batched import invert_batched_cublas
-from hdgfem.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.cublas_batched import invert_batched_cublas
+from hybridge.runtime.optional import require_cupy_device
 
 
 def _cupy_or_skip():

@@ -159,7 +159,7 @@ From the repository root, this machine's CUDA/AMGX environment is:
 ```bash
 export CUDA_PATH=/usr/local/cuda-13.0
 export LD_LIBRARY_PATH=~/src/AMGX-build-cuda13:~/src/AMGX-install-cuda13/lib:$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HDGFEM_PRECISION=float64
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HYBRIDGE_PRECISION=float64
 
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr.args \

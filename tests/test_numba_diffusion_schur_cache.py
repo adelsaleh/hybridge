@@ -3,15 +3,15 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.mixed.numba import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.mixed.numba import (
     build_diffusion_schur_cache_numba,
     assemble_projected_diffusion_trace_system_eliminated_numba,
     assemble_projected_diffusion_trace_rhs_eliminated_numba,
     reconstruct_projected_diffusion_local_unknowns_numba,
 )
-from hdgfem.hdg.numba_common import cholesky_factor_inplace, cholesky_solve_inplace
-from hdgfem.linalg import expand_known_dofs
+from hybridge.hdg.numba_common import cholesky_factor_inplace, cholesky_solve_inplace
+from hybridge.linalg import expand_known_dofs
 
 
 def boundary(x, y):
@@ -100,8 +100,8 @@ def test_cholesky_status_survives_fast_math_parallel_callers():
 @pytest.mark.parametrize('order', [0, 2, 6])
 @pytest.mark.parametrize('assemble_first', [False, True])
 def test_stateful_solver_numpy_parity_and_invalidation(kind, basis, order, assemble_first):
-    from hdgfem import DiffusionReactionHDGSolver, DGMesh
-    from hdgfem.mixed.local_numpy import hdg_residual
+    from hybridge import DiffusionReactionHDGSolver, DGMesh
+    from hybridge.mixed.local_numpy import hdg_residual
     mesh = rectangle_mesh(2, 2)
     mesh = DGMesh.from_arrays(mesh.node_coords @ np.array([[1.8, .3], [-.2, .8]]), mesh.triangles)
     space = DGSpace(mesh, order)
@@ -170,8 +170,8 @@ def test_stateful_solver_numpy_parity_and_invalidation(kind, basis, order, assem
 @pytest.mark.parametrize('kind', ['schur-lu', 'schur-cholesky'])
 @pytest.mark.parametrize('order', [1, 3, 6])
 def test_factor_action_against_numpy_schur(kind, order):
-    from hdgfem.mixed.local_numpy import _local_solver_pre_mats
-    from hdgfem.hdg.numba_common import lu_solve_inplace
+    from hybridge.mixed.local_numpy import _local_solver_pre_mats
+    from hybridge.hdg.numba_common import lu_solve_inplace
     space = DGSpace(rectangle_mesh(2, 1, xlim=(-2., 1.), ylim=(-0.3, 0.7)), order)
     reaction = space.project_callable(lambda x, y: 0.1 + x * x)
     cache = build_diffusion_schur_cache_numba(reaction, 0.7, space, factor_kind=kind)

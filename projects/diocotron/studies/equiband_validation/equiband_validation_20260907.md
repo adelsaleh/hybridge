@@ -29,7 +29,7 @@ No installed environment packages were modified for this work.
 The initial implementation suite passed 27 checks, including the optional MPI
 subprocess regression and local documentation links. A separate host run
 also exercised the repository packaging contract: its package-directory
-scan flags pre-existing `hdgfem/solvers/.cache/hdgfem/meshes` directories
+scan flags pre-existing `hybridge/solvers/.cache/hybridge/meshes` directories
 dated July 23, 2026. Those legacy cache files were not changed or deleted.
 The base runtime dependency set remains NumPy, Numba and SciPy. Equiband
 now lives in `projects/diocotron/dolfinx/equiband`, outside the installed
@@ -38,7 +38,7 @@ below use the script-side entry point.
 
 After the source relocation, 61 host-side checks and 30 FEniCSx/MPI checks
 passed. These include the new package-boundary regression, CLI discovery
-without HDGFEM or DOLFINx, native guiding-center checkpoint consumers,
+without HYBRIDGE or DOLFINx, native guiding-center checkpoint consumers,
 one-/two-rank target agreement and a new-process restart. The boundary
 regression is included in the repository's `host-fast` lane. A further 15
 test-matrix/packaging checks passed; the known cache-directory scan above

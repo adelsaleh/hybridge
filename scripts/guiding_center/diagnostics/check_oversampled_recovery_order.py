@@ -20,10 +20,10 @@ if not numba.config.DISABLE_JIT:
 import json
 import argparse
 import numpy as np
-from hdgfem.core.mesh import DGMesh, rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.core.transfer import project_same_mesh_field, evaluate_field_at_points
-from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
+from hybridge.core.mesh import DGMesh, rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.core.transfer import project_same_mesh_field, evaluate_field_at_points
+from hybridge.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

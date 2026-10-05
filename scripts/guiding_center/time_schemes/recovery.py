@@ -2,10 +2,10 @@
 from functools import wraps
 from time import perf_counter
 
-from hdgfem.core.field_ops import solution_trace
-from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.core.space import DGField
-from hdgfem.runtime.logging import timed_call
+from hybridge.core.field_ops import solution_trace
+from hybridge.core.transfer import project_same_mesh_field
+from hybridge.core.space import DGField
+from hybridge.runtime.logging import timed_call
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
     raise_for_poisson_rank_failure, raise_for_poisson_transport_failure,
@@ -112,7 +112,7 @@ class StepRecoveryWork:
 
     def repair(self, failure):
         """Repeat the failed checkpoint first; the caller then rebuilds histories."""
-        from hdgfem.diagnostics.solver import solver_diagnostics_snapshot
+        from hybridge.diagnostics.solver import solver_diagnostics_snapshot
         for kind in ("poisson", "transport"):
             results = getattr(self, kind+"_results")
             for index, result in enumerate(results):

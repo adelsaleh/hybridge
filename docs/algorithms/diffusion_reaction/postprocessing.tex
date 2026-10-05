@@ -33,8 +33,8 @@ was only modestly better than the raw HDG flux:
 The relevant files were:
 \begin{itemize}
     \item \verb|scripts/diffusion_reaction/run_cases.py| for preset execution and error reporting,
-    \item \verb|hdgfem/solvers/diffusion_reaction.py| for the HDG solver and postprocessing wrapper,
-    \item \verb|hdgfem/mixed/postprocess/numba_kernels.py| (current location) for the fused Numba local postprocessing kernels,
+    \item \verb|hybridge/solvers/diffusion_reaction.py| for the HDG solver and postprocessing wrapper,
+    \item \verb|hybridge/mixed/postprocess/numba_kernels.py| (current location) for the fused Numba local postprocessing kernels,
     \item \verb|tests/test_diffusion_reaction_solver.py| for solver and postprocessing regression tests.
 \end{itemize}
 
@@ -194,9 +194,9 @@ The implementation changes were:
     M^{-1}(\phi_i, \partial_r \phi_j), \qquad
     M^{-1}(\phi_i, \partial_s \phi_j)
     \]
-    in \verb|_HDGPostprocessCache|, now in \verb|hdgfem.mixed.postprocess.flux|.
+    in \verb|_HDGPostprocessCache|, now in \verb|hybridge.mixed.postprocess.flux|.
     \item Added the primal-reference H(div) flux kernel in
-    the Numba postprocessing kernels, now \verb|hdgfem.mixed.postprocess.numba_kernels|:
+    the Numba postprocessing kernels, now \verb|hybridge.mixed.postprocess.numba_kernels|:
     \begin{quote}
     \small
     \verb|solve_hdiv_flux_primal_reference_min_distance_postprocess_kernel|

@@ -1,1 +1,1 @@
-"""Archived ARK3 runner for controlled comparisons; shares the installed HDGFEM backends."""
+"""Archived ARK3 runner for controlled comparisons; shares the installed HYBRIDGE backends."""

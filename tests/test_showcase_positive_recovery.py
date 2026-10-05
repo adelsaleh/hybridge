@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from scripts.reports import record_gpu_showcase as recorder
-from hdgfem.linalg.results import LinearSolveConvergenceError
+from hybridge.linalg.results import LinearSolveConvergenceError
 
 
 def test_positive_options_reuse_robust_runner_attempts_and_corrected_upwind():
@@ -32,7 +32,7 @@ def test_accepted_gpu_solve_never_constructs_host_solver(monkeypatch):
 @pytest.mark.parametrize('handoff', [True, False])
 def test_exhausted_gpu_attempts_use_pardiso_and_require_device_handoff(monkeypatch, handoff):
     """Only accepted host results with reconstructed device fields can advance."""
-    from hdgfem.linalg import pardiso_runtime
+    from hybridge.linalg import pardiso_runtime
     events = []
     error = LinearSolveConvergenceError('exhausted retries')
     error.amgx_attempts = ({'label': 'primary', 'success': False},)

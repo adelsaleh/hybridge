@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Package-backed CUDA advection-reaction HDG runner.
 
-The numerical CUDA assembly/reconstruction path lives in ``hdgfem``. This file
+The numerical CUDA assembly/reconstruction path lives in ``hybridge``. This file
 is intentionally a thin CLI wrapper for benchmark/sweep compatibility.
 """
 
@@ -17,21 +17,21 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
-from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
-from hdgfem.solvers.capabilities import resolve_raw_lu_mode
-from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.core.field_ops import solution_field
-from hdgfem.diagnostics.errors import evaluate_scalar_error
-from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.linalg.amgx.config import load_amgx_config
-from hdgfem.io.output import pretty_print_sections
-from hdgfem.io.plot import (
+from hybridge.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
+from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
+from hybridge.solvers.capabilities import resolve_raw_lu_mode
+from hybridge.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+from hybridge.core.space import DGSpace, VectorDGField
+from hybridge.core.field_ops import solution_field
+from hybridge.diagnostics.errors import evaluate_scalar_error
+from hybridge.io.comparison import plot_sampled_solution_comparison
+from hybridge.linalg.amgx.config import load_amgx_config
+from hybridge.io.output import pretty_print_sections
+from hybridge.io.plot import (
     plot_solution_comparison,
     resolve_field_plot_resolution,
 )
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
 
 
@@ -465,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     timings = [(label, _format_timing_cell(seconds, total), "s") for label, seconds in main_timing_items]
 
     _print_timing_rows(
-        "HDGFEM CUDA Detailed Solver Timings",
+        "HYBRIDGE CUDA Detailed Solver Timings",
         detail_items,
         float(result.timings.total),
         "% solver",
@@ -478,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Errors", errors),
         ("Timings", timings),
     ]
-    pretty_print_sections(sections, title="HDGFEM CUDA Advection-Reaction Solve Summary")
+    pretty_print_sections(sections, title="HYBRIDGE CUDA Advection-Reaction Solve Summary")
 
     if args.plot:
         plot_title = f"{args.case}, p={space.order}, elements={mesh.num_tri:,}, L2={l2:.2e}"

@@ -3,14 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.face_dense import FaceDenseSystem, materialize_face_dense_matrix
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg import (
+from hybridge.linalg.face_dense import FaceDenseSystem, materialize_face_dense_matrix
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg import (
     build_face_additive_schwarz_preconditioner,
     solve_face_dense_gmres,
 )
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 

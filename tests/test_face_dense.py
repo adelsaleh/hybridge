@@ -7,22 +7,22 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_array
 
-from hdgfem.mixed.face_dense import build_face_topology
-from hdgfem.linalg.face_dense import (
+from hybridge.mixed.face_dense import build_face_topology
+from hybridge.linalg.face_dense import (
     expand_eliminated_solution,
     face_dense_matvec,
     face_dense_to_dense,
 )
-from hdgfem.hdg.condensation import block_source_moments, free_trace_dofs
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.reduction import eliminate_known_dofs
-from hdgfem.mixed.local_numpy import (
+from hybridge.hdg.condensation import block_source_moments, free_trace_dofs
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.reduction import eliminate_known_dofs
+from hybridge.mixed.local_numpy import (
     assemble_diffusion_trace_system,
     diffusion_element_boundary_mats,
     local_solvers,
 )
-from hdgfem.solvers.diffusion_face_dense import (
+from hybridge.solvers.diffusion_face_dense import (
     DiffusionFaceDenseAssembly,
     assemble_diffusion_face_dense_components,
 )

@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 from scipy.sparse import bsr_matrix
 
-from hdgfem.mixed.face_dense import (
+from hybridge.mixed.face_dense import (
     assemble_global_face_blocks,
     build_face_topology,
     eliminate_dirichlet_faces,
 )
-from hdgfem.linalg.face_dense import materialize_face_dense_matrix
-from hdgfem.linalg.additive_schwarz import (
+from hybridge.linalg.face_dense import materialize_face_dense_matrix
+from hybridge.linalg.additive_schwarz import (
     assemble_bsr_additive_schwarz_correction,
     assemble_bsr_face_additive_schwarz_correction,
     build_bsr_additive_schwarz_local_matrices,

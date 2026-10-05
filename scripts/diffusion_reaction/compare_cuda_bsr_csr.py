@@ -51,20 +51,20 @@ from pathlib import Path
 
 import numpy as np
 
-from hdgfem import (
+from hybridge import (
     DGSpace,
     DiffusionReactionHDGSolver,
     evaluate_scalar_error,
     gmsh_disc_mesh,
     rectangle_mesh,
 )
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.linalg.amgx.config import (
+from hybridge.runtime.optional import require_cupy
+from hybridge.linalg.amgx.config import (
     describe_amgx_preconditioner,
     describe_amgx_solver,
     load_amgx_config,
 )
-from hdgfem.mixed.stabilization import GlobalLengthDiffusion
+from hybridge.mixed.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 
@@ -458,13 +458,13 @@ def _replay_worker(args):
         if cpu:
             import ctypes
             import pypardiso
-            from hdgfem.linalg.direct import (
+            from hybridge.linalg.direct import (
                             solve_pypardiso_system,
                             clear_pypardiso_cache,
                             prepare_pypardiso_spd_matrix,
                         )
-            from hdgfem.linalg.results import refine_host_linear_solution
-            from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
+            from hybridge.linalg.results import refine_host_linear_solution
+            from hybridge.linalg.pardiso_diagnostics import pardiso_factor_statistics
             getter = pypardiso.ps.libmkl.MKL_Get_Max_Threads
             getter.restype = ctypes.c_int
             report["mkl_threads"] = int(getter())
@@ -476,7 +476,7 @@ def _replay_worker(args):
                 report["maximum_refinements"] = args.spd_refinement
                 report["maximum_original_matrix_corrections"] = args.spd_original_refinement
         else:
-            from hdgfem.linalg.amgx.host import initialize_pyamgx_once
+            from hybridge.linalg.amgx.host import initialize_pyamgx_once
             cp = require_cupy()
             cp.cuda.Device(0).use()
             sync = cp.cuda.get_current_stream().synchronize
@@ -527,10 +527,10 @@ def _replay_worker(args):
                         device_rhs = cp.asarray(rhs)
                         row = {}
                         if args.replay_worker.startswith("amgx"):
-                            from hdgfem.linalg.amgx.device_solver import (
+                            from hybridge.linalg.amgx.device_solver import (
                                                             PyAMGXCsrDeviceSolver,
                                                         )
-                            from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
+                            from hybridge.linalg.gpu.sparse import _DeviceBsrMatrixView
                             from scripts.guiding_center.poisson.amgx_bsr_smoothing import smoothing_config
                             sweeps = int(args.replay_worker[-1])
                             config = smoothing_config(postsweeps=3, hierarchy="scalar_expand",
@@ -540,7 +540,7 @@ def _replay_worker(args):
                             solver.setup(_DeviceBsrMatrixView(operator.data, operator.indices, operator.indptr, matrix.shape, q))
                             report["configuration"] = solver.config_dict
                         elif args.replay_worker in PMG_REPLAY_POLICIES:
-                            from hdgfem.linalg.multigrid.face_hp import (
+                            from hybridge.linalg.multigrid.face_hp import (
                                                             FaceBlockHpMgPcgSolver,
                                                         )
                             # E has modal basis rows: A_m=E A_n E^T, b_m=E b_n.
@@ -559,17 +559,17 @@ def _replay_worker(args):
                             row.update(symmetry_defect=solver.symmetry_defect,
                                        positive_curvature=solver.positive_curvature)
                         elif args.replay_worker == "asm_pp":
-                            from hdgfem.linalg.additive_schwarz import build_bsr_face_additive_schwarz_local_matrices
-                            from hdgfem.linalg.gpu.cublas_batched import (
+                            from hybridge.linalg.additive_schwarz import build_bsr_face_additive_schwarz_local_matrices
+                            from hybridge.linalg.gpu.cublas_batched import (
                                                             invert_batched_cublas,
                                                         )
-                            from hdgfem.linalg.gpu.preconditioners import (
+                            from hybridge.linalg.gpu.preconditioners import (
                                                             CuPyFaceAdditiveSchwarzPreconditioner,
                                                         )
-                            from hdgfem.linalg.gpu.polynomial import (
+                            from hybridge.linalg.gpu.polynomial import (
                                                             CuPyPolynomialPreconditioner,
                                                         )
-                            from hdgfem.linalg.gpu.production_gmres import (
+                            from hybridge.linalg.gpu.production_gmres import (
                                                             CuPyProductionGMRESSolver,
                                                             CuPyProductionGMRESOptions,
                                                         )

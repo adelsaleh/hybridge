@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import hdgfem.linalg.direct as linalg_direct
-from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
+import hybridge.linalg.direct as linalg_direct
+from hybridge.linalg.pardiso_diagnostics import pardiso_factor_statistics
 from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_inventory as inventory
 from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_worker as worker
 from scripts.advection_diffusion_reaction.campaigns.pardiso import run_adr_pardiso_campaign as campaign
@@ -120,7 +120,7 @@ def test_changed_cache_rejected(tiny_spec):
 
 def test_tiny_worker_repeats_fresh_lu_and_reuses_factors(tiny_spec, tmp_path, monkeypatch):
     pardiso = pytest.importorskip('pypardiso')
-    import hdgfem.linalg.system as backend
+    import hybridge.linalg.system as backend
     spec, system = tiny_spec
     data = inventory.read(spec)
     data['threads'] = int(pardiso.ps.libmkl.MKL_Get_Max_Threads())
@@ -170,7 +170,7 @@ def test_environment_is_cpu_only_and_disables_jit():
     env = campaign.worker_environment(24)
     assert env['MKL_NUM_THREADS'] == env['OMP_NUM_THREADS'] == '24'
     assert env['NUMBA_DISABLE_JIT'] == '1'
-    assert env['HDGFEM_PRECISION'] == 'float64'
+    assert env['HYBRIDGE_PRECISION'] == 'float64'
     assert env['OPENBLAS_NUM_THREADS'] == '1'
 
 

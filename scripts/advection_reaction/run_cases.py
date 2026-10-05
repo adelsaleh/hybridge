@@ -7,7 +7,7 @@ import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dataclasses import replace
 from pathlib import Path
-from hdgfem.runtime.logging import (
+from hybridge.runtime.logging import (
     format_elapsed_percent as _timing_with_percent,
     timed_call as _timed_call,
 )
@@ -87,7 +87,7 @@ def _runtime_config(config: AdvectionReactionRunPreset, args) -> AdvectionReacti
 
 
 def _build_mesh(config: AdvectionReactionRunPreset, case):
-    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
+    from hybridge.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
 
     domain = case.default_domain if config.domain == "auto" else config.domain
     if domain == "structured-rectangle":
@@ -128,8 +128,8 @@ def _numba_thread_count() -> int | None:
 def _summarize_solve(result, exact, *, preset_key: str, case, mesh, space, config: AdvectionReactionRunPreset) -> float:
     import numpy as np
 
-    from hdgfem.diagnostics.errors import evaluate_scalar_error
-    from hdgfem.io.output import pretty_print_sections
+    from hybridge.diagnostics.errors import evaluate_scalar_error
+    from hybridge.io.output import pretty_print_sections
 
     metrics = evaluate_scalar_error(result.field, exact).metrics
     l2_error = metrics.l2
@@ -329,7 +329,7 @@ def _main() -> None:
         "--matrix-pattern-dir",
         type=Path,
         default=Path("run_outputs") / "matrix_patterns",
-        help="output directory for matrix pattern plots; defaults outside the hdgfem package",
+        help="output directory for matrix pattern plots; defaults outside the hybridge package",
     )
     parser.add_argument(
         "--matrix-pattern-prefix",
@@ -383,8 +383,8 @@ def _main() -> None:
         print_preset_details(preset_key, config)
         return
 
-    from hdgfem.core.space import DGSpace, VectorDGField
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
+    from hybridge.core.space import DGSpace, VectorDGField
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
 
     case = case_definition_by_key(config.case)
     beta_x, beta_y, reaction, source, exact = case.build(**config.case_params)
@@ -477,7 +477,7 @@ def _main() -> None:
     )
 
     if config.plot:
-        from hdgfem.io.plot import plot_solution_comparison, resolve_field_plot_resolution
+        from hybridge.io.plot import plot_solution_comparison, resolve_field_plot_resolution
 
         title = f"{preset_key}, {case.key}, p={space.order}, elements={mesh.num_tri}, L2={l2_error:.2e}"
         resolution = resolve_field_plot_resolution(

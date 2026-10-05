@@ -1,7 +1,7 @@
 """Bounded stationary tensor ADR solves and recovery checks; no time stepping."""
 import numpy as np
 import pytest
-from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
+from hybridge import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
 from scripts.advection_diffusion_reaction.cases.tensor_cases import manufactured_raw_tensor
 
 
@@ -18,7 +18,7 @@ def cp():
 @pytest.mark.parametrize('basis',['legacy-lagrange','legendre-modal'])
 @pytest.mark.parametrize('fmt',['csr','bsr'])
 def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basis,fmt):
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     def forbidden(*args,**kwargs):
         raise AssertionError('native BSR solve unexpectedly scalarized')
     monkeypatch.setattr(amgx_device_solver,'_scalarize_device_bsr_matrix',forbidden)
@@ -51,7 +51,7 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
 @pytest.mark.parametrize('mode', ['flux', 'primal', 'both'])
 def test_tensor_postprocessing_enabled(mode):
     """The CUDA capability gate accepts qualified tensor recoveries."""
-    from hdgfem.solvers.capabilities import (
+    from hybridge.solvers.capabilities import (
             validate_advection_diffusion_backend_configuration,
         )
     validate_advection_diffusion_backend_configuration(operation='solve',assembly_backend='raw-cuda',

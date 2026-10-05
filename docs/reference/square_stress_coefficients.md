@@ -1,6 +1,6 @@
 # Smooth square ADR stress coefficients
 
-The reusable module `hdgfem/cases/square_stress_coefficients.py` defines a smooth
+The reusable module `hybridge/cases/square_stress_coefficients.py` defines a smooth
 counterpart of the annular campaign on \([-1,1]^2\). This is **not a geometry-only
 control**: the closed contours, exact field and crossing streamfunction change.
 

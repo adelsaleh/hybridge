@@ -1,7 +1,7 @@
 # Diffusion-Reaction Experiments
 
 This directory contains research solvers and specialized kernels that are not
-installed with `hdgfem` and are not part of the supported solver API.
+installed with `hybridge` and are not part of the supported solver API.
 
 - `bootstrap_initial_guess.py` solves the same mesh at a lower polynomial order,
   elevates the trace, and uses it as an initial guess for the target solve.

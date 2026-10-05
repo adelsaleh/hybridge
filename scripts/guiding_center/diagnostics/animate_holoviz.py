@@ -47,9 +47,9 @@ def main():
 
     import numpy as np
     import cupy as cp
-    from hdgfem import DGField, DGSpace, rectangle_mesh
-    from hdgfem.core.projection import project_quadrature_values
-    from hdgfem.io.holoviz import GuidingCenterHolovizPanels
+    from hybridge import DGField, DGSpace, rectangle_mesh
+    from hybridge.core.projection import project_quadrature_values
+    from hybridge.io.holoviz import GuidingCenterHolovizPanels
 
     space = DGSpace(rectangle_mesh(24, 24), 1, basis_type='bernstein')
     points = space.mapped_quads()

@@ -22,9 +22,9 @@ import threading
 
 import numpy as np
 
-import hdgfem as hdg
-from hdgfem.diagnostics import transport_velocity_diagnostics
-from hdgfem.io import HolovizScalarPanels
+import hybridge as hdg
+from hybridge.diagnostics import transport_velocity_diagnostics
+from hybridge.io import HolovizScalarPanels
 from scripts.reports.gpu_showcase_setup import (
     COUNTS, ORDER, SEED, SIGMAS, poisson_solver, resolve_tau, showcase_mesh,
     showcase_profile, showcase_space, transport_solver)
@@ -63,8 +63,8 @@ def solve_positive_transport(transport, space, rhs, beta, reaction, trace, step,
     downloads the reduced system, and solves with nonsymmetric PyPardiso.
     The public solver uploads the accepted trace for GPU field reconstruction.
     """
-    from hdgfem.linalg.results import LinearSolveConvergenceError
-    from hdgfem.linalg.pardiso_runtime import pardiso_thread_limit
+    from hybridge.linalg.results import LinearSolveConvergenceError
+    from hybridge.linalg.pardiso_runtime import pardiso_thread_limit
 
     try:
         return transport.solve(initial_guess=trace)
@@ -143,7 +143,7 @@ def file_sha256(path):
 def save_restart(path, space, rho, potential, velocity, trace, step, args, tau, color_limits=None):
     """Atomically preserve only the full-precision final endpoint, not its history."""
     import cupy as cp
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
     cspace = as_cupy_space(space)
     def coefficients(field):
         return cp.asnumpy(as_cupy_coefficients(field, cspace))
@@ -222,7 +222,7 @@ def record(args):
         if not (np.array_equal(restart["node_coords"], mesh.node_coords)
                 and np.array_equal(restart["triangles"], mesh.triangles)):
             raise ValueError("restart mesh differs; refusing to remap coefficients")
-        from hdgfem.core.device import field_from_cupy_coefficients
+        from hybridge.core.device import field_from_cupy_coefficients
         rho = field_from_cupy_coefficients(space, cp.asarray(restart["rho"], blocking=True))
         start_step = int(restart["step"])
         metadata["resumed_from_step"] = start_step
@@ -251,7 +251,7 @@ def record(args):
     rows = []
     positivity = None
     if args.strength_mode == "positive":
-        from hdgfem.diagnostics.guiding_center import ScalarPositivityDiagnostics
+        from hybridge.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity = ScalarPositivityDiagnostics(space, backend="device")
     primary_error = None
     potential = velocity = None
@@ -269,8 +269,8 @@ def record(args):
             cp.asarray(restart["poisson_trace"], blocking=True) if restart is not None else None))
         velocity = hdg.perpendicular_vector_field(potential.flux)
         if restart is not None:
-            from hdgfem.core.device import field_from_cupy_coefficients
-            from hdgfem.core.space import VectorDGField
+            from hybridge.core.device import field_from_cupy_coefficients
+            from hybridge.core.space import VectorDGField
             def restored(key):
                 return field_from_cupy_coefficients(space, cp.asarray(restart[key], blocking=True), name=key)
             velocity = VectorDGField(tuple(restored(f"velocity_{i}") for i in range(2)))
@@ -326,8 +326,8 @@ def record(args):
             frames = 0
             if args.movie or args.gif_mb is not None:
                 from PIL import Image
-                from hdgfem.io import GifWriter, MatplotlibRasterPanels
-                from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
+                from hybridge.io import GifWriter, MatplotlibRasterPanels
+                from hybridge.io.raster import DeviceRasterSampler, RasterGeometry
 
                 geometry = RasterGeometry.from_mesh(mesh, args.raster_size, args.raster_size)
                 sampler = DeviceRasterSampler(space, geometry, device_id=cp.cuda.runtime.getDevice())
@@ -389,7 +389,7 @@ def record(args):
                     gif = stack.enter_context(GifWriter(prefix.with_suffix(".gif"), fps=args.fps,
                                                         max_bytes=round(args.gif_mb*1_000_000)))
                 if args.movie:
-                    from hdgfem.io.movie import MovieWriter
+                    from hybridge.io.movie import MovieWriter
 
                     mp4 = MovieWriter(prefix.with_suffix(".mp4"), fps=args.fps)
                     stack.callback(mp4.close)

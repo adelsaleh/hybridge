@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from hdgfem.linalg.multigrid.hierarchy_bsr import (
+from hybridge.linalg.multigrid.hierarchy_bsr import (
     load_operator,
     level_permutation,
     permute_operator,

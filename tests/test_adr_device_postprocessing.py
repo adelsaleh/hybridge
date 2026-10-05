@@ -4,10 +4,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
-from hdgfem.mixed.adr_preparation import prepare_adr_data
-from hdgfem.core.space import DGField, VectorDGField
-from hdgfem.mixed.postprocess.total_flux import (
+from hybridge import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
+from hybridge.mixed.adr_preparation import prepare_adr_data
+from hybridge.core.space import DGField, VectorDGField
+from hybridge.mixed.postprocess.total_flux import (
     _postprocess_total_flux,
     _postprocess_primal_from_total_flux,
 )
@@ -42,7 +42,7 @@ def _problem(order):
 def test_recovery_stays_device_resident(monkeypatch, order, trace_basis, variant, diffusion_kind):
     """Forbid downloads through both CuPy and lazy field access during recovery."""
     cp = _cupy()
-    from hdgfem.core.device import field_from_cupy_coefficients
+    from hybridge.core.device import field_from_cupy_coefficients
 
     space, beta, tau = _problem(order)
     from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases
@@ -142,7 +142,7 @@ def test_raw_cuda_result_materialization(monkeypatch, materialize, mode, variant
     assert isinstance(result.local_unknowns, np.ndarray if materialize else cp.ndarray)
     if not materialize:
         assert all(size <= 1 for size in downloads), downloads
-        from hdgfem.core.field_ops import solution_trace
+        from hybridge.core.field_ops import solution_trace
         assert solution_trace(result, space).data.ptr == result.trace.data.ptr
         interior = solution_trace(result, space, reduced=True)
         assert isinstance(interior, cp.ndarray)
@@ -161,8 +161,8 @@ def test_raw_cuda_result_materialization(monkeypatch, materialize, mode, variant
 def test_device_stabilization_sampling(monkeypatch, kind):
     """Preserve supported stabilization inputs without hidden coefficient downloads."""
     cp = _cupy()
-    from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.mixed.postprocess.total_flux import _adr_postprocess_samples
+    from hybridge.core.device import field_from_cupy_coefficients
+    from hybridge.mixed.postprocess.total_flux import _adr_postprocess_samples
 
     space, beta, _ = _problem(2)
     post = DGSpace(space.mesh, 3, basis_type='dub_orth')
@@ -194,14 +194,14 @@ def test_device_stabilization_sampling(monkeypatch, kind):
 def test_fused_primal_system_matches_independent_contractions(order):
     """Compare every mixed block and RHS, including the nonsymmetric cross terms."""
     cp = _cupy()
-    from hdgfem.mixed.postprocess.flux_cupy import _primal_system_cupy
-    from hdgfem.mixed.postprocess.primal_raw_cuda import primal_system_raw_cuda
-    from hdgfem.mixed.coefficients import (
+    from hybridge.mixed.postprocess.flux_cupy import _primal_system_cupy
+    from hybridge.mixed.postprocess.primal_raw_cuda import primal_system_raw_cuda
+    from hybridge.mixed.coefficients import (
             sample_diffusion_tensor,
             inverse_diffusion_values,
         )
-    from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.mixed.postprocess.flux import _build_hdg_postprocess_cache
+    from hybridge.core.device import field_from_cupy_coefficients
+    from hybridge.mixed.postprocess.flux import _build_hdg_postprocess_cache
     from scripts.advection_diffusion_reaction.cases.tensor_cases import raw_cuda_coefficient
 
     space, _, _ = _problem(order)

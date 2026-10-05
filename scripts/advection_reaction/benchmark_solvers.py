@@ -139,7 +139,7 @@ def _timed(label: str, function, *, verbose: bool = True):
 
 
 def _build_mesh(mesh_size: float, gmsh_verbosity: int):
-    from hdgfem.core.mesh import gmsh_rectangle_mesh
+    from hybridge.core.mesh import gmsh_rectangle_mesh
 
     return gmsh_rectangle_mesh(
         mesh_size,
@@ -150,8 +150,8 @@ def _build_mesh(mesh_size: float, gmsh_verbosity: int):
 
 
 def _assemble_trace_problem(args):
-    from hdgfem.core.space import DGField, DGSpace, VectorDGField
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.core.space import DGField, DGSpace, VectorDGField
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
     from scripts.advection_reaction.cases import test2
 
     mesh, mesh_time = _timed(
@@ -262,8 +262,8 @@ def _build_native_preconditioner(config: LinearSolveConfig, matrix, rhs, trace_r
         )
 
     import numpy as np
-    from hdgfem.linalg.results import diagonal_scale_system
-    from hdgfem.linalg.upwind_block_gs import build_upwind_block_gs_preconditioner
+    from hybridge.linalg.results import diagonal_scale_system
+    from hybridge.linalg.upwind_block_gs import build_upwind_block_gs_preconditioner
 
     cache_key = _native_preconditioner_cache_key(config, solver, args)
     cached = native_cache.get(cache_key)
@@ -304,7 +304,7 @@ def _build_native_preconditioner(config: LinearSolveConfig, matrix, rhs, trace_r
 
 
 def _solve_cached_system(config: LinearSolveConfig, matrix, rhs, trace_result, solver, args, native_cache):
-    from hdgfem.linalg.system import solve_global_system
+    from hybridge.linalg.system import solve_global_system
 
     solver_is_petsc = config.solver is not None and str(config.solver).lower() == "petsc"
     preconditioner, prepared_scaling, native_setup_seconds = _build_native_preconditioner(
@@ -466,7 +466,7 @@ def _main() -> None:
     if trace_result.solve_matrix_rows is None or trace_result.solve_rhs is None:
         raise RuntimeError("trace assembly did not produce a solve matrix")
 
-    from hdgfem.linalg.system import assemble_global_matrix
+    from hybridge.linalg.system import assemble_global_matrix
 
     matrix, matrix_time = _timed(
         "building reusable SciPy CSR matrix",
@@ -501,7 +501,7 @@ def _main() -> None:
         for config in selected_configs
     )
     if uses_pypardiso:
-        from hdgfem.linalg import clear_pypardiso_cache
+        from hybridge.linalg import clear_pypardiso_cache
 
     for config in selected_configs:
         if config.solver is not None and str(config.solver).lower() in {"pypardiso", "pardiso"}:

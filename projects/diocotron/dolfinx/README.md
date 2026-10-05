@@ -2,7 +2,7 @@
 
 This directory contains the optional DOLFINx research solvers and their
 checkpoint adapters. They are checkout scripts, not modules of the installed
-`hdgfem` library. Activate a matching FEniCSx/PETSc/MPI environment and run
+`hybridge` library. Activate a matching FEniCSx/PETSc/MPI environment and run
 commands from the repository root.
 
 ## Fixed-threshold equilibrium bands
@@ -52,7 +52,7 @@ reuse a directory that another process is writing.
 See the [user guide](../docs/equiband.md) for the
 functionals, branch guards, MPI commands and limitations, and the
 [examples](../examples/equiband/README.md) for configurations and an
-environment specification. Equiband itself does not import `hdgfem`.
+environment specification. Equiband itself does not import `hybridge`.
 
 ## Curved horseshoe torsion-center audit
 
@@ -116,7 +116,7 @@ center audit, whose interface consumes a named `.msh`. Equiband itself now
 uses a deterministic MPI-safe cache for canonical geometries: set
 `geometry="horseshoe"`, `mesh_size` and `geometry_degree` in its configuration
 and do not pass `mesh_file`. Its first run generates under
-`.cache/hdgfem/dolfinx_meshes`; later runs authenticate and load the same
+`.cache/hybridge/dolfinx_meshes`; later runs authenticate and load the same
 artifact. Changing size or geometry order selects a new key. Explicit
 `geometry="msh"`/`--mesh-file` mode remains available for external meshes and
 never remeshes a file from a changed config number.
@@ -137,8 +137,8 @@ uniqueness proofs.
 - [checkpoint_data.py](checkpoint_data.py) validates and reads portable
   checkpoint arrays without importing either solver library.
 - [The HDG projection adapter](../comparisons/hdg_projection.py) reconstructs
-  the fields in native HDGFEM spaces. Only this optional comparison adapter
-  depends on HDGFEM projection utilities.
+  the fields in native HYBRIDGE spaces. Only this optional comparison adapter
+  depends on HYBRIDGE projection utilities.
 
 Import these helpers explicitly from the script layer:
 
@@ -147,9 +147,9 @@ from projects.diocotron.dolfinx.checkpoint import write_equilibrium_checkpoint_v
 from projects.diocotron.comparisons.hdg_projection import load_dolfinx_equilibrium
 ```
 
-The old `hdgfem.io` exports are intentionally removed. Existing v2 checkpoint
+The old `hybridge.io` exports are intentionally removed. Existing v2 checkpoint
 format identifiers and data layouts are unchanged; no file conversion is
-needed. To exercise real DOLFINx export and HDGFEM import on a small mesh:
+needed. To exercise real DOLFINx export and HYBRIDGE import on a small mesh:
 
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \

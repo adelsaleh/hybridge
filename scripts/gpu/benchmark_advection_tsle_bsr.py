@@ -22,20 +22,20 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.transport import raw_cuda as fused_cuda
-from hdgfem.transport import tsle_bsr as tsle_cuda
-from hdgfem.transport.cuda import assemble_reduced_system_cuda
-from hdgfem.core.device import as_cupy_trace_space
-from hdgfem.transport.tsle_bsr import RawAdvectionTsleWorkspace
-from hdgfem.core.device import (
+from hybridge.transport import raw_cuda as fused_cuda
+from hybridge.transport import tsle_bsr as tsle_cuda
+from hybridge.transport.cuda import assemble_reduced_system_cuda
+from hybridge.core.device import as_cupy_trace_space
+from hybridge.transport.tsle_bsr import RawAdvectionTsleWorkspace
+from hybridge.core.device import (
     as_cupy_space,
     as_cupy_vector_coefficients,
     clear_cupy_space_cache,
 )
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
-from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh
-from hdgfem.core.space import DGSpace, VectorDGField
+from hybridge.runtime.optional import require_cupy
+from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
+from hybridge.core.mesh import gmsh_disc_mesh, gmsh_rectangle_mesh
+from hybridge.core.space import DGSpace, VectorDGField
 from scripts.advection_reaction.cases import case_definition_by_key
 
 

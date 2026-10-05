@@ -7,7 +7,7 @@ the p=1,2 variable-full checks in ``test_adr_tensor_solver_cuda.py``.
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
+from hybridge import DGSpace, rectangle_mesh, solve_advection_diffusion_reaction_hdg
 from scripts.advection_diffusion_reaction.cases.tensor_cases import manufactured_tensor
 
 

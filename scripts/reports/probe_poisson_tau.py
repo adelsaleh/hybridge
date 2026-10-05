@@ -20,9 +20,9 @@ import time
 
 import numpy as np
 
-import hdgfem as hdg
-from hdgfem.diagnostics import transport_velocity_diagnostics
-from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
+import hybridge as hdg
+from hybridge.diagnostics import transport_velocity_diagnostics
+from hybridge.io.raster import DeviceRasterSampler, RasterGeometry
 from scripts.reports.gpu_showcase_setup import (
     TOLERANCES, poisson_solver, resolve_tau, showcase_mesh, showcase_profile, showcase_space)
 
@@ -45,7 +45,7 @@ def host_reference(mesh, profile, points, *, order, tau):
     PyPardiso runs under a verified 16-thread MKL limit, and the process CPU
     use is measured around the solve.
     """
-    from hdgfem.linalg.pardiso_runtime import pardiso_thread_limit
+    from hybridge.linalg.pardiso_runtime import pardiso_thread_limit
 
     space = hdg.DGSpace(mesh, order, basis_type="dub_orth")
     # The blob sum is evaluated on the device; the host solver downloads the

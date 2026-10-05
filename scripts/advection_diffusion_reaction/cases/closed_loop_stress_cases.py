@@ -62,9 +62,9 @@ class StressParameters:
 @lru_cache(maxsize=1)
 def square_coefficients():
     """Load package formulas without selecting a solver worktree or compiling."""
-    name = "_hdgfem_square_stress_coefficients"
+    name = "_hybridge_square_stress_coefficients"
     if name not in sys.modules:
-        path = Path(__file__).resolve().parents[3]/"hdgfem/cases/square_stress_coefficients.py"
+        path = Path(__file__).resolve().parents[3]/"hybridge/cases/square_stress_coefficients.py"
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module

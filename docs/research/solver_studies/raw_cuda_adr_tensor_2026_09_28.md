@@ -102,7 +102,7 @@ after mechanical extraction. Kernel after/before ratios range from 0.99361 to
 the 5% slowdown threshold. The maximum measured increases are 0.64% and 2.84%.
 
 The earlier 12-check / 18-configuration baseline at
-`/tmp/hdgfem_adr_assembly_baseline_hiqvlnkv/baseline.json` remains preliminary;
+`/tmp/hybridge_adr_assembly_baseline_hiqvlnkv/baseline.json` remains preliminary;
 it is not used as a regression conclusion. The matched comparison used a copy
 of the pre-edit working tree at `/tmp/adr_tensor_before`, preserving uncommitted
 work. No working-tree checkout or reset was performed.
@@ -114,7 +114,7 @@ Run from the repository root with the configured CUDA-capable `.venv`:
 ```sh
 NUMBA_NUM_THREADS=16 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 .venv/bin/python -m pytest -q tests/test_adr_tensor_raw_cuda.py tests/test_adr_tensor_solver_cuda.py tests/test_adr_face_stabilization.py
 NUMBA_NUM_THREADS=16 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 .venv/bin/python scripts/advection_diffusion_reaction/benchmarks/benchmark_tensor_raw_cuda.py --output /tmp/adr-tensor.jsonl
-NUMBA_NUM_THREADS=16 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 .venv/bin/python scripts/advection_diffusion_reaction/benchmarks/benchmark_tensor_raw_cuda.py --diffusion-before /tmp/adr_tensor_before/hdgfem/backends/diffusion_raw_cuda.py --output /tmp/diffusion-paired.jsonl
+NUMBA_NUM_THREADS=16 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 .venv/bin/python scripts/advection_diffusion_reaction/benchmarks/benchmark_tensor_raw_cuda.py --diffusion-before /tmp/adr_tensor_before/hybridge/backends/diffusion_raw_cuda.py --output /tmp/diffusion-paired.jsonl
 ```
 
 The benchmark appends JSONL records; use a fresh output path for a new campaign.

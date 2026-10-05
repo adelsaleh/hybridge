@@ -44,7 +44,7 @@ def check_saved_frames(paths, geometry, space, coefficients):
     import numpy as np
     from matplotlib import colormaps
     from PIL import Image
-    from hdgfem.io.live import expanding_color_limits
+    from hybridge.io.live import expanding_color_limits
 
     matrix = geometry.sampling_matrix(space)
     forward = matrix @ coefficients.ravel()
@@ -91,7 +91,7 @@ def main():
     args = parser.parse_args()
     if args.frames < 1 or min(args.width, args.height) < 64:
         parser.error("use at least one frame and dimensions of at least 64 pixels for this smoke check")
-    os.environ["HDGFEM_PRECISION"] = args.precision
+    os.environ["HYBRIDGE_PRECISION"] = args.precision
     if not args.allow_compilation:
         disable_compilation()
     soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
@@ -101,8 +101,8 @@ def main():
     from dataclasses import replace
     import numpy as np
     import cupy as cp
-    from hdgfem import DGField, DGSpace, rectangle_mesh
-    from hdgfem.runtime.precision import REAL_DTYPE
+    from hybridge import DGField, DGSpace, rectangle_mesh
+    from hybridge.runtime.precision import REAL_DTYPE
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.plotting import _make_plotter
 
@@ -133,7 +133,7 @@ def main():
     plotter = None
     try:
         plotter = _make_plotter(
-            config, rho, phi, title="HDGFEM Holoviz smoke", off_screen=not args.window,
+            config, rho, phi, title="HYBRIDGE Holoviz smoke", off_screen=not args.window,
             screenshot_dir=args.save_dir, screenshot_prefix="holoviz_smoke",
             density_is_vorticity=True,
         )

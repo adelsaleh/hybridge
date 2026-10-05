@@ -50,7 +50,7 @@ functions) with Numba `cfunc` and returns a `PointwiseCoefficient`, an
 `ElementCoefficient` that every ADR consumer above accepts. The function takes
 `(x, y, t)`, or `(x, y, t, v)` where `v` holds the values of `fields`, then the
 `(d/dx, d/dy)` pair of each field in `gradients`, then `params`. Sampling runs
-in the parallel kernels of `hdgfem/core/pointwise_kernels.py`, which are compiled
+in the parallel kernels of `hybridge/core/pointwise_kernels.py`, which are compiled
 once per signature and cached on disk, so new functions never recompile them;
 each function is itself cached when it is defined in a file (closures over
 numbers included, keyed by their captured values). `at_time(t)` rebinds the
@@ -84,7 +84,7 @@ Precomputed device arrays are also accepted on the raw-CUDA ADR path: a CuPy
 source of shape `(K, el_dof)` is taken as element moments and `(K, nq)` as
 volume-quadrature values (moments win when both shapes coincide, for example
 p=2 with the default 6-point rule, so prefer an `ElementCoefficient` or
-`hdgfem.hdg.condensation.source_moments_from_values` for values), and a CuPy reaction of shape
+`hybridge.hdg.condensation.source_moments_from_values` for values), and a CuPy reaction of shape
 `(K, nq)` passes through unchanged.
 
 ### Lazy zero and constant DG fields
@@ -114,7 +114,7 @@ CuPy-backed fields can be constructed without a host table through `CupyDGSpace.
 The remaining package-code `.coeffs` uses fall into these categories:
 
 - Core `DGField`/`VectorDGField` methods: intentional host operations such as `values`, gradients, algebra, packing with `as_component_first`, and explicit `asarray`. These define the host semantics of the public objects.
-- NumPy reference assembly helpers (`hdgfem.core.mass`, `hdgfem.hdg.matrices`, `hdgfem.transport.local_numpy`, `hdgfem.mixed.local_numpy`): intentional host assembly. Source/reaction/mass helpers use scalar or `constant_value` fast paths before table access where that avoids unnecessary materialization.
+- NumPy reference assembly helpers (`hybridge.core.mass`, `hybridge.hdg.matrices`, `hybridge.transport.local_numpy`, `hybridge.mixed.local_numpy`): intentional host assembly. Source/reaction/mass helpers use scalar or `constant_value` fast paths before table access where that avoids unnecessary materialization.
 - Numba backend adapters: intentional host table/descriptors. Numba is CPU-side and should not depend on device preparation.
 - CuPy backend adapters: device paths now use `as_cupy_coefficients` or `as_cupy_vector_coefficients`; the only remaining `.coeffs` fallback is inside `as_cupy_coefficients` when uploading a host-born nonconstant field to the active device.
 - Host diffusion postprocessing, mesh transfer, plotting, and explicit result inspection intentionally materialize host arrays. Device-capable scalar-error evaluation, field combinations, and solver-result extraction instead use resident coefficients/traces when available; host-only reductions such as `DGField.integral()` and `DGField.min_max()` remain explicit materialization boundaries.

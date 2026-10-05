@@ -4,18 +4,18 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-import hdgfem
-import hdgfem.linalg.results as linalg_results
-import hdgfem.linalg.iterative as linalg_iterative
-from hdgfem.linalg.results import (
+import hybridge
+import hybridge.linalg.results as linalg_results
+import hybridge.linalg.iterative as linalg_iterative
+from hybridge.linalg.results import (
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
     SolveResult,
     finalize_solve_result,
     residual_history_is_stagnated,
 )
-from hdgfem.linalg.system import solve_global_system
-from hdgfem.linalg.iterative import solve_iterative_system, solve_petsc_system
+from hybridge.linalg.system import solve_global_system
+from hybridge.linalg.iterative import solve_iterative_system, solve_petsc_system
 
 
 def _identity_problem():
@@ -246,7 +246,7 @@ def test_petsc_matrix_construction_failure_destroys_partial_matrix(monkeypatch) 
 
 
 def test_amgx_retry_count_is_bounded_before_optional_runtime_import() -> None:
-    from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
+    from hybridge.linalg.amgx.device_solver import solve_reduced_system_amgx_device
 
     retries = tuple({"label": f"retry-{index}"} for index in range(8))
     with pytest.raises(ValueError, match="at most 8 bounded attempts"):
@@ -290,8 +290,8 @@ class _FakeAMGXNoMemoryError(RuntimeError):
 
 @pytest.mark.parametrize("primary_throws", (False, True))
 def test_raw_amgx_primary_retry_reuses_only_a_live_solver(monkeypatch, primary_throws):
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     from types import SimpleNamespace
 
     primary = SimpleNamespace(closed=False, is_setup=True)
@@ -329,7 +329,7 @@ def test_raw_amgx_primary_retry_reuses_only_a_live_solver(monkeypatch, primary_t
     {"scale_system": "left"},
 ))
 def test_raw_amgx_primary_reuse_rejects_changed_solver_or_matrix_scaling(override):
-    from hdgfem.linalg.amgx.device_solver import solve_reduced_system_amgx_device
+    from hybridge.linalg.amgx.device_solver import solve_reduced_system_amgx_device
 
     with pytest.raises(ValueError, match="primary configuration and scaling"):
         solve_reduced_system_amgx_device(
@@ -340,8 +340,8 @@ def test_raw_amgx_primary_reuse_rejects_changed_solver_or_matrix_scaling(overrid
 
 def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkeypatch):
     from types import SimpleNamespace
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     config = {"solver": {"solver": "PCGF", "preconditioner": {
         "solver": "AMG", "classical_bsr_hierarchy": "scalar_expand",
@@ -382,8 +382,8 @@ def test_raw_amgx_scalar_only_smoother_reaches_retry_before_native_upload(monkey
 def test_raw_amgx_nonfinite_seed_residual_does_not_poison_best_candidate(
     monkeypatch, seed_norm,
 ):
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     from types import SimpleNamespace
 
     assembly = SimpleNamespace(rhs=np.ones(2))
@@ -424,8 +424,8 @@ def test_raw_amgx_retains_upstream_seed_until_physical_residual_passes(
     monkeypatch, correction,
 ):
     from dataclasses import dataclass
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     @dataclass
     class Assembly:
@@ -491,8 +491,8 @@ def test_raw_amgx_retains_upstream_seed_until_physical_residual_passes(
 
 
 def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     class FakeDeviceData:
         nbytes = 16
@@ -543,8 +543,8 @@ def test_raw_amgx_retry_wrapper_avoids_full_matrix_backup(monkeypatch) -> None:
 def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficients(
     monkeypatch,
 ) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     created = []
     calls = []
@@ -611,8 +611,8 @@ def test_raw_amgx_retry_cache_reuses_one_preconditioner_and_replaces_coefficient
 
 
 def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
 
@@ -642,8 +642,8 @@ def test_raw_amgx_capacity_failure_is_terminal_after_one_attempt(monkeypatch) ->
 
 
 def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
 
@@ -669,7 +669,7 @@ def test_raw_amgx_generic_backend_failure_preserves_retry_policy(monkeypatch) ->
 
 
 def test_raw_amgx_capacity_error_reports_structured_memory() -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as raw_amgx
 
     class FakeRuntime:
         @staticmethod
@@ -708,7 +708,7 @@ def test_raw_amgx_capacity_error_reports_structured_memory() -> None:
 
 
 def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     destroyed = []
 
@@ -743,7 +743,7 @@ def test_raw_amgx_cleanup_continues_after_destroy_failure() -> None:
 
 @pytest.mark.parametrize("history", [0, 1])
 def test_raw_amgx_config_respects_explicit_residual_history_without_mutating_input(history) -> None:
-    from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
+    from hybridge.linalg.amgx.device_solver import _amgx_config_for_solve
 
     config = {"solver": {"solver": "FGMRES", "store_res_history": history}}
     normalized = _amgx_config_for_solve(config=config)
@@ -754,7 +754,7 @@ def test_raw_amgx_config_respects_explicit_residual_history_without_mutating_inp
 
 
 def test_raw_amgx_config_reserves_native_iteration_table_for_level_three() -> None:
-    from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
+    from hybridge.linalg.amgx.device_solver import _amgx_config_for_solve
 
     config = {"solver": {"solver": "BICGSTAB", "print_solve_stats": 0}}
 
@@ -769,7 +769,7 @@ def test_raw_amgx_config_reserves_native_iteration_table_for_level_three() -> No
 
 
 def test_raw_amgx_scaled_solver_validation_uses_configured_relative_tolerance() -> None:
-    from hdgfem.linalg.amgx.device_solver import _amgx_relative_residual_check_rtol
+    from hybridge.linalg.amgx.device_solver import _amgx_relative_residual_check_rtol
 
     relative = {
         "solver": {"convergence": "RELATIVE_INI_CORE", "tolerance": 1.0e-8}
@@ -783,8 +783,8 @@ def test_raw_amgx_scaled_solver_validation_uses_configured_relative_tolerance() 
 
 
 def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     result = _diagnostic_result(
         solver_residual=1.0,
@@ -811,8 +811,8 @@ def test_raw_amgx_retry_exhaustion_raises_stable_convergence_error(monkeypatch) 
 
 
 def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     result = _diagnostic_result(
         solver_residual=np.nan,
@@ -847,10 +847,10 @@ def test_raw_amgx_nonraising_retry_returns_last_nonfinite_result(monkeypatch) ->
 
 
 def test_convergence_contract_is_available_from_public_packages() -> None:
-    assert hdgfem.LinearSolveCapacityError is LinearSolveCapacityError
-    assert hdgfem.LinearSolveConvergenceError is LinearSolveConvergenceError
-    assert hdgfem.LinearSolveError is linalg_results.LinearSolveError
-    assert "SolveStatus" in hdgfem.__all__
+    assert hybridge.LinearSolveCapacityError is LinearSolveCapacityError
+    assert hybridge.LinearSolveConvergenceError is LinearSolveConvergenceError
+    assert hybridge.LinearSolveError is linalg_results.LinearSolveError
+    assert "SolveStatus" in hybridge.__all__
     assert issubclass(LinearSolveConvergenceError, RuntimeError)
 
 
@@ -859,8 +859,8 @@ def test_convergence_contract_is_available_from_public_packages() -> None:
 def test_guiding_center_retries_precondition_bicgstab_before_dilu(
     monkeypatch, accepted_attempt, failure
 ) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 
@@ -913,8 +913,8 @@ def test_guiding_center_retries_precondition_bicgstab_before_dilu(
 
 
 def test_raw_amgx_divergence_advances_retry_and_records_exit(monkeypatch, capsys) -> None:
-    import hdgfem.linalg.amgx.device_solver as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.linalg.amgx.device_solver as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
 
     calls = []
     def attempt(_assembly, **kwargs):

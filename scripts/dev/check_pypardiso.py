@@ -17,10 +17,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.linalg import clear_pypardiso_cache, solve_global_system
-from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
-from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.linalg import clear_pypardiso_cache, solve_global_system
+from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
+from hybridge.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
 from scripts.advection_reaction.cases import test3 as advection_case
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 

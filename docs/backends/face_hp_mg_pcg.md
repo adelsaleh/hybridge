@@ -4,9 +4,9 @@ The [hp-AMG solver family and formalism](../algorithms/hp_amg/README.md)
 derive this native pMG-AMG variant's modal hierarchy, V-cycle, PCGF recurrence,
 and SPD assumptions alongside alternative geometric and algebraic hierarchies.
 
-`solver="fb-hp-mg-pcg"` selects HDGFEM's reusable native Poisson backend for supported raw-CUDA problems at polynomial degrees 4 through 6. The condensed trace operator is assembled directly as face BSR in the Legendre-modal assembly basis. Setup applies the one-time congruence transformation to orthonormal modal coordinates, builds a direct `p -> 0` hierarchy, and retains the operator, dense face-block diagonal inverses, Chebyshev spectral estimates, Krylov/V-cycle workspaces, and one fixed scalar-AMGX hierarchy at `p=0`.
+`solver="fb-hp-mg-pcg"` selects HYBRIDGE's reusable native Poisson backend for supported raw-CUDA problems at polynomial degrees 4 through 6. The condensed trace operator is assembled directly as face BSR in the Legendre-modal assembly basis. Setup applies the one-time congruence transformation to orthonormal modal coordinates, builds a direct `p -> 0` hierarchy, and retains the operator, dense face-block diagonal inverses, Chebyshev spectral estimates, Krylov/V-cycle workspaces, and one fixed scalar-AMGX hierarchy at `p=0`.
 
-The production cycle uses order-2 Chebyshev smoothing with symmetric `1+1` pre/post smoothing. Generic cuSPARSE BSR descriptors own ordinary finest-level matrix-vector products; HDGFEM raw-CUDA kernels fuse BSR traversal, residual formation, dense block-Jacobi inversion, and Chebyshev updates inside the smoother. PCG checks positive curvature and periodically refreshes the FP64 true residual. Residual norm, A-curvature, and preconditioned curvature are downloaded together, so the hot loop has one host synchronization per iteration instead of three. Warm trace guesses enter in the assembly basis and converged traces are transformed back before normal HDG field/flux reconstruction.
+The production cycle uses order-2 Chebyshev smoothing with symmetric `1+1` pre/post smoothing. Generic cuSPARSE BSR descriptors own ordinary finest-level matrix-vector products; HYBRIDGE raw-CUDA kernels fuse BSR traversal, residual formation, dense block-Jacobi inversion, and Chebyshev updates inside the smoother. PCG checks positive curvature and periodically refreshes the FP64 true residual. Residual norm, A-curvature, and preconditioned curvature are downloaded together, so the hot loop has one host synchronization per iteration instead of three. Warm trace guesses enter in the assembly basis and converged traces are transformed back before normal HDG field/flux reconstruction.
 
 The native outer iteration now uses the flexible PCGF beta update already used
 by the diagnostic prototype; the public `fb-hp-mg-pcg` selector is unchanged.
@@ -80,7 +80,7 @@ Both request Gaussian-annulus k=3, p=6, mesh size `0.0068`, at least 150,000 tri
 
 The pure advection solver currently requires its velocity field in the transport DG space. Consequently periodic RT output is retained for higher-accuracy user diagnostics and output, while time integration continues with the standard degree-p Poisson flux. Cross-space device-resident advection coefficients are tracked in `TODO.md`.
 
-Implementation entry points are `hdgfem/linalg/multigrid/face_hp.py`, `hdgfem/linalg/multigrid/policy.py`, `hdgfem/linalg/gpu/legendre_face_bsr.py`, `hdgfem/mixed/postprocess/rt_raw_cuda.py`, and `hdgfem/solvers/diffusion_reaction.py`. Retained performance evidence and rejected alternatives remain in the development plan.
+Implementation entry points are `hybridge/linalg/multigrid/face_hp.py`, `hybridge/linalg/multigrid/policy.py`, `hybridge/linalg/gpu/legendre_face_bsr.py`, `hybridge/mixed/postprocess/rt_raw_cuda.py`, and `hybridge/solvers/diffusion_reaction.py`. Retained performance evidence and rejected alternatives remain in the development plan.
 
 ## Guiding-center diagnostics cadence
 

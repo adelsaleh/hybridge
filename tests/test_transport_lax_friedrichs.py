@@ -4,16 +4,16 @@ from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
 import pytest
-from hdgfem.solvers import ScaledUpwind
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.hdg.stabilization import advection_trace_stabilization_values
-from hdgfem.transport.numba import (
+from hybridge.solvers import ScaledUpwind
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.hdg.stabilization import advection_trace_stabilization_values
+from hybridge.transport.numba import (
     _advection_stabilization_coefficients,
     _advection_trace_weight_tables,
 )
-from hdgfem.transport.raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
-from hdgfem.transport.diagnostics import transport_rank_failure_details
+from hybridge.transport.raw_cuda import _kernel_source, _RAW_FUSED_TEMPLATE
+from hybridge.transport.diagnostics import transport_rank_failure_details
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
@@ -42,7 +42,7 @@ def test_saved_face_has_full_trace_support_with_lax_friedrichs(case):
 
 @pytest.mark.parametrize('policy', [None, 'lax-friedrichs', ScaledUpwind(1), ScaledUpwind(1.25), ScaledUpwind(3.5)])
 def test_numpy_numba_and_cupy_policy_weights_agree_without_cuda(monkeypatch, policy):
-    import hdgfem.transport.cupy as backend
+    import hybridge.transport.cupy as backend
     space=DGSpace(rectangle_mesh(1,1),3,basis_type='dub_orth')
     trace=space.trace_space('legendre-modal')
     beta=np.random.default_rng(13).normal(size=(2,space.mesh.num_tri,space.el_dof))
@@ -91,7 +91,7 @@ def test_inflow_only_rank_claim_does_not_trigger_lf_poisson_retry():
 
 
 def test_raw_policy_preflight_accepts_scaled_assembly_modes():
-    from hdgfem.solvers.capabilities import validate_advection_backend_configuration
+    from hybridge.solvers.capabilities import validate_advection_backend_configuration
     common=dict(operation='solve',assembly_backend='raw-cuda',solver='amgx',cupyx_solver='bicgstab',
         boundary_mode='zero-flux',trace_basis='legacy-lagrange',trace_ordering='none',
         materialize_host_solution=False,raw_lu_mode='coop',raw_matrix_format='bsr',
@@ -102,7 +102,7 @@ def test_raw_policy_preflight_accepts_scaled_assembly_modes():
 
 
 import os
-@pytest.mark.skipif(os.environ.get('HDGFEM_RUN_CUDA_TRANSPORT_TESTS')!='1',
+@pytest.mark.skipif(os.environ.get('HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS')!='1',
                    reason='CUDA compilation requires explicit opt-in')
 @pytest.mark.parametrize('policy',[ScaledUpwind(1.25), ScaledUpwind(3.5)])
 @pytest.mark.parametrize('assembly_mode',['fused','split3'])
@@ -110,13 +110,13 @@ import os
 def test_cuda_lax_friedrichs_local_assembly_and_reconstruction(cache_response, assembly_mode, policy):
     import cupy as cp
     from scipy.sparse import coo_matrix,bsr_matrix
-    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
-    from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space, as_cupy_vector_coefficients
+    from hybridge.core.device import as_cupy_trace_space
+    from hybridge.transport.cuda import (
             assemble_reduced_system_cuda,
             reconstruct_advection_field_cuda,
         )
-    from hdgfem.transport.numba import (
+    from hybridge.transport.numba import (
             assemble_projected_trace_system_zero_flux_numba,
             reconstruct_projected_field_numba,
         )
@@ -160,8 +160,8 @@ def test_cli_multiplier_overrides_preset():
 
 @pytest.mark.parametrize("factor", [1., 1.25, 3.5])
 def test_cuda_precomputed_face_matrices_with_numpy_standin(monkeypatch, factor):
-    import hdgfem.transport.cuda as backend
-    from hdgfem.hdg import matrices as reference
+    import hybridge.transport.cuda as backend
+    from hybridge.hdg import matrices as reference
     space = DGSpace(rectangle_mesh(1, 1), 3, basis_type="dub_orth")
     trace = space.trace_space("legendre-modal")
     normal = np.random.default_rng(70).normal(size=(space.mesh.num_tri, 3, trace.weights.size))

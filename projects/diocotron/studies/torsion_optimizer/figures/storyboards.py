@@ -796,9 +796,9 @@ def _load_equilibrium_fields(
     """Load the portable v1/v2 nodal fields needed for a fallback panel."""
     with np.load(checkpoint, allow_pickle=False) as data:
         metadata = json.loads(str(data["metadata"].item()))
-        format_name = str(metadata.get("format", "hdgfem_equilibrium_v1"))
+        format_name = str(metadata.get("format", "hybridge_equilibrium_v1"))
         coordinates = np.asarray(data["coordinates"], dtype=float)
-        if format_name == "hdgfem_equilibrium_v2":
+        if format_name == "hybridge_equilibrium_v2":
             names = [str(value) for value in np.asarray(data["field_names"]).tolist()]
             nodal_values = np.asarray(data["nodal_values"], dtype=float)
             phi = np.asarray(nodal_values[names.index("phi")], dtype=float)

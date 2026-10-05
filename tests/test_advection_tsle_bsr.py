@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
 
 
 def _cupy_runtime_available() -> bool:
@@ -17,8 +17,8 @@ def _cupy_runtime_available() -> bool:
 
 
 def _projected_problem(order: int, trace_basis: str):
-    from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
+    from hybridge.core.device import as_cupy_trace_space
+    from hybridge.core.device import as_cupy_space, as_cupy_vector_coefficients
 
     mesh = rectangle_mesh(2, 1, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(
@@ -64,7 +64,7 @@ def _assemble(
     zero_boundary_flux: bool = False,
     matrix_format: str = "bsr",
 ):
-    from hdgfem.transport.cuda import assemble_reduced_system_cuda
+    from hybridge.transport.cuda import assemble_reduced_system_cuda
 
     (
         space,
@@ -161,7 +161,7 @@ def test_p9_split3_256_thread_solve_matches_fused_128() -> None:
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_split3_autotune_and_workspace_are_reused() -> None:
-    from hdgfem.transport.tsle_bsr import (
+    from hybridge.transport.tsle_bsr import (
             RawAdvectionTsleWorkspace,
             clear_tsle_runtime_caches,
         )
@@ -196,7 +196,7 @@ def test_split3_autotune_and_workspace_are_reused() -> None:
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
 def test_split3_tangent_boundary_assembler_reuses_workspace() -> None:
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, 3, basis_type="dub_orth", volume_quad_1d=8)

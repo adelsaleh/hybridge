@@ -33,7 +33,7 @@
 }
 
 \title{Upwind Block Gauss-Seidel Preconditioners for HDG Trace Systems}
-\author{HDGFEM implementation note}
+\author{HYBRIDGE implementation note}
 \date{}
 
 \begin{document}
@@ -44,7 +44,7 @@ This document explains the level-scheduled upwind block Gauss-Seidel
 preconditioner used in the advection-reaction HDG experiments.  It is written
 as an onboarding note: first we describe the trace system and the upwind graph,
 then we derive the forward block-GS approximation, then we map the mathematics
-to the arrays in \code{hdgfem}.  The same mathematical preconditioner currently
+to the arrays in \code{hybridge}.  The same mathematical preconditioner currently
 has four practical implementations: a CSR/NumPy reference builder, a scalar COO
 on-the-fly builder, an assembly-emitted dense block COO builder, and a CuPy
 operator that applies a host-built preconditioner on the device.
@@ -75,18 +75,18 @@ If you are new to this code, read in this order:
 The important files are:
 \begin{description}[leftmargin=3.0cm,style=nextline]
   \item[Ordering]
-  \path{hdgfem/linalg/ordering.py}.  Builds the upwind-SCC edge ordering.
+  \path{hybridge/linalg/ordering.py}.  Builds the upwind-SCC edge ordering.
 
   \item[CSR reference]
-  \path{hdgfem/linalg/upwind_block_gs.py}.  Builds the reference host
+  \path{hybridge/linalg/upwind_block_gs.py}.  Builds the reference host
   preconditioner and SciPy \code{LinearOperator}.
 
   \item[Direct builders]
-  \path{hdgfem/linalg/upwind_block_gs_on_the_fly.py}.  Builds the scalar COO and
+  \path{hybridge/linalg/upwind_block_gs_on_the_fly.py}.  Builds the scalar COO and
   ordered block COO variants.
 
   \item[CuPy apply]
-  \path{hdgfem/linalg/gpu/upwind_block_gs.py}.  Exports compact host data and
+  \path{hybridge/linalg/gpu/upwind_block_gs.py}.  Exports compact host data and
   applies the preconditioner on device.
 
   \item[Experiment]
@@ -199,7 +199,7 @@ The design target is therefore:
 \label{sec:ordering}
 
 The ordering is computed by
-\code{hdgfem.linalg.ordering.upwind_scc_trace_ordering}.  The input is the mesh,
+\code{hybridge.linalg.ordering.upwind_scc_trace_ordering}.  The input is the mesh,
 edge trace degree count, and an approximation to the advective normal flux on
 faces.  The output is an ordering of active trace edges and a topological level
 structure.
@@ -476,7 +476,7 @@ they scan and where the apply runs.
 
 Function:
 \[
-  \code{hdgfem.linalg.upwind_block_gs.build_upwind_block_gs_preconditioner}.
+  \code{hybridge.linalg.upwind_block_gs.build_upwind_block_gs_preconditioner}.
 \]
 It expects an already scaled and upwind-ordered SciPy sparse matrix:
 \begin{lstlisting}
@@ -511,7 +511,7 @@ What it costs:
 
 Function:
 \[
-  \code{hdgfem.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_coo}.
+  \code{hybridge.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_coo}.
 \]
 It consumes natural-order scalar COO triplets plus the scalar permutation:
 \begin{lstlisting}
@@ -555,7 +555,7 @@ Why it is not the performance target:
 
 Function:
 \begin{lstlisting}
-hdgfem.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_ordered_block_coo
+hybridge.linalg.upwind_block_gs_on_the_fly.build_forward_upwind_block_gs_from_ordered_block_coo
 \end{lstlisting}
 It consumes dense ordered edge-block COO emitted by Numba assembly:
 \begin{lstlisting}
@@ -593,7 +593,7 @@ This is the assembly-emitted host builder used by performance experiments.
 
 Function:
 \begin{lstlisting}
-hdgfem.linalg.gpu.upwind_block_gs.cupy_upwind_block_gs_from_host_preconditioner
+hybridge.linalg.gpu.upwind_block_gs.cupy_upwind_block_gs_from_host_preconditioner
 \end{lstlisting}
 It takes a host-built \code{UpwindBlockGSPreconditioner} and transfers compact
 arrays to the current CUDA device:

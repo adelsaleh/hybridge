@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, evaluate_scalar_error, evaluate_vector_error, rectangle_mesh
-from hdgfem.core.field_ops import (
+from hybridge import DGSpace, evaluate_scalar_error, evaluate_vector_error, rectangle_mesh
+from hybridge.core.field_ops import (
     coefficient_field,
     field_linear_combination,
     perpendicular_vector_field,
@@ -141,7 +141,7 @@ def test_scalar_field_integral_and_min_max_are_field_operations() -> None:
 def test_diagnostic_packing_rejects_unreduced_arrays_before_download() -> None:
     from types import SimpleNamespace
     import pytest
-    from hdgfem.diagnostics.guiding_center import _diagnostic_scalars
+    from hybridge.diagnostics.guiding_center import _diagnostic_scalars
 
     calls = []
     namespace = SimpleNamespace(asarray=np.asarray, stack=np.stack,
@@ -155,7 +155,7 @@ def test_diagnostic_packing_rejects_unreduced_arrays_before_download() -> None:
 
 def test_azimuthal_host_override_preserves_explicit_backend_choice() -> None:
     import pytest
-    from hdgfem.diagnostics.guiding_center import azimuthal_mode_diagnostics
+    from hybridge.diagnostics.guiding_center import azimuthal_mode_diagnostics
 
     space = _space(2)
     equilibrium = space.project_callable(lambda x, y: 1.0 + 0.1*x)
@@ -172,7 +172,7 @@ def test_azimuthal_host_override_preserves_explicit_backend_choice() -> None:
 def test_solution_trace_prefers_device_and_reduces_host_trace() -> None:
     from types import SimpleNamespace
 
-    from hdgfem.core.field_ops import solution_trace
+    from hybridge.core.field_ops import solution_trace
 
     space = _space(1)
     edge_dofs = space.quad_data.edg_dof
@@ -189,13 +189,13 @@ def test_solution_trace_prefers_device_and_reduces_host_trace() -> None:
 
 def _weighted_case():
     """u = x*y on (2,4)x(-1,1): int u^2 R dR dZ = int_2^4 x^3 dx * int_-1^1 y^2 dy = 40."""
-    from hdgfem import DGSpace, rectangle_mesh
+    from hybridge import DGSpace, rectangle_mesh
     space = DGSpace(rectangle_mesh(3, 2, xlim=(2., 4.), ylim=(-1., 1.)), 2, basis_type="dub_orth")
     return space, space.project_callable(lambda x, y: x * y)
 
 
 def test_weighted_scalar_and_vector_l2_are_exact_for_polynomials() -> None:
-    from hdgfem import evaluate_scalar_error, evaluate_vector_error
+    from hybridge import evaluate_scalar_error, evaluate_vector_error
     space, field = _weighted_case()
     zero = lambda x, y: 0. * x
     radius = lambda x, y: x
@@ -216,7 +216,7 @@ def test_weighted_scalar_l2_on_device_matches_host() -> None:
     cp = pytest.importorskip("cupy")
     if cp.cuda.runtime.getDeviceCount() == 0:
         pytest.skip("No CUDA device")
-    from hdgfem import evaluate_scalar_error
+    from hybridge import evaluate_scalar_error
     space, field = _weighted_case()
     zero = lambda x, y: 0. * x
     device = evaluate_scalar_error(field, zero, weight=lambda x, y: x, volume_degree=6, backend="device")

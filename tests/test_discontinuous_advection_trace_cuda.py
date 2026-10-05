@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from hdgfem.solvers import advection_reaction
+from hybridge.solvers import advection_reaction
 from scripts.advection_reaction.diagnose_discontinuous_trace import assemble_fixture, diagnose
 
 

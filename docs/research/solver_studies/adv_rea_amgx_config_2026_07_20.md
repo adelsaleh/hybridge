@@ -11,7 +11,7 @@ This note records focused AMGX configuration tests for the then-current runner r
 
 ```bash
 LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib \
-HDGFEM_GPU4_AMGX_MONITOR=0 \
+HYBRIDGE_GPU4_AMGX_MONITOR=0 \
 .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py --case test2_legacy_gpu3 \
   -o 6 -mt rectangle --basis dub_orth --trace-basis legacy-lagrange \
   --assembly-backend raw-cuda --raw-local-assembly fused --raw-lu-mode coop \

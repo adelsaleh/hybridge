@@ -59,7 +59,7 @@ def check_loaded_cuda_runtime(libraries, runtime_version):
 
 def probe(spec):
     import cupy as cp
-    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/runtime/devices.py')
+    inventory = load_file('_adr_cuda_inventory', ROOT/'hybridge/runtime/devices.py')
     devices = inventory.discover_cuda_devices(cp.cuda.runtime)
     selected = inventory.select_fp64_device(devices, overrides={int(k): v for k, v in spec.get('fp64_overrides', {}).items()})
     runtime = cp.cuda.runtime.runtimeGetVersion()
@@ -101,7 +101,7 @@ def probe(spec):
 def mesh(spec, common):
     sys.path.insert(0, str(ROOT))
     import numpy as np
-    from hdgfem.core.mesh import gmsh_smooth_star_mesh, as_dg_mesh
+    from hybridge.core.mesh import gmsh_smooth_star_mesh, as_dg_mesh
     system, directory = spec['system'], Path(spec['mesh_directory'])
     directory.mkdir(parents=True, exist_ok=True)
     definition = system['mesh']
@@ -144,7 +144,7 @@ def mesh(spec, common):
 
 def run_numerical(spec, common):
     # Import the branch case registry first; pMG adapter subsequently selects
-    # master numerics. Do not import master's hdgfem before that selection.
+    # master numerics. Do not import master's hybridge before that selection.
     sys.path.insert(0, spec['branch_root'])
     if 'stress_parameters' in spec:
         from scripts.adv_diff_rea_cases import register_case
@@ -158,7 +158,7 @@ def run_numerical(spec, common):
             raise ValueError('Mesh changed after preparation')
     if spec.get('expected_operator_sha256') and operator_hash(spec['cache']) != spec['expected_operator_sha256']:
         raise ValueError('Operator/RHS changed after assembly')
-    inventory = load_file('_adr_cuda_inventory', ROOT/'hdgfem/runtime/devices.py')
+    inventory = load_file('_adr_cuda_inventory', ROOT/'hybridge/runtime/devices.py')
     estimate = spec['memory_estimate']
     phase = spec['stage']
     host_need = estimate['assembly_host_bytes' if phase == 'assemble' else 'solver_host_bytes']

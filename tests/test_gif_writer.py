@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from hdgfem.io.movie import GifWriter
+from hybridge.io.movie import GifWriter
 
 
 def frames():

@@ -88,7 +88,7 @@ evaluated table rather than the callable itself.
 For positive constant isotropic diffusion, diffusion-reaction and ADR default
 to and explicitly accept:
 
-    from hdgfem import GlobalLengthDiffusion
+    from hybridge import GlobalLengthDiffusion
 
     policy = GlobalLengthDiffusion(
         gamma_d=1.0,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from hdgfem.linalg.amgx.config import (
+from hybridge.linalg.amgx.config import (
     describe_amgx_preconditioner,
     describe_amgx_solver,
     format_amgx_configuration,

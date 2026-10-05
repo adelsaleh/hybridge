@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.runtime.precision import REAL_DTYPE
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -72,7 +72,7 @@ class GuidingCenterCase:
         t = float(time)
         boundary = lambda x, y: self.potential_boundary(x, y, t)
         if self.potential_boundary_constant is not None:
-            boundary._hdgfem_constant_value = float(self.potential_boundary_constant)
+            boundary._hybridge_constant_value = float(self.potential_boundary_constant)
         return boundary
 
     def density_boundary_at(self, time: float) -> ScalarCallable | None:
@@ -466,8 +466,8 @@ def positive_turbulence(
     with smooth nonnegative grid reconstruction. Additional center clearance
     preserves the requested zero-density wall band after grid spreading.
     """
-    from hdgfem.core.geometry import DiskDomain, shaped_domain
-    from hdgfem.cases.profiles import sample_gaussian_blob_field
+    from hybridge.core.geometry import DiskDomain, shaped_domain
+    from hybridge.cases.profiles import sample_gaussian_blob_field
 
     counts, sigmas = tuple(counts), tuple(sigmas)
     geometry_params = dict(geometry_params or {})
@@ -528,8 +528,8 @@ def euler_shaped_vortex_gas(
         amplitude: float = 4.0, seed: int = 17,
 ) -> GuidingCenterCase:
     """Signed multiscale gas in a horseshoe, supplied ITER wall, or Pac-Man domain."""
-    from hdgfem.core.geometry import shaped_domain
-    from hdgfem.cases.profiles import sample_gaussian_blob_field
+    from hybridge.core.geometry import shaped_domain
+    from hybridge.cases.profiles import sample_gaussian_blob_field
 
     geometry_params = dict(geometry_params or {})
     domain = shaped_domain(geometry, **geometry_params)

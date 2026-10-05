@@ -58,7 +58,7 @@ bounded manufactured convergence.
 The [dated report](../../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md)
 records commands, results, environment and performance limitations. The original
 12-check / 18-configuration baseline remains at
-`/tmp/hdgfem_adr_assembly_baseline_hiqvlnkv/baseline.json`; it is preliminary
+`/tmp/hybridge_adr_assembly_baseline_hiqvlnkv/baseline.json`; it is preliminary
 measurement, not evidence of a regression.
 
 Acceptance covers matrix/RHS and reconstruction against NumPy and Numba for all

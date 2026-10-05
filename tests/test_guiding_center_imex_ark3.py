@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import json
 import numpy as np
 import pytest
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.core.field_ops import field_linear_combination, project_field_to_trace
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.core.field_ops import field_linear_combination, project_field_to_trace
 from scripts.guiding_center.time_schemes import imex_ark3 as ark
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
@@ -201,8 +201,8 @@ def test_device_embedded_norm_preserves_residency_and_reuses_gram():
     cp = pytest.importorskip("cupy")
     if not cp.cuda.runtime.getDeviceCount():
         pytest.skip("CUDA device unavailable")
-    from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.hdg.gram import field_l2_norm
+    from hybridge.core.device import field_from_cupy_coefficients
+    from hybridge.hdg.gram import field_l2_norm
     s = DGSpace(rectangle_mesh(2, 1), 3, basis_type="dub_orth")
     host = s.project_callable(lambda x, y: 1+x-y+x*y)
     device = field_from_cupy_coefficients(s, cp.asarray(host.coeffs), device=cp.cuda.runtime.getDevice())

@@ -193,7 +193,7 @@ ALPHA_TEST_LANES = (
         trace_bases=PRODUCTION_TRACE_BASES,
         requires_gpu=True,
         automated=False,
-        environment=(("HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH", "1"),),
+        environment=(("HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH", "1"),),
         required_modules=("gmsh",),
     ),
 )

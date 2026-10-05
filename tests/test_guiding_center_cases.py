@@ -19,7 +19,7 @@ from scripts.guiding_center.cases.guiding_center_cases import (
     rho_eq_super_gaussian_annulus,
 )
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from hdgfem.core.field_ops import project_callable_to_trace
+from hybridge.core.field_ops import project_callable_to_trace
 from scripts.guiding_center.time_schemes.stage_support import _fixed_operator_trace_predictor
 from scripts.guiding_center.runtime.configuration import _make_transport_options, _poisson_postprocess_overrides, _solver_verbosity, _validate_config
 from scripts.guiding_center.runtime.reporting import _print_linear_step_summary, _print_step_summary
@@ -489,8 +489,8 @@ def test_diocotron_k100_has_one_hundred_angular_maxima_and_only_mode_100() -> No
     assert np.max(angular_factor) == pytest.approx(2.0, abs=1.0e-13)
 
 def test_initial_density_trace_guess_projects_constant_to_reduced_skeleton() -> None:
-    from hdgfem.core.mesh import rectangle_mesh
-    from hdgfem.core.space import DGSpace
+    from hybridge.core.mesh import rectangle_mesh
+    from hybridge.core.space import DGSpace
 
     space = DGSpace(rectangle_mesh(2, 2), 2)
     guess = project_callable_to_trace(
@@ -700,7 +700,7 @@ def test_guiding_center_runner_uses_only_public_solver_classes_for_gpu_paths() -
     }
     source = path.read_text(encoding="utf-8")
 
-    assert "hdgfem.backends" not in "\n".join(sorted(imported_modules))
+    assert "hybridge.backends" not in "\n".join(sorted(imported_modules))
     assert not {"cupy", "pyamgx"} & imported_names
     assert "_device_coefficients_for" not in source
     assert "DiffusionReactionHDGSolver" in source

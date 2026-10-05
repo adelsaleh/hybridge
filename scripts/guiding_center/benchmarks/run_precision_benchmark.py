@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument('--time-scheme', choices=('si-euler', 'predictor-corrector'), default='si-euler')
     parser.add_argument('--output', type=Path, default=ROOT/'artifacts'/'precision-benchmark')
     args = parser.parse_args()
-    os.environ['HDGFEM_PRECISION'] = args.precision
+    os.environ['HYBRIDGE_PRECISION'] = args.precision
     os.environ['NUMBA_CACHE_DIR'] = str(ROOT/'.cache'/f'numba-{args.precision}')
     os.environ['CUPY_CACHE_DIR'] = str(ROOT/'.cache'/f'cupy-{args.precision}')
     os.environ['CUPY_CACHE_SAVE_CUDA_SOURCE'] = '1'
@@ -46,7 +46,7 @@ def main() -> None:
     import cupy as cp
     import pyamgx
     import numpy as np
-    from hdgfem.runtime.precision import (
+    from hybridge.runtime.precision import (
             KERNEL_AUDIT,
             PIPELINE_AUDIT,
             AMGX_MODE,
@@ -55,7 +55,7 @@ def main() -> None:
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.runner import run_guiding_center_case
     from scripts.guiding_center.runtime.configuration import _with_fp32_transport_solver
-    if args.precision == 'float32' and not getattr(pyamgx, 'HDGFEM_PRECISION_AWARE', False):
+    if args.precision == 'float32' and not getattr(pyamgx, 'HYBRIDGE_PRECISION_AWARE', False):
         raise RuntimeError('Build the local dtype-aware binding with scripts/dev/build_pyamgx_precision.py first')
     args.output.mkdir(parents=True, exist_ok=True)
     preset = 'diocotron_gaussian_annulus_k3_p6_dt01_t50_full_raw_cuda_amgx'

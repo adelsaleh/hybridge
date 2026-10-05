@@ -11,18 +11,18 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-import hdgfem.hdg.condensation_device as hdg_condensation_device
-import hdgfem.runtime.optional as runtime_optional
-from hdgfem.transport import cuda as advection_cuda, cupy
-from hdgfem.mixed import cupy as diffusion_cupy
-from hdgfem.mixed.raw_cuda import identity as diffusion_raw_cuda
-import hdgfem.linalg.gpu.sparse as gpu_sparse
-import hdgfem.runtime.optional as runtime_optional
-import hdgfem.linalg.amgx.device_solver as amgx_device_solver
-import hdgfem.core.device as core_device
-from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgResult
-from hdgfem.solvers import diffusion_reaction
-from hdgfem.solvers import diffusion_raw_cuda as raw_cuda_driver
+import hybridge.hdg.condensation_device as hdg_condensation_device
+import hybridge.runtime.optional as runtime_optional
+from hybridge.transport import cuda as advection_cuda, cupy
+from hybridge.mixed import cupy as diffusion_cupy
+from hybridge.mixed.raw_cuda import identity as diffusion_raw_cuda
+import hybridge.linalg.gpu.sparse as gpu_sparse
+import hybridge.runtime.optional as runtime_optional
+import hybridge.linalg.amgx.device_solver as amgx_device_solver
+import hybridge.core.device as core_device
+from hybridge.linalg.multigrid.face_hp import FaceBlockHpMgPcgResult
+from hybridge.solvers import diffusion_reaction
+from hybridge.solvers import diffusion_raw_cuda as raw_cuda_driver
 
 
 @pytest.fixture(params=("standard", "fast"))

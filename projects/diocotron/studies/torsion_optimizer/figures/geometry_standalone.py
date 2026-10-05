@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
             "homotopy_lambda": 0.0, "outer_iteration": -1,
         }
         metadata = {
-            "format": "hdgfem_torsion_optimizer_trajectory_v2",
+            "format": "hybridge_torsion_optimizer_trajectory_v2",
             "run_tag": args.run_tag, "mesh_path": str(args.mesh.resolve()),
             "order": args.order, "quadrature_degree": qdeg,
             "alpha_t1": args.alphaT1, "alpha_t2": args.alphaT2,
@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
         )
         summary = {
-            "format": "hdgfem_torsion_optimizer_geometry_overview_v1",
+            "format": "hybridge_torsion_optimizer_geometry_overview_v1",
             "status": "OVERVIEW_COMPLETE", "mesh": str(args.mesh.resolve()),
             "order": args.order, "num_dofs": int(V.dofmap.index_map.size_global),
             "num_cells": int(domain.topology.index_map(domain.topology.dim).size_global),

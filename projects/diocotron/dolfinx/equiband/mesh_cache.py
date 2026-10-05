@@ -1,9 +1,9 @@
 """Validated, MPI-safe cache for canonical DOLFINx/Gmsh meshes.
 
-The installed :mod:`hdgfem` package has its own cache for ``DGMesh`` arrays.
+The installed :mod:`hybridge` package has its own cache for ``DGMesh`` arrays.
 Equiband needs tagged, possibly curved ``.msh`` files instead, so this module
 mirrors the same cache principles in the script layer without introducing a
-DOLFINx dependency into :mod:`hdgfem`:
+DOLFINx dependency into :mod:`hybridge`:
 
 * JSON-stable keys include geometry, parameters, size, geometry order and the
   canonical-generator source hash;

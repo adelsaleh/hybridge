@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import hdgfem.linalg.direct as linalg_direct
-from hdgfem.linalg.face_dense import face_dense_matvec
-from hdgfem.linalg.bsr import face_dense_to_bsr
+import hybridge.linalg.direct as linalg_direct
+from hybridge.linalg.face_dense import face_dense_matvec
+from hybridge.linalg.bsr import face_dense_to_bsr
 from scripts.advection_diffusion_reaction.diagnostics import check_cached_adr_pardiso as diagnostic
 
 
@@ -84,7 +84,7 @@ def test_cache_hash_mismatch_refused(cached_system, tmp_path):
 
 def test_real_backend_reuses_existing_wrapper(cached_system, tmp_path, monkeypatch):
     pardiso = pytest.importorskip('pypardiso')
-    import hdgfem.linalg.system as backend
+    import hybridge.linalg.system as backend
     spec, _, _, _, known = cached_system
     output = tmp_path/'direct'
     output.mkdir()

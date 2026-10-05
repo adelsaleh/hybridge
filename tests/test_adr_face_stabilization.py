@@ -1,15 +1,15 @@
 """Spatial diffusion stabilization contracts shared by all ADR backends."""
 import numpy as np
 import pytest
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.hdg import matrices
-import hdgfem.hdg.coefficients as hdg_coefficients
-from hdgfem.mixed.adr_preparation import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.hdg import matrices
+import hybridge.hdg.coefficients as hdg_coefficients
+from hybridge.mixed.adr_preparation import (
     prepare_adr_data,
     normalize_diffusion_stabilization,
     diffusion_stabilization_on_trace,
 )
-from hdgfem.mixed.postprocess.total_flux import _adr_postprocess_samples
+from hybridge.mixed.postprocess.total_flux import _adr_postprocess_samples
 
 
 def setup():
@@ -97,7 +97,7 @@ def test_light_preparation_never_builds_dense_local_operators(monkeypatch):
 )
 def test_postprocess_samples_accept_every_upwind_policy(policy, factor):
     """Postprocessing tau_adv follows the same upwind-family rule as ADR assembly."""
-    from hdgfem.hdg.stabilization import ScaledUpwind
+    from hybridge.hdg.stabilization import ScaledUpwind
 
     space, beta = setup()
     if policy == 'scaled':
@@ -113,8 +113,8 @@ def test_postprocess_samples_accept_every_upwind_policy(policy, factor):
 
 def test_lax_friedrichs_flux_postprocess_runs_end_to_end():
     """An ADR solve with Lax-Friedrichs stabilization recovers the p+1 flux."""
-    from hdgfem import solve_advection_diffusion_reaction_hdg
-    from hdgfem.hdg.stabilization import ScaledUpwind
+    from hybridge import solve_advection_diffusion_reaction_hdg
+    from hybridge.hdg.stabilization import ScaledUpwind
 
     space, beta = setup()
     common = dict(diffusion=.3, assembly_backend='numba', solver='direct', preconditioner=None,

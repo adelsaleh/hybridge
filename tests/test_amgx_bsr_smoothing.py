@@ -57,7 +57,7 @@ def test_weighted_power_interval_covers_exact_block_scaled_spectrum(block_size):
     """Check the interval against a symmetric generalized dense eigensolve."""
     import re
     from scipy.linalg import eigh
-    from hdgfem.linalg.amgx.host import initialize_pyamgx_once
+    from hybridge.linalg.amgx.host import initialize_pyamgx_once
 
     matrix = coupled_spd_chain(block_size, 17, variable_basis=True)
     dense = matrix.toarray()
@@ -94,7 +94,7 @@ def test_weighted_power_interval_covers_exact_block_scaled_spectrum(block_size):
 @pytest.mark.parametrize('dtype', (np.float32, np.float64), ids=('fp32', 'fp64'))
 def test_cycle_cost_jacobi_zero_and_warm_starts_match_block_solves(block_size, backend, dtype):
     """Check real Jacobi updates, stale storage, and the second nonzero iterate."""
-    from hdgfem.linalg.amgx.host import pyamgx_supports_real_dtype
+    from hybridge.linalg.amgx.host import pyamgx_supports_real_dtype
 
     if not pyamgx_supports_real_dtype(dtype):
         pytest.skip("installed PyAMGX accepts float64 only; FP32 needs the mode-aware "

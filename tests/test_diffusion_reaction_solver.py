@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGField, DGSpace
-from hdgfem.solvers.diffusion_reaction import (
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGField, DGSpace
+from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGSolver as DiffReaSolver,
     solve_diffusion_reaction_hdg,
 )
@@ -211,7 +211,7 @@ def _assert_rt_flux_constraints(
         trace_basis: str = "legacy-lagrange",
 ) -> None:
     """Check the P_p(F) and [P_{p-1}]^2 Raviart--Thomas moments."""
-    from hdgfem.mixed.postprocess.flux import _edge_lagrange_basis, _trace_basis_at
+    from hybridge.mixed.postprocess.flux import _edge_lagrange_basis, _trace_basis_at
 
     flux_star = result.postprocessed_flux
     assert flux_star is not None
@@ -666,7 +666,7 @@ def test_diffusion_rt_projection_satisfies_unisolvent_moments(
 
 def test_diffusion_flux_postprocess_aliases_and_backend_preflight() -> None:
     """Keep compatibility aliases and reject unsupported CuPy full-space work."""
-    from hdgfem.mixed.postprocess.flux import _normalize_flux_postprocess_space
+    from hybridge.mixed.postprocess.flux import _normalize_flux_postprocess_space
 
     assert _normalize_flux_postprocess_space("full-p-plus-1") == "l2_closest"
     assert _normalize_flux_postprocess_space("rt-p") == "RT_projection"

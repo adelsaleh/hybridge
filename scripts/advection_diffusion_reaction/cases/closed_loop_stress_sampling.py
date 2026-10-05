@@ -1,7 +1,7 @@
 """Thin adapter to master's reusable, array-only coefficient sampler.
 
 File loading is intentional: the assembly worker imports the other worktree's
-hdgfem package. These two self-contained modules do not import either solver
+hybridge package. These two self-contained modules do not import either solver
 package, so the adapter cannot contaminate the worker's package selection.
 """
 import importlib.util
@@ -20,9 +20,9 @@ def _load(name, path):
 
 class StressCoefficientSampler:
     def __init__(self, spec):
-        root = Path(spec["master_root"])/"hdgfem"
-        sampling = _load("_hdgfem_coefficient_sampling", root/"hdg/coefficient_sampling.py")
-        self.formulas = _load("_hdgfem_closed_loop_coefficients", root/"cases/closed_loop_coefficients.py")
+        root = Path(spec["master_root"])/"hybridge"
+        sampling = _load("_hybridge_coefficient_sampling", root/"hdg/coefficient_sampling.py")
+        self.formulas = _load("_hybridge_closed_loop_coefficients", root/"cases/closed_loop_coefficients.py")
         p = spec["stress_parameters"]
         self.volume_function = self.formulas.closed_loop_volume
         self.velocity_function = self.formulas.closed_loop_velocity
@@ -30,7 +30,7 @@ class StressCoefficientSampler:
                            p["speed"]/spec["velocity_normalization"], p["reaction"],
                            ("trap", "cross", "orthogonal").index(p["variant"]))
         if p.get("geometry", "annulus") == "square":
-            self.formulas = _load("_hdgfem_square_stress_coefficients", root/"cases/square_stress_coefficients.py")
+            self.formulas = _load("_hybridge_square_stress_coefficients", root/"cases/square_stress_coefficients.py")
             self.parameters = (p["epsilon"], p["speed"]/spec["velocity_normalization"],
                                p["reaction"], ("trap", "cross", "orthogonal").index(p["variant"]))
             self.volume_function = self.formulas.square_volume

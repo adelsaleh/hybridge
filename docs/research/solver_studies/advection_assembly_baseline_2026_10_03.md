@@ -32,14 +32,14 @@ or refute those predictions. Raw rows and environment metadata are in
   reconstruction are excluded. Each value is the median of five timed
   assemblies after one warm-up. Block sizes for split3 and the cooperative LU
   are autotuned per signature.
-- **FP32 runs:** native FP32 rows run in the `HDGFEM_PRECISION=float32`
+- **FP32 runs:** native FP32 rows run in the `HYBRIDGE_PRECISION=float32`
   package mode. Tensor FP32 rows run in an FP64 process: FP64 face tables and
   coefficient rows, FP32 contractions, LU, and Schur rows, then FP64 BSR
   accumulation.
 - **Configuration classes:**
-  - **native:** HDGFEM raw kernels only (`fused`, `split3`);
-  - **hybrid:** library contractions with the HDGFEM cooperative LU;
-  - **pure library:** library contractions and library LU, with HDGFEM code
+  - **native:** HYBRIDGE raw kernels only (`fused`, `split3`);
+  - **hybrid:** library contractions with the HYBRIDGE cooperative LU;
+  - **pure library:** library contractions and library LU, with HYBRIDGE code
     limited to the face-weight and coefficient-row kernels and the BSR
     scatter.
 
@@ -118,7 +118,7 @@ the same as `getrf` followed by `getrs`.
 
 ## Machine-Specific Settings
 
-- `RAW_SPLIT3_MIN_ORDER = 8` (`hdgfem/solvers/capabilities.py`) comes from the
+- `RAW_SPLIT3_MIN_ORDER = 8` (`hybridge/solvers/capabilities.py`) comes from the
   FP64 rows above. In FP32 the native ranking reverses: fused beats split3 at
   every order.
 - The split3 and cooperative-LU block sizes are autotuned per process and are
@@ -146,7 +146,7 @@ the same as `getrf` followed by `getrs`.
 
 1. **cuTENSOR.** Install the wheel that matches CuPy's CUDA major version, for
    example `pip install cutensor-cu13` (or `cutensor-cu12` with CuPy for
-   CUDA 12). `hdgfem.runtime.optional.require_cutensor` preloads
+   CUDA 12). `hybridge.runtime.optional.require_cutensor` preloads
    `libcutensorMg`.
 2. **MAGMA.** Build a release that supports the installed toolkit (2.10 for
    CUDA 13) for sm_90:
@@ -158,7 +158,7 @@ the same as `getrf` followed by `getrs`.
      -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release \
      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON
    make -j magma
-   export HDGFEM_MAGMA_ROOT=<build directory containing lib/libmagma.so>
+   export HYBRIDGE_MAGMA_ROOT=<build directory containing lib/libmagma.so>
    ```
 
 3. **Correctness.** Check with
@@ -175,7 +175,7 @@ the same as `getrf` followed by `getrs`.
 5. **FP32 native run** (a separate process):
 
    ```bash
-   HDGFEM_PRECISION=float32 python scripts/gpu/benchmark_advection_tsle_tensor.py \
+   HYBRIDGE_PRECISION=float32 python scripts/gpu/benchmark_advection_tsle_tensor.py \
      --mesh-size 0.0095 --native fused,split3 --configs none \
      --output-json run_logs/h100/advection_assembly_fp32_native.json
    ```
@@ -187,5 +187,5 @@ used the same solver paths and statistics as the runner. Recapturing them with
 the runner first gives a like-for-like diff:
 
 ```bash
-HDGFEM_MAGMA_ROOT=~/src/magma-build-cuda13 .venv/bin/python scripts/gpu/benchmark_advection_tsle_tensor.py <same arguments as step 4>
+HYBRIDGE_MAGMA_ROOT=~/src/magma-build-cuda13 .venv/bin/python scripts/gpu/benchmark_advection_tsle_tensor.py <same arguments as step 4>
 ```

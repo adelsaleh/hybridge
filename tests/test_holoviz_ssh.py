@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from hdgfem.io.holoviz_ssh import _request
+from hybridge.io.holoviz_ssh import _request
 
 
 class FragmentedSocket:
@@ -42,7 +42,7 @@ def test_invalid_big_request_length_stops():
 
 def test_dio_bdf2_fast_policy_preserves_safeguards():
     from scripts.guiding_center.cases.guiding_center_presets import PRESETS
-    from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
+    from hybridge.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
 
     preset = PRESETS["diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"]
     source = PRESETS["diocotron_gaussian_m64_ark3_p6_h008_dt005_t70"]

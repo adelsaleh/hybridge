@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import hdgfem.linalg.amgx.device_solver as cuda
-from hdgfem.linalg.amgx.config import with_amgx_residual_history
-from hdgfem.io.records import DiagnosticsRecorder
+import hybridge.linalg.amgx.device_solver as cuda
+from hybridge.linalg.amgx.config import with_amgx_residual_history
+from hybridge.io.records import DiagnosticsRecorder
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import (
@@ -266,7 +266,7 @@ def test_m64_fast_preserves_numerics_and_disables_optional_work():
 
 
 def test_quiet_failure_skips_field_diagnostics_and_snapshot(monkeypatch, tmp_path):
-    from hdgfem.linalg.results import LinearSolveConvergenceError
+    from hybridge.linalg.results import LinearSolveConvergenceError
     from scripts.guiding_center.runtime import runner
     error = LinearSolveConvergenceError("canned failure", result=None)
     def unexpected(*args, **kwargs):

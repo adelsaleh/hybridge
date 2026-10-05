@@ -19,7 +19,7 @@ def _fake_generator(calls):
         payload = ("mesh:" + spec.key).encode("ascii")
         path.write_bytes(payload)
         metadata = {
-            "format": "hdgfem_canonical_gmsh_v1",
+            "format": "hybridge_canonical_gmsh_v1",
             "geometry": spec.geometry,
             "geometry_degree": spec.geometry_degree,
             "geometry_parameters": spec.parameters,

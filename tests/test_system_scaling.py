@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.linalg import scale_sparse_system
+from hybridge.linalg import scale_sparse_system
 
 
 def test_scale_sparse_system_left_matches_jacobi_rows() -> None:

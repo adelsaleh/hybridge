@@ -544,7 +544,7 @@ class InPlacePyVistaTorsionPlotter(BasePyVistaTorsionPlotter):
     ``--plot-mode nonblocking`` this class keeps the current plotter, VTK grids,
     mesh actors, and scalar actors alive, then only updates point scalar arrays
     and panel text on each emit.  That is the PyVista/DOLFINx analogue of the
-    reusable plotting style in ``hdgfem.io.plot``.
+    reusable plotting style in ``hybridge.io.plot``.
     """
 
     def __init__(self, *args, **kwargs) -> None:

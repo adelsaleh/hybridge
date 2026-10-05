@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix, csr_matrix, bsr_matrix
 
-from hdgfem import DGMesh, DGSpace, rectangle_mesh
-from hdgfem.mixed.adr_preparation import prepare_adr_data
-from hdgfem.mixed.adr_numpy import assemble_numpy
-from hdgfem.mixed.coefficients import prepare_diffusion
-from hdgfem.mixed.adr_numba import assemble_projected_adr_trace_system_eliminated_numba
-from hdgfem.mixed.raw_cuda.adr_operator import (
+from hybridge import DGMesh, DGSpace, rectangle_mesh
+from hybridge.mixed.adr_preparation import prepare_adr_data
+from hybridge.mixed.adr_numpy import assemble_numpy
+from hybridge.mixed.coefficients import prepare_diffusion
+from hybridge.mixed.adr_numba import assemble_projected_adr_trace_system_eliminated_numba
+from hybridge.mixed.raw_cuda.adr_operator import (
     assemble_projected_adr_trace_operator_raw_cuda,
 )
 from test_adr_tensor_numba import diffusion_cases
@@ -81,11 +81,11 @@ def test_tensor_assembly_all_shapes(cp, order, basis, diffusion, kind):
         if fmt == 'bsr':
             assert actual.data.shape[1:] == (order+1, order+1)
         if fmt == 'csr':
-            from hdgfem.hdg import condensation as hdg
-            from hdgfem.mixed.adr_numba import (
+            from hybridge.hdg import condensation as hdg
+            from hybridge.mixed.adr_numba import (
                             reconstruct_projected_adr_local_unknowns_numba,
                         )
-            from hdgfem.mixed.raw_cuda.adr_operator import (
+            from hybridge.mixed.raw_cuda.adr_operator import (
                             reconstruct_projected_adr_local_unknowns_raw_cuda,
                         )
             trace_values=np.sin(np.arange(mesh.num_edg*(order+1))+.2)
@@ -164,7 +164,7 @@ def test_resource_and_coefficient_preflight(cp):
 
 
 def test_workspace_specializations():
-    from hdgfem.mixed.raw_cuda.tensor import tensor_workspace
+    from hybridge.mixed.raw_cuda.tensor import tensor_workspace
     for p in range(7):
         n=(p+1)*(p+2)//2
         sizes=[tensor_workspace(n,np.array([kind]))[2] for kind in range(7)]
@@ -175,14 +175,14 @@ def test_workspace_specializations():
 
 
 def test_workspace_limit_is_a_clear_configuration_error():
-    from hdgfem.mixed.raw_cuda.tensor import (
+    from hybridge.mixed.raw_cuda.tensor import (
             TENSOR_SHARED_MEMORY_LIMIT,
             TensorWorkspaceError,
             max_tensor_volume_points,
             tensor_shared_bytes,
             tensor_workspace,
         )
-    from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
+    from hybridge.runtime.errors import UnsupportedBackendConfigurationError
     nel, kind, nfq = 28, 6, 14
     largest = max_tensor_volume_points(nel, kind, nfq)
     assert tensor_shared_bytes(nel, kind, largest, nfq, 1)[1] <= TENSOR_SHARED_MEMORY_LIMIT
@@ -205,9 +205,9 @@ def test_workspace_limit_is_a_clear_configuration_error():
 def test_tensor_overintegrated_quadrature(cp, order, basis, diffusion, kind, rule):
     """Overintegrated volume rules for the n-Gamma D-BDF2 plan: Duffy p+5 points or the
     42-point degree-14 Dunavant rule; production traces keep 2p+1 GLL face points."""
-    from hdgfem.mixed.raw_cuda.tensor import tensor_workspace
-    from hdgfem.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge.mixed.raw_cuda.tensor import tensor_workspace
+    from hybridge.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
+    from hybridge.mixed.raw_cuda.adr_operator import (
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
     mesh = rectangle_mesh(2, 1)
@@ -240,7 +240,7 @@ def test_tensor_overintegrated_quadrature(cp, order, basis, diffusion, kind, rul
 
 
 def test_oversized_quadrature_fails_before_launch(cp):
-    from hdgfem.mixed.raw_cuda.tensor import TensorWorkspaceError
+    from hybridge.mixed.raw_cuda.tensor import TensorWorkspaceError
     from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases as coefficient_cases
     space = DGSpace(rectangle_mesh(1, 1), 6, basis_type='dub_orth', volume_quad_1d=14)
     trace = space.trace_space('legacy-lagrange')
@@ -263,7 +263,7 @@ def test_scalar_serial_diagnostic_is_retained(cp):
 
 
 def test_mass_factor_failure_and_trace_validation(cp):
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge.mixed.raw_cuda.adr_operator import (
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
     space=DGSpace(rectangle_mesh(1,1),1)
@@ -285,8 +285,8 @@ def test_mass_factor_failure_and_trace_validation(cp):
 @pytest.mark.parametrize('cache', ['none', 'schur-lu', 'schur-lu+mass'])
 def test_single_thread_tensor_assembly_and_reconstruction(cp, diffusion, kind, order, cache):
     """Exercise partial-warp factors and column solves, including 2*NEL > 32."""
-    from hdgfem.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge.mixed.adr_numba import reconstruct_projected_adr_local_unknowns_numba
+    from hybridge.mixed.raw_cuda.adr_operator import (
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
 
@@ -318,7 +318,7 @@ def test_single_thread_tensor_assembly_and_reconstruction(cp, diffusion, kind, o
 def test_reused_mass_factors_reproduce_fresh_assembly(cp):
     """Reloading the factored variable-tensor mass reproduces a fresh assembly for a changed advection
     field (to roundoff: the reload kernel is compiled separately, so operation contraction can differ)."""
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge.mixed.raw_cuda.adr_operator import (
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
     from scripts.advection_diffusion_reaction.cases.tensor_cases import diffusion_cases as coefficient_cases

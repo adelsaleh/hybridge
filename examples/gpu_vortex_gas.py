@@ -9,8 +9,8 @@ records the published run and its checks.
 def main():
     """Couple the Poisson and transport solvers with constant-step BDF2."""
     # README example begins
-    import hdgfem as hdg
-    from hdgfem.io import HolovizScalarPanels
+    import hybridge as hdg
+    from hybridge.io import HolovizScalarPanels
 
     # A five-lobed star around a circular island, with degree-6 elements.
     mesh = hdg.gmsh_smooth_star_mesh(

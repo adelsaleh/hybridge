@@ -16,9 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hdgfem.hdg.gram import assemble_hdg_gram, build_krylov_hdg_gram_inverse
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
+from hybridge.hdg.gram import assemble_hdg_gram, build_krylov_hdg_gram_inverse
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
 
 
 def _relative_error(a: float, b: float) -> float:
@@ -82,12 +82,12 @@ def test_gram(
     krylov_maxiter: int | None,
     spectrum: str,
 ) -> None:
-    """Assemble with hdgfem and print numerical consistency checks."""
+    """Assemble with hybridge and print numerical consistency checks."""
     print(f"mesh: elements={space.mesh.num_tri}, edges={space.mesh.num_edg}, interior_edges={space.mesh.int_edges_inds.size}")
     print(f"space: order={space.order}, basis={space.reference.basis_type}, el_dof={space.el_dof}, edg_dof={space.quad_data.edg_dof}")
     print(f"stabilization: tau_F = {sigma:g} * p^2 / h_F")
     if use_numba:
-        print("assembly implementation: hdgfem package (backend selection is package-owned)")
+        print("assembly implementation: hybridge package (backend selection is package-owned)")
 
     started = time.perf_counter()
     assembled = assemble_hdg_gram(space, sigma=sigma, jump_weight="scaled")

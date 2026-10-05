@@ -28,7 +28,7 @@
   backgroundcolor=\color{black!3}
 }
 
-\title{Symmetric Triangle Quadrature in HDGFEM}
+\title{Symmetric Triangle Quadrature in HYBRIDGE}
 \author{}
 \date{}
 
@@ -46,7 +46,7 @@ bases despite removable singularities.
 
 \section{Reference triangle}
 
-HDGFEM uses the reference triangle
+HYBRIDGE uses the reference triangle
 \[
   \Khat = \operatorname{conv}\{(-1,-1), (1,-1), (-1,1)\}.
 \]
@@ -56,7 +56,7 @@ For a point \((\xi,\eta)\in\Khat\), the barycentric coordinates are
   \lam_2 = \frac{\eta+1}{2},\qquad
   \lam_0 = 1-\lam_1-\lam_2 = -\frac{\xi+\eta}{2}.
 \]
-The map from barycentric coordinates back to the HDGFEM reference triangle is
+The map from barycentric coordinates back to the HYBRIDGE reference triangle is
 \[
   \xi=-1+2\lam_1,\qquad \eta=-1+2\lam_2.
 \]
@@ -80,7 +80,7 @@ weights for a unit-area triangle, so the test code multiplies those weights by
   \fill[red!70!black] (0.6667,0.6667) circle (0.025) node[right] {centroid};
   \node at (0.75,0.32) {\(\Khat\)};
 \end{tikzpicture}
-\caption{The reference triangle used by \code{hdgfem/core/quadrature.py}.}
+\caption{The reference triangle used by \code{hybridge/core/quadrature.py}.}
 \label{fig:reference-triangle}
 \end{figure}
 
@@ -114,7 +114,7 @@ mass term.
 
 \section{Basis formulas}
 
-The implementations are in \code{hdgfem/core/basis.py}.  The three supported
+The implementations are in \code{hybridge/core/basis.py}.  The three supported
 element basis families span the same polynomial space \(\Phat_p(\Khat)\), but
 they are evaluated by different formulas.
 
@@ -341,7 +341,7 @@ experiments have a clear scalar reference.
 
 \subsection{ReferenceElementData consistency}
 
-The tests also check that \code{hdgfem/core/quadrature.py} computes its cached
+The tests also check that \code{hybridge/core/quadrature.py} computes its cached
 reference tensors consistently.  For each \(p=0,\ldots,6\) and each basis, the
 test rebuilds and compares:
 \begin{itemize}[nosep]
@@ -386,8 +386,8 @@ compatibility and higher-order fallback.
   \item John Burkardt, Dunavant triangle rule archive:
         \url{https://people.sc.fsu.edu/~jburkardt/f_src/triangle_dunavant_rule/triangle_dunavant_rule.html}.
   \item Local code references:
-        \code{hdgfem/core/basis.py},
-        \code{hdgfem/core/quadrature.py}, and
+        \code{hybridge/core/basis.py},
+        \code{hybridge/core/quadrature.py}, and
         \code{tests/test_symmetric_triangle_quadrature_host.py}.
 \end{enumerate}
 

@@ -128,7 +128,7 @@ def test_figure_registry_contract_is_png_only(tmp_path):
     })
     (generated_dir / "figure_registry.json").write_text(
         json.dumps({
-            "format": "hdgfem_torsion_optimizer_figure_registry_v1",
+            "format": "hybridge_torsion_optimizer_figure_registry_v1",
             "asset_format": "png",
             "stage": "preliminary",
             "figures": entries,

@@ -393,7 +393,7 @@ def start_bootstrap_terminal_log_capture(
         if _BOOTSTRAP_CAPTURE is not None:
             return _BOOTSTRAP_CAPTURE
         file_fd, file_name = tempfile.mkstemp(
-            prefix=f"hdgfem-terminal-{os.getpid()}-",
+            prefix=f"hybridge-terminal-{os.getpid()}-",
             suffix=".log",
         )
         os.close(file_fd)

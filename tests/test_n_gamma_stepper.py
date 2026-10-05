@@ -6,7 +6,7 @@ Host references use Numba assembly with the direct solver.
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh
+from hybridge import DGSpace, rectangle_mesh
 from scripts.n_gamma import coefficients as nc
 from scripts.n_gamma.stepper import NGammaBDF2Stepper, StepRejected
 

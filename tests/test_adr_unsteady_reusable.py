@@ -10,7 +10,7 @@ Bounded checks only: a 4x4 mesh, T=0.4, at most 16 steps per run.
 import numpy as np
 import pytest
 
-from hdgfem import (AdvectionDiffusionReactionHDGSolver, DGSpace, ElementCoefficient, evaluate_scalar_error,
+from hybridge import (AdvectionDiffusionReactionHDGSolver, DGSpace, ElementCoefficient, evaluate_scalar_error,
                     field_values_at_ref, rectangle_mesh, solve_advection_diffusion_reaction_hdg)
 
 BETA = (.7, -.2)

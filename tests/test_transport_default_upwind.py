@@ -5,9 +5,9 @@ import os
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.hdg.stabilization import resolve_transport_stabilization, ScaledUpwind
-from hdgfem.solvers import advection_reaction as ar
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.hdg.stabilization import resolve_transport_stabilization, ScaledUpwind
+from hybridge.solvers import advection_reaction as ar
 
 
 def problem(order=2):
@@ -56,7 +56,7 @@ def test_public_solver_resolves_policy_before_backend_dispatch(monkeypatch, back
             advection_stabilization=policy)
 
 
-@pytest.mark.skipif(os.environ.get('HDGFEM_RUN_CUDA_TRANSPORT_TESTS') != '1',
+@pytest.mark.skipif(os.environ.get('HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS') != '1',
                    reason='requires an available CUDA device')
 @pytest.mark.parametrize('entry', ['functional', 'tangent-bsr'])
 def test_default_raw_p6_matrix_matches_explicit_corrected_policy(entry):

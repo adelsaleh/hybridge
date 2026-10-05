@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem import rectangle_mesh
-from hdgfem.io import PyVistaFieldPanels, scalar_color_limits
-from hdgfem.io import live, plot
+from hybridge import rectangle_mesh
+from hybridge.io import PyVistaFieldPanels, scalar_color_limits
+from hybridge.io import live, plot
 
 
 class PolyData:
@@ -173,7 +173,7 @@ def test_add_field_preserves_mesh_return_and_can_return_actor(vtk):
 
 
 def test_runner_adapter_preserves_vorticity_policy(monkeypatch):
-    import hdgfem.io
+    import hybridge.io
     from scripts.guiding_center.runtime.plotting import GuidingCenterPyVistaPanels
 
     calls = []
@@ -184,7 +184,7 @@ def test_runner_adapter_preserves_vorticity_policy(monkeypatch):
             calls.append((fields, frame))
         def close(self):
             calls.append("closed")
-    monkeypatch.setattr(hdgfem.io, "PyVistaFieldPanels", Viewer)
+    monkeypatch.setattr(hybridge.io, "PyVistaFieldPanels", Viewer)
     adapter = GuidingCenterPyVistaPanels(
         "rho", "phi", resolution=4, title="case", show_mesh=False, off_screen=True,
         screenshot_dir=None, screenshot_prefix="case", include_potential=True, density_is_vorticity=True,

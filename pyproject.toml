@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hdgfem"
-version = "0.1.0a1"
+name = "hybridge"
+version = "0.1.0a2"
 description = "Self-contained DG/HDG simulator."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,13 +33,13 @@ release = ["build", "twine"]
 all = ["gmsh", "matplotlib", "pyvista", "pytest", "tomli; python_version < '3.11'"]
 
 [project.urls]
-Repository = "https://github.com/adelsaleh/hdgfem"
+Repository = "https://github.com/adelsaleh/hybridge"
 
 [tool.setuptools.packages.find]
-include = ["hdgfem*"]
+include = ["hybridge*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-"hdgfem.core" = ["geometries/*.geo"]
+"hybridge.core" = ["geometries/*.geo"]

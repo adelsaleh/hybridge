@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, rectangle_mesh
+from hybridge import DGSpace, rectangle_mesh
 
 cp = pytest.importorskip("cupy")
 
@@ -21,7 +21,7 @@ def _require_device():
 def test_require_finite_device_values_names_stage_and_elements():
     """Finite values pass through; NaN/Inf raise with the stage and element count."""
     _require_device()
-    from hdgfem.hdg.condensation_device import require_finite_device_values
+    from hybridge.hdg.condensation_device import require_finite_device_values
 
     values = cp.ones((4, 3))
     assert require_finite_device_values(values, "stage") is values
@@ -38,8 +38,8 @@ def test_require_finite_device_values_names_stage_and_elements():
 def test_raw_cuda_advection_reconstruction_rejects_non_finite_trace():
     """A NaN reaching the fused raw-CUDA local solve raises instead of returning NaN fields."""
     _require_device()
-    from hdgfem.core.device import as_cupy_space, as_cupy_trace_space
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space, as_cupy_trace_space
+    from hybridge.transport.cuda import (
         assemble_reduced_system_cuda,
         project_callable_cupy,
         reconstruct_advection_field_cuda,

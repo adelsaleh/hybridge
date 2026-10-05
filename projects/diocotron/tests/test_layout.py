@@ -25,7 +25,7 @@ def test_dolfinx_sources_do_not_import_hdg_or_comparisons():
                 modules = [node.module or ""]
             else:
                 continue
-            assert all(not name.startswith(("hdgfem", "projects.diocotron.hdg", "projects.diocotron.comparisons")) for name in modules), source
+            assert all(not name.startswith(("hybridge", "projects.diocotron.hdg", "projects.diocotron.comparisons")) for name in modules), source
 
 
 def test_checkpoint_export_and_validation_import_without_either_solver():
@@ -34,7 +34,7 @@ def test_checkpoint_export_and_validation_import_without_either_solver():
         import sys
         class BlockSolvers(importlib.abc.MetaPathFinder):
             def find_spec(self, fullname, path=None, target=None):
-                if fullname.split('.')[0] in {'hdgfem', 'dolfinx', 'basix', 'ufl'}:
+                if fullname.split('.')[0] in {'hybridge', 'dolfinx', 'basix', 'ufl'}:
                     raise AssertionError('unexpected numerical dependency: ' + fullname)
         sys.meta_path.insert(0, BlockSolvers())
         from projects.diocotron.dolfinx.checkpoint import write_dolfinx_checkpoint_v2

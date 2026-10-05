@@ -1,4 +1,4 @@
-"""Summarize existing guiding-center Poisson logs without importing HDGFEM.
+"""Summarize existing guiding-center Poisson logs without importing HYBRIDGE.
 
 This is offline analysis: no CUDA initialization, compilation, or time stepping.
 Endpoint metrics and all-stage metrics are deliberately kept separate.

@@ -7,8 +7,8 @@ import sys
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import gmsh_smooth_star_mesh
-from hdgfem.io.raster import RasterGeometry
+from hybridge.core.mesh import gmsh_smooth_star_mesh
+from hybridge.io.raster import RasterGeometry
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key, euler_star_vortex_gas
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.runner import _build_mesh
@@ -39,7 +39,7 @@ def test_star_gas_populates_lobes_and_is_reproducible() -> None:
     assert case.density_boundary_at(0) is None
     for wall_r in (0.3, 1 + 0.35*np.cos(5*theta)):
         boundary = case.potential_boundary_at(0)
-        assert boundary._hdgfem_constant_value == 0.0
+        assert boundary._hybridge_constant_value == 0.0
         np.testing.assert_array_equal(boundary(wall_r*np.cos(theta), wall_r*np.sin(theta)), 0.0)
     assert case.initial_density(np.zeros((3, 1)), np.zeros((1, 4))).shape == (3, 4)
 

@@ -1,7 +1,7 @@
 """Original polygonal cosine-star mesh for the standalone Newton experiment.
 
 This preserves that experiment's geometry and Gmsh options independently of
-HDGFEM. It deliberately differs from the canonical spline/sine-star geometry.
+HYBRIDGE. It deliberately differs from the canonical spline/sine-star geometry.
 """
 from __future__ import annotations
 

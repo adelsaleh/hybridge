@@ -1261,10 +1261,10 @@ def load_initial_equilibrium_state(
             with np.load(resolve_archive_path(path), allow_pickle=False) as checkpoint:
                 metadata = json.loads(str(checkpoint["metadata"].item()))
                 format_name = str(metadata.get("format", ""))
-                if format_name == "hdgfem_equilibrium_v1":
+                if format_name == "hybridge_equilibrium_v1":
                     coordinates = np.asarray(checkpoint["coordinates"], dtype=np.float64).copy()
                     phi_values = np.asarray(checkpoint["phi"], dtype=np.float64).copy()
-                elif format_name == "hdgfem_equilibrium_v2":
+                elif format_name == "hybridge_equilibrium_v2":
                     names = [str(value) for value in np.asarray(checkpoint["field_names"]).tolist()]
                     if "phi" not in names:
                         raise ValueError("v2 equilibrium checkpoint has no 'phi' field")
@@ -1619,7 +1619,7 @@ class TrajectoryRecorder:
         archive_metadata = dict(self.context)
         archive_metadata.update(metadata)
         archive_metadata.update({
-            "format": "hdgfem_torsion_optimizer_trajectory_v2",
+            "format": "hybridge_torsion_optimizer_trajectory_v2",
             "mesh_path": str(self.mesh_path.resolve()),
             "states": self.states,
             "complete": bool(metadata.get("complete", False)),
@@ -9058,7 +9058,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         phi=u,
         rho=rho_checkpoint,
         metadata={
-            "format": "hdgfem_equilibrium_v1",
+            "format": "hybridge_equilibrium_v1",
             "run_tag": run_tag,
             "mesh_path": str(Path(mesh_path).resolve()),
             "order": int(args.order),

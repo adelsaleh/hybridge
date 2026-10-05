@@ -7,8 +7,8 @@ import json
 import numpy as np
 import pytest
 
-from hdgfem.core import DGMesh, DGSpace
-from hdgfem.core.quadrature import ReferenceElementData
+from hybridge.core import DGMesh, DGSpace
+from hybridge.core.quadrature import ReferenceElementData
 from projects.diocotron.comparisons.hdg_projection import (
     EQUILIBRIUM_FORMAT_V2,
     GENERIC_DOLFINX_FORMAT_V2,
@@ -182,7 +182,7 @@ def test_v1_checkpoint_has_clear_generic_import_error(tmp_path) -> None:
         coordinates=np.zeros((1, 3)),
         rho=np.zeros(1),
         phi=np.zeros(1),
-        metadata=np.asarray(json.dumps({"format": "hdgfem_equilibrium_v1"})),
+        metadata=np.asarray(json.dumps({"format": "hybridge_equilibrium_v1"})),
     )
     with pytest.raises(ValueError, match="lack cell-local polynomial samples"):
         load_dolfinx_checkpoint(path)

@@ -5,7 +5,7 @@
 
 The smooth fixed-mesh implementation now lives in
 [`scripts/diocotron_dolfinx/equiband/`](../dolfinx/equiband),
-outside the installed `hdgfem` package. All DOLFINx-specific solvers and
+outside the installed `hybridge` package. All DOLFINx-specific solvers and
 checkpoint adapters belong to the script layer. The maintained
 [user guide](equiband.md) defines its current API, functionals,
 guard statuses, configuration units and run/restart commands.
@@ -861,12 +861,12 @@ Recommended official references:
 ## 4. Repository layout
 
 The implementation is a script-side package in this repository, not a
-subpackage or installation extra of `hdgfem`. Run it from the repository
+subpackage or installation extra of `hybridge`. Run it from the repository
 root with `python -m projects.diocotron.dolfinx.equiband` in the FEniCSx
-environment. No DOLFINx-specific module belongs in the core `hdgfem` package:
+environment. No DOLFINx-specific module belongs in the core `hybridge` package:
 
 ```text
-hdgfem/
+hybridge/
 ├── scripts/diocotron_dolfinx/equiband/
 │   ├── __init__.py
 │   ├── __main__.py
@@ -1026,7 +1026,7 @@ ITER also hashes its external `.geo` source. Rank zero alone generates a miss
 under a per-key lock, uses a temporary directory, atomically installs the mesh
 and sidecar, and broadcasts the resolved path. A hit authenticates its key and
 full mesh SHA-256. Corruption is regenerated explicitly. The default
-`.cache/hdgfem/dolfinx_meshes` and `/tmp` fallback mirror the core project's
+`.cache/hybridge/dolfinx_meshes` and `/tmp` fallback mirror the core project's
 cache policy while all DOLFINx code remains under `scripts/diocotron_dolfinx`.
 
 Keep explicit-file mode semantically separate: `mesh_file` is authoritative,
@@ -2154,7 +2154,7 @@ mesh:
   geometric_dimension: 2
   geometry_degree: 3
   gmsh_algorithm: 6
-  cache_directory: .cache/hdgfem/dolfinx_meshes
+  cache_directory: .cache/hybridge/dolfinx_meshes
   rebuild_cache: false
 
 finite_element:

@@ -1,4 +1,4 @@
-# hdgfem
+# hybridge
 
 **High-order hybridizable discontinuous Galerkin methods in Python, on CPUs
 and NVIDIA GPUs.**
@@ -7,7 +7,7 @@ and NVIDIA GPUs.**
 [GPU example](#a-gpu-vortex-gas-in-python) · [User manual](MANUAL.md) ·
 [Documentation](docs/README.md)
 
-`hdgfem` is a research library of hybridizable discontinuous Galerkin (HDG)
+`hybridge` is a research library of hybridizable discontinuous Galerkin (HDG)
 methods ([Cockburn et al., 2009](https://doi.org/10.1137/070706616);
 [Nguyen et al., 2009](https://doi.org/10.1016/j.jcp.2009.01.030);
 [Cockburn et al., 2010](https://doi.org/10.1090/S0025-5718-10-02334-3)) for
@@ -95,7 +95,7 @@ The GPU solves use our forks of [NVIDIA AMGX](https://github.com/adelsaleh/AMGX/
 and [PyAMGX](https://github.com/adelsaleh/pyamgx/tree/quality-of-life), which
 add HDG block systems and GPU diagnostics. The
 [fork setup guide](docs/getting_started/forked_amgx_stack.md) lists the tested
-revisions and build steps. Importing `hdgfem` needs none of the optional
+revisions and build steps. Importing `hybridge` needs none of the optional
 runtimes; the [installation guide](docs/getting_started/installation.md) covers
 every dependency group.
 
@@ -105,7 +105,7 @@ A manufactured Poisson problem on the unit square, solved with the base
 installation:
 
 ```python
-from hdgfem import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
+from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
 
 mesh = rectangle_mesh(6, 6, xlim=(0., 1.), ylim=(0., 1.))
 space = DGSpace(mesh, 2, basis_type="dub_orth")
@@ -174,8 +174,8 @@ reconstruction, and drawing belong to the library; the coupling and the time
 history stay visible:
 
 ```python
-import hdgfem as hdg
-from hdgfem.io import HolovizScalarPanels
+import hybridge as hdg
+from hybridge.io import HolovizScalarPanels
 
 # A five-lobed star around a circular island, with degree-6 elements.
 mesh = hdg.gmsh_smooth_star_mesh(
@@ -279,7 +279,7 @@ installed wheel contains the library.
 
 ## Development status
 
-`hdgfem` is an **early-alpha research package**. The public solver API and
+`hybridge` is an **early-alpha research package**. The public solver API and
 backend support are documented, while numerical methods, performance paths,
 and application studies continue to evolve. The [roadmap](TODO.md) tracks
 current work, and the [release record](docs/releases/early_alpha.md)

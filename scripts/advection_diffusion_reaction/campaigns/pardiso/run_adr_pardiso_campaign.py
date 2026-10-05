@@ -36,8 +36,8 @@ SOURCE_FILES = (
     Path(__file__), Path(archive.__file__), Path(tuning.__file__),
     ROOT/'scripts/advection_diffusion_reaction/campaigns/pardiso/adr_pardiso_worker.py',
     ROOT/'scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py',
-    ROOT/'hdgfem/linalg/pardiso_diagnostics.py', ROOT/'hdgfem/linalg/system.py',
-    ROOT/'hdgfem/linalg/bsr.py', ROOT/'hdgfem/mixed/face_dense.py', ROOT/'hdgfem/runtime/precision.py',
+    ROOT/'hybridge/linalg/pardiso_diagnostics.py', ROOT/'hybridge/linalg/system.py',
+    ROOT/'hybridge/linalg/bsr.py', ROOT/'hybridge/mixed/face_dense.py', ROOT/'hybridge/runtime/precision.py',
 )
 
 
@@ -121,7 +121,7 @@ def worker_environment(threads):
     env = dict(os.environ, MKL_NUM_THREADS=str(threads), OMP_NUM_THREADS=str(threads),
                OMP_THREAD_LIMIT=str(threads), OMP_DYNAMIC='FALSE',
                MKL_DYNAMIC='FALSE', OPENBLAS_NUM_THREADS='1', NUMBA_DISABLE_JIT='1',
-               HDGFEM_PRECISION='float64', PYTHONDONTWRITEBYTECODE='1', PYTHONPATH=str(ROOT))
+               HYBRIDGE_PRECISION='float64', PYTHONDONTWRITEBYTECODE='1', PYTHONPATH=str(ROOT))
     # An inherited per-domain override can defeat the candidate count.
     env.pop('MKL_DOMAIN_NUM_THREADS', None)
     return env

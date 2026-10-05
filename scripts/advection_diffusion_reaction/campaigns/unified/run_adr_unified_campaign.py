@@ -158,7 +158,9 @@ def run_job(key, specification, args, common, environment, *, retry=False, comma
 def source_hashes(branch):
     sources = {}
     for label, root in (('master', ROOT), ('branch', branch)):
-        paths = list((root/'hdgfem').rglob('*.py'))
+        # The vendored snapshot keeps the pre-rename package name.
+        package = 'hybridge' if label == 'master' else 'hdgfem'
+        paths = list((root/package).rglob('*.py'))
         paths += list((root/'scripts').glob('*adr*.py'))
         paths += list((root/'scripts').glob('*adv_diff_rea*.py'))
         paths += list((root/'scripts/advection_diffusion_reaction').rglob('*.py'))
@@ -173,7 +175,7 @@ def execute(plan, args, common):
     args.output.mkdir(parents=True, exist_ok=True)
     with (args.output/'campaign.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        environment = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', HDGFEM_PRECISION='float64',
+        environment = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', HYBRIDGE_PRECISION='float64', HDGFEM_PRECISION='float64',
                            OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1', OMP_NUM_THREADS='1',
                            NUMBA_NUM_THREADS=str(args.numba_threads), NUMBA_THREADING_LAYER='omp')
         if os.environ.get('NUMBA_DISABLE_JIT') == '1':

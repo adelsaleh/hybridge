@@ -1,7 +1,7 @@
 """Explicit fixed-cycle AMG configuration must not inherit solve stopping."""
 import copy
 import pytest
-from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
+from hybridge.linalg.amgx.device_solver import _amgx_config_for_solve
 
 
 @pytest.mark.parametrize('cycles', (1, 2))
@@ -32,10 +32,10 @@ def test_fixed_cycles_reject_a_krylov_solver():
 def test_native_coarse_cycle_enforces_fixed_work(monkeypatch):
     from types import SimpleNamespace
     from unittest.mock import Mock
-    from hdgfem.transport import cuda as advection_cuda
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
-    from hdgfem.linalg.multigrid.face_hp import AmgxScalarVcycle
-    from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
+    from hybridge.transport import cuda as advection_cuda
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
+    from hybridge.linalg.multigrid.face_hp import AmgxScalarVcycle
+    from hybridge.linalg.multigrid.policy import scalar_p0_amgx_config
 
     device = Mock()
     device.setup.return_value = 0.1

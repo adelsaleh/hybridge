@@ -9,13 +9,13 @@ import time
 
 import numpy as np
 
-from hdgfem.linalg.amgx.host import initialize_pyamgx_once
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.linalg.gpu.legendre_face_bsr import (
+from hybridge.linalg.amgx.host import initialize_pyamgx_once
+from hybridge.runtime.optional import require_cupy
+from hybridge.linalg.gpu.legendre_face_bsr import (
     _CusparseGenericBsrOperator,
     _CusparseGenericCsrOperator,
 )
-from hdgfem.linalg.multigrid.hierarchy_bsr import compare_product, deterministic_vectors
+from hybridge.linalg.multigrid.hierarchy_bsr import compare_product, deterministic_vectors
 
 
 class NativeCsrProduct:
@@ -28,7 +28,7 @@ class NativeCsrProduct:
         if host.shape[0] != host.shape[1] or host.dtype != np.float64:
             raise ValueError('Native AMGX product requires square FP64 CSR')
         initialize_pyamgx_once()
-        self.lib = ct.CDLL(str(Path(os.environ['HDGFEM_AMGX_BUILD_ROOT'])/'libamgxsh.so'))
+        self.lib = ct.CDLL(str(Path(os.environ['HYBRIDGE_AMGX_BUILD_ROOT'])/'libamgxsh.so'))
         p, i = ct.c_void_p, ct.c_int
         signatures = dict(
             AMGX_config_create=([ct.POINTER(p), ct.c_char_p]),

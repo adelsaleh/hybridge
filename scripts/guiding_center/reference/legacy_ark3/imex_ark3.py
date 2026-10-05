@@ -11,14 +11,14 @@ import math
 from time import perf_counter
 import numpy as np
 
-from hdgfem.core.field_ops import (
+from hybridge.core.field_ops import (
     field_linear_combination,
     perpendicular_vector_field,
     solution_field,
     solution_trace,
 )
-from hdgfem.hdg.gram import field_l2_norm
-from hdgfem.runtime.logging import timed_call
+from hybridge.hdg.gram import field_l2_norm
+from hybridge.runtime.logging import timed_call
 from scripts.guiding_center.reference.legacy_ark3.stage_support import closest_trace, GuidingCenterStep
 from scripts.guiding_center.reference.legacy_ark3.poisson_recovery import (
     PoissonCheckpoint, PoissonStageRankFailure, PoissonTauRecovery,
@@ -327,7 +327,7 @@ class _ARKWork:
         return rhs, trace, drift
 
     def repair(self, failure):
-        from hdgfem.diagnostics.solver import solver_diagnostics_snapshot
+        from hybridge.diagnostics.solver import solver_diagnostics_snapshot
         # Drop rejected solution/system arrays, retaining the package metric
         # interface and owning traces already stored in the candidate lists.
         for prefix in ("transport", "poisson"):

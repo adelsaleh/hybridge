@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import (
+from hybridge import (
     DGField,
     DGMesh,
     DGSpace,
@@ -17,8 +17,8 @@ from hdgfem import (
     rectangle_mesh,
     solve_advection_reaction_hdg,
 )
-from hdgfem.core.space import evaluate_product
-from hdgfem.hdg.condensation import (
+from hybridge.core.space import evaluate_product
+from hybridge.hdg.condensation import (
     assemble_trace_system,
     as_vector_field,
     boundary_trace_coefficients,
@@ -29,8 +29,8 @@ from hdgfem.hdg.condensation import (
     trace_matrix_data,
     trace_matrix_indices,
 )
-from hdgfem.hdg.matrices import _vector_values_on_test_quads
-from hdgfem.transport.local_numpy import (
+from hybridge.hdg.matrices import _vector_values_on_test_quads
+from hybridge.transport.local_numpy import (
     add_advection_mats,
     advection_mats,
     boundary_mass,
@@ -38,25 +38,25 @@ from hdgfem.transport.local_numpy import (
     element_boundary_mats,
     element_boundary_mats_from_normal_flux,
 )
-from hdgfem.hdg.coefficients import advective_boundary_normal
-from hdgfem.core.mass import (
+from hybridge.hdg.coefficients import advective_boundary_normal
+from hybridge.core.mass import (
     add_reaction_mass,
     mass_from_field,
     weighted_mass_from_field,
 )
-from hdgfem.solvers.diffusion_reaction import (
+from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,
     solve_diffusion_reaction_hdg,
 )
-from hdgfem.mixed.local_numpy import impose_boundary_trace_on_guess
-from hdgfem.core.trace_transfer import prolong_trace_coefficients
+from hybridge.mixed.local_numpy import impose_boundary_trace_on_guess
+from hybridge.core.trace_transfer import prolong_trace_coefficients
 from scripts.diffusion_reaction.experiments.bootstrap_initial_guess import (
     solve_diffusion_reaction_hdg as solve_diffusion_reaction_hdg_with_bootstrap,
 )
-from hdgfem.linalg.reduction import eliminate_known_dofs, expand_known_dofs
-from hdgfem.linalg.system import solve_global_system
-from hdgfem.linalg.ordering import strongly_connected_component_order, upwind_scc_trace_ordering
+from hybridge.linalg.reduction import eliminate_known_dofs, expand_known_dofs
+from hybridge.linalg.system import solve_global_system
+from hybridge.linalg.ordering import strongly_connected_component_order, upwind_scc_trace_ordering
 from scripts.diffusion_reaction.cases import (
     lshape_singular_harmonic_case,
     quadratic_poisson_case,

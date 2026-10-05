@@ -2,7 +2,7 @@
 
 This checkout project owns the diocotron application: its DOLFINx, native HDG,
 and FreeFEM implementations, scientific studies, and reports. The general
-`hdgfem` library remains at the repository root and is packaged independently.
+`hybridge` library remains at the repository root and is packaged independently.
 Run the commands below from the repository root.
 
 Generated figures and frames (PNG) of the studies are not distributed with the
@@ -14,14 +14,14 @@ outputs live under the local, untracked `run_outputs/`.
 
 | Directory | Responsibility | Numerical environment |
 | --- | --- | --- |
-| [dolfinx/](dolfinx/README.md) | Equiband, torsion-based equilibrium optimization, CG/SUPG evolution | FEniCSx/PETSc/MPI; no HDGFEM imports |
-| [hdg/](hdg/README.md) | Native HDG equilibrium experiments | HDGFEM and its selected optional backends |
+| [dolfinx/](dolfinx/README.md) | Equiband, torsion-based equilibrium optimization, CG/SUPG evolution | FEniCSx/PETSc/MPI; no HYBRIDGE imports |
+| [hdg/](hdg/README.md) | Native HDG equilibrium experiments | HYBRIDGE and its selected optional backends |
 | [freefem/](freefem/README.md) | FreeFEM equilibrium and evolution programs | FreeFEM and the program's required plugins |
 | [comparisons/](comparisons/README.md) | Checkpoint projection and implementation comparisons | Dependencies of the particular comparison |
 
 The implementations have separate numerical models and configuration policies.
 Neither backend imports the other's solvers. The comparison code may use
-HDGFEM and lightweight DOLFINx checkpoint data; parsing those files does not
+HYBRIDGE and lightweight DOLFINx checkpoint data; parsing those files does not
 import the DOLFINx runtime. Existing checkpoint v2 identifiers are preserved.
 
 ## Start a run
@@ -71,7 +71,7 @@ preserved artifacts, and compatibility with archived paths.
 
 ## Verification
 
-The root test suite owns HDGFEM. The application suite is selected explicitly
+The root test suite owns HYBRIDGE. The application suite is selected explicitly
 and uses the FEniCSx environment for its finite-element and MPI checks:
 
 ```bash
@@ -82,10 +82,10 @@ python -m pytest projects/diocotron/tests
 On a headless machine, set `VTK_DEFAULT_OPENGL_WINDOW=vtkEGLRenderWindow`
 when exercising the real off-screen rendering tests. MPI subprocess tests are
 explicit opt-ins: `EQUIBAND_RUN_MPI_TESTS=1` and
-`HDGFEM_RUN_DOLFINX_INTEGRATION=1`. Use the MPI launcher belonging to the active
+`HYBRIDGE_RUN_DOLFINX_INTEGRATION=1`. Use the MPI launcher belonging to the active
 FEniCSx environment.
 
 Pure Python/NumPy tests and checkpoint projection tests can also be selected
-individually in an HDGFEM environment. Optional comparisons involving both
+individually in an HYBRIDGE environment. Optional comparisons involving both
 libraries are isolated under `tests/comparisons/`. No application package is
-included in the HDGFEM wheel.
+included in the HYBRIDGE wheel.

@@ -17,19 +17,19 @@ import numpy as np
 import numba
 from scipy.sparse import coo_matrix
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.mixed.adr_preparation import prepare_adr_data
-from hdgfem.mixed.coefficients import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.mixed.adr_preparation import prepare_adr_data
+from hybridge.mixed.coefficients import (
     prepare_diffusion,
     sample_diffusion_tensor,
     inverse_diffusion_values,
 )
-from hdgfem.mixed.adr_numba import (
+from hybridge.mixed.adr_numba import (
     assemble_projected_adr_trace_system_eliminated_numba as assemble,
     reconstruct_projected_adr_local_unknowns_numba as reconstruct,
 )
-from hdgfem.runtime.benchmarking import measure
-from hdgfem.io.records import append_jsonl_record
+from hybridge.runtime.benchmarking import measure
+from hybridge.io.records import append_jsonl_record
 
 
 # Keep the established benchmark import name.

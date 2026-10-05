@@ -5,7 +5,7 @@ Every case is selected with an explicit ``geometry`` (no default):
 the plain divergence; ``"axisymmetric"`` cases take ``(R, Z)`` (``x = R - 3``)
 and use the axisymmetric divergence. Sources are continuous and unweighted;
 the ADR coefficient builder applies the measure weight (1 or R). Host
-evaluations run in element chunks on the ``hdgfem.core.host_threads`` pool
+evaluations run in element chunks on the ``hybridge.core.host_threads`` pool
 (NumPy ufuncs are single-threaded); device arrays are evaluated directly.
 """
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from hdgfem.runtime.threads import elementwise
+from hybridge.runtime.threads import elementwise
 
 from . import forcing
 from .geometry import GEOMETRIES, build_case_mesh, frame_shift

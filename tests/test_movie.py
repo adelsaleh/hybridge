@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from hdgfem.io.movie import MovieWriter
+from hybridge.io.movie import MovieWriter
 
 
 def test_movie_stream_round_trip(tmp_path):

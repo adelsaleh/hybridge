@@ -51,7 +51,7 @@ Gauss-Seidel, point Jacobi and Chebyshev-Jacobi.
 
 ## Recommended starting configuration
 
-The following choices are proposed starting points for HDGFEM. The Chebyshev
+The following choices are proposed starting points for HYBRIDGE. The Chebyshev
 block smoother, intermediate p-level, aggregation target and terminal-size
 range require comparison on the actual trace systems; they are not claimed
 as published optimal settings.
@@ -98,7 +98,7 @@ The current reference-Legendre normalization uses a congruence
 Reference-face orthonormality is not physical-face orthonormality. On a
 straight edge of length L, the corresponding physical modal mass matrix is
 `(L/2) I`. Reuse the existing
-[normalization and modal-transfer helpers](../../../hdgfem/linalg/gpu/legendre_face_bsr.py).
+[normalization and modal-transfer helpers](../../../hybridge/linalg/gpu/legendre_face_bsr.py).
 
 For a same-mesh p step, E injects the low modes and fills higher modes with
 zero. `E^T A E` is the principal modal block of the already condensed
@@ -194,7 +194,7 @@ high-order setting. The application to condensed HDG traces remains an
 adaptation because their systems use DG volume unknowns.
 [Author manuscript](https://lukeo.cs.illinois.edu/files/2011_OlSc_hodg.pdf).
 
-For HDGFEM, a proposed construction would rank-test local candidates, fit
+For HYBRIDGE, a proposed construction would rank-test local candidates, fit
 those candidates in tentative interpolation, then minimize interpolation
 energy on a bounded sparsity pattern subject to `P N_c = N_f`. Retain
 `R=P^T` and `A_c=P^T A P`. Physical x/y traces or independently relaxed test
@@ -207,7 +207,7 @@ independent candidates give larger blocks. Preserve mathematical rank rather
 than adding dependent columns to keep a preferred BSR block size. Variable
 ranks require grouped or variable-block storage.
 
-## Relation to existing HDGFEM studies
+## Relation to existing HYBRIDGE studies
 
 The [shared hp-AMG formalism](hp_amg.tex) describes the native pMG-AMG
 variant, whose [backend](../../backends/face_hp_mg_pcg.md) already provides modal
@@ -237,7 +237,7 @@ transport without the corresponding analysis.
 ## What remains unestablished
 
 The literature supports the candidates, but does not establish which is
-fastest for HDGFEM's matrices or give a blanket hp-robustness guarantee for
+fastest for HYBRIDGE's matrices or give a blanket hp-robustness guarantee for
 the proposed BSR realization. A later comparison would need identical fine
 operators, boundary conditions, stabilization, RHS, initial guesses and true
 residual targets. It should separate setup, repeated-solve cost, hierarchy

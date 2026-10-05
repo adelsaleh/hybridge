@@ -9,22 +9,22 @@ from time import perf_counter
 
 import numpy as np
 
-from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-from hdgfem.linalg.gpu.gmres import restarted_gmres_cupy
-from hdgfem.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
-from hdgfem.linalg.gpu.preconditioners import CuPyFaceAdditiveSchwarzPreconditioner
-from hdgfem.linalg.gpu.profiling import (
+from hybridge.hdg import condensation as hdg_assembly
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hybridge.linalg.gpu.gmres import restarted_gmres_cupy
+from hybridge.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
+from hybridge.linalg.gpu.preconditioners import CuPyFaceAdditiveSchwarzPreconditioner
+from hybridge.linalg.gpu.profiling import (
     CuPyGMRESProfiler,
     benchmark_cuda_call,
     profile_additive_schwarz,
     profile_face_dense_operator,
 )
-from hdgfem.core.mesh import gmsh_disc_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.mixed.local_numpy import diffusion_element_boundary_mats, local_solvers
-from hdgfem.solvers.diffusion_face_dense import assemble_diffusion_face_dense_components
+from hybridge.core.mesh import gmsh_disc_mesh
+from hybridge.core.space import DGSpace
+from hybridge.mixed.local_numpy import diffusion_element_boundary_mats, local_solvers
+from hybridge.solvers.diffusion_face_dense import assemble_diffusion_face_dense_components
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 

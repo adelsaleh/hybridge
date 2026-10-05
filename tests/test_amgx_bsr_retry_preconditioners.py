@@ -18,8 +18,8 @@ def test_native_amgx_bsr_retry_preconditioners(block_size, retry_index, scale_sy
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
 
-    from hdgfem.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
-    from hdgfem.runtime.precision import REAL_DTYPE
+    from hybridge.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
+    from hybridge.runtime.precision import REAL_DTYPE
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 
@@ -71,7 +71,7 @@ def unpooled_bsr_system():
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
 
-    from hdgfem.runtime.precision import REAL_DTYPE
+    from hybridge.runtime.precision import REAL_DTYPE
 
     def build(block_size, block_rows=513):
         # More than 256 rows exposes the old large-block BJ scratch overflow.
@@ -104,7 +104,7 @@ def unpooled_bsr_system():
 @pytest.mark.parametrize("backend", ("legacy", "cusparse_generic"))
 def test_block_jacobi_large_block_update(unpooled_bsr_system, block_size, backend) -> None:
     """Check Dinv and both BSR multiplies, with allocations visible to memcheck."""
-    from hdgfem.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
+    from hybridge.linalg.amgx.device_solver import _solve_reduced_system_amgx_device_once
 
     cp, host, blocks, exact, assembly, rtol = unpooled_bsr_system(block_size)
     guess = np.cos(np.arange(exact.size) * 0.13).astype(exact.dtype)
@@ -139,8 +139,8 @@ def test_block_jacobi_exception_reaches_real_dilu(
     monkeypatch, unpooled_bsr_system, failure_phase,
 ) -> None:
     """Inject a recoverable BJ error; the very next attempt must solve via DILU."""
-    import hdgfem.transport.cuda as raw_amgx
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    import hybridge.transport.cuda as raw_amgx
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.configuration import _make_transport_options
 

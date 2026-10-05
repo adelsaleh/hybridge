@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from hdgfem.cases.profiles import sample_gaussian_blob_field
-from hdgfem.core.geometry import MeshDomain
-from hdgfem.core.mesh import DGMesh, rectangle_mesh
+from hybridge.cases.profiles import sample_gaussian_blob_field
+from hybridge.core.geometry import MeshDomain
+from hybridge.core.mesh import DGMesh, rectangle_mesh
 
 
 def square_with_hole():

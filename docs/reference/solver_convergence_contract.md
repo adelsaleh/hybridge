@@ -8,10 +8,10 @@ combinations remain defined by `docs/reference/backend_capabilities.md`.
 ## Public Surface
 
 Application code may import the normalized result and exceptions from
-`hdgfem`:
+`hybridge`:
 
 ```python
-from hdgfem import (
+from hybridge import (
     LinearSolveCapacityError,
     LinearSolveConvergenceError,
     LinearSolveError,

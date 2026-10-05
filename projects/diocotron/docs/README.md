@@ -12,5 +12,5 @@
 - [Layout migration](layout_migration.md): source locations and archive paths.
 
 Study-specific reports and selected data live together in
-[../studies/](../studies/); general HDGFEM documentation remains in the
+[../studies/](../studies/); general HYBRIDGE documentation remains in the
 [library documentation](../../../docs/README.md).

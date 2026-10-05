@@ -8,7 +8,7 @@ import pytest
 pytest.importorskip('numba')
 pytest.importorskip('gmsh')
 
-from hdgfem import DGSpace  # noqa: E402
+from hybridge import DGSpace  # noqa: E402
 from scripts.n_gamma import coefficients as nc  # noqa: E402
 from scripts.n_gamma.cases import forcing, forcing_numba, get_case  # noqa: E402
 from scripts.n_gamma.compiled import CompiledCoefficients  # noqa: E402

@@ -16,7 +16,7 @@ From the repository root, with GPU performance-counter access enabled:
 
 ```sh
 .venv/bin/python scripts/gpu/capture_raw_assembly_profiles.py \
-  --output /tmp/hdgfem-shared-profiles --cases poisson \
+  --output /tmp/hybridge-shared-profiles --cases poisson \
   --orders 6 --sizes 128 --bases legendre-modal --blocks 128
 ```
 
@@ -48,7 +48,7 @@ For a smaller first capture focused on the launch-size observation below:
 
 ```sh
 .venv/bin/python scripts/gpu/capture_raw_assembly_profiles.py \
-  --output /tmp/hdgfem-shared-launch --cases poisson --orders 6 --sizes 128 \
+  --output /tmp/hybridge-shared-launch --cases poisson --orders 6 --sizes 128 \
   --bases legendre-modal --blocks 32 64 128 \
   --formats bsr --cache-policies none --phases assembly
 ```
@@ -235,7 +235,7 @@ and the explicit p=9 256-thread TSLE solve kernel versus fused 128-thread work.
 | Hardware bottleneck attribution and any default promotion | Insufficient counters; defaults unchanged | Not complete |
 
 Counter access has failed in three consecutive goal turns. The requested
-`/tmp/hdgfem-shared-profiles` and `/tmp/hdgfem-shared-launch` captures have not
+`/tmp/hybridge-shared-profiles` and `/tmp/hybridge-shared-launch` captures have not
 arrived; only the already-examined historical reports are present. The next
 necessary evidence is the focused shared-memory capture above, followed by the
 broader matrix as needed. Further unprofiled timing permutations cannot supply

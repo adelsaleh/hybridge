@@ -13,7 +13,7 @@
 \setlength{\emergencystretch}{3em}
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \title{Face-Block hp--AMG Solvers for HDG Trace Systems:\\Polynomial, Geometric, and Algebraic Hierarchies}
-\author{HDGFEM algorithm notes}
+\author{HYBRIDGE algorithm notes}
 \date{}
 \begin{document}
 \maketitle
@@ -399,16 +399,16 @@ configuration values, not mathematical requirements or universal optima.
 
 Paths are relative to the repository root.
 \begin{itemize}
-\item \code{hdgfem/linalg/multigrid/face_hp.py}:
+\item \code{hybridge/linalg/multigrid/face_hp.py}:
 \code{FaceBlockPmgPrototype} constructs and applies the production p-hierarchy
 (despite its historical class name); \code{AmgxScalarVcycle} wraps the scalar
 cycle; \code{FaceBlockHpMgPcgSolver} owns coordinate transforms, PCGF, checks,
 and persistent workspaces; \code{_pcgf_beta} defines the recurrence.
-\item \code{hdgfem/linalg/multigrid/policy.py}: baseline and override policies.
-\item \code{hdgfem/linalg/gpu/legendre_face_bsr.py}:
+\item \code{hybridge/linalg/multigrid/policy.py}: baseline and override policies.
+\item \code{hybridge/linalg/gpu/legendre_face_bsr.py}:
 \code{LegendreFaceBsrOperator}, \code{principal_modal_bsr_data}, and
 \code{modal_degree_schedule} implement BSR actions and nested extraction.
-\item \code{hdgfem/solvers/diffusion_reaction.py}: assembled action,
+\item \code{hybridge/solvers/diffusion_reaction.py}: assembled action,
 operator reuse, field reconstruction, and native fallback integration.
 \end{itemize}
 The production note is \code{docs/backends/face_hp_mg_pcg.md}.
@@ -522,7 +522,7 @@ neighborhoods. All products use the full nonsymmetric matrix.
 
 Local restriction of this kind is motivated by $\ell$AIR
 \cite{lair}; combining it with a polynomial-selected $C/H$ split here is
-the proposed HDGFEM adaptation. Its effectiveness is not established by
+the proposed HYBRIDGE adaptation. Its effectiveness is not established by
 the existing SPD pMG implementation.
 
 Compute the actual product $R_\ell A_\ell P_\ell$. For example, choosing
@@ -719,7 +719,7 @@ are claimed for these candidates.
 
 The closest direct HDG template is Wildey, Muralikrishnan, and Bui-Thanh
 \cite{wildey}: p-to-one reduction, agglomeration, DtN-based transfers and
-local interior correction. The initial HDGFEM comparison should use
+local interior correction. The initial HYBRIDGE comparison should use
 $p\to1$ against a staged schedule such as $6\to3\to1$. Same-mesh p-transfer
 can reuse the Galerkin injection from Section~\ref{sec:spd}, terminating at
 one. Each matrix inherits the original condensed operator and stabilization;
@@ -788,7 +788,7 @@ arbitrary agglomerates or prove p-uniform convergence of this proposal.
 For the existing GPU setting, the proposed first smoother combines full
 face-block diagonal solves with degree-two Chebyshev acceleration and
 balanced $1+1$ sweeps. Compare higher degree or stronger patches by complete
-cycle cost. This combination is an HDGFEM adaptation; it is not asserted to
+cycle cost. This combination is an HYBRIDGE adaptation; it is not asserted to
 be the optimum from \cite{wildey}. The spectral cautions in
 Section~\ref{sec:spd} still apply. Vertex-patch and harmonic-transfer ideas
 also appear in the divergence-conforming HDG work of Fu and Kuang

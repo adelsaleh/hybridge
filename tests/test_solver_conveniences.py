@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import hdgfem as hdg
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.cases.profiles import GaussianBlobField
-from hdgfem.core.field_ops import perpendicular_vector_field
-from hdgfem.diagnostics import transport_velocity_diagnostics
+import hybridge as hdg
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.cases.profiles import GaussianBlobField
+from hybridge.core.field_ops import perpendicular_vector_field
+from hybridge.diagnostics import transport_velocity_diagnostics
 
 
 def _space(order: int = 2, cells: int = 2) -> DGSpace:

@@ -8,12 +8,12 @@ from __future__ import annotations
 import math
 from time import perf_counter
 
-from hdgfem.runtime.logging import timed_call
+from hybridge.runtime.logging import timed_call
 from .recovery import (
     StepRecoveryWork, with_poisson_recovery, recovery_options, poisson_tau,
 )
 from scripts.guiding_center.poisson.poisson_recovery import PoissonStageFailure
-from hdgfem.core.field_ops import (
+from hybridge.core.field_ops import (
     perpendicular_vector_field,
     solution_field,
     solution_trace,

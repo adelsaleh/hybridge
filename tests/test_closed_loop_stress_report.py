@@ -70,7 +70,7 @@ def test_render_exports_both_figures_without_numerical_imports(tmp_path, saved_m
     before = set(sys.modules)
     metadata = figures.render(tmp_path, angular_points=72, radial_intervals=12,
                               mesh_record=saved_mesh_record, normalization_dir=frozen_normalizations)
-    assert not {"hdgfem", "numba", "cupy", "gmsh"}.intersection(set(sys.modules)-before)
+    assert not {"hybridge", "numba", "cupy", "gmsh"}.intersection(set(sys.modules)-before)
     assert (tmp_path/"geometry_fields.pdf").read_bytes().startswith(b"%PDF-")
     assert (tmp_path/"geometry_fields.png").read_bytes().startswith(b"\x89PNG")
     assert "<svg" in (tmp_path/"geometry_fields.svg").read_text()
@@ -249,10 +249,10 @@ def test_mesh_overlay_preserves_connectivity_and_triangles_crossing_the_crop():
 
 
 def test_existing_plot_api_delegates_to_lightweight_mesh_helper():
-    tree = ast.parse((ROOT/"hdgfem/io/plot.py").read_text())
+    tree = ast.parse((ROOT/"hybridge/io/plot.py").read_text())
     helper = next(node for node in tree.body
                   if isinstance(node, ast.FunctionDef) and node.name == "add_matplotlib_mesh")
-    assert any(isinstance(node, ast.ImportFrom) and node.module == "hdgfem.io.figures"
+    assert any(isinstance(node, ast.ImportFrom) and node.module == "hybridge.io.figures"
                and any(alias.name == "add_matplotlib_mesh" for alias in node.names)
                for node in ast.walk(helper))
 

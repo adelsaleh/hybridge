@@ -15,7 +15,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem import (
+from hybridge import (
     AdvectionDiffusionReactionHDGOptions,
     AdvectionDiffusionReactionHDGSolver,
     DGSpace,
@@ -23,8 +23,8 @@ from hdgfem import (
     automatic_domain_length,
     gmsh_disc_mesh,
 )
-from hdgfem.runtime.logging import format_elapsed_percent, timed_call
-from hdgfem.io.output import pretty_print_sections
+from hybridge.runtime.logging import format_elapsed_percent, timed_call
+from hybridge.io.output import pretty_print_sections
 
 
 from scripts.advection_diffusion_reaction.cases.disk_case import (
@@ -206,9 +206,9 @@ def _plot_manufactured_run(
     show_mesh: bool,
 ) -> None:
     """Plot raw, postprocessed, exact, and postprocessed-error panels."""
-    from hdgfem.diagnostics.errors import evaluate_scalar_error
-    from hdgfem.io.comparison import plot_sampled_solution_comparison
-    from hdgfem.io.plot import resolve_postprocessed_plot_resolution
+    from hybridge.diagnostics.errors import evaluate_scalar_error
+    from hybridge.io.comparison import plot_sampled_solution_comparison
+    from hybridge.io.plot import resolve_postprocessed_plot_resolution
 
     result = run.result
     field = result.field

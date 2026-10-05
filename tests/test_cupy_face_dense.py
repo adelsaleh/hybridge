@@ -3,15 +3,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.face_dense import face_dense_matvec
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import (
+from hybridge.linalg.face_dense import face_dense_matvec
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import (
     CuPyFaceDenseOperator,
     prepare_face_dense_batch_layout,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 

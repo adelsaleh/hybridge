@@ -6,17 +6,17 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.diagnostics.guiding_center import (
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGField, DGSpace, VectorDGField
+from hybridge.diagnostics.guiding_center import (
     ScalarPositivityDiagnostics,
     azimuthal_mode_diagnostics,
     guiding_center_field_diagnostics,
 )
-from hdgfem.diagnostics.errors import evaluate_scalar_error
-from hdgfem.diagnostics.solver import solver_result_metrics
-from hdgfem.io.records import DiagnosticsRecorder
-from hdgfem.linalg.results import SolveResult
+from hybridge.diagnostics.errors import evaluate_scalar_error
+from hybridge.diagnostics.solver import solver_result_metrics
+from hybridge.io.records import DiagnosticsRecorder
+from hybridge.linalg.results import SolveResult
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics
 from scripts.guiding_center.runtime.diagnostics import _compute_diagnostics
 
@@ -55,7 +55,7 @@ def fields(*, order=3, basis="dub_orth", nx=2, mixed=False):
 
 
 def upload_fields(cp, source):
-    from hdgfem.core.device import as_cupy_space
+    from hybridge.core.device import as_cupy_space
 
     uploaded = []
 

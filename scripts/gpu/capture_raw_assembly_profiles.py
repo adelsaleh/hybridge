@@ -55,11 +55,11 @@ def main():
     if any(order < 1 or order > max_order for order in args.orders) or any(nx < 1 for nx in args.sizes) or args.repeats < 1:
         parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1; use --cases transport for p=7..9")
     args.output.mkdir(parents=True, exist_ok=True)
-    source_paths = [BENCHMARK, Path(__file__), *sorted((ROOT / "hdgfem/backends").glob("*diffusion*cuda.py")),
-                    ROOT / "hdgfem/mixed/cupy.py", ROOT / "hdgfem/transport/raw_cuda.py",
-                    ROOT / "hdgfem/transport/tsle_bsr.py",
-                    ROOT / "hdgfem/mixed/raw_cuda/tensor.py",
-                    ROOT / "hdgfem/hdg/cuda/raw_source.py"]
+    source_paths = [BENCHMARK, Path(__file__), *sorted((ROOT / "hybridge/backends").glob("*diffusion*cuda.py")),
+                    ROOT / "hybridge/mixed/cupy.py", ROOT / "hybridge/transport/raw_cuda.py",
+                    ROOT / "hybridge/transport/tsle_bsr.py",
+                    ROOT / "hybridge/mixed/raw_cuda/tensor.py",
+                    ROOT / "hybridge/hdg/cuda/raw_source.py"]
     source_hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True)
     manifest = {"scope": "Raw Poisson none/Schur-LU assembly, RHS and reconstruction; separate CuPy compact Schur-Cholesky construction/reuse; fused transport COO/CSR/BSR; transport TSLE BSR; cooperative tensor-ready ADR COO/CSR/BSR",
@@ -84,7 +84,7 @@ def main():
             commands.append(("baseline", common + ["--repeats", str(args.repeats)]))
         if args.mode in ("profile", "both"):
             commands.append(("profile", [args.ncu, "--target-processes", "all", "--nvtx",
-                "--nvtx-include", "hdgfem_raw_assembly/",
+                "--nvtx-include", "hybridge_raw_assembly/",
                 "--section", "SpeedOfLight", "--section", "ComputeWorkloadAnalysis",
                 "--section", "MemoryWorkloadAnalysis_Tables", "--section", "LaunchStats",
                 "--section", "Occupancy", "--section", "SchedulerStats",

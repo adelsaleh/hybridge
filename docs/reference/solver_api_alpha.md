@@ -7,10 +7,10 @@ type, or host/device combination is supported.
 
 ## Supported Imports
 
-Application code should import these symbols from `hdgfem`:
+Application code should import these symbols from `hybridge`:
 
 ```python
-from hdgfem import (
+from hybridge import (
     AdvectionDiffusionReactionHDGOptions,
     AdvectionDiffusionReactionHDGSolver,
     AdvectionDiffusionReactionResult,
@@ -35,10 +35,10 @@ from hdgfem import (
 )
 ```
 
-The HDG objects are also available from `hdgfem.solvers`. Module-oriented code
-should use `hdgfem.solvers.advection_reaction`,
-`hdgfem.solvers.diffusion_reaction`, or
-`hdgfem.solvers.advection_diffusion_reaction`. The reusable solver classes are
+The HDG objects are also available from `hybridge.solvers`. Module-oriented code
+should use `hybridge.solvers.advection_reaction`,
+`hybridge.solvers.diffusion_reaction`, or
+`hybridge.solvers.advection_diffusion_reaction`. The reusable solver classes are
 the primary API for repeated solves. The three `solve_*_hdg` functions remain
 supported for one-shot calls and compatibility. Pure diffusion-reaction flux
 postprocessing uses the same canonical
@@ -82,12 +82,12 @@ Explicit Numba postprocessing requires host materialization and is rejected with
 for tested scope and transfer accounting. Legacy
 `full-p-plus-1` and `rt-p` spellings remain compatibility aliases. The ADR
 host default is nonsymmetric `pypardiso`. The linear-solve result, status,
-exceptions, and dispatcher are also available from `hdgfem.linalg`.
+exceptions, and dispatcher are also available from `hybridge.linalg`.
 
 The optional host direct backend is selected through the same dispatcher:
 
 ```python
-from hdgfem.linalg import clear_pypardiso_cache, solve_global_system
+from hybridge.linalg import clear_pypardiso_cache, solve_global_system
 
 result = solve_global_system(rows, cols, data, rhs, size, solver="pypardiso")
 clear_pypardiso_cache()
@@ -101,7 +101,7 @@ serialized around pypardiso's process-global solvers, and the normalized
 physical-residual acceptance contract is evaluated against the original full,
 unscaled matrix.
 
-`hdgfem.solvers.adv_rea` and `hdgfem.solvers.diff_rea` remain importable
+`hybridge.solvers.adv_rea` and `hybridge.solvers.diff_rea` remain importable
 compatibility shims for the full-name implementation modules. Their lower-level assembly
 helpers and the aliases `adv_rea_hdg_solv` and `diff_rea_hdg_solve` are not
 part of the frozen
@@ -209,10 +209,10 @@ The supported exception categories are:
   backend.
 
 Unsupported assembly/solve/reconstruction combinations raise
-`hdgfem.runtime.errors.UnsupportedBackendConfigurationError`, a stable
+`hybridge.runtime.errors.UnsupportedBackendConfigurationError`, a stable
 `NotImplementedError` subclass. It was previously exported from the removed
-`hdgfem.backends` package; the support table and validators are in
-`hdgfem.solvers.capabilities`. Its message identifies the rejected backend
+`hybridge.backends` package; the support table and validators are in
+`hybridge.solvers.capabilities`. Its message identifies the rejected backend
 combination, gives an actionable alternative, and links to
 `docs/reference/backend_capabilities.md`. Backend preflight runs before coefficient
 sampling, optional-runtime imports, raw-CUDA launch setup, or matrix assembly.

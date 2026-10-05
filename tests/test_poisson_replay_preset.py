@@ -80,7 +80,7 @@ def test_spd_pmg_suite_selects_pilots_and_confirms_separately(tmp_path, monkeypa
 
 
 def test_spd_storage_preserves_full_operator_and_rejects_asymmetry():
-    from hdgfem.linalg import prepare_pypardiso_spd_matrix
+    from hybridge.linalg import prepare_pypardiso_spd_matrix
     full = sparse.csr_matrix([[4., -1.], [-1., 3.]])
     original = full.toarray().copy()
     upper = prepare_pypardiso_spd_matrix(full)
@@ -93,7 +93,7 @@ def test_spd_storage_preserves_full_operator_and_rejects_asymmetry():
 
 
 def test_pmg_screen_preserves_balanced_fixed_work():
-    from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
+    from hybridge.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
     for policy, tuning in benchmark.PMG_REPLAY_POLICIES.values():
         parameters = face_hp_mg_preconditioner_parameters(policy, overrides=tuning)
         assert parameters["presweeps"] == parameters["postsweeps"]
@@ -103,7 +103,7 @@ def test_pmg_screen_preserves_balanced_fixed_work():
 
 
 def test_original_matrix_refinement_with_nearly_symmetric_factor():
-    from hdgfem.linalg import refine_host_linear_solution
+    from hybridge.linalg import refine_host_linear_solution
     symmetric = np.array([[2., -1.], [-1., 2.]])
     original = symmetric.copy()
     original[1, 0] += 1e-5
@@ -124,7 +124,7 @@ def test_original_matrix_refinement_with_nearly_symmetric_factor():
     ("standard", {"chebyshev_order": 1}), ("fast", None),
 ])
 def test_pmg_constructor_forwards_fixed_work_tuning(monkeypatch, policy, tuning):
-    from hdgfem.linalg.multigrid import face_hp as mg
+    from hybridge.linalg.multigrid import face_hp as mg
     captured = {}
 
     class StopBeforeDeviceWork(Exception):

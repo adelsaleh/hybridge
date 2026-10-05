@@ -5,14 +5,14 @@ import json
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.transport.residual import UpwindHDGTransportResidual
-from hdgfem.core.field_ops import field_linear_combination, perpendicular_vector_field
-from hdgfem.transport.diagnostics import (
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.transport.residual import UpwindHDGTransportResidual
+from hybridge.core.field_ops import field_linear_combination, perpendicular_vector_field
+from hybridge.transport.diagnostics import (
     UpwindHDGTraceRankError,
     transport_rank_failure_details,
 )
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
+from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 from scripts.guiding_center.time_schemes import imex_ark3 as ark
 from scripts.guiding_center.poisson.poisson_recovery import PoissonTauRecovery
 from tests.test_guiding_center_imex_ark3 import scalar_stepper
@@ -171,7 +171,7 @@ def test_device_face_solve_never_calls_numpy_solve(monkeypatch):
     cp = pytest.importorskip('cupy')
     if not cp.cuda.runtime.getDeviceCount():
         pytest.skip('CUDA unavailable')
-    from hdgfem.core.device import (
+    from hybridge.core.device import (
             field_from_cupy_coefficients,
             as_cupy_coefficients,
             as_cupy_space,
@@ -248,11 +248,11 @@ def test_real_poisson_retry_rebuilds_then_reuses_and_records_all_work(tmp_path, 
 
 
 def test_rejected_result_snapshot_preserves_metrics_without_solution_or_preconditioner():
-    from hdgfem.diagnostics.solver import (
+    from hybridge.diagnostics.solver import (
             solver_diagnostics_snapshot,
             solver_result_metrics,
         )
-    from hdgfem.linalg.results import SolveResult
+    from hybridge.linalg.results import SolveResult
     global_result = SolveResult(x=np.ones(4), x_device=object(), preconditioner=object(),
                                 iteration_count=5, status='converged')
     global_result.amgx_attempts = [dict(iterations=5)]

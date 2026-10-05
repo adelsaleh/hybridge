@@ -12,13 +12,13 @@ differences of ``data``, ``rhs``, and the local response against FP64 split3.
 A configuration is ``precision/contraction/compute/local_solver``, for example
 ``float32/cublas/default/coop``. On FP64-limited GPUs, FP32 rows serve as a
 throughput proxy for FP64 on FP64-capable hardware; FP64 rows check the
-tensorized algebra. MAGMA rows need ``HDGFEM_MAGMA_ROOT`` or
-``HDGFEM_MAGMA_LIBRARY``; cuTENSOR rows need the ``cutensor-cu13`` wheel.
+tensorized algebra. MAGMA rows need ``HYBRIDGE_MAGMA_ROOT`` or
+``HYBRIDGE_MAGMA_LIBRARY``; cuTENSOR rows need the ``cutensor-cu13`` wheel.
 Assembly only: no AMGX setup, global solve, or time stepping.
 
 ``--native fused,split3`` also times the native raw-CUDA paths through the
 public solver in the process precision. Native FP32 rows therefore need
-``HDGFEM_PRECISION=float32``, a separate process in which tensor configurations
+``HYBRIDGE_PRECISION=float32``, a separate process in which tensor configurations
 are refused (use ``--configs none``). The JSON output records the GPU, driver,
 CUDA, and library versions so that runs on different machines can be compared;
 see ``docs/research/solver_studies/advection_assembly_baseline_2026_10_03.md``.
@@ -40,13 +40,13 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import hdgfem as hdg
-import hdgfem.transport.cuda as transport_cuda
-from hdgfem.core.space import VectorDGField
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.runtime.precision import PRECISION
-from hdgfem.transport import tsle_bsr
-from hdgfem.transport.tsle_tensor import (
+import hybridge as hdg
+import hybridge.transport.cuda as transport_cuda
+from hybridge.core.space import VectorDGField
+from hybridge.runtime.optional import require_cupy
+from hybridge.runtime.precision import PRECISION
+from hybridge.transport import tsle_bsr
+from hybridge.transport.tsle_tensor import (
     RawAdvectionTsleTensorWorkspace,
     assemble_projected_advection_trace_system_eliminated_tsle_tensor,
 )
@@ -222,7 +222,7 @@ def environment_metadata(cp) -> dict:
     except Exception:
         metadata["cublas"] = None
     try:
-        from hdgfem.runtime.optional import require_cutensor
+        from hybridge.runtime.optional import require_cutensor
 
         require_cutensor()
         from cupy_backends.cuda.libs import cutensor
@@ -232,7 +232,7 @@ def environment_metadata(cp) -> dict:
         metadata["cutensor"] = None
     try:
         import ctypes
-        from hdgfem.linalg.gpu.magma_batched import load_magma
+        from hybridge.linalg.gpu.magma_batched import load_magma
 
         library = load_magma()
         version = [ctypes.c_int(), ctypes.c_int(), ctypes.c_int()]
@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     if set(native) - set(NATIVE_PATHS):
         raise ValueError(f"--native accepts {NATIVE_PATHS}")
     if configs and PRECISION != "float64":
-        raise ValueError("tensor configurations need the FP64 package mode; use --configs none with HDGFEM_PRECISION=float32")
+        raise ValueError("tensor configurations need the FP64 package mode; use --configs none with HYBRIDGE_PRECISION=float32")
     cp = require_cupy()
     metadata = environment_metadata(cp)
     mesh = showcase_mesh(args.mesh_size)
