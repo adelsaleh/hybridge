@@ -187,5 +187,5 @@ used the same solver paths and statistics as the runner. Recapturing them with
 the runner first gives a like-for-like diff:
 
 ```bash
-HYBRIDGE_MAGMA_ROOT=~/src/magma-build-cuda13 .venv/bin/python scripts/gpu/benchmark_advection_tsle_tensor.py <same arguments as step 4>
+HYBRIDGE_MAGMA_ROOT=../magma-build-cuda13 .venv/bin/python scripts/gpu/benchmark_advection_tsle_tensor.py <same arguments as step 4>
 ```

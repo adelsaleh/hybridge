@@ -91,9 +91,9 @@ are not a synchronized whole-process GPU high-water mark.
 From the repository root, use a **new empty output directory**:
 
 ```bash
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
 PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
 scripts/gpu/run_cuda13.sh .venv/bin/python -u -B \
   -m scripts.diffusion_reaction.compare_cuda_bsr_csr \

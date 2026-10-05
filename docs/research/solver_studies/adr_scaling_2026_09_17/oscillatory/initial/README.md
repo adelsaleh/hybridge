@@ -76,11 +76,11 @@ Original meshes, specs, source snapshots, job logs, cached systems and solutions
 Example rerun of the selected fine case, on this machine with the existing prebuilt dependencies:
 
 ```sh
-cd ~/src/hdgfem-gmres
+cd ../hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
 scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
   --output run_logs/adr_oscillatory_star_fine_rerun \
   --cases cellular7_anisotropic cellular7_weak \
@@ -91,7 +91,7 @@ scripts/gpu/run_cuda13.sh python -m scripts.run_oscillatory_adr_study \
 To re-audit and regenerate the report from the archived campaigns, without solver runs:
 
 ```sh
-cd ~/src/hdgfem-gmres
+cd ../hdgfem-gmres
 .venv/bin/python -m scripts.audit_oscillatory_adr_study
 # from the repository root
 .venv/bin/python scripts/reports/make_oscillatory_adr_report.py

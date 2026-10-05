@@ -3,7 +3,7 @@ env -u DISPLAY \
   VTK_DEFAULT_OPENGL_WINDOW=vtkEGLRenderWindow \
   OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
   mpirun --bind-to core --map-by core -n 8 \
-  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  python \
   projects/diocotron/dolfinx/torsion/initialization/fractional_target.py \
     --run-tag iter_0p4_0p5_fractional_phi_target_highdof_png \
     --mesh projects/diocotron/runs/torsion_optimizer/meshes/iter-p4-dof200000.msh \

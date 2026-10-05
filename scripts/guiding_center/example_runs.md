@@ -217,8 +217,8 @@ Run from your current `ssh -Y` terminal with its original `DISPLAY` and
 proxy, raises the stack limit to 32 MiB, and removes the proxy when the run exits.
 
 ```bash
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
-  CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
+  CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr.args \
@@ -248,8 +248,8 @@ Keep the original SSH `DISPLAY` and `XAUTHORITY`. The run retains `dt=0.5`,
 `T=400`, and `h=0.0068`.
 
 ```bash
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
-  CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
+  CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_ark3_p6_h008_dt005_t70.args \
@@ -299,8 +299,8 @@ Keep the original SSH `DISPLAY` and `XAUTHORITY`. The run retains `dt=0.5`,
 Residual tolerances and robust recovery remain enabled.
 
 ```bash
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
-  CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
+  CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \

@@ -11,10 +11,11 @@ fallback was rejected by automated review. Only the specifically user-approved
 advection-hook edit was performed. The active campaign still uses its original
 coefficient callbacks and settings.
 
-From the common workspace directory, inspect and apply the remaining small patch:
+From the directory that holds both checkouts (the parent of the repository
+root), inspect and apply the remaining small patch:
 
 ```bash
-cd ~/src
+cd ..
 git apply --check hybridge/patches/adr_gpu_first_coefficient_sampling_20260922.patch
 git apply hybridge/patches/adr_gpu_first_coefficient_sampling_20260922.patch
 ```
@@ -148,7 +149,7 @@ NUMBA_DISABLE_JIT=0 NUMBA_NUM_THREADS=24 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=
   HYBRIDGE_TEST_SAMPLING_JIT=1 .venv/bin/python -B -m pytest -q \
   tests/test_coefficient_sampling.py -k compiled_numba_parity
 
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 HYBRIDGE_TEST_SAMPLING_CUDA=1 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 HYBRIDGE_TEST_SAMPLING_CUDA=1 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B -m pytest -q \
   tests/test_coefficient_sampling.py -k cupy_parity
 ```

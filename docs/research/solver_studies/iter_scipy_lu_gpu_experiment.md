@@ -24,7 +24,7 @@ No new mesh or kernel was generated. Command used:
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
-  CUDA_PATH=/usr/local/cuda-13.0 LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
   -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
   --iter-mesh-size 0.2 --max-capture-dofs 25000 \
@@ -63,7 +63,7 @@ the saved factors, with live terminal output, run:
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
-  CUDA_PATH=/usr/local/cuda-13.0 LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
   -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_small_lu_gpu_20260925/poisson_capture \
@@ -153,7 +153,7 @@ setup may take hours again. This command allows 12 hours per worker.
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
-  CUDA_PATH=/usr/local/cuda-13.0 LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
   -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_repeated_poisson_20260924 \
@@ -178,7 +178,7 @@ From the repository root, run:
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
-  CUDA_PATH=/usr/local/cuda-13.0 LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
   -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_repeated_poisson_20260924 \

@@ -29,10 +29,10 @@ Build the mode-aware variant locally using the existing development tools:
 
 ```bash
 .venv/bin/python scripts/dev/build_pyamgx_precision.py \
-  --source "$HOME/src/pyamgx-hdg-cuda13" \
+  --source ../pyamgx-hdg-cuda13 \
   --output .cache/pyamgx-fp32 \
-  --amgx-source "$HOME/src/AMGX-hdg-cuda13" \
-  --amgx-build "$HOME/src/AMGX-build-cuda13"
+  --amgx-source ../AMGX-hdg-cuda13 \
+  --amgx-build ../AMGX-build-cuda13
 ```
 
 This builds a separate extension; it does not install a package or edit the
@@ -44,9 +44,9 @@ isolates Numba, CuPy and mesh caches. Use a separate process for each precision.
 From the repository root, select the existing CUDA/AMGX environment:
 
 ```bash
-export HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0
-export HYBRIDGE_AMGX_BUILD_ROOT="$HOME/src/AMGX-build-cuda13"
-export HYBRIDGE_AMGX_INSTALL_ROOT="$HOME/src/AMGX-install-cuda13"
+export HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13
+export HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13
+export HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13
 ```
 
 Start with approximately 12k triangles. Mesh size 0.025 produced 11,776 triangles

@@ -38,7 +38,7 @@ def main():
     """Save each exact command, output, and exit status alongside profiler artifacts."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--ncu", default="/usr/local/cuda-13.0/bin/ncu")
+    parser.add_argument("--ncu", default="ncu")
     parser.add_argument("--mode", choices=("baseline", "profile", "both"), default="both")
     parser.add_argument("--cases", nargs="+", choices=("poisson", "transport", "adr"), default=["poisson", "transport"])
     parser.add_argument("--orders", nargs="+", type=int, default=[2, 6])

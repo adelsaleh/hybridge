@@ -67,7 +67,7 @@ Balanced run:
 ```bash
 XDG_CACHE_HOME=/tmp/hybridge_fenics_cache \
 MPLCONFIGDIR=/tmp/hybridge_mpl_cache \
-~/miniforge3/envs/fenicsx-dgfem/bin/python \
+python \
   projects/diocotron/dolfinx/torsion/equilibrium/newton.py \
   --mesh run_outputs/strategyA_band_study_20260712/fixed_mesh/smooth_star_h010_n220.msh \
   --order 5 \

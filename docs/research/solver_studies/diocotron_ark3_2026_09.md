@@ -136,8 +136,8 @@ Raw measurements, input hashes, plots, and fit reports are in
 From the repository root, in a new terminal if CUDA libraries need setup:
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
-export LD_LIBRARY_PATH=~/src/AMGX-build-cuda13:~/src/AMGX-install-cuda13/lib:/usr/local/cuda-13.0/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+export CUDA_PATH=/path/to/cuda-13
+export LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib:/path/to/cuda-13/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export HYBRIDGE_PRECISION=float64
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 ```

@@ -118,11 +118,11 @@ installation or time integration is involved. `--resume` reads completed jobs,
 including failures; use a new output directory for a fresh campaign.
 
 ```bash
-cd ~/src/hdgfem-gmres
+cd ../hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
-export HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0
-export HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13
-export HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13
+export HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13
+export HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13
+export HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13
 
 scripts/gpu/run_cuda13.sh \
   python -m scripts.run_oscillatory_adr_scaling --geometries square --resume \

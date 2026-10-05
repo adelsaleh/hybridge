@@ -107,7 +107,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python scripts/reports/make_adr_named_comparison_report.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
   .venv/bin/python scripts/reports/make_adr_scaling_section.py \
-  --campaign ~/src/hdgfem-gmres/run_logs/adr_scaling_20260917 \
+  --campaign ../hdgfem-gmres/run_logs/adr_scaling_20260917 \
   --output docs/research/solver_studies/adr_scaling_2026_09_17
 ```
 
@@ -167,8 +167,9 @@ The manuscript does not infer implementation optimality from these timings.
 
 Regenerate using saved data only (no solvers or TeX):
 
+From the repository root:
+
 ```bash
-cd ~/src/hybridge
 export PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg
 .venv/bin/python scripts/reports/make_adr_native_completion_report.py
 .venv/bin/python scripts/reports/make_oscillatory_adr_report.py
@@ -186,7 +187,7 @@ maximum-eight-page layout target, but its updated page count awaits typesetting.
 To refresh both PDFs yourself:
 
 ```bash
-cd ~/src/hybridge/docs/research/solver_studies/adr_scaling_2026_09_17
+cd docs/research/solver_studies/adr_scaling_2026_09_17
 latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex main_synthesis.tex
 ```
 
