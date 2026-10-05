@@ -45,6 +45,9 @@
     - publish `hybridge` to TestPyPI, then PyPI;
     - go public by renaming the existing `adelsaleh/hdgfem` repository, which keeps the collaborators, the open issue and URL redirects;
     - remove machine-local artifacts and the diocotron data from the tree; history is not rewritten, and everything removed is preserved locally first;
+    - `projects/diocotron` must be preserved: it ships in `master` without its PNG figure data (done 2026-10-05, `9ee9135`); the old `diocotron-dolfinx` branch with the figures stays in the local bundle and the private archive;
+    - positivity-preservation work stays uncommitted for this release; it resumes after it;
+    - README and MANUAL must render on GitHub without errors (fenced math, verified through GitHub's markdown API, `393d0e8`);
     - `gpu_gmres_precondit` (VRRodrigues, 36 commits) stays a separate public branch of `hybridge`.
   - Phase 0, preserve before removing (local, no publication):
     - create `~/src/hybridge-archive/` outside every checkout;
