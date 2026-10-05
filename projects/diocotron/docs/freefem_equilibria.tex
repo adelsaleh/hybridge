@@ -1,0 +1,928 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black
+}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{210,210,210}
+\definecolor{darkgreen}{RGB}{0,95,45}
+\lstdefinestyle{ff}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  commentstyle=\color{darkgreen},
+  keywordstyle=\color{blue!70!black},
+  showstringspaces=false,
+  tabsize=2
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Guiding-center annular equilibria}
+\rhead{Technical summary}
+\cfoot{\thepage}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection}{0.7em}{}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+\newtheorem{definition}{Definition}
+
+\newcommand{\Om}{\Omega}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\supp}{\operatorname{supp}}
+\newcommand{\atan}{\operatorname{atan2}}
+\newcommand{\grad}{\nabla}
+\newcommand{\Div}{\nabla\cdot}
+\newcommand{\curl}{\operatorname{curl}}
+\newcommand{\eps}{\varepsilon}
+
+\title{Constructing and Perturbing Diocotron-like Equilibria\\in the Guiding-Center Model on General Domains}
+\author{Technical summary of the explored numerical strategies}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note summarizes the ideas explored for constructing diocotron-like annular equilibria for the two-dimensional guiding-center model on a bounded, generally non-circular domain. The core problem is to produce a density $\rho$ and potential $\phi$ satisfying
+\[
+  -\Delta \phi = \rho, \qquad \phi|_{\partial\Om}=0,
+\]
+with $\rho$ organized as a localized annular band along level sets of $\phi$. We discuss exact stationary states of the form $\rho=f(\phi)$, variational and Newton formulations for semilinear elliptic equilibria, branch-selection issues, continuation, stabilization, mesh adaptivity, designed near-equilibria based on torsion, empirical fitting strategies, and meaningful perturbations on non-circular geometries. Emphasis is placed on what is mathematically justified, what is a numerical heuristic, and what diagnostics should be logged in FreeFEM.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{The guiding-center model and stationary states}
+
+We considered the guiding-center evolution in a bounded planar domain $\Om\subset\R^2$:
+\begin{equation}
+  \partial_t \rho + E^\perp\cdot \nabla \rho = 0,
+  \qquad
+  E=-\nabla\phi,
+  \qquad
+  -\Delta\phi=\rho,
+  \qquad
+  \phi|_{\partial\Om}=0.
+\end{equation}
+Equivalently, with the advecting velocity
+\begin{equation}
+  b = E^\perp = (-\partial_y\phi,\partial_x\phi)=\nabla^\perp\phi,
+\end{equation}
+one has
+\begin{equation}
+  \partial_t\rho + b\cdot\nabla \rho=0.
+\end{equation}
+The key identity is
+\begin{equation}
+  b\cdot\nabla\phi = \nabla^\perp\phi\cdot\nabla\phi =0.
+\end{equation}
+Therefore the velocity is tangent to the level sets of $\phi$.
+
+\begin{proposition}[Sufficient condition for equilibrium]
+If $\rho=f(\phi)$ for some scalar function $f$, then $\rho$ is stationary for the guiding-center transport equation, provided $\phi$ solves
+\begin{equation}
+  -\Delta\phi=f(\phi),\qquad \phi|_{\partial\Om}=0.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+If $\rho=f(\phi)$, then $\nabla\rho=f'(\phi)\nabla\phi$ formally, hence
+\begin{equation}
+  b\cdot\nabla\rho=f'(\phi)b\cdot\nabla\phi=0.
+\end{equation}
+For nonsmooth $f$, this remains valid in a weak or renormalized sense whenever $\rho$ is constant on the level sets of $\phi$.
+\end{proof}
+
+\subsection{The disk annulus intuition}
+
+On a disk, if $\rho$ is radially symmetric and supported on an annulus, then the Dirichlet Poisson solution $\phi$ is radial. Its level curves are circles and $\nabla^\perp\phi$ is tangent to those circles. Thus an annular density of the form
+\begin{equation}
+  \rho = \mathbf{1}_{\{r_1<r<r_2\}}
+\end{equation}
+is stationary because the density is constant along streamlines. In a general domain, exact circular symmetry is unavailable, but the same mechanism survives if $\rho$ is a function of $\phi$.
+
+\subsection{General-domain level-set annuli}
+
+On a general domain, the natural analog of a circular annulus is a level-set annulus:
+\begin{equation}
+  \rho(x)=\mathbf{1}_{\{c_1<\phi(x)<c_2\}}.
+\end{equation}
+This is stationary if $\phi$ solves the nonlinear elliptic problem
+\begin{equation}
+  -\Delta\phi=\mathbf{1}_{\{c_1<\phi<c_2\}},
+  \qquad \phi|_{\partial\Om}=0.
+\end{equation}
+Numerically we replaced the discontinuous indicator by a smooth logistic window,
+\begin{equation}
+  f(s)=\sigma_\eps(s-c_1)-\sigma_\eps(s-c_2),
+  \qquad
+  \sigma_\eps(z)=\frac{1}{1+e^{-z/\eps}}.
+\end{equation}
+This approximates $\mathbf{1}_{c_1<s<c_2}$ when $\eps\ll c_2-c_1$.
+
+\section{Choosing $c_1,c_2$ from the domain}
+
+A useful domain-dependent scale comes from the torsion function $T$:
+\begin{equation}
+  -\Delta T=1,
+  \qquad T|_{\partial\Om}=0.
+\end{equation}
+Let $M_T=\max_\Om T$. Then one can define level thresholds
+\begin{equation}
+  c_1=\alpha_1 M_T,
+  \qquad
+  c_2=\alpha_2 M_T,
+  \qquad 0<\alpha_1<\alpha_2<1.
+\end{equation}
+This gives a reproducible parameterization across domains. However, two important caveats emerged.
+
+\begin{enumerate}[leftmargin=2em]
+  \item The physical/geometric width of the resulting density band is not controlled only by $c_2-c_1$. It is controlled by the conversion from potential level spacing to physical distance:
+  \begin{equation}
+    \Delta x_\perp \approx \frac{c_2-c_1}{|\nabla\phi|}.
+  \end{equation}
+  If $|\nabla\phi|$ is small in the band, even a small $c_2-c_1$ can yield a physically thick annulus.
+  \item During Newton iteration, the maximum of $u$ often drifts close to $c_1$ or below $c_2$, producing stagnation or collapse to the trivial branch $u=0$.
+\end{enumerate}
+
+Thus $\alpha_1,\alpha_2$ are useful but do not independently and sharply prescribe the physical annular bandwidth.
+
+\section{Variational formulation}
+
+Let $V=H_0^1(\Om)$. Define the bilinear form
+\begin{equation}
+  a(u,v)=\int_\Om \nabla u\cdot\nabla v\,\dd x.
+\end{equation}
+The weak form of
+\begin{equation}
+  -\Delta u=f(u),\qquad u|_{\partial\Om}=0
+\end{equation}
+is
+\begin{equation}
+  a(u,v)-\int_\Om f(u)v\,\dd x=0\qquad\forall v\in H_0^1(\Om).
+\end{equation}
+Let $F$ be a primitive of $f$, i.e. $F'=f$. The energy functional is
+\begin{equation}
+  J(u)=\frac12\int_\Om |\nabla u|^2\,\dd x-\int_\Om F(u)\,\dd x.
+\end{equation}
+Its first variation is
+\begin{equation}
+  J'(u)v=\int_\Om\nabla u\cdot\nabla v\,\dd x-
+  \int_\Om f(u)v\,\dd x.
+\end{equation}
+Assuming $f$ is sufficiently smooth, its second variation is
+\begin{equation}
+  J''(u)(v,w)=\int_\Om \nabla v\cdot\nabla w\,\dd x-
+  \int_\Om f'(u)vw\,\dd x.
+\end{equation}
+
+\subsection{Function spaces}
+
+A standard setup is:
+\begin{align}
+  J &: H_0^1(\Om)\to \R,\nonumber\\
+  J'(u)&\in H^{-1}(\Om),\nonumber\\
+  J''(u)&:H_0^1(\Om)\times H_0^1(\Om)\to\R.
+\end{align}
+For $J$ to be well-defined, one needs enough growth control on $F(u)$. In two dimensions, $H_0^1$ embeds into $L^p$ for all finite $p$, so bounded smooth logistic nonlinearities are harmless.
+
+
+\section{Newton iteration, residuals, and damping}
+
+Newton's method seeks
+\begin{equation}
+  u_{k+1}=u_k+\alpha_k\delta u_k,
+\end{equation}
+where the undamped correction $\delta u_k$ is formally defined by
+\begin{equation}
+  J''(u_k)(\delta u_k,v)=-J'(u_k)v
+  \qquad\forall v\in H_0^1(\Om).
+\end{equation}
+Equivalently,
+\begin{equation}
+  \int_\Om \nabla\delta u_k\cdot\nabla v\,\dd x
+  -\int_\Om f'(u_k)\delta u_k v\,\dd x
+  =-
+  \left[
+  \int_\Om\nabla u_k\cdot\nabla v\,\dd x
+  -\int_\Om f(u_k)v\,\dd x
+  \right].
+\end{equation}
+The scalar $\alpha_k\in(0,1]$ is chosen by a line search. In the computations,
+$\alpha_k$ is crucial because the full Newton step frequently leaves the desired
+annular branch, especially when the logistic window is sharp.
+
+\subsection{Exact weak residual}
+
+The equation we ultimately want to solve is always
+\begin{equation}
+  -\Delta u=f(u),
+  \qquad u|_{\partial\Om}=0.
+\end{equation}
+Its exact weak residual is the functional
+\begin{equation}
+  R(u)(v)
+  =a(u,v)-\int_\Om f(u)v\,\dd x
+  =\int_\Om \nabla u\cdot\nabla v\,\dd x
+  -\int_\Om f(u)v\,\dd x.
+\end{equation}
+Thus $u$ is a true semilinear equilibrium if and only if
+\begin{equation}
+  R(u)(v)=0
+  \qquad\forall v\in H_0^1(\Om).
+\end{equation}
+This residual is independent of any shifted-Newton stabilization parameter
+$\mu_k$ and independent of any auxiliary homotopy parameter used for branch
+selection.
+
+In FreeFEM++, we assembled this residual vector in the finite element basis.
+For $V_h=\operatorname{span}\{\varphi_i\}_{i=1}^{N_h}$, the entries are
+\begin{equation}
+  r_i(u_h)
+  =\int_\Om \nabla u_h\cdot\nabla\varphi_i\,\dd x
+  -\int_\Om f(u_h)\varphi_i\,\dd x.
+\end{equation}
+The logged residual was the Euclidean norm of this assembled vector:
+\begin{equation}
+  \|R_h(u_h)\|_{\ell^2}
+  =\left(\sum_{i=1}^{N_h} r_i(u_h)^2\right)^{1/2}.
+\end{equation}
+The corresponding FreeFEM++ code was:
+\begin{lstlisting}[style=ff]
+varf ResidualForm(unused, v)
+    = int2d(Th)(
+        dx(u)*dx(v)
+      + dy(u)*dy(v)
+      - ffun(u)*v
+    )
+    + on(bLabel, unused=0);
+
+func real residualNorm()
+{
+    real[int] r = ResidualForm(0, Vh);
+    return sqrt(r'*r);
+}
+\end{lstlisting}
+This is the residual denoted by \texttt{res} in the logs. For instance, in a
+line such as
+\begin{lstlisting}[style=ff]
+HYBRID_LOG ieps epsPhiRatio epsPhi k res nd alpha bt muShift ... status
+\end{lstlisting}
+the fifth numerical field after \texttt{k} is the value of
+$\|R_h(u_h)\|_{\ell^2}$.
+
+\subsection{Interpretation of the logged residual}
+
+The Euclidean coefficient norm is easy to compute and very useful for debugging,
+but it is not mesh-invariant. It depends on the basis and on the number of
+degrees of freedom. Therefore it should primarily be used for comparisons within
+the same mesh and finite element space. It is nevertheless reliable for deciding
+whether Newton is reducing the discrete equations on a fixed mesh.
+
+A more intrinsic residual norm is an $H^{-1}$-type norm. If $K$ is the stiffness
+matrix associated with $a(\cdot,\cdot)$ and $r$ is the residual vector, then
+\begin{equation}
+  \|R_h(u_h)\|_{H^{-1}_h}^2
+  \simeq r^T K^{-1}r.
+\end{equation}
+This measures the residual as a functional on $H_0^1(\Om)$. A FreeFEM++ version
+would be:
+\begin{lstlisting}[style=ff]
+real[int] r = ResidualForm(0, Vh);
+real[int] z = K^-1*r;
+real resHminus1 = sqrt(r'*z);
+\end{lstlisting}
+provided that $K$ is assembled with the same homogeneous Dirichlet condition.
+This norm is more meaningful across mesh adaptations, while the Euclidean norm
+is cheaper and was the one primarily logged in our runs.
+
+\subsection{Shifted Newton step}
+
+For sharp windows, the exact Newton matrix
+\begin{equation}
+  J''(u_k)(v,w)=a(v,w)-\int_\Om f'(u_k)vw\,\dd x
+\end{equation}
+can become poorly conditioned or effectively indefinite. It can produce a step
+that decreases the algebraic residual while destroying the desired annular
+branch. To stabilize the correction, we used the shifted Newton equation
+\begin{equation}
+  J''(u_k)(\delta u_k,v)+\mu_k a(\delta u_k,v)=-J'(u_k)v.
+\end{equation}
+Equivalently,
+\begin{equation}
+  (1+
+  \mu_k)\int_\Om \nabla\delta u_k\cdot\nabla v\,\dd x
+  -\int_\Om f'(u_k)\delta u_k v\,\dd x
+  =-
+  \left[
+  \int_\Om\nabla u_k\cdot\nabla v\,\dd x
+  -\int_\Om f(u_k)v\,\dd x
+  \right].
+\end{equation}
+In FreeFEM++ this was implemented as:
+\begin{lstlisting}[style=ff]
+problem NewtonStep(du, v, solver=sparsesolver)
+    = int2d(Th)(
+        (1.0 + muShift)*(dx(du)*dx(v) + dy(du)*dy(v))
+      - dffun(u)*du*v
+    )
+    + int2d(Th)(
+        dx(u)*dx(v)
+      + dy(u)*dy(v)
+      - ffun(u)*v
+    )
+    + on(bLabel, du=0);
+\end{lstlisting}
+The shift changes only the search direction. The residual used to accept or
+reject a step remains the exact residual $R_h(u_h)$ of the unshifted semilinear
+equation.
+
+\subsection{Armijo backtracking}
+
+After computing $\delta u_k$, we tested trial states
+\begin{equation}
+  u_{trial}=u_k+\alpha\delta u_k,
+  \qquad
+  \alpha=1,\beta_{LS},\beta_{LS}^2,\ldots,
+\end{equation}
+with $0<\beta_{LS}<1$. The residual acceptance condition was
+\begin{equation}
+  \|R_h(u_{trial})\|_{\ell^2}
+  \leq
+  (1-c_{A}\alpha)\|R_h(u_k)\|_{\ell^2},
+\end{equation}
+where $c_A$ is the Armijo constant. In the code, the typical values were
+\begin{equation}
+  \beta_{LS}=0.5,
+  \qquad
+  c_A=10^{-6},
+  \qquad
+  \alpha_{min}=10^{-7}.
+\end{equation}
+Thus the line search was deliberately permissive: it demanded a decrease in the
+exact residual, but not an aggressive one. This was important because overly
+strict decrease conditions often rejected all steps near the desired annular
+branch.
+
+The practical line search had the following structure:
+\begin{lstlisting}[style=ff]
+real alpha = 1.0;
+real resOld = res;
+uOld = u;
+bool accepted = false;
+int nBacktrack = 0;
+
+while (alpha >= alphaMin && nBacktrack <= maxBacktrack)
+{
+    uTrial = uOld + alpha*du;
+    u = uTrial;
+
+    rhoFromPhi = ffun(u);
+
+    real trialMass = int2d(Th)(rhoFromPhi);
+    real trialMaxRho = rhoFromPhi[].max;
+    real trialMaxU = u[].max;
+    real resNew = residualNorm();
+
+    bool branchOK =
+        (trialMass >= massFloor)
+     && (trialMaxRho >= rhoMaxFloor);
+
+    if (branchOK && resNew <= (1.0 - armijoC*alpha)*resOld)
+    {
+        res = resNew;
+        accepted = true;
+        break;
+    }
+
+    alpha *= betaLS;
+    nBacktrack++;
+}
+
+if (!accepted)
+{
+    u = uOld;
+    muShift = min(muMax, 2.0*muShift);
+}
+\end{lstlisting}
+The logged fields \texttt{alpha} and \texttt{bt} are the accepted damping factor
+and the number of backtracking reductions. If \texttt{bt} is repeatedly large,
+or if \texttt{alpha} becomes extremely small, then the Newton direction is not
+well aligned with the branch being sought. In our computations this usually
+meant one of four things: the window was too sharp, the band was under-resolved,
+the shift was too small, or the chosen window levels selected an unstable or
+nonexistent annular branch.
+
+\subsection{Branch preservation}
+
+Because $f(0)=0$ for the logistic window, the trivial solution $u=0$ is always a
+solution of
+\begin{equation}
+  -\Delta u=f(u).
+\end{equation}
+Therefore a pure residual-decreasing Newton method may converge to the zero
+branch. To prevent this, the line search did not accept a trial state solely
+because it reduced the residual. It also required basic nontriviality of the
+active density:
+\begin{equation}
+  \int_\Om f(u_{trial})\,\dd x \geq m_{floor},
+  \qquad
+  \max_\Om f(u_{trial})\geq \rho_{floor}.
+\end{equation}
+In some runs we also required
+\begin{equation}
+  \max_\Om u_{trial}>c_2
+\end{equation}
+or a slightly weaker condition involving a core level. This helps preserve an
+annular hole, because if $\max u\leq c_2$, the upper window level is never
+crossed and the density cannot form a genuine annulus. However, this condition
+can be too restrictive: if imposed too strongly, it can cause line-search
+failure or stagnation even when a nearby useful step exists.
+
+The branch-preservation conditions should therefore be interpreted as numerical
+safeguards, not as part of the mathematical equation. The final solution must
+always be assessed using the exact residual of the unmodified equation and by
+checking the final density geometry.
+
+\section{Strategy A: torsion-designed initializer plus semilinear Newton}
+
+This was the most successful approach among the strategies tested.
+
+\subsection{Construction}
+
+First solve the torsion problem
+\begin{equation}
+  -\Delta T=1,
+  \qquad T|_{\partial\Om}=0.
+\end{equation}
+Then define a designed density band using torsion levels:
+\begin{equation}
+  \rho_T=g_T(T),
+  \qquad
+  g_T(s)=\sigma_{\eps_T}(s-c_{1,T})-
+  \sigma_{\eps_T}(s-c_{2,T}).
+\end{equation}
+Next compute the Poisson-consistent potential
+\begin{equation}
+  -\Delta\phi_D=\rho_T,
+  \qquad \phi_D|_{\partial\Om}=0.
+\end{equation}
+This pair $(\rho_T,\phi_D)$ is generally only a near-equilibrium because $\rho_T$ is not necessarily a function of $\phi_D$. We monitored the stationarity defect
+\begin{equation}
+  D=\nabla^\perp\phi_D\cdot\nabla\rho_T
+  =-\partial_y\phi_D\partial_x\rho_T+
+  \partial_x\phi_D\partial_y\rho_T.
+\end{equation}
+A normalized diagnostic was
+\begin{equation}
+  \frac{\|D\|_{L^2}}{\|\nabla\rho_T\|_{L^2}\|\nabla\phi_D\|_{L^2}}.
+\end{equation}
+
+Then define a true semilinear window in $\phi$-space:
+\begin{equation}
+  f_\phi(s)=\sigma_{\eps_\phi}(s-c_{1,\phi})-
+  \sigma_{\eps_\phi}(s-c_{2,\phi}),
+\end{equation}
+where
+\begin{equation}
+  c_{1,\phi}=\beta_1\max\phi_D,
+  \qquad
+  c_{2,\phi}=\beta_2\max\phi_D.
+\end{equation}
+
+\subsection{Heuristic choice of the nonlinearity for localization}
+
+The guiding principle in all window constructions is that an exact stationary
+state should satisfy
+\begin{equation}
+  \rho=f(\phi).
+\end{equation}
+Therefore the support of the density is determined by the range of potential
+values for which $f$ is active. If $f$ is approximately the indicator of an
+interval,
+\begin{equation}
+  f(s)\approx \mathbf{1}_{c_1<s<c_2},
+\end{equation}
+then the active density region is approximately
+\begin{equation}
+  \{x\in\Om:\ c_1<\phi(x)<c_2\}.
+\end{equation}
+Thus, on a domain where the level sets of $\phi$ are nested closed curves, a
+window nonlinearity produces an annular density band between two potential
+level curves.
+
+In computations we replaced the discontinuous indicator by a smooth logistic
+window
+\begin{equation}
+  f(s)=\rho_{amp}\left[
+  \sigma_\eps(s-c_1)-\sigma_\eps(s-c_2)
+  \right],
+  \qquad
+  \sigma_\eps(z)=\frac{1}{1+\exp(-z/\eps)}.
+\end{equation}
+The parameters have distinct roles:
+\begin{itemize}[leftmargin=2em]
+  \item $c_1$ selects the outer interface of the annulus, since $\phi=0$ on
+  $\partial\Om$ and $\phi$ increases toward the interior.
+  \item $c_2$ selects the inner interface. The solution must satisfy
+  $\max_\Om \phi>c_2$ to create a genuine annulus with a hole; otherwise the
+  density becomes a single bump or cap.
+  \item $c_2-c_1$ controls thickness in potential space, not directly in
+  physical space.
+  \item $\eps$ controls smoothness of the interfaces. Smaller $\eps$ gives a
+  sharper approximation to an indicator but makes Newton more ill-conditioned
+  and increases the need for mesh resolution near the band.
+  \item $\rho_{amp}$ controls the forcing amplitude. Increasing $\rho_{amp}$
+  changes the scale of the resulting potential, so it should not be treated as
+  a passive normalization parameter.
+\end{itemize}
+
+The physical width of the band is approximately governed by the coarea
+heuristic
+\begin{equation}
+  \delta_{\mathrm{phys}}
+  \sim
+  \frac{c_2-c_1}{|\nabla\phi|}
+  \quad\text{on the active level set region}.
+\end{equation}
+This explains an important numerical observation: reducing $c_2-c_1$ does not
+necessarily reduce the visible width by the same factor. The nonlinear solve
+changes $\phi$ and hence changes $|\nabla\phi|$. If the final solution flattens
+near the annular region, a small interval in potential can still correspond to
+a thick physical band. Conversely, a large potential gradient can make a
+moderate window appear sharply localized.
+
+For Strategy A, the initial design is done in torsion space. We choose
+\begin{equation}
+  c_{1,T}=\alpha_{T,1}\max T,
+  \qquad
+  c_{2,T}=\alpha_{T,2}\max T,
+\end{equation}
+and construct $\rho_T=g_T(T)$. Larger values of
+$\alpha_{T,1},\alpha_{T,2}$ place the designed band closer to the center of the
+torsion potential, while smaller values place it closer to the boundary. A
+narrower gap $\alpha_{T,2}-\alpha_{T,1}$ gives a thinner designed band in
+torsion-level space. This provides a good initial geometric target, but it does
+not by itself determine the width of the final semilinear equilibrium because
+the Newton solve is governed by the final potential $u$, not by $T$.
+
+After computing the Poisson-consistent potential $\phi_D$ from
+$-\Delta\phi_D=\rho_T$, we choose the semilinear window in $\phi_D$-space:
+\begin{equation}
+  c_{1,\phi}=\beta_1\max\phi_D,
+  \qquad
+  c_{2,\phi}=\beta_2\max\phi_D.
+\end{equation}
+This choice is heuristic but practical. The lower level $\beta_1$ determines
+where the outer edge of the density is expected to lie in the initial
+potential, while $\beta_2$ determines whether the density closes into an
+annulus or collapses into a bump. The necessary check is
+\begin{equation}
+  \max \phi_D-c_{2,\phi}>0.
+\end{equation}
+If this quantity is too small, the annulus is fragile: Newton may push the
+solution below the upper level and destroy the inner hole. If it is too large,
+the active set can become too broad and may drift toward unwanted level sets.
+
+A useful practical rule is:
+\begin{enumerate}[leftmargin=2em]
+  \item First choose $\alpha_{T,1},\alpha_{T,2}$ to make the designed band
+  visually correct in $\rho_T=g_T(T)$.
+  \item Compute $\phi_D$ and inspect the density $f_\phi(\phi_D)$ induced by
+  candidate values of $\beta_1,\beta_2$ before running Newton.
+  \item Choose $\beta_1,\beta_2$ so that $f_\phi(\phi_D)$ overlaps the designed
+  band and has comparable mass. This is more informative than using
+  $\beta_1,\beta_2$ blindly.
+  \item Start with a forgiving $\eps_\phi/(c_{2,\phi}-c_{1,\phi})$, typically
+  $0.2$--$0.3$, then continue toward sharper values such as $0.12$, $0.10$,
+  or $0.08$ only after the correct branch is established.
+  \item Monitor not only the residual, but also $\max u-c_{2,\phi}$,
+  $\max f(u)$, $\int_\Om f(u)$, the active area, and the relative distance to
+  the designed density.
+\end{enumerate}
+
+There is no universal choice of $(c_1,c_2,\eps)$ that guarantees a localized
+annular equilibrium on an arbitrary domain. The reason is that existence of a
+nontrivial annular branch depends on the nonlinear coupling between the active
+set and the Poisson solve. The window levels select a desired active set, but
+the active set then changes the potential that defines those same levels. The
+choice of $f$ is therefore a branch-selection problem, not merely a local
+thresholding problem.
+
+This also clarifies the role of Strategy B. If the designed pair
+$(\rho_T,\phi_D)$ is close to an exact equilibrium, then the scatter plot of
+$\rho_T(x)$ versus $\phi_D(x)$ should be nearly single-valued. In that case one
+can empirically fit a function $f_{fit}$ such that
+\begin{equation}
+  \rho_T(x)\approx f_{fit}(\phi_D(x)).
+\end{equation}
+A fitted nonlinearity may preserve the designed band better than a simple
+two-level logistic window. However, if the scatter is multi-valued, no scalar
+function $f(\phi)$ can exactly reproduce the designed density. Then one should
+expect drift, broadening, or loss of the band under the final semilinear
+projection.
+
+Finally solve
+\begin{equation}
+  -\Delta u=f_\phi(u),
+  \qquad u|_{\partial\Om}=0,
+\end{equation}
+initialized by $u_0=\phi_D$.
+
+\subsection{Observed behavior}
+
+Strategy A often produced genuine semilinear equilibria with localized annular density. However, the annular band tended to drift toward the boundary. The drift was reduced by choosing larger $\beta_1,\beta_2$ values, for example values near $0.68,0.82$ or $0.78,0.86$ depending on the run. But pushing these too high can cause poor matching or loss of the band.
+
+A key observation was that changing $\alpha_{T,1},\alpha_{T,2}$ alone did not sharply control the physical band width. This is because the final semilinear solution reorganizes its own level sets, and the map from level spacing to physical spacing depends on $|\nabla u|$.
+
+\subsection{Important diagnostics}
+
+The useful log fields were:
+\begin{center}
+\begin{tabular}{>{\ttfamily}p{0.22\textwidth}p{0.67\textwidth}}
+\toprule
+Field & Meaning\\
+\midrule
+res & exact unshifted residual norm for $-\Delta u=f(u)$\\
+nd & $H^1$ seminorm of Newton correction\\
+alpha & accepted damping parameter\\
+bt & number of backtracking steps\\
+muShift & current shifted-Newton stabilization\\
+maxRho & maximum of $f(u)$\\
+massRho & total density mass $\int f(u)$\\
+relRhoDesign & relative $L^2$ distance to designed density\\
+annularPhiMinusC2 & $\max u-c_{2,\phi}$; positive means the solution crosses the upper level\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Strategy B: empirical construction of $f$}
+
+Strategy B is to construct $f$ from a designed pair $(\phi_D,\rho_T)$. The ideal requirement for an exact semilinear equilibrium is
+\begin{equation}
+  \rho_T(x)\approx f(\phi_D(x)).
+\end{equation}
+If the scatter plot $(\phi_D(x),\rho_T(x))$ is close to a single-valued graph, then one can fit an empirical function $f$. If it is not single-valued, no scalar function of $\phi_D$ alone can reproduce the designed density.
+
+\subsection{Recommended implementation}
+
+FreeFEM is not ideal for robust one-dimensional regression. A practical workflow is:
+\begin{enumerate}[leftmargin=2em]
+  \item Export point values of $\phi_D$ and $\rho_T$ to text or VTK.
+  \item In Python/NumPy/SciPy, bin by $\phi_D$ and compute conditional averages or quantiles of $\rho_T$.
+  \item Fit a smooth monotone or window-like function $f_{fit}(s)$.
+  \item Re-import the fitted table or approximate it by a few logistic functions in FreeFEM.
+\end{enumerate}
+
+This can produce a nonlinearity adapted to the designed band, but it may still fail if the designed density is geometrically incompatible with the level sets of $\phi_D$.
+
+\section{Strategy C: constrained or penalized continuation}
+
+Strategy C is to solve a modified problem that includes attraction to the designed band. The purpose is not to change the final equation permanently, but to guide Newton toward the desired branch. One possible homotopy is
+\begin{equation}
+  -\Delta u = (1-\lambda)f(u)+\lambda\rho_T,
+\end{equation}
+with $\lambda$ decreased from $1$ to $0$. The final $\lambda=0$ residual must be logged separately:
+\begin{equation}
+  R_{exact}(u)= -\Delta u-f(u).
+\end{equation}
+A more optimization-based variant penalizes distance to the design:
+\begin{equation}
+  J_\eta(u)=J(u)+\frac{\eta}{2}\|f(u)-\rho_T\|_{L^2}^2.
+\end{equation}
+This may improve branch selection but changes the Newton equations and requires careful differentiation.
+
+\section{Mesh adaptation}
+
+Small $\eps$ creates steep density transitions. If the mesh does not resolve those layers, the numerical band may be too diffuse, oscillatory, or poorly transported. We therefore considered adapting the mesh to the moving band.
+
+\subsection{Principle}
+
+Adapt between continuation stages, not during each Newton solve. The safer algorithm is:
+\begin{enumerate}[leftmargin=2em]
+  \item Finish a continuation stage for fixed $\eps_\phi$.
+  \item Compute $\rho=f(u)$.
+  \item Adapt the mesh using both $u$ and $\rho$ as metric inputs.
+  \item Rebuild the finite element space, matrices, residual forms, and Newton problem.
+  \item Interpolate all fields onto the new mesh.
+\end{enumerate}
+
+A useful target length scale near the interface is
+\begin{equation}
+  h_{target}\approx C\frac{\eps_\phi}{\max|\nabla u|},
+\end{equation}
+where $C$ is a safety factor such as $0.25$.
+
+\subsection{Visualization limitation}
+
+FreeFEM's native plot can display a mesh and scalar function together:
+\begin{lstlisting}[style=ff]
+plot(Th, rhoFromPhi, fill=true, value=true, wait=true,
+     nbiso=60, cmm="rho with mesh overlay");
+\end{lstlisting}
+However, transparent mesh overlays are not reliable in the native viewer. For transparency and inspection, exporting VTK and using ParaView with ``Surface With Edges'' and reduced opacity is more robust.
+
+\section{Perturbing the final equilibrium}
+
+Once a good equilibrium $(\rho_{eq},\phi_{eq})$ is found, one can initialize the guiding-center simulation with an angular perturbation.
+
+\subsection{Euclidean angular perturbation}
+
+Choose a center $(x_c,y_c)$, preferably the point where $\phi_{eq}$ is maximal. Define
+\begin{equation}
+  \theta(x,y)=\operatorname{atan2}(y-y_c,x-x_c).
+\end{equation}
+Then set
+\begin{equation}
+  \rho_0=\rho_{eq}\left(1+\eps_p\cos(k\theta)\right).
+\end{equation}
+On a general domain, the perturbation may not be mass-neutral. A better version subtracts the $\rho_{eq}$-weighted mean:
+\begin{equation}
+  m_k=\frac{\int_\Om \rho_{eq}\cos(k\theta)\,\dd x}{\int_\Om\rho_{eq}\,\dd x},
+\end{equation}
+and uses
+\begin{equation}
+  \rho_0=\rho_{eq}\left[1+\eps_p(\cos(k\theta)-m_k)\right].
+\end{equation}
+An exact mass renormalization can also be applied.
+
+\subsection{Ray-based geometry-adapted perturbation}
+
+For star-shaped or approximately star-shaped domains, define the ray radius $R(\theta)$ as the distance from the center to the boundary along angle $\theta$. Then define
+\begin{equation}
+  r(x,y)=\sqrt{(x-x_c)^2+(y-y_c)^2},
+  \qquad
+  s(x,y)=\frac{r(x,y)}{R(\theta(x,y))}.
+\end{equation}
+The angular mode is still $\cos(k\theta)$, but the normalized radius $s$ can be used for geometry-aware masking:
+\begin{equation}
+  \rho_0=\rho_{eq}\left[1+\eps_p M(s)(\cos(k\theta)-m_k)\right].
+\end{equation}
+Here $M(s)$ is optional. Since multiplication by $\rho_{eq}$ already localizes the perturbation to the annulus, one may take $M\equiv1$ initially.
+
+\section{Guiding-center simulation import checks}
+
+When importing an equilibrium into a separate simulation file, the following compatibility conditions are critical:
+\begin{enumerate}[leftmargin=2em]
+  \item The mesh must be exactly the mesh on which the degrees of freedom were saved.
+  \item The finite element space must match. If $\rho$ and $\phi$ were saved in $P2$, they must be read into a $P2$ space on the same mesh.
+  \item The boundary label in the Poisson matrix must match the exported mesh boundary label.
+  \item The mass matrix for the right-hand side should be unconstrained; only the stiffness matrix imposes Dirichlet data.
+\end{enumerate}
+
+A useful check is
+\begin{equation}
+  \phi_{check}=K^{-1}M\rho_{eq},
+  \qquad
+  \frac{\|\phi_{check}-\phi_{eq}\|_{L^2}}{\|\phi_{eq}\|_{L^2}}.
+\end{equation}
+If this is close to one, the import is wrong: likely the wrong mesh, wrong FE space, or wrong boundary label.
+
+\section{Representative FreeFEM fragments}
+
+\subsection{Logistic window}
+\begin{lstlisting}[style=ff]
+func real sigma(real z)
+{
+    real zz = z/eps;
+    if (zz > 50.0) return 1.0;
+    if (zz < -50.0) return 0.0;
+    return 1.0/(1.0 + exp(-zz));
+}
+
+func real ffun(real s)
+{
+    return sigma(s-c1) - sigma(s-c2);
+}
+
+func real dffun(real s)
+{
+    real S1 = sigma(s-c1);
+    real S2 = sigma(s-c2);
+    return S1*(1.0-S1)/eps - S2*(1.0-S2)/eps;
+}
+\end{lstlisting}
+
+\subsection{Exact residual form}
+\begin{lstlisting}[style=ff]
+varf ResidualForm(unused, v)
+    = int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v) - ffun(u)*v)
+    + on(bLabel, unused=0);
+
+func real residualNorm()
+{
+    real[int] r = ResidualForm(0, Vh);
+    return sqrt(r'*r);
+}
+\end{lstlisting}
+
+\subsection{Shifted Newton step}
+\begin{lstlisting}[style=ff]
+problem NewtonStep(du, v, solver=sparsesolver)
+    = int2d(Th)((1.0 + muShift)*(dx(du)*dx(v) + dy(du)*dy(v))
+                - dffun(u)*du*v)
+    + int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v) - ffun(u)*v)
+    + on(bLabel, du=0);
+\end{lstlisting}
+
+\subsection{Mass-neutral angular perturbation}
+\begin{lstlisting}[style=ff]
+Vh angularMode, rhoPert;
+angularMode = cos(pertK*atan2(y-yc, x-xc));
+
+real massEq = int2d(Th)(rhoEq);
+real modeMean = int2d(Th)(rhoEq*angularMode)/max(massEq, 1e-30);
+
+rhoPert = rhoEq*(1.0 + pertAmp*(angularMode - modeMean));
+real massPert = int2d(Th)(rhoPert);
+rhoPert = (massEq/max(massPert, 1e-30))*rhoPert;
+\end{lstlisting}
+
+\section{Practical parameter lessons}
+
+The following lessons emerged from the experiments:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Begin with forgiving windows: moderate $\eps/(c_2-c_1)$ such as $0.2$--$0.3$, then continue downward.
+  \item Avoid very thin windows before the correct branch is established.
+  \item Monitor $\max u-c_2$. If it is negative, the upper level is not crossed and the intended annulus is not fully active.
+  \item A high $\max\rho$ close to one does not guarantee a good annulus. Also inspect mass, active area, plateau area, and visual location.
+  \item If Newton stagnates with $\max u$ pinned near $c_1$ or a core level, changing $\mu$ alone may not help. The branch condition or the window levels may be over-constraining the iterate.
+  \item $c_2-c_1$ controls potential thickness, not physical thickness. Physical thickness is roughly $(c_2-c_1)/|\nabla u|$.
+  \item Strategy A is robust but tends to move the band. Strategy B may preserve the designed band better if the data are close to single-valued in $(\phi_D,\rho_T)$ space. Strategy C can help with branch selection, but the final unmodified residual must always be checked.
+\end{enumerate}
+
+\section{Recommended current workflow}
+
+For the current project, the most defensible workflow is:
+\begin{enumerate}[leftmargin=2em]
+  \item Generate a torsion-designed band $\rho_T=g_T(T)$ with visually acceptable location and width.
+  \item Compute $\phi_D$ from $-\Delta\phi_D=\rho_T$ and measure the stationarity defect.
+  \item Use Strategy A with $u_0=\phi_D$, selecting $\beta_1,\beta_2$ high enough to avoid excessive boundary drift.
+  \item Use $\eps_\phi$ continuation, with exact residual logging.
+  \item Adapt the mesh between continuation stages if $\eps_\phi$ is small.
+  \item Verify import into the time-dependent simulation by recomputing $\phi_{check}$.
+  \item Perturb with a mass-neutral angular mode centered at $\arg\max\phi_{eq}$; for noncircular domains, optionally use ray-based geometry coordinates.
+\end{enumerate}
+
+\section{Open numerical questions}
+
+Several points remain empirical and should be tested systematically:
+\begin{enumerate}[leftmargin=2em]
+  \item Whether an empirical $f$ fitted from $(\phi_D,\rho_T)$ can preserve the designed band better than a logistic window.
+  \item Whether adaptive remeshing reduces band drift or mainly improves interface resolution.
+  \item Whether a constrained homotopy can guide Strategy A to a band closer to $\rho_T$ without changing the final equation.
+  \item How the instability growth rates depend on whether the perturbation uses Euclidean angle, ray-based angle, or a harmonic angle coordinate.
+\end{enumerate}
+
+\appendix
+\section{Notation summary}
+\begin{center}
+\begin{tabular}{>{\ttfamily}p{0.22\textwidth}p{0.67\textwidth}}
+\toprule
+Symbol & Meaning\\
+\midrule
+$\rho$ & guiding-center density\\
+$\phi$ & Poisson potential, $-\Delta\phi=\rho$\\
+$T$ & torsion function, $-\Delta T=1$\\
+$\rho_T$ & designed torsion density band $g_T(T)$\\
+$\phi_D$ & Poisson potential generated by $\rho_T$\\
+$f$ & semilinear source function in $-\Delta u=f(u)$\\
+$\eps_T$ & smoothing width for torsion-designed density\\
+$\eps_\phi$ & smoothing width for semilinear $\phi$-window\\
+$\mu$ & shifted Newton stabilization parameter\\
+$res$ & exact unshifted residual norm\\
+$nd$ & $H^1$ seminorm of Newton correction\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
+

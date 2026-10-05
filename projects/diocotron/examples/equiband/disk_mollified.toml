@@ -1,0 +1,16 @@
+schema_version = 2
+geometry = "disk"
+mesh_size = 0.075
+quadrature_degree = 16
+number_of_rays = 64
+samples_per_ray = 200
+backend = "numba"
+threads = 1
+target_distance = 0.60
+distance_tolerance = 1e-4
+
+[band]
+kind = "mollified"
+threshold_width_delta = 0.02
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.08

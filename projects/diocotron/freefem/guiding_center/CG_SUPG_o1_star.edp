@@ -1,0 +1,326 @@
+include "getARGV.idp"
+load "lapack"
+load "msh3"
+load "gmsh"
+load "iovtk"
+
+real dt = getARGV("-dt", 0.1);
+real endt = getARGV("-endt", 50);
+int modeK = getARGV("-k", 3);
+real epsArg = getARGV("-eps", 0.05);
+real r0 = getARGV("-r0", 0.45);
+real sigma = getARGV("-sigma", 0.03);
+real visc = getARGV("-visc", 0.0);
+int nn = getARGV("-nn", 300);
+int plt = getARGV("-plot", 0);
+
+// Boundary label must match the equilibrium solve.
+// Your latest equilibrium code used bLabel = 1.
+int bLabel = getARGV("-bLabel", 1);
+
+// ------------------------------------------------------------
+// Read mesh
+//
+// IMPORTANT:
+// Use the same mesh-loading route used when writing rho[] and phi[].
+// The equilibrium code used gmshload("iter_wall.mesh").
+// Do NOT use readmesh("equilibrium_mesh.msh") for raw DOF reload
+// unless the DOF files were written on that exact reloaded mesh.
+// ------------------------------------------------------------
+//mesh Th = gmshload("iter.msh");
+mesh Th = readmesh("equilibrium_mesh.msh");
+
+if (plt == 1) {
+    plot(Th, wait=true, cmm="Imported simulation mesh");
+}
+
+// This was unused in the current code. Keep only if needed elsewhere.
+// meshS ThS = movemesh23(Th, transfo = [x, y, 0]);
+
+// ------------------------------------------------------------
+// FE spaces
+// Must match the equilibrium code: P2.
+// ------------------------------------------------------------
+fespace Vh(Th, P2);
+Vh rho1, rho, rhoEq;
+Vh phi, phiEq, phiImported, phiCheck;
+Vh u, v, uh, phi0, rho0, tmp, uold, phiHalf, rhoHalf;
+
+fespace P0h(Th, P0);
+P0h bxK, byK, tauK;
+
+// ------------------------------------------------------------
+// Import saved equilibrium fields
+// ------------------------------------------------------------
+{
+    ifstream frho("rho_dof.txt");
+    frho >> rho[];
+}
+
+{
+    ifstream fphi("phi_dof.txt");
+    fphi >> phiImported[];
+}
+
+// Set equilibrium fields from imported data
+rhoEq = rho;
+phiEq = phiImported;
+
+// Initial density
+rho0 = rho;
+
+// Current potential starts from imported potential, but below we also
+// recompute the Poisson-consistent potential from rho.
+phi = phiImported;
+
+// ------------------------------------------------------------
+// Immediate import diagnostics
+// ------------------------------------------------------------
+cout << "IMPORT_DIAG "
+     << "ndof=" << Vh.ndof << " "
+     << "nt=" << Th.nt << " "
+     << "bLabel=" << bLabel << " "
+     << "rhoMin=" << rho[].min << " "
+     << "rhoMax=" << rho[].max << " "
+     << "rhoMass=" << int2d(Th)(rho) << " "
+     << "phiImportedMin=" << phiImported[].min << " "
+     << "phiImportedMax=" << phiImported[].max << " "
+     << "phiImportedL2=" << sqrt(int2d(Th)(phiImported^2))
+     << endl;
+
+if (plt == 1) {
+    plot(rhoEq, fill=true, value=true, nbiso=40, wait=true,
+         cmm="Imported rhoEq");
+
+    plot(phiEq, fill=true, value=true, nbiso=40, wait=true,
+         cmm="Imported phiEq");
+}
+
+// ------------------------------------------------------------
+// Matrices for Poisson solve
+//
+// Solve -Delta phi = rho, phi=0 on boundary.
+//
+// K should enforce Dirichlet boundary conditions.
+// M should be unconstrained mass/load matrix.
+// ------------------------------------------------------------
+varf a(u,v) =
+      int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
+    + on(bLabel, u=0);
+
+varf b(u,v) =
+      int2d(Th)(u*v);
+
+matrix K = a(Vh,Vh);
+matrix M = b(Vh,Vh);
+
+// ------------------------------------------------------------
+// Check consistency of imported phi with imported rho
+// ------------------------------------------------------------
+tmp[] = M * rhoEq[];
+phiCheck[] = K^-1 * tmp[];
+
+real phiImportErr = sqrt(int2d(Th)((phiCheck - phiEq)^2));
+real phiImportNorm = sqrt(int2d(Th)(phiEq^2));
+real phiCheckNorm = sqrt(int2d(Th)(phiCheck^2));
+
+cout << "IMPORT_CHECK "
+     << "errL2=" << phiImportErr << " "
+     << "relErr=" << phiImportErr / max(phiImportNorm, 1e-30) << " "
+     << "phiEqL2=" << phiImportNorm << " "
+     << "phiCheckL2=" << phiCheckNorm << " "
+     << "phiCheckMin=" << phiCheck[].min << " "
+     << "phiCheckMax=" << phiCheck[].max
+     << endl;
+
+Vh phiDiff;
+phiDiff = phiCheck - phiEq;
+
+if (plt == 1) {
+    plot(phiCheck, fill=true, wait=true, value=true,
+         cmm="phiCheck recomputed from imported rho");
+
+    plot(phiDiff, fill=true, wait=true, value=true,
+         cmm="phiCheck - imported phiEq");
+}
+
+// ------------------------------------------------------------
+// For the simulation, use the Poisson-consistent potential.
+// This avoids propagating a corrupted phi_dof import.
+// ------------------------------------------------------------
+phiEq = phiCheck;
+phi   = phiCheck;
+
+// Recomputed phi0 from rho0 for diagnostics
+tmp[] = M * rho0[];
+phi0[] = K^-1 * tmp[];
+
+// ------------------------------------------------------------
+// Your original SUPG problem: unchanged except bLabel variable
+// ------------------------------------------------------------
+problem densitySUPG(rho1, v) =
+      int2d(Th)(rho1 * v / dt)
+    - int2d(Th)(rho * v / dt)
+    + int2d(Th)(
+          rho1 * (-dy(phi) * dx(v) + dx(phi) * dy(v))
+      )
+    + int2d(Th)(
+          tauK * rho1 / dt * (-dy(phi) * dx(v) + dx(phi) * dy(v))
+      )
+    - int2d(Th)(
+          tauK * rho  / dt * (-dy(phi) * dx(v) + dx(phi) * dy(v))
+      )
+    + int2d(Th)(
+          tauK * (
+              -dy(phi) * dx(rho1)
+            * (-dy(phi) * dx(v) + dx(phi) * dy(v))
+          )
+      )
+    + int2d(Th)(
+          tauK * (
+              dx(phi) * dy(rho1)
+            * (-dy(phi) * dx(v) + dx(phi) * dy(v))
+          )
+      )
+    + on(bLabel, rho1=0);
+
+// ------------------------------------------------------------
+// Diagnostics
+// ------------------------------------------------------------
+if (plt == 1) {
+    plot(rho, fill=true, wait=true, value=true,
+         cmm="Initial rho");
+
+    plot(phi0, fill=true, wait=true, value=true,
+         cmm="phi0 recomputed from initial rho");
+}
+
+real mass0 = int2d(Th)(rho0);
+real enrg0 = sqrt(int2d(Th)(dx(phi0)^2 + dy(phi0)^2));
+
+cout << "INITIAL_CHECK "
+     << "mass0=" << mass0 << " "
+     << "enrg0=" << enrg0 << " "
+     << "rhoMin=" << rho0[].min << " "
+     << "rhoMax=" << rho0[].max << " "
+     << "phi0Min=" << phi0[].min << " "
+     << "phi0Max=" << phi0[].max
+     << endl;
+
+string filename =
+      "out/dat_cgSUPGstar_xo2_to1_k_" + modeK
+    + "_eps_" + epsArg
+    + ".txt";
+
+ofstream file(filename);
+
+file << "eps " << epsArg
+     << " k " << modeK
+     << " dof " << Vh.ndof
+     << endl;
+
+// ------------------------------------------------------------
+// Time loop
+// ------------------------------------------------------------
+for (real t = 0.0; t < endt; t += dt) {
+
+    // Recompute phi from current rho
+    tmp[] = M * rho[];
+    phi[] = K^-1 * tmp[];
+
+    if (t > 0.0) {
+        real instb = sqrt(int2d(Th)((phi - phiEq)^2));
+
+        real relElecEnErr =
+            abs(
+                sqrt(int2d(Th)(dx(phi)^2 + dy(phi)^2))
+              - sqrt(int2d(Th)(dx(phi0)^2 + dy(phi0)^2))
+            ) / max(enrg0, 1e-30);
+
+        real relMassErr =
+            abs(int2d(Th)(rho - rho0)) / max(abs(mass0), 1e-30);
+
+        file << t << " "
+             << instb << " "
+             << relElecEnErr << " "
+             << relMassErr << endl;
+
+        cout << "SIM "
+             << "t=" << t << " "
+             << "instb=" << instb << " "
+             << "relElecEnErr=" << relElecEnErr << " "
+             << "relMassErr=" << relMassErr << " "
+             << "rhoMin=" << rho[].min << " "
+             << "rhoMax=" << rho[].max << " "
+             << "rhoMass=" << int2d(Th)(rho)
+             << endl;
+    }
+
+    bxK = -dy(phi);
+    byK =  dx(phi);
+
+    tauK[] = 0.0;
+
+    for (int iK = 0; iK < Th.nt; ++iK) {
+        real areaK = Th[iK].measure;
+
+        // vertices
+        real x0 = Th[iK][0].x, y0 = Th[iK][0].y;
+        real x1 = Th[iK][1].x, y1 = Th[iK][1].y;
+        real x2 = Th[iK][2].x, y2 = Th[iK][2].y;
+
+        // edges
+        real ex0 = x1 - x0, ey0 = y1 - y0;
+        real ex1 = x2 - x1, ey1 = y2 - y1;
+        real ex2 = x0 - x2, ey2 = y0 - y2;
+
+        real L0 = sqrt(ex0^2 + ey0^2);
+        real L1 = sqrt(ex1^2 + ey1^2);
+        real L2 = sqrt(ex2^2 + ey2^2);
+
+        // outward normals, unit length up to orientation convention
+        real nx0 = -ey0, ny0 = ex0;
+        real nx1 = -ey1, ny1 = ex1;
+        real nx2 = -ey2, ny2 = ex2;
+
+        nx0 /= L0; ny0 /= L0;
+        nx1 /= L1; ny1 /= L1;
+        nx2 /= L2; ny2 /= L2;
+
+        // element beta
+        real bx = bxK[][iK];
+        real by = byK[][iK];
+
+        real denom =
+              abs(bx*nx0 + by*ny0)*L0
+            + abs(bx*nx1 + by*ny1)*L1
+            + abs(bx*nx2 + by*ny2)*L2;
+
+        real epsDenom = 1e-14;
+
+        tauK[][iK] =
+            (denom > epsDenom)
+            ? (areaK / (2.0 * denom))
+            : 0.0;
+    }
+
+    cout << "TAU "
+         << "t=" << t << " "
+         << "maxTauK=" << tauK[].max
+         << endl;
+
+    densitySUPG;
+
+    if (plt == 1) {
+        plot(rho1, fill=true, value=true, dim=2, wait=false,
+             cmm = "P2, nb_el=" + Th.nt
+                 + ", eps=" + epsArg
+                 + ", mode=" + modeK
+                 + ", visc=" + visc
+                 + ", dt=" + dt
+                 + ", iteration=" + t/dt
+                 + ", t=" + t);
+    }
+
+    rho = rho1;
+}

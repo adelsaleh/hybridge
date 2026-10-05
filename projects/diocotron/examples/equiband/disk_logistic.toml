@@ -1,0 +1,20 @@
+# Quick validation case, not a mesh-converged production result.
+schema_version = 2
+geometry = "disk"
+radius = 1.0
+mesh_size = 0.02
+degree = 2
+quadrature_degree = 12
+number_of_rays = 64
+samples_per_ray = 200
+backend = "numba"
+threads = 1
+target_distance = 0.10
+distance_tolerance = 1e-4
+
+[band]
+kind = "logistic"
+threshold_width_delta = 0.003
+# Dimensionless ratio: epsilon = relative_epsilon * threshold_width_delta.
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.08

@@ -1,0 +1,943 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{bm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\newcommand{\dd}{\,\mathrm d}
+\newcommand{\R}{\mathbb R}
+\newcommand{\OmegaD}{\Omega}
+\newcommand{\V}{V}
+\newcommand{\VT}{V_T}
+\newcommand{\sig}{\sigma}
+\newcommand{\W}{W}
+\newcommand{\cvec}{\bm c}
+\newcommand{\astar}{\alpha_1}
+\newcommand{\bstar}{\alpha_2}
+\newcommand{\phistar}{\phi^\star}
+\newcommand{\phit}{\phi_T}
+\newcommand{\rhot}{\rho_T}
+\newcommand{\epsT}{\varepsilon_T}
+\newcommand{\epsp}{\varepsilon_\Phi}
+\newcommand{\etaT}{\eta_T}
+\newcommand{\etap}{\eta_\Phi}
+\newcommand{\Honez}{H^1_0(\OmegaD)}
+
+\title{Closed-Loop Window Optimization for the Torsion-Initialized Newton Method}
+\author{}
+\date{2026-07-13}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+This note formulates a closed-loop version of the torsion-initialized Newton
+band-selection problem.  The input torsion thresholds are fixed through two parameters
+\(\alpha_1\) and \(\alpha_2\).  The output thresholds \(c_1\) and \(c_2\)
+are not chosen by matching a window applied to an already computed potential.
+Instead, they are chosen by solving the nonlinear state equation
+\[
+  -\Delta \phistar = \W(\phistar;c_1,c_2,\epsp)
+  \quad \text{in } \OmegaD,
+  \qquad
+  \phistar = 0
+  \quad \text{on } \partial\OmegaD,
+\]
+and minimizing the \(L^2(\OmegaD)\) distance between \(\phistar\) and a
+torsion-derived target potential \(\phit\).  This is the abstraction suggested
+by the numerical experiments: \(c_1\) and \(c_2\) should be selected through
+the semilinear fixed point they produce, not only through a pointwise fit of
+the right-hand side.
+
+\section{Notation}
+
+The computational domain is a bounded Lipschitz set
+\(\OmegaD\subset\R^2\).  Its boundary is denoted by \(\partial\OmegaD\).
+All scalar potentials in this note satisfy homogeneous Dirichlet boundary
+conditions.  The energy space is
+\[
+  \V = \Honez
+  =
+  \{v\in H^1(\OmegaD): v=0 \text{ on } \partial\OmegaD\}.
+\]
+The \(L^2(\OmegaD)\) inner product and norm are
+\[
+  (u,v)_{L^2(\OmegaD)}
+  =
+  \int_{\OmegaD} u(x)v(x)\dd x,
+  \qquad
+  \|u\|_{L^2(\OmegaD)}
+  =
+  \left((u,u)_{L^2(\OmegaD)}\right)^{1/2}.
+\]
+
+The fixed torsion parameters are
+\[
+  0<\alpha_1<\alpha_2<1.
+\]
+The torsion function \(T\in \V\) is defined by
+\[
+  -\Delta T = 1
+  \quad \text{in } \OmegaD,
+  \qquad
+  T=0
+  \quad \text{on } \partial\OmegaD.
+\]
+Equivalently, \(T\in\V\) satisfies
+\[
+  \int_{\OmegaD}\nabla T\cdot\nabla v\dd x
+  =
+  \int_{\OmegaD} v\dd x
+  \qquad
+  \forall v\in\V.
+\]
+Let
+\[
+  T_{\max} = \operatorname*{ess\,sup}_{x\in\OmegaD} T(x).
+\]
+The torsion thresholds are
+\[
+  c_{T,1} = \alpha_1 T_{\max},
+  \qquad
+  c_{T,2} = \alpha_2 T_{\max}.
+\]
+The torsion smoothing scale is
+\[
+  \epsT = \eta_T(c_{T,2}-c_{T,1}),
+\]
+where \(\eta_T>0\) is a prescribed dimensionless smoothing ratio.
+
+The amplitude of the density window is denoted by \(A>0\).  In the current
+scripts this amplitude is \(\texttt{rho\_amp}\), usually \(A=1\).  For every
+\(\varepsilon>0\), define the clipped logistic idealization
+\[
+  \sig_\varepsilon(z)
+  =
+  \frac{1}{1+\exp(-z/\varepsilon)}.
+\]
+The implementation clips the argument \(z/\varepsilon\) for numerical
+stability, but the mathematical model in this note uses the smooth expression
+above.  Given two thresholds \(a<b\), define the two-sided window
+\[
+  \boxed{
+  \W(s;a,b,\varepsilon)
+  =
+  A\left(\sig_\varepsilon(s-a)-\sig_\varepsilon(s-b)\right).
+  }
+\]
+This window is near zero for \(s\ll a\), near \(A\) for \(a\ll s\ll b\), and
+near zero again for \(s\gg b\).
+
+\section{Torsion Target}
+
+The torsion-designed density is
+\[
+  \rhot(x)
+  =
+  \W(T(x);c_{T,1},c_{T,2},\epsT).
+\]
+The target potential \(\phit\in\V\) is the Poisson response to this density:
+\[
+  -\Delta \phit = \rhot
+  \quad \text{in } \OmegaD,
+  \qquad
+  \phit=0
+  \quad \text{on } \partial\OmegaD.
+\]
+Equivalently,
+\[
+  \int_{\OmegaD}\nabla \phit\cdot\nabla v\dd x
+  =
+  \int_{\OmegaD}\rhot v\dd x
+  \qquad
+  \forall v\in\V.
+\]
+The function \(\phit\) is fixed once \(\OmegaD\), \(A\), \(\eta_T\),
+\(\alpha_1\), and \(\alpha_2\) have been chosen.  It is the quantity that the
+closed-loop semilinear equilibrium will try to match.
+
+\section{Closed-Loop State Equation}
+
+The optimization variables are the semilinear thresholds
+\[
+  \cvec = (c_1,c_2)\in\R^2.
+\]
+They live in the \(\phi\)-scale, not the torsion scale.  The admissible set is
+\[
+  \mathcal C
+  =
+  \left\{
+    (c_1,c_2)\in\R^2:
+    0\le c_1,\quad
+    c_1+\delta_{\min}\le c_2,\quad
+    c_2\le C_{\max}
+  \right\}.
+\]
+Here \(\delta_{\min}>0\) is a prescribed minimum width, and \(C_{\max}>0\) is
+a prescribed upper search bound.  A natural choice is
+\[
+  C_{\max} = \operatorname*{ess\,sup}_{x\in\OmegaD}\phit(x),
+\]
+possibly enlarged by a safety factor if the semilinear solution can exceed
+\(\phit\).
+
+For a fixed continuation stage, the semilinear smoothing scale is
+\[
+  \epsp(\cvec) = \eta_\Phi(c_2-c_1),
+\]
+where \(\eta_\Phi>0\) is the chosen continuation ratio.  In the scripts this
+ratio is one of the values in the sequence
+\[
+  \eta_\Phi\in \{0.11,\ 0.08,\ 0.06\}.
+\]
+For each \(\cvec\in\mathcal C\), define the state
+\(\phi(\cvec)\in\V\) as a solution of
+\[
+  -\Delta\phi(\cvec)
+  =
+  \W\!\left(
+    \phi(\cvec);c_1,c_2,\epsp(\cvec)
+  \right)
+  \quad \text{in } \OmegaD,
+  \qquad
+  \phi(\cvec)=0
+  \quad \text{on } \partial\OmegaD.
+\]
+The corresponding weak form is
+\[
+  \int_{\OmegaD}\nabla\phi(\cvec)\cdot\nabla v\dd x
+  =
+  \int_{\OmegaD}
+    \W\!\left(\phi(\cvec);c_1,c_2,\epsp(\cvec)\right)v
+  \dd x
+  \qquad
+  \forall v\in\V.
+\]
+
+The semilinear problem can have multiple solutions if the window derivative is
+large enough.  Therefore the state map
+\[
+  S:\mathcal C\to\V,
+  \qquad
+  S(\cvec)=\phi(\cvec),
+\]
+must be understood as the branch selected by the chosen numerical procedure:
+the continuation ratios, the Newton initialization, the damping strategy, and
+the linear solver tolerances.  The optimization problem below is therefore a
+closed-loop optimization over this selected solution branch.
+
+\section{Reduced Optimization Problem}
+
+The closed-loop threshold-selection problem is
+\[
+  \boxed{
+  \min_{\cvec\in\mathcal C}
+  J(\cvec)
+  =
+  \frac{1}{2}
+  \left\|S(\cvec)-\phit\right\|_{L^2(\OmegaD)}^2 .
+  }
+\]
+The relative version, useful for reporting, is
+\[
+  J_{\mathrm{rel}}(\cvec)
+  =
+  \frac{
+    \left\|S(\cvec)-\phit\right\|_{L^2(\OmegaD)}
+  }{
+    \left\|\phit\right\|_{L^2(\OmegaD)}
+  },
+\]
+provided \(\|\phit\|_{L^2(\OmegaD)}>0\).  The minimizer is denoted by
+\[
+  \cvec^\star = (c_1^\star,c_2^\star).
+\]
+The corresponding state is
+\[
+  \phistar = S(\cvec^\star).
+\]
+By construction, \(\phistar\) satisfies
+\[
+  -\Delta\phistar
+  =
+  \W(\phistar;c_1^\star,c_2^\star,\epsp(\cvec^\star)),
+  \qquad
+  \phistar|_{\partial\OmegaD}=0,
+\]
+and it is the closest semilinear equilibrium to \(\phit\) among the
+admissible thresholds in the selected solution branch.
+
+\section{First-Order Sensitivity}
+
+This section derives the gradient of \(J\) with respect to \(c_1\) and
+\(c_2\).  The derivation is useful even if the first implementation uses a
+derivative-free search, because it states exactly which closed-loop quantity is
+being optimized.
+
+Let
+\[
+  s\in\R,\qquad
+  \varepsilon>0,\qquad
+  a<b.
+\]
+Define
+\[
+  \ell_a = \sig_\varepsilon(s-a),
+  \qquad
+  \ell_b = \sig_\varepsilon(s-b).
+\]
+The derivatives of the window with respect to its scalar argument and
+thresholds are
+\[
+  \W_s(s;a,b,\varepsilon)
+  =
+  \frac{A}{\varepsilon}
+  \left(\ell_a(1-\ell_a)-\ell_b(1-\ell_b)\right),
+\]
+\[
+  \W_a(s;a,b,\varepsilon)
+  =
+  -\frac{A}{\varepsilon}\ell_a(1-\ell_a),
+  \qquad
+  \W_b(s;a,b,\varepsilon)
+  =
+  \frac{A}{\varepsilon}\ell_b(1-\ell_b).
+\]
+The derivative with respect to \(\varepsilon\) is
+\[
+  \W_\varepsilon(s;a,b,\varepsilon)
+  =
+  A\left[
+    -\frac{s-a}{\varepsilon^2}\ell_a(1-\ell_a)
+    +
+    \frac{s-b}{\varepsilon^2}\ell_b(1-\ell_b)
+  \right].
+\]
+Since
+\[
+  \epsp(\cvec)=\eta_\Phi(c_2-c_1),
+\]
+the total derivatives of the right-hand side with respect to the optimization
+variables are
+\[
+  G_1(s;\cvec)
+  =
+  \W_{c_1}(s;c_1,c_2,\epsp)
+  -
+  \eta_\Phi\W_\varepsilon(s;c_1,c_2,\epsp),
+\]
+\[
+  G_2(s;\cvec)
+  =
+  \W_{c_2}(s;c_1,c_2,\epsp)
+  +
+  \eta_\Phi\W_\varepsilon(s;c_1,c_2,\epsp).
+\]
+Here \(\W_{c_1}\) is \(\W_a\) evaluated at \(a=c_1\), and
+\(\W_{c_2}\) is \(\W_b\) evaluated at \(b=c_2\).
+
+Assume that \(\phi=S(\cvec)\) is a differentiable point of the selected state
+branch.  Let
+\[
+  z_i = \frac{\partial S}{\partial c_i}(\cvec)\in\V,
+  \qquad i\in\{1,2\}.
+\]
+Differentiating the state equation gives the sensitivity equations
+\[
+  -\Delta z_i
+  -
+  \W_s(\phi;c_1,c_2,\epsp) z_i
+  =
+  G_i(\phi;\cvec)
+  \quad \text{in } \OmegaD,
+  \qquad
+  z_i=0
+  \quad \text{on } \partial\OmegaD.
+\]
+In weak form,
+\[
+  \int_{\OmegaD}\nabla z_i\cdot\nabla v\dd x
+  -
+  \int_{\OmegaD}
+    \W_s(\phi;c_1,c_2,\epsp) z_i v
+  \dd x
+  =
+  \int_{\OmegaD}G_i(\phi;\cvec)v\dd x
+  \qquad
+  \forall v\in\V.
+\]
+The direct reduced gradient is
+\[
+  \frac{\partial J}{\partial c_i}(\cvec)
+  =
+  \int_{\OmegaD}(\phi-\phit)z_i\dd x,
+  \qquad i\in\{1,2\}.
+\]
+
+\section{Adjoint Gradient}
+
+Solving two sensitivity equations is cheap in this two-parameter problem, but
+the adjoint form is cleaner and extends to richer parameterizations.  Define
+the linearized state operator
+\[
+  \mathcal L_\phi z
+  =
+  -\Delta z
+  -
+  \W_s(\phi;c_1,c_2,\epsp)z,
+  \qquad z\in\V.
+\]
+With homogeneous Dirichlet boundary conditions, this operator is formally
+self-adjoint in \(L^2(\OmegaD)\).  The adjoint variable \(p\in\V\) is defined
+by
+\[
+  \mathcal L_\phi p = \phi-\phit
+  \quad \text{in } \OmegaD,
+  \qquad
+  p=0
+  \quad \text{on } \partial\OmegaD.
+\]
+Equivalently,
+\[
+  \int_{\OmegaD}\nabla p\cdot\nabla v\dd x
+  -
+  \int_{\OmegaD}
+    \W_s(\phi;c_1,c_2,\epsp)p v
+  \dd x
+  =
+  \int_{\OmegaD}(\phi-\phit)v\dd x
+  \qquad
+  \forall v\in\V.
+\]
+Using the sensitivity equations,
+\[
+  \boxed{
+  \frac{\partial J}{\partial c_i}(\cvec)
+  =
+  \int_{\OmegaD} p(x)G_i(\phi(x);\cvec)\dd x,
+  \qquad i\in\{1,2\}.
+  }
+\]
+
+For an unconstrained interior minimizer, the necessary first-order conditions
+are
+\[
+  \frac{\partial J}{\partial c_1}(\cvec^\star)=0,
+  \qquad
+  \frac{\partial J}{\partial c_2}(\cvec^\star)=0.
+\]
+For the constrained admissible set \(\mathcal C\), the correct optimality
+condition is the Karush--Kuhn--Tucker condition for the inequalities
+\[
+  -c_1\le 0,\qquad
+  c_1+\delta_{\min}-c_2\le 0,\qquad
+  c_2-C_{\max}\le 0.
+\]
+If none of these inequalities is active, the unconstrained equations above
+hold.  If one or more inequalities are active, the gradient need not vanish;
+it must be balanced by nonnegative multipliers attached to the active
+constraints.
+
+\section{Discrete Version}
+
+Let \(\mathcal T_h\) be a conforming triangular mesh of \(\OmegaD\), and let
+\[
+  V_h
+  =
+  \{v_h\in C^0(\overline\OmegaD):
+    v_h|_K\in\mathbb P_p(K)\ \forall K\in\mathcal T_h,\
+    v_h|_{\partial\OmegaD}=0\}
+\]
+be the continuous Lagrange space of polynomial degree \(p\).  This is the
+space used by the DOLFINx comparison runner.  The discrete torsion
+\(T_h\in V_h\), torsion target density \(\rho_{T,h}\), and target potential
+\(\phi_{T,h}\in V_h\) are defined by replacing \(T\), \(\rhot\), and \(\phit\)
+with their finite element counterparts.
+
+For each \(\cvec\in\mathcal C\), the discrete state
+\(\phi_h(\cvec)\in V_h\) satisfies
+\[
+  \int_{\OmegaD}\nabla\phi_h(\cvec)\cdot\nabla v_h\dd x
+  =
+  \int_{\OmegaD}
+    \W(\phi_h(\cvec);c_1,c_2,\epsp(\cvec))v_h
+  \dd x
+  \qquad
+  \forall v_h\in V_h.
+\]
+The discrete reduced objective is
+\[
+  J_h(\cvec)
+  =
+  \frac{1}{2}
+  \|\phi_h(\cvec)-\phi_{T,h}\|_{L^2(\OmegaD)}^2.
+\]
+All integrals in \(J_h\), the state residual, the sensitivity equations, and
+the adjoint equation should be evaluated using a quadrature rule of sufficient
+degree for the selected polynomial order and the steepness of
+\(\W\).  Since \(\W\) is not a polynomial, increasing polynomial degree does
+not by itself remove the need for adequate quadrature near the two transition
+layers \(s\approx c_1\) and \(s\approx c_2\).
+
+\section{Relation to the Current v2 Fitted Window}
+
+The current v2 runner fits \(c_1\) and \(c_2\) with the surrogate objective
+\[
+  \min_{(c_1,c_2)\in\mathcal C}
+  \left\|
+    \W(\phi_{T,h};c_1,c_2,\epsp(c_1,c_2))
+    -
+    \rho_{T,h}
+  \right\|_{L^2(\OmegaD)}^2.
+\]
+This is a pointwise right-hand-side fit on quadrature samples.  It is fast
+because it does not solve the semilinear state equation for every candidate
+\((c_1,c_2)\).  However, it is not the closed-loop objective above.  It can
+fail for three distinct reasons:
+\begin{enumerate}[label=(\roman*)]
+  \item The level sets of \(\phi_{T,h}\) need not align well enough with the
+  level sets of \(T_h\), even though \(\phi_{T,h}\) is generated from the
+  torsion-designed density.
+  \item The final semilinear state \(\phi_h(\cvec)\) need not stay close to
+  \(\phi_{T,h}\) after solving the nonlinear equation
+  \[
+    -\Delta\phi_h=\W(\phi_h;c_1,c_2,\epsp).
+  \]
+  \item A right-hand-side \(L^2\) fit does not enforce mass, active-set
+  overlap, plateau-set overlap, or closeness of the final potential.
+\end{enumerate}
+The closed-loop objective removes the second mismatch by evaluating the
+candidate thresholds through the nonlinear PDE itself.
+
+\section{Possible Algorithms}
+
+\subsection{Coarse Closed-Loop Search}
+
+The most robust first implementation is a coarse reduced search:
+\begin{enumerate}[label=\arabic*.]
+  \item Fix \(\alpha_1\), \(\alpha_2\), \(\eta_T\), and \(\eta_\Phi\).
+  \item Compute \(T_h\), \(\rho_{T,h}\), and \(\phi_{T,h}\).
+  \item Choose a coarse grid of admissible pairs \((c_1,c_2)\in\mathcal C\).
+  \item For each pair, solve the semilinear state equation to obtain
+  \(\phi_h(c_1,c_2)\).
+  \item Score each pair with \(J_h(c_1,c_2)\).
+  \item Refine the search around the best pair.
+\end{enumerate}
+This method is expensive but directly measures the desired quantity.  It is
+appropriate for validating the formulation and producing reference data.
+
+\subsection{Adjoint Reduced Optimization}
+
+Once the objective is validated, one can use the adjoint gradient:
+\begin{enumerate}[label=\arabic*.]
+  \item For the current pair \(\cvec\), solve the state equation for
+  \(\phi_h(\cvec)\).
+  \item Solve the adjoint equation for \(p_h\).
+  \item Assemble the gradient components
+  \[
+    \frac{\partial J_h}{\partial c_i}
+    =
+    \int_{\OmegaD}p_hG_i(\phi_h;\cvec)\dd x,
+    \qquad i=1,2.
+  \]
+  \item Take a constrained optimization step in \(\mathcal C\).
+  \item Repeat until the projected gradient and objective decrease satisfy
+  prescribed tolerances.
+\end{enumerate}
+This is the natural method if the same idea is later extended from two
+thresholds to a larger parameterization of the nonlinear window.
+
+\subsection{Fixed Smoothing First, Continuation Later}
+
+The optimization problem should first be posed at one fixed value of
+\(\eta_\Phi\).  That is, during one outer optimization run we fix
+\[
+  \epsp(\cvec)=\eta_\Phi(c_2-c_1)
+\]
+with a single chosen value of \(\eta_\Phi\), for example
+\(\eta_\Phi=0.06\).  The outer optimizer then sees a stationary objective
+\[
+  J_{h,\eta_\Phi}(\cvec)
+  =
+  \frac{1}{2}
+  \|\phi_{h,\eta_\Phi}(\cvec)-\phi_{T,h}\|_{L^2(\OmegaD)}^2,
+\]
+where \(\phi_{h,\eta_\Phi}(\cvec)\) solves the semilinear problem with that
+fixed smoothing ratio.
+
+Only after this fixed-\(\eta_\Phi\) problem is understood should one run a
+continuation sequence.  A continuation sequence is a family of optimization
+problems
+\[
+  \eta_\Phi^{(0)}>\eta_\Phi^{(1)}>\cdots>\eta_\Phi^{(m)}
+\]
+where the optimizer for stage \(j+1\) is initialized with the best pair found
+at stage \(j\).  This is a continuation in the outer reduced problem, not only
+in the inner Newton solve.  It avoids mixing two effects in the first test:
+\begin{enumerate}[label=(\roman*)]
+  \item whether the closed-loop objective identifies useful thresholds, and
+  \item whether the sharp-window continuation path is numerically stable.
+\end{enumerate}
+
+\subsection{Inexact Reduced Optimization}
+
+The exact reduced method assumes that, for every candidate
+\(\cvec=(c_1,c_2)\), the state equation is solved exactly.  In computation,
+this is neither possible nor necessary.  Let the discrete semilinear residual
+be the functional
+\[
+  F_h(\phi_h,\cvec;v_h)
+  =
+  \int_{\OmegaD}\nabla\phi_h\cdot\nabla v_h\dd x
+  -
+  \int_{\OmegaD}
+    \W(\phi_h;c_1,c_2,\epsp(\cvec))v_h
+  \dd x,
+  \qquad v_h\in V_h.
+\]
+The exact state equation is
+\[
+  F_h(\phi_h,\cvec;v_h)=0
+  \qquad
+  \forall v_h\in V_h.
+\]
+An inexact reduced method replaces the exact state
+\(\phi_h(\cvec)\) by an approximate state \(\widetilde\phi_h(\cvec)\) such
+that
+\[
+  \|F_h(\widetilde\phi_h,\cvec;\cdot)\|_{V_h'} \le \tau_{\mathrm{state}},
+\]
+where \(V_h'\) is the algebraic dual of \(V_h\), and
+\(\tau_{\mathrm{state}}\) is a chosen state tolerance.  The norm can be the
+energy-dual norm
+\[
+  \|F_h\|_{V_h'}^2
+  =
+  \bm r^T \bm A^{-1}\bm r,
+\]
+where \(\bm r\) is the residual vector and \(\bm A\) is the stiffness matrix,
+or a cheaper Euclidean residual norm for early experiments.
+
+The important point is that the inner Newton solve does not need to reach
+machine precision.  It only needs to be accurate enough that the error in the
+reduced objective and adjoint gradient is smaller than the optimization
+signal.  A practical rule is
+\[
+  \|F_h(\widetilde\phi_h,\cvec;\cdot)\|_{V_h'}
+  \le
+  \theta_k
+  \max\{1,\|\nabla_{\cvec}J_h(\cvec)\|_2\},
+\]
+where \(0<\theta_k<1\) is tightened as the outer optimization converges.
+Early outer iterations can use loose Newton tolerances.  Near a candidate
+minimum, the state tolerance must be tightened; otherwise the adjoint gradient
+can point in a direction dominated by state-solve error.
+
+Operationally, this suggests the following first implementation:
+\begin{enumerate}[label=\arabic*.]
+  \item Fix one \(\eta_\Phi\).
+  \item Start from the v2 fitted pair or from a successful band-study pair.
+  \item For each outer step, warm-start Newton from the previous semilinear
+  state.
+  \item Stop the inner Newton solve when the state residual is below an
+  outer-iteration-dependent tolerance, not necessarily machine precision.
+  \item Compute the adjoint and gradient at the approximate state.
+  \item Take a line-searched constrained step in \(\mathcal C\).
+  \item If the line search becomes ambiguous, recompute the current state with
+  a stricter tolerance and retry.
+\end{enumerate}
+
+\subsection{All-at-Once Formulation in \texorpdfstring{\(\mathcal C\times V_h\)}{C x Vh}}
+
+It is natural to ask whether one can avoid fully solving the Newton problem
+for each \(\cvec\) by optimizing directly over both the thresholds and the
+state:
+\[
+  (\cvec,\phi_h)\in\mathcal C\times V_h.
+\]
+The mathematically faithful all-at-once problem is the equality-constrained
+optimization problem
+\[
+  \boxed{
+  \begin{aligned}
+  \min_{\cvec\in\mathcal C,\ \phi_h\in V_h}
+  \quad&
+  \frac{1}{2}\|\phi_h-\phi_{T,h}\|_{L^2(\OmegaD)}^2,\\
+  \text{subject to}\quad&
+  F_h(\phi_h,\cvec;v_h)=0
+  \qquad \forall v_h\in V_h.
+  \end{aligned}
+  }
+\]
+This formulation does not require an inner nonlinear solve at every outer
+threshold update.  Instead, one solves the KKT system for
+\((\phi_h,\cvec,p_h)\), where \(p_h\in V_h\) is the adjoint multiplier for the
+state equation.  The first-order equations are:
+\[
+  F_h(\phi_h,\cvec;v_h)=0
+  \qquad
+  \forall v_h\in V_h,
+\]
+\[
+  \int_{\OmegaD}\nabla p_h\cdot\nabla w_h\dd x
+  -
+  \int_{\OmegaD}
+    \W_s(\phi_h;c_1,c_2,\epsp)p_h w_h
+  \dd x
+  =
+  \int_{\OmegaD}(\phi_h-\phi_{T,h})w_h\dd x
+  \qquad
+  \forall w_h\in V_h,
+\]
+and
+\[
+  \int_{\OmegaD}p_hG_i(\phi_h;\cvec)\dd x
+  +
+  \text{constraint terms for }\mathcal C
+  =
+  0,
+  \qquad i=1,2.
+\]
+This is equivalent to the reduced adjoint optimality system when the state
+equation is exactly satisfied.  A Newton or SQP method applied to this KKT
+system would update \(\phi_h\), \(p_h\), and \(\cvec\) simultaneously.
+
+There is also a simpler penalty alternative:
+\[
+  \min_{\cvec\in\mathcal C,\ \phi_h\in V_h}
+  \frac{1}{2}\|\phi_h-\phi_{T,h}\|_{L^2(\OmegaD)}^2
+  +
+  \frac{\gamma}{2}
+  \|F_h(\phi_h,\cvec;\cdot)\|_{V_h'}^2.
+\]
+For finite \(\gamma\), this is not the same problem as the constrained
+closed-loop formulation.  A minimizer may trade state-equation residual against
+potential matching.  This can be useful as a globalization or diagnostic
+device, but it should not be interpreted as the final torsion-initialized Newton threshold
+selection problem unless the residual term is driven sufficiently close to
+zero.
+
+The all-at-once approach is attractive because it may avoid oversolving the
+state equation for poor threshold pairs.  Its cost is complexity: the KKT
+matrix is larger, generally indefinite, and its globalization is more delicate
+than a line-searched reduced method.  For this reason, the recommended first
+implementation is an inexact reduced adjoint method.  If that method shows the
+right trend but spends too much time in inner Newton solves, then an all-at-once
+SQP or residual-penalty method becomes the next reasonable abstraction.
+
+\subsection{Residual-Penalty All-at-Once Prototype}
+
+The first all-at-once implementation should use a residual-penalty objective
+rather than the full KKT system.  This is not the final constrained problem,
+but it is much simpler to debug and it tests whether simultaneous updates in
+\(\mathcal C\times V_h\) can find useful window thresholds without repeatedly
+solving the semilinear state equation to high accuracy.
+
+Use center-width variables
+\[
+  m=\frac{c_1+c_2}{2},
+  \qquad
+  w=c_2-c_1,
+\]
+so that
+\[
+  c_1=m-\frac{w}{2},
+  \qquad
+  c_2=m+\frac{w}{2},
+  \qquad
+  \epsp=\eta_\Phi w.
+\]
+The admissible set is enforced by projection:
+\[
+  w_{\min}\le w\le C_{\max},
+  \qquad
+  \frac{w}{2}\le m\le C_{\max}-\frac{w}{2}.
+\]
+
+Let \(\bm r(\phi_h,m,w)\) be the assembled residual vector associated with
+\[
+  F_h(\phi_h,m,w;v_h)
+  =
+  \int_{\OmegaD}\nabla\phi_h\cdot\nabla v_h\dd x
+  -
+  \int_{\OmegaD}\W(\phi_h;c_1,c_2,\eta_\Phi w)v_h\dd x.
+\]
+The prototype minimizes
+\[
+  \boxed{
+  \begin{aligned}
+  \mathcal J_\gamma(\phi_h,m,w)
+  &=
+  \frac{\lambda_\phi}{2}
+  \|\phi_h-\phi_{T,h}\|_{L^2(\OmegaD)}^2\\
+  &\quad+
+  \frac{\lambda_\rho}{2}
+  \|\rho_h-\rho_{T,h}\|_{L^2(\OmegaD)}^2\\
+  &\quad+
+  \frac{\lambda_M}{2}
+  \left(\int_{\OmegaD}(\rho_h-\rho_{T,h})\dd x\right)^2\\
+  &\quad+
+  \frac{\gamma}{2}\|\bm r(\phi_h,m,w)\|_2^2,
+  \end{aligned}
+  }
+\]
+where
+\[
+  \rho_h=\W(\phi_h;c_1,c_2,\eta_\Phi w).
+\]
+The weights satisfy
+\[
+  \lambda_\phi\ge0,\qquad
+  \lambda_\rho\ge0,\qquad
+  \lambda_M\ge0,\qquad
+  \gamma>0.
+\]
+The density and mass terms are included because the intended practical target
+is not only closeness of potentials, but also closeness of the designed band
+and the final semilinear band.  Active-set and plateau-set areas should remain
+diagnostics in this first prototype because their indicator definitions are
+nonsmooth.
+
+The scalar derivatives needed for the \(m,w\) update are
+\[
+  \W_m
+  =
+  \W_{c_1}+\W_{c_2},
+\]
+and
+\[
+  \W_w
+  =
+  -\frac{1}{2}\W_{c_1}
+  +
+  \frac{1}{2}\W_{c_2}
+  +
+  \eta_\Phi\W_\varepsilon.
+\]
+The residual-penalty derivatives with respect to \(m\) and \(w\) are
+\[
+  \frac{\partial}{\partial m}
+  \frac{\gamma}{2}\|\bm r\|_2^2
+  =
+  \gamma\,\bm r^T\bm r_m,
+  \qquad
+  \frac{\partial}{\partial w}
+  \frac{\gamma}{2}\|\bm r\|_2^2
+  =
+  \gamma\,\bm r^T\bm r_w,
+\]
+where \(\bm r_m\) and \(\bm r_w\) are the assembled vectors for
+\[
+  -\int_{\OmegaD}\W_m(\phi_h;m,w)v_h\dd x,
+  \qquad
+  -\int_{\OmegaD}\W_w(\phi_h;m,w)v_h\dd x.
+\]
+The coefficient gradient with respect to \(\phi_h\) is
+\[
+  \bm g_\phi
+  =
+  \bm g_{\mathrm{data}}
+  +
+  \gamma \bm J_\phi^T\bm r,
+\]
+where \(\bm J_\phi\) is the Jacobian of \(\bm r\) with respect to
+\(\phi_h\).  In weak form,
+\[
+  \bm J_\phi
+  \leftrightarrow
+  \int_{\OmegaD}\nabla z_h\cdot\nabla v_h\dd x
+  -
+  \int_{\OmegaD}\W_s(\phi_h;c_1,c_2,\eta_\Phi w)z_hv_h\dd x.
+\]
+
+Use a preconditioned descent direction for the state variable:
+\[
+  \bm P\bm d_\phi=-\bm g_\phi,
+\]
+with
+\[
+  \bm P
+  \leftrightarrow
+  \int_{\OmegaD}\nabla z_h\cdot\nabla v_h\dd x
+  +
+  \mu_P\int_{\OmegaD}z_hv_h\dd x.
+\]
+The threshold direction is the negative scalar gradient in \((m,w)\), scaled
+so that the un-line-searched threshold update is not larger than a prescribed
+fraction of \(C_{\max}\).  A backtracking Armijo line search is then applied
+to the combined step
+\[
+  (\phi_h,m,w)
+  \leftarrow
+  (\phi_h,m,w)
+  +
+  \alpha(d_\phi,d_m,d_w),
+\]
+with projection of \((m,w)\) after each trial update.
+
+Every iteration should report both objective quality and state feasibility:
+\[
+  \mathcal J_\gamma,\quad
+  \|\phi_h-\phi_{T,h}\|_{L^2},\quad
+  \|\rho_h-\rho_{T,h}\|_{L^2},\quad
+  \left|\int_{\OmegaD}(\rho_h-\rho_{T,h})\dd x\right|,
+  \quad
+  \|\bm r\|_2.
+\]
+If the band metrics improve but \(\|\bm r\|_2\) remains large, the iterate is
+not a valid semilinear equilibrium.  It is only a useful search state.
+
+\subsection{Composite Diagnostics}
+
+The pure potential objective is
+\(\|\phi_h-\phi_{T,h}\|_{L^2(\OmegaD)}\).  If the scientific goal is closer to
+matching density geometry, then one can add terms:
+\[
+  J_{\mathrm{comp}}(\cvec)
+  =
+  \frac{1}{2}\|\phi_h(\cvec)-\phi_{T,h}\|_{L^2(\OmegaD)}^2
+  +
+  \frac{\lambda_m}{2}
+  \left(\int_{\OmegaD}\rho_h(\cvec)-\rho_{T,h}\dd x\right)^2
+  +
+  \frac{\lambda_\rho}{2}
+  \|\rho_h(\cvec)-\rho_{T,h}\|_{L^2(\OmegaD)}^2.
+\]
+Here
+\[
+  \rho_h(\cvec)
+  =
+  \W(\phi_h(\cvec);c_1,c_2,\epsp(\cvec)),
+\]
+and \(\lambda_m\ge 0\), \(\lambda_\rho\ge 0\) are user-chosen weights.  Active
+set and plateau set overlaps are useful diagnostics, but their sharp
+indicator definitions are nonsmooth.  If they are used in optimization rather
+than only reporting, they should be replaced by smooth approximations.
+
+\section{Implementation Implications}
+
+The closed-loop formulation changes the role of \(c_1\) and \(c_2\):
+\begin{itemize}
+  \item \(\alpha_1\) and \(\alpha_2\) define the torsion target only.
+  \item \(c_1\) and \(c_2\) are free \(\phi\)-scale parameters selected by a
+  reduced optimization problem.
+  \item The current v2 histogram fit can be used as an initial guess, but not
+  as the final definition of optimality.
+  \item A fair test of the idea should compare \(J_h(c_1,c_2)\), final mass,
+  active overlap, and density mismatch after the semilinear PDE has converged.
+\end{itemize}
+
+The key mathematical object is therefore the reduced map
+\[
+  (c_1,c_2)
+  \longmapsto
+  \phi_h(c_1,c_2),
+\]
+where \(\phi_h(c_1,c_2)\) is obtained by solving the nonlinear PDE.  Any
+selection rule that does not evaluate this map is a surrogate and should be
+validated against the closed-loop objective.
+
+\end{document}

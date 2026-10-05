@@ -1,0 +1,300 @@
+// ================================================================
+// Adapt a FreeFEM mesh from imported phi and rho fields.
+//
+// Input files, by default:
+//	equilibrium_mesh.msh
+//	phi_dof.txt
+//	rho_dof.txt
+//
+// Output files:
+//	adapted_equilibrium_mesh.msh
+//	adapted_phi_dof.txt
+//	adapted_rho_dof.txt
+//	adapted_equilibrium.vtu
+//
+// Usage examples:
+//	FreeFem++ adapt_mesh_from_phi_rho.edp
+//	FreeFem++ adapt_mesh_from_phi_rho.edp -mesh equilibrium_mesh.msh -phi phi_dof.txt -rho rho_dof.txt -epsPhi 0.02 -plot 1
+// ================================================================
+
+include "getARGV.idp"
+load "iovtk"
+load "gmsh"
+
+// ------------------------------------------------------------
+// Input/output options
+// ------------------------------------------------------------
+string inMeshFile = getARGV("-mesh", "equilibrium_mesh.msh");
+string inPhiFile  = getARGV("-phi",  "phi_dof.txt");
+string inRhoFile  = getARGV("-rho",  "rho_dof.txt");
+
+string outMeshFile = getARGV("-outmesh", "adapted_equilibrium_mesh.msh");
+string outPhiFile  = getARGV("-outphi",  "adapted_phi_dof.txt");
+string outRhoFile  = getARGV("-outrho",  "adapted_rho_dof.txt");
+string outVTKFile  = getARGV("-outvtk",  "adapted_equilibrium.vtu");
+
+int plt = getARGV("-plot", 0);
+
+// Boundary label used in your problem.
+// This script checks that the adapted mesh still has boundary edges with this label.
+int bLabel = getARGV("-bLabel", 1);
+
+// ------------------------------------------------------------
+// Adaptation parameters
+// ------------------------------------------------------------
+// If epsPhi is known from the semilinear window, pass it with -epsPhi.
+// The script estimates a local band target h ~ hFactor*epsPhi/max|grad phi|.
+real epsPhi = getARGV("-epsPhi", 0.02);
+real hFactor = getARGV("-hFactor", 0.25);
+
+// Hard limits for h.
+real hminUser = getARGV("-hmin", 0.003);
+real hmaxUser = getARGV("-hmax", 0.15);
+
+// adaptmesh interpolation error target.
+// Smaller err -> more vertices.
+real errAdapt = getARGV("-err", 0.008);
+
+// Geometry error. Smaller errg follows curved/nonconvex boundary more closely.
+real errgAdapt = getARGV("-errg", 0.001);
+
+// Maximum vertices allowed.
+int nbvxAdapt = getARGV("-nbvx", 500000);
+
+// Ratio controls grading between neighboring element sizes.
+// Smaller is smoother but may create more vertices.
+real ratioAdapt = getARGV("-ratio", 1.4);
+
+// Anisotropy cap. Larger allows more stretched elements.
+// For narrow bands, mild anisotropy is useful, but do not make this too large at first.
+real anisomaxAdapt = getARGV("-anisomax", 5.0);
+
+// Number of adaptmesh passes. 2 is often better than 1 for narrow layers.
+int nAdaptPass = getARGV("-npass", 2);
+
+// ------------------------------------------------------------
+// Logging
+// ------------------------------------------------------------
+real tGlobal = clock();
+real tBlock;
+
+cout << endl;
+cout << "========== START ADAPT MESH FROM PHI/RHO ==========" << endl;
+cout << "ADAPT_HEADER pass nt ndof hmin hmax err errg nbvx ratio anisomax maxGradPhi hBandTarget massRho maxRho bdEdges status" << endl;
+
+// ------------------------------------------------------------
+// Read original mesh and fields
+// ------------------------------------------------------------
+tBlock = clock();
+mesh Th = readmesh(inMeshFile);
+cout << "READ_MESH file=" << inMeshFile << " nt=" << Th.nt << " time=" << clock()-tBlock << endl;
+
+fespace Vh(Th, P2);
+Vh phi, rho;
+
+{
+	ifstream fphi(inPhiFile);
+	fphi >> phi[];
+}
+
+{
+	ifstream frho(inRhoFile);
+	frho >> rho[];
+}
+
+cout << "READ_FIELDS "
+	<< "phiFile=" << inPhiFile << " "
+	<< "rhoFile=" << inRhoFile << " "
+	<< "ndof=" << Vh.ndof << " "
+	<< "minPhi=" << phi[].min << " "
+	<< "maxPhi=" << phi[].max << " "
+	<< "minRho=" << rho[].min << " "
+	<< "maxRho=" << rho[].max << " "
+	<< "massRho=" << int2d(Th)(rho)
+	<< endl;
+
+if (plt == 1)
+{
+	plot(Th, wait=true, cmm="Original mesh");
+	plot(phi, fill=true, value=true, wait=true, nbiso=60, cmm="Original phi");
+	plot(rho, fill=true, value=true, wait=true, nbiso=60, cmm="Original rho");
+}
+
+// ------------------------------------------------------------
+// Adaptation loop
+// ------------------------------------------------------------
+for (int ipass = 0; ipass < nAdaptPass; ipass++)
+{
+	// Rebuild the space on the current mesh.
+	fespace Wh(Th, P2);
+	Wh phiW = phi;
+	Wh rhoW = rho;
+	Wh gradPhiMag = sqrt(dx(phiW)^2 + dy(phiW)^2);
+	Wh gradRhoMag = sqrt(dx(rhoW)^2 + dy(rhoW)^2);
+
+	real maxGradPhi = gradPhiMag[].max;
+	real hBandTarget = hFactor*epsPhi/max(maxGradPhi, 1e-14);
+
+	// Clamp target h.
+	real hminUsed = max(hminUser, min(0.5*hmaxUser, hBandTarget));
+	real hmaxUsed = hmaxUser;
+
+	// Count boundary edges with requested label.
+	int bdEdges = 0;
+	for (int ibe = 0; ibe < Th.nbe; ibe++)
+	{
+		if (Th.be(ibe).label == bLabel)
+		{
+			bdEdges++;
+		}
+	}
+
+	cout << "ADAPT_START "
+		<< ipass << " "
+		<< Th.nt << " "
+		<< Wh.ndof << " "
+		<< hminUsed << " "
+		<< hmaxUsed << " "
+		<< errAdapt << " "
+		<< errgAdapt << " "
+		<< nbvxAdapt << " "
+		<< ratioAdapt << " "
+		<< anisomaxAdapt << " "
+		<< maxGradPhi << " "
+		<< hBandTarget << " "
+		<< int2d(Th)(rhoW) << " "
+		<< rhoW[].max << " "
+		<< bdEdges << " "
+		<< "BEGIN"
+		<< endl;
+
+	// Use rho and phi as adaptation fields.
+	// rho refines the band edges; phi helps preserve potential level-set geometry.
+	tBlock = clock();
+	mesh ThNew = adaptmesh(
+		Th,
+		rhoW,
+		phiW,
+		err=errAdapt,
+		errg=errgAdapt,
+		hmin=hminUsed,
+		hmax=hmaxUsed,
+		nbvx=nbvxAdapt,
+		ratio=ratioAdapt,
+		anisomax=anisomaxAdapt,
+		nbsmooth=5,
+		nbjacoby=5
+	);
+
+	// Interpolate fields to adapted mesh.
+	fespace Xh(ThNew, P2);
+	Xh phiNew = phiW;
+	Xh rhoNew = rhoW;
+
+	// Replace current mesh and functions.
+	Th = ThNew;
+	fespace VhNew(Th, P2);
+	phi = phiNew;
+	rho = rhoNew;
+
+	// Check boundary labels after adaptation.
+	int bdEdgesNew = 0;
+	for (int jbe = 0; jbe < Th.nbe; jbe++)
+	{
+		if (Th.be(jbe).label == bLabel)
+		{
+			bdEdgesNew++;
+		}
+	}
+
+	cout << "ADAPT_DONE "
+		<< ipass << " "
+		<< Th.nt << " "
+		<< VhNew.ndof << " "
+		<< hminUsed << " "
+		<< hmaxUsed << " "
+		<< errAdapt << " "
+		<< errgAdapt << " "
+		<< nbvxAdapt << " "
+		<< ratioAdapt << " "
+		<< anisomaxAdapt << " "
+		<< maxGradPhi << " "
+		<< hBandTarget << " "
+		<< int2d(Th)(rho) << " "
+		<< rho[].max << " "
+		<< bdEdgesNew << " "
+		<< "time=" << clock()-tBlock
+		<< endl;
+
+	if (bdEdgesNew == 0)
+	{
+		cout << "WARNING no_boundary_edges_with_label bLabel=" << bLabel << " after_adapt_pass=" << ipass << endl;
+	}
+}
+
+// ------------------------------------------------------------
+// Final diagnostics
+// ------------------------------------------------------------
+fespace VhFinal(Th, P2);
+VhFinal phiFinal = phi;
+VhFinal rhoFinal = rho;
+VhFinal gradPhiFinal = sqrt(dx(phiFinal)^2 + dy(phiFinal)^2);
+VhFinal gradRhoFinal = sqrt(dx(rhoFinal)^2 + dy(rhoFinal)^2);
+
+int bdEdgesFinal = 0;
+for (int kbe = 0; kbe < Th.nbe; kbe++)
+{
+	if (Th.be(kbe).label == bLabel)
+	{
+		bdEdgesFinal++;
+	}
+}
+
+cout << "FINAL_ADAPT "
+	<< "nt=" << Th.nt << " "
+	<< "ndof=" << VhFinal.ndof << " "
+	<< "minPhi=" << phiFinal[].min << " "
+	<< "maxPhi=" << phiFinal[].max << " "
+	<< "minRho=" << rhoFinal[].min << " "
+	<< "maxRho=" << rhoFinal[].max << " "
+	<< "massRho=" << int2d(Th)(rhoFinal) << " "
+	<< "maxGradPhi=" << gradPhiFinal[].max << " "
+	<< "maxGradRho=" << gradRhoFinal[].max << " "
+	<< "bdEdges=" << bdEdgesFinal
+	<< endl;
+
+if (plt == 1)
+{
+	plot(Th, wait=true, cmm="Adapted mesh");
+	plot(phiFinal, fill=true, value=true, wait=true, nbiso=60, cmm="Adapted phi");
+	plot(rhoFinal, fill=true, value=true, wait=true, nbiso=60, cmm="Adapted rho");
+	plot(gradRhoFinal, fill=true, value=true, wait=true, nbiso=60, cmm="Adapted |grad rho|");
+}
+
+// ------------------------------------------------------------
+// Export adapted mesh and fields
+// ------------------------------------------------------------
+savemesh(Th, outMeshFile);
+
+{
+	ofstream fphi(outPhiFile);
+	fphi << phiFinal[];
+}
+
+{
+	ofstream frho(outRhoFile);
+	frho << rhoFinal[];
+}
+
+savevtk(outVTKFile, Th, phiFinal, rhoFinal, gradPhiFinal, gradRhoFinal,
+	dataname="phi rho gradPhi gradRho");
+
+cout << "EXPORT "
+	<< outMeshFile << " "
+	<< outPhiFile << " "
+	<< outRhoFile << " "
+	<< outVTKFile
+	<< endl;
+
+cout << "TIME_TOTAL " << clock()-tGlobal << endl;
+cout << "========== END ADAPT MESH FROM PHI/RHO ==========" << endl;

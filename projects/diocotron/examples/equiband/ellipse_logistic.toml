@@ -1,0 +1,19 @@
+# Use --seed homotopy --m-start 0.035 --m-stop 0.040.
+# The inverse target is empirical: no width/distance pair formula is imposed.
+schema_version = 2
+geometry = "ellipse"
+ellipse_ratio = 0.7
+mesh_size = 0.08
+quadrature_degree = 12
+number_of_rays = 64
+samples_per_ray = 200
+center_stop_radius = 0.0001
+backend = "numba"
+threads = 1
+target_distance = 0.60
+
+[band]
+kind = "logistic"
+threshold_width_delta = 0.02
+smoothing_mode = "relative_to_delta"
+relative_epsilon = 0.08
