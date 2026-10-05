@@ -26,6 +26,28 @@ def publication_style(*, font_size=9.0):
         yield
 
 
+def apply_figure_theme(figure, foreground, *, transparent=True):
+    """Recolor text, ticks and frames for a page theme, optionally on a clear background.
+
+    Plotted data and colormaps are unchanged. A transparent figure takes the
+    color of the page it is shown on, so a dark ``foreground`` suits dark pages
+    and a light one suits dark-mode pages.
+    """
+    import matplotlib as mpl
+
+    if transparent:
+        figure.patch.set_alpha(0)
+    for ax in figure.axes:
+        if transparent:
+            ax.set_facecolor('none')
+        ax.tick_params(colors=foreground, which='both')
+        for spine in ax.spines.values():
+            spine.set_edgecolor(foreground)
+    for text in figure.findobj(mpl.text.Text):
+        text.set_color(foreground)
+    return figure
+
+
 def save_publication_figure(figure, stem, *, formats=('pdf', 'svg', 'png'), dpi=220):
     """Export one figure as embedded-font PDF, portable SVG and/or PNG."""
     stem = Path(stem)
@@ -111,4 +133,4 @@ def add_direction_glyphs(ax, x, y, vx, vy, *, length=0.08, headless=False,
                      color=color, alpha=alpha, width=.004)
 
 
-__all__ = ['publication_style', 'save_publication_figure', 'add_matplotlib_mesh', 'add_direction_glyphs']
+__all__ = ['apply_figure_theme', 'publication_style', 'save_publication_figure', 'add_matplotlib_mesh', 'add_direction_glyphs']

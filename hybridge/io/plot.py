@@ -1000,10 +1000,106 @@ def plot_scalar_raster_panels_matplotlib(
     return fig
 
 
+def _plot_postprocessed_comparison(
+        field: DGField,
+        postprocessed: DGField,
+        exact_solution: Callable,
+        *,
+        resolution: int,
+        exact_resolution: int | str | None,
+        title: str,
+        show_mesh: bool,
+        show: bool,
+        off_screen: bool,
+        window_size: tuple[int, int],
+):
+    """Plot the HDG solution, its postprocessed field and the exact solution on one scale."""
+    mesh = field.space.mesh
+    post_resolution = resolve_postprocessed_plot_resolution(
+        resolution, order=field.space.order, num_elements=mesh.num_tri,
+    )
+    numerical_points, _, numerical_values = sample_field_on_elements(field, resolution=resolution)
+    post_points, _, post_values = sample_field_on_elements(postprocessed, resolution=post_resolution)
+    exact_points, _, exact_values = sample_callable_on_elements(
+        mesh,
+        exact_solution,
+        resolution=_resolve_exact_plot_resolution(
+            exact_resolution, numerical_resolution=post_resolution, num_elements=mesh.num_tri,
+        ),
+    )
+    titles = (
+        f"HDG solution, p = {field.space.order}\nL2 error {field.l2_error(exact_solution):.1e}",
+        f"Postprocessed, p = {postprocessed.space.order}\n"
+        f"L2 error {postprocessed.l2_error(exact_solution):.1e}",
+        "Exact solution",
+    )
+    if mesh.num_tri <= 130:
+        return plot_scalar_sample_panels_matplotlib(
+            mesh,
+            (
+                (titles[0], numerical_points, numerical_values),
+                (titles[1], post_points, post_values),
+                (titles[2], exact_points, exact_values, {"show_mesh": False}),
+            ),
+            suptitle=title or None,
+            show_mesh=show_mesh,
+            cmap="viridis",
+            levels=contour_levels_for_order(postprocessed.space.order),
+            share_clim=True,
+            show=show,
+        )
+
+    pv = _require_pyvista()
+    clim = _robust_clim(np.concatenate(
+        (numerical_values.reshape(-1), post_values.reshape(-1), exact_values.reshape(-1))
+    ))
+    plotter = pv.Plotter(shape=(1, 3), window_size=list(window_size), off_screen=off_screen)
+    scalar_bar_args = {
+        "vertical": False,
+        "width": 0.55,
+        "height": 0.08,
+        "position_x": 0.225,
+        "position_y": 0.02,
+    }
+    panels = ((field, numerical_points, numerical_values), (postprocessed, post_points, post_values))
+    for column, (panel_field, panel_points, values) in enumerate(panels):
+        add_field_to_plotter(
+            plotter,
+            panel_field,
+            reference_points=panel_points,
+            values=values,
+            scalar_name=f"field_{column}",
+            title=titles[column] if column or not title else f"{titles[column]}\n{title}",
+            subplot=(0, column),
+            show_mesh=show_mesh,
+            cmap="viridis",
+            clim=clim,
+            scalar_bar_args=scalar_bar_args,
+        )
+    add_samples_to_plotter(
+        plotter,
+        mesh,
+        exact_points,
+        exact_values,
+        scalar_name="field_2",
+        title=titles[2],
+        subplot=(0, 2),
+        show_mesh=False,
+        cmap="viridis",
+        clim=clim,
+        scalar_bar_args=scalar_bar_args,
+    )
+    plotter.link_views()
+    if show:
+        plotter.show()
+    return plotter
+
+
 def plot_solution_comparison(
         field: DGField,
         exact_solution: Callable,
         *,
+        postprocessed: DGField | None = None,
         resolution: int = 20,
         exact_resolution: int | str | None = None,
         title: str = "",
@@ -1021,7 +1117,25 @@ def plot_solution_comparison(
     controls only the exact reference panel; use ``"auto"`` for a denser exact
     sampling that is independent of the DG polynomial order.  ``None`` preserves the historical
     behavior and samples the exact panel on the same grid as the numerical panel.
+
+    With ``postprocessed`` (for example ``result.postprocessed_field`` from
+    ``hdg_postprocess="primal"``), the panels are the HDG solution, the
+    postprocessed field and the exact solution, on one color scale, each
+    numerical panel titled with its L2 error.
     """
+    if postprocessed is not None:
+        return _plot_postprocessed_comparison(
+            field,
+            postprocessed,
+            exact_solution,
+            resolution=resolution,
+            exact_resolution=exact_resolution,
+            title=title,
+            show_mesh=show_mesh,
+            show=show,
+            off_screen=off_screen,
+            window_size=window_size,
+        )
     reference_points, physical_points, numerical_values = sample_field_on_elements(
         field,
         resolution=resolution,
