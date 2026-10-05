@@ -37,6 +37,8 @@ def equation(match):
  bounds=Bbox.union([label.get_window_extent(fig.canvas.get_renderer()) for label in labels]).transformed(fig.dpi_scale_trans.inverted()).expanded(1.02,1.08)
  buf=io.BytesIO();fig.savefig(buf,format='svg',bbox_inches=bounds,pad_inches=.02,transparent=True);plt.close(fig)
  return '<div class="equation"><img alt="Guiding-center equations, wall conditions, and BDF2 time step" src="data:image/svg+xml;base64,'+base64.b64encode(buf.getvalue()).decode()+'"></div>'
+# GitHub math: fenced ```math blocks (verbatim TeX) and legacy $$...$$ blocks.
+source=re.sub(r'```math\n(.*?)```',equation,source,flags=re.S)
 source=re.sub(r'\$\$(.*?)\$\$',equation,source,flags=re.S)
 def code(text,language,*args):
  try:return '<pre class="highlight"><code>'+highlight(text,get_lexer_by_name(language),HtmlFormatter(nowrap=True))+'</code></pre>'
