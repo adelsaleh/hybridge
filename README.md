@@ -1,36 +1,42 @@
-# hybridge
+# HYBRIDGE
 
-**High-order hybridizable discontinuous Galerkin methods in Python, on CPUs
-and NVIDIA GPUs.**
+**HYBRIdizable Discontinuous Galerkin Environment: HDG methods in Python, on
+CPUs and NVIDIA GPUs.**
 
 [Install](#installation) · [First solve](#a-first-solve-on-the-cpu) ·
 [GPU example](#a-gpu-vortex-gas-in-python) · [User manual](MANUAL.md) ·
 [Documentation](docs/README.md)
 
-`hybridge` is a research library of hybridizable discontinuous Galerkin (HDG)
-methods ([Cockburn et al., 2009](https://doi.org/10.1137/070706616);
+HYBRIDGE aims to make hybridizable discontinuous Galerkin (HDG) methods
+([Cockburn et al., 2009](https://doi.org/10.1137/070706616);
 [Nguyen et al., 2009](https://doi.org/10.1016/j.jcp.2009.01.030);
-[Cockburn et al., 2010](https://doi.org/10.1090/S0025-5718-10-02334-3)) for
-transport, diffusion, and coupled flow problems on two-dimensional triangular
-meshes. Build a mesh, define polynomial fields, and assemble HDG solves through
-one Python interface, on the CPU or entirely on the GPU. Reusable solvers serve
-single boundary-value problems and the repeated solves of time-dependent
-applications.
+[Cockburn et al., 2010](https://doi.org/10.1090/S0025-5718-10-02334-3))
+accessible to newcomers, in the spirit of FreeFEM and DOLFINx. Build a mesh,
+define polynomial fields, and assemble and solve transport, diffusion, and
+coupled advection–diffusion–reaction problems on two-dimensional triangular
+meshes through one Python interface, on the CPU or entirely on the GPU.
+Reusable solvers serve single boundary-value problems and the repeated solves
+of time-dependent applications. The import package is `hybridge`.
+
+HYBRIDGE is the companion HDG project of SOLEDGE-HDG, the high-order HDG code
+for tokamak edge plasmas in realistic geometry
+([Giorgiani et al., 2018](https://doi.org/10.1016/j.jcp.2018.07.028)). GPU
+assembly and solver techniques developed here are meant to be transferred to
+SOLEDGE-HDG, first in 2D and eventually in 3D. Guiding-center plasma dynamics,
+shown below, is one application of the library.
 
 <!-- showcase-video: vortex_gas -->
 
-https://github.com/user-attachments/assets/e67a723f-f34b-4c06-a7e6-16641e62185d
+<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_light.png#gh-light-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_dark.png#gh-dark-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
 
 *Positive and negative charge drifting between grounded walls: the plasma form
-of a two-dimensional vortex gas. Play the 5.4 MB
-video (53 s of playback, t = 0 to 15.9).
-Degree-6 HDG on 360,379 triangles carries 10.1 million element unknowns per
-field and couples 3.77 million trace unknowns in each of its two solves per
-step, at
-0.74 s per time step, including rendering, on one NVIDIA
-RTX PRO 5000 Blackwell. The total charge changes by 2.2e-13 and the energy drifts by
-2.9e-4, while 29.9% of the enstrophy is
-dissipated as filaments reach the grid.*
+of a two-dimensional vortex gas, from t = 0 to 15.9; click the image to play the
+video. Degree-6 HDG on 360,379 triangles carries 10.1 million element unknowns
+per field and couples 3.77 million trace unknowns in each of its two solves per
+step, at 0.74 s per time step, including rendering, on one NVIDIA RTX PRO 5000
+Blackwell. The total charge changes by 2.2e-13 and the energy drifts by 2.9e-4,
+while 29.9% of the enstrophy is dissipated as filaments reach the grid.*
 
 ## What you can build
 
@@ -101,24 +107,38 @@ every dependency group.
 
 ## A first solve on the CPU
 
-A manufactured Poisson problem on the unit square, solved with the base
-installation:
+A manufactured Poisson problem on the square [-2.5, 2.5]². The solve needs only the
+base installation; the plot also needs the `plot` extra:
 
 ```python
+import numpy as np
 from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
+from hybridge.io import plot_solution_comparison
 
-mesh = rectangle_mesh(6, 6, xlim=(0., 1.), ylim=(0., 1.))
+mesh = rectangle_mesh(8, 8, xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
 space = DGSpace(mesh, 2, basis_type="dub_orth")
-exact = lambda x, y: 1. + x**2 + y**2                # -Δu = -4, u = exact on the boundary.
+exact = lambda x, y: np.sin(x**2 + y**2) + np.sin(x*y)
+source = lambda x, y: ((x**2 + y**2) * (4*np.sin(x**2 + y**2) + np.sin(x*y))
+                       - 4*np.cos(x**2 + y**2))     # -Δu = source, u = exact on the boundary.
 
 result = solve_diffusion_reaction_hdg(
-    lambda x, y: -4. + 0.*x, lambda x, y: 0.*x, exact, space,
-    solver="direct", preconditioner=None, boundary_mode="eliminate", verbose=False)
+    source, lambda x, y: 0.*x, exact, space, solver="direct", preconditioner=None,
+    boundary_mode="eliminate", hdg_postprocess="primal", verbose=False)
 print(f"L2 error {result.field.l2_error(exact):.1e} on {mesh.num_tri} triangles")
+print(f"after postprocessing {result.postprocessed_field.l2_error(exact):.1e}")
+plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed_field,
+                         exact_resolution=40)
 ```
 
-The error is at round-off because degree-2 elements contain the exact
-solution. The [minimal examples](MANUAL.md#minimal-end-to-end-examples) add
+![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_light.png#gh-light-mode-only)
+![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_dark.png#gh-dark-mode-only)
+
+On this deliberately coarse mesh the degree-2 solution misses the outer ring
+and jumps between elements, with an L2 error of 1.5. Postprocessing recovers,
+element by element, a degree-3 field from the solution and the HDG flux: its
+error is 0.099, 15 times smaller, and it converges one order faster (h⁴ instead
+of h³). This completes the HDG pipeline. The
+[minimal examples](MANUAL.md#minimal-end-to-end-examples) add
 advection and an independent residual check; run them with
 `python examples/diffusion_reaction_minimal.py` and
 `python examples/advection_reaction_minimal.py`.
@@ -237,13 +257,17 @@ GPUs.
 
 <!-- showcase-video: positive_density -->
 
-https://github.com/user-attachments/assets/2ea0e59d-124b-40c0-89fe-9980ae3d0515
+<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_light.png#gh-light-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_dark.png#gh-dark-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
 
-*The same domain with positive charge only, from t = 0 to 6.4 (6.1 MB video,
-21 s of playback). Like-signed charge rolls up and merges into larger
-vortices. No limiter is applied: the density reaches −3.1 against a maximum of
-21.1, and 0.42% of the total charge lies in negative regions, which are drawn
-in pink. The total charge changes by 2.4e-11 and the energy drifts by 2.2e-6.*
+*The same domain with positive charge only and KKT positivity preservation, from
+t = 0 to 6.4; click the image to play the video. Like-signed charge rolls up and
+merges into larger vortices. After each transport step, a KKT projection
+restores ρ ≥ 0 at constrained points in every element while conserving the total
+charge, so no pixel falls into the pink used for negative density. The total
+charge changes by 2.4e-11, the energy drifts by 4.1e-5, and 8.2% of the
+enstrophy is dissipated. The KKT projection is on the `positivity-kkt`
+development branch and is not part of this release.*
 
 The [reproduction guide](docs/getting_started/gpu_showcase.md) gives the
 recording commands, the time-step, mesh, and stabilization checks behind both
@@ -279,7 +303,7 @@ installed wheel contains the library.
 
 ## Development status
 
-`hybridge` is an **early-alpha research package**. The public solver API and
+HYBRIDGE is an **early-alpha research package**. The public solver API and
 backend support are documented, while numerical methods, performance paths,
 and application studies continue to evolve. The [roadmap](TODO.md) tracks
 current work, and the [release record](docs/releases/early_alpha.md)
@@ -313,6 +337,13 @@ Foundational HDG work by Cockburn and collaborators:
   [A projection-based error analysis of HDG methods](https://doi.org/10.1090/S0025-5718-10-02334-3).
   *Mathematics of Computation* **79**(271), 1351–1367.
 
+The companion project:
+
+- **SOLEDGE-HDG:** G. Giorgiani, H. Bufferand, G. Ciraolo, P. Ghendrih,
+  F. Schwander, E. Serre, and P. Tamain (2018).
+  [A hybrid discontinuous Galerkin method for tokamak edge plasma simulations in global realistic geometry](https://doi.org/10.1016/j.jcp.2018.07.028).
+  *Journal of Computational Physics* **374**, 515–532.
+
 ## Acknowledgements
 
 The GPU backend builds on these upstream projects:
@@ -326,3 +357,8 @@ The GPU backend builds on these upstream projects:
 
 Our AMGX and PyAMGX versions are downstream forks of these projects, with
 additional support for HDG workloads.
+
+## License
+
+HYBRIDGE is distributed under the [BSD 3-Clause License](LICENSE). Its authors,
+collaborators, and their affiliations are listed in [`AUTHORS.md`](AUTHORS.md).

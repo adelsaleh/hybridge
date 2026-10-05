@@ -6,18 +6,53 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 
 ## Current Candidate
 
-- Version: `0.1.0a1`.
-- Status: all four release-blocking lanes and the broad Gmsh/CUDA suite passed locally on 2026-08-05. The first hosted run exposed missing Python 3.10 TOML compatibility and Matplotlib test dependencies; the dependency contract is corrected, but a clean Python 3.10/3.12 rerun and exact tag commit remain pre-tag gates.
-- Commit/worktree: reviewed pre-alpha candidate; the exact tag commit will be recorded by release automation.
-- Environment: Python 3.12.3, NumPy 2.4.6, SciPy 1.18.0, Numba 0.66.0,
-  pytest 9.1.1, CuPy 14.1.1, CUDA runtime 12.9, CUDA driver API 13.0, AMGX 2.5.0.
-- GPU: Quadro RTX 6000, driver 580.173.02, 24576 MiB.
+- Version: `0.1.0a2`, the first public HYBRIDGE release. The import package and
+  distribution are `hybridge`. `0.1.0a1` (2026-08-05) was the private
+  pre-release of the same code base under the name `hdgfem`; its evidence is
+  kept below.
+- Status: the full suite and all four release-blocking lanes passed locally on
+  2026-10-04/05, and the hosted `early-alpha` workflow passed on Python 3.10 and
+  3.12 (host lanes and package job) for the merged branch and the renamed
+  `master`. The exact tag commit is recorded when `v0.1.0a2` is created.
+- Environment: Python 3.12.3, NumPy 2.5.3, SciPy 1.18.1, Numba 0.67.0,
+  pytest 9.1.1, CuPy 14.2.0, CUDA runtime 13.2 (driver API 13.0), AMGX 2.5.0.
+  The AMGX fork is `hdg-cuda13-integration` at `c564f9d866ea` and the PyAMGX
+  fork `quality-of-life` at `a44d224d8b92`.
+- GPU: NVIDIA RTX PRO 5000 Blackwell, driver 580.126.09, 48379 MiB.
+- Release notes: [`0.1.0a2.md`](0.1.0a2.md).
 - Installation contract: `docs/getting_started/installation.md`.
 - Capability contract: `docs/reference/backend_capabilities.md`.
 - Solver API contract: `docs/reference/solver_api_alpha.md`.
 - Test matrix: `docs/development/alpha_test_matrix.md`.
 
 ## Evidence Log
+
+### 0.1.0a2 Qualification (2026-10-04/05)
+
+- Full sharded suite on a clean checkout of the renamed `master` (`a1be5d6`):
+  3,660 passed and 389 skipped (optional or opt-in). Two documented-example
+  tests failed only because the shared venv did not yet provide `hybridge`; both
+  pass once it does. Two GPU shards still abort at interpreter exit with an AMGX
+  `Cuda failure: 'invalid argument'` after writing their results; see the gaps.
+- `host-fast`: 825 passed. `cpu-parity`: 136 passed. `install-smoke`: passed,
+  with wheel `hybridge-0.1.0a2` installed outside the checkout and a public
+  sparse solve run from it. `gpu-smoke`: 272 passed.
+- Opt-in raw-CUDA conflict-averaged kernel tests
+  (`HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 tests/test_conflict_averaged_upwind.py`):
+  365 passed.
+- Hosted `early-alpha` workflow, all of host Python 3.10, host Python 3.12 and
+  package passed:
+  [37290623238](https://github.com/adelsaleh/hybridge/actions/runs/37290623238)
+  and [37293934813](https://github.com/adelsaleh/hybridge/actions/runs/37293934813)
+  (PR #2), [37294710974](https://github.com/adelsaleh/hybridge/actions/runs/37294710974)
+  (merged `master`), and
+  [37334439090](https://github.com/adelsaleh/hybridge/actions/runs/37334439090)
+  (renamed `master`). Host jobs took 4.8–5.8 min, the package job 56 s. These
+  are the first clean hosted runs; they resolve the pre-fix attempt below.
+- The defects found and fixed during this qualification are listed in the
+  [release notes](0.1.0a2.md).
+
+The subsections below record the `0.1.0a1` evidence of 2026-08-05.
 
 ### Hosted Matrix Attempt (Pre-fix)
 
@@ -180,9 +215,15 @@ Known deviations and tracking issue:
 
 ## Known Release Gaps
 
-- The local Python 3.12 package/install contract is qualified, but the first
-  hosted `early-alpha` workflow pass on Python 3.10 and 3.12 is still required
-  and must be linked here before the tag.
+- Two GPU test processes abort at interpreter exit with an AMGX
+  `Cuda failure: 'invalid argument'` raised during native teardown, after all
+  results are written. Solves are unaffected, but the teardown order of AMGX
+  resources at exit is not yet clean.
+- The default PyAMGX fork build accepts only float64 arrays. FP32 AMGX needs
+  the mode-aware binding from `scripts/dev/build_pyamgx_precision.py`; the
+  fp32 AMGX tests skip without it.
+- `projects/diocotron` ships as an application project outside the package
+  tests. Its DOLFINx and FreeFEM parts are not exercised in the release lanes.
 - PETSc has normalized API/failure handling but no dedicated numerical parity
   case in the release lanes; optional PETSc, CUDA, DOLFINx, Gmsh, and plotting
   installation stacks are not qualified by the base-wheel smoke.

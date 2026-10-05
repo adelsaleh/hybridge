@@ -179,7 +179,7 @@ A PETSc solve needs a matched PETSc / `petsc4py` pair visible to the active
 Python environment:
 
 ```bash
-export PETSC_DIR=$HOME/opt/petsc
+export PETSC_DIR=/path/to/petsc
 export PETSC_ARCH=arch-linux-c-opt
 export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
 python -c "from petsc4py import PETSc; print(PETSc.Sys.getVersion())"
@@ -252,7 +252,7 @@ The measured machine-specific comparison is recorded in
 ### CuPy, Cupyx, and AMGX
 
 For a compact configuration using generic CUDA/AMGX/PyAMGX directories, see
-[Connect the GPU backends](README.md#connect-the-gpu-backends).
+[GPU runtime](docs/getting_started/installation.md#gpu-runtime).
 
 The supported AMGX path uses our maintained
 [AMGX](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration) and
@@ -586,7 +586,10 @@ numerical flux and whose interior moments match the raw HDG flux against
 modal traces use signed odd modes on reversed edges.  Numba diffusion assembly is
 currently enabled for legacy and modal traces.  Manufactured cases return
 the exact conservative flux `q=-kappa grad u`; the runner reports raw and
-postprocessed flux errors when available.
+postprocessed flux errors when available.  To compare the HDG solution, the
+postprocessed field and the exact solution in one figure, call
+`plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed_field)`
+from `hybridge.io`, as in the README's first solve.
 
 Create a new manufactured PDE by adding a factory and `CASE_DEFINITIONS` entry
 in `scripts/diffusion_reaction/cases.py`.  Create a new run
@@ -1849,7 +1852,7 @@ host; each report records the diagnostic backend.
 The same driver also compares unforced vortex gas at matching physical times:
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
+export CUDA_PATH=/path/to/cuda-13
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
   --study vortex-gas --scheme si-bdf2 --final-time 5 --dts 0.01,0.005 \
@@ -2008,9 +2011,10 @@ skips do not count as GPU evidence.
 `scheduled-evidence` preflights the recommended Gmsh runtime and enables its
 opt-in geometry parity cases; those cases may not be counted as scheduled skips.
 
-The current package candidate is `0.1.0a1`. On 2026-08-05 it passed 495 host
-tests, the isolated wheel smoke, 14 CPU parity cases, and 10 GPU smoke cases.
-The current Gmsh-enabled broad suite passed 613 tests with zero skips. The four
+The current package candidate is `0.1.0a2`. On 2026-10-05 it passed 825
+`host-fast` tests, the isolated wheel smoke, 136 CPU parity cases, and 272 GPU
+smoke cases, plus the hosted Python 3.10/3.12 workflow.
+The 2026-08-05 Gmsh-enabled broad suite passed 613 tests with zero skips. The four
 focused Gmsh parameters cover 16 geometry/order combinations. The evidence
 record retains the stronger dependency-isolated install smoke and wheel/sdist
 metadata checks. The first hosted `early-alpha` workflow execution on Python

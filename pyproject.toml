@@ -1,12 +1,19 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hybridge"
 version = "0.1.0a2"
-description = "Self-contained DG/HDG simulator."
+description = "Hybridizable discontinuous Galerkin (HDG) methods in Python, on CPUs and NVIDIA GPUs."
 readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "AUTHORS.md"]
+authors = [
+    {name = "Adel Saleh", email = "saleh.a@univ-amu.fr"},
+    {name = "Victor Rodrigues", email = "victor.dos_reis_rodrigues@centrale-med.fr"},
+]
+maintainers = [{name = "Adel Saleh", email = "saleh.a@univ-amu.fr"}]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",

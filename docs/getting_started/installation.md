@@ -4,9 +4,9 @@ This document defines the bounded installation surface for the early-alpha
 package. It distinguishes the installable `hybridge` library from repository-only
 runners, benchmark data, AMGX configurations, and research scripts.
 
-The current package candidate is the PEP 440 prerelease `0.1.0a1`. Its local
-release matrix is recorded in `docs/releases/early_alpha.md`; the exact release
-commit and hosted Python 3.10/3.12 workflow run remain required before tagging.
+The current package candidate is the PEP 440 prerelease `0.1.0a2`, the first
+public HYBRIDGE release. Its local release matrix and hosted Python 3.10/3.12
+workflow runs are recorded in `docs/releases/early_alpha.md`.
 
 ## Base Host Install
 
