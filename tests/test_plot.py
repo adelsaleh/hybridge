@@ -230,3 +230,35 @@ def test_raster_panels_reject_invalid_input(panels, bounds, message):
 
     with pytest.raises(ValueError, match=message):
         plot_scalar_raster_panels_matplotlib(panels, bounds, show=False)
+
+
+def test_postprocessed_comparison_shares_one_scale_and_reports_errors():
+    """HDG solution, postprocessed field and exact solution share a colorbar."""
+    from hybridge import DGSpace, project_callable
+    from hybridge.io import plot_solution_comparison
+
+    mesh = rectangle_mesh(2, 2)
+    exact = lambda x, y: np.sin(np.pi * x) * np.sin(np.pi * y)
+    field = project_callable(exact, DGSpace(mesh, 1, basis_type="dub_orth"))
+    post = project_callable(exact, DGSpace(mesh, 2, basis_type="dub_orth"))
+    figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12, show=False)
+    titles = [ax.get_title() for ax in figure.axes if ax.get_title()]
+    assert titles[0].startswith("HDG solution, p = 1") and "L2 error" in titles[0]
+    assert titles[1].startswith("Postprocessed, p = 2") and "L2 error" in titles[1]
+    assert titles[2] == "Exact solution"
+    assert len(figure.axes) == 4                     # three panels and one shared colorbar
+
+
+def test_apply_figure_theme_recolors_text_on_a_clear_background():
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    from hybridge.io.figures import apply_figure_theme
+
+    figure, ax = plt.subplots()
+    ax.set_title("t")
+    apply_figure_theme(figure, "#e6edf3")
+    assert figure.patch.get_alpha() == 0
+    assert ax.get_facecolor()[3] == 0
+    assert mpl.colors.to_hex(ax.title.get_color()) == "#e6edf3"
+    assert mpl.colors.to_hex(ax.spines["left"].get_edgecolor()) == "#e6edf3"
+    plt.close(figure)
