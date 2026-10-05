@@ -39,7 +39,7 @@ def test_constant_vector_balanced_cycle_is_fixed_symmetric_and_positive(block_si
 @pytest.mark.parametrize('dtype', (np.float64, np.float32))
 def test_constant_vector_hierarchy_solves_spd_system_in_variable_basis(dtype):
     pyamgx = pytest.importorskip('pyamgx')
-    if dtype == np.float32 and not getattr(pyamgx, 'HDGFEM_PRECISION_AWARE', False):
+    if dtype == np.float32 and not getattr(pyamgx, 'HYBRIDGE_PRECISION_AWARE', False):
         pytest.skip('FP32 requires the existing precision-aware PyAMGX binding')
     matrix = coupled_spd_chain(7, variable_basis=True)
     config = json.loads(CONFIG.read_text())

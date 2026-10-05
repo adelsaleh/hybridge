@@ -3,8 +3,8 @@
 The public solver API separates assembly, global sparse inversion, and
 reconstruction. Supported combinations and transfer boundaries are defined in
 [`../reference/backend_capabilities.md`](../reference/backend_capabilities.md).
-Backend modules are implementation details unless exported from `hdgfem` or
-`hdgfem.solvers`. Internal module paths carry no compatibility guarantee: the
+Backend modules are implementation details unless exported from `hybridge` or
+`hybridge.solvers`. Internal module paths carry no compatibility guarantee: the
 package reorganization moved them without re-export shims.
 
 ## Guides
@@ -24,7 +24,7 @@ package reorganization moved them without re-export shims.
   pure-BSR successor contract.
 - [`bsr_amgx_dependency_map.md`](bsr_amgx_dependency_map.md): authoritative
   ownership and dependency map for direct BSR assembly, AMGX hybrid/pure-BSR
-  hierarchies, HDGFEM face-block p/h multigrid, cuSPARSE, and remaining custom
+  hierarchies, HYBRIDGE face-block p/h multigrid, cuSPARSE, and remaining custom
   kernels.
 - [`face_dense_gpu.md`](face_dense_gpu.md): experimental fixed-slot face-block
   GMRES path with block-Jacobi/ASM and polynomial preconditioning, including
@@ -45,7 +45,7 @@ runtime → core → cases → linalg → hdg → {transport, mixed} → solvers
   Function-level (lazy) imports count.
 - `transport` and `mixed` share a layer and never import each other. Code they
   both need belongs in `hdg/` or lower.
-- The package root `hdgfem/__init__.py` is the public facade over every layer.
+- The package root `hybridge/__init__.py` is the public facade over every layer.
 - `tests/test_package_layering.py` enforces the rule with an empty
   allowed-violation list.
 
@@ -68,10 +68,10 @@ The package organizes HDG code by discretization family, then by stage
 (coefficients, local operator, condensation/assembly, reconstruction,
 postprocessing), then by backend.
 
-- **Transport (first-order) HDG**, `hdgfem/transport/`: advection-reaction.
+- **Transport (first-order) HDG**, `hybridge/transport/`: advection-reaction.
   There is no flux unknown; face weights come from the upwind τ/γ policies in
   `hdg/stabilization`.
-- **Mixed (second-order) HDG**, `hdgfem/mixed/`: diffusion-reaction (DR) and
+- **Mixed (second-order) HDG**, `hybridge/mixed/`: diffusion-reaction (DR) and
   advection-diffusion-reaction (ADR). Both use local unknowns `[u, q_x, q_y]`
   with `q = -κ∇u`, the same block layout and signs, and τ in the same three
   places. DR is ADR with β = 0 whenever τ_adv(β = 0) = 0, which holds for the
@@ -83,7 +83,7 @@ postprocessing), then by backend.
 
 ## Backend Ownership
 
-Module paths are relative to `hdgfem/`. Solver modules dispatch to these
+Module paths are relative to `hybridge/`. Solver modules dispatch to these
 backends after `solvers/capabilities` preflight validation.
 
 ### Transport (advection-reaction)
@@ -148,13 +148,13 @@ kernels would remove these fast paths.
 
 ## Solver Modules
 
-- `hdgfem.solvers.advection_reaction`, `hdgfem.solvers.diffusion_reaction` and
-  `hdgfem.solvers.advection_diffusion_reaction` own the public module APIs and
+- `hybridge.solvers.advection_reaction`, `hybridge.solvers.diffusion_reaction` and
+  `hybridge.solvers.advection_diffusion_reaction` own the public module APIs and
   stage orchestration.
-- `hdgfem.solvers.adv_rea` and `hdgfem.solvers.diff_rea` are compatibility
+- `hybridge.solvers.adv_rea` and `hybridge.solvers.diff_rea` are compatibility
   shims retained by the documented alpha API contract.
 - Unsupported combinations raise
-  `hdgfem.runtime.errors.UnsupportedBackendConfigurationError`.
+  `hybridge.runtime.errors.UnsupportedBackendConfigurationError`.
 
 The hard-coded fused tensor Test 7 adapter and kernels live under
 `scripts/diffusion_reaction/experiments/` and are not installed.
@@ -169,7 +169,7 @@ The hard-coded fused tensor Test 7 adapter and kernels live under
 - Name modules by execution role, not prototype generation number.
 - Keep experiments under `scripts/<equation>/experiments/`, with focused tests
   for reusable numerical logic.
-- Keep optional imports lazy. Importing `hdgfem` must not require CUDA, AMGX,
+- Keep optional imports lazy. Importing `hybridge` must not require CUDA, AMGX,
   PETSc, PARDISO, Gmsh, or DOLFINx.
 - Do not infer residency from a filename. Use the checked capability record and
   transfer instrumentation.

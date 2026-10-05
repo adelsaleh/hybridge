@@ -15,7 +15,7 @@ BINDING = ROOT / '.cache' / 'pyamgx-fp32'
 
 
 def _run(code: str, precision: str, tmp_path: Path) -> subprocess.CompletedProcess:
-    env = dict(os.environ, HDGFEM_PRECISION=precision,
+    env = dict(os.environ, HYBRIDGE_PRECISION=precision,
                NUMBA_CACHE_DIR=str(tmp_path / f'numba-{precision}'))
     return subprocess.run([sys.executable, '-c', code], env=env, cwd=ROOT,
                           text=True, capture_output=True, timeout=180)
@@ -25,9 +25,9 @@ def _run(code: str, precision: str, tmp_path: Path) -> subprocess.CompletedProce
 def test_precision_geometry_fields_and_mixed_array_guard(precision, mode, itemsize, tmp_path):
     code = f'''
 import numpy as np
-from hdgfem.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, AMGX_MODE, check_real_arrays
-from hdgfem.core.mesh import rectangle_mesh, _mesh_cache_files
-from hdgfem.core.space import DGSpace
+from hybridge.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, AMGX_MODE, check_real_arrays
+from hybridge.core.mesh import rectangle_mesh, _mesh_cache_files
+from hybridge.core.space import DGSpace
 mesh = rectangle_mesh(nx=1, ny=1)
 space = DGSpace(mesh, 2)
 assert mesh.node_coords.dtype == np.dtype({precision!r})
@@ -51,9 +51,9 @@ assert ('"precision":"float32"' in key) == ({precision!r} == 'float32')
 
 
 def test_invalid_process_precision_is_rejected(tmp_path):
-    result = _run('import hdgfem', 'float16', tmp_path)
+    result = _run('import hybridge', 'float16', tmp_path)
     assert result.returncode != 0
-    assert 'HDGFEM_PRECISION must be float32 or float64' in result.stderr
+    assert 'HYBRIDGE_PRECISION must be float32 or float64' in result.stderr
 
 
 def _require_cuda_and_binding():
@@ -74,7 +74,7 @@ sys.path.insert(0, {str(BINDING)!r})
 import cupy as cp
 import numpy as np
 import pyamgx
-from hdgfem.runtime.precision import cuda_source, real_raw_kernel
+from hybridge.runtime.precision import cuda_source, real_raw_kernel
 source = 'extern "C" __global__ void eval(const double* x, double* y) {{ int i=threadIdx.x; y[i]=sqrt(x[i])+1.25e-2; }}'
 converted = cuda_source(source)
 assert 'double' not in converted and 'sqrtf(' in converted and '1.25e-2f' in converted

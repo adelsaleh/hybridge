@@ -9,17 +9,17 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix
 
-import hdgfem.runtime.optional as runtime_optional
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.hdg import matrices as mats
-import hdgfem.hdg.stabilization as hdg_stabilization
-from hdgfem.transport.residual import UpwindHDGTransportResidual
-import hdgfem.transport.numba as nb
-import hdgfem.transport.numba as transport_numba
-from hdgfem.transport.numba_kernels import _assemble_conflict_face_trace_weights
-from hdgfem.transport.diagnostics import trace_inflow_diagnostics
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-from hdgfem.hdg.stabilization import (
+import hybridge.runtime.optional as runtime_optional
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.hdg import matrices as mats
+import hybridge.hdg.stabilization as hdg_stabilization
+from hybridge.transport.residual import UpwindHDGTransportResidual
+import hybridge.transport.numba as nb
+import hybridge.transport.numba as transport_numba
+from hybridge.transport.numba_kernels import _assemble_conflict_face_trace_weights
+from hybridge.transport.diagnostics import trace_inflow_diagnostics
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.hdg.stabilization import (
     conflict_averaged_normal_pair,
     effective_advection_normal_flux,
     gauge_inactive_advection_trace_blocks,
@@ -92,7 +92,7 @@ def test_node_rules_exact_and_near_cancellation_and_scaling():
 
 @pytest.mark.parametrize("basis", ["legacy-lagrange", "legendre-modal"])
 def test_numba_owned_weights_match_numpy_and_cupy_reference(monkeypatch, basis):
-    import hdgfem.transport.cupy as cp_backend
+    import hybridge.transport.cupy as cp_backend
     space = DGSpace(rectangle_mesh(2, 1), 3, basis_type="dub_orth")
     trace = space.trace_space(basis)
     beta = np.random.default_rng(27).normal(size=(2, *space.shape))
@@ -213,8 +213,8 @@ def test_operator_reuse_keeps_policy_and_option_change_invalidates():
 
 
 def test_raw_specializations_keep_launches_and_connectivity_static():
-    from hdgfem.transport import raw_cuda as raw
-    from hdgfem.transport import tsle_bsr as split
+    from hybridge.transport import raw_cuda as raw
+    from hybridge.transport import tsle_bsr as split
     templates = [raw._RAW_FUSED_TEMPLATE, raw._raw_fused_csr_template(), raw._raw_fused_bsr_template(),
                  raw._RAW_FUSED_TEMPLATE + split._TSLE_KERNEL_TEMPLATE]
     for template in templates:
@@ -237,7 +237,7 @@ def test_raw_specializations_keep_launches_and_connectivity_static():
 import os
 
 
-@pytest.mark.skipif(os.environ.get("HDGFEM_RUN_CUDA_TRANSPORT_TESTS") != "1",
+@pytest.mark.skipif(os.environ.get("HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS") != "1",
                    reason="CUDA compilation requires explicit opt-in")
 @pytest.mark.parametrize("mode,fmt", [("fused", "coo"), ("fused", "csr"), ("fused", "bsr"), ("split3", "bsr")])
 @pytest.mark.parametrize("basis", ["legacy-lagrange", "legendre-modal"])
@@ -248,9 +248,9 @@ import os
 def test_authorized_cuda_matrices_and_reconstruction(mode, fmt, basis, cache_response, pair, boundary_mode, order):
     import cupy as cp
     from scipy.sparse import csr_matrix, bsr_matrix
-    from hdgfem.core.device import as_cupy_space, as_cupy_vector_coefficients
-    from hdgfem.core.device import as_cupy_trace_space
-    from hdgfem.transport.cuda import (
+    from hybridge.core.device import as_cupy_space, as_cupy_vector_coefficients
+    from hybridge.core.device import as_cupy_trace_space
+    from hybridge.transport.cuda import (
             assemble_reduced_system_cuda,
             reconstruct_advection_field_cuda,
         )
@@ -308,7 +308,7 @@ def test_reversing_global_orientation_preserves_effective_local_samples():
 
 
 def test_active_deficient_residual_retains_strict_support_check():
-    from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
+    from hybridge.transport.diagnostics import UpwindHDGTraceRankError
     space = DGSpace(rectangle_mesh(1, 1), 2)
     residual = UpwindHDGTransportResidual(space, advection_stabilization=POLICY)
     count = residual.normal_flux.shape[-1]
@@ -320,7 +320,7 @@ def test_active_deficient_residual_retains_strict_support_check():
 
 
 def test_cupy_reference_mass_gauge_matches_numpy(monkeypatch):
-    from hdgfem.transport import cupy as backend
+    from hybridge.transport import cupy as backend
     space, _ = constant_pair_problem()
     trace = space.trace_space("legendre-modal")
     tau = np.zeros((space.mesh.num_tri, 3, trace.weights.size))
@@ -337,8 +337,8 @@ def test_cupy_reference_mass_gauge_matches_numpy(monkeypatch):
 
 def test_raw_kernel_argument_counts_without_compilation():
     import re
-    from hdgfem.transport import raw_cuda as raw
-    from hdgfem.transport import tsle_bsr as split
+    from hybridge.transport import raw_cuda as raw
+    from hybridge.transport import tsle_bsr as split
     source = raw._RAW_FUSED_TEMPLATE + split._TSLE_KERNEL_TEMPLATE
     local = re.findall(r'assemble_projected_local_advection_raw\((.*?)\)', source, flags=re.S)
     assert len(local) == 4  # definition, fused build, reconstruction, split build
@@ -367,7 +367,7 @@ def test_raw_kernel_argument_counts_without_compilation():
 
 
 def test_requested_snapshot_contains_raw_and_effective_samples(tmp_path):
-    from hdgfem.transport.diagnostics import (
+    from hybridge.transport.diagnostics import (
             save_transport_failure_snapshot,
             analyze_transport_snapshot,
         )

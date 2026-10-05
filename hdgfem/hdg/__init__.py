@@ -1,1 +1,0 @@
-"""hdgfem.hdg package."""

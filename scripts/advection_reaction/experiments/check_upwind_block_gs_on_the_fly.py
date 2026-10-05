@@ -40,20 +40,20 @@ from scipy.sparse.linalg import bicgstab
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem.hdg import matrices as hdg_mats
-import hdgfem.hdg.coefficients as hdg_coefficients
-from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
-from hdgfem.linalg.system import assemble_global_matrix
-from hdgfem.linalg.results import diagonal_scale_system, residual_diagnostics
-from hdgfem.transport.numba import assemble_projected_trace_system_eliminated_numba
-from hdgfem.linalg.upwind_block_gs import UpwindBlockGSPreconditioner, build_upwind_block_gs_preconditioner
-from hdgfem.linalg.upwind_block_gs_on_the_fly import (
+from hybridge.hdg import matrices as hdg_mats
+import hybridge.hdg.coefficients as hdg_coefficients
+from hybridge.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
+from hybridge.linalg.system import assemble_global_matrix
+from hybridge.linalg.results import diagonal_scale_system, residual_diagnostics
+from hybridge.transport.numba import assemble_projected_trace_system_eliminated_numba
+from hybridge.linalg.upwind_block_gs import UpwindBlockGSPreconditioner, build_upwind_block_gs_preconditioner
+from hybridge.linalg.upwind_block_gs_on_the_fly import (
     build_forward_upwind_block_gs_from_coo,
     build_forward_upwind_block_gs_from_ordered_block_coo,
 )
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
 
 
@@ -563,10 +563,10 @@ def run_cupyx_bicgstab(
         import_start = logger.start("cupyx_imports", "loading CuPy/Cupyx helpers", level=2)
     else:
         import_start = time.perf_counter()
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
-    from hdgfem.linalg.gpu.cupyx import solve_cupyx_csr
-    from hdgfem.linalg.gpu.upwind_block_gs import (
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.linalg.gpu.sparse import scipy_csr_to_cupy
+    from hybridge.linalg.gpu.cupyx import solve_cupyx_csr
+    from hybridge.linalg.gpu.upwind_block_gs import (
             cupy_upwind_block_gs_from_host_preconditioner,
         )
 
@@ -800,7 +800,7 @@ def print_compact_summary(
 ) -> None:
     """Always-visible summary for verbosity 0 and concise end-of-run context."""
     print()
-    print("HDGFEM upwind block-GS check summary")
+    print("HYBRIDGE upwind block-GS check summary")
     print("------------------------------------")
     print(
         f"case={args.case}, order={args.order}, mesh_size={args.mesh_size}, "
@@ -1003,7 +1003,7 @@ def main(argv: list[str] | None = None) -> int:
     logger = StageLogger(args.verbosity)
     run_start = time.perf_counter()
 
-    logger.message("HDGFEM upwind block-GS on-the-fly check", level=1)
+    logger.message("HYBRIDGE upwind block-GS on-the-fly check", level=1)
     logger.message(
         f"case={args.case}, order={args.order}, mesh_size={args.mesh_size}, "
         f"basis={args.basis}, trace_basis={args.trace_basis}, backend={args.assembly_backend}",
@@ -1347,7 +1347,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print()
-        print("HDGFEM host forward upwind block-GS on-the-fly check")
+        print("HYBRIDGE host forward upwind block-GS on-the-fly check")
         print("----------------------------------------------------")
         print(
             f"case={args.case}, order={args.order}, mesh_size={args.mesh_size}, basis={args.basis}, "

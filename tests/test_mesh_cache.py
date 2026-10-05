@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import hdgfem.core.mesh as mesh_module
-from hdgfem.core.mesh import DGMesh, default_mesh_cache_dir, gmsh_rectangle_mesh
+import hybridge.core.mesh as mesh_module
+from hybridge.core.mesh import DGMesh, default_mesh_cache_dir, gmsh_rectangle_mesh
 
 
 class _FakeGmshOption:
@@ -94,7 +94,7 @@ class _FakeGmsh:
 
 
 def test_default_mesh_cache_dir_is_local_relative():
-    assert default_mesh_cache_dir() == Path(".cache") / "hdgfem" / "meshes"
+    assert default_mesh_cache_dir() == Path(".cache") / "hybridge" / "meshes"
 
 
 def test_gmsh_rectangle_mesh_uses_local_cache_logs_and_thread_options(monkeypatch, tmp_path, capsys):

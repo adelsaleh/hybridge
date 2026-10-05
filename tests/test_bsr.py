@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy.sparse import bsr_matrix, csr_matrix
 
-from hdgfem.linalg.bsr import principal_bsr_submatrix
+from hybridge.linalg.bsr import principal_bsr_submatrix
 
 
 def _matrix(block_size=2, dtype=np.float64):

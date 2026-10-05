@@ -5,13 +5,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hdgfem.core.geometry import DiskDomain, PolygonDomain
-from hdgfem.cases.profiles import (
+from hybridge.core.geometry import DiskDomain, PolygonDomain
+from hybridge.cases.profiles import (
     FFTGaussianBlobField,
     GaussianBlobField,
     sample_gaussian_blob_field,
 )
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_cases import positive_turbulence
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
@@ -137,10 +137,10 @@ def test_fft_gpu_matches_host_and_keeps_grid_and_projection_on_device():
             pytest.skip("CUDA device unavailable")
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("CUDA runtime unavailable")
-    from hdgfem.core.projection import project_callable
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
-    from hdgfem.core.mesh import rectangle_mesh
-    from hdgfem.core.space import DGSpace
+    from hybridge.core.projection import project_callable
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.core.mesh import rectangle_mesh
+    from hybridge.core.space import DGSpace
 
     host, device = fft_field(), fft_field()
     x, y = np.meshgrid(np.linspace(-0.7, 0.7, 29), np.linspace(-0.8, 0.8, 33))

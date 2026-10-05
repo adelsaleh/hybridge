@@ -22,10 +22,10 @@ density. ``b_p`` is a callable of the mesh coordinates, used as supplied
 without renormalization (``|b_p| < 1`` keeps ``P`` positive definite).
 
 Coefficient callables take NumPy or CuPy coordinate arrays; element-local
-terms are :class:`hdgfem.ElementCoefficient` objects evaluated with
+terms are :class:`hybridge.ElementCoefficient` objects evaluated with
 ``xp=cupy`` on the raw-CUDA path, so no field leaves the device. Returned ADR
 fluxes carry the weight ``W``. On the host the pointwise combinations run in
-element chunks on the ``hdgfem.core.host_threads`` pool.
+element chunks on the ``hybridge.core.host_threads`` pool.
 """
 from __future__ import annotations
 
@@ -34,9 +34,9 @@ from typing import Callable
 
 import numpy as np
 
-from hdgfem import DGField, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref
-from hdgfem.core.element_coefficients import physical_points
-from hdgfem.runtime.threads import elementwise
+from hybridge import DGField, DGSpace, ElementCoefficient, field_gradient_at_ref, field_values_at_ref
+from hybridge.core.element_coefficients import physical_points
+from hybridge.runtime.threads import elementwise
 
 PoloidalField = Callable[..., tuple]
 GEOMETRIES = ("cartesian", "axisymmetric")
@@ -181,14 +181,14 @@ def density_floor_diagnostics(n_star: DGField, space: DGSpace, trace_space, dens
     Raises ``FloatingPointError`` for nonfinite extrapolated densities: the
     floor never repairs a nonfinite state. Only four scalars leave the device.
     """
-    from hdgfem.core.quadrature import _reference_edge_points_from_1d
+    from hybridge.core.quadrature import _reference_edge_points_from_1d
 
     face = np.asarray(_reference_edge_points_from_1d(trace_space.quads)).reshape(-1, 2)
     volume_values = field_values_at_ref(n_star, space.quad_data.Krf_quads, device=device)
     face_values = field_values_at_ref(n_star, face, device=device)
     xp = np
     if device:
-        from hdgfem.runtime.optional import require_cupy
+        from hybridge.runtime.optional import require_cupy
         xp = require_cupy()
     floor = float(density_floor)
     stats = xp.stack((xp.minimum(volume_values.min(), face_values.min()),

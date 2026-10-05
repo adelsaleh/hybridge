@@ -47,7 +47,7 @@ def build(source: Path, output: Path, amgx_source: Path, amgx_build: Path) -> No
         path.write_text(text)
     module = staging / "pyamgx" / "pyamgx.pyx"
     with module.open("a") as stream:
-        stream.write('\nHDGFEM_PRECISION_AWARE = True\n')
+        stream.write('\nHYBRIDGE_PRECISION_AWARE = True\n')
     env = dict(os.environ, AMGX_DIR=str(amgx_source.resolve()), AMGX_BUILD_DIR=str(amgx_build.resolve()))
     subprocess.run([sys.executable, "setup.py", "build_ext", "--build-lib", str(output),
                     "--build-temp", str(output / "objects")], cwd=staging, env=env, check=True)

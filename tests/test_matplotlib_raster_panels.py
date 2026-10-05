@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from hdgfem.io.matplotlib import MatplotlibRasterPanels
+from hybridge.io.matplotlib import MatplotlibRasterPanels
 
 
 @pytest.mark.parametrize("background", ("white", "black"))

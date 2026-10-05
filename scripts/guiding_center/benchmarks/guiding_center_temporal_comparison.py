@@ -16,7 +16,7 @@ from time import perf_counter
 
 import numpy as np
 
-from hdgfem.hdg.gram import ScalarHDGGram
+from hybridge.hdg.gram import ScalarHDGGram
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.configuration import _validate_config
 from scripts.guiding_center.runtime.runner import run_guiding_center_case
@@ -143,7 +143,7 @@ def accepted_density_trace(snapshot, *, trace_basis):
     reduced = getattr(snapshot, "accepted_density_trace_reduced", None)
     if reduced is None:
         return _transport_trace(snapshot.transport_result)
-    from hdgfem.hdg.condensation import expand_interior_trace
+    from hybridge.hdg.condensation import expand_interior_trace
 
     boundary = snapshot.accepted_density_boundary
     return expand_interior_trace(snapshot.space, reduced,
@@ -166,7 +166,7 @@ def _host_artifact(array):
 class VorticityRaster:
     """Cache mesh-aware sampling; use cuSPARSE for changing device fields."""
     def __init__(self, space, resolution, *, device_id=None):
-        from hdgfem.io.raster import RasterGeometry, DeviceRasterSampler
+        from hybridge.io.raster import RasterGeometry, DeviceRasterSampler
 
         self.geometry = RasterGeometry.from_mesh(space.mesh, resolution, resolution)
         if device_id is None:
@@ -198,7 +198,7 @@ def _json(path, data):
 def plot_vortex_comparison(rows, samples, output_dir, prefix):
     """Shared color limits for fields and a separate scale for their difference."""
     import matplotlib.pyplot as plt
-    from hdgfem.io import plot_scalar_raster_panels_matplotlib, scalar_color_limits
+    from hybridge.io import plot_scalar_raster_panels_matplotlib, scalar_color_limits
 
     output_dir = Path(output_dir)
     fig, grid = plt.subplots(2, 3, figsize=(14, 8), constrained_layout=True)
@@ -271,7 +271,7 @@ def run_vortex_comparison(*, resolution=1024, plot=False, cached_kernels_only=Fa
     if manifest_path.exists():
         raise FileExistsError(f"Comparison already exists: {manifest_path}; choose a new prefix")
     manifest = dict(study="vortex-gas", status="running", configs=[asdict(c) for c in configs],
-                    precision=str(__import__("hdgfem.runtime.precision", fromlist=["REAL_DTYPE"]).REAL_DTYPE),
+                    precision=str(__import__("hybridge.runtime.precision", fromlist=["REAL_DTYPE"]).REAL_DTYPE),
                     cached_kernels_only=cached_kernels_only,
                     note="Fixed-space temporal sensitivity, not an observed order or exact error. "
                          "HDG palinstrophy = broken palinstrophy + J/2; J uses 1/h_K (element diameter). "

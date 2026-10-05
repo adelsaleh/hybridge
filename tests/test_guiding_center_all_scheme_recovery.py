@@ -3,12 +3,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.linalg.results import (
+from hybridge.linalg.results import (
     LinearSolveError,
     LinearSolveConvergenceError,
     LinearSolveCapacityError,
 )
-from hdgfem.transport.diagnostics import UpwindHDGTraceRankError
+from hybridge.transport.diagnostics import UpwindHDGTraceRankError
 from scripts.guiding_center.time_schemes import STEPPERS
 from scripts.guiding_center.time_schemes import (
     si_euler, si_bdf2, si_bdf3, predictor_corrector, hybrid_bdf3, imex_ark3, recovery, stage_support,
@@ -296,7 +296,7 @@ def test_factory_forwards_recovery_policy_for_every_scheme(monkeypatch, scheme):
     from dataclasses import replace
     from scripts.guiding_center.runtime import steppers
     from scripts.guiding_center.cases.guiding_center_presets import PRESETS
-    from hdgfem.transport import residual as advection_residual
+    from hybridge.transport import residual as advection_residual
     config = replace(PRESETS['euler_vortex_gas_imex_ark3_p6_h008_dt0005_t50_raw_cuda_bsr'],
                      time_scheme=scheme, poisson_tau_retry_factor=2., poisson_tau_max_retries=7,
                      verbosity=0)

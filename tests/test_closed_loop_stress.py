@@ -191,7 +191,7 @@ def test_default_plan_has_complete_coverage_and_no_numerical_imports(tmp_path, m
     assert {c["parameters"]["variant"] for c in plan["cases"]} == set(cases.VARIANTS)
     assert {c["family"] for c in plan["candidates"]} == {"asm_pp", "bj_pp", "amgx", "native_hp"}
     assert not (tmp_path/"campaign").exists()
-    assert not {"hdgfem", "cupy", "gmsh"}.intersection(set(sys.modules)-existing_modules)
+    assert not {"hybridge", "cupy", "gmsh"}.intersection(set(sys.modules)-existing_modules)
 
 
 @pytest.mark.parametrize("extra", [
@@ -432,7 +432,7 @@ def test_status_is_read_only_and_does_not_require_branch_or_numerical_imports(tm
     output = capsys.readouterr().out
     assert "trace_dofs=140" in output and "CPU_reference=NOT CHECKED" in output
     assert "CPU/GPU_assembly=NOT CHECKED" in output
-    assert not {"hdgfem", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
+    assert not {"hybridge", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
     assert before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
 
 
@@ -440,7 +440,7 @@ def test_strong_preset_resolves_all_families_and_preserves_baseline_policies(tmp
     args, common = planning_args(tmp_path, "--solver-strength", "strong")
     modules = set(sys.modules)
     plan = runner.build_plan(args, common)
-    assert not {"hdgfem", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
+    assert not {"hybridge", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
     assert plan["restart"] == 150 and plan["solver_controls"]["pp_degree"] == 96
     for row in plan["candidates"]:
         if row["family"] in ("asm_pp", "bj_pp"):
@@ -549,7 +549,7 @@ def test_cached_large_mesh_obeys_current_budget_without_importing_gmsh(tmp_path)
     with pytest.raises(ValueError, match="exceeds --max-triangles"):
         prepare_mesh(cases.StressParameters(), 150000, tmp_path, max_triangles=150000,
                      neck_elements=12, boundary_points=3600)
-    assert not {"hdgfem", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
+    assert not {"hybridge", "cupy", "gmsh"}.intersection(set(sys.modules)-modules)
 
 
 def test_workspace_budget_accounts_for_restart_and_polynomial_degree(tmp_path):

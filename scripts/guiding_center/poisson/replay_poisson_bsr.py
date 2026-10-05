@@ -17,10 +17,10 @@ import traceback
 import numpy as np
 from scipy import sparse
 
-from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
-from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
-from hdgfem.linalg.amgx.host import initialize_pyamgx_once
-from hdgfem.runtime.optional import require_cupy
+from hybridge.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
+from hybridge.linalg.gpu.sparse import _DeviceBsrMatrixView
+from hybridge.linalg.amgx.host import initialize_pyamgx_once
+from hybridge.runtime.optional import require_cupy
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import block_basis_congruence, cycle_gate, smoothing_cases
 from scripts.guiding_center.poisson.benchmark_poisson_backends import digest
 from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
@@ -80,7 +80,7 @@ def main():
     root = Path(__file__).resolve().parents[3]
     for path in (Path(__file__), args.configs,
                  native/'include/classical/hierarchy_diagnostics.h', native/'src/multiply.cu',
-                 root/'hdgfem/linalg/gpu/legendre_face_bsr.py', root/'hdgfem/linalg/multigrid/hierarchy_bsr.py',
+                 root/'hybridge/linalg/gpu/legendre_face_bsr.py', root/'hybridge/linalg/multigrid/hierarchy_bsr.py',
                  Path(__file__).with_name('hierarchy_product_benchmark.py'),
                  Path(__file__).with_name('benchmark_hybrid_hierarchy_bsr.py')):
         if path is not None:

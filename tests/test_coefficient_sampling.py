@@ -59,7 +59,7 @@ def test_scalar_broadcast_empty_and_strided_inputs():
 def test_scalar_kernel_body_without_compiling():
     evaluator, p = adapter()
     import sys
-    module = sys.modules["_hdgfem_coefficient_sampling"]
+    module = sys.modules["_hybridge_coefficient_sampling"]
     x, y = points(p)
     result = np.empty((6, *x.shape))
     module._point_loop(evaluator.formulas.closed_loop_volume, evaluator.parameters, x, y, result)
@@ -137,7 +137,7 @@ def test_invalid_and_nonfinite():
         sampler.sample(simple, [np.nan], [2.], (3.,), components=2)
 
 
-@pytest.mark.skipif(os.environ.get("HDGFEM_TEST_SAMPLING_JIT") != "1", reason="requires explicit JIT authorization")
+@pytest.mark.skipif(os.environ.get("HYBRIDGE_TEST_SAMPLING_JIT") != "1", reason="requires explicit JIT authorization")
 @pytest.mark.parametrize("variant", reference.VARIANTS)
 def test_compiled_numba_parity(variant):
     evaluator, p = adapter(variant, backend="numba")
@@ -148,7 +148,7 @@ def test_compiled_numba_parity(variant):
     assert evaluator.stats["numba_threads"] > 0
 
 
-@pytest.mark.skipif(os.environ.get("HDGFEM_TEST_SAMPLING_CUDA") != "1", reason="requires explicit CUDA/JIT authorization")
+@pytest.mark.skipif(os.environ.get("HYBRIDGE_TEST_SAMPLING_CUDA") != "1", reason="requires explicit CUDA/JIT authorization")
 @pytest.mark.parametrize("variant", reference.VARIANTS)
 def test_cupy_parity(variant):
     evaluator, p = adapter(variant, backend="cupy")

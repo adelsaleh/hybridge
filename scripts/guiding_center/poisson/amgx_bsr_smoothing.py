@@ -135,7 +135,7 @@ def block_basis_congruence(matrix, basis):
 class HostAmgxSystem(AbstractContextManager):
     """Small host-uploaded algebra fixture using the shared runtime initializer."""
     def __init__(self, matrix, config, *, dtype=np.float64):
-        from hdgfem.linalg.amgx.host import initialize_pyamgx_once
+        from hybridge.linalg.amgx.host import initialize_pyamgx_once
         self.amgx = initialize_pyamgx_once()
         self.objects = []
         self.size = matrix.shape[0]
@@ -199,7 +199,7 @@ class HostAmgxSystem(AbstractContextManager):
 
 def cycle_gate(smoother='l1', presweeps=0, postsweeps=3, *, block_size=7, config=None):
     """Verify history independence, linearity, and preservation of a warm start."""
-    from hdgfem.linalg.amgx.host import initialize_pyamgx_once
+    from hybridge.linalg.amgx.host import initialize_pyamgx_once
     matrix = coupled_spd_chain(block_size)
     config = (smoothing_config(smoother, presweeps, postsweeps) if config is None
               else copy.deepcopy(config))

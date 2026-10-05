@@ -8,8 +8,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from scripts.guiding_center.time_schemes import STEPPERS
-from hdgfem.runtime.precision import PRECISION
-from hdgfem.linalg.amgx.config import load_amgx_config, with_amgx_residual_history
+from hybridge.runtime.precision import PRECISION
+from hybridge.linalg.amgx.config import load_amgx_config, with_amgx_residual_history
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 
 
@@ -383,7 +383,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         )
     upwind_scale = getattr(args, "transport_upwind_factor", None)
     if upwind_scale is not None:
-        from hdgfem.hdg.stabilization import ScaledUpwind
+        from hybridge.hdg.stabilization import ScaledUpwind
         updates["transport_advection_stabilization"] = ScaledUpwind(upwind_scale)
     runtime = replace(config, **updates) if updates else config
     if args.transport_amgx_config is None:
@@ -466,7 +466,7 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
     if config.time_scheme in {"h1-bdf3", "h2-bdf3", "imex-ark3"}:
         if config.time_scheme != "imex-ark3" and _hybrid_startup_method(config) not in {"si-euler-extrap3", "ssprk3"}:
             raise ValueError("hybrid startup must be si-euler-extrap3 or ssprk3")
-        from hdgfem.hdg.stabilization import upwind_factor
+        from hybridge.hdg.stabilization import upwind_factor
         if upwind_factor(config.transport_advection_stabilization) != 1.:
             raise ValueError(f"{config.time_scheme} requires unit-factor upwind or conflict-averaged-upwind stabilization")
         if config.transport_boundary_mode not in {"auto", "zero-flux", "eliminate"}:
@@ -571,7 +571,7 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
 
 
 def _make_poisson_options(config: GuidingCenterRunPreset):
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 
     config_dir = Path(__file__).resolve().parents[3] / "configs" / "amgx"
     primary_path = config.poisson_amgx_config_path
@@ -716,7 +716,7 @@ def _make_poisson_options(config: GuidingCenterRunPreset):
 def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) -> dict:
     """Enable native divergence exits for transport, preserving explicit overrides."""
     if config is None:
-        from hdgfem.linalg.amgx.host import default_pyamgx_config
+        from hybridge.linalg.amgx.host import default_pyamgx_config
         config = default_pyamgx_config(tolerance=tolerance, maxiter=None)
     config = copy.deepcopy(config)
     solver = config.setdefault("solver", {})
@@ -728,7 +728,7 @@ def _transport_amgx_divergence_config(config: dict | None, *, tolerance: float) 
 
 
 def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGOptions
 
     retry_attempts = None
     primary_amgx_tolerance = (

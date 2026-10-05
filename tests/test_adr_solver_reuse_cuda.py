@@ -7,7 +7,7 @@ stay fixed. No time integration.
 import numpy as np
 import pytest
 
-from hdgfem import (AdvectionDiffusionReactionHDGSolver, DGMesh, DGSpace, rectangle_mesh,
+from hybridge import (AdvectionDiffusionReactionHDGSolver, DGMesh, DGSpace, rectangle_mesh,
                     solve_advection_diffusion_reaction_hdg)
 
 DIFFUSION = (lambda x, y: .05*(1. + .1*x), lambda x, y: .01 + .002*y, lambda x, y: .04*(1. + .05*y))
@@ -82,8 +82,8 @@ def test_reused_solves_match_fresh_solves(cp, reuse):
 
 
 def test_failed_stale_solve_retries_with_fresh_setup(cp, monkeypatch):
-    from hdgfem.transport import cuda as advection_cuda
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
+    from hybridge.transport import cuda as advection_cuda
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
     dg = space()
     solver = AdvectionDiffusionReactionHDGSolver(dg, **options(amgx_reuse='preconditioner'))
     sequence = list(problems(dg, 3))

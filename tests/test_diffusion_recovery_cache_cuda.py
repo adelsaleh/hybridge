@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from hdgfem.mixed.postprocess import flux_recovery_raw_cuda as raw
-from hdgfem.core.mesh import DGMesh, rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.solvers import diffusion_reaction as diffusion
-import hdgfem.mixed.postprocess.flux as postprocess_flux
+from hybridge.mixed.postprocess import flux_recovery_raw_cuda as raw
+from hybridge.core.mesh import DGMesh, rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.solvers import diffusion_reaction as diffusion
+import hybridge.mixed.postprocess.flux as postprocess_flux
 
 
 @pytest.fixture

@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.core.space import DGSpace, VectorDGField
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.runtime import runner
 import scripts.guiding_center.run_guiding_center_cases as cli
 import scripts.guiding_center.time_schemes.si_bdf2 as si_bdf2
@@ -109,9 +109,9 @@ def test_bdf2_has_second_order_local_consistency_with_coupled_velocity():
 @pytest.mark.parametrize("plot_every", [0, 2])
 def test_runner_uses_accepted_history_with_canned_solver_results(monkeypatch, tmp_path, scheme, stages, recovered, diagnostics_enabled, record_timings, plot_every):
     """Exercise control flow only: every numerical solve returns a canned state."""
-    import hdgfem.core.space as space_module
-    import hdgfem.solvers.advection_reaction as advection
-    import hdgfem.solvers.diffusion_reaction as diffusion
+    import hybridge.core.space as space_module
+    import hybridge.solvers.advection_reaction as advection
+    import hybridge.solvers.diffusion_reaction as diffusion
 
     config = replace(
         preset_by_key("rho_helm_wave_host_accuracy"),

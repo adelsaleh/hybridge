@@ -1,11 +1,11 @@
 # AMGX Classical AMG With A BSR Fine Operator
 
-This document describes the experimental AMGX path used by HDGFEM when the
+This document describes the experimental AMGX path used by HYBRIDGE when the
 condensed HDG trace operator is uploaded in block sparse row (BSR) format and
 the selected preconditioner is classical AMG. It records the maintained
 algorithm and storage lifecycle. Dated performance evidence belongs in the
 [August 2026 solver study](../research/solver_studies/classical_amg_bsr_2026_08.md).
-The software ownership boundary and comparison with the independent HDGFEM
+The software ownership boundary and comparison with the independent HYBRIDGE
 face-block p/h-multigrid path are defined in the
 [BSR and AMGX dependency map](bsr_amgx_dependency_map.md).
 
@@ -115,7 +115,7 @@ BSR fine operator:
 }
 ```
 
-HDGFEM's checked-in example is
+HYBRIDGE's checked-in example is
 `configs/amgx/diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive.json`. The option is
 opt-in so legacy AMGX block-Jacobi behavior remains unchanged.
 

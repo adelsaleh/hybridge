@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from hdgfem.linalg.gpu.sparse import (
+from hybridge.linalg.gpu.sparse import (
     diagonal_scale_cupy_csr_rows_in_place,
     symmetric_scale_cupy_csr_in_place,
 )

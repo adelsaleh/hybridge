@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from hdgfem.core.geometry import PolygonDomain, shaped_domain
-from hdgfem.cases.profiles import GaussianBlobField
+from hybridge.core.geometry import PolygonDomain, shaped_domain
+from hybridge.cases.profiles import GaussianBlobField
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
@@ -97,7 +97,7 @@ def test_bad_geometry_rejected(params):
 @pytest.mark.parametrize("kind", ["horseshoe", "pacman"])
 def test_small_mesh_topology_and_cache_use_the_same_polygon(kind, tmp_path):
     pytest.importorskip("gmsh")
-    from hdgfem.core.mesh import gmsh_polygon_mesh
+    from hybridge.core.mesh import gmsh_polygon_mesh
     domain = shaped_domain(kind, boundary_points=64)
     mesh = gmsh_polygon_mesh(.18, vertices=domain.vertices, cache_dir=tmp_path, log_cache=False)
     assert np.all(mesh.aff_jacs > 0)
@@ -111,8 +111,8 @@ def test_small_mesh_topology_and_cache_use_the_same_polygon(kind, tmp_path):
 
 def test_iter_mesh_uses_source_curves_and_physical_labels(monkeypatch):
     import gmsh
-    import hdgfem.core.mesh as mesh_module
-    from hdgfem.core.geometry import iter_geometry_path
+    import hybridge.core.mesh as mesh_module
+    from hybridge.core.geometry import iter_geometry_path
     from scripts.guiding_center.runtime.runner import _build_mesh
     config = preset_by_key("euler_iter_gas_imex_ark3_p6_300k_t50")
     from types import SimpleNamespace

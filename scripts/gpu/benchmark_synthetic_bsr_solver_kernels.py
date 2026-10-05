@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile HDGFEM's FP64 BSR solver paths on a synthetic sparse operator.
+"""Profile HYBRIDGE's FP64 BSR solver paths on a synthetic sparse operator.
 
 The operator has a periodic 2-D five-point block stencil and a strictly
 dominant diagonal. Its values and RHS are deterministic; no mesh, PDE assembly, or
@@ -8,7 +8,7 @@ application.  AMGX candidates time a short solve, because pyamgx does not
 expose its preconditioner application.  These are kernel probes, not solver
 convergence or cross-family runtime comparisons.
 
-Run under Nsight Compute with ``--nvtx --nvtx-include hdgfem_synthetic/`` to
+Run under Nsight Compute with ``--nvtx --nvtx-include hybridge_synthetic/`` to
 collect counters only inside the timed operation.  Warmup and hierarchy setup
 are outside the NVTX range.
 """
@@ -103,18 +103,18 @@ def synthetic_element_faces(cp, faces: int):
 
 
 def native_operation(cp, candidate, matrix, blocks, neighbors, rhs, pp_degree):
-    from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-    from hdgfem.linalg.gpu.preconditioners import (
+    from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+    from hybridge.linalg.gpu.preconditioners import (
             CuPyFaceAdditiveSchwarzPreconditioner,
             CuPyFaceBlockJacobiPreconditioner,
         )
-    from hdgfem.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
-    from hdgfem.linalg.multigrid.krylov import BernsteinHpSymmetricPartPreconditioner
+    from hybridge.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
+    from hybridge.linalg.multigrid.krylov import BernsteinHpSymmetricPartPreconditioner
 
     faces, _, block_size, _ = blocks.shape
     output = cp.empty_like(rhs)
     if candidate == "bsr_matvec":
-        from hdgfem.linalg.gpu.legendre_face_bsr import LegendreFaceBsrOperator
+        from hybridge.linalg.gpu.legendre_face_bsr import LegendreFaceBsrOperator
         operator = LegendreFaceBsrOperator(
             cp.asarray(matrix.indptr, dtype=cp.int32),
             cp.asarray(matrix.indices, dtype=cp.int32),
@@ -264,7 +264,7 @@ def main() -> None:
         times = []
         for _ in range(args.repeats):
             sync()
-            cp.cuda.nvtx.RangePush("hdgfem_synthetic")
+            cp.cuda.nvtx.RangePush("hybridge_synthetic")
             start = perf_counter()
             try:
                 apply()

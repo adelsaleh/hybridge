@@ -12,7 +12,7 @@ constitutive blocks. It retains the total numerical flux and element mean.
 For quadrature-only coefficients, samples must match the recovery quadrature;
 use callable or DG components when assembly and recovery points differ.
 
-CuPy primal recovery uses `hdgfem.mixed.postprocess.primal_raw_cuda` to assemble its
+CuPy primal recovery uses `hybridge.mixed.postprocess.primal_raw_cuda` to assemble its
 matrix and RHS in one launch, tiling matrix entries across blocks and sharing
 quadrature contractions across the nine mixed volume blocks. CuPy/cuBLAS solves
 the batched pivoted systems. The independent contraction-based implementation

@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from hdgfem.transport.diagnostics import transport_rank_failure_details
+from hybridge.transport.diagnostics import transport_rank_failure_details
 
 
 @dataclass
@@ -54,7 +54,7 @@ class PoissonTauRecovery:
         self.events = []
 
     def increase(self, solver, failure, *, step_time):
-        from hdgfem.mixed.stabilization import resolve_diffusion_stabilization
+        from hybridge.mixed.stabilization import resolve_diffusion_stabilization
 
         old = float(resolve_diffusion_stabilization(
             solver.options.stabilization, solver.options.diffusion, solver.space))

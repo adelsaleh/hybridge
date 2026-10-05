@@ -138,8 +138,8 @@ scripts/gpu/run_cuda13.sh .venv/bin/python -c \
 
 Use this launcher for GPU tests, benchmarks, and guiding-center runs instead of
 hand-writing a partial `LD_LIBRARY_PATH`. Advanced installations can override
-`HDGFEM_CUDA13_ROOT`, `HDGFEM_AMGX_BUILD_ROOT`, and
-`HDGFEM_AMGX_INSTALL_ROOT`.
+`HYBRIDGE_CUDA13_ROOT`, `HYBRIDGE_AMGX_BUILD_ROOT`, and
+`HYBRIDGE_AMGX_INSTALL_ROOT`.
 
 Verify the source pins and imported extension before running HDG evidence:
 

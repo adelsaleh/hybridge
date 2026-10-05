@@ -132,9 +132,9 @@ def test_parameter_overrides_and_case_switch():
 
 
 def test_block_amg_preset_loads_study_config(monkeypatch):
-    import hdgfem
+    import hybridge
     from types import SimpleNamespace
-    from hdgfem.solvers.advection_diffusion_reaction import AdvectionDiffusionReactionTimings
+    from hybridge.solvers.advection_diffusion_reaction import AdvectionDiffusionReactionTimings
     seen = {}
 
     class FakeSolver:
@@ -147,7 +147,7 @@ def test_block_amg_preset_loads_study_config(monkeypatch):
                 timings=AdvectionDiffusionReactionTimings(), global_solve_result=None,
                 field=SimpleNamespace(l2_error=lambda exact: 0.), flux=SimpleNamespace(l2_error=lambda exact: 0.))
 
-    monkeypatch.setattr(hdgfem, "AdvectionDiffusionReactionHDGSolver", FakeSolver)
+    monkeypatch.setattr(hybridge, "AdvectionDiffusionReactionHDGSolver", FakeSolver)
     run_case(replace(preset_by_key("tensor_cuda_bsr_amg"), nx=1, verbosity=0))
     options = seen["options"]
     assert options.raw_matrix_format == "bsr"
@@ -161,8 +161,8 @@ def test_block_amg_preset_loads_study_config(monkeypatch):
 
 @pytest.mark.parametrize("backend", ["pyvista", "holoviz"])
 def test_plot_backend_selects_only_requested_helper(monkeypatch, backend):
-    import hdgfem.io.holoviz as holoviz
-    import hdgfem.io.plot as plot
+    import hybridge.io.holoviz as holoviz
+    import hybridge.io.plot as plot
     from types import SimpleNamespace
     from scripts.advection_diffusion_reaction import run_cases
     calls = []
@@ -197,7 +197,7 @@ def test_verbosity_cli_matches_other_runners():
 def test_verbosity_levels_are_nested(capsys):
     """Level 2 adds backend micro-timings; level 3 also asks the solver layer for everything."""
     pytest.importorskip("pypardiso")
-    from hdgfem.solvers.advection_diffusion_reaction import _solver_verbosity
+    from hybridge.solvers.advection_diffusion_reaction import _solver_verbosity
 
     outputs = {}
     for level in (0, 1, 2, 3):
@@ -222,7 +222,7 @@ def test_file_and_module_entrypoints_have_no_numerical_imports():
 import sys
 from scripts.advection_diffusion_reaction.run_cases import main
 main(['stress_annulus_trap', '--dry-run'])
-assert not {'hdgfem', 'numba', 'cupy', 'gmsh', 'pypardiso'}.intersection(sys.modules)
+assert not {'hybridge', 'numba', 'cupy', 'gmsh', 'pypardiso'}.intersection(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, check=True)
 
@@ -249,8 +249,8 @@ def test_runner_small_pardiso_diagnostic_restores_threads():
 
 
 def test_runner_passes_native_cuda_options(monkeypatch):
-    import hdgfem
-    from hdgfem.solvers.advection_diffusion_reaction import AdvectionDiffusionReactionTimings
+    import hybridge
+    from hybridge.solvers.advection_diffusion_reaction import AdvectionDiffusionReactionTimings
     from types import SimpleNamespace
     seen = {}
 
@@ -264,7 +264,7 @@ def test_runner_passes_native_cuda_options(monkeypatch):
                 timings=AdvectionDiffusionReactionTimings(), global_solve_result=None,
                 field=SimpleNamespace(l2_error=lambda exact: 0.), flux=SimpleNamespace(l2_error=lambda exact: 0.))
 
-    monkeypatch.setattr(hdgfem, "AdvectionDiffusionReactionHDGSolver", FakeSolver)
+    monkeypatch.setattr(hybridge, "AdvectionDiffusionReactionHDGSolver", FakeSolver)
     _, report = run_case(replace(preset_by_key("tensor_cuda_bsr"), nx=1, verbosity=0))
     options = seen["options"]
     assert options.assembly_backend == "raw-cuda" and options.solver == "amgx"

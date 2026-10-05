@@ -1,11 +1,11 @@
 # PyPardiso factor diagnostics
 
-`hdgfem.linalg.pardiso_diagnostics.pardiso_factor_statistics(solver, matrix_nnz=...)`
+`hybridge.linalg.pardiso_diagnostics.pardiso_factor_statistics(solver, matrix_nnz=...)`
 reads an already active PyPardiso solver. It neither imports the optional backend
 nor changes its parameters. Call it after factorization and before releasing
 the factors. It is CPU-only because PyPardiso is a host direct solver; it does
 not transfer device matrices implicitly. Use the existing `face_dense_to_bsr`
-conversion and `solve_pypardiso_system` wrapper for HDGFEM trace systems.
+conversion and `solve_pypardiso_system` wrapper for HYBRIDGE trace systems.
 
 The package also exposes `prepare_pypardiso_spd_matrix(full_matrix)`: it checks
 real finite square input and symmetry, then returns upper-triangular CSR for

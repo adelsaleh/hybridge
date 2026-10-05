@@ -13,16 +13,16 @@ from pathlib import Path
 
 import numpy as np
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.hdg import matrices as mats
-import hdgfem.transport.local_numpy as transport_local_numpy
-import hdgfem.hdg.coefficients as hdg_coefficients
-import hdgfem.hdg.stabilization as hdg_stabilization
-import hdgfem.core.mass as core_mass
-from hdgfem.linalg.system import assemble_global_matrix
-from hdgfem.transport.diagnostics import trace_inflow_diagnostics
-from hdgfem.linalg.failure_snapshot import trace_matrix_diagnostics
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.hdg import matrices as mats
+import hybridge.transport.local_numpy as transport_local_numpy
+import hybridge.hdg.coefficients as hdg_coefficients
+import hybridge.hdg.stabilization as hdg_stabilization
+import hybridge.core.mass as core_mass
+from hybridge.linalg.system import assemble_global_matrix
+from hybridge.transport.diagnostics import trace_inflow_diagnostics
+from hybridge.linalg.failure_snapshot import trace_matrix_diagnostics
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 
 
 AVERAGED = "conflict-averaged-upwind"

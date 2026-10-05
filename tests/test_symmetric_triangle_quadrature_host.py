@@ -8,8 +8,8 @@ import numba as nb
 import numpy as np
 import pytest
 
-from hdgfem.core import basis as basis_module
-from hdgfem.core.quadrature import ReferenceElementData
+from hybridge.core import basis as basis_module
+from hybridge.core.quadrature import ReferenceElementData
 
 
 BASIS_TYPES = ("bernstein", "hier_C0", "dub_orth")
@@ -18,7 +18,7 @@ P_SWEEP = tuple(range(1, 7))
 
 # Compact Dunavant rules with weights normalized to a unit-area triangle.
 # ``_dunavant_rule`` expands each symmetric orbit and rescales the weights to
-# the HDGFEM reference triangle, which has area 2.
+# the HYBRIDGE reference triangle, which has area 2.
 DUNAVANT_RULE_BLOCKS = {
     2: (
         ((2.0 / 3.0, 1.0 / 6.0, 1.0 / 6.0), 1.0 / 3.0),

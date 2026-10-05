@@ -9,9 +9,9 @@ import time
 
 import numpy as np
 
-from hdgfem import gmsh_smooth_star_mesh
-from hdgfem.io import GifWriter, MatplotlibRasterPanels
-from hdgfem.io.movie import MovieWriter
+from hybridge import gmsh_smooth_star_mesh
+from hybridge.io import GifWriter, MatplotlibRasterPanels
+from hybridge.io.movie import MovieWriter
 
 
 def restyle(source, target, *, background="black", gif_mb=100., movie=False):

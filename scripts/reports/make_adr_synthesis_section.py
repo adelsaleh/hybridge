@@ -11,7 +11,7 @@ from matplotlib.colors import Normalize
 from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
 import numpy as np
-from hdgfem.io.figures import publication_style, save_publication_figure
+from hybridge.io.figures import publication_style, save_publication_figure
 import adr_native_completion as native_completion
 import adr_lu_baseline as lu
 from adr_report_labels import PMG, PMG_TEX, polynomial_label

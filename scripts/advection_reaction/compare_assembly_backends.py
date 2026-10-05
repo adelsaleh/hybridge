@@ -2,7 +2,7 @@
 """Compare NumPy and Numba HDG assembly speed and memory use.
 
 This is a development benchmark, not library API.  Run it from an environment
-where ``hdgfem`` is installed, typically with ``python -m pip install -e .``.
+where ``hybridge`` is installed, typically with ``python -m pip install -e .``.
 """
 
 from __future__ import annotations
@@ -86,8 +86,8 @@ def _phase_seconds(result: Any) -> dict[str, float]:
     return dict(result.phases) if isinstance(result, AssemblyOutcome) else {}
 
 
-def _load_hdgfem() -> None:
-    """Import hdgfem dependencies while suppressing third-party import noise."""
+def _load_hybridge() -> None:
+    """Import hybridge dependencies while suppressing third-party import noise."""
     global DGField
     global DGSpace
     global VectorDGField
@@ -116,40 +116,40 @@ def _load_hdgfem() -> None:
 
     with _suppress_output_fds():
         import numpy as _np
-        from hdgfem.hdg import condensation as _hdg_assembly
-        from hdgfem.hdg import matrices as _hdg_mats
-        from hdgfem.mixed.numba import (
+        from hybridge.hdg import condensation as _hdg_assembly
+        from hybridge.hdg import matrices as _hdg_mats
+        from hybridge.mixed.numba import (
                     assemble_projected_diffusion_trace_system_eliminated_numba as _assemble_projected_diffusion_trace_system_eliminated_numba,
                 )
-        from hdgfem.transport.numba import (
+        from hybridge.transport.numba import (
                     assemble_projected_trace_system_eliminated_numba as _assemble_projected_trace_system_eliminated_numba,
                 )
-        from hdgfem.transport.numba import (
+        from hybridge.transport.numba import (
                     assemble_projected_trace_system_numba as _assemble_projected_trace_system_numba,
                 )
-        from hdgfem.core.mesh import gmsh_disc_mesh as _gmsh_disc_mesh
-        from hdgfem.core.mesh import gmsh_lshape_mesh as _gmsh_lshape_mesh
-        from hdgfem.core.mesh import gmsh_rectangle_mesh as _gmsh_rectangle_mesh
-        from hdgfem.core.mesh import gmsh_triangle_mesh as _gmsh_triangle_mesh
-        from hdgfem.core.mesh import rectangle_mesh as _rectangle_mesh
-        from hdgfem.core.space import DGField as _DGField
-        from hdgfem.core.space import DGSpace as _DGSpace
-        from hdgfem.core.space import VectorDGField as _VectorDGField
-        from hdgfem.linalg.ordering import upwind_scc_trace_ordering as _upwind_scc_trace_ordering
-        from hdgfem.linalg.reduction import (
+        from hybridge.core.mesh import gmsh_disc_mesh as _gmsh_disc_mesh
+        from hybridge.core.mesh import gmsh_lshape_mesh as _gmsh_lshape_mesh
+        from hybridge.core.mesh import gmsh_rectangle_mesh as _gmsh_rectangle_mesh
+        from hybridge.core.mesh import gmsh_triangle_mesh as _gmsh_triangle_mesh
+        from hybridge.core.mesh import rectangle_mesh as _rectangle_mesh
+        from hybridge.core.space import DGField as _DGField
+        from hybridge.core.space import DGSpace as _DGSpace
+        from hybridge.core.space import VectorDGField as _VectorDGField
+        from hybridge.linalg.ordering import upwind_scc_trace_ordering as _upwind_scc_trace_ordering
+        from hybridge.linalg.reduction import (
                     eliminate_known_dofs as _eliminate_known_dofs,
                 )
-        from hdgfem.mixed.coefficients import _diffusion_is_identity
-        from hdgfem.mixed.local_numpy import _local_solver_blocks_numpy
-        from hdgfem.mixed.local_numpy import _local_solver_pre_mats
-        from hdgfem.mixed.local_numpy import _local_solver_scalar_inverse
-        from hdgfem.mixed.coefficients import (
+        from hybridge.mixed.coefficients import _diffusion_is_identity
+        from hybridge.mixed.local_numpy import _local_solver_blocks_numpy
+        from hybridge.mixed.local_numpy import _local_solver_pre_mats
+        from hybridge.mixed.local_numpy import _local_solver_scalar_inverse
+        from hybridge.mixed.coefficients import (
                     normalize_diffusion_stabilization as _normalize_tau,
                 )
-        from hdgfem.mixed.local_numpy import (
+        from hybridge.mixed.local_numpy import (
                     assemble_diffusion_trace_system as _assemble_diffusion_trace_system,
                 )
-        from hdgfem.mixed.local_numpy import (
+        from hybridge.mixed.local_numpy import (
                     diffusion_element_boundary_mats as _diffusion_element_boundary_mats,
                 )
         try:
@@ -671,7 +671,7 @@ def _print_breakdown(cases: list[BenchmarkCase]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Compare hdgfem NumPy and Numba projected HDG assembly.",
+        description="Compare hybridge NumPy and Numba projected HDG assembly.",
     )
     parser.add_argument(
         "--problem",
@@ -683,7 +683,7 @@ def parse_args() -> argparse.Namespace:
         "--diff-test",
         choices=("test0", "test2", "test3", "test5", "test6"),
         default="test2",
-        help="manufactured diffusion-reaction problem from hdgfem.solvers.diffusion_reaction",
+        help="manufactured diffusion-reaction problem from hybridge.solvers.diffusion_reaction",
     )
     parser.add_argument("--stabilization", type=float, default=1.0, help="diffusion-reaction HDG stabilization")
     parser.add_argument("--lc", "--mesh-size", dest="lc", type=float, default=0.35, help="Gmsh target mesh size")
@@ -701,7 +701,7 @@ def parse_args() -> argparse.Namespace:
         "--trace-ordering",
         choices=("none", "upwind-scc"),
         default="none",
-        help="optional advection trace-edge ordering, matching hdgfem.solvers.advection_reaction",
+        help="optional advection trace-edge ordering, matching hybridge.solvers.advection_reaction",
     )
     parser.add_argument(
         "--trace-ordering-flux-tolerance",
@@ -734,7 +734,7 @@ def main() -> int:
     args = parse_args()
     if args.repeats < 1:
         raise SystemExit("--repeats must be at least 1")
-    _load_hdgfem()
+    _load_hybridge()
     cases = run_benchmark(args)
     if not cases:
         raise SystemExit("no benchmark cases selected; diffusion Numba currently supports --mode eliminate or both")

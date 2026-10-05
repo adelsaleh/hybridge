@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
 
 
 def _cupy_runtime_available() -> bool:
@@ -18,7 +18,7 @@ def _cupy_runtime_available() -> bool:
 
 def _cutensor_available() -> bool:
     try:
-        from hdgfem.runtime.optional import require_cutensor
+        from hybridge.runtime.optional import require_cutensor
 
         require_cutensor()
     except Exception:
@@ -28,7 +28,7 @@ def _cutensor_available() -> bool:
 
 def _magma_available() -> bool:
     try:
-        from hdgfem.linalg.gpu.magma_batched import magma_available
+        from hybridge.linalg.gpu.magma_batched import magma_available
 
         return magma_available()
     except Exception:
@@ -40,8 +40,8 @@ pytestmark = pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA
 
 def _split3_inputs(order: int, trace_basis: str, *, zero_boundary_flux: bool, stabilization=None) -> dict:
     """Return the keyword inputs that assemble_reduced_system_cuda passes to TSLE-BSR."""
-    import hdgfem.transport.cuda as transport_cuda
-    from hdgfem.core.device import as_cupy_space, as_cupy_trace_space, as_cupy_vector_coefficients
+    import hybridge.transport.cuda as transport_cuda
+    from hybridge.core.device import as_cupy_space, as_cupy_trace_space, as_cupy_vector_coefficients
 
     mesh = rectangle_mesh(3, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     space = DGSpace(mesh, order, basis_type="dub_orth", volume_quad_1d=2 * order + 2, edge_quad_1d=order + 2)
@@ -75,8 +75,8 @@ def _split3_inputs(order: int, trace_basis: str, *, zero_boundary_flux: bool, st
 
 def _assert_matches_split3(inputs: dict, *, rtol: float, **options) -> None:
     import cupy as cp
-    from hdgfem.transport.tsle_bsr import assemble_projected_advection_trace_system_eliminated_tsle_bsr
-    from hdgfem.transport.tsle_tensor import assemble_projected_advection_trace_system_eliminated_tsle_tensor
+    from hybridge.transport.tsle_bsr import assemble_projected_advection_trace_system_eliminated_tsle_bsr
+    from hybridge.transport.tsle_tensor import assemble_projected_advection_trace_system_eliminated_tsle_tensor
 
     reference = assemble_projected_advection_trace_system_eliminated_tsle_bsr(**inputs)
     result = assemble_projected_advection_trace_system_eliminated_tsle_tensor(**inputs, **options)
@@ -108,7 +108,7 @@ def test_fp64_tensor_tsle_zero_flux_conflict_averaged_matches_split3(trace_basis
     _assert_matches_split3(inputs, rtol=1.0e-12, precision="float64", contraction="cublas", local_solver="coop")
 
 
-@pytest.mark.skipif(not _magma_available(), reason="MAGMA is unavailable (set HDGFEM_MAGMA_ROOT)")
+@pytest.mark.skipif(not _magma_available(), reason="MAGMA is unavailable (set HYBRIDGE_MAGMA_ROOT)")
 @pytest.mark.parametrize("precision,rtol", (("float64", 1.0e-12), ("float32", 1.0e-4)))
 def test_magma_tensor_tsle_matches_split3(precision, rtol) -> None:
     inputs = _split3_inputs(6, "legendre-modal", zero_boundary_flux=True, stabilization="conflict-averaged-upwind")
@@ -124,7 +124,7 @@ def test_fp32_tensor_tsle_tracks_fp64_split3() -> None:
 @pytest.mark.parametrize("trans", (False, True))
 def test_lu_solve_batched_cublas_matches_numpy(dtype, trans) -> None:
     import cupy as cp
-    from hdgfem.linalg.gpu.cublas_batched import BatchedLUWorkspace, lu_solve_batched_cublas
+    from hybridge.linalg.gpu.cublas_batched import BatchedLUWorkspace, lu_solve_batched_cublas
 
     rng = np.random.default_rng(3)
     matrices = rng.standard_normal((5, 7, 7)) + 7.0 * np.eye(7)
@@ -141,7 +141,7 @@ def test_lu_solve_batched_cublas_matches_numpy(dtype, trans) -> None:
 
 
 def test_specialize_real_source_targets_float32_only_on_request() -> None:
-    from hdgfem.runtime.precision import specialize_real_source
+    from hybridge.runtime.precision import specialize_real_source
 
     source = "double x = fabs(y) * 0.5 + 1.0e-30;"
     assert specialize_real_source(source, np.float64) == source

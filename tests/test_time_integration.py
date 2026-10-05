@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.core.time_integration import bdf2_transport_data, bdf3_transport_data
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace, VectorDGField
+from hybridge.core.time_integration import bdf2_transport_data, bdf3_transport_data
+from hybridge.runtime.precision import REAL_DTYPE
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ def test_bdf2_device_parity_without_host_materialization(fields, startup):
             pytest.skip("no CUDA device")
     except cp.cuda.runtime.CUDARuntimeError as exc:
         pytest.skip(f"CUDA unavailable: {exc}")
-    from hdgfem.core.device import field_from_cupy_coefficients
+    from hybridge.core.device import field_from_cupy_coefficients
 
     field, velocity, previous, previous_velocity = fields
     inputs = [field, *velocity.components, previous, *previous_velocity.components]

@@ -9,8 +9,8 @@ Equilibrium names are deliberately a thin convenience layer over the generic
 field checkpoint.  The core importer works for any collection of named scalar
 DOLFINx fields.
 
-This script-side adapter depends on native HDGFEM projection utilities;
-the core ``hdgfem`` package does not import it. Existing v2 format identifiers
+This script-side adapter depends on native HYBRIDGE projection utilities;
+the core ``hybridge`` package does not import it. Existing v2 format identifiers
 remain unchanged so relocating the module does not invalidate checkpoints.
 """
 
@@ -23,7 +23,7 @@ from typing import Any, Iterable, Mapping
 import numpy as np
 from scipy.spatial import cKDTree
 
-from hdgfem.core.projection import project_quadrature_values
+from hybridge.core.projection import project_quadrature_values
 from projects.diocotron.paths import resolve_archive_path
 from projects.diocotron.dolfinx.checkpoint_data import (
     EQUILIBRIUM_FORMAT_V2,
@@ -41,9 +41,9 @@ from projects.diocotron.dolfinx.checkpoint_data import (
     checkpoint_array_sha256,
     dolfinx_lagrange_reference_points,
 )
-from hdgfem.core.mesh import DGMesh
-from hdgfem.core.quadrature import ReferenceElementData
-from hdgfem.core.space import DGField, DGSpace
+from hybridge.core.mesh import DGMesh
+from hybridge.core.quadrature import ReferenceElementData
+from hybridge.core.space import DGField, DGSpace
 
 
 @dataclass(frozen=True)

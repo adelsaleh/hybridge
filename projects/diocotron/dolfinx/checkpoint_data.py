@@ -15,10 +15,10 @@ import numpy as np
 
 from projects.diocotron.paths import resolve_archive_path
 
-GENERIC_DOLFINX_FORMAT_V2 = "hdgfem_dolfinx_fields_v2"
+GENERIC_DOLFINX_FORMAT_V2 = "hybridge_dolfinx_fields_v2"
 
 
-EQUILIBRIUM_FORMAT_V2 = "hdgfem_equilibrium_v2"
+EQUILIBRIUM_FORMAT_V2 = "hybridge_equilibrium_v2"
 
 
 _SUPPORTED_V2_FORMATS = frozenset({GENERIC_DOLFINX_FORMAT_V2, EQUILIBRIUM_FORMAT_V2})
@@ -41,7 +41,7 @@ _CHECKSUM_ARRAYS = (
 def dolfinx_lagrange_reference_points(order: int) -> np.ndarray:
     """Return a canonical unisolvent degree-``order`` triangle point grid.
 
-    Points use the HDGFEM reference triangle with vertices ``(-1, -1)``,
+    Points use the HYBRIDGE reference triangle with vertices ``(-1, -1)``,
     ``(1, -1)``, and ``(-1, 1)``.  The ordering is stable and independent of
     DOLFINx/Basix internal degree-of-freedom ordering.
     """
@@ -169,7 +169,7 @@ def _validated_checkpoint_arrays(
     metadata = _decode_metadata(_require_array(arrays, "metadata"))
     format_name = str(metadata.get("format", ""))
     if format_name not in _SUPPORTED_V2_FORMATS:
-        if format_name == "hdgfem_equilibrium_v1":
+        if format_name == "hybridge_equilibrium_v1":
             raise ValueError(
                 "v1 equilibrium checkpoints lack cell-local polynomial samples; "
                 "re-export the DOLFINx fields as a v2 checkpoint before DG import"

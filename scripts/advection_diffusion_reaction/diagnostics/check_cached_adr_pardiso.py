@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose one cached ADR system using HDGFEM's existing PyPardiso backend.
+"""Diagnose one cached ADR system using HYBRIDGE's existing PyPardiso backend.
 
 No assembly, JIT, GPU, or campaign writes. Planning is the default; --execute
 runs each thread-count/repetition in a fresh, monitored CPU process.
@@ -67,9 +67,9 @@ def inspect_cache(spec_path, max_dofs):
 def solve_cached(args, threads, output):
     import numpy as np
     import pypardiso
-    from hdgfem.linalg.face_dense import face_dense_matvec
-    from hdgfem.linalg.bsr import face_dense_to_bsr
-    from hdgfem.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
+    from hybridge.linalg.face_dense import face_dense_matvec
+    from hybridge.linalg.bsr import face_dense_to_bsr
+    from hybridge.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
 
     report = dict(status='running', threads=threads, timings_ms={})
     destination = output/'result.json'
@@ -287,7 +287,7 @@ def main(argv=None):
             output.mkdir()
             env = dict(os.environ, MKL_NUM_THREADS=str(threads), OMP_NUM_THREADS=str(threads),
                        MKL_DYNAMIC='FALSE', OPENBLAS_NUM_THREADS='1', NUMBA_DISABLE_JIT='1',
-                       HDGFEM_PRECISION='float64', PYTHONDONTWRITEBYTECODE='1')
+                       HYBRIDGE_PRECISION='float64', PYTHONDONTWRITEBYTECODE='1')
             command = [sys.executable, '-u', '-B', str(Path(__file__).resolve()), '--worker',
                        '--spec', str(args.spec.resolve()), '--output', str(output.resolve()),
                        '--threads', str(threads), '--rtol', str(args.rtol), '--max-dofs', str(args.max_dofs)]

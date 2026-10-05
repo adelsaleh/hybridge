@@ -2,8 +2,8 @@
 """Compare trace-basis and scaling effects for diffusion HDG matrices.
 
 The script is intentionally orchestration-only: assembly and solves go through
-:class:`hdgfem.DiffusionReactionHDGSolver`, while sparse scaling uses the
-public :mod:`hdgfem.linalg` API.
+:class:`hybridge.DiffusionReactionHDGSolver`, while sparse scaling uses the
+public :mod:`hybridge.linalg` API.
 """
 
 from __future__ import annotations
@@ -22,17 +22,17 @@ import numpy as np
 import scipy.sparse
 from scipy.sparse.linalg import eigsh
 
-from hdgfem import DGSpace, DiffusionReactionHDGSolver
-from hdgfem.core.mesh import (
+from hybridge import DGSpace, DiffusionReactionHDGSolver
+from hybridge.core.mesh import (
     gmsh_disc_mesh,
     gmsh_lshape_mesh,
     gmsh_rectangle_mesh,
     gmsh_triangle_mesh,
     rectangle_mesh,
 )
-from hdgfem.linalg.amgx.config import load_amgx_config
-from hdgfem.io.output import pretty_print_sections
-from hdgfem.linalg import assemble_global_matrix, scale_sparse_system
+from hybridge.linalg.amgx.config import load_amgx_config
+from hybridge.io.output import pretty_print_sections
+from hybridge.linalg import assemble_global_matrix, scale_sparse_system
 from scripts.diffusion_reaction.cases import case_definition_by_key
 
 
@@ -249,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     scales = [_scale_mode(value) for value in requested_scales]
     if args.show_cupy_config:
-        from hdgfem.runtime.optional import require_cupy
+        from hybridge.runtime.optional import require_cupy
 
         require_cupy().show_config()
 
@@ -324,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             all_results.append(stats)
             pretty_print_sections(
                 [(f"trace={trace_basis}, scale={scale}", _diagnostic_rows(stats))],
-                title="HDGFEM Diffusion Matrix Diagnostics",
+                title="HYBRIDGE Diffusion Matrix Diagnostics",
             )
 
     comparison = []

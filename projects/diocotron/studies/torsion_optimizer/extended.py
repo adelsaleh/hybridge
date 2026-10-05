@@ -1000,7 +1000,7 @@ def create_contract_figures(bundle: Path, rows: list[dict[str, Any]], stage: str
                 "stage": stage,
                 "group": "standalone_control",
             })
-    registry = {"format": "hdgfem_torsion_optimizer_figure_registry_v1", "stage": stage,
+    registry = {"format": "hybridge_torsion_optimizer_figure_registry_v1", "stage": stage,
                 "asset_format": "png",
                 "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "figures": ([entries[item["id"]] for item in FIGURE_CONTRACT]

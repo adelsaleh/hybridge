@@ -39,8 +39,8 @@ import os
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/hdgfem_torsion_pyvista_mpl")
-os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hdgfem_torsion_pyvista_cache")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/hybridge_torsion_pyvista_mpl")
+os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hybridge_torsion_pyvista_cache")
 
 import gmsh
 import numpy as np

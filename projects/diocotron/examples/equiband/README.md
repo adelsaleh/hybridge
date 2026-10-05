@@ -3,7 +3,7 @@
 These examples require the optional FEniCSx environment; they are not native
 HDG solver presets. The implementation lives in
 [`projects/diocotron/dolfinx/equiband`](../../dolfinx/equiband),
-outside the installed `hdgfem` package. The maintained
+outside the installed `hybridge` package. The maintained
 [user guide](../../docs/equiband.md)
 explains the equations, guards, configuration units, MPI/thread layout,
 checkpoints and limitations.
@@ -19,7 +19,7 @@ selected ratio. Both remain fixed throughout the subsequent midpoint target
 search.
 
 From the repository root, after activating the FEniCSx environment (no
-editable `hdgfem` install is needed):
+editable `hybridge` install is needed):
 
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
@@ -102,8 +102,8 @@ use the output prompt or `--overwrite-output` to archive the previous run.
 forms a deterministic key from the complete geometry parameters, `mesh_size`,
 `geometry_degree`, Gmsh algorithm/version and generator source hash. Rank zero
 generates the tagged `.msh` on a cache miss; all ranks load the same validated
-artifact. The default cache is `.cache/hdgfem/dolfinx_meshes`, following the
-project-local convention used by `hdgfem.core.mesh` while keeping DOLFINx code
+artifact. The default cache is `.cache/hybridge/dolfinx_meshes`, following the
+project-local convention used by `hybridge.core.mesh` while keeping DOLFINx code
 outside the installed package.
 
 Every run prints `MESH_CACHE status=hit|miss-stored|rebuild`, its key and

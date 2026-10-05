@@ -35,7 +35,7 @@ import pytest
 import scipy.sparse
 import scipy.sparse.linalg
 
-from hdgfem import (
+from hybridge import (
     DGSpace,
     rectangle_mesh,
     solve_advection_diffusion_reaction_hdg,
@@ -211,14 +211,14 @@ def test_flux_recovery_matches_diffusion_reaction(flux_space, trace_basis, order
 
 
 def _cuda_float64_runtime():
-    """Return CuPy when a CUDA device and FP64 hdgfem precision are available."""
+    """Return CuPy when a CUDA device and FP64 hybridge precision are available."""
     cp = pytest.importorskip("cupy")
     try:
         if cp.cuda.runtime.getDeviceCount() == 0:
             pytest.skip("No CUDA device")
     except Exception as exc:  # pragma: no cover - driver-dependent
         pytest.skip(f"CUDA runtime unavailable: {exc}")
-    from hdgfem.runtime.precision import REAL_DTYPE
+    from hybridge.runtime.precision import REAL_DTYPE
 
     if REAL_DTYPE != np.float64:
         pytest.skip("raw-CUDA ADR is FP64 only")
@@ -241,23 +241,23 @@ def _dense_compressed(cp, matrix_format: str, data, indices, indptr, size: int) 
 def test_raw_cuda_operator_and_reconstruction_match_diffusion_reaction(matrix_format, trace_basis, order):
     """Raw-CUDA DR (identity kappa, scalar tau, zero reaction) equals raw-CUDA ADR (kind 0, beta=0)."""
     cp = _cuda_float64_runtime()
-    from hdgfem import DiffusionReactionHDGSolver
-    from hdgfem.mixed.adr_preparation import prepare_adr_data
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge import DiffusionReactionHDGSolver
+    from hybridge.mixed.adr_preparation import prepare_adr_data
+    from hybridge.mixed.raw_cuda.adr_operator import (
             assemble_projected_adr_trace_operator_raw_cuda,
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.mixed.cupy import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.mixed.cupy import (
             build_trace_reference,
             face_element_mass,
             reference_derivative_mats,
             source_moments_cupy,
         )
-    from hdgfem.mixed.raw_cuda.identity import (
+    from hybridge.mixed.raw_cuda.identity import (
             reconstruct_projected_diffusion_field_raw_cuda,
         )
-    from hdgfem.linalg import expand_known_dofs
+    from hybridge.linalg import expand_known_dofs
 
     space = _space(order)
     source = space.project_callable(_source, name="source_h")

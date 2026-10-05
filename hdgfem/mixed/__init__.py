@@ -1,1 +1,0 @@
-"""hdgfem.mixed package."""

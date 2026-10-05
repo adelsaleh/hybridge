@@ -98,7 +98,7 @@ def worker(args):
         with kernel_cache_only(True):
             if args.worker == "pardiso":
                 import pypardiso
-                from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
+                from hybridge.linalg.pardiso_diagnostics import pardiso_factor_statistics
                 factors = pypardiso.PyPardisoSolver(mtype=11)
                 getter = factors.libmkl.MKL_Get_Max_Threads
                 getter.argtypes, getter.restype = [], ctypes.c_int
@@ -125,11 +125,11 @@ def worker(args):
                 to_host = np.asarray
             elif args.worker == "pmg-fast":
                 import cupy as cp
-                from hdgfem.linalg.gpu.legendre_face_bsr import (
+                from hybridge.linalg.gpu.legendre_face_bsr import (
                                     LegendreFaceBsrOperator,
                                     diagonal_block_positions,
                                 )
-                from hdgfem.linalg.multigrid.face_hp import FaceBlockHpMgPcgSolver
+                from hybridge.linalg.multigrid.face_hp import FaceBlockHpMgPcgSolver
                 sync = cp.cuda.get_current_stream().synchronize
                 stage("fast pMG control on identical captured matrix/RHS, zero initial guess")
                 sync(); started = time.perf_counter()

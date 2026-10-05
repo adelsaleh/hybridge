@@ -1,4 +1,4 @@
-"""Configure guiding-center precision before loading NumPy, Numba or hdgfem."""
+"""Configure guiding-center precision before loading NumPy, Numba or hybridge."""
 from __future__ import annotations
 
 import argparse
@@ -10,9 +10,9 @@ import sys
 def configure_precision_cli() -> None:
     """Read only --precision early, leaving all other CLI options untouched."""
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--precision', choices=('float32', 'float64'), default=os.environ.get('HDGFEM_PRECISION', 'float64'))
+    parser.add_argument('--precision', choices=('float32', 'float64'), default=os.environ.get('HYBRIDGE_PRECISION', 'float64'))
     args, _ = parser.parse_known_args()
-    os.environ['HDGFEM_PRECISION'] = args.precision
+    os.environ['HYBRIDGE_PRECISION'] = args.precision
     if args.precision == 'float32':
         root = Path(__file__).resolve().parents[3]
         os.environ['NUMBA_CACHE_DIR'] = str(root/'.cache'/'numba-float32')

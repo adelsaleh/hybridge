@@ -120,9 +120,9 @@ including failures; use a new output directory for a fresh campaign.
 ```bash
 cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
-export HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0
-export HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13
-export HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13
+export HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0
+export HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13
+export HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13
 
 scripts/gpu/run_cuda13.sh \
   python -m scripts.run_oscillatory_adr_scaling --geometries square --resume \

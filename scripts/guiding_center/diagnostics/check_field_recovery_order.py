@@ -21,11 +21,11 @@ def check_field_recovery_order(density_order=3, subdivisions=(2, 4, 8), jitter=0
 
     if not numba.config.DISABLE_JIT:
         raise RuntimeError('Numba was imported before JIT was disabled')
-    from hdgfem.core.mesh import DGMesh, rectangle_mesh
-    from hdgfem.core.space import DGSpace
-    from hdgfem.core.transfer import project_same_mesh_field
-    from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
-    from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
+    from hybridge.core.mesh import DGMesh, rectangle_mesh
+    from hybridge.core.space import DGSpace
+    from hybridge.core.transfer import project_same_mesh_field
+    from hybridge.mixed.postprocess.flux import _postprocess_diffusion_solution
+    from hybridge.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
 
     p = int(density_order)
     sizes = tuple(int(n) for n in subdivisions)

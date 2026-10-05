@@ -26,8 +26,8 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[3]
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/hdgfem_poisson_figures_mpl")
-os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hdgfem_poisson_figures_cache")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/hybridge_poisson_figures_mpl")
+os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hybridge_poisson_figures_cache")
 os.environ.setdefault("PYVISTA_OFF_SCREEN", "true")
 
 import gmsh

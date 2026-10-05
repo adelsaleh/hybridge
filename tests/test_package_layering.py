@@ -1,4 +1,4 @@
-"""One-way import layering of the hdgfem package.
+"""One-way import layering of the hybridge package.
 
 Each subpackage has a layer; a module may import only from its own layer or
 from lower layers. ``transport`` (first-order HDG) and ``mixed`` (mixed HDG)
@@ -16,24 +16,24 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "hdgfem"
+PACKAGE = ROOT / "hybridge"
 
 # Longest matching prefix wins.
 LAYERS: dict[str, float] = {
-    "hdgfem.runtime": 0,
-    "hdgfem.core": 1,
-    "hdgfem.cases": 1.5,
-    "hdgfem.linalg": 2,
-    "hdgfem.hdg": 3,
-    "hdgfem.transport": 4,
-    "hdgfem.mixed": 4,
-    "hdgfem.solvers": 5,
-    "hdgfem.diagnostics": 6,
-    "hdgfem.io": 7,
-    "hdgfem": 8,
+    "hybridge.runtime": 0,
+    "hybridge.core": 1,
+    "hybridge.cases": 1.5,
+    "hybridge.linalg": 2,
+    "hybridge.hdg": 3,
+    "hybridge.transport": 4,
+    "hybridge.mixed": 4,
+    "hybridge.solvers": 5,
+    "hybridge.diagnostics": 6,
+    "hybridge.io": 7,
+    "hybridge": 8,
 }
 # Families on the same layer that must stay independent of each other.
-SIBLINGS = {"hdgfem.transport", "hdgfem.mixed"}
+SIBLINGS = {"hybridge.transport", "hybridge.mixed"}
 
 ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 
@@ -75,7 +75,7 @@ def _imports(importer: str, path: Path, modules: dict[str, Path]) -> set[str]:
                 targets.add(candidate if candidate in modules else base)
     resolved = set()
     for target in targets:
-        if not (target == "hdgfem" or target.startswith("hdgfem.")):
+        if not (target == "hybridge" or target.startswith("hybridge.")):
             continue
         while target not in modules and "." in target:
             target = target.rsplit(".", 1)[0]
@@ -103,7 +103,7 @@ def collect_violations() -> set[tuple[str, str]]:
     modules = _modules()
     found = set()
     for importer, path in modules.items():
-        if importer == "hdgfem":
+        if importer == "hybridge":
             continue  # the package root is the public facade over every layer
         for imported in _imports(importer, path, modules):
             if _violation(importer, imported):
@@ -128,7 +128,7 @@ def test_layering_baseline_has_no_stale_entries() -> None:
 
 
 def test_every_module_has_a_layer() -> None:
-    """Every hdgfem module maps to a declared layer."""
+    """Every hybridge module maps to a declared layer."""
     missing = [m for m in _modules() if not any(
         m == p or m.startswith(p + ".") for p in LAYERS
     )]

@@ -32,7 +32,7 @@ def existing_library_only():
 @pytest.mark.parametrize('dtype', (np.float64, np.float32))
 def test_block_dilu_matches_kronecker_factor_oracle(block_size, block_rows, bandwidth, dtype):
     pyamgx = pytest.importorskip('pyamgx')
-    if dtype == np.float32 and not getattr(pyamgx, 'HDGFEM_PRECISION_AWARE', False):
+    if dtype == np.float32 and not getattr(pyamgx, 'HYBRIDGE_PRECISION_AWARE', False):
         pytest.skip('FP32 requires the existing precision-aware PyAMGX binding')
     n, q = block_rows, block_size
     offsets = list(range(-bandwidth, bandwidth+1))

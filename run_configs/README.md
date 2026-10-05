@@ -235,7 +235,7 @@ Euler gas's counts `(192, 96, 48, 24)`, Gaussian widths
 Unlike the Euler case, every strength is positive and the field is treated as
 a guiding-center density rather than signed vorticity for labels and mass
 diagnostics. Mathematically it is also a one-signed Euler-vorticity initial
-condition, up to the Poisson sign convention. This is an HDGFEM-defined stress
+condition, up to the Poisson sign convention. This is an HYBRIDGE-defined stress
 test rather than a reproduction of a published benchmark; its literature
 context is recorded in `scripts/guiding_center/README.md`.
 
@@ -321,7 +321,7 @@ The temporal-convergence driver supplements its manufactured solution with
 units. Initial conditions, spatial operators and solver tolerances are fixed.
 
 ```bash
-HDGFEM_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
+HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
   --study vortex-gas --dts 0.01,0.005 --final-time 5 \
   --sample-interval 0.5 --plot-comparison --cached-kernels-only \
   --prefix star_hole_bdf2_dt_comparison
@@ -341,7 +341,7 @@ The HDG term uses `1/h_K` (element diameter), both sides of interior faces, and
 the actual numerical trace. Unused zero-flux boundary trace slots are excluded.
 Final volume and trace coefficients are saved separately.
 
-The shared scalar evaluator in `hdgfem/assembly/hdg_gram.py` performs CuPy norm
+The shared scalar evaluator in `hybridge/assembly/hdg_gram.py` performs CuPy norm
 reductions directly from resident device fields; raster sampling uses cuSPARSE.
 Reports record the diagnostic backend. The manufactured study also uses device
 AMGX solves and CuPy diagnostics, with analytic gradient, trace mismatch and

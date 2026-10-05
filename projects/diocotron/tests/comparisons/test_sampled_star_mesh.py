@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 import meshio
 import numpy as np
-from hdgfem.core.mesh import gmsh_smooth_star_mesh
+from hybridge.core.mesh import gmsh_smooth_star_mesh
 from projects.diocotron.dolfinx.geometry.sampled_star import write_sampled_star_mesh
 root = Path(sys.argv[1])
 kwargs = dict(boundary_points=40, radius=1.5, amplitude=.32, mode=5,

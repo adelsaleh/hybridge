@@ -1,6 +1,6 @@
 """One isolated CPU-only repeated LU benchmark; called by the campaign driver.
 
-Reuses HDGFEM's face conversion, residual operator and PyPardiso solve wrapper.
+Reuses HYBRIDGE's face conversion, residual operator and PyPardiso solve wrapper.
 No mesh/space reconstruction, assembly, JIT, or GPU import is needed explicitly.
 """
 from __future__ import annotations
@@ -53,10 +53,10 @@ def validate_cache(system):
 def run(spec_path, output):
     import numpy as np
     import pypardiso
-    from hdgfem.linalg.face_dense import face_dense_matvec
-    from hdgfem.linalg.bsr import face_dense_to_bsr
-    from hdgfem.linalg.pardiso_diagnostics import pardiso_factor_statistics
-    from hdgfem.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
+    from hybridge.linalg.face_dense import face_dense_matvec
+    from hybridge.linalg.bsr import face_dense_to_bsr
+    from hybridge.linalg.pardiso_diagnostics import pardiso_factor_statistics
+    from hybridge.linalg.direct import clear_pypardiso_cache, solve_pypardiso_system
 
     spec = read(spec_path)
     system, protocol = spec['system'], spec['protocol']

@@ -19,21 +19,21 @@ import traceback
 import numpy as np
 from scipy import sparse
 
-from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
-from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
-from hdgfem.linalg.gpu.cublas_batched import invert_batched_cublas
-from hdgfem.linalg.amgx.host import initialize_pyamgx_once
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.hdg.trace_maps import _edge_to_solve_edge
-from hdgfem.linalg.gpu.legendre_face_bsr import _CusparseGenericBsrOperator
-from hdgfem.core.mesh import _mesh_cache_files, _load_cached_gmsh_mesh
-from hdgfem.linalg.additive_schwarz import (
+from hybridge.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
+from hybridge.linalg.gpu.sparse import _DeviceBsrMatrixView
+from hybridge.linalg.gpu.cublas_batched import invert_batched_cublas
+from hybridge.linalg.amgx.host import initialize_pyamgx_once
+from hybridge.runtime.optional import require_cupy
+from hybridge.hdg.trace_maps import _edge_to_solve_edge
+from hybridge.linalg.gpu.legendre_face_bsr import _CusparseGenericBsrOperator
+from hybridge.core.mesh import _mesh_cache_files, _load_cached_gmsh_mesh
+from hybridge.linalg.additive_schwarz import (
     build_bsr_face_additive_schwarz_local_matrices,
     assemble_bsr_face_additive_schwarz_correction,
     build_bsr_additive_schwarz_local_matrices,
     assemble_bsr_additive_schwarz_correction,
 )
-from hdgfem.linalg.multigrid.face_hp import (
+from hybridge.linalg.multigrid.face_hp import (
     solve_pcgf_prototype,
     _chebyshev_richardson_weights,
 )
@@ -233,7 +233,7 @@ def main():
         if digest(values) != metadata[f'matrix_{label}_sha256']:
             raise RuntimeError(f'Captured matrix {label} changed')
     sources = provenance()
-    for path in [Path(__file__), ROOT/'hdgfem/linalg/additive_schwarz.py', ROOT/'hdgfem/linalg/multigrid/face_hp.py', ROOT/'scripts/guiding_center/poisson/asm_patches.py', ROOT/'hdgfem/transport/cuda.py', ROOT/'hdgfem/linalg/gpu/legendre_face_bsr.py', ROOT/'hdgfem/linalg/gpu/cublas_batched.py']:
+    for path in [Path(__file__), ROOT/'hybridge/linalg/additive_schwarz.py', ROOT/'hybridge/linalg/multigrid/face_hp.py', ROOT/'scripts/guiding_center/poisson/asm_patches.py', ROOT/'hybridge/transport/cuda.py', ROOT/'hybridge/linalg/gpu/legendre_face_bsr.py', ROOT/'hybridge/linalg/gpu/cublas_batched.py']:
         sources[str(path.resolve())] = dict(sha256=hashlib.sha256(path.read_bytes()).hexdigest(), bytes=path.stat().st_size, mtime_ns=path.stat().st_mtime_ns)
     save_json(args.output_dir/'provenance.json', sources)
     (args.output_dir/'replay_source.py').write_text(Path(__file__).read_text())

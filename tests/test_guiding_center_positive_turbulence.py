@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hdgfem.core.geometry import DiskDomain
-from hdgfem.cases.profiles import GaussianBlobField, sample_gaussian_blob_field
+from hybridge.core.geometry import DiskDomain
+from hybridge.cases.profiles import GaussianBlobField, sample_gaussian_blob_field
 from scripts.guiding_center.cases.guiding_center_cases import (
     case_definition_by_key,
     positive_turbulence,
@@ -99,7 +99,7 @@ def test_positive_turbulence_samples_the_requested_shaped_domain(monkeypatch) ->
         calls.append((kind, params))
         return domain
 
-    monkeypatch.setattr("hdgfem.core.geometry.shaped_domain", shaped_domain)
+    monkeypatch.setattr("hybridge.core.geometry.shaped_domain", shaped_domain)
     case = positive_turbulence(
         geometry="iter",
         geometry_params={"boundary_points": 512},
@@ -235,7 +235,7 @@ def test_positive_turbulence_poisson_retry_order_and_conditioning(preset) -> Non
 
 
 def test_robust_native_poisson_preconditioner_remains_symmetric() -> None:
-    from hdgfem.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
+    from hybridge.linalg.multigrid.policy import face_hp_mg_preconditioner_parameters
 
     policy = face_hp_mg_preconditioner_parameters("robust")
     assert policy["schedule"] == "halve"

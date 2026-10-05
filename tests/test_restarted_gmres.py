@@ -3,15 +3,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.face_dense import (
+from hybridge.linalg.face_dense import (
     face_dense_relative_residual,
     materialize_face_dense_matrix,
 )
-from hdgfem.mixed.face_dense import normalize_penalty_rows
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.gmres import restarted_gmres, solve_face_dense_gmres
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.mixed.face_dense import normalize_penalty_rows
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.gmres import restarted_gmres, solve_face_dense_gmres
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 

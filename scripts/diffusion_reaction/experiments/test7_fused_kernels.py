@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from hdgfem.hdg.numba_common import (
+from hybridge.hdg.numba_common import (
     lu_factor_inplace,
     lu_solve_inplace,
     map_edge_dof_bool,
 )
-from hdgfem.runtime.optional import njit, prange
-from hdgfem.mixed.numba_kernels import _diffusion_lift_dot
+from hybridge.runtime.optional import njit, prange
+from hybridge.mixed.numba_kernels import _diffusion_lift_dot
 
 
 @njit(cache=True, inline="always", fastmath=True)

@@ -4,9 +4,9 @@ import pytest
 matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg", force=True)
 
-from hdgfem import rectangle_mesh
-from hdgfem.io.plot import plot_scalar_sample_panels_matplotlib
-from hdgfem.core.quadrature import reference_plot_points
+from hybridge import rectangle_mesh
+from hybridge.io.plot import plot_scalar_sample_panels_matplotlib
+from hybridge.core.quadrature import reference_plot_points
 
 
 def _sample_values(mesh, reference_points, offset=0.0, scale=1.0):
@@ -122,7 +122,7 @@ def test_matplotlib_unshared_colorbars_default_to_each_panel_values():
 def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
     import matplotlib.pyplot as plt
 
-    from hdgfem.io.comparison import plot_sampled_solution_comparison
+    from hybridge.io.comparison import plot_sampled_solution_comparison
 
     mesh = rectangle_mesh(1, 1)
     reference_points = reference_plot_points(5)
@@ -133,7 +133,7 @@ def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
     def exact_solution(x, y):
         return x + 0.5 * y
 
-    _, _, exact_display = __import__("hdgfem.io.plot", fromlist=["sample_callable_on_elements"]).sample_callable_on_elements(
+    _, _, exact_display = __import__("hybridge.io.plot", fromlist=["sample_callable_on_elements"]).sample_callable_on_elements(
         mesh,
         exact_solution,
         reference_points=reference_points,
@@ -174,7 +174,7 @@ def test_gpu_diffusion_matplotlib_exact_panel_keeps_own_color_range():
 
 def test_raster_panels_preserve_holes_orientation_and_separate_difference_scale():
     import matplotlib.pyplot as plt
-    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+    from hybridge.io import plot_scalar_raster_panels_matplotlib
 
     left = np.array([[np.nan, 2.0], [-4.0, 1.0]])
     right = left + .25
@@ -203,7 +203,7 @@ def test_raster_panels_preserve_holes_orientation_and_separate_difference_scale(
 
 def test_raster_shared_colorbar_and_masked_outliers():
     import matplotlib.pyplot as plt
-    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+    from hybridge.io import plot_scalar_raster_panels_matplotlib
 
     first = np.ma.array([[2., 1.e9]], mask=[[False, True]])
     second = np.array([[-5., np.inf]])
@@ -226,7 +226,7 @@ def test_raster_shared_colorbar_and_masked_outliers():
     ([("bad", [[1]])], (1, 0, 0, 1), "bounds"),
 ])
 def test_raster_panels_reject_invalid_input(panels, bounds, message):
-    from hdgfem.io import plot_scalar_raster_panels_matplotlib
+    from hybridge.io import plot_scalar_raster_panels_matplotlib
 
     with pytest.raises(ValueError, match=message):
         plot_scalar_raster_panels_matplotlib(panels, bounds, show=False)

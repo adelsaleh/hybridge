@@ -3,22 +3,22 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-from hdgfem.linalg.gpu.gmres import (
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hybridge.linalg.gpu.gmres import (
     _termination_reason,
     _updated_stagnation_count,
     _validate_robustness_parameters,
     restarted_gmres_cupy,
 )
-from hdgfem.linalg.gpu.production_gmres import (
+from hybridge.linalg.gpu.production_gmres import (
     CuPyGMRESFailure,
     CuPyProductionGMRESOptions,
     CuPyProductionGMRESSolver,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 

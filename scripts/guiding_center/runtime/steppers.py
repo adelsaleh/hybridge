@@ -1,5 +1,5 @@
 """Connect preset policy and case boundaries to the guiding-center time steppers."""
-from hdgfem.runtime.logging import timed_call
+from hybridge.runtime.logging import timed_call
 from scripts.guiding_center.time_schemes import STEPPERS, SIEulerStepper
 from .configuration import (
     _detail_verbosity,
@@ -30,7 +30,7 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
         return stepper_type(space, config.dt, density, poisson_result, density_trace,
                             potential_trace=potential_trace, **options)
 
-    from hdgfem.transport.residual import HDGTraceWorkspace, UpwindHDGTransportResidual
+    from hybridge.transport.residual import HDGTraceWorkspace, UpwindHDGTransportResidual
 
     def initialize():
         """Prime the shared residual/projection workspace before normal timings."""

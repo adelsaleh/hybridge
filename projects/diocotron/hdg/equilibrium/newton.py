@@ -37,23 +37,23 @@ if str(REPO_ROOT) not in sys.path:
 
 DEFAULT_RUN_LOG_ROOT = REPO_ROOT / "projects/diocotron/runs" / "hdg_torsion_initialized_newton"
 
-from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.hdg.gram import CondensedHDGGramInverse, build_flux_jump_gram_inverse
-from hdgfem.hdg.matrices import scalar_volume_residual
-from hdgfem.core.projection import (
+from hybridge.hdg import condensation as hdg_assembly
+from hybridge.hdg.gram import CondensedHDGGramInverse, build_flux_jump_gram_inverse
+from hybridge.hdg.matrices import scalar_volume_residual
+from hybridge.core.projection import (
     field_from_moments,
     l2_from_values,
     mass_from_values,
     project_quadrature_values,
 )
-from hdgfem.core.mesh import (
+from hybridge.core.mesh import (
     gmsh_smooth_star_mesh,
     mesh_edge_min_max,
 )
-from hdgfem.core.space import DGField, DGSpace
-from hdgfem.io.plot import add_field_to_plotter, reference_plot_points
-from hdgfem.mixed.local_numpy import hdg_residual
-from hdgfem.solvers.diffusion_reaction import (
+from hybridge.core.space import DGField, DGSpace
+from hybridge.io.plot import add_field_to_plotter, reference_plot_points
+from hybridge.mixed.local_numpy import hdg_residual
+from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,
     flux_coefficients,
@@ -519,7 +519,7 @@ def residual_row(state: State) -> dict[str, float]:
 
 
 class PyVistaTorsionPlotter:
-    """PyVista plotting and frame writer using ``hdgfem.io.plot`` helpers."""
+    """PyVista plotting and frame writer using ``hybridge.io.plot`` helpers."""
 
     def __init__(
             self,

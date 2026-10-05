@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.transport.residual import UpwindHDGTransportResidual
-from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.transport.residual import UpwindHDGTransportResidual
+from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+from hybridge.runtime.precision import REAL_DTYPE
 
 
 @pytest.fixture

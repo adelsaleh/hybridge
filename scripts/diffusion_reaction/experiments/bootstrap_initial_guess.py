@@ -1,7 +1,7 @@
 r"""Bootstrap-enabled HDG solver for scalar diffusion-reaction problems.
 
 This module layers a coarse same-mesh initial guess on top of
-:mod:`hdgfem.solvers.diffusion_reaction`.  The base module owns the actual HDG assembly and solve;
+:mod:`hybridge.solvers.diffusion_reaction`.  The base module owns the actual HDG assembly and solve;
 this module only builds a lower-order trace solution, degree-elevates it to the
 target trace space, and passes it as ``initial_guess`` to the normal solver.
 
@@ -22,15 +22,15 @@ from typing import Literal
 
 import numpy as np
 
-from hdgfem.solvers.diffusion_reaction import (
+from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionResult,
     ReturnKey,
     solve_diffusion_reaction_hdg as _solve_plain_diffusion_reaction_hdg,
 )
-from hdgfem.mixed.local_numpy import LocalSolverBackend, impose_boundary_trace_on_guess
-from hdgfem.runtime.logging import _timed_call, _verbosity_level
-from hdgfem.core.space import DGSpace
-from hdgfem.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
+from hybridge.mixed.local_numpy import LocalSolverBackend, impose_boundary_trace_on_guess
+from hybridge.runtime.logging import _timed_call, _verbosity_level
+from hybridge.core.space import DGSpace
+from hybridge.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
 
 
 @dataclass(frozen=True)
@@ -197,7 +197,7 @@ def solve_diffusion_reaction_hdg(
 ):
     r"""Solve :math:`-\nabla\cdot(\kappa\nabla u) + r u=f` with an optional bootstrap trace guess.
 
-    This wrapper keeps the normal solver in :mod:`hdgfem.solvers.diffusion_reaction` untouched.  If
+    This wrapper keeps the normal solver in :mod:`hybridge.solvers.diffusion_reaction` untouched.  If
     ``bootstrap_order`` is provided, it first solves the same problem on the
     same mesh with a lower polynomial order, degree-elevates the trace, and uses
     the result as ``initial_guess`` for the target-order solve.
@@ -312,7 +312,7 @@ def _as_optional_preconditioner(value: str | None):
 
 def _summarize_solve(result: DiffusionReactionResult, exact: Callable, *, args, mesh, space) -> float:
     """Print the same compact solve summary as the plain diffusion CLI."""
-    from hdgfem.io.output import pretty_print_ncol
+    from hybridge.io.output import pretty_print_ncol
 
     l2_error = result.field.l2_error(exact)
     numerical_values = result.field.values()
@@ -392,11 +392,11 @@ def _main() -> None:
     """Run the bootstrap-enabled diffusion-reaction CLI."""
     from argparse import ArgumentParser
 
-    from hdgfem.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
-    from hdgfem.io.plot import plot_solution_comparison
+    from hybridge.core.mesh import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh, rectangle_mesh
+    from hybridge.io.plot import plot_solution_comparison
     from scripts.diffusion_reaction.cases import case_by_legacy_id
 
-    parser = ArgumentParser(description="Run the bootstrap-enabled hdgfem diffusion-reaction HDG solver.")
+    parser = ArgumentParser(description="Run the bootstrap-enabled hybridge diffusion-reaction HDG solver.")
     parser.add_argument("--order", "-p", type=int, default=2, help="uniform DG polynomial order")
     parser.add_argument("--test", type=int, default=0, choices=(0, 2, 3, 5, 6), help="manufactured legacy test id")
     parser.add_argument(

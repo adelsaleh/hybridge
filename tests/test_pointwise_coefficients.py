@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("numba")
 
-from hdgfem import (  # noqa: E402
+from hybridge import (  # noqa: E402
     DGSpace,
     ElementCoefficient,
     pointwise_coefficient,
@@ -17,7 +17,7 @@ from hdgfem import (  # noqa: E402
     rectangle_mesh,
     solve_advection_diffusion_reaction_hdg,
 )
-from hdgfem.core.element_coefficients import physical_points  # noqa: E402
+from hybridge.core.element_coefficients import physical_points  # noqa: E402
 
 GLOBAL_SCALE = 4.0
 
@@ -103,11 +103,11 @@ def _element(space, function, components=1):
 
 
 def test_numba_solve_matches_numpy_element_coefficients_with_one_kernel_signature(space):
-    from hdgfem.mixed.adr_numba_kernels import (
+    from hybridge.mixed.adr_numba_kernels import (
             assemble_projected_adr_trace_system_eliminated_kernel,
             reconstruct_projected_adr_local_unknowns_kernel,
         )
-    from hdgfem.core.pointwise_kernels import sample_pointwise_xyt_kernel
+    from hybridge.core.pointwise_kernels import sample_pointwise_xyt_kernel
 
     beta = pointwise_coefficient((lambda x, y, t: .8 + .1*y, lambda x, y, t: -.25 + .07*x), space)
     source = pointwise_coefficient(lambda x, y, t: np.sin(pi*x)*np.cos(y), space)
@@ -146,7 +146,7 @@ def test_laws_evaluate_any_shape_with_params_and_time():
 
 
 def test_laws_are_diffusion_tensor_components(space):
-    from hdgfem.mixed.coefficients import prepare_diffusion, sample_diffusion_tensor
+    from hybridge.mixed.coefficients import prepare_diffusion, sample_diffusion_tensor
 
     laws = (pointwise_law(lambda x, y, t: 1. + .1*x), pointwise_law(lambda x, y, t: .2*y),
             pointwise_law(lambda x, y, t: 2. + x*y))

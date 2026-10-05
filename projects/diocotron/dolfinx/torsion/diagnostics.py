@@ -38,8 +38,8 @@ import tempfile
 import time
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/hdgfem_torsion_oscillations_mpl")
-os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hdgfem_torsion_oscillations_cache")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/hybridge_torsion_oscillations_mpl")
+os.environ.setdefault("XDG_CACHE_HOME", "/tmp/hybridge_torsion_oscillations_cache")
 os.environ.setdefault("PYVISTA_OFF_SCREEN", "true")
 
 import basix

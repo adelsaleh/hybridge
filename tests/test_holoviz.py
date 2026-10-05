@@ -7,9 +7,9 @@ import sys
 import numpy as np
 import pytest
 
-from hdgfem import DGMesh, DGSpace, rectangle_mesh
-from hdgfem.io.raster import DeviceRasterSampler, RasterGeometry
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge import DGMesh, DGSpace, rectangle_mesh
+from hybridge.io.raster import DeviceRasterSampler, RasterGeometry
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
 import scripts.guiding_center.run_guiding_center_cases as cli
@@ -105,7 +105,7 @@ def test_device_sampler_rejects_cross_device_host_fallback():
 
 @pytest.mark.parametrize("backend", ["pyvista", "holoviz"])
 def test_factory_selects_only_requested_backend(monkeypatch, backend):
-    from hdgfem.io import holoviz
+    from hybridge.io import holoviz
 
     def construct(*fields, **options):
         return fields, options
@@ -165,7 +165,7 @@ def test_invalid_plot_options_fail_before_solver(overrides):
 
 def _viewer_queue_without_gpu():
     import threading
-    from hdgfem.io.holoviz import GuidingCenterHolovizPanels
+    from hybridge.io.holoviz import GuidingCenterHolovizPanels
     viewer = GuidingCenterHolovizPanels.__new__(GuidingCenterHolovizPanels)
     viewer._condition = threading.Condition()
     viewer._pending = viewer._inflight = viewer._last_frame = None
@@ -176,7 +176,7 @@ def _viewer_queue_without_gpu():
 
 
 def test_minimized_frame_is_retried_until_matching_completion():
-    from hdgfem.io.holoviz import _Frame
+    from hybridge.io.holoviz import _Frame
     viewer = _viewer_queue_without_gpu()
     first, second = _Frame({}, None, 1, .1), _Frame({}, None, 2, .2)
     viewer._pending = first
@@ -196,7 +196,7 @@ def test_minimized_frame_is_retried_until_matching_completion():
 
 
 def test_idle_redraw_does_not_add_frames_or_prevent_shutdown():
-    from hdgfem.io.holoviz import _Frame
+    from hybridge.io.holoviz import _Frame
     viewer = _viewer_queue_without_gpu()
     frame = _Frame({}, None, 1, .1)
     viewer._complete_frame(frame)
@@ -212,7 +212,7 @@ def test_idle_redraw_does_not_add_frames_or_prevent_shutdown():
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_movie_toggle_reaches_only_selected_capture(monkeypatch, enabled):
-    import hdgfem.io.holoviz as holoviz
+    import hybridge.io.holoviz as holoviz
     config = replace(preset_by_key("diocotron_gaussian_m64_si_bdf2_p6_h0068_dt01_t400_fast"),
                      save_movie=enabled)
     monkeypatch.setattr(holoviz, "GuidingCenterHolovizPanels", lambda *args, **kw: kw)
@@ -223,7 +223,7 @@ def test_movie_toggle_reaches_only_selected_capture(monkeypatch, enabled):
 
 
 def test_color_limits_keep_padding_until_exceeded_and_never_shrink():
-    from hdgfem.io.live import expanding_color_limits
+    from hybridge.io.live import expanding_color_limits
     limits = expanding_color_limits(-2., 8.)
     np.testing.assert_allclose(limits, (-3., 9.))
     for bounds in [(-1., 5.), (-2.9, 8.9), (-3., 9.)]:
@@ -236,7 +236,7 @@ def test_color_limits_keep_padding_until_exceeded_and_never_shrink():
 
 
 def test_symmetric_color_limits_expand_both_sides_only_on_exceedance():
-    from hdgfem.io.live import expanding_color_limits
+    from hybridge.io.live import expanding_color_limits
     limits = expanding_color_limits(-2., 8., symmetric=True)
     np.testing.assert_allclose(limits, (-8.8, 8.8))
     np.testing.assert_allclose(expanding_color_limits(-8.5, 2., limits=limits, symmetric=True), limits)
@@ -261,7 +261,7 @@ def test_sampler_keeps_same_value_same_color_until_range_is_exceeded():
 
 
 def test_time_labels_keep_decimal_after_accumulated_timestep_rounding():
-    from hdgfem.io.live import simulation_frame_label
+    from hybridge.io.live import simulation_frame_label
     time_value = 0.
     for step in range(1, 31):
         time_value += .1

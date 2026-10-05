@@ -4,24 +4,24 @@ from pathlib import Path
 
 import pytest
 
-from hdgfem import (
+from hybridge import (
     AdvectionDiffusionReactionHDGSolver,
     AdvectionReactionHDGSolver,
     DGSpace,
     DiffusionReactionHDGSolver,
     rectangle_mesh,
 )
-from hdgfem.solvers.capabilities import BACKEND_CAPABILITIES, get_backend_capability
-from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
-from hdgfem.solvers.capabilities import (
+from hybridge.solvers.capabilities import BACKEND_CAPABILITIES, get_backend_capability
+from hybridge.runtime.errors import UnsupportedBackendConfigurationError
+from hybridge.solvers.capabilities import (
     normalize_solver_backend,
     render_backend_capability_table,
     validate_advection_backend_configuration,
     validate_advection_diffusion_backend_configuration,
     validate_diffusion_backend_configuration,
 )
-from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
-from hdgfem.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
+from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
+from hybridge.solvers.diffusion_reaction import solve_diffusion_reaction_hdg
 
 
 def _capability_id(capability) -> str:

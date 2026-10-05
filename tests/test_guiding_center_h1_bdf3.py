@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem import DGField, DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.transport.residual import UpwindHDGTransportResidual
-from hdgfem.core.field_ops import field_linear_combination, project_field_to_trace
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge import DGField, DGSpace, VectorDGField, rectangle_mesh
+from hybridge.transport.residual import UpwindHDGTransportResidual
+from hybridge.core.field_ops import field_linear_combination, project_field_to_trace
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.time_schemes import h1_bdf3
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
@@ -41,7 +41,7 @@ def test_residual_exact_affine_advection_and_trace_projection(basis):
     np.testing.assert_allclose(residual.coeffs, s.constant(-1.6).coeffs, atol=tol)
     projected = evaluator.project_trace(density).reshape(-1, 3)
     tr = s.trace_space(basis)
-    from hdgfem.core.field_ops import project_callable_to_trace
+    from hybridge.core.field_ops import project_callable_to_trace
     expected = project_callable_to_trace(s, exact, trace_basis=basis).reshape(-1, 3)
     np.testing.assert_allclose(projected, expected, atol=tol)
     cache = s._trace_projection_cache[(tr.kind, None)]
@@ -54,7 +54,7 @@ def test_residual_exact_affine_advection_and_trace_projection(basis):
 @pytest.mark.parametrize("boundary_mode", ["zero-flux", "eliminate"])
 def test_residual_matches_static_hdg_solve_and_preserves_history(basis, boundary_mode, order):
     """Reverse a small stationary HDG solve; this does not advance a trajectory."""
-    from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
+    from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
     s = DGSpace(rectangle_mesh(2, 1), order, basis_type="dub_orth")
     density = s.field(np.random.default_rng(4).normal(size=s.shape).astype(REAL_DTYPE))
     # Exercise discontinuous element-side velocities as well as orientation.
@@ -211,7 +211,7 @@ def test_hybrid_configuration_and_warm_retry_policy(verbosity, time_scheme):
 
 
 def test_reference_advection_device_tensor_is_uploaded_once_per_device(monkeypatch):
-    import hdgfem.transport.cuda as cuda
+    import hybridge.transport.cuda as cuda
     uploads = []
     fake_cp = SimpleNamespace(asarray=lambda x: uploads.append(x) or np.array(x),
                               cuda=SimpleNamespace(Device=lambda device: nullcontext()))
@@ -231,9 +231,9 @@ def test_reference_advection_device_tensor_is_uploaded_once_per_device(monkeypat
 @pytest.mark.parametrize("verbosity", [0, 1, 2, 3])
 def test_hybrid_runner_with_canned_solvers_only(monkeypatch, tmp_path, capfd, verbosity, startup_method, time_scheme):
     """Exercise runner wiring; every PDE solver and residual is replaced."""
-    import hdgfem.solvers.advection_reaction as advection
-    import hdgfem.solvers.diffusion_reaction as diffusion
-    import hdgfem.transport.residual as residual_module
+    import hybridge.solvers.advection_reaction as advection
+    import hybridge.solvers.diffusion_reaction as diffusion
+    import hybridge.transport.residual as residual_module
     config = replace(preset_by_key('rho_helm_wave_host_accuracy'), time_scheme=time_scheme,
                      h1_startup=startup_method, h2_startup=startup_method, dt=.01, num_steps=4, verbosity=verbosity, diagnostics_dir=str(tmp_path), plot_every=0)
     calls = {'transport': [], 'poisson': []}

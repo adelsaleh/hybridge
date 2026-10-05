@@ -4,10 +4,10 @@ Six panels, one row per field ``n`` and ``Gamma``: the exact manufactured
 solution at the current time, the numerical DG field, and their pointwise
 difference. Two backends share this layout:
 
-* ``pyvista`` (host path): :class:`hdgfem.io.PyVistaFieldPanels` with the
-  exact field evaluated pointwise through :class:`hdgfem.io.AnalyticPanelField`
-  and the error through :class:`hdgfem.io.DifferencePanelField`;
-* ``holoviz`` (device path): :class:`hdgfem.io.HolovizScalarPanels`, sampling
+* ``pyvista`` (host path): :class:`hybridge.io.PyVistaFieldPanels` with the
+  exact field evaluated pointwise through :class:`hybridge.io.AnalyticPanelField`
+  and the error through :class:`hybridge.io.DifferencePanelField`;
+* ``holoviz`` (device path): :class:`hybridge.io.HolovizScalarPanels`, sampling
   the device-resident DG fields and the exact solution
   (``DeviceRasterSampler.sample_callable(device=True)``) on the GPU, so no
   field is downloaded. Holoviz uses one colormap per window; each panel keeps
@@ -58,7 +58,7 @@ class NGammaPanels:
         return (lambda a, b: self.case.density(a, b, t)), (lambda a, b: self.case.momentum(a, b, t))
 
     def _open_pyvista(self, density, momentum, t):
-        from hdgfem.io import AnalyticPanelField, DifferencePanelField, PyVistaFieldPanels
+        from hybridge.io import AnalyticPanelField, DifferencePanelField, PyVistaFieldPanels
         o = self._options
         exact_n, exact_gamma = (AnalyticPanelField(self.space, f, name) for f, name in
                                 zip(self._exact(t), ("n exact", "Gamma exact")))
@@ -75,13 +75,13 @@ class NGammaPanels:
             time_step=o["time_step"], total_steps=o["total_steps"])
 
     def _pyvista_fields(self, density, momentum):
-        from hdgfem.io import DifferencePanelField
+        from hybridge.io import DifferencePanelField
         exact_n, exact_gamma = self._analytic
         return (exact_n, density, DifferencePanelField(density, exact_n, "n_h - n"),
                 exact_gamma, momentum, DifferencePanelField(momentum, exact_gamma, "Gamma_h - Gamma"))
 
     def _open_holoviz(self):
-        from hdgfem.io import HolovizScalarPanels
+        from hybridge.io import HolovizScalarPanels
         o = self._options
         # Holoviz sizes are per panel; the 2x3 grid keeps the requested total window size.
         self._viewer = HolovizScalarPanels(

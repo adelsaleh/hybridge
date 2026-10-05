@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from numba import njit
 
-from hdgfem import pointwise_coefficient, pointwise_law
+from hybridge import pointwise_coefficient, pointwise_law
 
 from .cases import forcing_numba
 from .cases.geometry import frame_shift

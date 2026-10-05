@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cuda13_root="${HDGFEM_CUDA13_ROOT:-/tmp/cuda}"
-amgx_build_root="${HDGFEM_AMGX_BUILD_ROOT:-/tmp/AMGX-build}"
-amgx_install_root="${HDGFEM_AMGX_INSTALL_ROOT:-/tmp/AMGX-install}"
+cuda13_root="${HYBRIDGE_CUDA13_ROOT:-/tmp/cuda}"
+amgx_build_root="${HYBRIDGE_AMGX_BUILD_ROOT:-/tmp/AMGX-build}"
+amgx_install_root="${HYBRIDGE_AMGX_INSTALL_ROOT:-/tmp/AMGX-install}"
 cuda13_lib_root="${cuda13_root}/targets/x86_64-linux/lib"
 
 if [[ ! -x "${cuda13_root}/bin/nvcc" ]]; then

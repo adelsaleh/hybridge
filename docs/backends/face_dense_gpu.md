@@ -18,23 +18,23 @@ and
 
 The face-dense solver does **not** depend on AMGX or PyAMGX:
 
-- `hdgfem.mixed.face_dense` owns fixed-slot face topology, face assembly, and
+- `hybridge.mixed.face_dense` owns fixed-slot face topology, face assembly, and
   boundary elimination/penalty normalization.
-- `hdgfem.linalg.face_dense` owns `FaceDenseSystem`, reference matvecs,
+- `hybridge.linalg.face_dense` owns `FaceDenseSystem`, reference matvecs,
   residuals, and validation materialization.
-- `hdgfem.solvers.diffusion_face_dense` builds the face-dense diffusion system
+- `hybridge.solvers.diffusion_face_dense` builds the face-dense diffusion system
   from the mixed local solvers.
-- `hdgfem.linalg.gmres`, `additive_schwarz`, `block_jacobi`, and `polynomial`
+- `hybridge.linalg.gmres`, `additive_schwarz`, `block_jacobi`, and `polynomial`
   provide NumPy reference algorithms.
-- `hdgfem.linalg.gpu.face_dense` owns the CuPy operator and its raw/fused
+- `hybridge.linalg.gpu.face_dense` owns the CuPy operator and its raw/fused
   device variants.
-- `hdgfem.linalg.gpu.gmres` owns restarted device GMRES.
-- `hdgfem.linalg.gpu.preconditioners` owns face block-Jacobi and
+- `hybridge.linalg.gpu.gmres` owns restarted device GMRES.
+- `hybridge.linalg.gpu.preconditioners` owns face block-Jacobi and
   element-patch additive Schwarz.
-- `hdgfem.linalg.gpu.polynomial` owns Arnoldi/harmonic-Ritz setup and the
+- `hybridge.linalg.gpu.polynomial` owns Arnoldi/harmonic-Ritz setup and the
   polynomial preconditioner.
-- `hdgfem.linalg.gpu.cublas_batched` supplies optional batched dense inverses;
-  `hdgfem.linalg.gpu.production_gmres` composes the production-oriented
+- `hybridge.linalg.gpu.cublas_batched` supplies optional batched dense inverses;
+  `hybridge.linalg.gpu.production_gmres` composes the production-oriented
   experimental interface and convergence safeguards.
 
 CuPy supplies device arrays and kernel compilation, while cuBLAS is used for

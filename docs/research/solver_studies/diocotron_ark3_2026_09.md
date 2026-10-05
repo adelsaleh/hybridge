@@ -78,7 +78,7 @@ scalar amplitudes as a substitute for subtracting complex fields.
 
 ## Initialization and device reuse
 
-`hdgfem.assembly.projection.project_callable` now exposes the package's existing
+`hybridge.assembly.projection.project_callable` now exposes the package's existing
 host/device projection with an optional richer initialization rule. The supplied
 presets use 32x32 quadrature for initial and equilibrium density only. The
 transport and Poisson quadrature, matrices and cache policy remain fixed.
@@ -138,7 +138,7 @@ From the repository root, in a new terminal if CUDA libraries need setup:
 ```bash
 export CUDA_PATH=/usr/local/cuda-13.0
 export LD_LIBRARY_PATH=~/src/AMGX-build-cuda13:~/src/AMGX-install-cuda13/lib:/usr/local/cuda-13.0/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-export HDGFEM_PRECISION=float64
+export HYBRIDGE_PRECISION=float64
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 ```
 

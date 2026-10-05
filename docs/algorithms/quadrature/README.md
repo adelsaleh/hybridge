@@ -11,7 +11,7 @@ admissible fallback. The generated positive-weight symmetric rule remains an
 explicit option; the collapsed Duffy rule remains available for compatibility
 and higher-order fallback.
 
-The implementation lives in `hdgfem.core.quadrature` and is validated by
+The implementation lives in `hybridge.core.quadrature` and is validated by
 `tests/test_symmetric_triangle_quadrature_host.py`. Quadrature policy changes
 must preserve monomial exactness, reference mass/stiffness matrices, and
 manufactured-solution parity before changing a solver default.

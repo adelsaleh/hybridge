@@ -16,16 +16,16 @@ from pathlib import Path
 
 import numpy as np
 
-from hdgfem import DGSpace, gmsh_disc_mesh, rectangle_mesh
-from hdgfem.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.linalg.gpu.legendre_face_bsr import (
+from hybridge import DGSpace, gmsh_disc_mesh, rectangle_mesh
+from hybridge.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
+from hybridge.runtime.optional import require_cupy
+from hybridge.linalg.gpu.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     diagonal_block_positions,
     transform_legendre_bsr_to_orthonormal,
 )
-from hdgfem.linalg.amgx.config import load_amgx_config
-from hdgfem.linalg.multigrid.face_hp import (
+from hybridge.linalg.amgx.config import load_amgx_config
+from hybridge.linalg.multigrid.face_hp import (
     AmgxScalarVcycle,
     CupyxCgScalarSolve,
     FaceBlockPmgPrototype,
@@ -33,8 +33,8 @@ from hdgfem.linalg.multigrid.face_hp import (
     solve_pcg_prototype,
     symmetric_scalar_amgx_config,
 )
-from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
-from hdgfem.mixed.stabilization import GlobalLengthDiffusion
+from hybridge.linalg.multigrid.policy import scalar_p0_amgx_config
+from hybridge.mixed.stabilization import GlobalLengthDiffusion
 from scripts.diffusion_reaction.cases import trigonometric_poisson_case
 
 
@@ -139,7 +139,7 @@ def _assemble_legendre_bsr(space, problem, tau):
     """Assemble direct raw-CUDA BSR without invoking a global solver."""
     source = space.project_callable(problem.source, name="source_h")
     reaction = space.zeros(name="reaction_h")
-    from hdgfem.mixed.cupy import (
+    from hybridge.mixed.cupy import (
             assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
         )
 

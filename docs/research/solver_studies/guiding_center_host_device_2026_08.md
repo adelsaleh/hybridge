@@ -8,7 +8,7 @@ or a production-preset recommendation.
 The exact source, configuration, binary, and result-artifact hashes used here
 are recorded in
 [`guiding_center_host_device_2026_08.provenance.json`](guiding_center_host_device_2026_08.provenance.json).
-The HDGFEM and AMGX worktrees were dirty, so the Git commits alone do not
+The HYBRIDGE and AMGX worktrees were dirty, so the Git commits alone do not
 identify the tested code. The SHA-256 entries in that manifest are therefore
 part of the result identity.
 

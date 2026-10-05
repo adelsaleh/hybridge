@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test the reusable HDGFEM CuPy advection-reaction solver class.
+"""Smoke-test the reusable HYBRIDGE CuPy advection-reaction solver class.
 
 The defaults intentionally mirror the advection-reaction working path in
 ``configs/amgx/README.md``: p6/ms0.01, ``dub_orth``, volume quadrature 12,
@@ -21,15 +21,15 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.runtime.optional import (
+from hybridge.runtime.optional import (
     require_cupy,
     require_cupyx_sparse_linalg,
     require_pyamgx,
 )
-from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.linalg.amgx.config import load_amgx_config
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+from hybridge.linalg.amgx.config import load_amgx_config
+from hybridge.core.space import DGField, DGSpace, VectorDGField
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
 
 

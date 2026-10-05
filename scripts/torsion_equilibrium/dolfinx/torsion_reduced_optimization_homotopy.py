@@ -5551,7 +5551,7 @@ def run_strategy(args: argparse.Namespace) -> int:
         phi=u,
         rho=rho,
         metadata={
-            "format": "hdgfem_equilibrium_v1",
+            "format": "hybridge_equilibrium_v1",
             "run_tag": run_tag,
             "mesh_path": str(Path(mesh_path).resolve()),
             "order": int(args.order),

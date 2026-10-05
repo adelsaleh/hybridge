@@ -111,7 +111,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg \
   --output docs/research/solver_studies/adr_scaling_2026_09_17
 ```
 
-The shared `hdgfem.io.figures` helper supplies publication styling and vector/raster
+The shared `hybridge.io.figures` helper supplies publication styling and vector/raster
 export. Case-specific charts and discussion remain in the report scripts/templates.
 See the [oscillatory reproduction instructions](oscillatory/README.md) for the GPU
 sweeps and their independent audit. The original smooth campaign is preserved in

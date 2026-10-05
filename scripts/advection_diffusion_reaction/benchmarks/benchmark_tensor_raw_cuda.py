@@ -19,10 +19,10 @@ if __package__ in {None, ''}:
     sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 
 import numpy as np
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.mixed.adr_preparation import prepare_adr_data
-from hdgfem.mixed.raw_cuda.adr_operator import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.runtime.optional import require_cupy
+from hybridge.mixed.adr_preparation import prepare_adr_data
+from hybridge.mixed.raw_cuda.adr_operator import (
     assemble_projected_adr_trace_operator_raw_cuda,
 )
 
@@ -80,10 +80,10 @@ def sweep(args,cp):
 
 
 def diffusion_comparison(args,cp):
-    from hdgfem.mixed import cupy as wrapper
-    from hdgfem.mixed.raw_cuda import identity as current
+    from hybridge.mixed import cupy as wrapper
+    from hybridge.mixed.raw_cuda import identity as current
     from scripts.gpu.benchmark_fused_raw_assembly_kernels import _make_assembler
-    spec=importlib.util.spec_from_file_location('hdgfem.backends._tensor_baseline',args.diffusion_before)
+    spec=importlib.util.spec_from_file_location('hybridge.backends._tensor_baseline',args.diffusion_before)
     baseline=importlib.util.module_from_spec(spec)
     sys.modules[spec.name]=baseline
     spec.loader.exec_module(baseline)

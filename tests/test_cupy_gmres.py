@@ -3,11 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.face_dense import face_dense_relative_residual
-from hdgfem.mixed.face_dense import normalize_penalty_rows
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-from hdgfem.linalg.gpu.gmres import (
+from hybridge.linalg.face_dense import face_dense_relative_residual
+from hybridge.mixed.face_dense import normalize_penalty_rows
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hybridge.linalg.gpu.gmres import (
     _apply_previous_givens,
     _back_substitute_upper,
     _compute_givens,
@@ -17,10 +17,10 @@ from hdgfem.linalg.gpu.gmres import (
     CuPyVectorBLAS,
     restarted_gmres_cupy,
 )
-from hdgfem.linalg.gpu.preconditioners import CuPyFaceBlockJacobiPreconditioner
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.linalg.gpu.preconditioners import CuPyFaceBlockJacobiPreconditioner
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 
@@ -380,7 +380,7 @@ def test_cupy_block_jacobi_application_matches_cpu_reference() -> None:
     rng = np.random.default_rng(77)
     vector = rng.standard_normal(system.rhs.shape)
 
-    from hdgfem.linalg.block_jacobi import (
+    from hybridge.linalg.block_jacobi import (
         build_face_block_jacobi_preconditioner,
     )
 
@@ -396,7 +396,7 @@ def test_cupy_block_jacobi_application_matches_cpu_reference() -> None:
 
 
 def test_orthogonality_metrics_identity_and_perturbation() -> None:
-    from hdgfem.linalg.gpu.gmres import _orthogonality_metrics_from_gram
+    from hybridge.linalg.gpu.gmres import _orthogonality_metrics_from_gram
 
     identity = np.eye(4)
     assert _orthogonality_metrics_from_gram(identity) == (0.0, 0.0, 0.0)
@@ -416,7 +416,7 @@ def test_orthogonality_metrics_identity_and_perturbation() -> None:
 
 @pytest.mark.parametrize("bad", [np.ones(3), np.ones((2, 3))])
 def test_orthogonality_metrics_reject_nonsquare_input(bad: np.ndarray) -> None:
-    from hdgfem.linalg.gpu.gmres import _orthogonality_metrics_from_gram
+    from hybridge.linalg.gpu.gmres import _orthogonality_metrics_from_gram
 
     with pytest.raises(ValueError, match="square"):
         _orthogonality_metrics_from_gram(bad)

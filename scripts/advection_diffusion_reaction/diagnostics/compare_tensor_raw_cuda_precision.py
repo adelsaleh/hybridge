@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare raw-CUDA tensor ADR assembly and reconstruction in FP32 and FP64.
 
-Precision is fixed per process (``HDGFEM_PRECISION`` is read at import), so the
+Precision is fixed per process (``HYBRIDGE_PRECISION`` is read at import), so the
 parent runs one worker per precision in a fresh process. Each worker samples
 the case's coefficients on the device, assembles the reduced trace operator in
 every requested format (COO, CSR, face-BSR) and reconstructs the local fields
@@ -61,14 +61,14 @@ def _canonical_csr(system):
 def run_worker(args) -> None:
     """Assemble and reconstruct in this process's precision; write an ``.npz``."""
     import cupy as cp
-    from hdgfem import DGSpace
-    from hdgfem.hdg import condensation as hdg
-    from hdgfem.mixed.coefficients_device import prepare_adr_data_cupy
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge import DGSpace
+    from hybridge.hdg import condensation as hdg
+    from hybridge.mixed.coefficients_device import prepare_adr_data_cupy
+    from hybridge.mixed.raw_cuda.adr_operator import (
             assemble_projected_adr_trace_operator_raw_cuda,
             reconstruct_projected_adr_local_unknowns_raw_cuda,
         )
-    from hdgfem.runtime.precision import PRECISION
+    from hybridge.runtime.precision import PRECISION
     from scripts.advection_diffusion_reaction.cases import CASE_DEFINITIONS
     from scripts.advection_diffusion_reaction.run_cases import _build_mesh
 
@@ -225,7 +225,7 @@ def main(argv=None) -> int:
     with tempfile.TemporaryDirectory(prefix="adr_precision_") as scratch:
         for precision in PRECISIONS:
             out = Path(scratch) / f"{precision}.npz"
-            env = dict(os.environ, HDGFEM_PRECISION=precision)
+            env = dict(os.environ, HYBRIDGE_PRECISION=precision)
             command = [sys.executable, "-m", "scripts.advection_diffusion_reaction.diagnostics."
                        "compare_tensor_raw_cuda_precision", *passthrough, "--worker", "--out", str(out)]
             print(f"running {precision} worker ...", flush=True)

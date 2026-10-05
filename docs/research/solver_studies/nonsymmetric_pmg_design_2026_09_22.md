@@ -45,7 +45,7 @@ python -B scripts/dev/check_nonsymmetric_pmg_algebra.py
 ```
 
 The [diagnostic source](../../../scripts/dev/check_nonsymmetric_pmg_algebra.py)
-uses existing NumPy and SciPy only, without importing HDGFEM or optional
+uses existing NumPy and SciPy only, without importing HYBRIDGE or optional
 accelerator modules. [Saved results](nonsymmetric_pmg_design_2026_09_22.json)
 include dependency versions, residuals, iteration counts, and level data.
 
@@ -101,11 +101,11 @@ installed for this diagnostic.
 
 | Existing component | Reuse or required change |
 |---|---|
-| [`face_hp_multigrid.py`](../../../hdgfem/linalg/multigrid/face_hp.py) | Reuse hierarchy concepts and convergence accounting. Current diagonal symmetrization, Chebyshev bounds, PCGF and SPD-oriented coarse policy cannot define the new path. |
-| [`legendre_face_bsr.py`](../../../hdgfem/linalg/gpu/legendre_face_bsr.py) | Reuse modal transforms, orientation conventions, and face-BSR products. New transfers have graph couplings and cannot use only principal-block extraction. |
-| [`additive_schwarz.py`](../../../hdgfem/linalg/additive_schwarz.py) | Reuse BSR graph lookup and patch gathering. Add the chosen high-mode grouping, local factor policy, and overlap weighting to shared helpers when implementing. |
-| [`cupy_gmres.py`](../../../hdgfem/linalg/gpu/gmres.py) | The current implementation is left-preconditioned GMRES. Flexible right Arnoldi must store both residual basis vectors and their actual preconditioned corrections. |
-| [`face_hp_krylov.py`](../../../hdgfem/linalg/multigrid/krylov.py) | Its symmetric-part adapter is a comparator, not general nonsymmetric pMG. |
+| [`face_hp_multigrid.py`](../../../hybridge/linalg/multigrid/face_hp.py) | Reuse hierarchy concepts and convergence accounting. Current diagonal symmetrization, Chebyshev bounds, PCGF and SPD-oriented coarse policy cannot define the new path. |
+| [`legendre_face_bsr.py`](../../../hybridge/linalg/gpu/legendre_face_bsr.py) | Reuse modal transforms, orientation conventions, and face-BSR products. New transfers have graph couplings and cannot use only principal-block extraction. |
+| [`additive_schwarz.py`](../../../hybridge/linalg/additive_schwarz.py) | Reuse BSR graph lookup and patch gathering. Add the chosen high-mode grouping, local factor policy, and overlap weighting to shared helpers when implementing. |
+| [`cupy_gmres.py`](../../../hybridge/linalg/gpu/gmres.py) | The current implementation is left-preconditioned GMRES. Flexible right Arnoldi must store both residual basis vectors and their actual preconditioned corrections. |
+| [`face_hp_krylov.py`](../../../hybridge/linalg/multigrid/krylov.py) | Its symmetric-part adapter is a comparator, not general nonsymmetric pMG. |
 | AMG endpoint | Existing AMGX availability does not establish AIR or constrained AIR support. A backend and its block/device capabilities must be qualified. |
 
 The smallest implementation comparator would retain polynomial injection,

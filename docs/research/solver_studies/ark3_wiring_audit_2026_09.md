@@ -27,8 +27,8 @@ the available diagnostic classifier, not proof of a nonsingular matrix.
   residual workspace, dt, Poisson solver and tau policy inputs as the old branch.
   The callback refreshes the matrix at stage 2 and changes only the RHS for the
   remaining two stages, as in the archived runner.
-- `hdgfem/assembly/advection_residual.py`, `hdgfem/core/field_ops.py`,
-  `hdgfem/backends/diffusion_cupy.py`, and `hdgfem/solvers/advection_reaction.py`
+- `hybridge/assembly/advection_residual.py`, `hybridge/core/field_ops.py`,
+  `hybridge/backends/diffusion_cupy.py`, and `hybridge/solvers/advection_reaction.py`
   are byte-identical to `/tmp/gc-stepper-refactor-jtrkkr6d`. This comparison does
   not cover every shared module, binary, configuration file or earlier version.
 - Four canned-solver checks at dt=0.5 and 1.0, with and without injected trace-rank
@@ -39,7 +39,7 @@ the available diagnostic classifier, not proof of a nonsingular matrix.
 ## Earlier completed-run evidence
 
 The preserved `imex_ark3_t50_audit` under
-`/tmp/hdgfem-cleanup-20260913-wnc2yhb3/artifacts/` records a completed run with
+`/tmp/hybridge-cleanup-20260913-wnc2yhb3/artifacts/` records a completed run with
 exactly two tau increases. Its parameters were dt=0.05, h=0.008, p=6,
 113,894 triangles and T=50. Tau increased 1,000 -> 2,000 at step 215 and
 2,000 -> 4,000 at step 546. This verifies that successful run, without excluding

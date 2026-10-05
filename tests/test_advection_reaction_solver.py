@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.solvers.advection_reaction import (
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGField, DGSpace, VectorDGField
+from hybridge.solvers.advection_reaction import (
     AdvectionReactionHDGSolver as AdvReaSolver,
     solve_advection_reaction_hdg,
 )

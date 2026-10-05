@@ -242,7 +242,7 @@ def load_or_generate_mesh(
         code = (
             "import json, sys\n"
             "sys.path.insert(0, sys.argv[1])\n"
-            "from hdgfem.core.mesh import gmsh_smooth_star_mesh\n"
+            "from hybridge.core.mesh import gmsh_smooth_star_mesh\n"
             "cfg = json.loads(sys.argv[2])\n"
             "mesh_size = cfg.pop('mesh_size')\n"
             "gmsh_smooth_star_mesh(mesh_size, **cfg)\n"

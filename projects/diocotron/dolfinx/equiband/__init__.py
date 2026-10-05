@@ -1,7 +1,7 @@
 """Fixed-threshold-width semilinear equilibrium bands.
 
 This research solver belongs to ``projects.diocotron.dolfinx``, not to the
-installed ``hdgfem`` package. Run from the repository root with
+installed ``hybridge`` package. Run from the repository root with
 ``python -m projects.diocotron.dolfinx.equiband --help``; full run examples and
 the mathematical contract are in ``projects/diocotron/docs/equiband.md``.
 

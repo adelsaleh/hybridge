@@ -398,7 +398,7 @@ def generate_mesh(
 
     definition = geometry_definition(name)
     metadata: dict[str, Any] = {
-        "format": "hdgfem_canonical_gmsh_v1",
+        "format": "hybridge_canonical_gmsh_v1",
         "geometry": definition.slug,
         "title": definition.title,
         "geometry_parameters": used_parameters,

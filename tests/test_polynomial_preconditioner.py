@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.polynomial import (
+from hybridge.linalg.polynomial import (
     PolynomialPreconditioner,
     arnoldi_factorization,
     build_polynomial_preconditioner,

@@ -49,7 +49,7 @@ def run_coarse_check(key, args, common):
     environment = dict(os.environ, MKL_NUM_THREADS=str(args.pardiso_threads),
                        OMP_NUM_THREADS=str(args.pardiso_threads), MKL_DYNAMIC="FALSE",
                        OPENBLAS_NUM_THREADS="1", NUMBA_DISABLE_JIT="1",
-                       HDGFEM_PRECISION="float64", PYTHONDONTWRITEBYTECODE="1")
+                       HYBRIDGE_PRECISION="float64", PYTHONDONTWRITEBYTECODE="1")
     # Select master's direct-solver package even if a sourced environment puts
     # the companion worktree on PYTHONPATH.
     environment["PYTHONPATH"] = str(diagnostic.ROOT)+os.pathsep+environment.get("PYTHONPATH", "")

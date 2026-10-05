@@ -55,9 +55,9 @@ PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 MPLBACKEND=
 
 Outputs are PDF, SVG, PNG and analytic provenance (`run_outputs/solver_studies/adr_scaling_2026_09_17/figures/closed_loop_stress/`, local, untracked).
 The package's publication styling/export and mesh-overlay helpers supply the
-portable formats. The array-only `hdgfem.io.figures.add_matplotlib_mesh` accepts
+portable formats. The array-only `hybridge.io.figures.add_matplotlib_mesh` accepts
 `node_coords`/`triangles` and optional `(xmin, xmax, ymin, ymax)` bounds; the
-existing `hdgfem.io.plot.add_matplotlib_mesh` delegates to it. Bounding-box
+existing `hybridge.io.plot.add_matplotlib_mesh` delegates to it. Bounding-box
 selection retains crossing triangles and never retriangulates holes. This
 allows report rendering without importing numerical kernels. Source, figure
 saved-mesh and normalization hashes, term extrema and shared color scales are

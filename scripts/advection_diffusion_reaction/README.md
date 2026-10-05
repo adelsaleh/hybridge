@@ -42,7 +42,7 @@ Historical output records and the frozen vendor tree are not rewritten.
 
 ## Common runner
 
-Run commands from the repository root, using the environment where HDGFEM is
+Run commands from the repository root, using the environment where HYBRIDGE is
 installed:
 
 ```sh
@@ -52,7 +52,7 @@ python -m scripts.advection_diffusion_reaction.run_cases quadratic --dry-run
 python -m scripts.advection_diffusion_reaction.run_cases disk --case-param peclet=20 --print-preset
 ```
 
-Listing and inspecting presets do not import HDGFEM, Gmsh, Numba, CUDA or
+Listing and inspecting presets do not import HYBRIDGE, Gmsh, Numba, CUDA or
 PyPardiso, build coefficients, generate a mesh, or solve a system. File invocation
 also works: `python scripts/advection_diffusion_reaction/run_cases.py --help`.
 
@@ -152,7 +152,7 @@ qualification.
 The study snapshot in `vendor/adr_gmres` remains intact so historical campaigns
 can still select their original solver tree. The promoted baseline and
 oscillatory formulas are checked against that snapshot; the common runner uses
-the current HDGFEM package.
+the current HYBRIDGE package.
 
 ## Specialized runners retained here
 
@@ -166,7 +166,7 @@ the current HDGFEM package.
 | [run_adr_unified_campaign.py](campaigns/unified/run_adr_unified_campaign.py) | Iterative replay of the archived ADR inventory. |
 | [run_adr_pardiso_campaign.py](campaigns/pardiso/run_adr_pardiso_campaign.py) | Direct-solver campaign for archived systems. |
 | [check_cached_adr_pardiso.py](diagnostics/check_cached_adr_pardiso.py) | Bounded cached-system CPU diagnostic with detailed resource monitoring. |
-| [compare_tensor_raw_cuda_precision.py](diagnostics/compare_tensor_raw_cuda_precision.py) | Raw-CUDA tensor assembly and reconstruction in FP64 vs FP32 (one worker per `HDGFEM_PRECISION`), COO/CSR/BSR agreement and kernel times; exits 1 above tolerance. No solve. |
+| [compare_tensor_raw_cuda_precision.py](diagnostics/compare_tensor_raw_cuda_precision.py) | Raw-CUDA tensor assembly and reconstruction in FP64 vs FP32 (one worker per `HYBRIDGE_PRECISION`), COO/CSR/BSR agreement and kernel times; exits 1 above tolerance. No solve. |
 | [tensor_shared_memory_budget.py](diagnostics/tensor_shared_memory_budget.py) | Host-only table of the raw-CUDA tensor ADR shared-memory budget per order, diffusion kind and volume/face quadrature rule (batch width, bytes, largest fitting NQ); `--json` records. No GPU or solve. |
 | [export_adr_unified_inventory.py](campaigns/unified/export_adr_unified_inventory.py) | Export the archived-system inventory. |
 | [make_oscillatory_geometry.py](meshes/make_oscillatory_geometry.py), [make_oscillatory_scaling_meshes.py](meshes/make_oscillatory_scaling_meshes.py) | Existing study geometry/mesh generators. |

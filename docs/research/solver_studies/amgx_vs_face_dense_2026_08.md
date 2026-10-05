@@ -27,8 +27,8 @@ current master implementation was commit
 runner's stale duplicate `mesh_size` argument fixed during this campaign.
 
 The validated face-dense implementation and focused tests have since been
-selectively ported into the current tree under `hdgfem.linalg`,
-`hdgfem.backends.cupy_*`, and `hdgfem.solvers.diffusion_face_dense`. The
+selectively ported into the current tree under `hybridge.linalg`,
+`hybridge.backends.cupy_*`, and `hybridge.solvers.diffusion_face_dense`. The
 historical timings below remain tied to the two commits named above; the
 canonical current runners are
 `scripts.diffusion_reaction.validate_face_dense_gpu_solver` and

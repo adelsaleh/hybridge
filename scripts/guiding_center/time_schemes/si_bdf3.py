@@ -14,8 +14,8 @@ preserving.
 """
 from time import perf_counter
 
-from hdgfem.core.field_ops import perpendicular_vector_field, trace_linear_combination
-from hdgfem.core.time_integration import bdf3_transport_data
+from hybridge.core.field_ops import perpendicular_vector_field, trace_linear_combination
+from hybridge.core.time_integration import bdf3_transport_data
 from .si_bdf2 import SIBDF2Stepper
 from .stage_support import GuidingCenterStep
 

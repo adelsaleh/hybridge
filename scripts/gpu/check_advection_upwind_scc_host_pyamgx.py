@@ -23,18 +23,18 @@ import scipy.sparse
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.hdg import matrices as hdg_mats
-import hdgfem.hdg.coefficients as hdg_coefficients
-from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse
-from hdgfem.linalg.gpu.sparse import scipy_csr_to_cupy
-from hdgfem.transport.numba import reconstruct_projected_field_numba
-from hdgfem.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
-from hdgfem.linalg.system import assemble_global_matrix, solve_global_system
-from hdgfem.linalg.results import diagonal_scale_system, residual_diagnostics
-from hdgfem.linalg.reduction import expand_known_dofs
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.hdg import matrices as hdg_mats
+import hybridge.hdg.coefficients as hdg_coefficients
+from hybridge.runtime.optional import require_cupy, require_cupyx_sparse
+from hybridge.linalg.gpu.sparse import scipy_csr_to_cupy
+from hybridge.transport.numba import reconstruct_projected_field_numba
+from hybridge.core.mesh import gmsh_rectangle_mesh, rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.ordering import GraphOrderingResult, upwind_scc_trace_ordering
+from hybridge.linalg.system import assemble_global_matrix, solve_global_system
+from hybridge.linalg.results import diagonal_scale_system, residual_diagnostics
+from hybridge.linalg.reduction import expand_known_dofs
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
 
 
@@ -526,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     check_seconds = time.perf_counter() - check_start
 
     print()
-    print("HDGFEM host upwind-SCC CuPy/Cupyx ordering check")
+    print("HYBRIDGE host upwind-SCC CuPy/Cupyx ordering check")
     print("----------------------------------------------")
     print(
         f"case={args.case}, order={args.order}, mesh_size={args.mesh_size}, basis={args.basis}, "

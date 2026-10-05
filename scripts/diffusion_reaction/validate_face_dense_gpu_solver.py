@@ -12,22 +12,22 @@ from time import perf_counter
 
 import numpy as np
 
-from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-from hdgfem.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
-from hdgfem.linalg.gpu.preconditioners import (
+from hybridge.hdg import condensation as hdg_assembly
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hybridge.linalg.gpu.polynomial import CuPyPolynomialPreconditioner
+from hybridge.linalg.gpu.preconditioners import (
     CuPyFaceAdditiveSchwarzPreconditioner,
     CuPyFaceBlockJacobiPreconditioner,
 )
-from hdgfem.linalg.gpu.production_gmres import (
+from hybridge.linalg.gpu.production_gmres import (
     CuPyProductionGMRESOptions,
     CuPyProductionGMRESSolver,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.mixed.local_numpy import diffusion_element_boundary_mats, local_solvers
-from hdgfem.solvers.diffusion_face_dense import (
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.mixed.local_numpy import diffusion_element_boundary_mats, local_solvers
+from hybridge.solvers.diffusion_face_dense import (
     assemble_diffusion_face_dense_components,
 )
 from scripts.diffusion_reaction.cases import quadratic_poisson_case

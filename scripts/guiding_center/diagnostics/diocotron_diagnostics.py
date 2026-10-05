@@ -1,4 +1,4 @@
-"""Disk modal diagnostics using HDGFEM's cached mapped-grid sampler.
+"""Disk modal diagnostics using HYBRIDGE's cached mapped-grid sampler.
 
 The paper's whole-domain potential perturbation norm is retained by the
 standard runner. These additional polar Fourier norms separate mode growth
@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import numpy as np
 
-from hdgfem.io.raster import RasterGeometry, DeviceRasterSampler
+from hybridge.io.raster import RasterGeometry, DeviceRasterSampler
 
 
 class DiocotronModeDiagnostics:
@@ -50,7 +50,7 @@ class DiocotronModeDiagnostics:
         # neighboring instabilities outside the seeded mode's first harmonics.
         self.modes=tuple(range(1,self.angular_points//2))
         if backend == "device":
-            from hdgfem.core.device import as_cupy_space
+            from hybridge.core.device import as_cupy_space
             self.sampler=DeviceRasterSampler(space,geometry,device_id=as_cupy_space(space).device_id)
             self.xp=self.sampler.cp
             self.sample=self.sampler.sample
@@ -89,7 +89,7 @@ class DiocotronModeDiagnostics:
             diocotron_phi_mode_target_l2=result[f"diocotron_phi_mode_{self.mode}_l2"],
             diocotron_modal_radius=self.radius,diocotron_modal_backend=self.backend,
             diocotron_modal_radial_points=len(self.radii),diocotron_modal_angular_points=self.angular_points)
-        from hdgfem.diagnostics.guiding_center import modal_activity
+        from hybridge.diagnostics.guiding_center import modal_activity
         activity = modal_activity(packed[:len(self.modes)], self.modes)
         result["diocotron_active_mode_count"] = int(activity["active_counts"][0])
         for rank, (number, value) in enumerate(zip(

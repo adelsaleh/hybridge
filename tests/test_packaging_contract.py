@@ -22,7 +22,7 @@ def test_alpha_package_metadata_declares_bounded_runtime_and_extras() -> None:
     metadata = _metadata()
     project = metadata["project"]
 
-    assert project["name"] == "hdgfem"
+    assert project["name"] == "hybridge"
     assert project["requires-python"] == ">=3.10"
     assert set(project["dependencies"]) == {"numba", "numpy", "scipy"}
     extras = project["optional-dependencies"]
@@ -32,12 +32,12 @@ def test_alpha_package_metadata_declares_bounded_runtime_and_extras() -> None:
     assert "Development Status :: 3 - Alpha" in project["classifiers"]
 
 
-def test_setuptools_discovers_every_hdgfem_subpackage() -> None:
+def test_setuptools_discovers_every_hybridge_subpackage() -> None:
     metadata = _metadata()
-    assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["hdgfem*"]
+    assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["hybridge*"]
 
     directories = [
-        path for path in (ROOT / "hdgfem").rglob("*")
+        path for path in (ROOT / "hybridge").rglob("*")
         if path.is_dir() and "__pycache__" not in path.parts
     ]
     # Directories with Python modules must be packages so setuptools finds them.

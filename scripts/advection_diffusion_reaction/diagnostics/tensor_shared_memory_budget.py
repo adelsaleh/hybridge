@@ -15,7 +15,7 @@ given as 1D point counts ``volume_quad_1d``/``edge_quad_1d`` offsets from ``p``;
 ``p+5/p+4`` is the n-Gamma D-BDF2 plan's overintegration. The production trace
 bases fix the face rule at 2p+1 Gauss--Lobatto points (NFQ), so the edge count
 only matters for ``--trace-basis bernstein``. Bytes follow the
-selected precision (``HDGFEM_PRECISION``, read at import). Example::
+selected precision (``HYBRIDGE_PRECISION``, read at import). Example::
 
     .venv/bin/python -m scripts.advection_diffusion_reaction.diagnostics.tensor_shared_memory_budget \\
         --orders 0 1 2 3 4 5 6 --rules auto p+3/default p+5/p+4 p+7/p+4 2p+2/default --json budget.json
@@ -55,7 +55,7 @@ def rule_sizes(order: int, rule: str, trace_basis: str) -> tuple[str, int, int]:
     ``legendre-modal`` always use 2p+1 Gauss--Lobatto points, so the edge part
     of a rule only affects ``bernstein`` traces.
     """
-    from hdgfem import DGSpace, rectangle_mesh
+    from hybridge import DGSpace, rectangle_mesh
 
     if rule == "auto":
         space = DGSpace(rectangle_mesh(1, 1), order)
@@ -74,8 +74,8 @@ def rule_sizes(order: int, rule: str, trace_basis: str) -> tuple[str, int, int]:
 
 def budget(orders, rules, trace_basis="legacy-lagrange") -> list[dict]:
     """Return one record per (order, rule) with per-kind batch and bytes."""
-    from hdgfem.mixed.coefficients import DIFFUSION_KINDS
-    from hdgfem.mixed.raw_cuda.tensor import (
+    from hybridge.mixed.coefficients import DIFFUSION_KINDS
+    from hybridge.mixed.raw_cuda.tensor import (
             TensorWorkspaceError,
             max_tensor_volume_points,
             tensor_workspace,
@@ -101,7 +101,7 @@ def budget(orders, rules, trace_basis="legacy-lagrange") -> list[dict]:
 
 def markdown(records) -> str:
     """Render the records as one Markdown table (cell = batch/KiB or -)."""
-    from hdgfem.mixed.coefficients import DIFFUSION_KINDS
+    from hybridge.mixed.coefficients import DIFFUSION_KINDS
 
     header = "| p | rule (vol/edge 1D) | NQ | NFQ | " + " | ".join(DIFFUSION_KINDS) + " | max NQ (variable-full) |"
     lines = [header, "|" + "---|" * (len(DIFFUSION_KINDS) + 5)]
@@ -125,8 +125,8 @@ def main(argv=None) -> int:
                         choices=("legacy-lagrange", "legendre-modal", "bernstein"))
     parser.add_argument("--json", type=Path, help="write the records to this JSON file")
     args = parser.parse_args(argv)
-    from hdgfem.mixed.raw_cuda.tensor import TENSOR_SHARED_MEMORY_LIMIT
-    from hdgfem.runtime.precision import REAL_ITEMSIZE
+    from hybridge.mixed.raw_cuda.tensor import TENSOR_SHARED_MEMORY_LIMIT
+    from hybridge.runtime.precision import REAL_ITEMSIZE
 
     records = budget(args.orders, args.rules, args.trace_basis)
     print(f"trace basis {args.trace_basis}, real size {REAL_ITEMSIZE} B, limit {TENSOR_SHARED_MEMORY_LIMIT:,} B; cell = batch/KiB, '-' = does not fit")

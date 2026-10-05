@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.linalg.system import assemble_global_matrix
-from hdgfem.solvers import advection_reaction
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.linalg.system import assemble_global_matrix
+from hybridge.solvers import advection_reaction
 from scripts.advection_reaction.diagnose_discontinuous_trace import assemble_fixture, diagnose
 
 

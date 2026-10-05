@@ -5,10 +5,10 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-import hdgfem
-import hdgfem.solvers as solver_api
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
+import hybridge
+import hybridge.solvers as solver_api
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.runtime.errors import UnsupportedBackendConfigurationError
 
 
 _PRIMARY_SOLVER_EXPORTS = {
@@ -42,7 +42,7 @@ def _space() -> DGSpace:
 
 
 def test_supported_solver_exports_are_identical_at_both_package_levels() -> None:
-    assert _PRIMARY_SOLVER_EXPORTS <= set(hdgfem.__all__)
+    assert _PRIMARY_SOLVER_EXPORTS <= set(hybridge.__all__)
     assert set(solver_api.__all__) == _PRIMARY_SOLVER_EXPORTS | {
         "advection_reaction",
         "advection_diffusion_reaction",
@@ -52,7 +52,7 @@ def test_supported_solver_exports_are_identical_at_both_package_levels() -> None
     }
 
     for name in _PRIMARY_SOLVER_EXPORTS:
-        assert getattr(hdgfem, name) is getattr(solver_api, name)
+        assert getattr(hybridge, name) is getattr(solver_api, name)
 
 
 def test_solver_module_facades_and_legacy_aliases_remain_importable() -> None:
@@ -73,12 +73,12 @@ def test_solver_module_facades_and_legacy_aliases_remain_importable() -> None:
 @pytest.mark.parametrize(
     "options_type, unknown_message",
     (
-        (hdgfem.AdvectionReactionHDGOptions, "unknown advection-reaction solver option"),
+        (hybridge.AdvectionReactionHDGOptions, "unknown advection-reaction solver option"),
         (
-            hdgfem.AdvectionDiffusionReactionHDGOptions,
+            hybridge.AdvectionDiffusionReactionHDGOptions,
             "unknown advection-diffusion-reaction solver option",
         ),
-        (hdgfem.DiffusionReactionHDGOptions, "unknown diffusion-reaction solver option"),
+        (hybridge.DiffusionReactionHDGOptions, "unknown diffusion-reaction solver option"),
     ),
 )
 def test_options_are_immutable_and_reject_unknown_overrides(options_type, unknown_message: str) -> None:
@@ -96,13 +96,13 @@ def test_options_are_immutable_and_reject_unknown_overrides(options_type, unknow
 @pytest.mark.parametrize(
     "public_type",
     (
-        hdgfem.AdvectionReactionTimings,
-        hdgfem.AdvectionReactionResult,
-        hdgfem.AdvectionDiffusionReactionTimings,
-        hdgfem.AdvectionDiffusionReactionResult,
-        hdgfem.DiffusionReactionTimings,
-        hdgfem.DiffusionReactionResult,
-        hdgfem.DiffusionReactionAssemblyResult,
+        hybridge.AdvectionReactionTimings,
+        hybridge.AdvectionReactionResult,
+        hybridge.AdvectionDiffusionReactionTimings,
+        hybridge.AdvectionDiffusionReactionResult,
+        hybridge.DiffusionReactionTimings,
+        hybridge.DiffusionReactionResult,
+        hybridge.DiffusionReactionAssemblyResult,
     ),
 )
 def test_public_result_and_timing_dataclasses_are_frozen(public_type) -> None:
@@ -110,8 +110,8 @@ def test_public_result_and_timing_dataclasses_are_frozen(public_type) -> None:
 
 
 def test_solver_failure_types_are_stable_before_backend_dispatch() -> None:
-    adv_solver = hdgfem.AdvectionReactionHDGSolver(_space(), verbose=False)
-    diff_solver = hdgfem.DiffusionReactionHDGSolver(_space(), verbose=False)
+    adv_solver = hybridge.AdvectionReactionHDGSolver(_space(), verbose=False)
+    diff_solver = hybridge.DiffusionReactionHDGSolver(_space(), verbose=False)
 
     with pytest.raises(RuntimeError, match="no complete advection-reaction problem is set"):
         adv_solver.solve()
@@ -125,14 +125,14 @@ def test_solver_failure_types_are_stable_before_backend_dispatch() -> None:
 
 def test_constructor_rejects_partial_problem_bundles() -> None:
     with pytest.raises(ValueError, match="must be provided together"):
-        hdgfem.AdvectionReactionHDGSolver(_space(), source=object(), verbose=False)
+        hybridge.AdvectionReactionHDGSolver(_space(), source=object(), verbose=False)
     with pytest.raises(ValueError, match="must be provided together"):
-        hdgfem.DiffusionReactionHDGSolver(_space(), source=object(), verbose=False)
+        hybridge.DiffusionReactionHDGSolver(_space(), source=object(), verbose=False)
 
 
 def test_with_options_is_persistent_and_clears_cached_result() -> None:
-    adv_solver = hdgfem.AdvectionReactionHDGSolver(_space(), verbose=False)
-    diff_solver = hdgfem.DiffusionReactionHDGSolver(_space(), verbose=False)
+    adv_solver = hybridge.AdvectionReactionHDGSolver(_space(), verbose=False)
+    diff_solver = hybridge.DiffusionReactionHDGSolver(_space(), verbose=False)
     sentinel = object()
     adv_solver.result = sentinel
     diff_solver.result = sentinel
@@ -148,8 +148,8 @@ def test_with_options_is_persistent_and_clears_cached_result() -> None:
 @pytest.mark.parametrize(
     "solver_type",
     (
-        hdgfem.AdvectionReactionHDGSolver,
-        hdgfem.DiffusionReactionHDGSolver,
+        hybridge.AdvectionReactionHDGSolver,
+        hybridge.DiffusionReactionHDGSolver,
     ),
 )
 def test_solve_overrides_persist_but_explicit_initial_guess_does_not(solver_type) -> None:
@@ -202,7 +202,7 @@ def test_functional_and_reusable_solvers_accept_real_constant_boundary_data(equa
 
     if equation == "advection-reaction":
         source, beta, reaction, _ = _advection_problem(space)
-        functional = hdgfem.solve_advection_reaction_hdg(
+        functional = hybridge.solve_advection_reaction_hdg(
             source,
             beta,
             reaction,
@@ -210,18 +210,18 @@ def test_functional_and_reusable_solvers_accept_real_constant_boundary_data(equa
             space,
             **common,
         )
-        solver = hdgfem.AdvectionReactionHDGSolver(space, **common)
+        solver = hybridge.AdvectionReactionHDGSolver(space, **common)
         solver.set_problem(source, beta, reaction, boundary_value)
     else:
         source, reaction, _ = _diffusion_problem(space)
-        functional = hdgfem.solve_diffusion_reaction_hdg(
+        functional = hybridge.solve_diffusion_reaction_hdg(
             source,
             reaction,
             boundary_value,
             space,
             **common,
         )
-        solver = hdgfem.DiffusionReactionHDGSolver(space, **common)
+        solver = hybridge.DiffusionReactionHDGSolver(space, **common)
         solver.set_problem(source, reaction, boundary_value)
 
     reusable = solver.solve()
@@ -255,7 +255,7 @@ def test_functional_and_reusable_solvers_reject_non_callable_non_constant_bounda
     if equation == "advection-reaction":
         source, beta, reaction, _ = _advection_problem(space)
         with pytest.raises(TypeError, match=message):
-            hdgfem.solve_advection_reaction_hdg(
+            hybridge.solve_advection_reaction_hdg(
                 source,
                 beta,
                 reaction,
@@ -264,7 +264,7 @@ def test_functional_and_reusable_solvers_reject_non_callable_non_constant_bounda
                 **common,
             )
         with pytest.raises(TypeError, match=message):
-            hdgfem.AdvectionReactionHDGSolver(
+            hybridge.AdvectionReactionHDGSolver(
                 space,
                 source=source,
                 beta=beta,
@@ -275,7 +275,7 @@ def test_functional_and_reusable_solvers_reject_non_callable_non_constant_bounda
     else:
         source, reaction, _ = _diffusion_problem(space)
         with pytest.raises(TypeError, match=message):
-            hdgfem.solve_diffusion_reaction_hdg(
+            hybridge.solve_diffusion_reaction_hdg(
                 source,
                 reaction,
                 invalid,
@@ -283,7 +283,7 @@ def test_functional_and_reusable_solvers_reject_non_callable_non_constant_bounda
                 **common,
             )
         with pytest.raises(TypeError, match=message):
-            hdgfem.DiffusionReactionHDGSolver(
+            hybridge.DiffusionReactionHDGSolver(
                 space,
                 source=source,
                 reaction=reaction,
@@ -308,10 +308,10 @@ def test_host_reusable_solver_accepts_per_call_initial_guess_and_reports_true_re
         "verbose": False,
     }
     if equation == "advection-reaction":
-        solver = hdgfem.AdvectionReactionHDGSolver(space, **common)
+        solver = hybridge.AdvectionReactionHDGSolver(space, **common)
         solver.set_discrete_problem(*_advection_problem(space))
     else:
-        solver = hdgfem.DiffusionReactionHDGSolver(
+        solver = hybridge.DiffusionReactionHDGSolver(
             space,
             hdg_postprocess="none",
             **common,
@@ -349,7 +349,7 @@ def test_host_reusable_solver_accepts_per_call_initial_guess_and_reports_true_re
 )
 def test_advection_problem_updates_clear_exposed_solve_artifacts(setter_name: str, new_value) -> None:
     space = _space()
-    solver = hdgfem.AdvectionReactionHDGSolver(space, boundary_mode="eliminate", verbose=False)
+    solver = hybridge.AdvectionReactionHDGSolver(space, boundary_mode="eliminate", verbose=False)
     solver.set_discrete_problem(*_advection_problem(space))
     sentinel = object()
     artifact_names = (
@@ -386,7 +386,7 @@ def test_advection_problem_updates_clear_exposed_solve_artifacts(setter_name: st
 @pytest.mark.parametrize("update_kind", ("source", "boundary"))
 def test_diffusion_rhs_updates_preserve_cached_operator_but_clear_rhs_and_solution(update_kind: str) -> None:
     space = _space()
-    solver = hdgfem.DiffusionReactionHDGSolver(
+    solver = hybridge.DiffusionReactionHDGSolver(
         space,
         assembly_backend="numba",
         boundary_mode="eliminate",
@@ -438,7 +438,7 @@ def test_diffusion_rhs_updates_preserve_cached_operator_but_clear_rhs_and_soluti
 
 def test_diffusion_reaction_update_invalidates_cached_operator() -> None:
     space = _space()
-    solver = hdgfem.DiffusionReactionHDGSolver(
+    solver = hybridge.DiffusionReactionHDGSolver(
         space,
         assembly_backend="numba",
         boundary_mode="eliminate",
@@ -459,7 +459,7 @@ def test_diffusion_reaction_update_invalidates_cached_operator() -> None:
 
 def test_diffusion_scipy_cache_reuses_host_and_scaled_csr() -> None:
     space = _space()
-    solver = hdgfem.DiffusionReactionHDGSolver(
+    solver = hybridge.DiffusionReactionHDGSolver(
         space,
         assembly_backend="numba",
         boundary_mode="eliminate",
@@ -500,7 +500,7 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
         raise AssertionError("coefficient sampling must not run before backend preflight")
 
     if equation == "advection-reaction":
-        solver = hdgfem.AdvectionReactionHDGSolver(
+        solver = hybridge.AdvectionReactionHDGSolver(
             space,
             source=unexpected_coefficient_call,
             beta=(unexpected_coefficient_call, unexpected_coefficient_call),
@@ -513,7 +513,7 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
         )
         match = "boundary_mode='zero-flux'"
     else:
-        solver = hdgfem.DiffusionReactionHDGSolver(
+        solver = hybridge.DiffusionReactionHDGSolver(
             space,
             source=unexpected_coefficient_call,
             reaction=unexpected_coefficient_call,
@@ -531,7 +531,7 @@ def test_reusable_solver_preflights_before_coefficient_sampling(equation: str) -
 
 
 def test_diffusion_options_expose_local_factor_cache_policy() -> None:
-    options = hdgfem.DiffusionReactionHDGOptions(cache_local_factors="schur-lu", verbose=False)
+    options = hybridge.DiffusionReactionHDGOptions(cache_local_factors="schur-lu", verbose=False)
 
     assert options.cache_local_factors == "schur-lu"
     assert options.as_solve_kwargs()["cache_local_factors"] == "schur-lu"
@@ -543,7 +543,7 @@ def test_diffusion_options_expose_local_factor_cache_policy() -> None:
 
 
 def test_diffusion_options_expose_flux_postprocessing_policy() -> None:
-    options = hdgfem.DiffusionReactionHDGOptions(verbose=False)
+    options = hybridge.DiffusionReactionHDGOptions(verbose=False)
 
     assert options.flux_postprocess_space == "l2_closest"
     assert options.postprocessing_backend == "auto"
@@ -560,7 +560,7 @@ def test_diffusion_options_expose_flux_postprocessing_policy() -> None:
 
 def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_runtime_setup() -> None:
     space = _space()
-    solver = hdgfem.DiffusionReactionHDGSolver(
+    solver = hybridge.DiffusionReactionHDGSolver(
         space,
         source=space.constant(1.0),
         reaction=space.zeros(),
@@ -573,7 +573,7 @@ def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_
         solver.solve()
 
     with pytest.raises(ValueError, match="stateful DiffusionReactionHDGSolver"):
-        hdgfem.solve_diffusion_reaction_hdg(
+        hybridge.solve_diffusion_reaction_hdg(
             1.0,
             0.0,
             0.0,
@@ -582,7 +582,7 @@ def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_
             verbose=False,
         )
 
-    raw_cholesky = hdgfem.DiffusionReactionHDGSolver(
+    raw_cholesky = hybridge.DiffusionReactionHDGSolver(
         space,
         source=space.constant(1.0),
         reaction=space.zeros(),
@@ -599,7 +599,7 @@ def test_diffusion_local_factor_cache_rejects_incompatible_configuration_before_
 
 
 def test_advection_options_expose_krylov_restart() -> None:
-    options = hdgfem.AdvectionReactionHDGOptions(restart=37, verbose=False)
+    options = hybridge.AdvectionReactionHDGOptions(restart=37, verbose=False)
 
     assert options.restart == 37
     assert options.as_solve_kwargs()["restart"] == 37

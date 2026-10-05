@@ -75,11 +75,11 @@ is required by its operator, ASM, or PP application.
 
 Relevant code:
 
-- Branch face operator (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_face_dense.py`, local, untracked): fixed-width layout, raw and fused operator kernels.
-- Branch ASM (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_preconditionners.py`, local, untracked): `_FUSED_ASM_KERNEL_SOURCE`, `build_face_additive_schwarz_incidence_slots`, and `CuPyFaceAdditiveSchwarzPreconditioner.apply_into`.
-- [Local ASM matrices](../../../hdgfem/linalg/additive_schwarz.py): existing shared CPU formalism and inverse oracle.
-- Branch PP (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_polynomial.py`, local, untracked): harmonic-Ritz setup, real recurrence, and reusable buffers.
-- Branch GMRES (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hdgfem/backends/cupy_gmres.py`, local, untracked): left preconditioning, Arnoldi, and true residual recomputation.
+- Branch face operator (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hybridge/backends/cupy_face_dense.py`, local, untracked): fixed-width layout, raw and fused operator kernels.
+- Branch ASM (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hybridge/backends/cupy_preconditionners.py`, local, untracked): `_FUSED_ASM_KERNEL_SOURCE`, `build_face_additive_schwarz_incidence_slots`, and `CuPyFaceAdditiveSchwarzPreconditioner.apply_into`.
+- [Local ASM matrices](../../../hybridge/linalg/additive_schwarz.py): existing shared CPU formalism and inverse oracle.
+- Branch PP (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hybridge/backends/cupy_polynomial.py`, local, untracked): harmonic-Ritz setup, real recurrence, and reusable buffers.
+- Branch GMRES (`artifacts/gmres_bsr_inspiration_20260913/branch_snapshot/hybridge/backends/cupy_gmres.py`, local, untracked): left preconditioning, Arnoldi, and true residual recomputation.
 
 ## ASM and PP, as implemented
 
@@ -166,7 +166,7 @@ A future setup would:
    orthonormal native BSR operator. This avoids reassembling the PDE or
    importing the branch's legacy trace basis.
 3. Reuse the shared batched factorization/inversion machinery in
-   [cublas_batched.py](../../../hdgfem/linalg/gpu/cublas_batched.py), with local
+   [cublas_batched.py](../../../hybridge/linalg/gpu/cublas_batched.py), with local
    inverse and SPD checks. Batch the setup to control its temporary memory.
 4. Assemble the inverse blocks into the existing BSR pattern, using the
    existing face incidence/assembly formalism. A face-row owner can accumulate
@@ -310,7 +310,7 @@ minimize coarse-basis energy while preserving selected modes and a chosen
 sparsity pattern. [PyAMG's reference implementation](https://pyamg.readthedocs.io/en/latest/generated/pyamg.aggregation.html#pyamg.aggregation.energy_prolongation_smoother)
 accepts BSR operators and BSR tentative interpolation, with explicit fine and
 coarse candidates. These references support the algorithmic direction, not
-the performance of the proposed HDGFEM CUDA implementation.
+the performance of the proposed HYBRIDGE CUDA implementation.
 
 There is also a concrete setup-kernel opportunity in the existing AMGX code:
 `dense_bsr_galerkin_kernel` loops over each coarse output block and repeatedly

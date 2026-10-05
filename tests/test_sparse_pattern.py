@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem.linalg import sparse_pattern as sp_
+from hybridge.linalg import sparse_pattern as sp_
 
 
 def coo(size, count, *, long_row=False, seed=0):
@@ -53,7 +53,7 @@ def test_pattern_errors_mismatches_and_nonfinite_counts():
 
 def test_reusable_pardiso_reuses_analysis_and_detects_pattern_changes():
     pytest.importorskip('pypardiso')
-    from hdgfem.linalg.pardiso_runtime import ReusablePardisoSolver
+    from hybridge.linalg.pardiso_runtime import ReusablePardisoSolver
 
     size = 120
     matrix = (scipy.sparse.random(size, size, density=.05, random_state=3) + 6*scipy.sparse.eye(size)).tocoo()

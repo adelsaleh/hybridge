@@ -1,6 +1,6 @@
 """Constant-step semi-implicit BDF2 with an SI-Euler first step."""
-from hdgfem.core.field_ops import perpendicular_vector_field
-from hdgfem.core.time_integration import bdf2_transport_data
+from hybridge.core.field_ops import perpendicular_vector_field
+from hybridge.core.time_integration import bdf2_transport_data
 from .si_euler import SIEulerStepper
 
 

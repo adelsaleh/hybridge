@@ -44,9 +44,9 @@ isolates Numba, CuPy and mesh caches. Use a separate process for each precision.
 From the repository root, select the existing CUDA/AMGX environment:
 
 ```bash
-export HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0
-export HDGFEM_AMGX_BUILD_ROOT="$HOME/src/AMGX-build-cuda13"
-export HDGFEM_AMGX_INSTALL_ROOT="$HOME/src/AMGX-install-cuda13"
+export HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0
+export HYBRIDGE_AMGX_BUILD_ROOT="$HOME/src/AMGX-build-cuda13"
+export HYBRIDGE_AMGX_INSTALL_ROOT="$HOME/src/AMGX-install-cuda13"
 ```
 
 Start with approximately 12k triangles. Mesh size 0.025 produced 11,776 triangles
@@ -86,7 +86,7 @@ The original unpreconditioned FP32 BiCGSTAB run diverged at step 18 despite
 passing earlier short checks. Increasing the accepted residual is insufficient
 when the recurrence diverges. FGMRES completed all 500 steps to T=50 on 11,776
 triangles with the same tolerances, plotting and phase logging. All recorded
-HDGFEM precision audits remained float32 and AMGX used dFFI.
+HYBRIDGE precision audits remained float32 and AMGX used dFFI.
 
 Validation on 2026-09-11:
 

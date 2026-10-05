@@ -7,7 +7,7 @@ import pytest
 
 import scripts.guiding_center.run_guiding_center_cases as cli
 import scripts.guiding_center.time_schemes.si_bdf3 as si_bdf3
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.configuration import _validate_config
 from scripts.guiding_center.runtime.labels import run_label

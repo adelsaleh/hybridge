@@ -5,7 +5,7 @@ from contextlib import nullcontext
 
 import pytest
 
-from hdgfem.io.holoviz import HolovizScalarPanels
+from hybridge.io.holoviz import HolovizScalarPanels
 
 
 def _viewer(*, flush_error=None, movie_error=None):

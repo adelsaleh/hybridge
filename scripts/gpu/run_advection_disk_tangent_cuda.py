@@ -13,21 +13,21 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from hdgfem.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
-from hdgfem.hdg.cuda.launch import resolve_raw_cuda_block_size
-from hdgfem.core.mesh import gmsh_disc_mesh
-from hdgfem.core.space import DGSpace, VectorDGField
-from hdgfem.core.field_ops import solution_field
-from hdgfem.diagnostics.errors import evaluate_scalar_error
-from hdgfem.io.comparison import plot_sampled_solution_comparison
-from hdgfem.linalg.amgx.config import (
+from hybridge.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
+from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
+from hybridge.core.mesh import gmsh_disc_mesh
+from hybridge.core.space import DGSpace, VectorDGField
+from hybridge.core.field_ops import solution_field
+from hybridge.diagnostics.errors import evaluate_scalar_error
+from hybridge.io.comparison import plot_sampled_solution_comparison
+from hybridge.linalg.amgx.config import (
     describe_amgx_preconditioner,
     describe_amgx_solver,
     load_amgx_config,
 )
-from hdgfem.io.output import pretty_print_sections
-from hdgfem.io.plot import plot_solution_comparison, resolve_field_plot_resolution
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.io.output import pretty_print_sections
+from hybridge.io.plot import plot_solution_comparison, resolve_field_plot_resolution
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
 from scripts.advection_reaction.cases import case_definition_by_key
 
 

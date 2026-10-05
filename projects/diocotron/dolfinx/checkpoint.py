@@ -1,6 +1,6 @@
 """MPI-safe v2 checkpoint writers for the DOLFINx script workflows.
 
-This adapter is deliberately outside the installed ``hdgfem`` package.
+This adapter is deliberately outside the installed ``hybridge`` package.
 The on-disk v2 identifiers are retained for existing checkpoint compatibility.
 """
 

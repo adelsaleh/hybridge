@@ -8,7 +8,7 @@ The archived runner, presets, ARK stepper, stage support, and rank-only tau poli
 are independent of the current temporal registry and runtime runner.
 
 This is the Kennedy–Carpenter IMEX-ARK3 implementation, not a different RK method.
-It shares the installed HDGFEM assembly, field operations, solver backends, case
+It shares the installed HYBRIDGE assembly, field operations, solver backends, case
 builders, AMGX configurations, and precision/bootstrap support. It is not a full
 historical environment. No compiled libraries or numerical caches were restored.
 

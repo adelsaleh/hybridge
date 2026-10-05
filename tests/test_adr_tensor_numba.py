@@ -3,10 +3,10 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix
 
-from hdgfem import DGSpace, DGMesh, rectangle_mesh, solve_advection_diffusion_reaction_hdg
-from hdgfem.mixed.coefficients import prepare_diffusion, normal_diffusivity_on_faces
-from hdgfem.mixed.stabilization import GlobalLengthDiffusion
-from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
+from hybridge import DGSpace, DGMesh, rectangle_mesh, solve_advection_diffusion_reaction_hdg
+from hybridge.mixed.coefficients import prepare_diffusion, normal_diffusivity_on_faces
+from hybridge.mixed.stabilization import GlobalLengthDiffusion
+from hybridge.runtime.errors import UnsupportedBackendConfigurationError
 from scripts.advection_diffusion_reaction.cases.tensor_cases import (
     diffusion_cases as coefficient_cases, manufactured_tensor, raw_cuda_coefficient,
 )
@@ -106,9 +106,9 @@ def test_manufactured_tensor_convergence(kind,order):
 @pytest.mark.parametrize('cross_space', [False, True])
 def test_mixed_element_paths_and_cross_space_fields(cross_space):
     from dataclasses import replace
-    from hdgfem.mixed.adr_preparation import prepare_adr_data
-    from hdgfem.mixed.adr_numpy import assemble_numpy
-    from hdgfem.mixed.adr_numba import (
+    from hybridge.mixed.adr_preparation import prepare_adr_data
+    from hybridge.mixed.adr_numpy import assemble_numpy
+    from hybridge.mixed.adr_numba import (
             assemble_projected_adr_trace_system_eliminated_numba,
         )
     mesh=rectangle_mesh(2,1,xlim=(-1.,1.))

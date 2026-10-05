@@ -21,12 +21,12 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem.runtime.optional import asnumpy
-from hdgfem.core.field_ops import solution_field
-from hdgfem.diagnostics.solver import solver_result_metrics
-from hdgfem.linalg import clear_pypardiso_cache
-from hdgfem.solvers.advection_reaction import AdvectionReactionHDGSolver
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+from hybridge.runtime.optional import asnumpy
+from hybridge.core.field_ops import solution_field
+from hybridge.diagnostics.solver import solver_result_metrics
+from hybridge.linalg import clear_pypardiso_cache
+from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
+from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.models import GuidingCenterStepSnapshot
 from scripts.guiding_center.runtime.configuration import _make_poisson_options, _make_transport_options

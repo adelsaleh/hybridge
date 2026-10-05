@@ -3,28 +3,28 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.hdg import condensation as hdg_assembly
-from hdgfem.hdg import matrices as hdg_mats
-import hdgfem.transport.local_numpy as transport_local_numpy
-import hdgfem.hdg.coefficients as hdg_coefficients
-import hdgfem.hdg.stabilization as hdg_stabilization
-import hdgfem.hdg.coefficients as hdg_coefficients
-import hdgfem.core.mass as core_mass
-from hdgfem.runtime.errors import UnsupportedBackendConfigurationError
-from hdgfem.transport.numba import (
+from hybridge.hdg import condensation as hdg_assembly
+from hybridge.hdg import matrices as hdg_mats
+import hybridge.transport.local_numpy as transport_local_numpy
+import hybridge.hdg.coefficients as hdg_coefficients
+import hybridge.hdg.stabilization as hdg_stabilization
+import hybridge.hdg.coefficients as hdg_coefficients
+import hybridge.core.mass as core_mass
+from hybridge.runtime.errors import UnsupportedBackendConfigurationError
+from hybridge.transport.numba import (
     assemble_local_advection_reaction_numba,
     assemble_projected_trace_system_eliminated_numba,
     assemble_projected_trace_system_numba,
     assemble_projected_trace_system_zero_flux_numba,
 )
-from hdgfem.linalg.system import assemble_global_matrix
-from hdgfem.linalg.reduction import eliminate_known_dofs
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.solvers.advection_reaction import (
+from hybridge.linalg.system import assemble_global_matrix
+from hybridge.linalg.reduction import eliminate_known_dofs
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.solvers.advection_reaction import (
     AdvectionReactionHDGSolver,
     solve_advection_reaction_hdg,
 )
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
+from hybridge.core.space import DGField, DGSpace, VectorDGField
 from scripts.advection_reaction.cases import test2 as adv_rea_test2
 
 

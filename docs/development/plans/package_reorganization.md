@@ -1,6 +1,6 @@
 # Package reorganization by operator family
 
-Drafted on 2026-09-29 from a read-only audit of `hdgfem/` (import graph,
+Drafted on 2026-09-29 from a read-only audit of `hybridge/` (import graph,
 duplicated helpers, and DR/ADR implementation parity). The audit sections
 (Why, DR versus ADR(β = 0) by stage, Correctness items) describe the tree at
 that date and use its module paths (`backends/`, `kernels/`, `assembly/`),
@@ -95,7 +95,7 @@ these points:
   over the operator API in `mixed/raw_cuda/adr_operator`.
 
 ```
-hdgfem/
+hybridge/
   runtime/      optional (dependency gates, asnumpy, njit/prange fallbacks),
                 precision, logging, terminal, errors, devices, threads,
                 benchmarking
@@ -177,11 +177,11 @@ hdgfem/
 ## Implementation status (2026-10-01)
 
 Phases 0–5 and 7 are done on branch `package-reorganization`. The layering
-test passes with zero allowed violations; `hdgfem/backends/`,
-`hdgfem/kernels/` and `hdgfem/assembly/` are removed without compatibility
+test passes with zero allowed violations; `hybridge/backends/`,
+`hybridge/kernels/` and `hybridge/assembly/` are removed without compatibility
 shims, as are the DR primal-postprocess CuPy and raw-CUDA ports and the
-unreachable generic Numba DR adapters. The public names in `hdgfem` and
-`hdgfem.solvers` are unchanged. The Bernstein postprocess branches are kept:
+unreachable generic Numba DR adapters. The public names in `hybridge` and
+`hybridge.solvers` are unchanged. The Bernstein postprocess branches are kept:
 flux recovery supports Bernstein traces and is reachable from the
 guiding-center runner. Splitting the large solver modules into per-backend
 drivers is a recorded follow-up in `TODO.md`.
@@ -252,7 +252,7 @@ execution protocol: per-phase gates, the phase 6 performance gate, and the
 final merge procedure.
 
 Each phase is its own commit or commit series. In every phase, the imports in
-`hdgfem/`, `tests/` and `scripts/` are updated by codemod, CODEMAP rows are
+`hybridge/`, `tests/` and `scripts/` are updated by codemod, CODEMAP rows are
 updated in the same change, and the affected tests are run.
 
 0. **Safety net.** Start from a committed working tree.
@@ -313,7 +313,7 @@ Decided on 2026-09-29:
 
    The legacy aliases `adv_rea`/`diff_rea` follow the existing TODO item on
    removing compatibility shims.
-5. **Package name:** the shared layer is `hdgfem/hdg/`.
+5. **Package name:** the shared layer is `hybridge/hdg/`.
 6. **Scope:** all phases, including the phase 6 kernel merges.
 
 ## Acceptance
@@ -321,5 +321,5 @@ Decided on 2026-09-29:
 - The layering test passes with an empty baseline.
 - The DR/ADR(β = 0) parity tests pass at every merge step.
 - The full host suite and the GPU backend suites pass, with no public-name
-  changes in `hdgfem.__init__` or `hdgfem.solvers`.
+  changes in `hybridge.__init__` or `hybridge.solvers`.
 - CODEMAP and `docs/backends/README.md` describe the final layout.

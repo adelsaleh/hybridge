@@ -110,7 +110,7 @@ build does likewise, and its scatter consumes the completed weight table.
 The non-compiling regression check is:
 
 ```bash
-NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=0 \
+NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=0 \
   .venv/bin/python -m pytest -q tests/test_conflict_averaged_upwind.py
 ```
 
@@ -119,7 +119,7 @@ at degrees 2 and 6, including COO/CSR/BSR where supported, both trace bases,
 and cached/rebuilt reconstruction:
 
 ```bash
-NUMBA_DISABLE_JIT=0 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=1 \
+NUMBA_DISABLE_JIT=0 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 \
   .venv/bin/python -m pytest -q tests/test_conflict_averaged_upwind.py
 ```
 

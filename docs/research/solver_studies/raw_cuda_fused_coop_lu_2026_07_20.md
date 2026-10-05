@@ -10,7 +10,7 @@
 This note records the fused Raw CUDA advection-reaction update that followed the
 2026-07-19 serial/cooperative baseline work. The implementation is in:
 
-- `hdgfem/backends/cupy_adv_rea_raw.py`
+- `hybridge/backends/cupy_adv_rea_raw.py`
 - run_adv_rea_gpu4_hdg.py (the then-current runner)
 
 The focus was to reduce fused local-kernel cost, add an opt-in cooperative LU
@@ -227,7 +227,7 @@ at `ms=0.2` with exact rows/columns and max matrix/RHS differences below
 p8, `ms=0.01`:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HDGFEM_GPU4_AMGX_MONITOR=0 \
+LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HYBRIDGE_GPU4_AMGX_MONITOR=0 \
 .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py --case test2 -o 8 -ms 0.01 -mt rectangle \
   --basis dub_orth --trace-basis legacy-lagrange --assembly-backend raw-cuda \
   --raw-local-assembly fused --raw-lu-mode coop --raw-block-size 32 \
@@ -237,7 +237,7 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HDGFEM_GPU4_AMGX_MONITOR=0
 p8, `ms=0.006`:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HDGFEM_GPU4_AMGX_MONITOR=0 \
+LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HYBRIDGE_GPU4_AMGX_MONITOR=0 \
 .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py --case test2 -o 8 -ms 0.006 -mt rectangle \
   --basis dub_orth --trace-basis legacy-lagrange --assembly-backend raw-cuda \
   --raw-local-assembly fused --raw-lu-mode coop --raw-block-size 32 \
@@ -247,7 +247,7 @@ LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HDGFEM_GPU4_AMGX_MONITOR=0
 p6, `ms=0.005`:
 
 ```bash
-LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HDGFEM_GPU4_AMGX_MONITOR=0 \
+LD_LIBRARY_PATH=/tmp/AMGX-build:/tmp/AMGX-install/lib HYBRIDGE_GPU4_AMGX_MONITOR=0 \
 .venv/bin/python scripts/run_adv_rea_gpu4_hdg.py --case test2 -o 6 -ms 0.005 -mt rectangle \
   --basis dub_orth --trace-basis legacy-lagrange --assembly-backend raw-cuda \
   --raw-local-assembly fused --raw-lu-mode coop --raw-block-size 32 \

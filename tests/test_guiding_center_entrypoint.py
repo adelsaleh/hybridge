@@ -110,7 +110,7 @@ def test_failed_final_poisson_preserves_low_order_state_and_allows_retry(scheme)
 @pytest.mark.parametrize("scheme", TESTED_PRESETS)
 def test_factory_initializes_the_registered_stepper_with_tested_policy(monkeypatch, scheme):
     """Exercise real stepper construction with a coefficient-only workspace."""
-    import hdgfem.transport.residual as residual_module
+    import hybridge.transport.residual as residual_module
     from scripts.guiding_center.runtime.steppers import make_stepper
 
     config = preset_by_key(TESTED_PRESETS[scheme])

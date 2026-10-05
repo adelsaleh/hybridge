@@ -17,8 +17,8 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from hdgfem.diagnostics.errors import evaluate_hdg_scalar_error
-from hdgfem.hdg.condensation import expand_interior_trace
+from hybridge.diagnostics.errors import evaluate_hdg_scalar_error
+from hybridge.hdg.condensation import expand_interior_trace
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.runner import run_guiding_center_case

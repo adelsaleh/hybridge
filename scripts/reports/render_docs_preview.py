@@ -114,15 +114,15 @@ script = """<script>
 const themeButton=document.getElementById('theme-toggle');
 const preference=window.matchMedia('(prefers-color-scheme: dark)');
 let mode='auto';
-try{const saved=localStorage.getItem('hdgfem-preview-theme');if(['auto','light','dark'].includes(saved))mode=saved;}catch(e){}
+try{const saved=localStorage.getItem('hybridge-preview-theme');if(['auto','light','dark'].includes(saved))mode=saved;}catch(e){}
 function setTheme(){const theme=mode==='auto'?(preference.matches?'dark':'light'):mode;document.documentElement.dataset.theme=theme;themeButton.textContent=mode==='auto'?'◐':mode==='dark'?'☾':'☀';themeButton.title='Theme: '+mode+'. Click to cycle Auto → Light → Dark.';themeButton.setAttribute('aria-label',themeButton.title);themeButton.setAttribute('aria-pressed',String(mode!=='auto'));}
 setTheme();
-themeButton.addEventListener('click',()=>{mode={auto:'light',light:'dark',dark:'auto'}[mode];try{localStorage.setItem('hdgfem-preview-theme',mode);}catch(e){}setTheme();});
+themeButton.addEventListener('click',()=>{mode={auto:'light',light:'dark',dark:'auto'}[mode];try{localStorage.setItem('hybridge-preview-theme',mode);}catch(e){}setTheme();});
 if(preference.addEventListener)preference.addEventListener('change',()=>{if(mode==='auto')setTheme();});else preference.addListener(()=>{if(mode==='auto')setTheme();});
 function fallbackCopy(text){const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw Error('Copy failed');}
 document.querySelectorAll('.copy-code').forEach(button=>button.addEventListener('click',async()=>{const text=button.parentElement.querySelector('pre').textContent;try{try{if(!navigator.clipboard)throw Error('Clipboard unavailable');await navigator.clipboard.writeText(text);}catch(e){fallbackCopy(text);}button.textContent='Copied';}catch(e){button.textContent='Select to copy';const selection=window.getSelection();const range=document.createRange();range.selectNodeContents(button.parentElement.querySelector('pre'));selection.removeAllRanges();selection.addRange(range);}setTimeout(()=>button.textContent='Copy',1800);}));
 </script>"""
-startup="<script>try{const m=localStorage.getItem('hdgfem-preview-theme');document.documentElement.dataset.theme=(m==='light'||m==='dark')?m:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}</script>"
+startup="<script>try{const m=localStorage.getItem('hybridge-preview-theme');document.documentElement.dataset.theme=(m==='light'||m==='dark')?m:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}</script>"
 from urllib.parse import urlsplit,unquote
 import html as html_module
 
@@ -131,14 +131,14 @@ def local_links(body):
   href=html_module.unescape(match.group(1));parts=urlsplit(href)
   if parts.scheme or not parts.path:return match.group(0)
   if parts.path in ('README.md','MANUAL.md'):
-   target='hdgfem-readme-portable.html' if parts.path=='README.md' else 'hdgfem-manual.html'
+   target='hybridge-readme-portable.html' if parts.path=='README.md' else 'hybridge-manual.html'
    return 'href="'+target+('#'+parts.fragment if parts.fragment else '')+'"'
   target=root/unquote(parts.path)
   if target.exists():return 'href="'+target.as_uri()+('#'+parts.fragment if parts.fragment else '')+'"'
   return match.group(0)
  return re.sub(r'href="([^"]+)"',link,body)
 
-nav='<nav class="preview-nav" aria-label="Documentation"><a href="hdgfem-readme-portable.html">README</a><a href="hdgfem-manual.html">Manual</a></nav>'
+nav='<nav class="preview-nav" aria-label="Documentation"><a href="hybridge-readme-portable.html">README</a><a href="hybridge-manual.html">Manual</a></nav>'
 def document(body,title,theme='light'):
  return '<!doctype html><html lang="en" data-theme="'+theme+'"><head><meta charset="utf-8">'+startup+'<meta name="viewport" content="width=device-width,initial-scale=1"><title>'+title+'</title><style>'+style+'</style></head><body><main><div class="theme-bar"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Choose color theme">◐</button></div>'+nav+local_links(body)+'</main>'+script+'</body></html>'
 
@@ -151,10 +151,10 @@ for anchor,title in re.findall(r'<h2 id="([^"]+)">(.*?)</h2>',manual_body):
  contents.append('<li><a href="#'+anchor+'">'+title+'</a></li>')
 manual_body=re.sub(r'(</h1>)',lambda m:m.group(1)+'<details class="manual-contents"><summary>Contents</summary><ul>'+''.join(contents)+'</ul></details>',manual_body,count=1)
 for name,title,content,theme in [
- ('hdgfem-readme-portable.html','hdgfem README',body,'light'),
- ('hdgfem-readme-preview.html','hdgfem README',body,'light'),
- ('hdgfem-readme-dark.html','hdgfem README',body,'dark'),
- ('hdgfem-manual.html','hdgfem Manual',manual_body,'light')]:
+ ('hybridge-readme-portable.html','hybridge README',body,'light'),
+ ('hybridge-readme-preview.html','hybridge README',body,'light'),
+ ('hybridge-readme-dark.html','hybridge README',body,'dark'),
+ ('hybridge-manual.html','hybridge Manual',manual_body,'light')]:
  rendered=document(content,title,theme)
  for directory in (output,):
   path=directory/name;temporary=path.with_suffix('.html.tmp');temporary.write_text(rendered);temporary.replace(path)

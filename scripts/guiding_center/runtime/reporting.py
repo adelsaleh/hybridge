@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import Any
 from scripts.guiding_center.runtime.labels import run_label
-from hdgfem.runtime.precision import PRECISION
+from hybridge.runtime.precision import PRECISION
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 from scripts.guiding_center.runtime.configuration import _hybrid_startup_method, _verbosity_level
 from scripts.guiding_center.runtime.models import GuidingCenterRunResult
@@ -370,7 +370,7 @@ def _print_diagnostics_block(
 def _print_run_summary(result: GuidingCenterRunResult) -> None:
     if _verbosity_level(result.config) < 1:
         return
-    from hdgfem.io.output import pretty_print_sections
+    from hybridge.io.output import pretty_print_sections
 
     if not result.diagnostics:
         print(f"[gc] completed {result.config.num_steps:,} steps to "

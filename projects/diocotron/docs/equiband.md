@@ -7,9 +7,9 @@ implements the first smooth, fixed-mesh solver in
 torsion reduced optimizer: it does not change that optimizer or reuse its
 physical-width/target-area objectives.
 
-Equiband is not part of the installed `hdgfem` library and does not depend
+Equiband is not part of the installed `hybridge` library and does not depend
 on that library. DOLFINx-specific code stays in the script layer; no
-compatibility module is kept inside `hdgfem`. Use the checkout-root module
+compatibility module is kept inside `hybridge`. Use the checkout-root module
 commands below, including for MPI runs.
 
 This is a research solver, not yet the completed ITER parameter campaign.
@@ -103,8 +103,8 @@ working conda MPI stack. An MPI-library mismatch warning must be investigated
 before long production runs. A matching MPI launcher must come from the same
 environment as `python`.
 
-There is no `hdgfem` installation extra for this script. The separate
-environment supplies its dependencies, and an editable `hdgfem` install is
+There is no `hybridge` installation extra for this script. The separate
+environment supplies its dependencies, and an editable `hybridge` install is
 not needed for equiband. On Python 3.11+ TOML parsing uses the standard
 library; Python 3.10 additionally needs `tomli` (or use JSON configuration).
 
@@ -125,8 +125,8 @@ The generated key contains every canonical geometry parameter, `mesh_size`,
 coordinate-map `geometry_degree`, Gmsh algorithm and version, cache format,
 and a hash of the canonical builder source (plus the external `.geo` source
 for ITER). By default artifacts live under
-`.cache/hdgfem/dolfinx_meshes`, matching the project-local cache convention
-used by `hdgfem.core.mesh` without putting DOLFINx code in `hdgfem`. Use
+`.cache/hybridge/dolfinx_meshes`, matching the project-local cache convention
+used by `hybridge.core.mesh` without putting DOLFINx code in `hybridge`. Use
 `mesh_cache_directory` in TOML or `--mesh-cache-directory DIR` to choose a
 different location.
 

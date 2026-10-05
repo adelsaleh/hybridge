@@ -3,19 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.runtime.optional import require_cupy_device
-from hdgfem.linalg.gpu.face_dense import CuPyFaceDenseOperator
-from hdgfem.linalg.gpu.gmres import restarted_gmres_cupy
-from hdgfem.linalg.gpu.preconditioners import (
+from hybridge.runtime.optional import require_cupy_device
+from hybridge.linalg.gpu.face_dense import CuPyFaceDenseOperator
+from hybridge.linalg.gpu.gmres import restarted_gmres_cupy
+from hybridge.linalg.gpu.preconditioners import (
     CuPyFaceAdditiveSchwarzPreconditioner,
     prepare_face_additive_schwarz_batch_layout,
 )
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.linalg.additive_schwarz import (
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.linalg.additive_schwarz import (
     build_face_additive_schwarz_preconditioner,
 )
-from hdgfem.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
+from hybridge.solvers.diffusion_face_dense import solve_diffusion_face_dense_direct
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 

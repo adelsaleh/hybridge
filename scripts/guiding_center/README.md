@@ -5,14 +5,14 @@ CLI, `run_guiding_center_cases.py`; its AMGX launcher forwards to that CLI:
 
 ```bash
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases --help
-HDGFEM_PYTHON="$PWD/.venv/bin/python" scripts/guiding_center/run_local_amgx_cases.sh --help
+HYBRIDGE_PYTHON="$PWD/.venv/bin/python" scripts/guiding_center/run_local_amgx_cases.sh --help
 ```
 
 The CLI selects a preset, applies overrides, and starts the shared runner. It
 contains no time-stepping equations. Guiding-center evolution composes the
 package diffusion and advection HDG solvers, so its temporal schemes belong
 in [`time_schemes/`](time_schemes/), alongside case policy and orchestration.
-The `hdgfem` package supplies the HDG solvers, assembly, field/trace operations,
+The `hybridge` package supplies the HDG solvers, assembly, field/trace operations,
 and shared diagnostics and I/O.
 
 | Directory | Contents |
@@ -42,7 +42,7 @@ with third-order extrapolated drift, then the endpoint Poisson solve,
     = (18 rho_n - 9 rho_(n-1) + 2 rho_(n-2)) / 11.
 ```
 
-The temporal algebra is `hdgfem.core.time_integration.bdf3_transport_data`. Its
+The temporal algebra is `hybridge.core.time_integration.bdf3_transport_data`. Its
 startup keeps third order: step 1 is Richardson-extrapolated SI Euler
 (`2 E(dt/2) - E(dt)`: three transport and two Poisson solves), step 2 is SI BDF2.
 A plain Euler/BDF2 ramp would limit the global order to two. The extrapolated
@@ -180,7 +180,7 @@ the respective recovery method, solver tolerances, convergence monitoring, and
 retry policies are inherited from each original preset. AMGX convergence monitoring stays enabled:
 `../AMGX/src/solvers/solver.cu` also uses that flag for tolerance-based stopping.
 Both retain row scaling and its separate solver/physical residual checks.
-For unscaled AMGX solves, HDGFEM now shares the identical solver/physical residual
+For unscaled AMGX solves, HYBRIDGE now shares the identical solver/physical residual
 calculation while checking both acceptance targets. Throughput has not been measured.
 
 The RT and L2-closest paths (including the ITER RT preset) automatically reuse
@@ -223,7 +223,7 @@ and throughput have not been run, so fastest measured performance is not
 claimed. To explicitly compile and check the CUDA kernels without a simulation:
 
 ```bash
-HDGFEM_RUN_CUDA_RECOVERY_TESTS=1 NUMBA_DISABLE_JIT=1 PYTHONPATH=. \
+HYBRIDGE_RUN_CUDA_RECOVERY_TESTS=1 NUMBA_DISABLE_JIT=1 PYTHONPATH=. \
   .venv/bin/python -m pytest -q tests/test_diffusion_flux_recovery_maps.py
 ```
 
@@ -501,7 +501,7 @@ is needed for this directory reorganization.
 
 Presets come from `scripts.guiding_center.cases.guiding_center_presets`.
 Time-stepping classes come from `scripts.guiding_center.time_schemes`.
-They reuse `hdgfem` helpers to compose the existing HDG solvers.
+They reuse `hybridge` helpers to compose the existing HDG solvers.
 Programmatic study drivers import
 `run_guiding_center_case` from `scripts.guiding_center.runtime.runner`, and
 snapshot/result types from `scripts.guiding_center.runtime.models`. They reuse
@@ -515,12 +515,12 @@ appropriate directory from the table above to its old module path.
 
 ## Plotting ownership
 
-Reusable rendering belongs to `hdgfem.io`. The runtime's PyVista adapter supplies
+Reusable rendering belongs to `hybridge.io`. The runtime's PyVista adapter supplies
 case labels and color policies to `PyVistaFieldPanels`; the package owns mesh
 sampling, overlays, in-place scalar updates, linked views, headless rendering,
 and screenshot output. Vorticity uses fixed symmetric initial limits, while
 density and potential use their current robust ranges. The existing
-`hdgfem.io.holoviz` backend retains GPU sampling and asynchronous rendering.
+`hybridge.io.holoviz` backend retains GPU sampling and asynchronous rendering.
 
 Temporal field comparisons use `plot_scalar_raster_panels_matplotlib` with
 `RasterGeometry` bounds and `scalar_color_limits`. Mesh holes stay masked, the
@@ -529,12 +529,12 @@ scale. `VorticityRaster` already uses the package's raster geometry and sampling
 operators. Diagnostic histories, growth fits, and convergence-study labels
 remain in the scripts because they depend on those studies' observables.
 The independent DOLFINx reference retains its own field-to-VTK adapter.
-Incremental diagnostic JSONL/CSV writing is shared through `hdgfem.io.records`.
+Incremental diagnostic JSONL/CSV writing is shared through `hybridge.io.records`.
 
 Other package clients can construct a live viewer without importing a runner:
 
 ```python
-from hdgfem.io import PyVistaFieldPanels
+from hybridge.io import PyVistaFieldPanels
 
 viewer = PyVistaFieldPanels(
     [("Scalar", field, {"symmetric_clim": True, "fixed_clim": True,
@@ -553,7 +553,7 @@ Holoviz for GPU-resident rendering without downloading field coefficients.
 
 ## Positive guiding-center turbulence
 
-`positive_turbulence` is an HDGFEM-defined density analogue of the signed Euler
+`positive_turbulence` is an HYBRIDGE-defined density analogue of the signed Euler
 vortex gas. It uses the same 360 blobs, four Gaussian widths, amplitude range,
 and seed, but all strengths are positive. The shared indexed Gaussian profile
 truncates every blob at eight standard deviations. Centers are sampled in the
@@ -570,7 +570,7 @@ this profile is equivalently one-signed Euler vorticity. Nonnegative vorticity
 in domains with material boundaries is a standard analytical setting, and
 same-sign vortex gases also occur in related two-dimensional turbulence work.
 The particular disk, population, widths, and cutoff here are not a reproduction
-of a published benchmark; they define a reproducible multiscale HDGFEM stress
+of a published benchmark; they define a reproducible multiscale HYBRIDGE stress
 test. See [Cai, Guo, and Qiu](https://arxiv.org/abs/1804.02365),
 [Iftimie et al.](https://arxiv.org/abs/1305.0905), and
 [van Kan et al.](https://arxiv.org/abs/2308.08789) for the three respective
@@ -637,7 +637,7 @@ every-step. Initial projection uses 16 points per coordinate.
 
 The horseshoe is an annular sector with radii .48 and 1 and a 60-degree gap.
 Pac-Man removes a 60-degree sector from the unit disk. Both openings face +x.
-ITER uses the supplied [ITER.geo](../../hdgfem/core/geometries/ITER.geo),
+ITER uses the supplied [ITER.geo](../../hybridge/core/geometries/ITER.geo),
 including the detailed lower wall, in its original coordinates (area about
 30.73). Gmsh meshes the original Line/BSpline/Spline curves; vortex placement
 samples those curves for wall containment and clearance. The physical wall
@@ -825,7 +825,7 @@ usual upwind stabilization bound.
 The Python solver option is:
 
 ```python
-from hdgfem.solvers import AdvectionReactionHDGOptions, ScaledUpwind
+from hybridge.solvers import AdvectionReactionHDGOptions, ScaledUpwind
 
 options = AdvectionReactionHDGOptions(
     advection_stabilization=ScaledUpwind(1.25),
@@ -842,13 +842,13 @@ factor in generated code; no AMGX or PyAMGX rebuild is needed.
 CPU-only checks (no JIT or CUDA compilation):
 
 ```bash
-NUMBA_DISABLE_JIT=1 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=0 PYTHONPATH=. \
+NUMBA_DISABLE_JIT=1 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=0 PYTHONPATH=. \
   .venv/bin/python -m pytest -q tests/test_transport_lax_friedrichs.py
 ```
 
 To explicitly compile and check the tiny CUDA assembly/reconstruction cases:
 
 ```bash
-NUMBA_DISABLE_JIT=1 HDGFEM_RUN_CUDA_TRANSPORT_TESTS=1 PYTHONPATH=. \
+NUMBA_DISABLE_JIT=1 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 PYTHONPATH=. \
   .venv/bin/python -m pytest -q tests/test_transport_lax_friedrichs.py
 ```

@@ -18,15 +18,15 @@ import traceback
 import numpy as np
 from scipy import sparse
 
-from hdgfem.linalg.amgx.device_solver import (
+from hybridge.linalg.amgx.device_solver import (
     PyAMGXCsrDeviceSolver,
     solve_reduced_system_amgx_device,
 )
-from hdgfem.linalg.gpu.sparse import _DeviceBsrMatrixView
-from hdgfem.linalg.amgx.host import initialize_pyamgx_once
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGSolver
-from hdgfem.mixed.postprocess.flux import _trace_basis_at
+from hybridge.linalg.gpu.sparse import _DeviceBsrMatrixView
+from hybridge.linalg.amgx.host import initialize_pyamgx_once
+from hybridge.runtime.optional import require_cupy
+from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
+from hybridge.mixed.postprocess.flux import _trace_basis_at
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import (
     BASE_CONFIG, ROOT, cycle_gate, smoothing_cases,
 )

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hdgfem.core.mesh import DGMesh, gmsh_rectangle_mesh, gmsh_smooth_star_mesh
+from hybridge.core.mesh import DGMesh, gmsh_rectangle_mesh, gmsh_smooth_star_mesh
 
 BASELINE_SIZES = (0.20, 0.10, 0.05)
 STRESS_POLYGONIZATIONS = ((80, 20), (160, 40), (320, 80))

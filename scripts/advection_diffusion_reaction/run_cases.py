@@ -143,7 +143,7 @@ def configuration_record(config):
 
 
 def _build_mesh(config, problem):
-    from hdgfem.core.mesh import rectangle_mesh, gmsh_disc_mesh, gmsh_smooth_star_mesh
+    from hybridge.core.mesh import rectangle_mesh, gmsh_disc_mesh, gmsh_smooth_star_mesh
 
     domain = problem.domain if config.domain == "auto" else config.domain
     if domain in {"square", "unit-square"}:
@@ -169,9 +169,9 @@ def _numba_thread_count() -> int | None:
 
 def _solve_case(config):
     """Build and solve one case; return the problem, mesh, space, result and report."""
-    from hdgfem import DGSpace, AdvectionDiffusionReactionHDGSolver, AdvectionDiffusionReactionHDGOptions
-    from hdgfem.runtime.logging import timed_call
-    from hdgfem.linalg.pardiso_runtime import pardiso_thread_limit
+    from hybridge import DGSpace, AdvectionDiffusionReactionHDGSolver, AdvectionDiffusionReactionHDGOptions
+    from hybridge.runtime.logging import timed_call
+    from hybridge.linalg.pardiso_runtime import pardiso_thread_limit
 
     problem, case_seconds = timed_call("preparing analytic case", config.verbosity,
         lambda: CASE_DEFINITIONS[config.case].build(**config.case_params))
@@ -185,7 +185,7 @@ def _solve_case(config):
     beta = tuple(value if callable(value) else space.constant(value) for value in problem.beta)
     amgx_config = None
     if config.amgx_config is not None:
-        from hdgfem.linalg.amgx.config import load_amgx_config
+        from hybridge.linalg.amgx.config import load_amgx_config
         amgx_config, _ = load_amgx_config(_resolve_repository_path(config.amgx_config))
     options = AdvectionDiffusionReactionHDGOptions(
         diffusion=problem.diffusion, trace_basis=config.trace_basis,
@@ -226,11 +226,11 @@ def _plot_case(config, problem, result):
         raise ValueError("comparison plotting requires a manufactured exact solution")
     title = f"ADR: {config.case}, p={config.order}"
     if config.plot_backend == "holoviz":
-        from hdgfem.io.holoviz import plot_solution_comparison_holoviz
+        from hybridge.io.holoviz import plot_solution_comparison_holoviz
         plot_solution_comparison_holoviz(result.field, problem.exact, title=title,
                                          width=config.plot_width, height=config.plot_height)
         return
-    from hdgfem.io.plot import plot_solution_comparison
+    from hybridge.io.plot import plot_solution_comparison
     plot_solution_comparison(result.field, problem.exact, resolution=config.plot_resolution, title=title)
 
 
@@ -248,9 +248,9 @@ def _summarize_solve(result, report, problem, *, preset_key, mesh, space, config
     Also records pointwise error metrics in ``report`` for JSON output.
     """
     import numpy as np
-    from hdgfem.diagnostics.errors import evaluate_scalar_error
-    from hdgfem.runtime.logging import format_elapsed_percent
-    from hdgfem.io.output import pretty_print_sections
+    from hybridge.diagnostics.errors import evaluate_scalar_error
+    from hybridge.runtime.logging import format_elapsed_percent
+    from hybridge.io.output import pretty_print_sections
 
     run_mesh_items = [
         ("preset", preset_key, "s"),

@@ -13,7 +13,7 @@ class GuidingCenterPyVistaPanels:
         off_screen, screenshot_dir, screenshot_prefix, include_potential=False,
         density_is_vorticity=False, time_step=None, total_steps=None,
     ):
-        from hdgfem.io import PyVistaFieldPanels
+        from hybridge.io import PyVistaFieldPanels
 
         self.include_potential = bool(include_potential)
         density_options = {"scalar_name": "density"}
@@ -54,7 +54,7 @@ def _make_plotter(
         density_is_vorticity=density_is_vorticity,
     )
     if config.plot_backend == "holoviz":
-        from hdgfem.io.holoviz import GuidingCenterHolovizPanels
+        from hybridge.io.holoviz import GuidingCenterHolovizPanels
         return GuidingCenterHolovizPanels(
             density_field, potential_field, width=config.plot_width, height=config.plot_height,
             max_fps=config.plot_max_fps, movie_path=config.movie_path if config.save_movie else None,

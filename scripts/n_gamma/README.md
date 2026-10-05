@@ -129,7 +129,7 @@ before NumPy loads, because idle OpenBLAS workers spin; on 24 cores this halved
 a p=6 host step (301 → 155 ms at 944 triangles). This costs the coefficient
 preparation nothing: its NumPy work is elementwise ufuncs and stacks of tiny
 matrix products, which OpenBLAS never threads (24 OpenBLAS threads kept 16
-cores busy with no wall-time change). Instead, `hdgfem.core.host_threads` runs
+cores busy with no wall-time change). Instead, `hybridge.core.host_threads` runs
 that work in element chunks on a thread pool sized to the Numba thread count.
 On 2026-09-29 (transient baseline, h=0.025, 14,776 triangles, p=6, 24 threads)
 the two preparations of one step took 0.50 s instead of 1.71 s, matching the
@@ -271,5 +271,5 @@ data/geometry diagnostics, with no PDE solve or time integration.
 Repository-wide documentation checks currently also fail on unrelated
 historical artifact links, generated documentation files, missing existing
 docstrings, and the planned but unimplemented n–Gamma runner path. A packaging
-check fails on the existing `hdgfem/core/geometries` directory lacking an
+check fails on the existing `hybridge/core/geometries` directory lacking an
 `__init__.py`. These broader checks are not claimed as passing.

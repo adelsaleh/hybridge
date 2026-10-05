@@ -219,7 +219,7 @@ proxy, raises the stack limit to 32 MiB, and removes the proxy when the run exit
 ```bash
 env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
   CUDA_PATH=/usr/local/cuda-13.0 \
-  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/positive_turbulence_iter_fft_si_bdf2_p6_h014_dt0005_t50_raw_cuda_bsr.args \
   --positivity-diagnostics \
@@ -250,7 +250,7 @@ Keep the original SSH `DISPLAY` and `XAUTHORITY`. The run retains `dt=0.5`,
 ```bash
 env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
   CUDA_PATH=/usr/local/cuda-13.0 \
-  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_ark3_p6_h008_dt005_t70.args \
   --verbosity 3 --dt 0.5 --num-steps 800 \
@@ -301,7 +301,7 @@ Residual tolerances and robust recovery remain enabled.
 ```bash
 env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
   CUDA_PATH=/usr/local/cuda-13.0 \
-  .venv/bin/python -m hdgfem.io.holoviz_ssh -- \
+  .venv/bin/python -m hybridge.io.holoviz_ssh -- \
   .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400.args \
   --verbosity 3 --mesh-size 0.0068 --dt 0.1 \

@@ -24,11 +24,11 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.core.mesh import DGMesh
-from hdgfem.runtime.optional import require_cupy
-from hdgfem.mixed.raw_cuda import identity as raw
-from hdgfem.mixed.cupy import (
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.core.mesh import DGMesh
+from hybridge.runtime.optional import require_cupy
+from hybridge.mixed.raw_cuda import identity as raw
+from hybridge.mixed.cupy import (
     assemble_projected_diffusion_trace_system_eliminated_raw_cupy,
 )
 from scripts.diffusion_reaction.experiments.tensor_schur_kernels import specialize_tensor_schur
@@ -67,7 +67,7 @@ def prototype(mode, block, evidence, output):
         """Capture compiler resources once, outside warmed measurements."""
         kernel, seconds = original_compile(cp, code, name, shared)
         if 'kernel_attributes' not in evidence:
-            from hdgfem.runtime.precision import cuda_source
+            from hybridge.runtime.precision import cuda_source
             compiled_source = cuda_source(code)
             evidence['kernel_attributes'] = dict(kernel.attributes)
             evidence['dynamic_shared_bytes'] = int(shared)
@@ -124,11 +124,11 @@ def main():
     if not 1 <= args.order <= 6 or args.nx < 1 or (args.ny is not None and args.ny < 1) or args.repeats < 1:
         parser.error('require p=1..6, nx>=1, ny>=1, repeats>=1')
     cp = require_cupy()
-    from hdgfem.runtime.precision import REAL_ITEMSIZE
+    from hybridge.runtime.precision import REAL_ITEMSIZE
     if REAL_ITEMSIZE == 4 and (args.modes != ['fp32'] or args.reference_dir is None):
         raise ValueError('FP32 requires --modes fp32 and an existing --reference-dir from FP64')
     if REAL_ITEMSIZE == 8 and 'fp32' in args.modes:
-        raise ValueError('run fp32 in a separate HDGFEM_PRECISION=float32 process')
+        raise ValueError('run fp32 in a separate HYBRIDGE_PRECISION=float32 process')
     args.output.mkdir(parents=True, exist_ok=True)
     if (args.output / 'results.json').exists():
         parser.error('output already contains results; use another directory')

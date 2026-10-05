@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from time import perf_counter
 
-from hdgfem.core.field_ops import (
+from hybridge.core.field_ops import (
     perpendicular_vector_field,
     solution_field,
     solution_trace,

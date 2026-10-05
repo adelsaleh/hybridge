@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import hdgfem.linalg.amgx.device_solver as raw_amgx
-import hdgfem.linalg.amgx.host as cupy_backend
-from hdgfem.linalg.amgx.errors import as_amgx_capacity_error, is_amgx_capacity_error
-from hdgfem.linalg.results import LinearSolveCapacityError
+import hybridge.linalg.amgx.device_solver as raw_amgx
+import hybridge.linalg.amgx.host as cupy_backend
+from hybridge.linalg.amgx.errors import as_amgx_capacity_error, is_amgx_capacity_error
+from hybridge.linalg.results import LinearSolveCapacityError
 
 
 class AMGXAllocationError(RuntimeError):

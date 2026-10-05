@@ -224,9 +224,9 @@ anything:
 cd ~/src/hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 adr_python() {
-  HDGFEM_CUDA13_ROOT=/usr/local/cuda-13.0 \
-  HDGFEM_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-  HDGFEM_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+  HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
+  HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
+  HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
     scripts/gpu/run_cuda13.sh python "$@"
 }
 adr_python scripts/run_adr_solver_comparison.py --degree 6 --mesh 32 \
@@ -249,5 +249,5 @@ Native and profiling runs use the recorded JSON specifications with
 `scripts.profile_adr_amgx_preconditioner` and the canonical
 `scripts.adr_performance_worker` component profiler. Worker snapshots retain
 older protocols before harness changes. The new native adapter is
-`hdgfem/linalg/face_hp_krylov.py` in the master worktree; it is experimental
+`hybridge/linalg/face_hp_krylov.py` in the master worktree; it is experimental
 and does not change the production solver selection.

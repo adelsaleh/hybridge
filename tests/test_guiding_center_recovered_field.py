@@ -10,12 +10,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import hdgfem.runtime.optional as runtime_optional
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGField, DGSpace, VectorDGField
-from hdgfem.core.transfer import project_same_mesh_field
-from hdgfem.diagnostics.guiding_center import guiding_center_field_diagnostics
-from hdgfem.runtime.precision import REAL_DTYPE
+import hybridge.runtime.optional as runtime_optional
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGField, DGSpace, VectorDGField
+from hybridge.core.transfer import project_same_mesh_field
+from hybridge.diagnostics.guiding_center import guiding_center_field_diagnostics
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.arguments import build_parser
 from scripts.guiding_center.runtime.configuration import _runtime_config, _validate_config
@@ -153,8 +153,8 @@ class NumpyDevice:
 
 
 def test_device_projection_keeps_coefficients_resident(monkeypatch):
-    import hdgfem.transport.cupy as backend
-    import hdgfem.core.device as core_device
+    import hybridge.transport.cupy as backend
+    import hybridge.core.device as core_device
     density_space, poisson_space = spaces(4)
     coefficients = np.random.default_rng(123).normal(size=density_space.shape).astype(REAL_DTYPE)
     expected = project_same_mesh_field(density_space.field(coefficients), poisson_space)
@@ -169,8 +169,8 @@ def test_device_projection_keeps_coefficients_resident(monkeypatch):
 
 
 def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
-    import hdgfem.transport.cupy as backend
-    import hdgfem.core.device as core_device
+    import hybridge.transport.cupy as backend
+    import hybridge.core.device as core_device
     density_space, poisson_space = spaces(3)
     rho = density_space.project_callable(lambda x, y: 2+x*x*y)
     fields = result(density_space, poisson_space)
@@ -193,7 +193,7 @@ def test_device_diagnostics_accept_distinct_scalar_spaces(monkeypatch):
 @pytest.mark.parametrize('density_order', [1, 3, 6])
 def test_rt_recovery_has_requested_degree_and_conservative_moments(density_order):
     """Postprocess synthetic local coefficients only; no Poisson solve."""
-    from hdgfem.mixed.postprocess.flux import _postprocess_diffusion_solution
+    from hybridge.mixed.postprocess.flux import _postprocess_diffusion_solution
     from test_diffusion_reaction_solver import _assert_rt_flux_constraints
     _, poisson_space = spaces(density_order)
     random = np.random.default_rng(41)

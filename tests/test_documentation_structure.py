@@ -210,10 +210,10 @@ def test_guiding_center_gpu_documentation_matches_current_retry() -> None:
         assert required in manual, required
 
 
-def test_hdgfem_functions_have_docstrings() -> None:
+def test_hybridge_functions_have_docstrings() -> None:
     """Require a short description on every package function and method."""
     missing: list[str] = []
-    for source in sorted((ROOT / "hdgfem").rglob("*.py")):
+    for source in sorted((ROOT / "hybridge").rglob("*.py")):
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

@@ -5,7 +5,7 @@ import unittest
 
 
 spec = importlib.util.spec_from_file_location(
-    'device_inventory_under_test', Path(__file__).parents[1] / 'hdgfem/runtime/devices.py')
+    'device_inventory_under_test', Path(__file__).parents[1] / 'hybridge/runtime/devices.py')
 inventory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inventory)
 

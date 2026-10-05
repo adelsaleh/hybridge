@@ -5,9 +5,9 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.runtime.precision import REAL_DTYPE
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.runtime.precision import REAL_DTYPE
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
@@ -50,7 +50,7 @@ def test_host_projection_uses_numpy_without_materializing_device_coefficients():
     ("numba", "raw-cuda"), ("numba", "cupy"),
 ])
 def test_device_projection_uses_cupy_and_keeps_coefficients_on_device(cp, poisson, transport):
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
 
     config = replace(preset_by_key("diocotron_gaussian_annulus_host_smoke"),
                      poisson_assembly_backend=poisson, transport_assembly_backend=transport)
@@ -79,7 +79,7 @@ def test_device_projection_uses_cupy_and_keeps_coefficients_on_device(cp, poisso
     "positive_turbulence", "rho_helm_wave",
 ])
 def test_registered_initial_fields_match_host_projection(cp, case_key):
-    from hdgfem.core.device import as_cupy_coefficients, as_cupy_space
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space
 
     config = replace(preset_by_key("diocotron_gaussian_annulus_host_smoke"),
                      poisson_assembly_backend="raw-cuda")
@@ -98,7 +98,7 @@ def test_registered_initial_fields_match_host_projection(cp, case_key):
 
 
 def test_runner_projects_initial_and_equilibrium_fields_on_device_before_any_solve(cp, monkeypatch):
-    import hdgfem.solvers.diffusion_reaction as diffusion
+    import hybridge.solvers.diffusion_reaction as diffusion
 
     class StopBeforeSolve(Exception):
         pass
@@ -132,7 +132,7 @@ def test_runner_projects_initial_and_equilibrium_fields_on_device_before_any_sol
 
 
 def test_projection_timing_sections_accumulate_completed_work(monkeypatch):
-    import hdgfem.runtime.logging as runtime_logging
+    import hybridge.runtime.logging as runtime_logging
 
     clock = [0.0]
     monkeypatch.setattr(runtime_logging.time, "perf_counter", lambda: clock[0])
@@ -147,7 +147,7 @@ def test_projection_timing_sections_accumulate_completed_work(monkeypatch):
 
 
 def test_host_projection_profile_preserves_coefficients():
-    from hdgfem.core.projection import project_callable
+    from hybridge.core.projection import project_callable
 
     space = small_space()
     function = lambda x, y: 1+x-.25*y+x*y

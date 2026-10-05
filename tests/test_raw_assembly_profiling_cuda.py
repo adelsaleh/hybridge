@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from scipy.sparse import coo_matrix, bsr_matrix
 
-from hdgfem import DGSpace, rectangle_mesh
-from hdgfem.core.space import VectorDGField
+from hybridge import DGSpace, rectangle_mesh
+from hybridge.core.space import VectorDGField
 
 
 @pytest.fixture
@@ -28,11 +28,11 @@ def _boundary(x, y):
 def test_adr_assembly_only_matches_numpy(cp, monkeypatch, basis, order):
     """The new shared helper preserves reference algebra without invoking AMGX."""
     from cupyx.scipy.sparse import csr_matrix
-    from hdgfem.mixed.adr_preparation import prepare_adr_data
-    from hdgfem.mixed.adr_numpy import assemble_numpy
-    from hdgfem.transport import cuda as advection_cuda
-    import hdgfem.linalg.amgx.device_solver as amgx_device_solver
-    from hdgfem.mixed.raw_cuda.adr_operator import (
+    from hybridge.mixed.adr_preparation import prepare_adr_data
+    from hybridge.mixed.adr_numpy import assemble_numpy
+    from hybridge.transport import cuda as advection_cuda
+    import hybridge.linalg.amgx.device_solver as amgx_device_solver
+    from hybridge.mixed.raw_cuda.adr_operator import (
             assemble_projected_adr_trace_operator_raw_cuda,
         )
 
@@ -89,7 +89,7 @@ def test_profiled_factor_policies_agree(cp, basis, fmt):
 def test_profiled_diffusion_formats_preserve_physical_system(cp, basis, order):
     """Check profiled COO/CSR/BSR and factor-write policies against NumPy."""
     from cupyx.scipy import sparse
-    from hdgfem import DiffusionReactionHDGSolver
+    from hybridge import DiffusionReactionHDGSolver
     from scripts.gpu.benchmark_fused_raw_assembly_kernels import _make_assembler
 
     space = DGSpace(rectangle_mesh(2, 1), order)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem.linalg.gpu.legendre_face_bsr import (
+from hybridge.linalg.gpu.legendre_face_bsr import (
     LegendreFaceBsrOperator,
     diagonal_block_positions,
     legendre_orthonormal_scales,
@@ -95,7 +95,7 @@ def test_modal_transfer_is_adjoint_and_principal_block_is_galerkin() -> None:
 
 def test_scalar_p0_amgx_config_is_independent_of_nodal_preset() -> None:
     """The scalar coarse cycle must not inherit high-order nodal tuning."""
-    from hdgfem.linalg.multigrid.policy import scalar_p0_amgx_config
+    from hybridge.linalg.multigrid.policy import scalar_p0_amgx_config
 
     solver = scalar_p0_amgx_config()["solver"]
     assert solver["solver"] == "AMG"
@@ -107,7 +107,7 @@ def test_scalar_p0_amgx_config_is_independent_of_nodal_preset() -> None:
 
 def test_native_pcg_level_three_log_separates_custom_bsr_and_coarse_amgx() -> None:
     """Native outer residuals must remain distinct from the quiet p=0 AMGX cycle."""
-    from hdgfem.linalg.multigrid.face_hp import (
+    from hybridge.linalg.multigrid.face_hp import (
             FacePmgLevelDiagnostics,
             _format_fb_hp_mg_pcg_stats,
         )
@@ -173,7 +173,7 @@ def test_synthetic_p_multigrid_is_symmetric_positive_and_pcg_compatible(
     """Both reference and fused p-cycles must satisfy the SPD/PCG gate."""
     import cupy as cp
 
-    from hdgfem.linalg.multigrid.face_hp import (
+    from hybridge.linalg.multigrid.face_hp import (
             FaceBlockPmgPrototype,
             solve_pcgf_prototype,
             solve_pcg_prototype,

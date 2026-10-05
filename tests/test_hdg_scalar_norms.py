@@ -4,11 +4,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hdgfem.hdg.gram import ScalarHDGGram, assemble_hdg_gram
-from hdgfem.core.field_ops import project_callable_to_trace
-from hdgfem.core.mesh import rectangle_mesh
-from hdgfem.core.space import DGSpace
-from hdgfem.diagnostics.errors import evaluate_hdg_scalar_error
+from hybridge.hdg.gram import ScalarHDGGram, assemble_hdg_gram
+from hybridge.core.field_ops import project_callable_to_trace
+from hybridge.core.mesh import rectangle_mesh
+from hybridge.core.space import DGSpace
+from hybridge.diagnostics.errors import evaluate_hdg_scalar_error
 from scripts.guiding_center.benchmarks import run_guiding_center_temporal_convergence as driver
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
@@ -109,7 +109,7 @@ def test_manufactured_driver_reports_hdg_errors_and_rates_from_accepted_traces(m
     def canned(config, **kwargs):
         assert config.poisson_solver == config.transport_solver == "amgx"
         assert config.poisson_assembly_backend == config.transport_assembly_backend == "raw-cuda"
-        from hdgfem.solvers.capabilities import validate_diffusion_backend_configuration
+        from hybridge.solvers.capabilities import validate_diffusion_backend_configuration
         validate_diffusion_backend_configuration(
             operation="solve", assembly_backend=config.poisson_assembly_backend,
             solver=config.poisson_solver, cupyx_solver=config.poisson_cupyx_solver,
@@ -151,9 +151,9 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
             pytest.skip("CUDA device required for resident diagnostic check")
     except cp.cuda.runtime.CUDARuntimeError as error:
         pytest.skip(str(error))
-    from hdgfem.core.device import field_from_cupy_coefficients
-    from hdgfem.hdg.condensation import expand_interior_trace
-    from hdgfem.core.space import DGField
+    from hybridge.core.device import field_from_cupy_coefficients
+    from hybridge.hdg.condensation import expand_interior_trace
+    from hybridge.core.space import DGField
     from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import (
         VorticityMetrics, VorticityRaster, _resident_coefficients,
     )
@@ -186,7 +186,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
     # Exercise the complete accepted-step diagnostic, including enstrophy,
     # velocity compatibility, and exact errors, while downloads are forbidden.
     from scripts.guiding_center.runtime.diagnostics import _compute_diagnostics
-    from hdgfem.core.space import VectorDGField
+    from hybridge.core.space import VectorDGField
     case = SimpleNamespace(parameters={}, density_is_vorticity=True,
                            exact_density_at=lambda t: exact, exact_potential_at=lambda t: exact)
     poisson = SimpleNamespace(field=device_field, flux=VectorDGField((device_field, device_field)),
@@ -198,7 +198,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
     assert accepted["rho_l2_error"] == pytest.approx(expected.l2, rel=1e-12)
     assert not device_field.coefficients_materialized
     # A host mirror must not pull auto diagnostics back onto the CPU.
-    import hdgfem.diagnostics.errors as diagnostics
+    import hybridge.diagnostics.errors as diagnostics
     monkeypatch.setattr(diagnostics, "_evaluate_host", forbidden)
     device_field._coeffs = field.coeffs
     scalar_error = diagnostics.evaluate_scalar_error(device_field, exact)

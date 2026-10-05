@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from hdgfem.diagnostics.guiding_center import modal_activity
-from hdgfem.io.time_series import DiagnosticPanel, TimeSeries, draw_time_series_panel, numeric_time_series, plot_diagnostic_panels
+from hybridge.diagnostics.guiding_center import modal_activity
+from hybridge.io.time_series import DiagnosticPanel, TimeSeries, draw_time_series_panel, numeric_time_series, plot_diagnostic_panels
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics
 from scripts.guiding_center.runtime.arguments import build_parser
@@ -245,7 +245,7 @@ def test_png_names_are_safe_and_do_not_collide(tmp_path):
 
 
 def test_coherent_groups_paginate_without_mixing_topics():
-    from hdgfem.io.time_series import diagnostic_pages
+    from hybridge.io.time_series import diagnostic_pages
     series = (TimeSeries("value", np.array([0., 1.]), np.array([1., 2.])),)
     panels = [DiagnosticPanel(f"Residual {i}", "Value", series, group="solver_residuals")
               for i in range(8)]
@@ -305,7 +305,7 @@ def test_combined_save_display_finishes_saving_before_opening_windows(tmp_path, 
 
 
 def test_interactive_overview_is_bounded_and_keeps_important_physics():
-    from hdgfem.io.time_series import diagnostic_pages
+    from hybridge.io.time_series import diagnostic_pages
     from scripts.guiding_center.runtime.diagnostic_plots import interactive_diagnostic_panels
 
     rows = [

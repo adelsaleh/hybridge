@@ -866,7 +866,7 @@ def test_trajectory_storyboard_selection_and_target_once_rendering(tmp_path):
         target_rho,
     ])
     metadata = {
-        "format": "hdgfem_torsion_optimizer_trajectory_v1",
+        "format": "hybridge_torsion_optimizer_trajectory_v1",
         "c1_t": 0.2,
         "c2_t": 0.7,
         "states": states,
@@ -901,7 +901,7 @@ def test_canonical_geometry_gmsh_smoke(tmp_path, geometry):
     mesh_path = tmp_path / f"{geometry}.msh"
     metadata = generate_mesh(geometry, 0.6, mesh_path)
     assert mesh_path.is_file()
-    assert metadata["format"] == "hdgfem_canonical_gmsh_v1"
+    assert metadata["format"] == "hybridge_canonical_gmsh_v1"
     assert metadata["geometry"] == geometry
     assert metadata["area"] > 0.0
     assert metadata["cells"] > 0
@@ -952,7 +952,7 @@ def test_report_escapes_figure_captions_and_flushes_large_float_sets(tmp_path):
         })
     (generated / "figure_registry.json").write_text(
         json.dumps({
-            "format": "hdgfem_torsion_optimizer_figure_registry_v1",
+            "format": "hybridge_torsion_optimizer_figure_registry_v1",
             "stage": "preliminary",
             "asset_format": "png",
             "figures": entries,
@@ -1091,8 +1091,8 @@ def test_report_escapes_figure_captions_and_flushes_large_float_sets(tmp_path):
 
 
 @pytest.mark.skipif(
-    os.environ.get("HDGFEM_RUN_DOLFINX_INTEGRATION") != "1",
-    reason="set HDGFEM_RUN_DOLFINX_INTEGRATION=1 for MPI/DOLFINx integration tests",
+    os.environ.get("HYBRIDGE_RUN_DOLFINX_INTEGRATION") != "1",
+    reason="set HYBRIDGE_RUN_DOLFINX_INTEGRATION=1 for MPI/DOLFINx integration tests",
 )
 def test_two_rank_optimizer_trajectory_and_supg_checkpoint_handoff(tmp_path):
     pytest.importorskip("dolfinx")

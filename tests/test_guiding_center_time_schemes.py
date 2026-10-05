@@ -66,10 +66,10 @@ def test_predictor_corrector_host_manufactured_smoke(tmp_path: Path) -> None:
 
 
 def test_solver_initial_guesses_are_per_call_and_not_stored() -> None:
-    from hdgfem.core.mesh import rectangle_mesh
-    from hdgfem.core.space import DGSpace, VectorDGField
-    from hdgfem.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
-    from hdgfem.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
+    from hybridge.core.mesh import rectangle_mesh
+    from hybridge.core.space import DGSpace, VectorDGField
+    from hybridge.solvers.advection_reaction import AdvectionReactionHDGOptions, AdvectionReactionHDGSolver
+    from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions, DiffusionReactionHDGSolver
 
     space = DGSpace(rectangle_mesh(2, 2), 1)
     source = space.constant(1.0)

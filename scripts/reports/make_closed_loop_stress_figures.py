@@ -85,8 +85,8 @@ def direction_points(parameters, count=31):
 
 
 def publication_helpers():
-    """Reuse shared export/style without importing HDGFEM's numerical package."""
-    spec = importlib.util.spec_from_file_location("_stress_publication_figures", ROOT/"hdgfem/io/figures.py")
+    """Reuse shared export/style without importing HYBRIDGE's numerical package."""
+    spec = importlib.util.spec_from_file_location("_stress_publication_figures", ROOT/"hybridge/io/figures.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -235,7 +235,7 @@ def render(output, *, angular_points=1800, radial_intervals=192, mesh_record=DEF
         sampling=dict(angular_points=angular_points, radial_intervals=radial_intervals,
                       method="cell-centred analytic polar grid, not a finite-element mesh"),
         sources={str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-                 for path in (source, Path(__file__).resolve(), ROOT/"hdgfem/io/figures.py")},
+                 for path in (source, Path(__file__).resolve(), ROOT/"hybridge/io/figures.py")},
         figures={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
         note="Geometry panels (a,b) are analytic; panel (c) uses the authenticated campaign mesh. Operator terms are evaluated on the common manufactured field; diffusion includes div(K). No mesh generation, assembly, solve or TeX compilation.",
     )

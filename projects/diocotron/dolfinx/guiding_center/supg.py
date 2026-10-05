@@ -195,7 +195,7 @@ def read_equilibrium_metadata(path: Path, comm: MPI.Comm) -> dict[str, Any]:
     error, metadata = comm.bcast(payload, root=0)
     if error is not None:
         raise RuntimeError(f"failed to read equilibrium checkpoint {path}: {error}")
-    supported_formats = {"hdgfem_equilibrium_v1", "hdgfem_equilibrium_v2"}
+    supported_formats = {"hybridge_equilibrium_v1", "hybridge_equilibrium_v2"}
     if metadata.get("format") not in supported_formats:
         raise ValueError(
             f"unsupported equilibrium checkpoint format {metadata.get('format')!r}"
@@ -295,15 +295,15 @@ def load_equilibrium_checkpoint(
             with np.load(resolve_archive_path(path), allow_pickle=False) as checkpoint:
                 metadata = json.loads(str(checkpoint["metadata"].item()))
                 format_name = metadata.get("format")
-                if format_name == "hdgfem_equilibrium_v1":
+                if format_name == "hybridge_equilibrium_v1":
                     saved_coordinates = np.asarray(
                         checkpoint["coordinates"], dtype=np.float64
                     ).copy()
                     saved_rho = np.asarray(checkpoint["rho"], dtype=np.float64).copy()
                     saved_phi = np.asarray(checkpoint["phi"], dtype=np.float64).copy()
-                elif format_name != "hdgfem_equilibrium_v2":
+                elif format_name != "hybridge_equilibrium_v2":
                     raise ValueError(f"unsupported equilibrium checkpoint format {format_name!r}")
-            if format_name == "hdgfem_equilibrium_v2":
+            if format_name == "hybridge_equilibrium_v2":
                 portable = load_dolfinx_checkpoint(path)
                 rho_index = portable.field_names.index("rho")
                 phi_index = portable.field_names.index("phi")

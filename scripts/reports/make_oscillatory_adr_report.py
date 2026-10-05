@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from hdgfem.io.figures import publication_style,save_publication_figure
+from hybridge.io.figures import publication_style,save_publication_figure
 import adr_native_completion as native_completion
 import adr_lu_baseline as lu
 from adr_report_labels import PMG, PMG_TEX, polynomial_label, prose
@@ -134,7 +134,7 @@ def portable_bundle(out, figures):
             'Setup, fresh and amortized times are medians. Failed runs have no ranked timing.\n'
             'results.data.json contains all samples, configs, binary hashes and validation.\n'
             'source_snapshot/ and meshes/ preserve the exact worker inputs. Re-executing these\n'
-            'workers requires the matching HDGFEM checkouts and prebuilt AMGX/pyamgx; the\n'
+            'workers requires the matching HYBRIDGE checkouts and prebuilt AMGX/pyamgx; the\n'
             'JSON records original machine paths, not relocatable cache locations.\n'
             'source/ contains the additional checks and geometry generator.\n')
         for name in ('accuracy_table.tex','native_completion_table.tex','native_results.json','comparison.csv','results.data.json','verification.json','figure_hashes.json'):

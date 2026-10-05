@@ -1,8 +1,8 @@
 # Optional comparisons and field transfer
 
 - `hdg_projection.py`: reconstruct exported cell polynomials and project them
-  into HDGFEM DG spaces. Requires HDGFEM, NumPy, and SciPy; no DOLFINx runtime.
-- `check_field_import.py`: real DOLFINx export → HDGFEM projection verification.
+  into HYBRIDGE DG spaces. Requires HYBRIDGE, NumPy, and SciPy; no DOLFINx runtime.
+- `check_field_import.py`: real DOLFINx export → HYBRIDGE projection verification.
 - `equilibrium.py`: compare two DOLFINx checkpoints on reference quadrature.
 
 ```bash

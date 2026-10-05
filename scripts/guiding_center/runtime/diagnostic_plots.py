@@ -11,7 +11,7 @@ import numpy as np
 
 from scripts.guiding_center.runtime.labels import run_label
 
-from hdgfem.io.time_series import (
+from hybridge.io.time_series import (
     DiagnosticPanel, TimeSeries, numeric_time_series, plot_diagnostic_panels, plot_mode_history,
     show_diagnostic_figures, diagnostic_pages,
 )
@@ -159,7 +159,7 @@ def diagnostic_panels(rows, timing_rows=()):
         if measured is None and rows and not any(drift_key in row for row in rows):
             baseline = rows[0].get(total_key)
             if rows[0].get("time") == 0 and baseline is not None and np.isfinite(baseline) and baseline != 0:
-                from hdgfem.diagnostics.solver import relative_drift
+                from hybridge.diagnostics.solver import relative_drift
 
                 times = np.asarray([row.get("time", np.nan) for row in rows])
                 values = np.asarray([

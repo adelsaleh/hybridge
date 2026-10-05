@@ -50,7 +50,7 @@ python scripts/dev/alpha_test_matrix.py scheduled-evidence --dry-run
 
 The scheduled lane contains longer parity, launch-size, and convergence work.
 Gmsh remains optional for the base package but is required here: the runner
-preflights the module and sets `HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1` for
+preflights the module and sets `HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH=1` for
 every scheduled command. The lane also requires an explicit acknowledgement:
 
 ```bash

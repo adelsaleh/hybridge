@@ -611,7 +611,7 @@ def _package_versions() -> dict[str, str]:
 
 def new_manifest() -> dict[str, Any]:
     return {
-        "format": "hdgfem_torsion_optimizer_numerical_tests",
+        "format": "hybridge_torsion_optimizer_numerical_tests",
         "version": MANIFEST_VERSION,
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "epsilon_ratio": EPSILON_RATIO,
@@ -1630,7 +1630,7 @@ def _cached_reference_comparison(
 
     mesh_size, order, dofs = _equilibrium_discretization(reference)
     ranks = select_mumps_ranks(mesh_size, order, dofs)
-    python = os.environ.get("HDGFEM_DOLFINX_PYTHON", sys.executable)
+    python = os.environ.get("HYBRIDGE_DOLFINX_PYTHON", sys.executable)
     argv = _mpi_argv(ranks, (
         python,
         str(EQUILIBRIUM_COMPARATOR),

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from hdgfem import (
+from hybridge import (
     DGMesh,
     DGSpace,
     DiffusionReactionHDGSolver,
@@ -16,7 +16,7 @@ from hdgfem import (
     solve_diffusion_reaction_hdg,
     solver_result_metrics,
 )
-from hdgfem.linalg import expand_known_dofs
+from hybridge.linalg import expand_known_dofs
 from scripts.diffusion_reaction.cases import quadratic_poisson_case
 
 pytest.importorskip("numba")
@@ -160,7 +160,7 @@ def test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident(
     matrix_format: str,
     config_name: str,
 ) -> None:
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     full_array_downloads = 0
@@ -233,7 +233,7 @@ def test_diffusion_raw_cuda_compressed_amgx_full_solve_stays_device_resident(
 def test_diffusion_raw_cuda_schur_lu_cache_reuses_factors_rhs_reconstruction_and_amgx(
         trace_basis: str, order: int, raw_block_size: int | str,
 ) -> None:
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -403,7 +403,7 @@ def test_fb_hp_mg_reuses_all_fixed_poisson_state_and_supports_periodic_rt_flux(
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_fb_hp_mg_runtime_gate_falls_back_once_and_reuses_hybrid_amgx(monkeypatch) -> None:
-    from hdgfem.linalg.multigrid import face_hp as face_hp_multigrid
+    from hybridge.linalg.multigrid import face_hp as face_hp_multigrid
 
     class RejectedNativeSolver:
         attempts = 0
@@ -461,7 +461,7 @@ def test_fb_hp_mg_runtime_gate_falls_back_once_and_reuses_hybrid_amgx(monkeypatc
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -> None:
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -574,7 +574,7 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
 
 @pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
 def test_diffusion_cupy_schur_cholesky_cache_reuses_factors_rhs_reconstruction_and_amgx() -> None:
-    from hdgfem.runtime.optional import require_cupy
+    from hybridge.runtime.optional import require_cupy
 
     cp = require_cupy()
     mesh = rectangle_mesh(2, 2, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
@@ -637,8 +637,8 @@ def test_diffusion_cupy_schur_cholesky_cache_reuses_factors_rhs_reconstruction_a
 @GPU_RUNTIME_MARK
 @pytest.mark.parametrize("order", (7, 10))
 def test_diffusion_cupy_schur_cholesky_matches_full_mixed_high_order(order: int) -> None:
-    from hdgfem.runtime.optional import require_cupy
-    from hdgfem.mixed.cupy import (
+    from hybridge.runtime.optional import require_cupy
+    from hybridge.mixed.cupy import (
             assemble_projected_diffusion_trace_system_eliminated_cupy,
             solve_mixed_from_scalar_cholesky_cupy,
         )
@@ -812,8 +812,8 @@ def test_diffusion_compact_schur_rhs_and_reconstruction_match_cublas(order: int)
     """The fused compact kernels preserve the mixed HDG signs and face orientation."""
     import cupy as cp
 
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.mixed.cupy import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.mixed.cupy import (
             assemble_compact_diffusion_rhs_cupy,
             assemble_projected_diffusion_trace_system_eliminated_cupy,
             build_trace_reference,
@@ -876,14 +876,14 @@ def test_diffusion_modal_raw_cuda_reconstruction_matches_numpy(raw_matrix_format
     import cupy as cp
     from scipy.sparse.linalg import spsolve
 
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.mixed.cupy import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.mixed.cupy import (
             build_trace_reference,
             face_element_mass,
             reference_derivative_mats,
             source_moments_cupy,
         )
-    from hdgfem.mixed.raw_cuda.identity import (
+    from hybridge.mixed.raw_cuda.identity import (
             reconstruct_projected_diffusion_field_raw_cuda,
         )
 
@@ -941,17 +941,17 @@ def test_diffusion_raw_cuda_reconstruction_full_local_unknowns_matches_numba(tra
 
     from scipy.sparse.linalg import spsolve
 
-    from hdgfem.core.device import as_cupy_space
-    from hdgfem.mixed.cupy import (
+    from hybridge.core.device import as_cupy_space
+    from hybridge.mixed.cupy import (
             build_trace_reference,
             face_element_mass,
             reference_derivative_mats,
             source_moments_cupy,
         )
-    from hdgfem.mixed.raw_cuda.identity import (
+    from hybridge.mixed.raw_cuda.identity import (
             reconstruct_projected_diffusion_field_raw_cuda,
         )
-    from hdgfem.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
+    from hybridge.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
 
     space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
     source_h = space.project_callable(_source, name="source_h")
@@ -996,13 +996,13 @@ def test_diffusion_raw_cuda_reconstruction_full_local_unknowns_matches_numba(tra
 
 @GPU_RUNTIME_MARK
 @pytest.mark.skipif(
-    os.environ.get("HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH") != "1",
-    reason="set HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 to run optional Gmsh geometry parity cases",
+    os.environ.get("HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH") != "1",
+    reason="set HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 to run optional Gmsh geometry parity cases",
 )
 @pytest.mark.parametrize("order", (2, 6))
 def test_diffusion_assembly_backends_match_numpy_on_gmsh_geometries_p_le_6(order: int) -> None:
     pytest.importorskip("gmsh")
-    from hdgfem import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh
+    from hybridge import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh
 
     mesh_factories = {
         "gmsh-rectangle": lambda: gmsh_rectangle_mesh(1.0, verbosity=0, cache=False, log_cache=False),
@@ -1021,13 +1021,13 @@ def test_diffusion_assembly_backends_match_numpy_on_gmsh_geometries_p_le_6(order
 
 @GPU_RUNTIME_MARK
 @pytest.mark.skipif(
-    os.environ.get("HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH") != "1",
-    reason="set HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 to run optional Gmsh geometry parity cases",
+    os.environ.get("HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH") != "1",
+    reason="set HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH=1 to run optional Gmsh geometry parity cases",
 )
 @pytest.mark.parametrize("order", (8, 10))
 def test_diffusion_numpy_numba_cupy_backends_match_on_gmsh_geometries_p_8_to_10(order: int) -> None:
     pytest.importorskip("gmsh")
-    from hdgfem import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh
+    from hybridge import gmsh_disc_mesh, gmsh_lshape_mesh, gmsh_rectangle_mesh, gmsh_triangle_mesh
 
     mesh_factories = {
         "gmsh-rectangle": lambda: gmsh_rectangle_mesh(1.0, verbosity=0, cache=False, log_cache=False),

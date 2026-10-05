@@ -40,7 +40,7 @@ available. Same-mesh differences measure temporal sensitivity. They include
 interaction with spatial dissipation and do not establish spatial convergence.
 
 For the scalar field and its actual numerical trace, the shared
-[`ScalarHDGGram`](../../../hdgfem/hdg/gram.py) evaluator computes
+[`ScalarHDGGram`](../../../hybridge/hdg/gram.py) evaluator computes
 
 \[
 Z=\tfrac12\|\rho_h\|_{L^2}^2,\qquad
@@ -312,7 +312,7 @@ From the repository root, the recorded environment is:
 ```bash
 export CUDA_PATH=/usr/local/cuda-13.0
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export HDGFEM_PRECISION=float64
+export HYBRIDGE_PRECISION=float64
 export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=8
 export MPLBACKEND=Agg PYTHONDONTWRITEBYTECODE=1
 .venv/bin/python artifacts/temporal_cfl_20260912/run_study.py

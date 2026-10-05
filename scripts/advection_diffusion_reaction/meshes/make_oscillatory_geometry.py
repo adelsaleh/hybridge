@@ -10,7 +10,7 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
-from hdgfem.core.mesh import gmsh_smooth_star_mesh,mesh_edge_min_max
+from hybridge.core.mesh import gmsh_smooth_star_mesh,mesh_edge_min_max
 
 
 def main():

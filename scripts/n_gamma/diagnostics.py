@@ -4,7 +4,7 @@ Errors use the norm of the chosen geometry on the actual polygonal mesh
 domain: the plain ``L2`` norm for ``"cartesian"`` and the weighted
 ``||e||_{L2_R} = (int |e|^2 R dR dZ)^{1/2}`` for ``"axisymmetric"``. Minima are *sampled* on the volume and
 face quadrature points and are reported as samples, not certified bounds.
-Per-step rows go through :class:`hdgfem.io.records.DiagnosticsRecorder`
+Per-step rows go through :class:`hybridge.io.records.DiagnosticsRecorder`
 (JSONL while running, CSV at the end); convergence summaries are JSON and
 Markdown tables with error ratios and observed orders.
 """
@@ -18,8 +18,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from hdgfem import DGField, evaluate_scalar_error, field_values_at_ref
-from hdgfem.io.records import DiagnosticsRecorder, _json_safe
+from hybridge import DGField, evaluate_scalar_error, field_values_at_ref
+from hybridge.io.records import DiagnosticsRecorder, _json_safe
 
 
 def radius_weight(R, Z):
@@ -48,7 +48,7 @@ def error_norms(fields: dict[str, DGField], exact: dict[str, Callable], *, geome
 
 def sampled_minimum(field: DGField, space, trace_space, *, device: bool = False) -> float:
     """Return the minimum of ``field`` sampled on volume and element-side face points."""
-    from hdgfem.core.quadrature import _reference_edge_points_from_1d
+    from hybridge.core.quadrature import _reference_edge_points_from_1d
 
     face = np.asarray(_reference_edge_points_from_1d(trace_space.quads)).reshape(-1, 2)
     volume = field_values_at_ref(field, space.quad_data.Krf_quads, device=device)

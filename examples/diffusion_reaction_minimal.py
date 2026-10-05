@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hdgfem import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
+from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
 
 
 def main() -> None:

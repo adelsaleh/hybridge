@@ -186,7 +186,7 @@ def parse_mesh_sizes(spec: str) -> list[float]:
 
 def quad_from_label(label: str, order: int) -> int | None:
     normalized = label.strip().lower()
-    if normalized in {"default", "none", "hdgfem"}:
+    if normalized in {"default", "none", "hybridge"}:
         return None
     if normalized == "p":
         value = order

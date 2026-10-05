@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hdgfem import DGSpace, VectorDGField, rectangle_mesh
-from hdgfem.hdg import matrices as hdg_mats
-import hdgfem.hdg.coefficients as hdg_coefficients
-from hdgfem.solvers.advection_reaction import solve_advection_reaction_hdg
+from hybridge import DGSpace, VectorDGField, rectangle_mesh
+from hybridge.hdg import matrices as hdg_mats
+import hybridge.hdg.coefficients as hdg_coefficients
+from hybridge.solvers.advection_reaction import solve_advection_reaction_hdg
 from scripts.advection_reaction.cases import test2 as adv_rea_test2
 
 pytest.importorskip("numba")

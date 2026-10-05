@@ -4,8 +4,8 @@ import json
 import numpy as np
 import pytest
 
-from hdgfem.core.geometry import PolygonDomain
-from hdgfem.core.mesh import gmsh_smooth_star_mesh
+from hybridge.core.geometry import PolygonDomain
+from hybridge.core.mesh import gmsh_smooth_star_mesh
 from scripts.n_gamma.cases.geometry import (
     BASELINE_SIZES, STRESS_POLYGONIZATIONS, build_case_mesh,
 )
@@ -92,7 +92,7 @@ def test_baseline_meshes(h, geometry, tmp_path):
 def test_invalid_hole_rejected_before_meshing(options, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError('invalid geometry reached Gmsh')
-    monkeypatch.setattr('hdgfem.core.mesh._generate_gmsh_mesh', forbidden)
+    monkeypatch.setattr('hybridge.core.mesh._generate_gmsh_mesh', forbidden)
     params = dict(center=(3., 0.), radius=.7, amplitude=.224,
                   boundary_points=80, hole_center=(3.28, .1),
                   hole_radius=.12, hole_boundary_points=20)
@@ -105,7 +105,7 @@ def test_hole_parameters_participate_in_cache_key(monkeypatch):
     keys = []
     def capture(*args, **kwargs):
         keys.append(kwargs['cache_key_data'])
-    monkeypatch.setattr('hdgfem.core.mesh._generate_gmsh_mesh', capture)
+    monkeypatch.setattr('hybridge.core.mesh._generate_gmsh_mesh', capture)
     for options in ({}, {'hole_center': (.1, 0.)}, {'hole_boundary_points': 20},
                     {'hole_boundary_points': 40}, {'boundary_points': 80},
                     {'hole_radius': .2}):

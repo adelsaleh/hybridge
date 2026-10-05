@@ -24,7 +24,7 @@ def background_sizes(parameters, bulk_size, neck_elements):
 
 def mesh_diagnostics(mesh, parameters):
     """Report mesh shape and topology, plus geometry-specific boundary diagnostics."""
-    from hdgfem.core.mesh import mesh_edge_min_max
+    from hybridge.core.mesh import mesh_edge_min_max
 
     vertices = mesh.node_coords[mesh.triangles]
     lengths = np.linalg.norm(vertices-np.roll(vertices, 1, axis=1), axis=2)
@@ -113,7 +113,7 @@ def prepare_mesh(parameters, target, directory, *, neck_elements=8, boundary_poi
         if hashlib.sha256(path.read_bytes()).hexdigest() != record["sha256"]:
             raise ValueError(f"Changed mesh: {path}")
         return path, record
-    from hdgfem.core.mesh import gmsh_smooth_star_mesh_with_background_sizes, gmsh_rectangle_mesh
+    from hybridge.core.mesh import gmsh_smooth_star_mesh_with_background_sizes, gmsh_rectangle_mesh
     search_target = min(target, 0.99*max_triangles)
     minimum_size = 0.0 if square else parameters.neck_width/neck_elements
     bulk_size = max(1.01*minimum_size, np.sqrt((9.24 if square else 9)/search_target))

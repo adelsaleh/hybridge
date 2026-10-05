@@ -18,8 +18,8 @@ import subprocess
 import sys
 import time
 
-from hdgfem.io.records import append_jsonl_record
-from hdgfem.runtime.benchmarking import measure
+from hybridge.io.records import append_jsonl_record
+from hybridge.runtime.benchmarking import measure
 
 
 def worker(args):
@@ -28,8 +28,8 @@ def worker(args):
     import numba
     import scipy
     from scipy.sparse import coo_matrix
-    from hdgfem import DGSpace, rectangle_mesh
-    from hdgfem.mixed.numba import (
+    from hybridge import DGSpace, rectangle_mesh
+    from hybridge.mixed.numba import (
             build_diffusion_schur_cache_numba,
             assemble_projected_diffusion_trace_system_eliminated_numba as assemble,
             assemble_projected_diffusion_trace_rhs_eliminated_numba as assemble_rhs,

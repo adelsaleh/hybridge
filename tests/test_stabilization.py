@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hdgfem import (
+from hybridge import (
     DGSpace,
     GlobalLengthDiffusion,
     automatic_domain_length,
@@ -15,14 +15,14 @@ from hdgfem import (
     mesh_domain_measures,
     rectangle_mesh,
 )
-from hdgfem.mixed.adr_preparation import (
+from hybridge.mixed.adr_preparation import (
     prepare_adr_data,
     recommended_diffusion_stabilization,
 )
-from hdgfem.solvers.advection_diffusion_reaction import (
+from hybridge.solvers.advection_diffusion_reaction import (
     AdvectionDiffusionReactionHDGOptions,
 )
-from hdgfem.solvers.diffusion_reaction import (
+from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGOptions,
     DiffusionReactionHDGSolver,
     solve_diffusion_reaction_hdg,

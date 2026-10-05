@@ -29,7 +29,7 @@ def test_alpha_test_lane_names_and_policies_are_stable() -> None:
     assert ALPHA_TEST_LANES_BY_NAME["gpu-smoke"].release_blocking
     assert not ALPHA_TEST_LANES_BY_NAME["scheduled-evidence"].automated
     scheduled = ALPHA_TEST_LANES_BY_NAME["scheduled-evidence"]
-    assert scheduled.environment == (("HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH", "1"),)
+    assert scheduled.environment == (("HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH", "1"),)
     assert scheduled.required_modules == ("gmsh",)
     assert KNOWN_GAPS
 
@@ -129,7 +129,7 @@ def test_scheduled_dry_run_exposes_gmsh_parity_environment() -> None:
         stderr=subprocess.PIPE,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "HDGFEM_DIFF_REA_ASSEMBLY_PARITY_GMSH=1" in completed.stdout
+    assert "HYBRIDGE_DIFF_REA_ASSEMBLY_PARITY_GMSH=1" in completed.stdout
     assert "tests/test_diffusion_reaction_assembly_parity.py" in completed.stdout
 
 
@@ -148,8 +148,8 @@ def test_lane_environment_is_forwarded_to_subprocess(monkeypatch) -> None:
         runtime="host",
         coverage="environment propagation",
         commands=(("{python}", "-c", "pass"),),
-        environment=(("HDGFEM_TEST_ENVIRONMENT", "enabled"),),
+        environment=(("HYBRIDGE_TEST_ENVIRONMENT", "enabled"),),
     )
     result = alpha_test_matrix._run_lane(lane, dry_run=False, confirm_scheduled=False)
     assert result == 0
-    assert captured_environment["HDGFEM_TEST_ENVIRONMENT"] == "enabled"
+    assert captured_environment["HYBRIDGE_TEST_ENVIRONMENT"] == "enabled"

@@ -5,8 +5,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from hdgfem.linalg.amgx.device_solver import _amgx_config_for_solve
-from hdgfem.linalg.results import SolveResult, finalize_solve_result
+from hybridge.linalg.amgx.device_solver import _amgx_config_for_solve
+from hybridge.linalg.results import SolveResult, finalize_solve_result
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import configuration as runner
 
