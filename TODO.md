@@ -33,7 +33,7 @@
 
 ### First Alpha Release Gate
 
-- [ ] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`. The first hosted attempt exposed release-environment gaps rather than solver failures: Python 3.10 lacked the `tomllib` backport and the test extra omitted Matplotlib while `host-fast` exercised temporal-convergence plotting. The package metadata and compatibility import now cover both; rerun evidence is pending.
+- [x] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`. Passed 2026-10-05 (runs 37290623238 and 37293934813 on PR #2; host jobs took 4.8–5.8 min, package 56 s). The URL goes into `early_alpha.md` with the 0.1.0a2 evidence. The first hosted attempt exposed release-environment gaps rather than solver failures: Python 3.10 lacked the `tomllib` backport and the test extra omitted Matplotlib while `host-fast` exercised temporal-convergence plotting. The package metadata and compatibility import now cover both; rerun evidence is pending.
 - [x] Confirm no documentation links are stale via the docs structure check (5 passed):
   - run: `pytest tests/test_documentation_structure.py`
   - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
@@ -69,11 +69,11 @@
       - lanes: `host-fast` 824 passed, `cpu-parity` 136 passed, `install-smoke` passed (wheel build, install outside the checkout, public solve), `gpu-smoke` 272 passed;
       - `gpu-smoke` first named two tests renamed months earlier (`…raw_cuda_csr_amgx_solver_smoke`, `…raw_cuda_csr_amgx_full_solve_stays_device_resident`); the lane now uses the current names, and the lane-target test checks that each test function exists.
   - Phase 2, hosted gate and merge (pushes need confirmation):
-    - push `package-reorganization` and open a PR to `master`. The `early-alpha` workflow (host Python 3.10/3.12 and package) must pass; the eight failures of the last hosted `master` run (2026-09-30) are fixed on this branch;
-    - fast-forward `master` (no divergence) and push it;
-    - set the GitHub default branch back to `master` (it is currently `package-reorganization`) and delete the merged branch;
-    - before retiring the `~/src/hybridge-reorg` worktree, move its untracked local evidence (`outputs/`, about 12 GB, `run_outputs/`, untracked `run_logs/`) into `~/src/hybridge-archive/`;
-    - from then on the shared venv's editable install runs the reorganized code.
+    - [x] push `package-reorganization` and open a PR to `master`; the `early-alpha` workflow must pass. Done 2026-10-05: PR #2. Hosted runs 37290623238 (`e9f6a23`) and 37293934813 (`a11a741`) passed host Python 3.10, host Python 3.12 and package, the first clean hosted runs since August;
+    - [x] fast-forward `master` and push it. Done 2026-10-05: `8bb2d4d..a11a741`, and PR #2 shows as merged;
+    - [x] set the GitHub default branch back to `master` and delete the merged remote branch. Done 2026-10-05; the local `package-reorganization` branch stays for the worktree below;
+    - [ ] postponed until after the release: retire the `~/src/hybridge-reorg` worktree. It holds the uncommitted positivity-preservation work, which stays out of this release. First move its untracked local evidence (`outputs/`, about 12 GB, and `run_outputs/`) into `~/src/hybridge-archive/`;
+    - [x] the shared venv's editable install now runs the reorganized code from `~/src/hybridge`, whose machine-local CODEMAP/AGENTS were replaced by the current ones; the old copies are in the archive.
   - Phase 3, rename `hdgfem` → `hybridge` in one dedicated commit on `master`:
     - the import package, `pyproject.toml` name and version `0.1.0a2`, and about 558 files outside `vendor/`; `vendor/adr_gmres/hdgfem` stays a frozen study snapshot;
     - the about 30 `HDGFEM_*` environment variables become `HYBRIDGE_*`, read through one helper that accepts the old names with a deprecation warning for one release;
