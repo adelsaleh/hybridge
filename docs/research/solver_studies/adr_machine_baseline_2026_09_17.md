@@ -6,7 +6,7 @@ The first incremental step toward comparing ASM + polynomial-preconditioned
 GMRES with AMGX is to qualify the existing ADR runners on this machine.
 The baseline is `gpu_gmres_precondit` at
 `d44acce873b18daa6507e0c89b20a9e4e5ab913e`, checked out in
-`~/src/hdgfem-gmres`. The main checkout remains on `master` with its
+`../hdgfem-gmres`. The main checkout remains on `master` with its
 uncommitted work preserved. No assembler or solver code was changed for this baseline.
 
 ## Environment
@@ -24,7 +24,7 @@ This is a tested existing-machine environment, not a reproduction of the
 branch's locked environment. `scripts.validate_gpu_environment` rejects it
 because NumPy and Numba exceed its declared version ranges and the Python
 `cuda-toolkit` distribution is absent. A system CUDA toolkit exists at
-`/usr/local/cuda-13.0`; the actual CUDA tests pass. The branch targets Python
+`/path/to/cuda-13`; the actual CUDA tests pass. The branch targets Python
 3.13, while this baseline uses 3.12.3. Keep these deviations attached to results.
 
 Local artifacts are under `run_logs/adr_baseline_20260917/` (Git-ignored).
@@ -33,7 +33,7 @@ pytest log/XML, and campaign output directories with environment metadata,
 raw measurements, and summaries. To use the same environment:
 
 ```bash
-cd ~/src/hdgfem-gmres
+cd ../hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 ```
 

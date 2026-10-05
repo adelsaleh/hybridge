@@ -1022,12 +1022,12 @@
     }
   ],
   "binaries": {
-    "~/src/AMGX-build-cuda13/libamgxsh.so": {
+    "../AMGX-build-cuda13/libamgxsh.so": {
       "sha256": "f19780cea8929352c8d3cf97ed2a2f43a23180a9932e9ba95a0af4cb1b056023",
       "size_bytes": 150015696,
       "matches_prior_campaign": true
     },
-    "~/src/AMGX-install-cuda13/lib/libamgxsh.so": {
+    "../AMGX-install-cuda13/lib/libamgxsh.so": {
       "sha256": "e006ecb3df8e7901450e6540ae14706222b9a642c88fcacce63b62568eca52f7",
       "size_bytes": 149469856,
       "matches_prior_campaign": true
@@ -1038,9 +1038,9 @@
       "matches_prior_campaign": true
     }
   },
-  "prior_binding_ldd": "linux-vdso.so.1 (0x00007203562b4000)\n\tlibamgxsh.so => ~/src/AMGX-build-cuda13/libamgxsh.so (0x000072034e400000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x000072034e000000)\n\tlibcublas.so.13 => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcublas.so.13 (0x000072034a800000)\n\tlibcusparse.so.12 => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcusparse.so.12 (0x0000720340a00000)\n\tlibcusolver.so.12 => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcusolver.so.12 (0x0000720338000000)\n\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x0000720337c00000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x000072035615b000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000072035612d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007203562b6000)\n\tlibcublasLt.so.13 => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcublasLt.so.13 (0x0000720312000000)\n\tlibrt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x0000720356126000)\n\tlibpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x0000720356121000)\n\tlibdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x000072035611c000)\n\tlibnvJitLink.so.13 => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libnvJitLink.so.13 (0x000072030c000000)",
+  "prior_binding_ldd": "linux-vdso.so.1 (0x00007203562b4000)\n\tlibamgxsh.so => ../AMGX-build-cuda13/libamgxsh.so (0x000072034e400000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x000072034e000000)\n\tlibcublas.so.13 => /path/to/cuda-13/targets/x86_64-linux/lib/libcublas.so.13 (0x000072034a800000)\n\tlibcusparse.so.12 => /path/to/cuda-13/targets/x86_64-linux/lib/libcusparse.so.12 (0x0000720340a00000)\n\tlibcusolver.so.12 => /path/to/cuda-13/targets/x86_64-linux/lib/libcusolver.so.12 (0x0000720338000000)\n\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x0000720337c00000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x000072035615b000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000072035612d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007203562b6000)\n\tlibcublasLt.so.13 => /path/to/cuda-13/targets/x86_64-linux/lib/libcublasLt.so.13 (0x0000720312000000)\n\tlibrt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x0000720356126000)\n\tlibpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x0000720356121000)\n\tlibdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x000072035611c000)\n\tlibnvJitLink.so.13 => /path/to/cuda-13/targets/x86_64-linux/lib/libnvJitLink.so.13 (0x000072030c000000)",
   "repositories": {
-    "~/src/hdgfem-gmres": "d44acce873b18daa6507e0c89b20a9e4e5ab913e",
+    "../hdgfem-gmres": "d44acce873b18daa6507e0c89b20a9e4e5ab913e",
     ".": "e40ddd25226ce7b91f64eda18754245f0d9bd426"
   },
   "cpu_tests": {

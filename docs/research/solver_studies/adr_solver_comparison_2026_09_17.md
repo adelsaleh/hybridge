@@ -214,19 +214,19 @@ The unused installed AMGX library differs from the library loaded from the
 build directory. Binary paths, hashes, repository states, worker hashes,
 exact configurations, measurements and failures are retained in
 [`adr_solver_comparison_2026_09_17.data.json`](adr_solver_comparison_2026_09_17.data.json).
-Raw local artifacts are under `~/src/hdgfem-gmres/run_logs/`.
+Raw local artifacts are under `../hdgfem-gmres/run_logs/`.
 
 Use new output directories when replaying the commands below. Each Python
 command runs through the existing guard; this shell function does not build
 anything:
 
 ```bash
-cd ~/src/hdgfem-gmres
+cd ../hdgfem-gmres
 source run_logs/adr_baseline_20260917/environment.sh
 adr_python() {
-  HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-  HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-  HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+  HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+  HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+  HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
     scripts/gpu/run_cuda13.sh python "$@"
 }
 adr_python scripts/run_adr_solver_comparison.py --degree 6 --mesh 32 \

@@ -135,7 +135,7 @@ mode is assigned to this case.
 Run from the repository root (the exports select this machine's installed CUDA toolkit):
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
+export CUDA_PATH=/path/to/cuda-13
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/spiral_sheet_p6_50k_dt002_t100_raw_cuda_bsr.args
@@ -175,8 +175,12 @@ tails cut by the wall). Overlap changes the extrema of the summed field; 360
 blobs does not mean 360 distinct coherent vortices. The default initial field
 has over 300 strong resolved vorticity extrema distributed across the disk.
 
-This is a random Gaussian vortex-gas initialization, a family used for decaying
-2D turbulence; see [Kuznetsov (2016), slides 50-53](https://nonlinearwaves.ipfran.ru/www_2016/materials/Kuznetsov1.pdf).
+This is a random Gaussian vortex-gas initialization. Decaying 2D turbulence
+from random initial fields organizes into a gas of coherent vortices
+([McWilliams, 1984](https://doi.org/10.1017/S0022112084001750);
+[Carnevale et al., 1991](https://doi.org/10.1103/PhysRevLett.66.2735)), and
+starting from such a gas directly is a common shortcut, as in E. A. Kuznetsov's
+Nonlinear Waves 2016 lecture (slides 50-53; the PDF is no longer online).
 Our counts, core sizes, amplitudes and disk geometry define a new test case.
 The initial condition seeds interacting vortices directly. It does not impose
 an inertial-range spectrum or prove a turbulent cascade.
@@ -192,7 +196,7 @@ annular confinement or forcing is added.
 Run from the repository root:
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
+export CUDA_PATH=/path/to/cuda-13
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \
   @run_configs/guiding_center/euler_vortex_gas_p6_50k_dt001_t50_raw_cuda_bsr.args \
@@ -310,8 +314,7 @@ environment is the same as for the disk run above. Seventeen focused checks
 passed, covering circulation balance, reproducibility, both mesh boundaries,
 mesh-cache separation, Holoviz's hole mask, registry integration and CLI
 overrides. Numba compilation was blocked during validation; no builds or time
-integration were run. The geometry-only check also produced an
-[initial-field preview](../artifacts/star_hole_preset/initial_vorticity.png).
+integration were run.
 
 ## Matched-time temporal comparison
 
@@ -400,5 +403,5 @@ Use `--plot-diagnostics` to display them at the end without writing figures, or
 use both flags to save and display.
 For diocotron, this includes the log-log instability norm
 `||phi - phi_eq||_L2` and time-dependent active-mode rankings and spectra.
-See the [geometry and diagnostic plotting guide](../scripts/guiding_center/README.md#horseshoe-iter-like-and-pac-man-euler-gas)
+See the [geometry and diagnostic plotting guide](../scripts/guiding_center/README.md#horseshoe-iter-and-pac-man-euler-gas)
 for commands, profile definitions, and output details.

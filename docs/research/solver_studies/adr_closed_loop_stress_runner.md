@@ -23,9 +23,9 @@ To execute that plan using the already installed ADR environment:
 
 ```bash
 # from the repository root
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --execute
@@ -67,9 +67,9 @@ with six additional CPU direct checks (both mesh sizes):
 
 ```bash
 # from the repository root
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --geometry square \
@@ -191,9 +191,9 @@ on the recorded 47.2 GiB device. Live host RAM, VRAM and disk guards remain on.
 
 ```bash
 # from the repository root
-HYBRIDGE_CUDA13_ROOT=/usr/local/cuda-13.0 \
-HYBRIDGE_AMGX_BUILD_ROOT=~/src/AMGX-build-cuda13 \
-HYBRIDGE_AMGX_INSTALL_ROOT=~/src/AMGX-install-cuda13 \
+HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
+HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
+HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
   scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k \

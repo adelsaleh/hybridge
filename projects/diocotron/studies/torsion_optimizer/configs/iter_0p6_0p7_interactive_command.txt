@@ -1,5 +1,5 @@
 env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  python \
   projects/diocotron/dolfinx/torsion/search/adaptive.py run \
     --transient-output \
     --handoff-eps-phi 0.003 \
@@ -30,7 +30,7 @@ env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
     --search-ranks 20 \
     --optimization-ranks 1 \
     --available-cores 20 \
-    --python ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+    --python python \
     -- \
     --mesh projects/diocotron/runs/torsion_optimizer/meshes/iter-p4-lowdof-h019.msh \
     --order 4 \

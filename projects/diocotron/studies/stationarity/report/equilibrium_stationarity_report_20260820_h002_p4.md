@@ -107,7 +107,7 @@ The final transport validation was run as:
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 mpirun --bind-to core --map-by core -n 16 \
-  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  python \
   projects/diocotron/dolfinx/guiding_center/supg.py \
   --equilibrium projects/diocotron/runs/scratch/torsion_reduced_optimization_homotopy/equilibrium_h002_p4_converged_gridseed_20260820/out/equilibrium.npz \
   --order 4 --dt 0.025 --num-steps 20 \

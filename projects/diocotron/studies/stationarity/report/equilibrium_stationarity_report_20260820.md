@@ -72,7 +72,7 @@ agree across all rank counts to roundoff.
 mpiexec -n 2 env \
   XDG_CACHE_HOME=/tmp/hybridge_fenics_cache \
   MPLCONFIGDIR=/tmp/hybridge_mpl_cache \
-  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  python \
   projects/diocotron/dolfinx/guiding_center/supg.py \
   --equilibrium projects/diocotron/runs/scratch/torsion_reduced_optimization_homotopy/equilibrium_h005_p2_optimized_20260820_20260820-180220-890586/out/equilibrium.npz \
   --order 2 \

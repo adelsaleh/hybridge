@@ -39,8 +39,9 @@ python -m projects.diocotron.dolfinx.torsion.optimization.homotopy --help
 python -m projects.diocotron.hdg.equilibrium.newton --help
 ```
 
-The [project run policy](AGENTS.md) specifies the measured MUMPS rank map and
-one numerical-library thread per rank. HDG GPU configuration continues to use
+Runs with `--linear-solver mumps` use one numerical-library thread per MPI
+rank; the best rank count depends on the mesh size, the order and the machine,
+so benchmark it before long runs. HDG GPU configuration continues to use
 the library's [backend configurations](../../configs/amgx/README.md).
 
 ## Studies and output ownership

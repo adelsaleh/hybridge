@@ -157,8 +157,8 @@ These are diagnostic estimates; the runner does not automatically change dt.
 From the repository root, this machine's CUDA/AMGX environment is:
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
-export LD_LIBRARY_PATH=~/src/AMGX-build-cuda13:~/src/AMGX-install-cuda13/lib:$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+export CUDA_PATH=/path/to/cuda-13
+export LD_LIBRARY_PATH=../AMGX-build-cuda13:../AMGX-install-cuda13/lib:$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HYBRIDGE_PRECISION=float64
 
 .venv/bin/python -m scripts.guiding_center.run_guiding_center_cases \

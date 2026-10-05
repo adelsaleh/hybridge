@@ -41,7 +41,7 @@ retained beside the final results for audit.
 The user ran this one AMGX build; no PyAMGX rebuild was needed. For reproduction:
 
 ```bash
-cmake --build ~/src/AMGX-build-cuda13 --target amgxsh --parallel 2
+cmake --build ../AMGX-build-cuda13 --target amgxsh --parallel 2
 ```
 
 After the build, run the saved-system experiment from the existing environment:

@@ -90,7 +90,7 @@ in mass and energy stays between approximately `1e-14` and `1e-11`.
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 mpirun --bind-to core --map-by core -n 20 \
-  ~/miniforge3/envs/fenicsx-dgfem/bin/python \
+  python \
   projects/diocotron/dolfinx/guiding_center/supg.py \
   --equilibrium projects/diocotron/runs/scratch/torsion_reduced_optimization_homotopy/optimized_h002_p4_cached_certstop_validation_20260820/out/equilibrium.npz \
   --order 4 --quad-degree 16 --dt 0.025 --num-steps 20 \

@@ -113,10 +113,10 @@ Run from the HYBRIDGE repository. These checks use tiny, changing synthetic DG
 coefficient tables and do not run a PDE solve or time integrator:
 
 ```bash
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -B scripts/guiding_center/diagnostics/smoke_holoviz.py
 
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -B scripts/guiding_center/diagnostics/smoke_holoviz.py \
   --save-dir artifacts/holoviz_smoke
 ```
@@ -144,7 +144,7 @@ backend selection, CLI configuration, and explicit saving behavior.
 For a small moving scene that uses the same GPU field sampler and viewer, run:
 
 ```bash
-env LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 CUDA_PATH=/usr/local/cuda-13.0 \
+env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
   .venv/bin/python -B scripts/guiding_center/diagnostics/animate_holoviz.py \
   --duration 60 --fps 20 --size 512
 ```
@@ -189,7 +189,7 @@ frames fixes the minimized-frame queue deadlock but does not release this lock.
 
 The source patch is retained in
 [pyamgx-release-gil.patch](../../patches/pyamgx-release-gil.patch) and has been
-applied to `~/src/pyamgx-hdg-cuda13`. It releases the GIL around
+applied to `../pyamgx-hdg-cuda13`. It releases the GIL around
 native setup and both solve variants, then reacquires it for error handling.
 The AMGX print callback explicitly acquires the GIL before calling Python.
 This does not make concurrent access to the same AMGX handles safe: keep
@@ -198,10 +198,10 @@ solver resources and vectors on the solver thread.
 The installed binary is unchanged until the user rebuilds the binding:
 
 ```bash
-AMGX_DIR=~/src/AMGX-hdg-cuda13 \
-AMGX_BUILD_DIR=~/src/AMGX-build-cuda13 \
+AMGX_DIR=../AMGX-hdg-cuda13 \
+AMGX_BUILD_DIR=../AMGX-build-cuda13 \
 .venv/bin/python -m pip install --no-build-isolation --no-deps --force-reinstall \
-  ~/src/pyamgx-hdg-cuda13
+  ../pyamgx-hdg-cuda13
 ```
 
 Restart the simulation process after rebuilding. This reuses the existing

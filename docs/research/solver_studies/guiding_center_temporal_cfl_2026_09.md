@@ -310,7 +310,7 @@ CUDA/device backends in the machine-readable outputs.
 From the repository root, the recorded environment is:
 
 ```bash
-export CUDA_PATH=/usr/local/cuda-13.0
+export CUDA_PATH=/path/to/cuda-13
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HYBRIDGE_PRECISION=float64
 export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=8

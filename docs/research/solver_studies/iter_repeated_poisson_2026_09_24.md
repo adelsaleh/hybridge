@@ -74,7 +74,7 @@ From the repository root, choose a new empty output directory:
 
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
-  CUDA_PATH=/usr/local/cuda-13.0 LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64 \
+  CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
   -m scripts.guiding_center.poisson.benchmark_repeated_poisson \
   --output run_outputs/solver_studies/iter_repeated_poisson_repeat \

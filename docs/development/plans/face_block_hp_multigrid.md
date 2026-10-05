@@ -94,7 +94,7 @@ The simulation settings match the earlier comparison: FP64, unit disk, signed Ga
 Production defaults are centralized in `hybridge/linalg/multigrid/policy.py::scalar_p0_amgx_config`. The tuning driver anchors the old three-parameter baseline explicitly, so future changes to the production default do not silently relabel the baseline. The original driver and helper used for this study are preserved with the evidence.
 
 ```sh
-CUDA_PATH=/usr/local/cuda-13.0 HYBRIDGE_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.tune_poisson_p0_amgx --order 6 --num-steps 100 --configs artifacts/poisson_p0_tuning_20260913/validation_configs.json --output-dir artifacts/poisson_p0_tuning_20260913/validate_p6_new
+CUDA_PATH=/path/to/cuda-13 HYBRIDGE_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.tune_poisson_p0_amgx --order 6 --num-steps 100 --configs artifacts/poisson_p0_tuning_20260913/validation_configs.json --output-dir artifacts/poisson_p0_tuning_20260913/validate_p6_new
 python3 artifacts/poisson_p0_tuning_20260913/summarize.py
 ```
 
@@ -224,7 +224,7 @@ For context, the native-driven reference trajectory has median linear-step wall 
 Artifacts: `artifacts/poisson_backend_comparison_20260913/` (local, untracked), including raw samples, per-order configurations and completion/failure records, console logs, source/library hashes, `summary.json`, `summary.csv`, and an offline coverage/aggregation script. The driver reuses production runner, solver, predictor, basis, field-norm, and compilation-guard helpers:
 
 ```sh
-CUDA_PATH=/usr/local/cuda-13.0 HYBRIDGE_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.benchmark_poisson_backends --order 6 --num-steps 100 --mesh-size 0.0068 --dt 0.01 --poisson-tau 1 --output-dir artifacts/poisson_backend_comparison_20260913/p6_new
+CUDA_PATH=/path/to/cuda-13 HYBRIDGE_PRECISION=float64 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m scripts.guiding_center.poisson.benchmark_poisson_backends --order 6 --num-steps 100 --mesh-size 0.0068 --dt 0.01 --poisson-tau 1 --output-dir artifacts/poisson_backend_comparison_20260913/p6_new
 python3 artifacts/poisson_backend_comparison_20260913/summarize.py
 ```
 

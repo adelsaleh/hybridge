@@ -27,7 +27,7 @@
   "cutensor": 20800,
   "magma": {
    "version": "2.10.0",
-   "library": "~/src/magma-build-cuda13/lib/libmagma.so"
+   "library": "../magma-build-cuda13/lib/libmagma.so"
   },
   "git_commit": "cb3dcb119de584ddcca18bae309152fe4ba4a482",
   "git_dirty": true,
