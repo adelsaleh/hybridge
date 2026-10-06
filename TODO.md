@@ -91,11 +91,11 @@
     - [x] `docs/releases/early_alpha.md` at `0.1.0a2` with the hosted run URLs; release notes in `docs/releases/0.1.0a2.md`;
     - [x] no machine-local paths in any tracked file; every Markdown link resolves in a clean checkout; external links answer or are Crossref-verified DOIs;
     - [x] verified on a clean checkout of `f823485`: docs, showcase, plotting, packaging, documented-example, layering and env tests pass (44);
-    - [ ] post the four published videos (`outputs/readme_showcase/published/`) as four comments in issue #1 (light and dark per video); then point each poster at its comment;
+    - [x] post the four published videos (`outputs/readme_showcase/published/`) as four comments in issue #1 (light and dark per video); then point each poster at its comment. Done 2026-10-06: each attachment was downloaded and matches its recorded SHA-256, and each README poster links to its comment;
     - [ ] Schwander's and Capasso's emails in `AUTHORS.md` (not publicly listed);
     - [ ] verify the README install path from a fresh clone;
     - [ ] rerun the plotting, showcase and documentation tests on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
-    - [ ] PyPI project description: `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it; update its poster links with the README's once the videos are posted;
+    - [ ] PyPI project description: `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it (its poster already links to the vortex-gas comment);
     - [ ] push `master` (the user pushes).
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;
