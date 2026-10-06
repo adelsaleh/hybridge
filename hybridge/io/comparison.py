@@ -69,10 +69,12 @@ def plot_sampled_solution_comparison(
     exact_reference_points, _, exact_display_values = sample_callable_on_elements(
         mesh, exact_solution, resolution=exact_panel_resolution,
     )
+    degree = "" if polynomial_order is None else f", p = {int(polynomial_order)}"
+    post_degree = "" if polynomial_order is None else f", p = {int(polynomial_order) + 1}"
     if backend == "matplotlib" or (backend == "auto" and mesh.num_tri <= 130):
-        panels = [("Numerical solution", primary.reference_points, primary.numerical_values)]
+        panels = [("Numerical solution" + degree, primary.reference_points, primary.numerical_values)]
         if post is not None:
-            panels.append(("Postprocessed primal", post.reference_points, post.numerical_values))
+            panels.append(("Postprocessed primal" + post_degree, post.reference_points, post.numerical_values))
         panels.append(("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}))
         if show_error:
             panels.append((
@@ -111,9 +113,9 @@ def plot_sampled_solution_comparison(
         "position_x": 0.225,
         "position_y": 0.02,
     }
-    panels = [("Numerical solution", primary.reference_points, primary.numerical_values, None, "viridis", True)]
+    panels = [("Numerical solution" + degree, primary.reference_points, primary.numerical_values, None, "viridis", True)]
     if post is not None:
-        panels.append(("Postprocessed primal", post.reference_points, post.numerical_values, None, "viridis", True))
+        panels.append(("Postprocessed primal" + post_degree, post.reference_points, post.numerical_values, None, "viridis", True))
     panels.append(("Exact solution", exact_reference_points, exact_display_values, None, "viridis", False))
     if show_error:
         panels.append((
