@@ -4,7 +4,9 @@ The [README](../../README.md) shows two degree-6 HDG calculations on the same
 five-lobed star with a circular island. The signed run is exactly the
 simulation of the [example script](../../examples/gpu_vortex_gas.py); the
 recorder `scripts/reports/record_gpu_showcase.py` builds the same solvers
-through `scripts/reports/gpu_showcase_setup.py`, runs the same time loop, and
+through `scripts/reports/gpu_showcase_setup.py`, runs the same time loop
+(forming the BDF2 data through `hdg.bdf2_transport_data`, which computes the
+example's `s` and `beta` with input checks), and
 adds Matplotlib rendering, diagnostics, a final checkpoint, and provenance.
 The published positive run also applies a KKT positivity projection after each
 transport step. It was recorded on the `positivity-kkt` development branch,
