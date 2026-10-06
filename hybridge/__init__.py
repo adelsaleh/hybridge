@@ -5,6 +5,13 @@ spaces, fields, reusable HDG assembly helpers, sparse solvers, and executable
 advection-reaction and diffusion-reaction solver modules.
 """
 
+from importlib import metadata as _metadata
+
+try:
+    __version__ = _metadata.version("hybridge")
+except _metadata.PackageNotFoundError:  # A source tree that is not installed.
+    __version__ = "unknown"
+
 from hybridge.core.mesh import (
     DGMesh,
     as_dg_mesh,
