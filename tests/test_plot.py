@@ -232,8 +232,8 @@ def test_raster_panels_reject_invalid_input(panels, bounds, message):
         plot_scalar_raster_panels_matplotlib(panels, bounds, show=False)
 
 
-def test_postprocessed_comparison_shares_one_scale_and_reports_errors():
-    """HDG solution, postprocessed field and exact solution share a colorbar."""
+def test_postprocessed_comparison_uses_the_sampled_comparison_panels():
+    """HDG solution, postprocessed field, exact solution and postprocessed error."""
     from hybridge import DGSpace, project_callable
     from hybridge.io import plot_solution_comparison
 
@@ -241,12 +241,13 @@ def test_postprocessed_comparison_shares_one_scale_and_reports_errors():
     exact = lambda x, y: np.sin(np.pi * x) * np.sin(np.pi * y)
     field = project_callable(exact, DGSpace(mesh, 1, basis_type="dub_orth"))
     post = project_callable(exact, DGSpace(mesh, 2, basis_type="dub_orth"))
-    figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12, show=False)
+    figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12,
+                                      backend="matplotlib", show=False)
     titles = [ax.get_title() for ax in figure.axes if ax.get_title()]
-    assert titles[0].startswith("HDG solution, p = 1") and "L2 error" in titles[0]
-    assert titles[1].startswith("Postprocessed, p = 2") and "L2 error" in titles[1]
-    assert titles[2] == "Exact solution"
-    assert len(figure.axes) == 4                     # three panels and one shared colorbar
+    assert titles == ["Numerical solution", "Postprocessed primal", "Exact solution",
+                      "Postprocessed absolute error"]
+    with pytest.raises(ValueError, match="backend"):
+        plot_solution_comparison(field, exact, postprocessed=post, backend="svg", show=False)
 
 
 def test_apply_figure_theme_recolors_text_on_a_clear_background():
