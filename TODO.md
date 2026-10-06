@@ -33,11 +33,11 @@
 
 ### First Alpha Release Gate
 
-- [x] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`. Passed 2026-10-05 (runs 37290623238 and 37293934813 on PR #2; host jobs took 4.8–5.8 min, package 56 s). The URL goes into `early_alpha.md` with the 0.1.0a2 evidence. The first hosted attempt exposed release-environment gaps rather than solver failures: Python 3.10 lacked the `tomllib` backport and the test extra omitted Matplotlib while `host-fast` exercised temporal-convergence plotting. The package metadata and compatibility import now cover both; rerun evidence is pending.
+- [x] Run a hosted full-suite sanity pass for both Python 3.10 and 3.12, then attach the workflow run URL and final duration summary to `docs/releases/early_alpha.md`. Passed 2026-10-05 (runs 37290623238 and 37293934813 on PR #2; host jobs took 4.8–5.8 min, package 56 s). Both run URLs are in `early_alpha.md`. The first hosted attempt exposed release-environment gaps rather than solver failures: Python 3.10 lacked the `tomllib` backport and the test extra omitted Matplotlib while `host-fast` exercised temporal-convergence plotting. The package metadata and compatibility import now cover both, and the two runs above are the passing rerun.
 - [x] Confirm no documentation links are stale via the docs structure check (5 passed):
   - run: `pytest tests/test_documentation_structure.py`
   - all generated links in `README.md`, `MANUAL.md`, `TODO.md`, and `docs/**/*.md` remain resolvable locally.
-- [ ] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied.
+- [x] Keep the two requirements above as the explicit alpha launch preconditions and mark this section complete only after both are satisfied. Both were satisfied on 2026-10-05.
 - [ ] Make the project public as **HYBRIDGE** (HYBRIdizable Discontinuous Galerkin Environment) with the `0.1.0a2` alpha release. The GENCI/IDRIS H100 allocation request names HYBRIDGE in its published summary and links https://github.com/adelsaleh/hybridge; it is submitted only after this public release.
   - Decisions (2026-10-04):
     - version `0.1.0a2`; the existing `v0.1.0a1` tag and GitHub release (2026-08-05) stay and become public with the repository;
@@ -56,7 +56,7 @@
     - include the `diocotron-dolfinx` branch's `projects/diocotron` data (576 MiB, commit `350fe41`), the strategy-A study, the tracked movies, and untracked local evidence (`outputs/`, `run_outputs/`, `artifacts/`, `run_logs/`);
     - later, mirror the same refs into a private GitHub archive repository as a second copy.
   - Phase 1, finish the branch (local):
-    - [x] publish the full positive-density showcase. Done 2026-10-04 (`5b5b58e`): one segment from the clean `79e9cdf` tree, 16,384 steps to t = 6.4, no host recovery. The Positive column, recovery sentence, poster time (6) and README caption are filled, and a docs test rejects leftover double-brace template placeholders. Still open: upload the new MP4 as a GitHub attachment (issue #1 hosts the README videos) and replace the README's old `user-attachments` URL;
+    - [x] publish the full positive-density showcase. Done 2026-10-04 (`5b5b58e`): one segment from the clean `79e9cdf` tree, 16,384 steps to t = 6.4, no host recovery. The Positive column, recovery sentence, poster time (6) and README caption are filled, and a docs test rejects leftover double-brace template placeholders. The README now shows theme posters instead of embedded video (Phase 4 below), so the old `user-attachments` URL is gone; the remaining upload is the Phase 4 video item;
     - [x] remove machine-local artifacts from the tree. Done 2026-10-04:
       - 223 files were first copied, hash-verified, to `../hybridge-archive/removed-from-tree/` with a manifest;
       - absolute home-directory paths in 34 files (docs and run-provenance JSON/CSV) are now relative to the repository root or its parent directory, and one recorded workstation hostname is anonymized;
@@ -94,6 +94,8 @@
     - [ ] post the four published videos (`outputs/readme_showcase/published/`) as four comments in issue #1 (light and dark per video); then point each poster at its comment;
     - [ ] Schwander's and Capasso's emails in `AUTHORS.md` (not publicly listed);
     - [ ] verify the README install path from a fresh clone;
+    - [ ] rerun the plotting, showcase and documentation tests on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
+    - [ ] PyPI project description: `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it; update its poster links with the README's once the videos are posted;
     - [ ] push `master` (the user pushes).
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;
@@ -131,7 +133,7 @@ Research studies in later sections inform future solver choices but do not block
   seconds on 2026-08-05; rerun evidence is recorded in
   `docs/releases/early_alpha.md`.
 - [x] Prepare the local `0.1.0a1` release candidate: remove patch-backup artifacts, ignore future `*.orig` files, rerun all four blocking lanes, build the wheel and sdist, inspect archive contents, and pass `twine check`. The exact committed revision and hosted workflow URL remain pre-tag work.
-- [ ] Obtain the first clean hosted `early-alpha` workflow pass on Python 3.10 and 3.12 and attach the run URL to `docs/releases/early_alpha.md`. The initial run found missing Python 3.10 TOML compatibility and Matplotlib test dependencies; both contracts are fixed locally, but the rerun must pass before the alpha tag.
+- [x] Obtain the first clean hosted `early-alpha` workflow pass on Python 3.10 and 3.12 and attach the run URL to `docs/releases/early_alpha.md`. The initial run found missing Python 3.10 TOML compatibility and Matplotlib test dependencies. Done 2026-10-05: with both fixed, runs 37290623238 and 37293934813 passed, and their URLs are in `early_alpha.md`. The run on the final `master` push is the evidence for the tag (Phase 4).
 
 ### Explicitly Non-Blocking Alpha Follow-Up
 

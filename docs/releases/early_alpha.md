@@ -233,3 +233,10 @@ Known deviations and tracking issue:
   scheduled evidence, not part of the per-change host lane.
 - High-mode guiding-center transport failure recovery and the CG/SUPG/FEniCS
   comparisons remain open research and validation work.
+- The default diffusion stabilization, `stabilization="global_length"`, sets
+  τ = κ/L_Ω with L_Ω = 2|Ω|/|∂Ω|, so τ shrinks as the domain grows (0.25 for
+  κ = 1 on [-4, 4]²). On large domains the HDG solution then loses accuracy,
+  while the degree-`p+1` postprocessed field is much less affected; the
+  README's first solve passes `stabilization=1.`. The
+  [stabilization plan](../development/plans/diffusion_stabilization_global_scales.md)
+  tracks the choice of default.

@@ -32,6 +32,13 @@ def test_alpha_package_metadata_declares_bounded_runtime_and_extras() -> None:
     assert "Development Status :: 3 - Alpha" in project["classifiers"]
 
 
+def test_package_reports_the_version_being_released() -> None:
+    """``hybridge.__version__`` comes from the installed distribution metadata."""
+    import hybridge
+
+    assert hybridge.__version__ == _metadata()["project"]["version"]
+
+
 def test_setuptools_discovers_every_hybridge_subpackage() -> None:
     metadata = _metadata()
     assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["hybridge*"]

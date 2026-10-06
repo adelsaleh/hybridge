@@ -1,4 +1,8 @@
 # Release Evidence
 
-- [`early_alpha.md`](early_alpha.md): current `0.1.0a1` local qualification,
-  artifact checks, known gaps, and hosted-CI requirement.
+- [`0.1.0a2.md`](0.1.0a2.md): release notes for `0.1.0a2`, the first public
+  HYBRIDGE release: upgrading from `hdgfem` `0.1.0a1`, new features, fixes,
+  and known gaps.
+- [`early_alpha.md`](early_alpha.md): qualification evidence for `0.1.0a2`
+  and `0.1.0a1`: release lanes, hosted CI runs, artifact checks, and known
+  gaps.
