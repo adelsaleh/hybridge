@@ -246,6 +246,9 @@ def test_postprocessed_comparison_uses_the_sampled_comparison_panels():
     titles = [ax.get_title() for ax in figure.axes if ax.get_title()]
     assert titles == ["Numerical solution", "Postprocessed primal", "Exact solution",
                       "Postprocessed absolute error"]
+    figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12,
+                                      backend="matplotlib", show_error=False, show=False)
+    assert [ax.get_title() for ax in figure.axes if ax.get_title()] == titles[:3]
     with pytest.raises(ValueError, match="backend"):
         plot_solution_comparison(field, exact, postprocessed=post, backend="svg", show=False)
 

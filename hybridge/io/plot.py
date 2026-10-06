@@ -1013,6 +1013,7 @@ def plot_solution_comparison(
         off_screen: bool = False,
         window_size: tuple[int, int] = (1800, 650),
         backend: str = "auto",
+        show_error: bool = True,
 ):
     """Plot numerical solution, exact solution, and absolute error.
 
@@ -1028,7 +1029,8 @@ def plot_solution_comparison(
     ``hdg_postprocess="primal"``), the plot is
     :func:`hybridge.io.comparison.plot_sampled_solution_comparison`: HDG
     solution, postprocessed field, exact solution and postprocessed error, as
-    drawn by the diffusion-reaction case runner.
+    drawn by the diffusion-reaction case runner; ``show_error=False`` drops
+    the error panel.
 
     ``backend`` is ``"matplotlib"``, ``"pyvista"``, or ``"auto"`` (Matplotlib
     for meshes of at most 130 triangles, PyVista otherwise).
@@ -1061,6 +1063,7 @@ def plot_solution_comparison(
             show=show,
             off_screen=off_screen,
             backend=backend,
+            show_error=show_error,
         )
     reference_points, physical_points, numerical_values = sample_field_on_elements(
         field,
