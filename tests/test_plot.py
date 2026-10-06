@@ -244,7 +244,7 @@ def test_postprocessed_comparison_uses_the_sampled_comparison_panels():
     figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12,
                                       backend="matplotlib", show=False)
     titles = [ax.get_title() for ax in figure.axes if ax.get_title()]
-    assert titles == ["Numerical solution", "Postprocessed primal", "Exact solution",
+    assert titles == ["Numerical solution, p = 1", "Postprocessed primal, p = 2", "Exact solution",
                       "Postprocessed absolute error"]
     figure = plot_solution_comparison(field, exact, postprocessed=post, exact_resolution=12,
                                       backend="matplotlib", show_error=False, show=False)

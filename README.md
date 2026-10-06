@@ -27,6 +27,8 @@ shown below, is one application of the library.
 
 <!-- showcase-video: vortex_gas -->
 
+<div>
+
 <a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_light.png#gh-light-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
 <a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_dark.png#gh-dark-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
 
@@ -37,6 +39,8 @@ per field and couples 3.77 million trace unknowns in each of its two solves per
 step, at 0.74 s per time step, including rendering, on one NVIDIA RTX PRO 5000
 Blackwell. The total charge changes by 2.2e-13 and the energy drifts by 2.9e-4,
 while 29.9% of the enstrophy is dissipated as filaments reach the grid.*
+
+</div>
 
 ## Installation
 
@@ -130,11 +134,17 @@ plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed
                          exact_resolution=48, backend="matplotlib", show_error=False)
 ```
 
+<div>
+
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_light.png#gh-light-mode-only)
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_dark.png#gh-dark-mode-only)
 
-The figure corresponds to the example above. The
-[minimal examples](MANUAL.md#minimal-end-to-end-examples) add
+*The example above: the HDG solution with polynomials of degree 4, its
+postprocessed field of degree 5, and the exact solution.*
+
+</div>
+
+The [minimal examples](MANUAL.md#minimal-end-to-end-examples) add
 advection and an independent residual check; run them with
 `python examples/diffusion_reaction_minimal.py` and
 `python examples/advection_reaction_minimal.py`.
@@ -253,6 +263,8 @@ GPUs.
 
 <!-- showcase-video: positive_density -->
 
+<div>
+
 <a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_light.png#gh-light-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
 <a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_dark.png#gh-dark-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
 
@@ -264,6 +276,8 @@ charge, so no pixel falls into the pink used for negative density. The total
 charge changes by 2.4e-11, the energy drifts by 4.1e-5, and 8.2% of the
 enstrophy is dissipated. The KKT projection is on the `positivity-kkt`
 development branch and is not part of this release.*
+
+</div>
 
 The [reproduction guide](docs/getting_started/gpu_showcase.md) gives the
 recording commands, the time-step, mesh, and stabilization checks behind both
