@@ -1012,6 +1012,7 @@ def _plot_postprocessed_comparison(
         show: bool,
         off_screen: bool,
         window_size: tuple[int, int],
+        use_matplotlib: bool,
 ):
     """Plot the HDG solution, its postprocessed field and the exact solution on one scale."""
     mesh = field.space.mesh
@@ -1033,7 +1034,7 @@ def _plot_postprocessed_comparison(
         f"L2 error {postprocessed.l2_error(exact_solution):.1e}",
         "Exact solution",
     )
-    if mesh.num_tri <= 130:
+    if use_matplotlib:
         return plot_scalar_sample_panels_matplotlib(
             mesh,
             (
@@ -1107,6 +1108,7 @@ def plot_solution_comparison(
         show: bool = True,
         off_screen: bool = False,
         window_size: tuple[int, int] = (1800, 650),
+        backend: str = "auto",
 ):
     """Plot numerical solution, exact solution, and absolute error.
 
@@ -1122,7 +1124,13 @@ def plot_solution_comparison(
     ``hdg_postprocess="primal"``), the panels are the HDG solution, the
     postprocessed field and the exact solution, on one color scale, each
     numerical panel titled with its L2 error.
+
+    ``backend`` is ``"matplotlib"``, ``"pyvista"``, or ``"auto"`` (Matplotlib
+    for meshes of at most 130 triangles, PyVista otherwise).
     """
+    if backend not in ("auto", "matplotlib", "pyvista"):
+        raise ValueError("backend must be 'auto', 'matplotlib' or 'pyvista'")
+    use_matplotlib = backend == "matplotlib" or (backend == "auto" and field.space.mesh.num_tri <= 130)
     if postprocessed is not None:
         return _plot_postprocessed_comparison(
             field,
@@ -1135,6 +1143,7 @@ def plot_solution_comparison(
             show=show,
             off_screen=off_screen,
             window_size=window_size,
+            use_matplotlib=use_matplotlib,
         )
     reference_points, physical_points, numerical_values = sample_field_on_elements(
         field,
@@ -1158,7 +1167,7 @@ def plot_solution_comparison(
         exact_solution,
         resolution=exact_panel_resolution,
     )
-    if field.space.mesh.num_tri <= 130:
+    if use_matplotlib:
         return plot_scalar_sample_panels_matplotlib(
             field.space.mesh,
             (

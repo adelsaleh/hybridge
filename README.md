@@ -38,6 +38,37 @@ step, at 0.74 s per time step, including rendering, on one NVIDIA RTX PRO 5000
 Blackwell. The total charge changes by 2.2e-13 and the energy drifts by 2.9e-4,
 while 29.9% of the enstrophy is dissipated as filaments reach the grid.*
 
+## Installation
+
+From a checkout, with Python 3.10 or newer:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[mesh,plot]'
+```
+
+The base package needs NumPy, SciPy, and Numba; `python -m pip install .`
+installs only those, which is enough for the [first solve](#a-first-solve-on-the-cpu).
+The command above adds Gmsh for geometry and Matplotlib/PyVista for plotting.
+Optional runtimes depend on the workflow:
+
+| Workflow | Runtime and setup |
+|---|---|
+| Large CPU direct solves | [PyPardiso / oneMKL](MANUAL.md#pypardiso-host-direct-solver) |
+| GPU solves | Linux, CUDA 13, CuPy, and the [forked AMGX/PyAMGX stack](docs/getting_started/forked_amgx_stack.md), connected as in the [GPU runtime guide](docs/getting_started/installation.md#gpu-runtime) |
+| Live GPU visualization | [NVIDIA Holoviz](docs/backends/holoviz.md) (`holoviz` extra) |
+| PETSc solves | [PETSc and petsc4py](MANUAL.md#petsc) |
+
+The GPU solves use our forks of [NVIDIA AMGX](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration)
+and [PyAMGX](https://github.com/adelsaleh/pyamgx/tree/quality-of-life), which
+add HDG block systems and GPU diagnostics. The
+[fork setup guide](docs/getting_started/forked_amgx_stack.md) lists the tested
+revisions and build steps. Importing `hybridge` needs none of the optional
+runtimes; the [installation guide](docs/getting_started/installation.md) covers
+every dependency group.
+
 ## What you can build
 
 The library provides three complementary PDE solvers:
@@ -74,40 +105,9 @@ polynomial degree, and requested recovery. The
 combinations, and the [numerical formulations](docs/algorithms/README.md)
 explain the discretizations.
 
-## Installation
-
-From a checkout, with Python 3.10 or newer:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[mesh,plot]'
-```
-
-The base package needs NumPy, SciPy, and Numba; `python -m pip install .`
-installs only those, which is enough for the [first solve](#a-first-solve-on-the-cpu).
-The command above adds Gmsh for geometry and Matplotlib/PyVista for plotting.
-Optional runtimes depend on the workflow:
-
-| Workflow | Runtime and setup |
-|---|---|
-| Large CPU direct solves | [PyPardiso / oneMKL](MANUAL.md#pypardiso-host-direct-solver) |
-| GPU solves | Linux, CUDA 13, CuPy, and the [forked AMGX/PyAMGX stack](docs/getting_started/forked_amgx_stack.md), connected as in the [GPU runtime guide](docs/getting_started/installation.md#gpu-runtime) |
-| Live GPU visualization | [NVIDIA Holoviz](docs/backends/holoviz.md) (`holoviz` extra) |
-| PETSc solves | [PETSc and petsc4py](MANUAL.md#petsc) |
-
-The GPU solves use our forks of [NVIDIA AMGX](https://github.com/adelsaleh/AMGX/tree/hdg-cuda13-integration)
-and [PyAMGX](https://github.com/adelsaleh/pyamgx/tree/quality-of-life), which
-add HDG block systems and GPU diagnostics. The
-[fork setup guide](docs/getting_started/forked_amgx_stack.md) lists the tested
-revisions and build steps. Importing `hybridge` needs none of the optional
-runtimes; the [installation guide](docs/getting_started/installation.md) covers
-every dependency group.
-
 ## A first solve on the CPU
 
-A manufactured Poisson problem on the square [-2.5, 2.5]². The solve needs only the
+A manufactured Poisson problem on the square [-5, 5]². The solve needs only the
 base installation; the plot also needs the `plot` extra:
 
 ```python
@@ -115,29 +115,25 @@ import numpy as np
 from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
 from hybridge.io import plot_solution_comparison
 
-mesh = rectangle_mesh(8, 8, xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
-space = DGSpace(mesh, 2, basis_type="dub_orth")
+mesh = rectangle_mesh(20, 20, xlim=(-5., 5.), ylim=(-5., 5.))
+space = DGSpace(mesh, 3, basis_type="dub_orth")
 exact = lambda x, y: np.sin(x**2 + y**2) + np.sin(x*y)
 source = lambda x, y: ((x**2 + y**2) * (4*np.sin(x**2 + y**2) + np.sin(x*y))
                        - 4*np.cos(x**2 + y**2))     # -Δu = source, u = exact on the boundary.
 
 result = solve_diffusion_reaction_hdg(
-    source, lambda x, y: 0.*x, exact, space, solver="direct", preconditioner=None,
-    boundary_mode="eliminate", hdg_postprocess="primal", verbose=False)
+    source, lambda x, y: 0.*x, exact, space, stabilization=1., solver="direct",
+    preconditioner=None, boundary_mode="eliminate", hdg_postprocess="primal", verbose=False)
 print(f"L2 error {result.field.l2_error(exact):.1e} on {mesh.num_tri} triangles")
 print(f"after postprocessing {result.postprocessed_field.l2_error(exact):.1e}")
 plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed_field,
-                         exact_resolution=40)
+                         exact_resolution=24, backend="matplotlib")
 ```
 
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_light.png#gh-light-mode-only)
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_dark.png#gh-dark-mode-only)
 
-On this deliberately coarse mesh the degree-2 solution misses the outer ring
-and jumps between elements, with an L2 error of 1.5. Postprocessing recovers,
-element by element, a degree-3 field from the solution and the HDG flux: its
-error is 0.099, 15 times smaller, and it converges one order faster (h⁴ instead
-of h³). This completes the HDG pipeline. The
+The figure corresponds to the example above. The
 [minimal examples](MANUAL.md#minimal-end-to-end-examples) add
 advection and an independent residual check; run them with
 `python examples/diffusion_reaction_minimal.py` and
