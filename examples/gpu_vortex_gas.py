@@ -45,9 +45,11 @@ def main():
         plot.update_fields((rho, potential.field), limits=limits)
 
         for step in range(1, steps + 1):
-            source, beta, _ = hdg.bdf2_transport_data(
-                rho, velocity, dt,
-                previous_field=previous_rho, previous_velocity=previous_velocity)
+            if previous_rho is None:                               # Euler startup.
+                source, beta = rho, dt * velocity
+            else:                                                  # BDF2.
+                source = (4 * rho - previous_rho) / 3
+                beta = (2 * dt / 3) * (2 * velocity - previous_velocity)
             next_rho = transport.solve(source=source, beta=beta, reaction=one).field
             potential = poisson.set_source(next_rho).solve()       # Both solves warm-start.
 
