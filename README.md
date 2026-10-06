@@ -29,8 +29,8 @@ shown below, is one application of the library.
 
 <div>
 
-<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_light.png#gh-light-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
-<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/vortex_gas_dark.png#gh-dark-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1#issuecomment-6020124224"><img src="docs/getting_started/media/vortex_gas_light.png#gh-light-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1#issuecomment-6020130865"><img src="docs/getting_started/media/vortex_gas_dark.png#gh-dark-mode-only" alt="Two-species guiding-center plasma: charge density and potential at t = 6. Click to play the video."></a>
 
 *Positive and negative charge drifting between grounded walls: the plasma form
 of a two-dimensional vortex gas, from t = 0 to 15.9; click the image to play the
@@ -269,8 +269,8 @@ GPUs.
 
 <div>
 
-<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_light.png#gh-light-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
-<a href="https://github.com/adelsaleh/hybridge/issues/1"><img src="docs/getting_started/media/positive_density_dark.png#gh-dark-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1#issuecomment-6020139247"><img src="docs/getting_started/media/positive_density_light.png#gh-light-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
+<a href="https://github.com/adelsaleh/hybridge/issues/1#issuecomment-6020149698"><img src="docs/getting_started/media/positive_density_dark.png#gh-dark-mode-only" alt="Single-species guiding-center plasma with KKT positivity preservation at t = 6. Click to play the video."></a>
 
 *The same domain with positive charge only and KKT positivity preservation, from
 t = 0 to 6.4; click the image to play the video. Like-signed charge rolls up and
