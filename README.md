@@ -107,7 +107,7 @@ explain the discretizations.
 
 ## A first solve on the CPU
 
-A manufactured Poisson problem on the square [-5, 5]². The solve needs only the
+A manufactured Poisson problem on the square [-4, 4]². The solve needs only the
 base installation; the plot also needs the `plot` extra:
 
 ```python
@@ -115,8 +115,8 @@ import numpy as np
 from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
 from hybridge.io import plot_solution_comparison
 
-mesh = rectangle_mesh(10, 10, xlim=(-5., 5.), ylim=(-5., 5.))
-space = DGSpace(mesh, 5, basis_type="dub_orth")
+mesh = rectangle_mesh(10, 10, xlim=(-4., 4.), ylim=(-4., 4.))
+space = DGSpace(mesh, 4, basis_type="dub_orth")
 exact = lambda x, y: np.sin(x**2 + y**2) + np.sin(x*y)
 source = lambda x, y: ((x**2 + y**2) * (4*np.sin(x**2 + y**2) + np.sin(x*y))
                        - 4*np.cos(x**2 + y**2))     # -Δu = source, u = exact on the boundary.
