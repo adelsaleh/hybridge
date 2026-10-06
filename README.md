@@ -127,7 +127,7 @@ result = solve_diffusion_reaction_hdg(
 print(f"L2 error {result.field.l2_error(exact):.1e} on {mesh.num_tri} triangles")
 print(f"after postprocessing {result.postprocessed_field.l2_error(exact):.1e}")
 plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed_field,
-                         exact_resolution=48, backend="matplotlib")
+                         exact_resolution=48, backend="matplotlib", show_error=False)
 ```
 
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_light.png#gh-light-mode-only)

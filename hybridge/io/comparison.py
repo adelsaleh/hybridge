@@ -48,10 +48,11 @@ def plot_sampled_solution_comparison(
         show: bool = True,
         off_screen: bool = False,
         backend: str = "auto",
+        show_error: bool = True,
 ):
     """Plot numerical, exact, and error panels from backend-generated samples.
 
-    ``backend`` is ``"matplotlib"`` (discontinuous per-element contours),
+    ``show_error=False`` leaves out the absolute-error panel. ``backend`` is ``"matplotlib"`` (discontinuous per-element contours),
     ``"pyvista"``, or ``"auto"`` (Matplotlib up to 130 triangles).
     """
     if backend not in ("auto", "matplotlib", "pyvista"):
@@ -72,15 +73,14 @@ def plot_sampled_solution_comparison(
         panels = [("Numerical solution", primary.reference_points, primary.numerical_values)]
         if post is not None:
             panels.append(("Postprocessed primal", post.reference_points, post.numerical_values))
-        panels.extend((
-            ("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}),
-            (
+        panels.append(("Exact solution", exact_reference_points, exact_display_values, {"show_mesh": False}))
+        if show_error:
+            panels.append((
                 "Absolute error" if post is None else "Postprocessed absolute error",
                 displayed.reference_points,
                 displayed_error,
                 {"cmap": "magma", "zero_min": True},
-            ),
-        ))
+            ))
         order = (
             int(polynomial_order) + (1 if post is not None else 0)
             if polynomial_order is not None
@@ -102,7 +102,7 @@ def plot_sampled_solution_comparison(
     upper = float(np.percentile(finite, 95.0)) if finite.size else 1.0
     error_clim = (0.0, upper if np.isfinite(upper) and upper > 0.0 else 1.0)
     pv = _require_pyvista()
-    panel_count = 4 if post is not None else 3
+    panel_count = 2 + (post is not None) + bool(show_error)
     plotter = pv.Plotter(shape=(1, panel_count), window_size=[600 * panel_count, 650], off_screen=off_screen)
     scalar_bar_args = {
         "vertical": False,
@@ -114,17 +114,16 @@ def plot_sampled_solution_comparison(
     panels = [("Numerical solution", primary.reference_points, primary.numerical_values, None, "viridis", True)]
     if post is not None:
         panels.append(("Postprocessed primal", post.reference_points, post.numerical_values, None, "viridis", True))
-    panels.extend((
-        ("Exact solution", exact_reference_points, exact_display_values, None, "viridis", False),
-        (
+    panels.append(("Exact solution", exact_reference_points, exact_display_values, None, "viridis", False))
+    if show_error:
+        panels.append((
             "Absolute error" if post is None else "Postprocessed absolute error",
             displayed.reference_points,
             displayed_error,
             error_clim,
             "magma",
             True,
-        ),
-    ))
+        ))
     for column, (panel_title, reference_points, values, clim, cmap, panel_mesh) in enumerate(panels):
         display_title = panel_title if column != 0 or not title else f"{panel_title}\n{title}"
         add_samples_to_plotter(
