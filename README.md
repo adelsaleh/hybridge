@@ -115,8 +115,8 @@ import numpy as np
 from hybridge import DGSpace, rectangle_mesh, solve_diffusion_reaction_hdg
 from hybridge.io import plot_solution_comparison
 
-mesh = rectangle_mesh(20, 20, xlim=(-5., 5.), ylim=(-5., 5.))
-space = DGSpace(mesh, 3, basis_type="dub_orth")
+mesh = rectangle_mesh(10, 10, xlim=(-5., 5.), ylim=(-5., 5.))
+space = DGSpace(mesh, 5, basis_type="dub_orth")
 exact = lambda x, y: np.sin(x**2 + y**2) + np.sin(x*y)
 source = lambda x, y: ((x**2 + y**2) * (4*np.sin(x**2 + y**2) + np.sin(x*y))
                        - 4*np.cos(x**2 + y**2))     # -Δu = source, u = exact on the boundary.
@@ -127,7 +127,7 @@ result = solve_diffusion_reaction_hdg(
 print(f"L2 error {result.field.l2_error(exact):.1e} on {mesh.num_tri} triangles")
 print(f"after postprocessing {result.postprocessed_field.l2_error(exact):.1e}")
 plot_solution_comparison(result.field, exact, postprocessed=result.postprocessed_field,
-                         exact_resolution=24, backend="matplotlib")
+                         exact_resolution=48, backend="matplotlib")
 ```
 
 ![HDG solution, postprocessed field and exact solution](docs/getting_started/media/first_solve_light.png#gh-light-mode-only)

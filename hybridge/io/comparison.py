@@ -47,8 +47,15 @@ def plot_sampled_solution_comparison(
         show_mesh: bool = True,
         show: bool = True,
         off_screen: bool = False,
+        backend: str = "auto",
 ):
-    """Plot numerical, exact, and error panels from backend-generated samples."""
+    """Plot numerical, exact, and error panels from backend-generated samples.
+
+    ``backend`` is ``"matplotlib"`` (discontinuous per-element contours),
+    ``"pyvista"``, or ``"auto"`` (Matplotlib up to 130 triangles).
+    """
+    if backend not in ("auto", "matplotlib", "pyvista"):
+        raise ValueError("backend must be 'auto', 'matplotlib' or 'pyvista'")
     primary = _coerce_samples(samples)
     post = None if postprocessed_samples is None else _coerce_samples(postprocessed_samples)
     displayed = primary if post is None else post
@@ -61,7 +68,7 @@ def plot_sampled_solution_comparison(
     exact_reference_points, _, exact_display_values = sample_callable_on_elements(
         mesh, exact_solution, resolution=exact_panel_resolution,
     )
-    if mesh.num_tri <= 130:
+    if backend == "matplotlib" or (backend == "auto" and mesh.num_tri <= 130):
         panels = [("Numerical solution", primary.reference_points, primary.numerical_values)]
         if post is not None:
             panels.append(("Postprocessed primal", post.reference_points, post.numerical_values))
