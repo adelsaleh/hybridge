@@ -36,7 +36,7 @@ A DOLFINx continuous-Galerkin fixed-mesh comparison runner is also available
 when the `fenics-dolfinx` environment is installed:
 
 ```bash
-/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+python \
   scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
   --mesh run_logs/diocotron_equilibrium_torsion_intialized/<run>/initial_mesh.msh \
   --order 2 --linear-solver mumps
@@ -118,7 +118,7 @@ PETSc support is optional.  The core package only depends on NumPy, SciPy, and
 Numba; PETSc is imported lazily when `--petsc` or `solver="petsc"` is used.
 
 Use a PETSc build with matching `petsc4py`.  For example, after configuring and
-building PETSc 3.22.2 in `~/opt/petsc` with `PETSC_ARCH=arch-linux-c-opt`:
+building PETSc 3.22.2 in `/path/to/petsc` with `PETSC_ARCH=arch-linux-c-opt`:
 
 ```bash
 source .venv/bin/activate

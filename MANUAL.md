@@ -407,7 +407,7 @@ python scripts/diocotron_equilibrium_torsion_intialized.py \
   --hdg-petsc-preset mumps_lu --residual-norm euclid
 
 # Then pass that exact mesh to DOLFINx.
-/home/asaleh/miniforge3/envs/fenicsx-dgfem/bin/python \
+python \
   scripts/strategyA_dolfinx_noadapt_torsion_newton.py \
   --run-tag dolfinx_star260_p2_mumps_hdgmesh_compare \
   --mesh run_logs/diocotron_equilibrium_torsion_intialized/<hdg-run>/initial_mesh.msh \
