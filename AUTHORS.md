@@ -9,20 +9,20 @@
 
 ## Collaborators
 
-| Name                | Affiliation                   | Email                           |
-|---------------------|-------------------------------|---------------------------------|
-| Michel Mehrenberger | Aix-Marseille Université; I2M | michel.mehrenberger@univ-amu.fr |
-| Frédéric Schwander  | Centrale Méditerranée         | —                               |
+| Name                | Affiliation                   | Email                              |
+|---------------------|-------------------------------|------------------------------------|
+| Michel Mehrenberger | Aix-Marseille Université; I2M | michel.mehrenberger@univ-amu.fr    |
+| Frédéric Schwander  | Centrale Méditerranée         | frederic.schwander@centrale-med.fr |
 
 ## Acknowledgements
 
 For indirect collaboration:
 
-| Name             | Affiliation    | Email                     |
-|------------------|----------------|---------------------------|
-| Éric Serre       | M2P2           | eric.serre@univ-amu.fr    |
-| Marcello Capasso | M2P2, CEA IRFM | —                         |
-| Ivan Kudashev    | M2P2           | ivan.kudashev@univ-amu.fr |
+| Name             | Affiliation    | Email                        |
+|------------------|----------------|------------------------------|
+| Éric Serre       | M2P2           | eric.serre@univ-amu.fr       |
+| Marcello Capasso | M2P2, CEA IRFM | marcello.capasso@univ-amu.fr |
+| Ivan Kudashev    | M2P2           | ivan.kudashev@univ-amu.fr    |
 
 ## Laboratories
 
