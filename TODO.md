@@ -94,7 +94,8 @@
     - [x] post the four published videos (`outputs/readme_showcase/published/`) as four comments in issue #1 (light and dark per video); then point each poster at its comment. Done 2026-10-06: each attachment was downloaded and matches its recorded SHA-256, and each README poster links to its comment;
     - [x] Schwander's and Capasso's emails in `AUTHORS.md`;
     - [ ] verify the README install path from a fresh clone;
-    - [ ] rerun the plotting, showcase and documentation tests on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
+    - [x] rerun the suite on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Done 2026-10-07 on a clean worktree of `b1fdae1` with the raw-CUDA transport tests enabled: 4,058 tests, 3,999 passed, 59 skipped, 0 failed (two GPU shards hit the known AMGX abort at exit after writing their results);
+    - [ ] pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
     - [x] PyPI project description (approved 2026-10-07; `pyproject.toml` `readme` points at it, and a packaging test pins its links to the tag and its first solve to the README's): `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it (its poster already links to the vortex-gas comment);
     - [ ] push `master` (the user pushes).
   - Phase 5, publication (outward steps; confirm each):
