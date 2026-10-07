@@ -38,7 +38,7 @@ def test_readme_local_links_and_showcase_assets_resolve():
 
 @pytest.mark.parametrize("name", ("vortex_gas", "positive_density"))
 def test_published_showcase_media_match_their_record(name):
-    """Theme posters match their digests and the README; both uploaded videos are recorded."""
+    """Posters match their digests; the README plays the recorded light video of each run."""
     import hashlib
     import json
 
@@ -50,13 +50,15 @@ def test_published_showcase_media_match_their_record(name):
         poster = metadata["posters"][theme]
         path = ROOT / poster["path"]
         assert hashlib.sha256(path.read_bytes()).hexdigest() == poster["sha256"]
-        assert f'{poster["path"]}#gh-{theme}-mode-only' in readme
         with image_module.open(path) as image:
             assert image.mode == "RGBA" and image.size == (metadata["width"], metadata["height"])
             assert image.getextrema()[3][0] == 0          # transparent background
         video = metadata["videos"][theme]
         assert video["file"] == f"{name}_{theme}.mp4"
         assert 0 < video["bytes"] < 10_000_000 and len(video["sha256"]) == 64
+        assert video["url"].startswith("https://github.com/user-attachments/assets/")
+    block = readme.split(f"<!-- showcase-video: {name} -->", 1)[1].lstrip("\n")
+    assert block.splitlines()[0] == metadata["videos"]["light"]["url"]
     assert metadata["playback_seconds"] == pytest.approx(metadata["rendered_frames"] / metadata["playback_fps"])
     assert metadata["simulation_time_per_playback_second"] == pytest.approx(
         metadata["final"]["time"] / metadata["playback_seconds"])

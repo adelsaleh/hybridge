@@ -32,8 +32,7 @@ https://github.com/user-attachments/assets/d3e1d030-26db-4acd-a6b6-e718dd7f477b
 <div>
 
 *Positive and negative charge drifting between grounded walls: the plasma form
-of a two-dimensional vortex gas, from t = 0 to 15.9; click the image to play the
-video. Degree-6 HDG on 360,379 triangles carries 10.1 million element unknowns
+of a two-dimensional vortex gas, from t = 0 to 15.9. Degree-6 HDG on 360,379 triangles carries 10.1 million element unknowns
 per field and couples 3.77 million trace unknowns in each of its two solves per
 step, at 0.74 s per time step, including rendering, on one NVIDIA RTX PRO 5000
 Blackwell. The total charge changes by 2.2e-13 and the energy drifts by 2.9e-4,
@@ -265,11 +264,13 @@ live panels, which stay on the GPU. At this resolution the run uses about
 GPUs.
 
 <!-- showcase-video: positive_density -->
+
 https://github.com/user-attachments/assets/e47ec83d-15d5-4ad1-b105-64af5f8219aa
 
 <div>
+
 *The same domain with positive charge only and KKT positivity preservation, from
-t = 0 to 6.4; click the image to play the video. Like-signed charge rolls up and
+t = 0 to 6.4. Like-signed charge rolls up and
 merges into larger vortices. After each transport step, a KKT projection
 restores ρ ≥ 0 at constrained points in every element while conserving the total
 charge, so no pixel falls into the pink used for negative density. The total
