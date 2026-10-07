@@ -27,7 +27,7 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
 
 ## Evidence Log
 
-### 0.1.0a2 Qualification (2026-10-04/05)
+### 0.1.0a2 Qualification (2026-10-04/07)
 
 - Full sharded suite on a clean checkout of the renamed `master` (`a1be5d6`):
   3,660 passed and 389 skipped (optional or opt-in). Two documented-example
@@ -49,6 +49,13 @@ candidate. Passing this matrix does not imply exhaustive backend validation.
   [37334439090](https://github.com/adelsaleh/hybridge/actions/runs/37334439090)
   (renamed `master`). Host jobs took 4.8–5.8 min, the package job 56 s. These
   are the first clean hosted runs; they resolve the pre-fix attempt below.
+- Release content (2026-10-07): the full suite on a clean checkout of `b1fdae1`,
+  with the raw-CUDA transport tests enabled, ran 4,058 tests: 3,999 passed,
+  59 skipped, none failed. The README installation from a fresh clone with
+  Python 3.12 ran the first solve as documented. The hosted `early-alpha`
+  workflow passed on the pushed `master` (`ab7164d`):
+  [37626468681](https://github.com/adelsaleh/hybridge/actions/runs/37626468681),
+  host jobs 5.6 min each, package 44 s.
 - The defects found and fixed during this qualification are listed in the
   [release notes](0.1.0a2.md).
 

@@ -96,19 +96,20 @@
     - [x] Schwander's and Capasso's emails in `AUTHORS.md`;
     - [x] verify the README install path from a fresh clone. Done 2026-10-07 on `e8384a4` with Python 3.12.3: `pip install -e '.[mesh,plot]'` took 25 s, and the first-solve example printed the README's errors (1.8 and 0.41); a base-only `pip install .` also runs the solve, `hybridge.io` import included. The venv command is now `python3 -m venv`, because Ubuntu has no `python` outside a venv;
     - [x] rerun the suite on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Done 2026-10-07 on a clean worktree of `b1fdae1` with the raw-CUDA transport tests enabled: 4,058 tests, 3,999 passed, 59 skipped, 0 failed (two GPU shards hit the known AMGX abort at exit after writing their results);
-    - [ ] pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
+    - [x] pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag. Done 2026-10-07: run 37626468681 on `ab7164d` passed (host Python 3.10 and 3.12, package);
     - [x] PyPI project description (approved 2026-10-07; `pyproject.toml` `readme` points at it, and a packaging test pins its links to the tag and its first solve to the README's): `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it (its poster already links to the vortex-gas comment);
-    - [ ] push `master` (the user pushes).
+    - [x] push `master`. Done 2026-10-07 (`331c24b..ab7164d`), rebased onto F. Monteghetti's `331c24b`, which replaced the poster links with inline video players;
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;
     - keep `diocotron-dolfinx` as a branch of `hybridge` for this release (decided 2026-10-07); it leaves with the post-release `gc-equilibria` split below;
-    - clean `gpu_gmres_precondit` in a cleanup commit on top of it, without rewriting it:
+    - [x] clean `gpu_gmres_precondit` in a cleanup commit on top of it, without rewriting it. Done 2026-10-07 (`e867a57`, pushed); VRRodrigues and `../hdgfem-gmres` still need to pull:
       - the branch inherited from `master` (2026-07-18) the strategy-A diocotron study (`docs/strategyA_band_parameter_study/`, 191 files) and absolute `/home/...` paths in `README.md` and `MANUAL.md` (14 files in all); VRRodrigues changed none of them;
       - make the commit in a detached temporary worktree, so the `../hdgfem-gmres` checkout and its uncommitted work stay untouched;
       - push it and tell VRRodrigues to pull;
-    - rename the repository to `hybridge` and update local remotes;
+    - [x] rename the repository to `hybridge` and update local remotes (done by 2026-10-07; the old `adelsaleh/hdgfem` URL redirects);
     - tag `v0.1.0a2`, build and `twine check` the wheel and sdist, upload to TestPyPI, verify a clean install, then upload to PyPI and create the GitHub release with the artifacts;
-    - switch visibility to public the same day, check the GENCI link, then submit the GENCI request;
+    - [x] switch visibility to public. Done 2026-10-07, before the PyPI upload (decided that day); the README videos, issue #1 and CI runs load without login;
+    - [ ] check the GENCI link, then submit the GENCI request;
     - protect `master` once public: collaborators keep write access, but changes reach `master` only through reviewed pull requests (admin bypass).
   - After the release, move the computed guiding-center equilibria to the private repository `adelsaleh/gc-equilibria` (decided 2026-10-07, postponed past `0.1.0a2` the same day). The four-way search of 2026-10-07 (package, scripts, docs, cross-boundary dependencies) is the basis of the lists below.
     - Scope. Every equilibrium band computed by the Newton or threshold/window optimizers moves, on any geometry and with any discretization (HDG, DOLFINx, FreeFEM). The classical diocotron cases of the guiding-center runner stay in `hybridge` as examples: the analytic disk and annulus bands (`rho_eq_annular_band`, `diocotron_k`, `diocotron_gaussian_annulus`), their presets, `run_configs/guiding_center/` files, diagnostics scripts and studies, `tests/test_diocotron_benchmark.py` (the classical disk/annulus reference), and the azimuthal-mode diagnostics in `hybridge/diagnostics/guiding_center.py`.
