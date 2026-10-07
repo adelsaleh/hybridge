@@ -205,7 +205,14 @@ def main():
         posters={theme: dict(path=relative(posters[theme]), sha256=digest(posters[theme])) for theme in THEMES},
         poster_time=frame_index * frame_time,
         seconds_per_step=metadata["wall_seconds"] / metadata["completed_steps"])
-    (media / f"{args.name}.json").write_text(json.dumps(sidecar, indent=2) + "\n")
+    record = media / f"{args.name}.json"
+    if record.exists():
+        # Keep the attachment URL of an uploaded video while its bytes are unchanged.
+        previous = json.loads(record.read_text()).get("videos", {})
+        for theme, video in sidecar["videos"].items():
+            if previous.get(theme, {}).get("sha256") == video["sha256"] and "url" in previous[theme]:
+                video["url"] = previous[theme]["url"]
+    record.write_text(json.dumps(sidecar, indent=2) + "\n")
     summary = dict(final_time=final["time"], seconds_per_step=sidecar["seconds_per_step"],
                    device_gib=metadata.get("device_used_gib_at_finish"),
                    energy_drift=final.get("energy_drift"), enstrophy_loss=final.get("enstrophy_loss"),

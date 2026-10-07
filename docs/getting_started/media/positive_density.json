@@ -282,12 +282,14 @@
     "light": {
       "file": "positive_density_light.mp4",
       "bytes": 6342553,
-      "sha256": "9bdc260bb5e0d5a9df5b9f3f190e2c3c8aef7a78236c13d29103f4847fe7e78d"
+      "sha256": "9bdc260bb5e0d5a9df5b9f3f190e2c3c8aef7a78236c13d29103f4847fe7e78d",
+      "url": "https://github.com/user-attachments/assets/e47ec83d-15d5-4ad1-b105-64af5f8219aa"
     },
     "dark": {
       "file": "positive_density_dark.mp4",
       "bytes": 6405216,
-      "sha256": "3340eaf6fe4cb2df6773c3ec806fe18beede4d448ec30469b55cecd20aad9572"
+      "sha256": "3340eaf6fe4cb2df6773c3ec806fe18beede4d448ec30469b55cecd20aad9572",
+      "url": "https://github.com/user-attachments/assets/d7eefb13-82a3-4528-bacd-cc73f7e0932a"
     }
   },
   "posters": {

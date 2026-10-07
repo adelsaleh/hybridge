@@ -147,12 +147,14 @@
     "light": {
       "file": "vortex_gas_light.mp4",
       "bytes": 5439098,
-      "sha256": "1fe475acdf27561b55a41d13b4bfd37fcc5641bcc93ed2f396830cf9b817b995"
+      "sha256": "1fe475acdf27561b55a41d13b4bfd37fcc5641bcc93ed2f396830cf9b817b995",
+      "url": "https://github.com/user-attachments/assets/d3e1d030-26db-4acd-a6b6-e718dd7f477b"
     },
     "dark": {
       "file": "vortex_gas_dark.mp4",
       "bytes": 4952266,
-      "sha256": "051cca0a0a0820693e311fa1a700178d2ef64b730d254957ce86ea200bfd0bb2"
+      "sha256": "051cca0a0a0820693e311fa1a700178d2ef64b730d254957ce86ea200bfd0bb2",
+      "url": "https://github.com/user-attachments/assets/ccb4bc58-2f1d-4455-9d50-4b8ad80156b8"
     }
   },
   "posters": {

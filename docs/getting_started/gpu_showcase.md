@@ -248,8 +248,10 @@ play button, and a JSON record with the run settings, diagnostics, provenance
 and the digests of all four files, without local paths. The dark movie and the
 posters redraw labels, colorbars and the fill from the rebuilt Matplotlib
 layout (`scripts/reports/showcase_media.py`); field pixels keep their recorded
-colors. The README shows the poster matching the reader's theme, and each
-poster links to the issue where the videos play.
+colors. The README embeds the light videos as GitHub players (a README cannot
+switch videos with the reader's theme); the JSON record keeps the attachment
+URL of each uploaded video, and the posters remain for pages that show a
+still image.
 
 ## Rerun the checks
 

@@ -88,7 +88,7 @@
   - Phase 4, release content (committed locally on `master`, 2026-10-05; not pushed yet):
     - [x] BSD-3-Clause `LICENSE`, PEP 639 license metadata, `AUTHORS.md` (authors, collaborators, acknowledgements, laboratories);
     - [x] README led by the project story (newcomers, FreeFEM/DOLFINx spirit, companion of SOLEDGE-HDG, plasma as one application); the first solve shows primal postprocessing with a light/dark comparison figure;
-    - [x] showcase as transparent light/dark posters linking to the issue that hosts the videos; vortex gas at 2× speed; positive density from the KKT run (`positivity-kkt` branch, not in this release); no MP4 in the repository;
+    - [x] showcase as transparent light/dark posters linking to the issue that hosts the videos (replaced on 2026-10-06 by inline GitHub players of the light videos in `331c24b`, F. Monteghetti, because the poster links did not work on GitHub); vortex gas at 2× speed; positive density from the KKT run (`positivity-kkt` branch, not in this release); no MP4 in the repository;
     - [x] `docs/releases/early_alpha.md` at `0.1.0a2` with the hosted run URLs; release notes in `docs/releases/0.1.0a2.md`;
     - [x] no machine-local paths in any tracked file; every Markdown link resolves in a clean checkout; external links answer or are Crossref-verified DOIs;
     - [x] verified on a clean checkout of `f823485`: docs, showcase, plotting, packaging, documented-example, layering and env tests pass (44);
