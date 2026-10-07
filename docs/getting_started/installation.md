@@ -14,7 +14,7 @@ The base package requires Python 3.10 or newer and installs NumPy, SciPy, and
 Numba:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install .

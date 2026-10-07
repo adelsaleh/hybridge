@@ -46,7 +46,7 @@ while 29.9% of the enstrophy is dissipated as filaments reach the grid.*
 From a checkout, with Python 3.10 or newer:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[mesh,plot]'
