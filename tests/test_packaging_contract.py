@@ -39,6 +39,24 @@ def test_package_reports_the_version_being_released() -> None:
     assert hybridge.__version__ == _metadata()["project"]["version"]
 
 
+def test_pypi_description_is_self_contained_and_matches_the_readme() -> None:
+    """PyPI resolves no relative links, so the long description uses absolute
+    ones pinned to the release tag and repeats the README's first solve."""
+    import re
+
+    project = _metadata()["project"]
+    assert project["readme"] == "docs/releases/pypi_description.md"
+    description = (ROOT / project["readme"]).read_text(encoding="utf-8")
+    tag = f"/v{project['version']}/"
+    for target in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", description):
+        assert target.startswith("https://"), target
+        if "raw.githubusercontent.com/adelsaleh/hybridge" in target or "github.com/adelsaleh/hybridge/blob" in target:
+            assert tag in target, target
+            assert (ROOT / target.split(tag, 1)[1].split("#")[0]).exists(), target
+    first_solve = re.findall(r"```python\n.*?```", description, re.S)[0]
+    assert first_solve in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
 def test_setuptools_discovers_every_hybridge_subpackage() -> None:
     metadata = _metadata()
     assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["hybridge*"]
