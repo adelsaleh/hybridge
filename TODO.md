@@ -95,7 +95,7 @@
     - [x] Schwander's and Capasso's emails in `AUTHORS.md`;
     - [ ] verify the README install path from a fresh clone;
     - [ ] rerun the plotting, showcase and documentation tests on the final commit: the README examples, `hybridge/io/plot.py` and `hybridge/io/comparison.py` changed after the `f823485` check. Pushing `master` runs the hosted `early-alpha` workflow; add its URL to `docs/releases/early_alpha.md` before the tag;
-    - [ ] PyPI project description: `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it (its poster already links to the vortex-gas comment);
+    - [x] PyPI project description (approved 2026-10-07; `pyproject.toml` `readme` points at it, and a packaging test pins its links to the tag and its first solve to the README's): `README.md` does not render on PyPI (relative links and images break, both theme posters show, fenced math stays raw). Review the draft `docs/releases/pypi_description.md` (absolute links pinned to `v0.1.0a2`), then point `pyproject.toml` `readme` at it (its poster already links to the vortex-gas comment);
     - [ ] push `master` (the user pushes).
   - Phase 5, publication (outward steps; confirm each):
     - mirror all refs to the private archive repository;

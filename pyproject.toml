@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "hybridge"
 version = "0.1.0a2"
 description = "Hybridizable discontinuous Galerkin (HDG) methods in Python, on CPUs and NVIDIA GPUs."
-readme = "README.md"
+# PyPI cannot resolve the README's relative links and theme images; this
+# description uses absolute links pinned to the release tag.
+readme = "docs/releases/pypi_description.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE", "AUTHORS.md"]
 authors = [
@@ -41,6 +43,9 @@ all = ["gmsh", "matplotlib", "pyvista", "pytest", "tomli; python_version < '3.11
 
 [project.urls]
 Repository = "https://github.com/adelsaleh/hybridge"
+Documentation = "https://github.com/adelsaleh/hybridge/blob/master/MANUAL.md"
+Issues = "https://github.com/adelsaleh/hybridge/issues"
+Changelog = "https://github.com/adelsaleh/hybridge/blob/master/docs/releases/0.1.0a2.md"
 
 [tool.setuptools.packages.find]
 include = ["hybridge*"]
