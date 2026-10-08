@@ -576,8 +576,10 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             "transport_reuse_first_preconditioner requires trace_ordering='none' so the "
             "cached preconditioner remains in the same trace coordinate system"
         )
-    if config.case == "rho_helm_wave" and config.transport_boundary_mode == "zero-flux":
-        raise ValueError("rho_helm_wave requires eliminated exact density boundary data; zero-flux is invalid")
+    from scripts.guiding_center.cases.guiding_center_cases import EXACT_BOUNDARY_CASES
+
+    if config.case in EXACT_BOUNDARY_CASES and config.transport_boundary_mode == "zero-flux":
+        raise ValueError(f"{config.case} requires eliminated exact density boundary data; zero-flux is invalid")
     if config.poisson_assembly_backend == "cupy":
         if not _is_amgx_solver(config.poisson_solver):
             raise ValueError("poisson_assembly_backend='cupy' requires poisson_solver='amgx'")
