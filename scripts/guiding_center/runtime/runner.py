@@ -69,6 +69,13 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
             verbosity=config.gmsh_verbosity, algorithm=config.gmsh_algorithm,
             log_cache=log_mesh_cache,
         )
+    if domain == "polygon":
+        # A simple polygon supplied by the case (e.g. orbiting_vortex's CROSS_POLYGON).
+        return gmsh_polygon_mesh(
+            config.mesh_size, vertices=case.parameters["geometry"]["vertices"],
+            verbosity=config.gmsh_verbosity, algorithm=config.gmsh_algorithm,
+            log_cache=log_mesh_cache,
+        )
     if domain == "rectangle":
         return gmsh_rectangle_mesh(
             config.mesh_size,
@@ -218,7 +225,7 @@ def run_guiding_center_case(
     from hybridge.solvers.advection_reaction import AdvectionReactionHDGSolver
     from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGSolver
     from hybridge.runtime.logging import timed_call
-    from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
+    from scripts.guiding_center.cases.guiding_center_cases import EXACT_BOUNDARY_CASES, case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
     case = case_definition.build(**config.case_params)
@@ -302,8 +309,8 @@ def run_guiding_center_case(
         if config.transport_boundary_mode == "auto"
         else config.transport_boundary_mode
     )
-    if case.key == "rho_helm_wave" and transport_boundary_mode != "eliminate":
-        raise ValueError("rho_helm_wave requires boundary_mode='eliminate' with exact density data")
+    if case.key in EXACT_BOUNDARY_CASES and transport_boundary_mode != "eliminate":
+        raise ValueError(f"{case.key} requires boundary_mode='eliminate' with exact density data")
     transport_options = _make_transport_options(config, transport_boundary_mode)
     if _detail_verbosity(config):
         print(

@@ -123,7 +123,7 @@ def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_
     assert tuple(CASE_DEFINITIONS) == (
         "diocotron_gaussian_annulus", "diocotron_k", "euler_vortex_gas",
         "positive_turbulence", "euler_star_vortex_gas", "euler_shaped_vortex_gas",
-        "spiral_sheet", "rho_helm_wave",
+        "spiral_sheet", "rho_helm_wave", "orbiting_vortex",
     )
 
 
@@ -871,3 +871,29 @@ def test_poisson_flux_postprocess_cadence_targets_only_accepted_steps() -> None:
             "postprocessing_backend": "raw-cuda",
         }
     }
+
+
+@pytest.mark.parametrize("smoothness", [1, 2, 3])
+def test_orbiting_vortex_is_an_exact_unforced_solution(smoothness):
+    from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
+
+    case = case_definition_by_key("orbiting_vortex").build(m=smoothness)
+    rng = np.random.default_rng(1)
+    x, y, t, h = rng.uniform(-1.0, 1.0, 3000), rng.uniform(-1.0, 1.0, 3000), 0.3, 1.0e-4
+    rho, phi = case.exact_density, case.exact_potential
+    centre = 0.7 * np.array((np.cos(np.pi * t), np.sin(np.pi * t)))
+    away = np.abs(np.hypot(x - centre[0], y - centre[1]) - 0.2) > 2.0e-3  # finite differences across the kink
+    laplacian = (phi(x + h, y, t) + phi(x - h, y, t) + phi(x, y + h, t) + phi(x, y - h, t) - 4.0 * phi(x, y, t)) / h**2
+    gx, gy = case.exact_potential_gradient(x, y, t)
+    qx, qy = case.exact_flux(x, y, t)
+    rx, ry = case.exact_density_gradient(x, y, t)
+    rho_t = (rho(x, y, t + h) - rho(x, y, t - h)) / (2.0 * h)
+    scale = np.max(np.abs(rho(x, y, t)))
+    assert np.max(np.abs(laplacian + rho(x, y, t))[away]) < 1e-6 * scale
+    assert np.allclose(gx, (phi(x + h, y, t) - phi(x - h, y, t)) / (2 * h), atol=1e-6)
+    assert np.allclose(gy, (phi(x, y + h, t) - phi(x, y - h, t)) / (2 * h), atol=1e-6)
+    assert np.array_equal(qx, -gx) and np.array_equal(qy, -gy)
+    assert np.allclose(rx[away], ((rho(x + h, y, t) - rho(x - h, y, t)) / (2 * h))[away], atol=1e-4 * scale)
+    # u = (d_y phi, -d_x phi) transports rho exactly.
+    assert np.max(np.abs(rho_t + gy * rx - gx * ry)[away]) < 1e-4 * scale
+    assert case.density_transport_boundary_mode == "eliminate" and case.default_domain == "polygon"

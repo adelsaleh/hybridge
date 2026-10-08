@@ -772,16 +772,21 @@ def rho_helm_wave(
         U: float = 1.0,
         kx: float = 1.0,
         ky: float = 1.0,
+        A: float = 1.0,
 ) -> GuidingCenterCase:
-    r"""Return the legacy manufactured Helmholtz-wave guiding-center pair.
+    r"""Return the manufactured Helmholtz-wave guiding-center pair.
 
-    The exact potential and density satisfy ``-Delta(phi) = rho`` and the
+    ``phi = A cos(theta) + U y`` and ``rho = A |k|^2 cos(theta)`` with
+    ``theta = kx (x - U t) + ky y`` satisfy ``-Delta(phi) = rho`` and the
     guiding-center transport equation ``rho_t + q^perp . grad(rho) = 0`` with
-    ``q = -grad(phi)``.
+    ``q = -grad(phi)``. ``A = 1/|k|`` keeps the crest-parallel drift of unit
+    amplitude for large wave numbers (high-resolution study); ``A = 1`` is the
+    legacy case.
     """
     velocity = float(U)
     wave_x = float(kx)
     wave_y = float(ky)
+    amplitude = float(A)
     laplace_factor = wave_x * wave_x + wave_y * wave_y
 
     def phase(x, y, t):
@@ -790,21 +795,21 @@ def rho_helm_wave(
 
     def potential(x, y, t):
         xp, x_arr, y_arr = _xy_arrays(x, y)
-        return xp.cos(phase(x_arr, y_arr, t)) + velocity * y_arr
+        return amplitude * xp.cos(phase(x_arr, y_arr, t)) + velocity * y_arr
 
     def density(x, y, t):
         xp, x_arr, y_arr = _xy_arrays(x, y)
-        return laplace_factor * xp.cos(phase(x_arr, y_arr, t))
+        return amplitude * laplace_factor * xp.cos(phase(x_arr, y_arr, t))
 
     def flux(x, y, t):
         xp, x_arr, y_arr = _xy_arrays(x, y)
         s = phase(x_arr, y_arr, t)
-        return wave_x * xp.sin(s), wave_y * xp.sin(s) - velocity
+        return amplitude * wave_x * xp.sin(s), amplitude * wave_y * xp.sin(s) - velocity
 
     def density_gradient(x, y, t):
         xp, x_arr, y_arr = _xy_arrays(x, y)
         sine = xp.sin(phase(x_arr, y_arr, t))
-        return -laplace_factor * wave_x * sine, -laplace_factor * wave_y * sine
+        return -amplitude * laplace_factor * wave_x * sine, -amplitude * laplace_factor * wave_y * sine
 
     def potential_gradient(x, y, t):
         qx, qy = flux(x, y, t)
@@ -824,8 +829,116 @@ def rho_helm_wave(
         exact_flux=flux,
         exact_density_gradient=density_gradient,
         exact_potential_gradient=potential_gradient,
-        parameters={"U": velocity, "kx": wave_x, "ky": wave_y},
+        parameters={"U": velocity, "kx": wave_x, "ky": wave_y, "A": amplitude},
     )
+
+
+# Cross-shaped polygon (arms |x| <= 0.6 or |y| <= 0.6 inside (-1, 1)^2): four re-entrant
+# 270-degree corners at (+-0.6, +-0.6), area 3.36.
+CROSS_POLYGON = (
+    (-0.6, -1.0), (0.6, -1.0), (0.6, -0.6), (1.0, -0.6), (1.0, 0.6), (0.6, 0.6),
+    (0.6, 1.0), (-0.6, 1.0), (-0.6, 0.6), (-1.0, 0.6), (-1.0, -0.6), (-0.6, -0.6),
+)
+
+
+def orbiting_vortex(
+        *,
+        rho0: float = 2.0 * np.pi,
+        A: float = 40.0,
+        R: float = 0.2,
+        m: int = 2,
+        d: float = 0.7,
+        theta0: float = 0.0,
+) -> GuidingCenterCase:
+    r"""Compact vortex of finite regularity orbiting in a uniform background (exact, unforced).
+
+    ``rho = rho0 + A (1 - s)_+^m`` with ``s = |x - c(t)|^2 / R^2`` and
+    ``phi = -rho0 |x|^2 / 4 + Psi(s)``, ``-Delta Psi = A (1 - s)_+^m``. The background
+    rotates rigidly with ``Omega = rho0 / 2``, the radial vortex does not advect itself,
+    so the vortex centre ``c(t) = d (cos(theta0 + Omega t), sin(theta0 + Omega t))``
+    orbits the origin and ``rho_t + u . grad(rho) = 0`` holds exactly with
+    ``u = (d_y phi, -d_x phi)``. The density is ``C^{m-1}`` with a jump of its m-th
+    radial derivative on ``|x - c| = R``: ``rho`` lies in ``H^{m+1/2-eps}`` only.
+    Boundary data (Dirichlet ``phi``, inflow ``rho``) come from the exact solution,
+    so any polygon containing part of the orbit is admissible; the default is the
+    cross ``CROSS_POLYGON``; with the defaults the vortex starts in the right arm, covers the
+    re-entrant corner (0.6, 0.6) at ``Omega t = pi / 4`` (distance 0.15 < R) and reaches the
+    top arm at ``Omega t = pi / 2`` (t = 0.5).
+    """
+    background, amplitude, radius = float(rho0), float(A), float(R)
+    smoothness, orbit, angle = int(m), float(d), float(theta0)
+    if smoothness != m or smoothness < 1:
+        raise ValueError("m must be a positive integer")
+    if radius <= 0.0:
+        raise ValueError("R must be positive")
+    omega = 0.5 * background
+    # Psi(s) = -A R^2/(4(m+1)) [H_{m+1}(min(s, 1)) + log(max(s, 1))],
+    # H_n(s) = sum_{j=1}^n (1 - (1 - s)^j) / j;  Psi'(r)/r = -A/(2(m+1)) G(s),
+    # G(s) = sum_{j=0}^m (1 - s)^j inside, 1/s outside (cancellation-free at s -> 0).
+    psi_scale = -amplitude * radius * radius / (4.0 * (smoothness + 1))
+    slope_scale = -amplitude / (2.0 * (smoothness + 1))
+
+    def centre(t):
+        phase = angle + omega * float(t)
+        return orbit * np.cos(phase), orbit * np.sin(phase)
+
+    def local(x, y, t):
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        cx, cy = centre(t)
+        dx, dy = x_arr - cx, y_arr - cy
+        s = (dx * dx + dy * dy) / (radius * radius)
+        return xp, x_arr, y_arr, dx, dy, s
+
+    def density(x, y, t):
+        xp, _, _, _, _, s = local(x, y, t)
+        return background + amplitude * xp.maximum(1.0 - s, 0.0) ** smoothness
+
+    def potential(x, y, t):
+        xp, x_arr, y_arr, _, _, s = local(x, y, t)
+        w = 1.0 - xp.minimum(s, 1.0)
+        harmonic = sum((1.0 - w**j) / j for j in range(1, smoothness + 2))
+        return (-0.25 * background * (x_arr * x_arr + y_arr * y_arr)
+                + psi_scale * (harmonic + xp.log(xp.maximum(s, 1.0))))
+
+    def potential_gradient(x, y, t):
+        xp, x_arr, y_arr, dx, dy, s = local(x, y, t)
+        w = xp.maximum(1.0 - s, 0.0)
+        inside = sum(w**j for j in range(smoothness + 1))
+        g = slope_scale * xp.where(s < 1.0, inside, 1.0 / xp.maximum(s, 1.0))
+        return -0.5 * background * x_arr + g * dx, -0.5 * background * y_arr + g * dy
+
+    def flux(x, y, t):
+        gx, gy = potential_gradient(x, y, t)
+        return -gx, -gy
+
+    def density_gradient(x, y, t):
+        xp, _, _, dx, dy, s = local(x, y, t)
+        w = xp.maximum(1.0 - s, 0.0)
+        factor = xp.where(s < 1.0, -2.0 * amplitude * smoothness * w ** (smoothness - 1) / (radius * radius), 0.0)
+        return factor * dx, factor * dy
+
+    return GuidingCenterCase(
+        key="orbiting_vortex",
+        description=("Compact C^{m-1} vortex orbiting in a rigidly rotating background; "
+                     "exact solution, exact nonzero boundary data."),
+        initial_density=lambda x, y: density(x, y, 0.0),
+        potential_boundary=potential,
+        density_boundary=density,
+        density_transport_boundary_mode="eliminate",
+        default_domain="polygon",
+        exact_density=density,
+        exact_potential=potential,
+        negative_laplacian_potential=density,
+        exact_flux=flux,
+        exact_density_gradient=density_gradient,
+        exact_potential_gradient=potential_gradient,
+        parameters={"rho0": background, "A": amplitude, "R": radius, "m": smoothness, "d": orbit,
+                    "theta0": angle, "geometry": {"vertices": CROSS_POLYGON}},
+    )
+
+
+# Cases whose density boundary data are the exact solution (transport must eliminate them).
+EXACT_BOUNDARY_CASES = frozenset({"rho_helm_wave", "orbiting_vortex"})
 
 
 CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
@@ -882,6 +995,12 @@ CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
         factory=rho_helm_wave,
         default_domain="rectangle",
     ),
+    "orbiting_vortex": GuidingCenterCaseDefinition(
+        key="orbiting_vortex",
+        description="Exact compact C^{m-1} vortex orbiting in a rotating background, cross-shaped polygon.",
+        factory=orbiting_vortex,
+        default_domain="polygon",
+    ),
 }
 
 CASE_BY_KEY = CASE_DEFINITIONS
@@ -902,6 +1021,9 @@ __all__ = [
     "GuidingCenterCase",
     "GuidingCenterCaseDefinition",
     "case_definition_by_key",
+    "CROSS_POLYGON",
+    "EXACT_BOUNDARY_CASES",
+    "orbiting_vortex",
     "diocotron_gaussian_annulus",
     "diocotron_k",
     "rho_eq_annular_band",
