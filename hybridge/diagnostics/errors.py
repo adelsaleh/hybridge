@@ -459,15 +459,125 @@ def evaluate_hdg_scalar_error(
                                  backend=gram.backend)
 
 
+@dataclass(frozen=True)
+class TraceErrorMetrics:
+    """Skeleton errors of a numerical trace (h-weighted, so they scale like volume L2 norms).
+
+    ``l2`` is (sum_F h_F ||uhat - u||_F^2)^(1/2) and ``projection_l2`` the same norm of
+    uhat - P_F u, with P_F the L2(F) projection onto the trace space; ``exact_l2`` is the
+    h-weighted skeleton norm of u, for relative errors. ``edges`` says which edges are summed.
+    """
+
+    l2: float
+    projection_l2: float
+    exact_l2: float
+    edges: str
+
+
+def evaluate_trace_error(
+        space,
+        trace,
+        exact: Callable,
+        *,
+        trace_basis: str = "legacy-lagrange",
+        edges: Literal["interior", "all"] = "interior",
+        face_weight: Callable | None = None,
+        edge_quad_1d: int | None = None,
+) -> TraceErrorMetrics:
+    """Compare a full trace (global edge order, ``num_edg * edg_dof`` coefficients) with ``exact``.
+
+    Runs with NumPy, or with CuPy when ``trace`` is a CuPy array (geometry is mirrored;
+    only the three scalars are transferred). Edge quadrature is the trace space's own rule.
+    ``face_weight(x, y, nx, ny) >= 0`` multiplies the integrand on every edge, with (nx, ny)
+    a unit edge normal of arbitrary sign; for a transport trace, ``|beta . n|`` gives the
+    norm the upwind flux uses. ``edge_quad_1d`` evaluates the norms with that many
+    Gauss-Legendre points per edge instead (for exact traces of limited smoothness); the
+    edgewise projection stays the trace space's own.
+    """
+    from hybridge.core.field_ops import _edge_points, project_callable_to_trace
+
+    if edges not in {"interior", "all"}:
+        raise ValueError("edges must be 'interior' or 'all'")
+    on_device = type(trace).__module__.split(".")[0] == "cupy"
+    if on_device:
+        import cupy as xp
+
+        from hybridge.core.device import as_cupy_space, as_cupy_trace_space
+
+        mesh = as_cupy_space(space).mesh
+        trace_space = as_cupy_trace_space(space.trace_space(trace_basis))
+    else:
+        xp, mesh, trace_space = np, space.mesh, space.trace_space(trace_basis)
+    edg_dof = int(trace_space.edg_dof)
+    trace = xp.asarray(trace, dtype=xp.float64)
+    if trace.size != int(mesh.num_edg) * edg_dof:
+        raise ValueError(f"full trace needs {int(mesh.num_edg) * edg_dof} coefficients; got {trace.size}")
+    by_edge = trace.reshape(int(mesh.num_edg), edg_dof)
+    if edge_quad_1d is None:
+        basis = xp.asarray(trace_space.bas1d_of_ref_edg_qds, dtype=xp.float64)    # (edg_dof, nq)
+        weights = xp.asarray(trace_space.weights, dtype=xp.float64)                # sum = 2 on [-1, 1]
+        quads = xp.asarray(trace_space.quads)
+    else:
+        from hybridge.core.quadrature import _lagrange_basis
+        from hybridge.core.space import _legendre_edge_basis
+
+        if trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
+            raise ValueError("edge_quad_1d supports Lagrange and Legendre-modal traces")
+        host_quads, host_weights = np.polynomial.legendre.leggauss(int(edge_quad_1d))
+        host_basis = (_lagrange_basis(np.asarray(space.trace_space(trace_basis).interpolation_nodes), host_quads)
+                      if trace_space.kind == "legacy-lagrange"
+                      else _legendre_edge_basis(int(space.order), host_quads))
+        basis = xp.asarray(host_basis, dtype=xp.float64)
+        weights = xp.asarray(host_weights, dtype=xp.float64)
+        quads = xp.asarray(host_quads)
+    points = _edge_points(mesh, quads, xp)
+    exact_values = xp.asarray(exact(points[:, :, 0], points[:, :, 1]), dtype=xp.float64)
+    projected = project_callable_to_trace(space, exact, trace_basis=trace_basis, reduced=False,
+                                          backend="device" if on_device else "host")
+    projected = xp.asarray(projected, dtype=xp.float64).reshape(int(mesh.num_edg), edg_dof)
+    half_length = xp.asarray(mesh.edge_jacs, dtype=xp.float64)                    # |F| / 2
+    # h_F * int_F g = |F| * (|F|/2) * sum_q w_q g_q
+    edge_weight = 2.0 * half_length * half_length
+    if edges == "interior":
+        mask = xp.zeros(int(mesh.num_edg), dtype=xp.float64)
+        mask[xp.asarray(mesh.int_edges_inds)] = 1.0
+        edge_weight = edge_weight * mask
+
+    pointwise = None
+    if face_weight is not None:
+        vertices = mesh.node_coords[mesh.edges]
+        tangent = vertices[:, 1, :] - vertices[:, 0, :]
+        length = xp.sqrt(xp.sum(tangent * tangent, axis=1))
+        nx = (tangent[:, 1] / length)[:, None] * xp.ones_like(points[:, :, 0])
+        ny = (-tangent[:, 0] / length)[:, None] * xp.ones_like(points[:, :, 0])
+        pointwise = xp.asarray(face_weight(points[:, :, 0], points[:, :, 1], nx, ny), dtype=xp.float64)
+        if bool((pointwise < 0).any()):
+            raise ValueError("face_weight must be nonnegative")
+
+    def norm(values):
+        squared = values * values if pointwise is None else values * values * pointwise
+        return float(xp.sqrt(xp.maximum(xp.einsum("e,eq,q->", edge_weight, squared, weights), 0.0)))
+
+    numerical = by_edge @ basis
+    return TraceErrorMetrics(
+        l2=norm(numerical - exact_values),
+        projection_l2=norm((by_edge - projected) @ basis),
+        exact_l2=norm(exact_values),
+        edges=edges,
+    )
+
+
 __all__ = [
     "ScalarComparisonSamples",
     "ScalarErrorMetrics",
     "ScalarHDGErrorMetrics",
     "ScalarErrorReport",
+    "TraceErrorMetrics",
     "VectorComparisonSamples",
     "VectorErrorMetrics",
     "VectorErrorReport",
     "evaluate_scalar_error",
     "evaluate_hdg_scalar_error",
+    "evaluate_trace_error",
     "evaluate_vector_error",
 ]
