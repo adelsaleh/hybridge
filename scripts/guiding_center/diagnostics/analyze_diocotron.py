@@ -13,7 +13,11 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.guiding_center.diagnostics.diocotron_reference import annulus_spectrum, converged_smooth_reference, fit_growth, PAPER_FIT_WINDOW
+from scripts.guiding_center.diagnostics.diocotron_reference import (
+    converged_smooth_reference, converged_truncated_reference, fit_growth, interface_spectrum, PAPER_FIT_WINDOW,
+)
+
+DIOCOTRON_CASES = ("diocotron_k", "diocotron_annulus")
 
 
 def read_run(path):
@@ -25,7 +29,7 @@ def read_run(path):
     if not np.isfinite(times).all() or np.any(np.diff(times)<=0):
         raise ValueError(f"{path}: times must be finite and strictly increasing")
     config=rows[0].get("run_configuration")
-    if config is None or config.get("case")!="diocotron_k":
+    if config is None or config.get("case") not in DIOCOTRON_CASES:
         raise ValueError(f"{path}: diocotron run_configuration metadata is missing")
     timing_path=path.with_name(path.stem+"_timings.jsonl")
     timings=([json.loads(line) for line in timing_path.read_text().splitlines() if line.strip()]
@@ -137,11 +141,27 @@ def analyze(run,*,control=None,half_seed=None,refined=None,window=PAPER_FIT_WIND
         raise ValueError("rate tolerance must be finite and positive")
     parameters=run["config"]["case_parameters"]
     mode=int(parameters["k"])
-    sharp_reference=annulus_spectrum([mode],inner=parameters["s_minus"],outer=parameters["s_plus"],density=parameters["rho_bar"])[0]
+    walls=dict(wall=float(parameters.get("wall",1.)),inner_wall=float(parameters.get("inner_wall",0.)))
+    sharp_reference=interface_spectrum([mode],inner=parameters["s_minus"],outer=parameters["s_plus"],
+                                       density=parameters["rho_bar"],**walls)[0]
     smooth=((parameters.get("p") is not None and not parameters.get("truncate",False)) or
             (parameters.get("p") is None and parameters.get("edge_width",0)>0))
-    reference=(converged_smooth_reference(mode,parameters=parameters) if smooth else
-               dict(**sharp_reference,reference_type="sharp-annulus-analytic"))
+    truncated=parameters.get("p") is not None and bool(parameters.get("truncate",False))
+    # A centred injection completed before the fit window leaves a central charge that
+    # rotates the ring: the reference is then the ring's rate with that charge.
+    injection=parameters.get("injection") or {}  # the case's record (see gaussian_injection)
+    charges=[float(q) for q in injection.get("charges",())]
+    centers=injection.get("centers")
+    injection_end=float(injection.get("start",0.))+float(injection.get("duration",0.))
+    centred=centers is None or all(float(x)==0. and float(y)==0. for x,y in centers)
+    central=sum(charges) if charges and centred and injection_end<=window[0] else 0.
+    if smooth:
+        reference=converged_smooth_reference(mode,parameters=parameters,central_charge=central,**walls)
+    elif truncated:
+        # Exact linear rate of the cut super-Gaussian (Zoni--Guclu eq. 35), not the sharp-band formula.
+        reference=converged_truncated_reference(mode,parameters=parameters,**walls)
+    else:
+        reference=dict(sharp_reference,reference_type="sharp-annulus-analytic")
     gamma=reference["growth_rate"]
     amplitude_key=f"diocotron_phi_mode_{mode}_l2"
     fit=lambda data,key,interval: fit_growth(data["times"],column(data["rows"],key),window=interval,reference=gamma if gamma>0 else None)
@@ -162,11 +182,11 @@ def analyze(run,*,control=None,half_seed=None,refined=None,window=PAPER_FIT_WIND
     notes=[]
     if gamma==0:
         notes.append("The selected sharp-annulus mode is stable; a positive exponential growth rate is not expected.")
-    if smooth:
+    if smooth or truncated:
         if not reference["reference_converged"]:
             notes.append("The smooth radial eigenvalue reference has not converged under radial refinement.")
         notes.append("The smooth-profile rate is an independent numerical eigenvalue reference; an HDG spatial refinement check remains necessary.")
-    elif parameters.get("p") is not None or parameters.get("edge_width",0):
+    elif parameters.get("edge_width",0):
         notes.append("Sharp-annulus theory is approximate for this radial profile; spatial and profile refinement remain necessary.")
     if not growth["agrees_with_reference"]:
         notes.append("The target-mode fit has not demonstrated agreement with the selected equilibrium reference.")

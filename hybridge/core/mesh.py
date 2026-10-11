@@ -896,7 +896,8 @@ def _generate_gmsh_mesh(
         if boundary_tags is not None:
             gmsh.model.addPhysicalGroup(1, list(boundary_tags), tag=1, name=f"{model_name}_boundary")
         if surface_tag is not None:
-            gmsh.model.addPhysicalGroup(2, [surface_tag], tag=1, name=model_name)
+            surface_tags = list(surface_tag) if isinstance(surface_tag, (list, tuple)) else [surface_tag]
+            gmsh.model.addPhysicalGroup(2, surface_tags, tag=1, name=model_name)
         gmsh.model.mesh.generate(2)
         mesh = _gmsh_model_to_mesh(gmsh, write_path=write_path)
         _validate_uniform_gmsh_mesh_arrays(mesh.node_coords, mesh.triangles, mesh_size)
@@ -1011,6 +1012,101 @@ def gmsh_disc_mesh(
             "center": center,
             "radius": radius,
             "radius_y": radius_y,
+        },
+        num_threads=num_threads,
+        log_cache=log_cache,
+    )
+
+
+def gmsh_annulus_mesh(
+        mesh_size: float,
+        *,
+        inner_radius: float = 0.0,
+        outer_radius: float = 1.0,
+        interface_radii: tuple[float, ...] = (),
+        center: tuple[float, float] = (0.0, 0.0),
+        band: tuple[float, float] | None = None,
+        band_mesh_size: float | None = None,
+        band_grading: float = 0.25,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
+) -> DGMesh:
+    """Generate a disk or annulus mesh conforming to concentric circles.
+
+    ``inner_radius > 0`` removes a concentric disk (an inner wall). Every
+    radius in ``interface_radii`` is embedded as a mesh curve, so no element
+    crosses it: a radial step profile at those radii is then piecewise
+    smooth on every element. Mesh vertices lie on the circles; the interface
+    and wall polygons are inscribed in them.
+
+    With ``band=(r0, r1)`` and ``band_mesh_size``, the size is
+    ``band_mesh_size`` for ``r0 <= r <= r1`` and grows linearly with distance
+    ``d`` from the band, ``band_mesh_size + band_grading * d``, up to
+    ``mesh_size``. Otherwise the mesh is uniform with size ``mesh_size``.
+    """
+    inner = float(inner_radius)
+    outer = float(outer_radius)
+    radii = tuple(sorted({float(radius) for radius in interface_radii}))
+    if not (np.isfinite(inner) and np.isfinite(outer)) or not 0.0 <= inner < outer:
+        raise ValueError("annulus radii must satisfy 0 <= inner_radius < outer_radius")
+    if any(not inner < radius < outer for radius in radii):
+        raise ValueError("interface radii must lie strictly between the inner and outer radius")
+    cx, cy = (float(center[0]), float(center[1]))
+    graded = band is not None and band_mesh_size is not None
+    if graded:
+        band = (float(band[0]), float(band[1]))
+        band_mesh_size = float(band_mesh_size)
+        band_grading = float(band_grading)
+        if not inner <= band[0] < band[1] <= outer:
+            raise ValueError("band must lie between the inner and outer radius")
+        if not 0.0 < band_mesh_size <= float(mesh_size) or band_grading <= 0.0:
+            raise ValueError("require 0 < band_mesh_size <= mesh_size and positive band_grading")
+
+    def build(gmsh):
+        """Create the (possibly holed) disk and fragment it along the interface circles."""
+        occ = gmsh.model.occ
+        objects = [(2, occ.addDisk(cx, cy, 0.0, outer, outer))]
+        if inner > 0.0:
+            objects, _ = occ.cut(objects, [(2, occ.addDisk(cx, cy, 0.0, inner, inner))])
+        if radii:
+            circles = [(1, occ.addCircle(cx, cy, 0.0, radius)) for radius in radii]
+            objects, _ = occ.fragment(objects, circles)
+        if graded:
+            for name, value in (("Mesh.MeshSizeMin", band_mesh_size), ("Mesh.CharacteristicLengthMin", band_mesh_size),
+                                ("Mesh.MeshSizeFromPoints", 0), ("Mesh.MeshSizeFromCurvature", 0),
+                                ("Mesh.MeshSizeExtendFromBoundary", 0)):
+                _set_gmsh_number_option(gmsh, name, value)
+            radius = f"Sqrt((x-({cx}))^2+(y-({cy}))^2)"
+            distance = f"Max(0, Max({band[0]}-{radius}, {radius}-{band[1]}))"
+            field = gmsh.model.mesh.field.add("MathEval")
+            gmsh.model.mesh.field.setString(
+                field, "F", f"Min({float(mesh_size)}, {band_mesh_size}+{band_grading}*{distance})")
+            gmsh.model.mesh.field.setAsBackgroundMesh(field)
+        return [tag for dim, tag in objects if dim == 2]
+
+    return _generate_gmsh_mesh(
+        "annulus",
+        mesh_size,
+        build,
+        verbosity=verbosity,
+        algorithm=algorithm,
+        write_path=write_path,
+        cache=cache,
+        cache_dir=cache_dir,
+        cache_key_data={
+            "geometry": "annulus",
+            "center": (cx, cy),
+            "inner_radius": inner,
+            "outer_radius": outer,
+            "interface_radii": radii,
+            "band": band if graded else None,
+            "band_mesh_size": band_mesh_size if graded else None,
+            "band_grading": band_grading if graded else None,
         },
         num_threads=num_threads,
         log_cache=log_cache,

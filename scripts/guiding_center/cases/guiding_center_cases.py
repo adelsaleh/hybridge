@@ -5,7 +5,7 @@ from __future__ import annotations
 from hybridge.runtime.precision import REAL_DTYPE
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -57,6 +57,12 @@ class GuidingCenterCase:
     parameters: dict[str, Any] = field(default_factory=dict)
     exact_density_gradient: Callable[[Any, Any, float], tuple[Any, Any]] | None = None
     exact_potential_gradient: Callable[[Any, Any, float], tuple[Any, Any]] | None = None
+    # Sharp radial band on an interface-conforming mesh: the runner projects
+    # ``band_modulation`` and multiplies it by the elementwise band indicator
+    # (element centroid radius in [inner, outer]), which is exact because no
+    # element crosses the band edges. ``band_modulation(x, y, perturbed)``.
+    conforming_band: tuple[float, float] | None = None
+    band_modulation: Callable[[Any, Any, bool], Any] | None = None
     # Forcing of the density equation d_t rho + v.grad rho = S(x, y, t) + alpha*rho:
     # an explicit source independent of rho and a constant reaction coefficient alpha.
     # ``density_source_mass(t)`` is the exact injected mass int_0^t int S, when known;
@@ -540,6 +546,156 @@ def gaussian_ionization(*, rate, center=(0.0, 0.0), width=None, start=0.0, ramp=
     if uniform and float(start) <= 0.0 and float(ramp) == 0.0:
         return dict(density_reaction=rate, record=record, exponent=exponent)
     return dict(density_reaction_profile=profile, density_reaction_rate=switch, record=record, exponent=exponent)
+
+
+def diocotron_annulus(
+        *,
+        k: int = 3,
+        modes: tuple[int, ...] | list[int] | None = None,
+        phase_scale: float = 0.0,
+        epsilon: float = 1.0e-6,
+        eps: float | None = None,
+        inner_wall: float = 0.1,
+        wall: float = 1.0,
+        s_minus: float = 0.4,
+        s_plus: float = 0.5,
+        rho_bar: float = 1.0,
+        edge_width: float = 0.0,
+        s_bar: float | None = None,
+        s_d: float | None = None,
+        p: float | None = None,
+        theta_shift: float = 0.0,
+        truncate: bool = False,
+        conforming: bool = True,
+        band_mesh_size: float | None = None,
+        band_grading: float = 0.25,
+        refine_band: tuple[float, float] | None = None,
+        injection_charges: tuple[float, ...] | list[float] = (),
+        injection_centers: tuple[tuple[float, float], ...] | list | None = None,
+        injection_width: float = 0.06,
+        injection_start: float = 0.0,
+        injection_duration: float = 4.0,
+        injection_angular_velocity: float = 0.0,
+        ionization_rate: float = 0.0,
+        ionization_center: tuple[float, float] = (0.0, 0.0),
+        ionization_width: float | None = None,
+        ionization_start: float = 0.0,
+        ionization_ramp: float = 0.0,
+) -> GuidingCenterCase:
+    """Diocotron band between an inner wall and an outer wall, phi = 0 on both.
+
+    This is the semi-Lagrangian benchmark geometry of Madaule et al. (2013) and
+    Crouseilles et al. (2014) ("Dirichlet for all modes"), scaled to an outer
+    wall of radius ``wall`` (lengths enter only through ratios; times are
+    unchanged). ``inner_wall=0`` gives the disk. Profiles are those of
+    :func:`diocotron_k`. A sharp band (``p=None``, ``edge_width=0``) with
+    ``conforming=True`` is meshed with embedded circles at ``s_minus`` and
+    ``s_plus`` and projected elementwise, so the initial step has no Gibbs
+    oscillations; so is a truncated super-Gaussian (``p`` with ``truncate=True``),
+    whose cutoff jumps are then exact element edges. ``band_mesh_size`` refines
+    the mesh on ``refine_band`` (default ``(s_minus, s_plus)``); the run's mesh
+    size applies far from it (see :func:`hybridge.core.mesh.gmsh_annulus_mesh`).
+
+    ``injection_charges`` adds an explicit density source (independent of rho):
+    normalized Gaussians of width ``injection_width`` at ``injection_centers``
+    (default: the centre), each injecting its charge with the unit-integral
+    window (2/T) sin^2(pi (t-t0)/T) on [t0, t0+T] = ``injection_start`` +
+    [0, ``injection_duration``], rotating about the centre at
+    ``injection_angular_velocity`` (see :func:`gaussian_injection`).
+
+    ``ionization_rate`` adds the ionization S = nu(x) rho of a neutral gas
+    cloud of that peak rate (Gaussian of ``ionization_width`` at
+    ``ionization_center``; uniform without a width), switched on at
+    ``ionization_start`` over ``ionization_ramp`` (see
+    :func:`gaussian_ionization`). Without a perturbation (``epsilon=0``), no
+    injection and an axisymmetric gas, rho0(r) exp(int_0^t nu) is the exact
+    density.
+    """
+    inner_wall, wall = float(inner_wall), float(wall)
+    if not 0.0 <= inner_wall < float(s_minus) < float(s_plus) < wall:
+        raise ValueError("require 0 <= inner_wall < s_minus < s_plus < wall")
+    base = diocotron_k(
+        k=k, modes=modes, phase_scale=phase_scale, epsilon=epsilon, eps=eps,
+        s_minus=s_minus, s_plus=s_plus, rho_bar=rho_bar, edge_width=edge_width,
+        s_bar=s_bar, s_d=s_d, p=p, theta_shift=theta_shift, truncate=truncate,
+    )
+    parameters = dict(base.parameters)
+    step = parameters["p"] is None and parameters["edge_width"] == 0.0
+    cut_profile = parameters["p"] is not None and parameters["truncate"]
+    band = (parameters["s_minus"], parameters["s_plus"]) if ((step or cut_profile) and conforming) else None
+    active_modes = tuple(parameters["modes"])
+    amplitude, phase = parameters["epsilon"], parameters["phase_scale"]
+    shift, level = parameters["theta_shift"], parameters["rho_bar"]
+
+    def radial_profile(x_arr, y_arr):
+        if not cut_profile:
+            return level + 0.0 * x_arr
+        # The untruncated super-Gaussian; the band indicator applies the cutoff.
+        return rho_eq_super_gaussian_annulus(
+            x_arr, y_arr, s_bar=parameters["s_bar"], s_d=parameters["s_d"], p=parameters["p"],
+            rho_bar=level, truncate=False)
+
+    def band_modulation(x, y, perturbed=True):
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        profile = radial_profile(x_arr, y_arr)
+        if not perturbed:
+            return profile
+        theta = xp.arctan2(y_arr, x_arr) - shift
+        modulation = 1.0 + 0.0 * x_arr
+        for azimuthal_mode in active_modes:
+            modulation = modulation + amplitude * xp.cos(azimuthal_mode * theta + phase * azimuthal_mode ** 2)
+        return profile * modulation
+
+    parameters.update(
+        inner_wall=inner_wall,
+        wall=wall,
+        conforming=bool(band is not None),
+        geometry={
+            "inner_radius": inner_wall,
+            "outer_radius": wall,
+            "interface_radii": band or (),
+            "band": ((tuple(float(r) for r in refine_band) if refine_band is not None
+                      else (parameters["s_minus"], parameters["s_plus"])) if band_mesh_size is not None else None),
+            "band_mesh_size": None if band_mesh_size is None else float(band_mesh_size),
+            "band_grading": float(band_grading),
+        },
+    )
+    wall_text = f"inner wall r={inner_wall:g}, " if inner_wall > 0 else ""
+    forcing = gaussian_injection(
+        charges=injection_charges, centers=injection_centers, width=injection_width,
+        start=injection_start, duration=injection_duration, angular_velocity=injection_angular_velocity,
+        inner_wall=inner_wall, wall=wall)
+    if forcing:
+        parameters["injection"] = forcing.pop("record")
+    ionization = gaussian_ionization(
+        rate=ionization_rate, center=ionization_center, width=ionization_width,
+        start=ionization_start, ramp=ionization_ramp)
+    exact = {}
+    if ionization:
+        parameters["ionization"] = ionization.pop("record")
+        exponent = ionization.pop("exponent")
+        axisymmetric = ionization_width is None or tuple(float(c) for c in ionization_center) == (0.0, 0.0)
+        if amplitude == 0.0 and not forcing and axisymmetric:
+            equilibrium = base.equilibrium_density
+
+            def exact_density(x, y, t):
+                xp, x_arr, y_arr = _xy_arrays(x, y)
+                return equilibrium(x_arr, y_arr) * xp.exp(exponent(x_arr, y_arr, t))
+
+            exact = dict(exact_density=exact_density)
+    return replace(
+        base,
+        **forcing,
+        **ionization,
+        **exact,
+        key="diocotron_annulus",
+        description=(f"Diocotron band {parameters['s_minus']:g}<r<{parameters['s_plus']:g}, {wall_text}"
+                     f"outer wall r={wall:g}, phi=0 on every wall, modes {active_modes}."),
+        default_domain="annulus",
+        parameters=parameters,
+        conforming_band=band,
+        band_modulation=band_modulation if band is not None else None,
+    )
 
 
 def euler_vortex_gas(
@@ -1185,6 +1341,14 @@ CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
         factory=orbiting_vortex,
         default_domain="polygon",
     ),
+    "diocotron_annulus": GuidingCenterCaseDefinition(
+        key="diocotron_annulus",
+        description=("Diocotron band between an inner and an outer wall (semi-Lagrangian benchmark "
+                     "geometry, scaled to an outer wall of radius 1); interface-conforming sharp band."),
+        factory=diocotron_annulus,
+        default_domain="annulus",
+        default_params={"k": 3},
+    ),
 }
 
 CASE_BY_KEY = CASE_DEFINITIONS
@@ -1219,4 +1383,5 @@ __all__ = [
     "positive_turbulence",
     "euler_star_vortex_gas",
     "euler_shaped_vortex_gas",
+    "diocotron_annulus",
 ]

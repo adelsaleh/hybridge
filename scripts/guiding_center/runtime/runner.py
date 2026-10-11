@@ -86,6 +86,22 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
             algorithm=config.gmsh_algorithm,
             log_cache=log_mesh_cache,
         )
+    if domain == "annulus":
+        from hybridge.core.mesh import gmsh_annulus_mesh
+
+        geometry = case.parameters.get("geometry", {})
+        return gmsh_annulus_mesh(
+            config.mesh_size,
+            inner_radius=float(geometry.get("inner_radius", 0.0)),
+            outer_radius=float(geometry.get("outer_radius", 1.0)),
+            interface_radii=tuple(geometry.get("interface_radii", ())),
+            band=geometry.get("band"),
+            band_mesh_size=geometry.get("band_mesh_size"),
+            band_grading=float(geometry.get("band_grading", 0.25)),
+            verbosity=config.gmsh_verbosity,
+            algorithm=config.gmsh_algorithm,
+            log_cache=log_mesh_cache,
+        )
     if domain == "disc":
         return gmsh_disc_mesh(
             config.mesh_size,
@@ -131,6 +147,38 @@ def _project_initial_field(config: GuidingCenterRunPreset, space, function, *, n
         backend="device" if _initial_projection_backend(config) == "cupy" else "host",
         volume_quad_1d=config.initial_projection_quad_1d, name=name, synchronize=True, timings=timings)
 
+
+
+def _project_case_density(config: GuidingCenterRunPreset, space, case, *, equilibrium: bool, name: str,
+                          timings=None):
+    """Project a case density; sharp conforming bands use the exact elementwise indicator.
+
+    No element of an interface-conforming mesh crosses the band edges, so the
+    L2 projection of indicator * modulation is the projected modulation times
+    the elementwise indicator (element centroid radius inside the band).
+    """
+    if case.conforming_band is None:
+        function = case.equilibrium_density if equilibrium else case.initial_density_at()
+        return _project_initial_field(config, space, function, name=name, timings=timings)
+    import numpy as np
+
+    from hybridge.runtime.precision import REAL_DTYPE
+
+    inner, outer = case.conforming_band
+    field = _project_initial_field(
+        config, space, lambda x, y: case.band_modulation(x, y, not equilibrium), name=name, timings=timings)
+    centroids = space.mesh.node_coords[space.mesh.triangles].mean(axis=1)
+    radius = np.hypot(centroids[:, 0], centroids[:, 1])
+    mask = ((radius > inner) & (radius < outer)).astype(REAL_DTYPE)[:, None]
+    if field.coefficients_materialized:
+        return space.field(np.ascontiguousarray(field.coeffs * mask), name=name)
+    from hybridge.core.device import as_cupy_coefficients, as_cupy_space, field_from_cupy_coefficients
+    from hybridge.runtime.optional import array_module
+
+    cspace = as_cupy_space(space)
+    coefficients = as_cupy_coefficients(field, cspace)
+    masked = coefficients * array_module(coefficients).asarray(mask)
+    return field_from_cupy_coefficients(space, masked, device=cspace.device_id, name=name)
 
 
 def _report_projection_timings(config, details, total, *, label, prefix):
@@ -261,9 +309,10 @@ def run_guiding_center_case(
             volume_quad_1d=config.volume_quad_1d, edge_quad_1d=config.edge_quad_1d,
             name="poisson_h",
         )
-    if config.diocotron_diagnostics and (case.key != "diocotron_k" or
-            (config.domain != "auto" and config.domain != "disc")):
-        raise ValueError("diocotron modal diagnostics require diocotron_k on the disk")
+    modal_domains = {"diocotron_k": {"auto", "disc"}, "diocotron_annulus": {"auto", "annulus"}}
+    if config.diocotron_diagnostics and config.domain not in modal_domains.get(case.key, ()):
+        raise ValueError("diocotron modal diagnostics require diocotron_k on the disk "
+                         "or diocotron_annulus on its annulus")
     projection_backend = _initial_projection_backend(config)
     projection_label = projection_backend
     if case.parameters.get("initial_profile") == "fft_gaussian":
@@ -276,8 +325,8 @@ def run_guiding_center_case(
     rho_field, initial_density_projection_time = timed_call(
         f"[gc:init] projecting initial density ({projection_label})",
         _detail_verbosity(config),
-        lambda: _project_initial_field(config, space, case.initial_density_at(), name="rho_h",
-                                       timings=initial_projection_timings),
+        lambda: _project_case_density(config, space, case, equilibrium=False, name="rho_h",
+                                      timings=initial_projection_timings),
     )
     _report_projection_timings(config, initial_projection_timings, initial_density_projection_time,
                                label="initial_density_projection", prefix=config.diagnostics_prefix or preset_key)
@@ -350,8 +399,8 @@ def run_guiding_center_case(
         equilibrium_density, equilibrium_density_projection_time = timed_call(
             f"[gc:init] projecting equilibrium density ({projection_backend})",
             _detail_verbosity(config),
-            lambda: _project_initial_field(config, space, case.equilibrium_density, name="rho_eq_h",
-                                           timings=equilibrium_projection_timings),
+            lambda: _project_case_density(config, space, case, equilibrium=True, name="rho_eq_h",
+                                          timings=equilibrium_projection_timings),
         )
         _report_projection_timings(config, equilibrium_projection_timings, equilibrium_density_projection_time,
                                    label="equilibrium_density_projection", prefix=config.diagnostics_prefix or preset_key)
@@ -494,6 +543,7 @@ def run_guiding_center_case(
                 mode=int(case.parameters["k"]), inner=float(case.parameters["s_minus"]),
                 outer=float(case.parameters["s_plus"]), radial_points=config.diocotron_radial_points,
                 angular_points=config.diocotron_angular_points,
+                inner_wall=float(case.parameters.get("inner_wall", 0.0)),
                 backend="device" if projection_backend == "cupy" else "host"))
 
     def benchmark_metrics():
@@ -540,10 +590,12 @@ def run_guiding_center_case(
                     "exact_drift_order_offset": config.exact_drift_order_offset}
                    if config.transport_electric_field == "exact" else {}))
             if config.diocotron_diagnostics:
-                from scripts.guiding_center.diagnostics.diocotron_reference import annulus_spectrum
-                initial_extra["diocotron_sharp_annulus_reference"] = annulus_spectrum(
+                from scripts.guiding_center.diagnostics.diocotron_reference import interface_spectrum
+                initial_extra["diocotron_sharp_annulus_reference"] = interface_spectrum(
                     [int(case.parameters["k"])], inner=float(case.parameters["s_minus"]),
-                    outer=float(case.parameters["s_plus"]), density=float(case.parameters["rho_bar"]))[0]
+                    outer=float(case.parameters["s_plus"]), density=float(case.parameters["rho_bar"]),
+                    wall=float(case.parameters.get("wall", 1.0)),
+                    inner_wall=float(case.parameters.get("inner_wall", 0.0)))[0]
             initial_extra.update(solver_result_metrics("first_poisson", first_poisson_result))
             if config.time_scheme in {"h1-bdf3", "h2-bdf3", "imex-ark3"}:
                 initial_extra.update(stage_stepper.initial_recovery_metrics)
@@ -624,6 +676,15 @@ def run_guiding_center_case(
             recorder.record(row)
             _print_step_summary(config, row)
 
+        initial_observer = getattr(step_observer, "observe_initial", None)
+        if initial_observer is not None:  # opt-in: observers that record the initial state (step 0)
+            initial_observer(GuidingCenterStepSnapshot(
+                step=0, time=0.0, space=space, transport_source=None, transport_beta=None,
+                transport_reaction=None, transport_boundary=None, transport_initial_guess=None,
+                transport_result=None, accepted_density=rho_field,
+                poisson_boundary=case.potential_boundary_at(0.0), poisson_initial_guess=None,
+                poisson_result=poisson_result, accepted_density_trace_reduced=density_trace,
+                equilibrium_potential=equilibrium_potential))
         current_time = 0.0
         for step in range(1, config.num_steps + 1):
             linear_step_start = time.perf_counter()
@@ -703,6 +764,7 @@ def run_guiding_center_case(
                     poisson_result=poisson_result,
                     accepted_density_trace_reduced=density_trace,
                     accepted_density_boundary=endpoint_density_boundary,
+                    equilibrium_potential=equilibrium_potential,
                 ))
 
             linear_step_wall_time = linear_step_end - linear_step_start
