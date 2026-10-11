@@ -16,7 +16,7 @@ class DiocotronModeDiagnostics:
     """Cache a polar sampling map, equilibrium and radial integration weights."""
 
     def __init__(self, space, equilibrium_potential, *, mode=9, inner=.45, outer=.50,
-                 radial_points=32, angular_points=None, backend="host"):
+                 radial_points=32, angular_points=None, backend="host", inner_wall=0.):
         if mode < 1 or int(mode)!=mode or radial_points < 2:
             raise ValueError("positive integer mode and at least two radial points required")
         self.space, self.mode, self.backend = space, int(mode), backend
@@ -27,14 +27,20 @@ class DiocotronModeDiagnostics:
         # thin outer shell from modal sampling instead of filling missing data.
         mesh = space.mesh
         vertices = mesh.node_coords[mesh.edges[mesh.bnd_edges_inds]]
+        # An inner wall is a polygon inscribed in r=inner_wall: points with
+        # r >= inner_wall lie in the mesh. Only outer-wall edges bound the radius.
+        self.inner_wall = float(inner_wall)
+        vertex_radius = np.linalg.norm(vertices, axis=2).min(axis=1)
+        outer_edges = vertex_radius > .5*(self.inner_wall+vertex_radius.max()) if self.inner_wall > 0 else slice(None)
+        vertices = vertices[outer_edges]
         lengths = np.linalg.norm(vertices[:, 1]-vertices[:, 0], axis=1)
         distances = np.abs(vertices[:,0,0]*vertices[:,1,1]-vertices[:,0,1]*vertices[:,1,0])/lengths
         self.radius = float(distances.min())*(1-1.e-12)
-        if not 0 <= inner < outer < self.radius:
-            raise ValueError("polar annulus must lie inside the mesh's inscribed circle")
+        if not 0 <= self.inner_wall <= inner < outer < self.radius:
+            raise ValueError("polar annulus must lie between the inner wall and the mesh's inscribed circle")
         points,weights=np.polynomial.legendre.leggauss(int(radial_points))
         radii, radial_weights=[],[]
-        breaks=[0.,inner,(inner+outer)/2,outer,self.radius]
+        breaks=[self.inner_wall,inner,(inner+outer)/2,outer,self.radius]
         for left,right in zip(breaks,breaks[1:]):
             if right<=left:
                 continue

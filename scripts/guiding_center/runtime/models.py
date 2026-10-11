@@ -51,4 +51,6 @@ class GuidingCenterStepSnapshot:
     poisson_result: Any
     accepted_density_trace_reduced: Any = None
     accepted_density_boundary: Any = None
+    # Potential of the case's equilibrium density, when the case defines one.
+    equilibrium_potential: Any = None
 
