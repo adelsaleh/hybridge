@@ -1,6 +1,7 @@
 """Guiding-center diagnostics helpers."""
 
 from __future__ import annotations
+import math
 import time
 from typing import Any
 from hybridge.core.field_ops import perpendicular_vector_field
@@ -15,6 +16,27 @@ from hybridge.diagnostics.solver import relative_drift
 def _electric_flux(poisson_result):
     """Return the accepted higher-order electric field when available."""
     return poisson_result.postprocessed_flux or poisson_result.flux
+
+
+def _forced_mass_balance(case, mass: float, baseline_mass: float, time_value: float) -> dict[str, Any]:
+    """Exact mass of a forced density equation and the relative error of the computed one.
+
+    dM/dt = int S + alpha*M: M0 + int_0^t int S without reaction, M0*exp(alpha*t)
+    without source; nothing is reported for unforced cases, when both act or for a
+    space-dependent reaction (whose balance uses the recorded ``reaction_production``).
+    """
+    alpha = float(getattr(case, "density_reaction", 0.0))
+    source_mass = getattr(case, "density_source_mass", None)
+    if getattr(case, "density_reaction_profile", None) is not None:
+        return {}
+    if source_mass is not None and alpha == 0.0:
+        expected = baseline_mass + float(source_mass(float(time_value)))
+    elif getattr(case, "density_source", None) is None and alpha != 0.0:
+        expected = baseline_mass * math.exp(alpha * float(time_value))
+    else:
+        return {}
+    return {"mass_expected": expected,
+            "mass_balance_relative_error": (mass - expected) / expected if expected else None}
 
 
 def _compute_diagnostics(
@@ -88,6 +110,7 @@ def _compute_diagnostics(
         "mass": mass,
         "mass_drift": mass - effective_baseline_mass,
         "mass_relative_drift": None if case.density_is_vorticity else relative_drift(mass, effective_baseline_mass),
+        **_forced_mass_balance(case, mass, effective_baseline_mass, time_value),
         "q_l2": q_l2,
         "q_l2_standard": standard_q_l2,
         "q_l2_postprocessed": postprocessed_q_l2,

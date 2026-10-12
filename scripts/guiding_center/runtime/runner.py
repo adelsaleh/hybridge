@@ -31,6 +31,7 @@ from scripts.guiding_center.runtime.configuration import (
 )
 from scripts.guiding_center.runtime.diagnostics import _compute_diagnostics, _electric_flux
 from scripts.guiding_center.runtime.labels import run_label
+from scripts.guiding_center.runtime.forcing import DensityForcing
 from scripts.guiding_center.runtime.steppers import make_stepper
 from scripts.guiding_center.runtime.models import GuidingCenterRunResult, GuidingCenterStepSnapshot
 from scripts.guiding_center.runtime.plotting import _make_plotter, _plot_output_settings
@@ -318,6 +319,9 @@ def run_guiding_center_case(
         print("[gc:init] preparing solver fields and options ... ", end="", flush=True)
     zero_reaction = poisson_space.zeros(name="zero_reaction_h")
     one_reaction = space.constant(1.0, name="one_reaction_h")
+    # Source S(x, t) and reaction alpha*rho of the density equation (none for most cases).
+    forcing = DensityForcing(space, case)
+    forcing.check_scheme(config.time_scheme)
     poisson_options = _make_poisson_options(config)
     transport_boundary_mode = (
         case.density_transport_boundary_mode
@@ -475,7 +479,7 @@ def run_guiding_center_case(
         config, case, space, rho_field, poisson_result, density_trace, potential_trace,
         transport_boundary_mode=transport_boundary_mode, poisson_solver=poisson_solver,
         positivity=positivity, recovery_record=record_poisson_recovery,
-        density_projector=density_projector,
+        forcing=forcing if forcing.active else None, density_projector=density_projector,
     )
     if hasattr(stage_stepper, "initial_poisson_result"):
         poisson_result = stage_stepper.initial_poisson_result
@@ -577,6 +581,8 @@ def run_guiding_center_case(
                     "plot_screenshot_dir_effective": effective_screenshot_dir,
                 }
             )
+            if forcing.has_reaction:
+                initial_extra["reaction_production"] = forcing.production(rho_field, 0.0)
             timing_recorder.record({"step": 0, "time": 0.0, **initial_extra})
         row = {}
         if diagnostics_enabled:
@@ -636,10 +642,15 @@ def run_guiding_center_case(
                 if stage_boundary is Ellipsis:
                     stage_boundary = (None if transport_boundary_mode == "zero-flux" else
                                       case.density_boundary_at(stage_time))
+                if forcing.active:  # implicit at the stage time: (1-alpha*scale) rho + scale*A rho = source + scale*S_h
+                    source = forcing.stage_source(source, scale, stage_time)
+                    # alpha_h(t) changing between stage times changes the operator itself.
+                    reuse_operator = reuse_operator and not forcing.time_dependent_reaction
                 if reuse_operator:
                     transport_solver.set_source(source, boundary_condition=stage_boundary)
                 else:
-                    transport_solver.set_problem(source, beta, one_reaction, stage_boundary)
+                    transport_solver.set_problem(
+                        source, beta, forcing.reaction(scale, one_reaction, stage_time, like=source), stage_boundary)
                 result = _solve_transport_stage(
                     transport_solver, initial_guess=guess, beta=beta, step=step,
                     time_value=stage_time, stage=stage or config.time_scheme, beta_scale=scale,
@@ -792,6 +803,10 @@ def run_guiding_center_case(
                 # projection after it conserves the total mass but moves charge locally.
                 solved_density = (rho_field if density_projector is None or transport_result is None
                                   else solution_field(transport_result, space))
+                if forcing.has_reaction:  # int alpha_h rho_h: the reaction term of the discrete mass balance
+                    extra["reaction_production"] = forcing.production(solved_density, current_time)
+                if forcing.source_function is not None:  # int S_h: its source term
+                    extra["source_production"] = forcing.source_production(current_time)
                 row, diagnostics_wall_time = timed_call(
                     "[gc] computing accepted-step diagnostics",
                     _detail_verbosity(config),
