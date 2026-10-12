@@ -10,7 +10,7 @@ one full step and two half steps, so its local error is O(dt^3). The second
 step is SI-BDF2, also O(dt^3) locally. Neither startup step then limits the
 global third order, unlike a plain Euler/BDF2 ramp. The startup costs three
 transport and two Poisson solves, once. The extrapolation is not positivity
-preserving.
+preserving; an optional density projector (KKT positivity) maps it too.
 """
 from time import perf_counter
 
@@ -111,15 +111,17 @@ class SIBDF3Stepper(SIBDF2Stepper):
         density.name = "rho_h"
         trace = trace_linear_combination([(2.0, path_trace), (-1.0, full_trace)])
         self._transport_wall += perf_counter() - start
+        metrics = dict(bdf3_startup=True, bdf3_startup_method=STARTUP_METHOD,
+                       transport_time_order=2, transport_beta_scale=0.5*dt)
+        # The extrapolation is not positivity preserving: project it like any transported density.
+        density = self._project_density(density, metrics)
         endpoint_guess = trace_linear_combination([(2.0, half_potential_trace), (-1.0, self.potential_trace)])
         poisson, potential_trace = self._poisson(
             poisson_solver, density, endpoint_guess, endpoint_postprocess, final=True)
         return GuidingCenterStep(
             density, trace, poisson, potential_trace, result, half_density, second_beta,
             half_trace, endpoint_guess, self._transport_results, self._poisson_results,
-            self._transport_wall, self._poisson_wall, beta_time,
-            dict(bdf3_startup=True, bdf3_startup_method=STARTUP_METHOD,
-                 transport_time_order=2, transport_beta_scale=0.5*dt),
+            self._transport_wall, self._poisson_wall, beta_time, metrics,
             transport_boundary=self.density_boundary(endpoint),
         )
 

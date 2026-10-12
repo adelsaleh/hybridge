@@ -29,4 +29,6 @@ def run_label(config):
         "predictor-corrector": "Predictor-corrector", "si-bdf2": "SI BDF2", "si-bdf3": "SI BDF3",
         "h1-bdf3": "H1-BDF3", "h2-bdf3": "H2-BDF3",
     }.get(config.time_scheme, config.time_scheme)
+    if getattr(config, "density_positivity", "none") == "kkt":
+        scheme += " + KKT positivity"
     return f"{model} | {scheme}"

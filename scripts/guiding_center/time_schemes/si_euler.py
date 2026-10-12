@@ -26,8 +26,14 @@ class SIEulerStepper:
                  density_boundary, potential_boundary, potential_trace=None,
                  phase_verbosity=0, detail_verbosity=0, poisson_solver=None,
                  poisson_tau_retry_factor=2., poisson_tau_max_retries=4,
-                 recovery_verbosity=0, recovery_record=None):
-        """Initialize the accepted state and its fixed-operator trace history."""
+                 recovery_verbosity=0, recovery_record=None, density_projector=None):
+        """Initialize the accepted state and its fixed-operator trace history.
+
+        ``density_projector`` (``project(field) -> (field, report)``, e.g. the KKT
+        positivity projector) maps every transported density before the endpoint
+        Poisson solve and before the history is committed, so drift, history and
+        diagnostics all see it.
+        """
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError(f"{self.scheme} requires a finite positive constant dt")
         self.space, self.dt, self.time = space, float(dt), 0.0
@@ -42,6 +48,24 @@ class SIEulerStepper:
         self.previous_potential_trace = self.older_potential_trace = None
         self.density_boundary, self.potential_boundary = density_boundary, potential_boundary
         self.phase_verbosity, self.detail_verbosity = phase_verbosity, detail_verbosity
+        self.density_projector = density_projector
+
+    def _project_density(self, density, metrics):
+        """Apply the optional density projector and record its report in ``metrics``."""
+        if self.density_projector is None:
+            return density
+        projected, report = self.density_projector.project(density, name=density.name)
+        metrics.update(report)
+        if self.detail_verbosity:
+            print(f"[gc:{self.scheme}] KKT positivity: flagged={report['positivity_flagged']} "
+                  f"(negative mean {report['positivity_negative_mean_projected']}"
+                  f"+{report['positivity_negative_mean_zeroed']} zeroed, "
+                  f"Zhang-Shu fallback {report['positivity_fallback']}) "
+                  f"min {report['positivity_min_before']:.3e} -> {report['positivity_min_after']:.1e} "
+                  f"|d rho|/|rho|={report['positivity_correction_relative']:.2e} "
+                  f"mass returned={report['positivity_mass_returned']:.1e} "
+                  f"in {report['positivity_projection_time']:.3f}s", flush=True)
+        return projected
 
     def _drift_flux(self, result):
         """Select the electric field (or exact drift) used by this scheme's transport history."""
@@ -87,6 +111,7 @@ class SIEulerStepper:
         beta_time = perf_counter() - start
         result, density, trace = self._transport(
             solve_transport, source, beta, self.density_trace, scale, self.time + self.dt, stage)
+        density = self._project_density(density, metrics)
         poisson, potential_trace = self._poisson(
             poisson_solver, density, guess, endpoint_postprocess, final=True)
         return GuidingCenterStep(

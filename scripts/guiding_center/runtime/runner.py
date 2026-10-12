@@ -13,7 +13,7 @@ from hybridge.runtime.precision import (
     PIPELINE_AUDIT,
     audit_arrays,
 )
-from hybridge.core.field_ops import project_callable_to_trace, solution_trace
+from hybridge.core.field_ops import project_callable_to_trace, solution_field, solution_trace
 from hybridge.core.transfer import project_same_mesh_field
 from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
 from hybridge.diagnostics.solver import result_transfer_time, solver_result_metrics
@@ -280,6 +280,21 @@ def run_guiding_center_case(
     )
     _report_projection_timings(config, initial_projection_timings, initial_density_projection_time,
                                label="initial_density_projection", prefix=config.diagnostics_prefix or preset_key)
+    density_projector = None
+    if config.density_positivity == "kkt":
+        from hybridge.transport.positivity import DensityPositivityProjector
+        projector_backend = "device" if projection_backend == "cupy" else "host"
+        density_projector, _ = timed_call(
+            f"[gc:init] preparing KKT positivity projector ({projector_backend}, {config.density_positivity_points})",
+            _detail_verbosity(config),
+            lambda: DensityPositivityProjector(space, points=config.density_positivity_points,
+                                               backend=projector_backend))
+        # rho_h(0) is left uncorrected: the initial Poisson and first transport solves
+        # only see its moments, which are those of the exact nonnegative density, so
+        # the first correction is the post-processing of rho_h(dt).
+        if _phase_verbosity(config):
+            print("[gc:init] KKT positivity: rho_h(0) is not corrected; the first solves use the "
+                  "exact density's moments and the first correction acts on rho_h(dt)", flush=True)
     positivity = None
     initial_positivity = {}
     if config.positivity_diagnostics:
@@ -460,6 +475,7 @@ def run_guiding_center_case(
         config, case, space, rho_field, poisson_result, density_trace, potential_trace,
         transport_boundary_mode=transport_boundary_mode, poisson_solver=poisson_solver,
         positivity=positivity, recovery_record=record_poisson_recovery,
+        density_projector=density_projector,
     )
     if hasattr(stage_stepper, "initial_poisson_result"):
         poisson_result = stage_stepper.initial_poisson_result
@@ -772,6 +788,10 @@ def run_guiding_center_case(
                     }
                 )
                 extra.update(benchmark_metrics())
+                # The balance terms use the density of the transport solve: a positivity
+                # projection after it conserves the total mass but moves charge locally.
+                solved_density = (rho_field if density_projector is None or transport_result is None
+                                  else solution_field(transport_result, space))
                 row, diagnostics_wall_time = timed_call(
                     "[gc] computing accepted-step diagnostics",
                     _detail_verbosity(config),

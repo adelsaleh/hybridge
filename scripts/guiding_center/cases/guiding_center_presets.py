@@ -116,6 +116,10 @@ class GuidingCenterRunPreset:
     transport_direct_fallback: str = "none"
     positivity_diagnostics: bool = False
     positivity_tolerance: float = 1.0e-12
+    # KKT projection of every transported SI-Euler/SI-BDF2 density onto nonnegative
+    # point values with exact mass conservation (hybridge.transport.positivity).
+    density_positivity: str = "none"
+    density_positivity_points: str = "quadrature+lattice"
     diocotron_diagnostics: bool = False
     diocotron_radial_points: int = 32
     diocotron_angular_points: int | None = None
