@@ -493,6 +493,17 @@ def _cupy_field_coefficients(field: DGField, layout_space: DGSpace, device_id: i
         return result.copy() if copy else result
 
 
+def match_device_residency(field: DGField, template: DGField) -> DGField:
+    """Cache ``field`` coefficients on every device that holds ``template``; host-only templates are a no-op.
+
+    Lets a host-built field (a projected source, say) enter device-resident linear
+    combinations without staging the other terms through the host.
+    """
+    for device_id in sorted(template._device_coeffs or {}):
+        as_cupy_coefficients(field, as_cupy_space(field.space, device=device_id))
+    return field
+
+
 def as_cupy_vector_coefficients(field: VectorDGField, cspace: CupyDGSpace, *, copy: bool = False):
     """Return component-first ``(dim, E, n)`` vector DG coefficients on ``cspace``'s device.
 

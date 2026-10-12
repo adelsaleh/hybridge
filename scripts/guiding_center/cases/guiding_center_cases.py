@@ -57,6 +57,28 @@ class GuidingCenterCase:
     parameters: dict[str, Any] = field(default_factory=dict)
     exact_density_gradient: Callable[[Any, Any, float], tuple[Any, Any]] | None = None
     exact_potential_gradient: Callable[[Any, Any, float], tuple[Any, Any]] | None = None
+    # Forcing of the density equation d_t rho + v.grad rho = S(x, y, t) + alpha*rho:
+    # an explicit source independent of rho and a constant reaction coefficient alpha.
+    # ``density_source_mass(t)`` is the exact injected mass int_0^t int S, when known;
+    # S vanishes outside ``density_source_window``; a separable source
+    # S = density_source_rate(t) * density_source_profile(x, y) is projected once.
+    density_source: TimeScalarCallable | None = None
+    density_reaction: float = 0.0
+    density_source_mass: Callable[[float], float] | None = None
+    density_source_window: tuple[float, float] | None = None
+    density_source_rate: Callable[[float], float] | None = None
+    density_source_profile: ScalarCallable | None = None
+    # A space-dependent reaction coefficient adds density_reaction_rate(t) *
+    # density_reaction_profile(x, y) to alpha (rate 1 when None), e.g. the
+    # electron-impact ionization rate nu(x) of a prescribed neutral gas.
+    density_reaction_profile: ScalarCallable | None = None
+    density_reaction_rate: Callable[[float], float] | None = None
+
+    @property
+    def has_density_forcing(self) -> bool:
+        """Return whether the density equation has a source or a reaction term."""
+        return (self.density_source is not None or self.density_reaction != 0.0
+                or self.density_reaction_profile is not None)
 
     @property
     def has_exact_solution(self) -> bool:
@@ -356,6 +378,168 @@ def diocotron_k(
             "truncate": bool(truncate),
         },
     )
+
+
+def sin2_window(start: float, duration: float):
+    """Unit-integral injection window w(t) = (2/T) sin^2(pi (t-t0)/T) on [t0, t0+T] and its primitive W(t)."""
+    start, duration = float(start), float(duration)
+    if not duration > 0:
+        raise ValueError("injection duration must be positive")
+
+    def rate(t):
+        tau = float(t) - start
+        if tau <= 0.0 or tau >= duration:
+            return 0.0
+        return 2.0 / duration * math.sin(math.pi * tau / duration) ** 2
+
+    def primitive(t):
+        tau = min(max(float(t) - start, 0.0), duration)
+        return (tau - duration / (2.0 * math.pi) * math.sin(2.0 * math.pi * tau / duration)) / duration
+
+    return rate, primitive
+
+
+def gaussian_injection(*, charges, centers=None, width=0.06, start=0.0, duration=4.0, angular_velocity=0.0,
+                       inner_wall=0.0, wall=1.0) -> dict[str, Any]:
+    """Explicit density source of normalized Gaussian injectors, as GuidingCenterCase fields.
+
+    S(x, t) = w(t) sum_k Q_k exp(-|x - c_k(t)|^2/sigma^2)/(pi sigma^2), with the
+    window of :func:`sin2_window` and centres c_k rotating about the origin at
+    ``angular_velocity``. Each injector must lie at least 5 sigma from every wall,
+    so it injects Q_k up to exp(-25) (a centred one exactly 1 - exp(-wall^2/sigma^2)).
+    Returns {} without charges; otherwise the forcing fields plus a JSON ``record``.
+    """
+    charges = tuple(float(q) for q in charges)
+    if not charges:
+        return {}
+    centers = tuple((0.0, 0.0) for _ in charges) if centers is None else tuple(
+        (float(x), float(y)) for x, y in centers)
+    width, omega = float(width), float(angular_velocity)
+    if len(centers) != len(charges) or not width > 0:
+        raise ValueError("one centre per injection charge and a positive width are required")
+    sigma2 = width * width
+    fractions = []
+    for x, y in centers:
+        radius = math.hypot(x, y)
+        if wall - radius < 5 * width or (inner_wall > 0 and radius - inner_wall < 5 * width):
+            raise ValueError("injectors must lie at least 5 widths from every wall")
+        fractions.append(1.0 - math.exp(-wall ** 2 / sigma2) if radius == 0.0 else 1.0)
+    rate, primitive = sin2_window(start, duration)
+    total = sum(q * f for q, f in zip(charges, fractions))
+
+    def blobs(x, y, t):
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        cos_t, sin_t = math.cos(omega * t), math.sin(omega * t)
+        result = 0.0 * x_arr
+        for q, (cx, cy) in zip(charges, centers):
+            px, py = cos_t * cx - sin_t * cy, sin_t * cx + cos_t * cy
+            result = result + q / (math.pi * sigma2) * xp.exp(-((x_arr - px) ** 2 + (y_arr - py) ** 2) / sigma2)
+        return result
+
+    def source(x, y, t):
+        weight = rate(t)
+        return weight * blobs(x, y, t) if weight else 0.0 * _xy_arrays(x, y)[1]
+
+    fields = dict(
+        density_source=source,
+        density_source_mass=lambda t: total * primitive(t),
+        density_source_window=(float(start), float(start) + float(duration)),
+        record=dict(charges=list(charges), centers=[list(c) for c in centers], width=width,
+                    start=float(start), duration=float(duration), angular_velocity=omega, total_charge=total),
+    )
+    if omega == 0.0:
+        fields.update(density_source_rate=rate, density_source_profile=lambda x, y: blobs(x, y, 0.0))
+    return fields
+
+
+def smooth_switch(start: float, duration: float):
+    """Switch-on r(t) = sin^2(pi (t-t0)/(2T)) on [t0, t0+T], 0 before and 1 after, and its primitive R(t)."""
+    start, duration = float(start), float(duration)
+    if duration < 0:
+        raise ValueError("switch-on duration must be nonnegative")
+
+    def rate(t):
+        tau = float(t) - start
+        if tau <= 0.0:
+            return 0.0
+        if tau >= duration:
+            return 1.0
+        return math.sin(0.5 * math.pi * tau / duration) ** 2
+
+    def primitive(t):
+        tau = max(float(t) - start, 0.0)
+        if tau >= duration:
+            return tau - 0.5 * duration
+        return 0.5 * tau - duration / (2.0 * math.pi) * math.sin(math.pi * tau / duration)
+
+    return rate, primitive
+
+
+def pulse_train(period: float, duty: float = 0.5, ramp: float | None = None):
+    """Periodic smooth pulses r(t) in [0, 1], e.g. a pulsed emission rate.
+
+    Each period starts with a pulse of length ``duty * period`` that rises and falls as sin^2 over
+    ``ramp`` (default a tenth of the pulse) and is 0 for the rest of the period.
+    """
+    period, duty = float(period), float(duty)
+    if not (period > 0.0 and 0.0 < duty <= 1.0):
+        raise ValueError("pulse_train needs period > 0 and 0 < duty <= 1")
+    on = duty * period
+    ramp = 0.1 * on if ramp is None else float(ramp)
+    if not 0.0 <= 2.0 * ramp <= on:
+        raise ValueError("pulse_train needs 0 <= 2 * ramp <= duty * period")
+
+    def rate(t):
+        tau = math.fmod(float(t), period)
+        if tau < 0.0:
+            tau += period
+        if tau >= on:
+            return 0.0
+        if ramp > 0.0 and tau < ramp:
+            return math.sin(0.5 * math.pi * tau / ramp) ** 2
+        if ramp > 0.0 and tau > on - ramp:
+            return math.sin(0.5 * math.pi * (on - tau) / ramp) ** 2
+        return 1.0
+
+    return rate
+
+
+def gaussian_ionization(*, rate, center=(0.0, 0.0), width=None, start=0.0, ramp=0.0) -> dict[str, Any]:
+    """Electron-impact ionization S = nu(x) rho of a prescribed neutral gas, as GuidingCenterCase fields.
+
+    nu(x, t) = r(t) * rate * exp(-|x - c|^2/width^2), with a uniform gas when
+    ``width`` is None and the switch-on r(t) of :func:`smooth_switch` (at
+    ``start`` over ``ramp``). The source acts only where electrons already are,
+    so it amplifies the density it meets. A uniform gas present from t = 0 is
+    the constant reaction ``density_reaction``, for which rho(x, t) =
+    exp(nu t) r(x, (exp(nu t) - 1)/nu) maps every forced solution onto the
+    unforced one r. Returns {} without a rate; otherwise the forcing fields, a
+    JSON ``record`` and ``exponent(x, y, t)`` = int_0^t nu, so that an
+    axisymmetric equilibrium rho0 evolves exactly as rho0 exp(exponent).
+    """
+    rate = float(rate)
+    if rate == 0.0:
+        return {}
+    cx, cy = (float(c) for c in center)
+    uniform = width is None
+    if not uniform and not float(width) > 0:
+        raise ValueError("the ionization width must be positive")
+    switch, primitive = smooth_switch(start, ramp)
+    record = dict(rate=rate, center=[cx, cy], width=None if uniform else float(width),
+                  start=float(start), ramp=float(ramp))
+
+    def profile(x, y):
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        if uniform:
+            return rate + 0.0 * x_arr
+        return rate * xp.exp(-((x_arr - cx) ** 2 + (y_arr - cy) ** 2) / float(width) ** 2)
+
+    def exponent(x, y, t):
+        return profile(x, y) * primitive(t)
+
+    if uniform and float(start) <= 0.0 and float(ramp) == 0.0:
+        return dict(density_reaction=rate, record=record, exponent=exponent)
+    return dict(density_reaction_profile=profile, density_reaction_rate=switch, record=record, exponent=exponent)
 
 
 def euler_vortex_gas(

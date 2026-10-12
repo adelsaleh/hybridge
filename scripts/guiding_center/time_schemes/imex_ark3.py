@@ -67,8 +67,13 @@ class IMEXARK3Stepper:
     def __init__(self, space, dt, density, poisson_result, residual, *,
                  density_boundary, potential_boundary, phase_verbosity=0, detail_verbosity=0,
                  poisson_solver=None, poisson_tau_retry_factor=2., poisson_tau_max_retries=4,
-                 recovery_verbosity=0, recovery_record=None, density_diagnostics=None):
-        """Initialize accepted state and the work needed for bounded stage recovery."""
+                 recovery_verbosity=0, recovery_record=None, density_diagnostics=None,
+                 density_forcing=None):
+        """Initialize accepted state and the work needed for bounded stage recovery.
+
+        ``density_forcing`` (:class:`DensityForcing`) adds S_h(t) + alpha*rho to every
+        stage residual; the runner adds it implicitly to the transport solves.
+        """
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError("IMEX-ARK3 requires a finite positive dt")
         self.space, self.dt, self.time = space, float(dt), 0.
@@ -80,6 +85,7 @@ class IMEXARK3Stepper:
         self.density_boundary, self.potential_boundary = density_boundary, potential_boundary
         self.phase_verbosity, self.detail_verbosity = phase_verbosity, detail_verbosity
         self.density_diagnostics = density_diagnostics
+        self.forcing = density_forcing
         self.recovery_options = dict(factor=poisson_tau_retry_factor,
             max_retries=poisson_tau_max_retries, verbosity=recovery_verbosity, record=recovery_record)
         start = perf_counter()
@@ -342,6 +348,10 @@ class _ARKWork:
             raise_for_poisson_rank_failure(error, checkpoint, checkpoint.label + " explicit HDG residual")
             raise
         self.residual_count += 1
+        if stepper.forcing is not None:  # full right-hand side v.grad rho -> ... + S_h(t) + alpha*rho
+            forcing = stepper.forcing.rhs(checkpoint.density, checkpoint.time)
+            if forcing is not None:
+                rhs = rhs + forcing
         return rhs, trace, drift
 
     def repair(self, failure):

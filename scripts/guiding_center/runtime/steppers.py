@@ -12,7 +12,7 @@ from .configuration import (
 
 def make_stepper(config, case, space, density, poisson_result, density_trace,
                  potential_trace, *, transport_boundary_mode, poisson_solver,
-                 positivity=None, recovery_record=None, density_projector=None):
+                 positivity=None, recovery_record=None, forcing=None, density_projector=None):
     """Initialize the selected algorithm using the tested preset's policies."""
     stepper_type = STEPPERS[config.time_scheme]
     options = dict(
@@ -46,6 +46,7 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
         if config.time_scheme == "imex-ark3":
             options.update(
                 density_diagnostics=None if positivity is None else positivity.measure,
+                density_forcing=forcing,
             )
         else:
             options["startup_method"] = startup_method
