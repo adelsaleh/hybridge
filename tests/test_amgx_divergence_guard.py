@@ -38,41 +38,45 @@ def native_solver(amgx, dense, *, block_size=1, **controls):
                   "divergence_grace_iters": 10,
                   **controls,
               }}
+    from hybridge.linalg.amgx.host import private_amgx_resources
+
     objects = []
     def own(obj):
         objects.append(obj)
         return obj
-    try:
-        cfg = own(amgx.Config().create_from_dict(config))
-        resources = own(amgx.Resources().create_simple(cfg))
-        mat = own(amgx.Matrix().create(resources, mode=AMGX_MODE))
-        mat.upload(matrix.indptr, matrix.indices, matrix.data,
-                   block_dims=(block_size, block_size),
-                   shape=(dense.shape[0] // block_size,) * 2)
-        b = own(amgx.Vector().create(resources, mode=AMGX_MODE))
-        x = own(amgx.Vector().create(resources, mode=AMGX_MODE))
-        solver = own(amgx.Solver().create(resources, cfg, mode=AMGX_MODE))
-        solver.setup(mat)
-        def solve(rhs, guess=None):
-            rhs = np.ascontiguousarray(rhs, dtype=REAL_DTYPE)
-            initial = np.zeros_like(rhs) if guess is None else np.ascontiguousarray(guess, dtype=REAL_DTYPE)
-            b.upload_raw(rhs.ctypes.data, rhs.size // block_size, block_size)
-            x.upload_raw(initial.ctypes.data, initial.size // block_size, block_size)
-            solver.solve(b, x, zero_initial_guess=guess is None)
-            answer = np.empty_like(rhs)
-            x.download_raw(answer.ctypes.data)
-            count = solver.iterations_number
-            components = 1 if controls.get("use_scalar_norm", 0) else block_size
-            history = [np.linalg.norm([solver.get_residual(i, j) for j in range(components)])
-                       for i in range(count + 1)]
+    # A private lease: destroying a raw Resources would free the memory pools
+    # of any other live AMGX object in this process.
+    with private_amgx_resources(config) as resources:
+        try:
+            cfg = own(amgx.Config().create_from_dict(config))
+            mat = own(amgx.Matrix().create(resources, mode=AMGX_MODE))
+            mat.upload(matrix.indptr, matrix.indices, matrix.data,
+                       block_dims=(block_size, block_size),
+                       shape=(dense.shape[0] // block_size,) * 2)
+            b = own(amgx.Vector().create(resources, mode=AMGX_MODE))
+            x = own(amgx.Vector().create(resources, mode=AMGX_MODE))
+            solver = own(amgx.Solver().create(resources, cfg, mode=AMGX_MODE))
+            solver.setup(mat)
+            def solve(rhs, guess=None):
+                rhs = np.ascontiguousarray(rhs, dtype=REAL_DTYPE)
+                initial = np.zeros_like(rhs) if guess is None else np.ascontiguousarray(guess, dtype=REAL_DTYPE)
+                b.upload_raw(rhs.ctypes.data, rhs.size // block_size, block_size)
+                x.upload_raw(initial.ctypes.data, initial.size // block_size, block_size)
+                solver.solve(b, x, zero_initial_guess=guess is None)
+                answer = np.empty_like(rhs)
+                x.download_raw(answer.ctypes.data)
+                count = solver.iterations_number
+                components = 1 if controls.get("use_scalar_norm", 0) else block_size
+                history = [np.linalg.norm([solver.get_residual(i, j) for j in range(components)])
+                           for i in range(count + 1)]
+                ctypes.CDLL(None).fflush(None)
+                return SimpleNamespace(x=answer, status=solver.status, iterations=count,
+                                       history=history)
+            yield solve
+        finally:
+            for obj in reversed(objects):
+                obj.destroy()
             ctypes.CDLL(None).fflush(None)
-            return SimpleNamespace(x=answer, status=solver.status, iterations=count,
-                                   history=history)
-        yield solve
-    finally:
-        for obj in reversed(objects):
-            obj.destroy()
-        ctypes.CDLL(None).fflush(None)
 
 
 @pytest.mark.parametrize("block_size", [1, 7])

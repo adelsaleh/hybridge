@@ -2,7 +2,9 @@
 
 from collections import Counter
 from enum import Enum
+import gc
 from types import SimpleNamespace
+import weakref
 
 import numpy as np
 import pytest
@@ -179,14 +181,17 @@ def runtime(monkeypatch):
     runtime = FakeRuntime()
     for module in (raw_amgx, cupy_backend):
         monkeypatch.setattr(module, "require_cupy", lambda: runtime.cp)
-        monkeypatch.setattr(module, "initialize_pyamgx_once", lambda: runtime.amgx)
+    monkeypatch.setattr(cupy_backend, "initialize_pyamgx_once", lambda: runtime.amgx)
     monkeypatch.setattr(raw_amgx, "require_pyamgx", lambda: runtime.amgx)
     monkeypatch.setattr(raw_amgx, "require_cupyx_sparse", lambda: None)
     monkeypatch.setattr(raw_amgx, "audit_arrays", lambda *_args: None)
-    monkeypatch.setattr(raw_amgx, "_AMGX_SHARED_RESOURCES", raw_amgx._PyAMGXSharedResourceManager())
-    monkeypatch.setattr(raw_amgx, "_AMGX_REUSABLE_SOLVERS", [])
+    # One process-wide ledger: device solvers and host one-shots share it.
+    manager = cupy_backend._PyAMGXSharedResourceManager()
+    for module in (raw_amgx, cupy_backend):
+        monkeypatch.setattr(module, "_AMGX_SHARED_RESOURCES", manager)
+    monkeypatch.setattr(raw_amgx, "_AMGX_LIVE_SOLVERS", weakref.WeakSet())
     yield runtime
-    for solver in raw_amgx._AMGX_REUSABLE_SOLVERS:
+    for solver in list(raw_amgx._AMGX_LIVE_SOLVERS):
         solver.close(suppress_errors=True)
 
 
@@ -353,6 +358,62 @@ def test_shared_resource_destroy_failure_still_clears_config_and_manager(runtime
     with pytest.raises(RuntimeError, match="cannot destroy resources"):
         solver.close()
     assert solver.closed
+    assert_released(runtime)
+
+
+# AMGX's Resources destructor frees the process-global memory pools and
+# library handles, so no Resources may be destroyed while another AMGX object
+# lives (otherwise: freed solver memory, then an abort at exit).
+def destroyed_resources(runtime):
+    return [event for event in runtime.events
+            if event.startswith("resources-") and event.endswith(".destroy")]
+
+
+def test_host_one_shot_borrows_a_live_solvers_resources(runtime):
+    healthy = raw_amgx.PyAMGXCsrDeviceSolver(reusable=True)
+    healthy_objects = tuple(runtime.objects)
+    matrix = runtime.assembly()
+    cupy_backend.solve_pyamgx_csr(matrix, matrix.rhs)
+    assert runtime.counts["resources"] == 1
+    assert not destroyed_resources(runtime)
+    assert raw_amgx._AMGX_SHARED_RESOURCES.refcount == 1
+    assert all(not obj.destroyed for obj in healthy_objects)
+    healthy.close()
+    assert_released(runtime)
+
+
+def test_private_resources_wait_for_the_last_shared_owner(runtime):
+    manager = cupy_backend._AMGX_SHARED_RESOURCES
+    solver = raw_amgx.PyAMGXCsrDeviceSolver()
+    with cupy_backend.private_amgx_resources({"config_version": 2}) as private:
+        assert private is not manager.rsrc
+    assert not destroyed_resources(runtime)
+    assert (manager.refcount, manager.private_leases) == (1, 0)
+    solver.close()
+    assert destroyed_resources(runtime) == ["resources-2.destroy", "resources-1.destroy"]
+    assert_released(runtime)
+
+
+def test_shared_resources_wait_for_an_open_private_lease(runtime):
+    manager = cupy_backend._AMGX_SHARED_RESOURCES
+    with cupy_backend.private_amgx_resources({"config_version": 2}):
+        raw_amgx.PyAMGXCsrDeviceSolver().close()
+        assert manager.refcount == 0 and manager.rsrc is not None
+        assert not destroyed_resources(runtime)
+        raw_amgx.PyAMGXCsrDeviceSolver().close()  # reuses the idle shared handle
+        assert runtime.counts["resources"] == 2
+        assert not destroyed_resources(runtime)
+    assert_released(runtime)
+
+
+def test_unreferenced_solvers_close_and_exit_handler_closes_the_rest(runtime):
+    dropped = raw_amgx.PyAMGXCsrDeviceSolver(reusable=True)
+    kept = [raw_amgx.PyAMGXCsrDeviceSolver(reusable=True) for _ in range(2)]
+    del dropped
+    gc.collect()
+    assert raw_amgx._AMGX_SHARED_RESOURCES.refcount == 2
+    raw_amgx._close_amgx_solvers_at_exit()
+    assert all(solver.closed for solver in kept)
     assert_released(runtime)
 
 

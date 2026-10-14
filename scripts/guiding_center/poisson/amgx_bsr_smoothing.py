@@ -5,7 +5,7 @@ The large guiding-center comparison lives in tune_poisson_bsr_smoothing.py.
 """
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, ExitStack
 import copy
 import json
 from pathlib import Path
@@ -133,11 +133,17 @@ def block_basis_congruence(matrix, basis):
 
 
 class HostAmgxSystem(AbstractContextManager):
-    """Small host-uploaded algebra fixture using the shared runtime initializer."""
+    """Small host-uploaded algebra fixture using the shared runtime initializer.
+
+    Its ``Resources`` follows ``config`` (e.g. ``device_mem_pool_enabled``)
+    under a private lease, destroyed only once no other hybridge AMGX object
+    is alive.
+    """
     def __init__(self, matrix, config, *, dtype=np.float64):
-        from hybridge.linalg.amgx.host import initialize_pyamgx_once
+        from hybridge.linalg.amgx.host import initialize_pyamgx_once, private_amgx_resources
         self.amgx = initialize_pyamgx_once()
         self.objects = []
+        self._resources = ExitStack()
         self.size = matrix.shape[0]
         self.q = matrix.blocksize[0]
         self.rows = self.size // self.q
@@ -148,8 +154,7 @@ class HostAmgxSystem(AbstractContextManager):
         try:
             cfg = self.amgx.Config().create_from_dict(config)
             self.objects.append(cfg)
-            resource = self.amgx.Resources().create_simple(cfg)
-            self.objects.append(resource)
+            resource = self._resources.enter_context(private_amgx_resources(config))
             self.matrix = self.amgx.Matrix().create(resource, mode=mode)
             self.objects.append(self.matrix)
             self.matrix.upload(np.ascontiguousarray(matrix.indptr, dtype=np.int32),
@@ -189,6 +194,10 @@ class HostAmgxSystem(AbstractContextManager):
             except Exception as error:
                 first_error = first_error or error
         self.objects.clear()
+        try:
+            self._resources.close()  # after every object made from it
+        except Exception as error:
+            first_error = first_error or error
         if first_error is not None:
             raise first_error
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import atexit
 import copy
+import weakref
 import numpy as np
 import time
 import warnings
@@ -32,7 +34,10 @@ from hybridge.linalg.amgx.errors import (
     destroy_amgx_objects,
 )
 from hybridge.linalg.amgx.config import format_amgx_configuration
-from hybridge.linalg.amgx.host import initialize_pyamgx_once
+from hybridge.linalg.amgx.host import (  # noqa: F401 (manager class re-exported for tests)
+    _AMGX_SHARED_RESOURCES,
+    _PyAMGXSharedResourceManager,
+)
 from dataclasses import replace
 from hybridge.runtime.optional import require_cupy, require_cupyx_sparse, require_pyamgx
 
@@ -47,58 +52,11 @@ def _residual_stats_cp(residual, rhs, *, rtol: float, atol: float):
     return residual_norm, rhs_norm, relative, target
 
 
-_AMGX_REUSABLE_SOLVERS = []
-
-
-class _PyAMGXSharedResourceManager:
-    """Own one process-wide AMGX Resources handle shared by live solvers."""
-
-    def __init__(self):
-        """Initialize the instance."""
-        self.pyamgx = None
-        self.resource_cfg = None
-        self.rsrc = None
-        self.refcount = 0
-
-    def acquire(self, pyamgx, resource_config: dict):
-        """Acquire the shared AMGX resource handle and increment its owner count."""
-        initialize_pyamgx_once()
-        if self.rsrc is None:
-            self.pyamgx = pyamgx
-            try:
-                self.resource_cfg = pyamgx.Config()
-                self.resource_cfg.create_from_dict(copy.deepcopy(resource_config))
-                self.rsrc = pyamgx.Resources()
-                self.rsrc.create_simple(self.resource_cfg)
-            except Exception as exc:
-                capacity_error = _as_amgx_capacity_error(
-                    exc, phase="resource acquisition", cp=require_cupy(), pyamgx=pyamgx
-                )
-                self.release(suppress_errors=True)
-                if capacity_error is not None and capacity_error is not exc:
-                    raise capacity_error from exc
-                raise
-        self.refcount += 1
-        return self.rsrc
-
-    def release(self, *, suppress_errors: bool = False) -> None:
-        """Release one owner and destroy shared AMGX resources when unused."""
-        if self.refcount > 0:
-            self.refcount -= 1
-        if self.refcount != 0:
-            return
-        try:
-            destroy_amgx_objects(
-                (self.rsrc, self.resource_cfg), suppress_errors=suppress_errors
-            )
-        finally:
-            self.rsrc = None
-            self.resource_cfg = None
-            self.pyamgx = None
-
-
-_AMGX_SHARED_RESOURCES = _PyAMGXSharedResourceManager()
-
+# Every open solver, weakly. Owners (caller caches) decide each solver's
+# lifetime: an unreferenced solver closes in ``__del__``, and the exit handler
+# below closes the rest. A strong registry kept every reusable solver open on
+# the shared resources until exit (see _PyAMGXSharedResourceManager in host).
+_AMGX_LIVE_SOLVERS = weakref.WeakSet()
 
 
 def _amgx_config_for_solve(*, config=None, tolerance: float = 1e-13, maxiter: int | None = None, verbose: bool | int = 0, fixed_amg_cycles: int | None = None):
@@ -218,6 +176,7 @@ class PyAMGXCsrDeviceSolver:
         try:
             self.rsrc = _AMGX_SHARED_RESOURCES.acquire(self.pyamgx, self.config_dict)
             self._shared_resources_acquired = True
+            _AMGX_LIVE_SOLVERS.add(self)
             failure_phase = "configuration creation"
             self.cfg = self.pyamgx.Config()
             self.cfg.create_from_dict(self.config_dict)
@@ -230,8 +189,6 @@ class PyAMGXCsrDeviceSolver:
             self.vec_x.create(self.rsrc, mode=AMGX_MODE)
             self.solver = self.pyamgx.Solver()
             self.solver.create(self.rsrc, self.cfg, mode=AMGX_MODE)
-            if self.reusable:
-                _AMGX_REUSABLE_SOLVERS.append(self)
         except Exception as exc:
             capacity_error = _as_amgx_capacity_error(
                 exc, phase=failure_phase, cp=self.cp, pyamgx=self.pyamgx
@@ -418,6 +375,7 @@ class PyAMGXCsrDeviceSolver:
         self._hybridge_fixed_operator = None
         self.is_setup = False
         self.closed = True
+        _AMGX_LIVE_SOLVERS.discard(self)
         if first_error is not None and not suppress_errors:
             raise first_error
 
@@ -427,6 +385,27 @@ class PyAMGXCsrDeviceSolver:
             self.close(suppress_errors=True)
         except Exception:
             pass
+
+
+def _close_amgx_solvers_at_exit() -> None:
+    """Close every open AMGX solver at interpreter exit, in a defined order.
+
+    Otherwise solvers that are still referenced close during module teardown,
+    in arbitrary order. Here each solver destroys its own objects and releases
+    its shared-resource lease; the last release destroys the shared
+    ``Resources`` while CUDA and pyamgx are fully alive. ``pyamgx.finalize()``
+    is deliberately not called: AMGX's static teardown is harmless once every
+    ``Resources`` is gone, and scripts that drive pyamgx themselves already
+    finalize it.
+    """
+    for solver in list(_AMGX_LIVE_SOLVERS):
+        try:
+            solver.close(suppress_errors=True)
+        except Exception:
+            pass
+
+
+atexit.register(_close_amgx_solvers_at_exit)
 
 
 def _pyamgx_solve_csr_device(

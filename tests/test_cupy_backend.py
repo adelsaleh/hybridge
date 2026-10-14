@@ -1,6 +1,9 @@
 import importlib
 import json
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 
 import numpy as np
 import scipy.sparse
@@ -891,6 +894,58 @@ def test_pyamgx_solver_matches_direct_small_system():
     assert amgx.info == 0
     assert np.all(np.isfinite(amgx.x))
     np.testing.assert_allclose(amgx.x, direct.x, rtol=1e-10, atol=1e-11)
+
+
+_LIVE_DEVICE_SOLVER_ACROSS_ONE_SHOT = textwrap.dedent(
+    """
+    import json, pathlib, sys
+    import cupy as cp
+    import cupyx.scipy.sparse as csp
+    import numpy as np
+    import scipy.sparse as sp
+    from hybridge.linalg.amgx.device_solver import PyAMGXCsrDeviceSolver
+    from hybridge.linalg.amgx.host import pyamgx_supports_real_dtype, solve_pyamgx_csr
+
+    n = 400
+    host = sp.diags((-np.ones(n - 1), 4.0 * np.ones(n), -np.ones(n - 1)), (-1, 0, 1), format="csr")
+    matrix, rhs = csp.csr_matrix(host), cp.ones(n)
+    config = json.loads(pathlib.Path(sys.argv[1]).read_text())
+    solver = PyAMGXCsrDeviceSolver(tolerance=1e-10, maxiter=200)
+    solver.setup(matrix)
+    solutions = [solver.solve(rhs)[0]]
+    solutions.append(solve_pyamgx_csr(matrix, rhs, config=config))
+    assert pyamgx_supports_real_dtype(np.float64)
+    solutions.append(solver.solve(rhs)[0])
+    residuals = [float(cp.linalg.norm(matrix @ x - rhs)) for x in solutions]
+    print("RESIDUALS", residuals, flush=True)
+    assert all(value < 1e-6 for value in residuals), residuals
+    # The solver stays open: interpreter exit must close it cleanly.
+    """
+)
+
+
+@pytest.mark.skipif(not _pyamgx_runtime_available(), reason="PyAMGX runtime is unavailable")
+def test_host_pyamgx_one_shot_keeps_live_device_solver_and_exits_cleanly(tmp_path):
+    """A host one-shot solve must not destroy AMGX state under a live device solver.
+
+    AMGX's ``Resources`` destructor frees the process-global memory pools. A
+    private one-shot ``Resources`` freed the live solver's memory: its next
+    solve read freed memory (NaN or a crash), and exit aborted (status 134).
+    """
+    if np.dtype(REAL_DTYPE) != np.float64:
+        pytest.skip("the program uses the default FP64 PyAMGX binding")
+    config = Path("configs/amgx/adv_rea_gpu4_hdg_bicgstab_ilu0_amg.json").resolve()
+    completed = subprocess.run(
+        [sys.executable, "-c", _LIVE_DEVICE_SOLVER_ACROSS_ONE_SHOT, str(config)],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    output = completed.stdout + "\n" + completed.stderr
+    assert completed.returncode == 0, output
+    assert "RESIDUALS" in output
+    assert "trying to free non-empty temporary device pool" not in output, output
 
 
 @pytest.mark.skipif(not _cupy_runtime_available(), reason="CuPy CUDA runtime is unavailable")
