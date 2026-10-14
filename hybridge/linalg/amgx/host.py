@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from hybridge.runtime.precision import AMGX_MODE, REAL_DTYPE
 from typing import Any
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+import copy
 from hybridge.runtime.optional import require_cupy, require_pyamgx
 
 import numpy as np
 import scipy.sparse.linalg
 import time
 from numpy.typing import NDArray
+from hybridge.linalg.amgx.errors import as_amgx_capacity_error, destroy_amgx_objects
 from hybridge.linalg.results import (
     SolveResult,
     compute_residual_norm,
@@ -56,6 +59,140 @@ def initialize_pyamgx_once():
     return amgx
 
 
+class _PyAMGXSharedResourceManager:
+    """Own every AMGX ``Resources`` handle in the process and when it is destroyed.
+
+    AMGX's ``Resources`` destructor tears down process-global state: the
+    device and pinned memory pools and the cuSPARSE/cuBLAS handles that every
+    other AMGX object uses (``free_resources`` in AMGX ``src/resources.cu``).
+    Destroying one ``Resources`` while objects made from another are alive
+    frees their memory under them. AMGX prints "trying to free non-empty
+    temporary device pool", later solves read freed memory, and destroying
+    those objects calls ``cudaFree`` on an interior pool pointer. That throws
+    ``amgx::amgx_exception`` from a C++ destructor, and ``std::terminate``
+    aborts the process (exit 134), possibly long after the faulty destroy.
+
+    Every AMGX object hybridge creates therefore hangs off a lease from here:
+
+    - ``acquire``/``release``: one shared, reference-counted ``Resources``
+      built from the first owner's configuration, whose resource-level keys
+      (``exception_handling``, ``device_mem_pool_*``) then apply to every
+      sharer. Device solvers, the one-shot host solve and the dtype probe
+      use it.
+    - ``acquire_private``/``release_private`` (via ``private_amgx_resources``):
+      a ``Resources`` from the caller's own configuration, for callers that
+      need their own resource-level settings.
+
+    No ``Resources`` is destroyed while a lease of either kind is outstanding.
+    A released private one is parked and the shared one stays reusable; the
+    last release destroys them all. Lease holders destroy their matrices,
+    vectors, solvers and configs before releasing.
+    """
+
+    def __init__(self):
+        """Initialize the instance."""
+        self.pyamgx = None
+        self.resource_cfg = None
+        self.rsrc = None
+        self.refcount = 0
+        self.private_leases = 0
+        self._parked = []
+
+    def acquire(self, pyamgx, resource_config: dict):
+        """Acquire the shared AMGX resource handle and increment its owner count."""
+        initialize_pyamgx_once()
+        if self.rsrc is None:
+            self.pyamgx = pyamgx
+            try:
+                self.resource_cfg = pyamgx.Config()
+                self.resource_cfg.create_from_dict(copy.deepcopy(resource_config))
+                self.rsrc = pyamgx.Resources()
+                self.rsrc.create_simple(self.resource_cfg)
+            except Exception as exc:
+                capacity_error = as_amgx_capacity_error(
+                    exc, phase="resource acquisition", cp=require_cupy(), pyamgx=pyamgx
+                )
+                # A handle whose creation failed owns no global state.
+                self._discard_shared(suppress_errors=True)
+                if capacity_error is not None and capacity_error is not exc:
+                    raise capacity_error from exc
+                raise
+        self.refcount += 1
+        return self.rsrc
+
+    def release(self, *, suppress_errors: bool = False) -> None:
+        """Release one shared owner; destroy the handles once no lease remains."""
+        if self.refcount > 0:
+            self.refcount -= 1
+        self._destroy_if_idle(suppress_errors=suppress_errors)
+
+    def acquire_private(self, pyamgx, resource_config: dict):
+        """Create a ``Resources`` from ``resource_config``; return the ``(resources, config)`` lease."""
+        initialize_pyamgx_once()
+        cfg = rsrc = None
+        try:
+            cfg = pyamgx.Config()
+            cfg.create_from_dict(copy.deepcopy(resource_config))
+            rsrc = pyamgx.Resources()
+            rsrc.create_simple(cfg)
+        except Exception:
+            destroy_amgx_objects((rsrc, cfg), suppress_errors=True)
+            raise
+        self.private_leases += 1
+        return rsrc, cfg
+
+    def release_private(self, lease, *, suppress_errors: bool = False) -> None:
+        """Park a private lease; destroy the handles once no lease remains."""
+        if self.private_leases > 0:
+            self.private_leases -= 1
+        self._parked.append(tuple(lease))
+        self._destroy_if_idle(suppress_errors=suppress_errors)
+
+    def _destroy_if_idle(self, *, suppress_errors: bool) -> None:
+        """Destroy every parked and shared handle once no lease is outstanding."""
+        if self.refcount or self.private_leases:
+            return
+        # Each Resources goes before the Config it was created from.
+        objects = [obj for lease in reversed(self._parked) for obj in lease]
+        self._parked.clear()
+        self._discard_shared(suppress_errors=suppress_errors, objects=objects)
+
+    def _discard_shared(self, *, suppress_errors: bool, objects=()) -> None:
+        """Destroy ``objects`` and the shared handle, then forget the shared handle."""
+        try:
+            destroy_amgx_objects(
+                (*objects, self.rsrc, self.resource_cfg), suppress_errors=suppress_errors
+            )
+        finally:
+            self.rsrc = None
+            self.resource_cfg = None
+            self.pyamgx = None
+
+
+_AMGX_SHARED_RESOURCES = _PyAMGXSharedResourceManager()
+
+
+@contextmanager
+def private_amgx_resources(resource_config: Mapping[str, Any]) -> Iterator[Any]:
+    """Yield an AMGX ``Resources`` built from ``resource_config`` under a private lease.
+
+    Use this, never ``pyamgx.Resources().create_simple``, when a caller needs
+    its own resource-level settings (e.g. ``device_mem_pool_enabled``).
+    Destroy every object made from it before the block exits. The handle is
+    destroyed only once no other hybridge AMGX lease is outstanding (see
+    ``_PyAMGXSharedResourceManager``).
+    """
+    amgx = initialize_pyamgx_once()
+    manager = _AMGX_SHARED_RESOURCES
+    lease = manager.acquire_private(amgx, dict(resource_config))
+    failed = True
+    try:
+        yield lease[0]
+        failed = False
+    finally:
+        manager.release_private(lease, suppress_errors=failed)
+
+
 _PYAMGX_DTYPE_SUPPORT: dict[str, bool] = {}
 
 
@@ -65,8 +202,9 @@ def pyamgx_supports_real_dtype(dtype) -> bool:
     The default build of the PyAMGX fork hard-codes float64 arrays, so FP32
     (``dFFI``) needs the mode-aware binding from
     ``scripts/dev/build_pyamgx_precision.py``. The probe uploads one tiny
-    vector once per process per dtype. Only the binding's dtype rejection
-    counts as unsupported; any other failure propagates.
+    vector once per process per dtype, on the shared AMGX resources. Only
+    the binding's dtype rejection counts as unsupported; any other failure
+    propagates.
     """
     dtype = np.dtype(dtype)
     if dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
@@ -74,14 +212,11 @@ def pyamgx_supports_real_dtype(dtype) -> bool:
     if dtype.str not in _PYAMGX_DTYPE_SUPPORT:
         amgx = initialize_pyamgx_once()
         mode = "dFFI" if dtype == np.dtype(np.float32) else "dDDI"
-        objects = []
+        manager = _AMGX_SHARED_RESOURCES
+        resources = manager.acquire(amgx, {"config_version": 2, "solver": {"solver": "BICGSTAB"}})
+        vector = None
         try:
-            config = amgx.Config().create_from_dict({"config_version": 2, "solver": {"solver": "BICGSTAB"}})
-            objects.append(config)
-            resources = amgx.Resources().create_simple(config)
-            objects.append(resources)
             vector = amgx.Vector().create(resources, mode=mode)
-            objects.append(vector)
             try:
                 vector.upload(np.zeros(2, dtype=dtype), block_dim=1)
                 supported = True
@@ -90,8 +225,10 @@ def pyamgx_supports_real_dtype(dtype) -> bool:
                     raise
                 supported = False
         finally:
-            for item in reversed(objects):
-                item.destroy()
+            try:
+                destroy_amgx_objects((vector,))
+            finally:
+                manager.release()
         _PYAMGX_DTYPE_SUPPORT[dtype.str] = supported
     return _PYAMGX_DTYPE_SUPPORT[dtype.str]
 
@@ -136,9 +273,12 @@ def solve_pyamgx_csr(
         verbose: bool | int = 0,
         return_info: bool = False,
 ):
-    """Solve a CuPy CSR system with PyAMGX and optionally return native diagnostics."""
-    from hybridge.linalg.amgx.errors import as_amgx_capacity_error, destroy_amgx_objects
+    """Solve a CuPy CSR system with PyAMGX and optionally return native diagnostics.
 
+    The one-shot objects live on the shared AMGX resources: destroying a
+    private ``Resources`` here would free the memory of every live device
+    solver (see ``_PyAMGXSharedResourceManager``).
+    """
     cupy = require_cupy()
     amgx = initialize_pyamgx_once()
     amgx_config = default_pyamgx_config(tolerance=tolerance, maxiter=maxiter, verbose=verbose)
@@ -146,6 +286,7 @@ def solve_pyamgx_csr(
         amgx_config = dict(config)
 
     info = {"amgx_status": "unknown", "amgx_iterations": None, "residual_history": ()}
+    manager = _AMGX_SHARED_RESOURCES
     cfg = rsrc = mat = vec_b = vec_x = solver = None
     failed = True
     failure_phase = "solution allocation"
@@ -161,8 +302,7 @@ def solve_pyamgx_csr(
         cfg = amgx.Config()
         cfg.create_from_dict(amgx_config)
         failure_phase = "resource acquisition"
-        rsrc = amgx.Resources()
-        rsrc.create_simple(cfg)
+        rsrc = manager.acquire(amgx, amgx_config)
         failure_phase = "solver-object creation"
         mat = amgx.Matrix()
         mat.create(rsrc, mode=AMGX_MODE)
@@ -215,9 +355,18 @@ def solve_pyamgx_csr(
             raise capacity_error from exc
         raise
     finally:
-        destroy_amgx_objects(
-            (solver, vec_x, vec_b, mat, rsrc, cfg), suppress_errors=failed
-        )
+        cleanup_error = None
+        try:
+            destroy_amgx_objects((solver, vec_x, vec_b, mat, cfg))
+        except Exception as exc:
+            cleanup_error = exc
+        if rsrc is not None:
+            try:
+                manager.release()
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
+        if cleanup_error is not None and not failed:
+            raise cleanup_error
     return (x_cp, info) if return_info else x_cp
 
 
