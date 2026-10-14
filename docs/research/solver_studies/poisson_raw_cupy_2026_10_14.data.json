@@ -1,0 +1,2905 @@
+{
+  "cases": [
+    {
+      "cupy_factor_bytes": 3111200000,
+      "cupy_reconstruction": {
+        "median_seconds": 0.05292616900987923,
+        "samples_seconds": [
+          0.05290382704697549,
+          0.05310004414059222,
+          0.05292616900987923
+        ]
+      },
+      "cupy_retained_device_bytes": 8015694848,
+      "cupy_rhs": {
+        "median_seconds": 0.044293716084212065,
+        "samples_seconds": [
+          0.044293716084212065,
+          0.044275521067902446,
+          0.044314814964309335
+        ]
+      },
+      "cupy_rhs_relative_error": 2.332202557306808e-16,
+      "cupy_schur_cholesky_assembly": {
+        "median_seconds": 0.6443782090209424,
+        "samples_seconds": [
+          0.6444734709803015,
+          0.6440990341361612,
+          0.6443782090209424
+        ]
+      },
+      "order": 7,
+      "raw": [
+        {
+          "assembly": {
+            "median_seconds": 0.2733498280867934,
+            "samples_seconds": [
+              0.2733498280867934,
+              0.27335313986986876,
+              0.2720759869553149
+            ]
+          },
+          "assembly_kernel_seconds": 0.25792306518554686,
+          "factor_bytes": 1771200000,
+          "format": "coo",
+          "matrix_relative_error": 2.2039584689091558e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 2.839409807546333e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": true,
+                "threads": 256
+              },
+              "key": "751a633c58394e68fc32b23be677596003e5e106598382249126c8b01d598204",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "coo",
+                "order": 7,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.2673231440130621,
+            "samples_seconds": [
+              0.2675239578820765,
+              0.26723365602083504,
+              0.2673231440130621
+            ]
+          },
+          "assembly_kernel_seconds": 0.26209088134765623,
+          "cached_rhs_relative_error": 2.8396076447277798e-14,
+          "factor_bytes": 1771200000,
+          "format": "csr",
+          "matrix_relative_error": 2.2039584689091558e-13,
+          "policy": "schur-cholesky",
+          "reconstruction": {
+            "median_seconds": 0.007545467931777239,
+            "samples_seconds": [
+              0.007367945974692702,
+              0.007545467931777239,
+              0.007635344984009862
+            ]
+          },
+          "reconstruction_relative_error": 9.068097948266797e-14,
+          "rhs": {
+            "median_seconds": 0.02037545689381659,
+            "samples_seconds": [
+              0.020302665885537863,
+              0.02037545689381659,
+              0.021285302937030792
+            ]
+          },
+          "rhs_relative_error": 2.839409807546333e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": true,
+                "threads": 256
+              },
+              "key": "bdeeb4d9013e6920e1689da9e43afa53a5b8828bb68c01b0901d92cd5959e449",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 7,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 32
+              },
+              "key": "00a51c57c3aaee4200f7c38d42686a90a77acf339d4c4ebbdabdf05cb48fe820",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 7,
+                "phase": 2,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 32
+              },
+              "key": "eaaf919dc7f47ad3d52569f2ffa00280f99cf4b5c8f81b58e44cb62ee099890d",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 7,
+                "phase": 1,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.2670674838591367,
+            "samples_seconds": [
+              0.2670674838591367,
+              0.2673767239321023,
+              0.2664980289991945
+            ]
+          },
+          "assembly_kernel_seconds": 0.2621243896484375,
+          "factor_bytes": 1771200000,
+          "format": "bsr",
+          "matrix_relative_error": 2.2038594633124885e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 2.839409807546333e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": true,
+                "threads": 256
+              },
+              "key": "25a3760fb4c8ccd5fef7078c7355954ac15fe2c6d6ee3fcc227526b7ad389562",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 7,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.2511346279643476,
+            "samples_seconds": [
+              0.2511346279643476,
+              0.25057569588534534,
+              0.2513588380534202
+            ]
+          },
+          "assembly_kernel_seconds": 0.24565863037109376,
+          "cached_rhs_relative_error": 1.2072652526496664e-14,
+          "factor_bytes": 0,
+          "format": "csr",
+          "matrix_relative_error": 2.150871033233995e-13,
+          "policy": "none",
+          "reconstruction": {
+            "median_seconds": 0.04218390700407326,
+            "samples_seconds": [
+              0.04218390700407326,
+              0.042084593093022704,
+              0.04429176892153919
+            ]
+          },
+          "reconstruction_relative_error": 1.1907304448137337e-13,
+          "rhs": {
+            "median_seconds": 0.05076027219183743,
+            "samples_seconds": [
+              0.05076027219183743,
+              0.05037663085386157,
+              0.050956388004124165
+            ]
+          },
+          "rhs_relative_error": 1.2077599574638111e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": true,
+                "threads": 256
+              },
+              "key": "59626dd49f4361ef5d1e258a18cc7123959093baac84a26d7627140b0958a880",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 7,
+                "phase": 0,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "02ec70ddf06431bb4487b7a0c0dabd7d140ce5cda642c673b2661bfbb60868bd",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 7,
+                "phase": 2,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.25173592404462397,
+            "samples_seconds": [
+              0.25173592404462397,
+              0.25137183093465865,
+              0.2530564221087843
+            ]
+          },
+          "assembly_kernel_seconds": 0.2463954620361328,
+          "cached_rhs_relative_error": 1.2072652526496664e-14,
+          "factor_bytes": 1051200000,
+          "format": "csr",
+          "matrix_relative_error": 2.150871033233995e-13,
+          "policy": "schur-lu",
+          "reconstruction": {
+            "median_seconds": 0.023377815959975123,
+            "samples_seconds": [
+              0.023377815959975123,
+              0.023113828850910068,
+              0.02449118299409747
+            ]
+          },
+          "reconstruction_relative_error": 1.1907304448137337e-13,
+          "rhs": {
+            "median_seconds": 0.027925092028453946,
+            "samples_seconds": [
+              0.028265979839488864,
+              0.027925092028453946,
+              0.027861461974680424
+            ]
+          },
+          "rhs_relative_error": 1.2077599574638111e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "d5cba4c5b22617b91b27418afadb2750a812b7569330b9c18cc0b67cd46ecc0d",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 7,
+                "phase": 0,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "54b05aece43c22b130cc9699f73faa2de7017e14f1afe78d7bd1144ad95e4e36",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 7,
+                "phase": 2,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "89afda27793ce78b2e4013cc24d1b64686fde8904e8b45455d1bb00a8ab080f4",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 7,
+                "phase": 1,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 42,
+                "workload_bucket": 17
+              }
+            }
+          }
+        }
+      ],
+      "trace_unknowns": 1196400,
+      "triangles": 100000
+    },
+    {
+      "cupy_factor_bytes": 4860800000,
+      "cupy_reconstruction": {
+        "median_seconds": 0.04515515500679612,
+        "samples_seconds": [
+          0.04571892786771059,
+          0.04515484790317714,
+          0.04515515500679612
+        ]
+      },
+      "cupy_retained_device_bytes": 11636529664,
+      "cupy_rhs": {
+        "median_seconds": 0.04515989893116057,
+        "samples_seconds": [
+          0.04515989893116057,
+          0.045157159911468625,
+          0.045177662977948785
+        ]
+      },
+      "cupy_rhs_relative_error": 3.2680710552800197e-16,
+      "cupy_schur_cholesky_assembly": {
+        "median_seconds": 0.8291409469675273,
+        "samples_seconds": [
+          0.8291409469675273,
+          0.8292125971056521,
+          0.829075139015913
+        ]
+      },
+      "order": 8,
+      "raw": [
+        {
+          "assembly": {
+            "median_seconds": 0.48995344107970595,
+            "samples_seconds": [
+              0.48995344107970595,
+              0.4896211239974946,
+              0.49139768490567803
+            ]
+          },
+          "assembly_kernel_seconds": 0.47624057006835935,
+          "factor_bytes": 2646000000,
+          "format": "coo",
+          "matrix_relative_error": 6.362135963519519e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 3.577788599759924e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "8ec99a9d2f0389fa37f52545b67216172ee6accac846afc99e847ff2b608299d",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "coo",
+                "order": 8,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.4726770920678973,
+            "samples_seconds": [
+              0.47257948596961796,
+              0.4726770920678973,
+              0.47428781585767865
+            ]
+          },
+          "assembly_kernel_seconds": 0.46835287475585935,
+          "cached_rhs_relative_error": 3.577788599759924e-14,
+          "factor_bytes": 2646000000,
+          "format": "csr",
+          "matrix_relative_error": 6.362135963519519e-13,
+          "policy": "schur-cholesky",
+          "reconstruction": {
+            "median_seconds": 0.00821428606286645,
+            "samples_seconds": [
+              0.010273270076140761,
+              0.008192871930077672,
+              0.00821428606286645
+            ]
+          },
+          "reconstruction_relative_error": 1.198815999221002e-13,
+          "rhs": {
+            "median_seconds": 0.02888601296581328,
+            "samples_seconds": [
+              0.028953064000234008,
+              0.02888601296581328,
+              0.028558241901919246
+            ]
+          },
+          "rhs_relative_error": 3.577788599759924e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "b2edd4eac99624065f65df124fba128d6e7b3e6a3e52136ecebaf247949b3643",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 8,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 32
+              },
+              "key": "10fd83f12ae4aa440a56f15e29ddff3ed8864c768a72da611a55ec234f729a41",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 8,
+                "phase": 2,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "217b910d6b71cefeae06d346d6522a4a9ff73b6a85716f0299f32bcef56801ec",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 8,
+                "phase": 1,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.4716139507945627,
+            "samples_seconds": [
+              0.471574482973665,
+              0.4721357871312648,
+              0.4716139507945627
+            ]
+          },
+          "assembly_kernel_seconds": 0.4669129638671875,
+          "factor_bytes": 2646000000,
+          "format": "bsr",
+          "matrix_relative_error": 6.362137299083094e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 3.577788599759924e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "d0fc2a0960570f71c255f05b6b839c2bc47151c69b63d7e10cf067c31ae95fc0",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 8,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.42594402004033327,
+            "samples_seconds": [
+              0.42594402004033327,
+              0.42568175005726516,
+              0.4259515500161797
+            ]
+          },
+          "assembly_kernel_seconds": 0.4201183776855469,
+          "cached_rhs_relative_error": 1.5477315953253533e-14,
+          "factor_bytes": 0,
+          "format": "csr",
+          "matrix_relative_error": 6.338383635858704e-13,
+          "policy": "none",
+          "reconstruction": {
+            "median_seconds": 0.06156535819172859,
+            "samples_seconds": [
+              0.061663053929805756,
+              0.06156535819172859,
+              0.06155168288387358
+            ]
+          },
+          "reconstruction_relative_error": 1.7350286573103672e-13,
+          "rhs": {
+            "median_seconds": 0.06361999013461173,
+            "samples_seconds": [
+              0.06361999013461173,
+              0.06347015197388828,
+              0.0642906918656081
+            ]
+          },
+          "rhs_relative_error": 1.5477315953253533e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "7eb8eb0c479e3136d29b3cc4b7f39985cd2522584cf70584b700825effd893f6",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 8,
+                "phase": 0,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "5c243742105f83ac81e1c80bda6747ce0f7b03b4958a2f5687262521793e201c",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 8,
+                "phase": 2,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.42706603393889964,
+            "samples_seconds": [
+              0.428319098893553,
+              0.42706603393889964,
+              0.4261957770213485
+            ]
+          },
+          "assembly_kernel_seconds": 0.4203273620605469,
+          "cached_rhs_relative_error": 1.5477315953253533e-14,
+          "factor_bytes": 1638000000,
+          "format": "csr",
+          "matrix_relative_error": 6.338383635858704e-13,
+          "policy": "schur-lu",
+          "reconstruction": {
+            "median_seconds": 0.03276801318861544,
+            "samples_seconds": [
+              0.032830352894961834,
+              0.03276801318861544,
+              0.0326533168554306
+            ]
+          },
+          "reconstruction_relative_error": 1.7350286573103672e-13,
+          "rhs": {
+            "median_seconds": 0.0346528219524771,
+            "samples_seconds": [
+              0.034581111976876855,
+              0.0346528219524771,
+              0.03531684190966189
+            ]
+          },
+          "rhs_relative_error": 1.5477315953253533e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "4be5a8b6f101bb746a98515eeb2d68f356a3871caeafebef07653ddb38bd11e7",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 8,
+                "phase": 0,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "347906b96649fae02d1dc335fb8573e783a298522203db55084231ebe19c5355",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 8,
+                "phase": 2,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "15f4273af10a34d97e0d211f0e19fa1f4ea9acd1199386541d684a0801fd70df",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 8,
+                "phase": 1,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 324,
+                "workload_bucket": 17
+              }
+            }
+          }
+        }
+      ],
+      "trace_unknowns": 1345950,
+      "triangles": 100000
+    },
+    {
+      "cupy_factor_bytes": 7260800000,
+      "cupy_reconstruction": {
+        "median_seconds": 0.06083894311450422,
+        "samples_seconds": [
+          0.060859713004902005,
+          0.06083894311450422,
+          0.060829801950603724
+        ]
+      },
+      "cupy_retained_device_bytes": 16330774016,
+      "cupy_rhs": {
+        "median_seconds": 0.06054587010294199,
+        "samples_seconds": [
+          0.060735312988981605,
+          0.06054587010294199,
+          0.060533644165843725
+        ]
+      },
+      "cupy_rhs_relative_error": 4.517447953372511e-16,
+      "cupy_schur_cholesky_assembly": {
+        "median_seconds": 1.1063914601691067,
+        "samples_seconds": [
+          1.1068980598356575,
+          1.1063253718893975,
+          1.1063914601691067
+        ]
+      },
+      "order": 9,
+      "raw": [
+        {
+          "assembly": {
+            "median_seconds": 0.8029563890304416,
+            "samples_seconds": [
+              0.8029563890304416,
+              0.8026924550067633,
+              0.8039203428197652
+            ]
+          },
+          "assembly_kernel_seconds": 0.787848388671875,
+          "factor_bytes": 3806000000,
+          "format": "coo",
+          "matrix_relative_error": 2.6785785662340324e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 2.435965476208832e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "2b3bc87604dfcac1c3094999c9ebc0c17d9cdee659260622b39451d1cefaa64f",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "coo",
+                "order": 9,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.7921253230888397,
+            "samples_seconds": [
+              0.7921253230888397,
+              0.7921151358168572,
+              0.7924410600680858
+            ]
+          },
+          "assembly_kernel_seconds": 0.7858189697265625,
+          "cached_rhs_relative_error": 2.435965476208832e-14,
+          "factor_bytes": 3806000000,
+          "format": "csr",
+          "matrix_relative_error": 2.6785785662340324e-13,
+          "policy": "schur-cholesky",
+          "reconstruction": {
+            "median_seconds": 0.009157951921224594,
+            "samples_seconds": [
+              0.009491728153079748,
+              0.009147498058155179,
+              0.009157951921224594
+            ]
+          },
+          "reconstruction_relative_error": 1.074033010368062e-13,
+          "rhs": {
+            "median_seconds": 0.053527347976341844,
+            "samples_seconds": [
+              0.053527347976341844,
+              0.054043513955548406,
+              0.053448915015906096
+            ]
+          },
+          "rhs_relative_error": 2.435965476208832e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "35698a14c1a499c95c65a4fec5bb0429f9df474bd01c868430121a03de99ff40",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 9,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 32
+              },
+              "key": "17880a8eab7ed68cd49327ce750b2446df15b534d8e5bb8628e4d7c472585877",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 9,
+                "phase": 2,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "150be3da387cb5931b7605d619920795cd33f162bbce13a04ad84d0c39247cd5",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 9,
+                "phase": 1,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.7920216261409223,
+            "samples_seconds": [
+              0.7929456690326333,
+              0.7906978600658476,
+              0.7920216261409223
+            ]
+          },
+          "assembly_kernel_seconds": 0.7858349609375,
+          "factor_bytes": 3806000000,
+          "format": "bsr",
+          "matrix_relative_error": 2.678602422617324e-13,
+          "policy": "schur-cholesky",
+          "rhs_relative_error": 2.435965476208832e-14,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "5d4667ff4688579ccc233d368ff9e050cdaec79ad2d147fc3532d3f49e6137a2",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 9,
+                "phase": 0,
+                "policy": "schur-cholesky",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.7562348661012948,
+            "samples_seconds": [
+              0.7555051168892533,
+              0.7562348661012948,
+              0.7564259730279446
+            ]
+          },
+          "assembly_kernel_seconds": 0.7490267333984375,
+          "cached_rhs_relative_error": 9.228765706237722e-15,
+          "factor_bytes": 0,
+          "format": "csr",
+          "matrix_relative_error": 2.7106849675942803e-13,
+          "policy": "none",
+          "reconstruction": {
+            "median_seconds": 0.1079380800947547,
+            "samples_seconds": [
+              0.1076875610742718,
+              0.10837829299271107,
+              0.1079380800947547
+            ]
+          },
+          "reconstruction_relative_error": 1.4095422217661851e-13,
+          "rhs": {
+            "median_seconds": 0.11180853913538158,
+            "samples_seconds": [
+              0.11180924600921571,
+              0.11148199113085866,
+              0.11180853913538158
+            ]
+          },
+          "rhs_relative_error": 9.228765706237722e-15,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "2f1ca1a329e09a55c9f469818aa14f9442cfdfc2533a802008385efbb35062e2",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 9,
+                "phase": 0,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "1efbf2aaa8219527dd3ffbc36a7da26285bfdee3e5a3a5f5987675919d2dca2c",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 9,
+                "phase": 2,
+                "policy": "none",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            }
+          }
+        },
+        {
+          "assembly": {
+            "median_seconds": 0.755921573145315,
+            "samples_seconds": [
+              0.7572188740596175,
+              0.7553491089493036,
+              0.755921573145315
+            ]
+          },
+          "assembly_kernel_seconds": 0.749556884765625,
+          "cached_rhs_relative_error": 9.228765706237722e-15,
+          "factor_bytes": 2442000000,
+          "format": "csr",
+          "matrix_relative_error": 2.7106849675942803e-13,
+          "policy": "schur-lu",
+          "reconstruction": {
+            "median_seconds": 0.05833101621828973,
+            "samples_seconds": [
+              0.05833101621828973,
+              0.058190801879391074,
+              0.05936139891855419
+            ]
+          },
+          "reconstruction_relative_error": 1.4095422217661851e-13,
+          "rhs": {
+            "median_seconds": 0.06140224914997816,
+            "samples_seconds": [
+              0.06141202291473746,
+              0.06139046419411898,
+              0.06140224914997816
+            ]
+          },
+          "rhs_relative_error": 9.228765706237722e-15,
+          "tuning": {
+            "assembly": {
+              "configuration": {
+                "columns": 8,
+                "retained_coupling": false,
+                "threads": 128
+              },
+              "key": "cd94b65d8fd44229a45699ebcf146fb85e6b76d29cb64911bdf3529e9b3598e1",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 9,
+                "phase": 0,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            },
+            "reconstruction": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "7c84664e39d77a400e508303ef1a8efce40f3d1c410ba21fb8523bf2c74e21f5",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": true,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "bsr",
+                "order": 9,
+                "phase": 2,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            },
+            "rhs": {
+              "configuration": {
+                "columns": 1,
+                "retained_coupling": false,
+                "threads": 64
+              },
+              "key": "ba195370942387c93756679192bb9f8b0874faafeef1fc5333c6301f536f29ef",
+              "reused": true,
+              "source": "process",
+              "version": 1,
+              "workload": {
+                "boundary_nonzero": false,
+                "element_basis": "dub_orth",
+                "family": "poisson",
+                "format": "csr",
+                "order": 9,
+                "phase": 1,
+                "policy": "schur-lu",
+                "precision": "<f8",
+                "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                "trace_basis": "legendre-modal",
+                "volume_points": 400,
+                "workload_bucket": 17
+              }
+            }
+          }
+        }
+      ],
+      "trace_unknowns": 1495500,
+      "triangles": 100000
+    }
+  ],
+  "complete": true,
+  "device": {
+    "cupy": "14.2.0",
+    "driver": 13000,
+    "fp32_fp64_ratio": 64,
+    "major": 12,
+    "maxThreadsPerBlock": 1024,
+    "maxThreadsPerMultiProcessor": 1536,
+    "minor": 0,
+    "multiProcessorCount": 110,
+    "name": "NVIDIA RTX PRO 5000 Blackwell",
+    "regsPerBlock": 65536,
+    "regsPerMultiprocessor": 65536,
+    "runtime": 13020,
+    "sharedMemPerBlock": 49152,
+    "sharedMemPerBlockOptin": 101376,
+    "sharedMemPerMultiprocessor": 102400,
+    "uuid": "929aff4deebf674c2237e7f59ba6f17b"
+  },
+  "dirichlet": 0.0,
+  "element_basis": "dub_orth",
+  "matched_low_orders": {
+    "arguments": {
+      "dry_run": false,
+      "element_basis": "dub_orth",
+      "gpu_lock": ".cache/gpu-campaign.lock",
+      "nx": 250,
+      "ny": 200,
+      "orders": [
+        2,
+        4,
+        6
+      ],
+      "output": "artifacts/poisson_100k_low_orders.json",
+      "repeats": 3,
+      "tau": 1.3,
+      "trace_basis": "legendre-modal",
+      "verbosity": 1,
+      "wait_timeout": null,
+      "warmups": 1
+    },
+    "cases": [
+      {
+        "cupy_factor_bytes": 87200000,
+        "cupy_reconstruction": {
+          "median_seconds": 0.00361678097397089,
+          "samples_seconds": [
+            0.003640359966084361,
+            0.00361678097397089,
+            0.003596500027924776
+          ]
+        },
+        "cupy_retained_device_bytes": 505389056,
+        "cupy_rhs": {
+          "median_seconds": 0.004090317990630865,
+          "samples_seconds": [
+            0.004131251946091652,
+            0.004074207041412592,
+            0.004090317990630865
+          ]
+        },
+        "cupy_rhs_relative_error": 1.5984662860631492e-16,
+        "cupy_schur_cholesky_assembly": {
+          "median_seconds": 0.033309485064819455,
+          "samples_seconds": [
+            0.033325240947306156,
+            0.033309485064819455,
+            0.03325628116726875
+          ]
+        },
+        "order": 2,
+        "raw": [
+          {
+            "assembly": {
+              "median_seconds": 0.02139158803038299,
+              "samples_seconds": [
+                0.023596376879140735,
+                0.02129609207622707,
+                0.02139158803038299
+              ]
+            },
+            "assembly_kernel_seconds": 0.007693600177764892,
+            "factor_bytes": 79200000,
+            "format": "coo",
+            "matrix_relative_error": 3.2630856265854806e-15,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 3.202246597079795e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "9c3695c82ec8ec77b2479965b0dc6aba8252f730deab141b06c3c389fde62d20",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "coo",
+                  "order": 2,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.011438903165981174,
+              "samples_seconds": [
+                0.011312281945720315,
+                0.011438903165981174,
+                0.01516434783115983
+              ]
+            },
+            "assembly_kernel_seconds": 0.007143295764923095,
+            "cached_rhs_relative_error": 3.2008665172901095e-15,
+            "factor_bytes": 79200000,
+            "format": "csr",
+            "matrix_relative_error": 3.2630856265854806e-15,
+            "policy": "schur-cholesky",
+            "reconstruction": {
+              "median_seconds": 0.0033363380935043097,
+              "samples_seconds": [
+                0.003512919880449772,
+                0.0033363380935043097,
+                0.0032781241461634636
+              ]
+            },
+            "reconstruction_relative_error": 4.993136759075462e-15,
+            "rhs": {
+              "median_seconds": 0.004818469984456897,
+              "samples_seconds": [
+                0.004818469984456897,
+                0.0048827300779521465,
+                0.004790088860318065
+              ]
+            },
+            "rhs_relative_error": 3.202246597079795e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "55f217e1e8073f6cefaad30e98fbbab4a929d91595d2f4f3dbf0b3f7248c9409",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 2,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "12b067b20d4d02f7167a63245b2bfaee89d9e2a1853e6274c1196462203a2731",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 2,
+                  "phase": 2,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "858eaa73d734ac0238d7b9864c93558cd19c901a8dc095c2e8656f6130d07185",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 2,
+                  "phase": 1,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.011474663158878684,
+              "samples_seconds": [
+                0.011215300997719169,
+                0.011474663158878684,
+                0.012747840955853462
+              ]
+            },
+            "assembly_kernel_seconds": 0.007137184143066406,
+            "factor_bytes": 79200000,
+            "format": "bsr",
+            "matrix_relative_error": 3.266212340049156e-15,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 3.202246597079795e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "a536b2861bcb6800ef248da31ba3ba3a8673929ffce57638b35d40b9a931e1ba",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 2,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.010307732969522476,
+              "samples_seconds": [
+                0.010202724020928144,
+                0.010307732969522476,
+                0.010375952813774347
+              ]
+            },
+            "assembly_kernel_seconds": 0.005945536136627197,
+            "cached_rhs_relative_error": 2.3204203710828266e-15,
+            "factor_bytes": 0,
+            "format": "csr",
+            "matrix_relative_error": 2.671818843688271e-15,
+            "policy": "none",
+            "reconstruction": {
+              "median_seconds": 0.0058344509452581406,
+              "samples_seconds": [
+                0.0058344509452581406,
+                0.005825838772580028,
+                0.0068104511592537165
+              ]
+            },
+            "reconstruction_relative_error": 4.257407283350201e-15,
+            "rhs": {
+              "median_seconds": 0.006539332214742899,
+              "samples_seconds": [
+                0.006539332214742899,
+                0.006557187996804714,
+                0.006530920043587685
+              ]
+            },
+            "rhs_relative_error": 2.3240416911858e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "2bcb92becff0e6c2112f3feb6c34a78c57e45a885480048053dd8b6161a44071",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 2,
+                  "phase": 0,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "909ad083ead6775cf0e98d98e5ac2bfb43a69a0da91fab1addad045221b8c6d8",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 2,
+                  "phase": 2,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.010249439161270857,
+              "samples_seconds": [
+                0.010283432900905609,
+                0.010249439161270857,
+                0.009930833941325545
+              ]
+            },
+            "assembly_kernel_seconds": 0.006046080112457276,
+            "cached_rhs_relative_error": 2.3204203710828266e-15,
+            "factor_bytes": 31200000,
+            "format": "csr",
+            "matrix_relative_error": 2.671818843688271e-15,
+            "policy": "schur-lu",
+            "reconstruction": {
+              "median_seconds": 0.004476179135963321,
+              "samples_seconds": [
+                0.004476179135963321,
+                0.004305465845391154,
+                0.008532240055501461
+              ]
+            },
+            "reconstruction_relative_error": 4.257407283350201e-15,
+            "rhs": {
+              "median_seconds": 0.005142827983945608,
+              "samples_seconds": [
+                0.004956247052177787,
+                0.0051698030438274145,
+                0.005142827983945608
+              ]
+            },
+            "rhs_relative_error": 2.3240416911858e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "a0b8e935edbed9912aa5f3c187e7faf1d4f6b5e7aeb0e846e2dbc480fbe7256e",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 2,
+                  "phase": 0,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "d481160b5a4126b6e8f7fcc6986777001a9ae5901c0fe3f87c83c99d04b50512",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 2,
+                  "phase": 2,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "aeafdde245fe8e98f1593919125d808ed1704dc2f8e84a21f1fe37c8e9cdb172",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 2,
+                  "phase": 1,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 6,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          }
+        ],
+        "trace_unknowns": 448650,
+        "triangles": 100000
+      },
+      {
+        "cupy_factor_bytes": 540800000,
+        "cupy_reconstruction": {
+          "median_seconds": 0.00475079589523375,
+          "samples_seconds": [
+            0.00475079589523375,
+            0.0047494289465248585,
+            0.004786992911249399
+          ]
+        },
+        "cupy_retained_device_bytes": 1957888512,
+        "cupy_rhs": {
+          "median_seconds": 0.005001024110242724,
+          "samples_seconds": [
+            0.0050110421143472195,
+            0.005001024110242724,
+            0.004999683937057853
+          ]
+        },
+        "cupy_rhs_relative_error": 2.6943552433478886e-16,
+        "cupy_schur_cholesky_assembly": {
+          "median_seconds": 0.13092116103507578,
+          "samples_seconds": [
+            0.13092116103507578,
+            0.1309167288709432,
+            0.13101086299866438
+          ]
+        },
+        "order": 4,
+        "raw": [
+          {
+            "assembly": {
+              "median_seconds": 0.046000465052202344,
+              "samples_seconds": [
+                0.046000465052202344,
+                0.046877730870619416,
+                0.044903900008648634
+              ]
+            },
+            "assembly_kernel_seconds": 0.030824607849121093,
+            "factor_bytes": 378000000,
+            "format": "coo",
+            "matrix_relative_error": 1.2622452592065433e-14,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 1.4769468871560177e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": false,
+                  "threads": 128
+                },
+                "key": "be4a9b866f4a279bc1fc9b0ca699c1788576717976abd01dd79a0a56a0a0ee3c",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "coo",
+                  "order": 4,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.03310963697731495,
+              "samples_seconds": [
+                0.033331108978018165,
+                0.03300626901909709,
+                0.03310963697731495
+              ]
+            },
+            "assembly_kernel_seconds": 0.028725536346435546,
+            "cached_rhs_relative_error": 1.477208409901106e-14,
+            "factor_bytes": 378000000,
+            "format": "csr",
+            "matrix_relative_error": 1.2622452592065433e-14,
+            "policy": "schur-cholesky",
+            "reconstruction": {
+              "median_seconds": 0.00408572587184608,
+              "samples_seconds": [
+                0.00408572587184608,
+                0.00405652285553515,
+                0.005502151092514396
+              ]
+            },
+            "reconstruction_relative_error": 1.011461673456898e-14,
+            "rhs": {
+              "median_seconds": 0.007664646953344345,
+              "samples_seconds": [
+                0.00792743219062686,
+                0.007664646953344345,
+                0.007650341838598251
+              ]
+            },
+            "rhs_relative_error": 1.4769468871560177e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "9d4da42c0729b8d174f9a70f990ac65de0a05d8aa85909a2de4f7f07be392be1",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 4,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "1302a7b7be345319dbbd093be439e32949b6c52654656c75b691909cd3b7f5d4",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 4,
+                  "phase": 2,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "e0aa95b79187f271a95e7a7db19b1fc645715ad71ec7eec970b44b4e0b8d50a8",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 4,
+                  "phase": 1,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.03300694515928626,
+              "samples_seconds": [
+                0.03300694515928626,
+                0.034148358972743154,
+                0.03279386181384325
+              ]
+            },
+            "assembly_kernel_seconds": 0.028715999603271484,
+            "factor_bytes": 378000000,
+            "format": "bsr",
+            "matrix_relative_error": 1.261814597799532e-14,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 1.4769468871560177e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 4,
+                  "retained_coupling": true,
+                  "threads": 128
+                },
+                "key": "0b2e77962764261fdda8936a666bb75dbd1377d7a8e67d60d5593ca9d5b7841f",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 4,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.028792741941288114,
+              "samples_seconds": [
+                0.0292107448913157,
+                0.028792741941288114,
+                0.028539429884403944
+              ]
+            },
+            "assembly_kernel_seconds": 0.024216896057128907,
+            "cached_rhs_relative_error": 7.096649002783703e-15,
+            "factor_bytes": 0,
+            "format": "csr",
+            "matrix_relative_error": 1.1834670727579855e-14,
+            "policy": "none",
+            "reconstruction": {
+              "median_seconds": 0.011756574967876077,
+              "samples_seconds": [
+                0.011701506096869707,
+                0.011756574967876077,
+                0.011817398946732283
+              ]
+            },
+            "reconstruction_relative_error": 1.5190680786230553e-14,
+            "rhs": {
+              "median_seconds": 0.012624970870092511,
+              "samples_seconds": [
+                0.012969639850780368,
+                0.012624970870092511,
+                0.012472393922507763
+              ]
+            },
+            "rhs_relative_error": 7.0966518749875466e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": true,
+                  "threads": 256
+                },
+                "key": "52b603d622d04b64a115d9df96da90f58058b189e8eedc0dee19e993ed655c20",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 4,
+                  "phase": 0,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "19e6c8fa4a416a6b7f3440327761300795d35e6c24c795834791f1354a1e7acd",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 4,
+                  "phase": 2,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.02893497282639146,
+              "samples_seconds": [
+                0.02893497282639146,
+                0.028667363105341792,
+                0.02924855495803058
+              ]
+            },
+            "assembly_kernel_seconds": 0.024291296005249024,
+            "cached_rhs_relative_error": 7.096649002783703e-15,
+            "factor_bytes": 186000000,
+            "format": "csr",
+            "matrix_relative_error": 1.1834670727579855e-14,
+            "policy": "schur-lu",
+            "reconstruction": {
+              "median_seconds": 0.007707834942266345,
+              "samples_seconds": [
+                0.007707834942266345,
+                0.007728923112154007,
+                0.007467951159924269
+              ]
+            },
+            "reconstruction_relative_error": 1.5190680786230553e-14,
+            "rhs": {
+              "median_seconds": 0.008679436054080725,
+              "samples_seconds": [
+                0.008730266010388732,
+                0.008467615814879537,
+                0.008679436054080725
+              ]
+            },
+            "rhs_relative_error": 7.0966518749875466e-15,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": true,
+                  "threads": 256
+                },
+                "key": "c486d0491e1320cc72b56879352ff3721582457383a90d0b7d9003d8e4fca3ca",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 4,
+                  "phase": 0,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "3095693a899912fbab085a3e2581416fc8cbff559cfa03888461b7721c737e9f",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 4,
+                  "phase": 2,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "549696b4cbc6a2f3a590682f02a61bfff0d465c21a3689a532dcf24e65f16c23",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 4,
+                  "phase": 1,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 16,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          }
+        ],
+        "trace_unknowns": 747750,
+        "triangles": 100000
+      },
+      {
+        "cupy_factor_bytes": 1882400000,
+        "cupy_reconstruction": {
+          "median_seconds": 0.03284371900372207,
+          "samples_seconds": [
+            0.03285096609033644,
+            0.03284371900372207,
+            0.032839314080774784
+          ]
+        },
+        "cupy_retained_device_bytes": 5301532160,
+        "cupy_rhs": {
+          "median_seconds": 0.032948239939287305,
+          "samples_seconds": [
+            0.032957240007817745,
+            0.03292584093287587,
+            0.032948239939287305
+          ]
+        },
+        "cupy_rhs_relative_error": 2.502852844064672e-16,
+        "cupy_schur_cholesky_assembly": {
+          "median_seconds": 0.29300316818989813,
+          "samples_seconds": [
+            0.2948960189241916,
+            0.2928611950483173,
+            0.29300316818989813
+          ]
+        },
+        "order": 6,
+        "raw": [
+          {
+            "assembly": {
+              "median_seconds": 0.1403015849646181,
+              "samples_seconds": [
+                0.1403015849646181,
+                0.13866298599168658,
+                0.1406873210798949
+              ]
+            },
+            "assembly_kernel_seconds": 0.12511325073242188,
+            "factor_bytes": 1131200000,
+            "format": "coo",
+            "matrix_relative_error": 4.8363430191847365e-14,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 1.8716192276755502e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": false,
+                  "threads": 128
+                },
+                "key": "d4784aef2db7792f89c8f48ee9a1395071c362c9e1b2f3c6b11a733c2b7abcf3",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "coo",
+                  "order": 6,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.1302552989218384,
+              "samples_seconds": [
+                0.1305660968646407,
+                0.13003934803418815,
+                0.1302552989218384
+              ]
+            },
+            "assembly_kernel_seconds": 0.12536681365966798,
+            "cached_rhs_relative_error": 1.872017796392718e-14,
+            "factor_bytes": 1131200000,
+            "format": "csr",
+            "matrix_relative_error": 4.8363430191847365e-14,
+            "policy": "schur-cholesky",
+            "reconstruction": {
+              "median_seconds": 0.004848532844334841,
+              "samples_seconds": [
+                0.0045283460058271885,
+                0.005304842023178935,
+                0.004848532844334841
+              ]
+            },
+            "reconstruction_relative_error": 3.140515421040692e-14,
+            "rhs": {
+              "median_seconds": 0.01334192999638617,
+              "samples_seconds": [
+                0.013388104038313031,
+                0.01331727602519095,
+                0.01334192999638617
+              ]
+            },
+            "rhs_relative_error": 1.8716192276755502e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": false,
+                  "threads": 128
+                },
+                "key": "95929c65f031d944d40565a2b74ed3a97da476ee1e16a89a01bbe83cdec05bda",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 6,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "67be978d9e6d681624232e837362c029c0539bc9382b88c0d35112389482610e",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 6,
+                  "phase": 2,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 32
+                },
+                "key": "85cdd26d2c4d1a867e8161ef7e5d9481204edb1394246a430961b0177ffe8d22",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 6,
+                  "phase": 1,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.12974187801592052,
+              "samples_seconds": [
+                0.130124906077981,
+                0.12956588808447123,
+                0.12974187801592052
+              ]
+            },
+            "assembly_kernel_seconds": 0.12562230682373046,
+            "factor_bytes": 1131200000,
+            "format": "bsr",
+            "matrix_relative_error": 4.83634398099e-14,
+            "policy": "schur-cholesky",
+            "rhs_relative_error": 1.8716192276755502e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": false,
+                  "threads": 128
+                },
+                "key": "15d8aa57566fa75f5750989cf799b2a2ce427189e50483e243d18d3e27e49fb0",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 6,
+                  "phase": 0,
+                  "policy": "schur-cholesky",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.10365445096977055,
+              "samples_seconds": [
+                0.10365445096977055,
+                0.10374843399040401,
+                0.10361158894374967
+              ]
+            },
+            "assembly_kernel_seconds": 0.09837136077880859,
+            "cached_rhs_relative_error": 1.0680796123453734e-14,
+            "factor_bytes": 0,
+            "format": "csr",
+            "matrix_relative_error": 4.393795156412496e-14,
+            "policy": "none",
+            "reconstruction": {
+              "median_seconds": 0.024693951942026615,
+              "samples_seconds": [
+                0.023942962987348437,
+                0.024937474867329,
+                0.024693951942026615
+              ]
+            },
+            "reconstruction_relative_error": 3.1684945457224806e-14,
+            "rhs": {
+              "median_seconds": 0.03250902099534869,
+              "samples_seconds": [
+                0.03250902099534869,
+                0.035353791899979115,
+                0.03238822612911463
+              ]
+            },
+            "rhs_relative_error": 1.067281292012904e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": true,
+                  "threads": 256
+                },
+                "key": "f218d0cfece09386b2883fd34c47b6744b708490c5e32baedd666528e21959bf",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 6,
+                  "phase": 0,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "32f994932d70e9b6f4aa59e5f16bbb24c09dbe69710fdbb8effe68f46538fef4",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 6,
+                  "phase": 2,
+                  "policy": "none",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          },
+          {
+            "assembly": {
+              "median_seconds": 0.10377466608770192,
+              "samples_seconds": [
+                0.10365042299963534,
+                0.10502572590485215,
+                0.10377466608770192
+              ]
+            },
+            "assembly_kernel_seconds": 0.09879251098632813,
+            "cached_rhs_relative_error": 1.0680796123453734e-14,
+            "factor_bytes": 638400000,
+            "format": "csr",
+            "matrix_relative_error": 4.393795156412496e-14,
+            "policy": "schur-lu",
+            "reconstruction": {
+              "median_seconds": 0.013379500014707446,
+              "samples_seconds": [
+                0.013185761868953705,
+                0.013564329827204347,
+                0.013379500014707446
+              ]
+            },
+            "reconstruction_relative_error": 3.1684945457224806e-14,
+            "rhs": {
+              "median_seconds": 0.017712723929435015,
+              "samples_seconds": [
+                0.01794012705795467,
+                0.01769964420236647,
+                0.017712723929435015
+              ]
+            },
+            "rhs_relative_error": 1.067281292012904e-14,
+            "tuning": {
+              "assembly": {
+                "configuration": {
+                  "columns": 8,
+                  "retained_coupling": true,
+                  "threads": 256
+                },
+                "key": "be269fd9aaf3e186f36bf16249f6113c7ffe8e866da895c4cc9cd64be8e2eb28",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 6,
+                  "phase": 0,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              },
+              "reconstruction": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "36081069b173e1e261c0748834e79a2add582837c6a3153133f546fbe763fc3e",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": true,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "bsr",
+                  "order": 6,
+                  "phase": 2,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              },
+              "rhs": {
+                "configuration": {
+                  "columns": 1,
+                  "retained_coupling": false,
+                  "threads": 64
+                },
+                "key": "94ca53ee03e940e26fad5c01b3ac0e0312510077f8d1e96a299cc7d215325c3b",
+                "reused": true,
+                "source": "process",
+                "version": 1,
+                "workload": {
+                  "boundary_nonzero": false,
+                  "element_basis": "dub_orth",
+                  "family": "poisson",
+                  "format": "csr",
+                  "order": 6,
+                  "phase": 1,
+                  "policy": "schur-lu",
+                  "precision": "<f8",
+                  "source_version": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+                  "trace_basis": "legendre-modal",
+                  "volume_points": 33,
+                  "workload_bucket": 17
+                }
+              }
+            }
+          }
+        ],
+        "trace_unknowns": 1046850,
+        "triangles": 100000
+      }
+    ],
+    "complete": true,
+    "device": {
+      "cupy": "14.2.0",
+      "driver": 13000,
+      "fp32_fp64_ratio": 64,
+      "major": 12,
+      "maxThreadsPerBlock": 1024,
+      "maxThreadsPerMultiProcessor": 1536,
+      "minor": 0,
+      "multiProcessorCount": 110,
+      "name": "NVIDIA RTX PRO 5000 Blackwell",
+      "regsPerBlock": 65536,
+      "regsPerMultiprocessor": 65536,
+      "runtime": 13020,
+      "sharedMemPerBlock": 49152,
+      "sharedMemPerBlockOptin": 101376,
+      "sharedMemPerMultiprocessor": 102400,
+      "uuid": "929aff4deebf674c2237e7f59ba6f17b"
+    },
+    "dirichlet": 0.0,
+    "element_basis": "dub_orth",
+    "kernel_source": "04bff3062ac34e60458aedfa3da823852b27cb3745345b20fcd89a8c71775045",
+    "parity_tolerance": 2e-10,
+    "precision": "float64",
+    "provenance": {
+      "code": {
+        "code_diff_sha256": "4526b94175c25f80d0305772df7e6174da6dce2358cf4c5299c21c6d91078f9c",
+        "git_branch": "master",
+        "git_dirty_entries": 99,
+        "git_head": "c9da79930b3bcb0ad3a708da25939573c7b1bbbc"
+      },
+      "extraction": "All timing samples, medians, numerical results, cache sizes and source provenance retained. Per-phase tuning reduced to selected configuration and workload identity.",
+      "packages": {
+        "cupy-cuda13x": "14.2.0",
+        "gmsh": "4.15.2",
+        "holoscan-cu13": "4.6.0",
+        "imageio-ffmpeg": "0.6.0",
+        "matplotlib": "3.11.1",
+        "numba": "0.67.0",
+        "numpy": "2.5.3",
+        "pillow": "12.3.0",
+        "pyamgx": "0.1",
+        "pypardiso": "0.4.7",
+        "scipy": "1.18.1"
+      },
+      "python": "3.12.3",
+      "recorded": "2026-10-14T19:34:55+00:00",
+      "source": {
+        "archive": "poisson_100k_low_orders.source.tar.gz",
+        "archive_sha256": "9a8ced75d0c8c910e3cdf0f7b1e4cc7ef63551b64ccd610c919ee4be4be54c13",
+        "files_sha256": {
+          "hybridge/__init__.py": "2e803d7e6a42f3cb0799a8133660af444cd6c39a95954fbb21a8c9952f4be75e",
+          "hybridge/cases/__init__.py": "c0496470c9fb48d099100497e570806c9793da58eec9ad2084ca95ae5689c03a",
+          "hybridge/cases/closed_loop_coefficients.py": "728f1c901e4f2e0533c8fdd9194c5a714d55a43fba043a87ce58be0583c6a6c8",
+          "hybridge/cases/profiles.py": "6f1f1c7817a976b93655f094899079f9389af2a854a59c7487989e156ce1db68",
+          "hybridge/cases/square_stress_coefficients.py": "51e45cc6daff011ff78b868b530587f8b27d4fb70c9093e0dbd9061aa72e9f00",
+          "hybridge/core/__init__.py": "ccd8ae65df7d91011d53fbcf9e483c813e6bc4c005125664848b82c2b30bf025",
+          "hybridge/core/adaptivity.py": "68751a91a8591eb637575dcd7d342fa5cf208c0d0fb374efd284291ce741edc5",
+          "hybridge/core/basis.py": "b2365c9a137b7a74426bab5dd0cdaa32b02bde2fc361e60e31a473602fdefc54",
+          "hybridge/core/conforming.py": "ef27a958fbb401c200c47c14e6315ce99b8c4fe57a23d3c3ea08346dbb0dd07c",
+          "hybridge/core/device.py": "fbc01f6fc4389933556cfcf97dee69f1451ac339249312b68dacb9ddedaea59f",
+          "hybridge/core/element_coefficients.py": "6593d36e8903e1f5663740bd89f5f779d480035c2a2ccfed5007a6534affdb24",
+          "hybridge/core/field_ops.py": "7b30ad961af73b1a87230bf98d54d37dd2b3701381e11ee5988005f73f4a7305",
+          "hybridge/core/geometry.py": "c34b60ca6fc578f1dab609cdacdaf12aa413d0b6328c7a094681647a82e30b26",
+          "hybridge/core/mass.py": "577155a9cbe32760c69852c617f62a6174802f5c61e853439be182124fffe4f3",
+          "hybridge/core/mesh.py": "719a2961f213e52f1080d9621f2b9949ec86951984a89a8ec7bb39976b49ac51",
+          "hybridge/core/pointwise.py": "8cb93c2e309a02dea501584b1a0c89301de0d31e55119a41fb150b2f06851a5c",
+          "hybridge/core/pointwise_kernels.py": "25cc0c69f46269fb4b6d10402132cef52a60ad62235fdcb867da7a8c2154a7a7",
+          "hybridge/core/projection.py": "170e04fc5bf8ded580379cebce448ea3fba970539bc286129cd20548f6df97f8",
+          "hybridge/core/quadrature.py": "85727927dc5d0395795ea629a03c358a2db044e73d3e75ab01726b20eda10cd6",
+          "hybridge/core/space.py": "9b8a5c1697b753de2f650b8f508daaaa00c063b8018a4fbaed2feebd0f185774",
+          "hybridge/core/time_integration.py": "9c47d974acd038a6a215fb0999fe119b856f9e76d4ac075c3fb6e5f68f1707af",
+          "hybridge/core/trace_transfer.py": "0cd4ad857cc515a848021ac056ae46fe85a924f24f1b7f12f9df05a2d81171b9",
+          "hybridge/core/transfer.py": "d5d7647f2ce24807b81d06e8ec530c6a2bc667bca072fb54d3eebbf3cd656ad9",
+          "hybridge/diagnostics/__init__.py": "1c55ad773c78ffc9280696ff363672e7cd52564461263cc0b0140a6bd441f8ab",
+          "hybridge/diagnostics/errors.py": "7c80bedd859744295e4fa966c4fb2459529809809264d7000527c2b4e10e284d",
+          "hybridge/diagnostics/guiding_center.py": "277cfe008d5dc80e13966e28ecb65021780988710328531f4574c3bbe8e33487",
+          "hybridge/diagnostics/solver.py": "6cf1562238a88ff6b789ea0fc3a62969ea26e8f8de12a82e773491c09eb1fccb",
+          "hybridge/hdg/__init__.py": "5602943b41bccd77beb4f1e929e6032bf47596ca9ea9a379f7f1f3335079c177",
+          "hybridge/hdg/coefficient_sampling.py": "738d9053a9e1fbb341e8fffb2cd9af658305da2ae33dafff77862edae08daeb2",
+          "hybridge/hdg/coefficients.py": "67974af9eba8e732ff0d93cddc0d98093a505141f7f9ac7ee541062403cdd02b",
+          "hybridge/hdg/coefficients_device.py": "21ae031252b2175d8d5f2be296429ee2a4e4b2a00d7f85e863adb21a4adbeb39",
+          "hybridge/hdg/condensation.py": "3e64776e9a918daf07f69e33a4a21a8a19f952385db09f6f2c401c3c9026d2ff",
+          "hybridge/hdg/condensation_device.py": "fd42dc82b3b1383f9648c6666714b441f9777388a3c47753eab8c428f6feeb79",
+          "hybridge/hdg/cuda/__init__.py": "96af8fa3ddb416af98584a614880ff2b40b6afef02f72edeee650a812105963c",
+          "hybridge/hdg/cuda/launch.py": "d81709da648344fa590a8d6dd2756a691c8fdeb35b431b1b7bd02d6a568f781d",
+          "hybridge/hdg/cuda/pattern.py": "8a046b93e7a3899214bc709c6a24db162866d95e6d2a8841dcfb2bc4df1aa0cc",
+          "hybridge/hdg/cuda/raw_source.py": "4c6a80d3f29bfcce90573920c35be6ee7f341f1dd880054d30fd2985bb894666",
+          "hybridge/hdg/cuda/tuning.py": "907673f47f12ab22fc5c708a9fbf6f4b79b08e2b23ae87439a5a0577779e6849",
+          "hybridge/hdg/gram.py": "53712317e20a91e2536530578067893fd6fcd5ffd27b4b9d630be8bf02f04909",
+          "hybridge/hdg/matrices.py": "43b0a8b1fc4e71d63278ee591597bb0d6e5835ae08ba924b9010a6998e341dae",
+          "hybridge/hdg/numba_common.py": "b75b077bf600daac5ac499067e826dbb69294c45198dba80c2348e932c8f8895",
+          "hybridge/hdg/reference.py": "ef2f94377b51609e965461809a2d68149699477e4bc6a2bc76891782ffd1c8c1",
+          "hybridge/hdg/stabilization.py": "8624e87be1f0c3b053b6404f08ecfa1f31e0dcf6697b8f4832e4196e009acbf8",
+          "hybridge/hdg/trace_maps.py": "7bed7b7642dba0f14923e646dc14cf53c5c0e4b23a33797ca7dfd13a3aabefd5",
+          "hybridge/io/__init__.py": "f9395f9d5520071c5303f53c670bdc19de21cd2702dd8c69f2a0fbbbddb528a3",
+          "hybridge/io/comparison.py": "6395864e9fddfeab433892fbaeb680fbace52fe46eded4e2b285f8aa1ddcc862",
+          "hybridge/io/figures.py": "7030766417196ec889531921906db80e84b9f21fc3718b61de1f0ab3e353405e",
+          "hybridge/io/holoviz.py": "c201fd135ef3d9899667646e015969fe057aebac8e77679d7395cd5ec567d7ac",
+          "hybridge/io/holoviz_ssh.py": "fbb8784beeef93b472771e06c14445fb2a7fc9c6b59ab532fd97ef0312be8faa",
+          "hybridge/io/live.py": "840cdd5a364aa5f721fe226aa528f6e9d8cdc6b2afd7d850c6d4096e1d818028",
+          "hybridge/io/matplotlib.py": "c0d2763e7c842187e67ade5fcc805b604515385aadc5285bf113ecc8ad2947c2",
+          "hybridge/io/movie.py": "15c1fdbbcd44610130eb9165ec957d350d77b461cdb8f61e543527d61f917248",
+          "hybridge/io/output.py": "7c03d6607fd5c8167e38accf2079ef83de223ec015f01b75eec9c3bef4e14f03",
+          "hybridge/io/plot.py": "f30e625659359ad5d7926318d6c48f8ce6842571f539473524fd73819a6741d9",
+          "hybridge/io/raster.py": "2dad2ef24cef8cf457fa41673d29a59032f7a7da50d9d39bbacb29247076fa30",
+          "hybridge/io/recording.py": "aa0b8e1f18b9813488fbd777967ee1b6a4545cb244d891d81de8ca09617db8f7",
+          "hybridge/io/records.py": "758f650249f6aff621ae5c089b3e5bccb9dc73f964006e7d70facf4d4f23bba5",
+          "hybridge/io/time_series.py": "53bc41dbc185a0f7a3da8b056aecead9a2be90065e07eee8c392241535d7cfcb",
+          "hybridge/linalg/__init__.py": "f5004f821c817960f47fd0f247072efc0d3e64904a119231707147ef02d7f54c",
+          "hybridge/linalg/additive_schwarz.py": "7e260b94f6a00ad1a2dae4f36d3d84d9b39e687b166f675e68905b38545a74a2",
+          "hybridge/linalg/amgx/__init__.py": "8e628474956a6e62f82a474e7f728dd47b3fd115edd8681ca1358cf1a640c665",
+          "hybridge/linalg/amgx/config.py": "b8745c76b0e30de6ec62e0077b3af4850de60e17b72207b9067911ca647e00ec",
+          "hybridge/linalg/amgx/device_solver.py": "3bc0babc79ebde9a6c7db189f42008994950e12436579fb67d7abbcffeba7579",
+          "hybridge/linalg/amgx/errors.py": "643ee3dbcb569710e0041ceae74774cc5c22470c25e9241ce004683ee2595928",
+          "hybridge/linalg/amgx/host.py": "b3616ca7c2ae5b70bb5146df7340e590d8f77f766f322a5dd817f62b4233d511",
+          "hybridge/linalg/block_jacobi.py": "a7238f3b8216c667da1d462febd02633fc91ef4de5a7fdd9fcda27c989826762",
+          "hybridge/linalg/bsr.py": "9f701e4999ce0d27ae1d63b284fd7add51f69853a63b0ab761ff9a65e9f68000",
+          "hybridge/linalg/direct.py": "5826d01baad9e614dc64bc4b78edd107e60c09caa94671090adfb4b543213067",
+          "hybridge/linalg/face_dense.py": "97ba0cf331e9b2d4d90faf5b88633b7eb8724344f8311ad2888199827fb6d3f0",
+          "hybridge/linalg/failure_snapshot.py": "97108e8cab74a39a7647c4fa240066379903a0b7d06579b4f3a6a5241c88782f",
+          "hybridge/linalg/gmres.py": "bdaab772267a17cd86a42c8334b45a209020edbc4f86d05239ace423020791bc",
+          "hybridge/linalg/gpu/__init__.py": "8e34a6dce87324964e8de5baab52b73c9136add5db9138dbac218d41594a7d97",
+          "hybridge/linalg/gpu/cublas_batched.py": "5adbc81088f13de5573dc4f512409a5dc58841980feafbc8c9cbffe6e4ff6236",
+          "hybridge/linalg/gpu/cupyx.py": "115f7ec92bad0067398e96380fd691b9edcb9ff90fbe8bb39a373c656ae6b19a",
+          "hybridge/linalg/gpu/cupyx_device.py": "f2a2efe1e67ceab6692c49b3e14bd399316f374ad7aedab42abafefe1d4af56e",
+          "hybridge/linalg/gpu/face_dense.py": "2d98d9fc0ea01218b071128cf2fb862d46fe7a6baf7450bc49d2c471d7913466",
+          "hybridge/linalg/gpu/gmres.py": "6711b2c83b815c5359034acded855ebda0af4eee95bf6dd03dd8dbc0de379da7",
+          "hybridge/linalg/gpu/legendre_face_bsr.py": "2d1aa0eafd577a8178d6e3bc11674b3e8d9909399cb0e1ef72c13382ea93d111",
+          "hybridge/linalg/gpu/magma_batched.py": "462759bdf335ea0df6fce6c7ddf47bf88e458735706744522204ac18fa1de227",
+          "hybridge/linalg/gpu/polynomial.py": "d47a62bed74de486e08dedd3187c65caad8beed0367770f550646f8421f9eb16",
+          "hybridge/linalg/gpu/preconditioners.py": "907e049bec936a96c8cd4e2f0c0f6a2bd75944d3d48a7967f79b592a58ca9c7b",
+          "hybridge/linalg/gpu/production_gmres.py": "6962b59a2d444c38e1f1e61829799eda3d2cd79b08f01daff9256fef0ee01472",
+          "hybridge/linalg/gpu/profiling.py": "09431e8c2f744b8472d55b7df3bc2804571df95f8f53604446f6bcb4ac8a2ae6",
+          "hybridge/linalg/gpu/sparse.py": "ab883b2a85184fc4fc52b96b4e9fbb375208ea581f5129bd0cdeb37adf9aded6",
+          "hybridge/linalg/gpu/triangular.py": "1ab2b2d3dcc5aa37d44cb20fedc5e3ff632a54ef361e39802bd9abf12609ac4b",
+          "hybridge/linalg/gpu/upwind_block_gs.py": "ecf5eff4db1a3606b4eea1709860ee964dc624320bffe37ee60d7f0701ce0ed8",
+          "hybridge/linalg/iterative.py": "180b4e95bf75b9a19f2555dc51ef6d75ad2289587ae699527ea2e05c96e5e740",
+          "hybridge/linalg/multigrid/__init__.py": "6bc9dfb3792b6a45217f7f8c4c7e11a4e40ab7dc6bfb757b2a921872cab4ce3b",
+          "hybridge/linalg/multigrid/face_hp.py": "a330e295bce2f371598a7fd10367cb4175d8a895f2993e88e02784b50bf6b398",
+          "hybridge/linalg/multigrid/hierarchy_bsr.py": "c0e45c6ac173d688b9c706efbb25819406abdfcb02e9de4540b34c39f8783dcc",
+          "hybridge/linalg/multigrid/krylov.py": "00a39c5aeaf2987953afa09a610d3d236852a751534508e519c4bb19da8d798b",
+          "hybridge/linalg/multigrid/policy.py": "e694a6a1d8b33bf2b0b3b547ef8d94428958692f848621780d98f538658bc178",
+          "hybridge/linalg/ordering.py": "efe31044d6284aa3a0dcb3f9708912c44eb6ebcbdbfbb52b7f8f55484c7cac1d",
+          "hybridge/linalg/pardiso_diagnostics.py": "ba21e6e8f8a58a1889f6cfbc0d497e2da371eb7efb1fa70c16ff79dc5f7b58a1",
+          "hybridge/linalg/pardiso_runtime.py": "f7e8bee8efebd07520ee376aa2705c5fd8efa48d23902efb66d064b2ab070b65",
+          "hybridge/linalg/polynomial.py": "7d0c7e148864c7e5379c90d50a3bff8f5e8307afcf43b2ff19c837851b432555",
+          "hybridge/linalg/reduction.py": "5c61e743c70d707268037bc127afbedc1eb4def7c3e98f7f2ac70e90b1150341",
+          "hybridge/linalg/results.py": "60e514150c37903d6f065e7800973eeb3cee0e27599d1b2ac9cbd1490c83a298",
+          "hybridge/linalg/sparse_pattern.py": "19f260037ba28a365e7ceb02fb1fa6821ee35d18d0968c80f91dee72ae7c95ea",
+          "hybridge/linalg/system.py": "71c7a02e3fd26b2df874d49509f25bea37b32ba5829b6f2cf8bcb94ef1a04c30",
+          "hybridge/linalg/upwind_block_gs.py": "b8d4521315d310c5a487f0bfbcac72b0ae5d012d8185b5da0d7dee855bfae4c0",
+          "hybridge/linalg/upwind_block_gs_on_the_fly.py": "9d7a475cba5b4efefca61ee69033a7bb1443b495c7d5658cb19d79202c620074",
+          "hybridge/mixed/__init__.py": "d82cfd787a37c2bbe44295d34ec94a4c7758a968ceed329bdadf15803391a7ed",
+          "hybridge/mixed/adr_numba.py": "adb405f0f78e83aaca821a717c8d82de69722ad4ca185308e73a222620c8274c",
+          "hybridge/mixed/adr_numba_kernels.py": "344f99d36f25dacb691161772e60a34b9dda217ecd821f50f18cbc16414742d0",
+          "hybridge/mixed/adr_numpy.py": "b1e9743ccef2d064838bb265ebe7135cb9f8c156f680c9979de198c840b69a0d",
+          "hybridge/mixed/adr_preparation.py": "a232b142737bf79a954d36ec762fda65a1a82c2a39426a944627d1a4e8580487",
+          "hybridge/mixed/coefficients.py": "98639ee5c6c75b6d35498d6a4f258932568aa12db0b3971babd5d02d60b4ddc0",
+          "hybridge/mixed/coefficients_device.py": "a28311d70ad2229f2758aefb414f98c16ef80b35023fa4431a513a0299f73839",
+          "hybridge/mixed/cupy.py": "152740a76642a4b32ea818f3441fabf64896216d51f875edbf479be36203f637",
+          "hybridge/mixed/face_dense.py": "27a426059622acfc0f5b94d0508cc2a7dd04c5be277d4c19b5771552b4718ad5",
+          "hybridge/mixed/local_numpy.py": "7b8ce11d79dcb8121964d5e1b25fc99b2ba9dd67b38d443eef4a2a46d4b63ba5",
+          "hybridge/mixed/numba.py": "68c349d282f0b9dfec9a55e0b112a0f4ee5c38db159d5e3b8fb153a4395d2b19",
+          "hybridge/mixed/numba_common.py": "9ac9665781e36a644a5c97def287bd2dd24202eaabbf9ebf24a13fac03f1965a",
+          "hybridge/mixed/numba_diffusion_mass.py": "29dc2e1ee4eac25fd254101e9ab01109fd3945b7f25252626b0ed9e78d78d02f",
+          "hybridge/mixed/numba_kernels.py": "bc848ddf55cd77535bba4b35d4d9ab97f0d24fd0a93cc46f5417c7ff57b756e3",
+          "hybridge/mixed/postprocess/__init__.py": "752f3ef0018d2c145a80b6fb42c3f65575f79527de1bd74996390241ec7de7dc",
+          "hybridge/mixed/postprocess/flux.py": "250dd72bae6f4fa1d387164233675e82c54b827b92dc057bbf20646b2864e6b9",
+          "hybridge/mixed/postprocess/flux_cupy.py": "3aa0f77f73940931e40904065d53f43ddf7df3b988c5436b92fbb6b57f82e1db",
+          "hybridge/mixed/postprocess/flux_recovery.py": "51081eb10a78a6ee94cf70323879cbdcee8e3eb15b63ff527661d1961cf528e4",
+          "hybridge/mixed/postprocess/flux_recovery_raw_cuda.py": "9bd29d4993fd195051a6aac3b17d32f1f428628727a066a9ff66458db47c8d82",
+          "hybridge/mixed/postprocess/numba_kernels.py": "3de325b9b1768bfd52919ba63b88a631d84a145aa27bf161b649b4db615aab90",
+          "hybridge/mixed/postprocess/primal_raw_cuda.py": "1addfd344264b37ba6a8bf4cabec0f9cb5df1797b8e0d62667b032d0cf371cf8",
+          "hybridge/mixed/postprocess/rt_raw_cuda.py": "6d6ade7626a7e8f2c94af9ce486d05492575133ec5d9e953ed2af541d691fbb1",
+          "hybridge/mixed/postprocess/total_flux.py": "d018c8d5b888dc8e660669e639b750500202ce8de80c716e543af2bd5679f911",
+          "hybridge/mixed/raw_cuda/__init__.py": "22ebf48980febe3f9dcf422ca3178a2ddb63fd1a5761a86ef299f51ce1886326",
+          "hybridge/mixed/raw_cuda/adr_operator.py": "e2cb60c7a6dd7e721875010eb4c2c4950254b36e8d82b3d5f0f5a834f1a040a0",
+          "hybridge/mixed/raw_cuda/identity.py": "2e418d915c934008e1d903069ca48d45bb64ac69ec7bb25f23395b5e894780b3",
+          "hybridge/mixed/raw_cuda/poisson.py": "8ec26dbe46414d9ab569c600ae2f4d1c8759ad8d1231bd607f8c94bc08473061",
+          "hybridge/mixed/raw_cuda/poisson_source.py": "738b8f7387c51c811b22ca634cc11aaabdc05da91f0775af78e45bcd4dbe54fc",
+          "hybridge/mixed/raw_cuda/tensor.py": "be5075607136ef9e0db3c0a45611abdb63cc9da0b1a4bae41cae5589676edeea",
+          "hybridge/mixed/stabilization.py": "19a106162b1851c29e1d54bd5a7d30a811b47c59c461c3feeb253ef363c869ab",
+          "hybridge/runtime/__init__.py": "f9e4851b80b38f54878ac02f6b240d75e6d07f6c67757bb496fcded9ab0d9506",
+          "hybridge/runtime/benchmarking.py": "69761aaa20e3beaab8c1bc7c119779b18ca556e06f7add3ac43496eb8119d186",
+          "hybridge/runtime/devices.py": "2180e5a34dcfa1f227d5a9c7bf72d34861052eea31fde273083b0afccd213c3f",
+          "hybridge/runtime/env.py": "75c1656fb806f6e1f2596b20845cc0110a4de0597de14c2f8b616f65653c86f4",
+          "hybridge/runtime/errors.py": "2d194b1a671827229265a2fb5af2f3d574a7efd349bf6441942992090333334c",
+          "hybridge/runtime/logging.py": "4105f6d25f097939101da672d0e8fc473c5e9c76165f75ecb287ae60cbbd7445",
+          "hybridge/runtime/optional.py": "089c7729786b9eb19581a20627cc9878141b8879826c6f027ce0da60cd75f886",
+          "hybridge/runtime/precision.py": "ce5379c2c9570a512beecd3721319742ac8ddcfdc9d1c4a4bc1c66f1cab14ef4",
+          "hybridge/runtime/terminal.py": "107539fea1ee295e3c61eec21ecec82fa397b450be9eeea8a001e4b3f186b9b9",
+          "hybridge/runtime/threads.py": "5b3c9642d6fe6cd3755fd973dc17e074a94086dcfe4f7b4c395cd1da77951dd1",
+          "hybridge/solvers/__init__.py": "f478244c75b4a87f870408709218ecd464b4bb911b8ecdd4ad4f2b4d31f064bd",
+          "hybridge/solvers/adv_rea.py": "b02e6209f64bdd712e290d4c3522780ba205241d44a161ee9f1b80f71ed928d5",
+          "hybridge/solvers/advection_cupy.py": "16476e76e0913d0733fcb5915b916e59f50fbfd5dc10152034c4e065e4fafae5",
+          "hybridge/solvers/advection_diffusion_reaction.py": "8591a9cbe727797a61ebe5c9c1945d8c74ca16329e18f6369daa0e240d8a7e9a",
+          "hybridge/solvers/advection_diffusion_reaction_device.py": "0924f648ee3cba0e233bd182c153aea3bd01219ddf627d6beb8c1891cfd73b7c",
+          "hybridge/solvers/advection_host.py": "8030b2511e8a53f00fcf343cb8609a179d28733e7f26f33ec283acce057d9c5c",
+          "hybridge/solvers/advection_raw_cuda.py": "54e17a75bd9e4fe930f41ba91ef351964ad702f440f6c19fc5939cf02d26a8e8",
+          "hybridge/solvers/advection_reaction.py": "3606601b01f1571a7ac6e2b3c77d73d594474eebbf7d704e439f126692d9d8bd",
+          "hybridge/solvers/advection_stages.py": "dd678fb657f490b1914acc420646ab3bd8f18f9c1cb63c4f2da7fcaa03397fe5",
+          "hybridge/solvers/capabilities.py": "c95af4fe814611a379f654e56d905e15c98f4389f5ce7b9da2df65ddb022bbcb",
+          "hybridge/solvers/diff_rea.py": "3816d40666b1aed5cec90ac81b6b7b79606ad9de9cf7022bf4f04f19d1206264",
+          "hybridge/solvers/diffusion_device.py": "5599059417b5cd5204d926c20bd99ff92d9fc1876e15ce19e3f7e77edea5448f",
+          "hybridge/solvers/diffusion_face_dense.py": "e920eb3322cbc57e3d72736bf59afe3840481ff2f9da09bbca6445a668c1bbc2",
+          "hybridge/solvers/diffusion_host.py": "c93f5aaae7af334c04f943d1ed84d16c09288cd127dc7627a48c539558d87c6d",
+          "hybridge/solvers/diffusion_raw_cuda.py": "a9fe64c7d08b156307405e4c3090f1ede4fbf473e1a7e95c4a301c8685b5518f",
+          "hybridge/solvers/diffusion_reaction.py": "a1274c629d84371e8aaadc7d618d0c7f826d0fd5ec789dfee0223e87f7b5f688",
+          "hybridge/transport/__init__.py": "71671bfd830da90769a12dd2835181820a6f18b230abd5518dcb38e4fbc06f05",
+          "hybridge/transport/cuda.py": "896f68742cc828b3de8b5afcd4393e01db97f332924c1d0f03f90f5beba5c769",
+          "hybridge/transport/cupy.py": "f9e651ebb173d1873fdc07d321d1180b9a637e230780814fe50dfe2c127cb9df",
+          "hybridge/transport/diagnostics.py": "ab97333edec12ca05ac10c1d24896b62e13696eed0165eb738da132580345745",
+          "hybridge/transport/drift.py": "bcf0ae14576d3832e7d4cb84fc505b9cf25cf6b23f144122d4094a39b3e3c855",
+          "hybridge/transport/local_numpy.py": "67f00f8b79c875a38e71af40413d4613c53c9b9291d1e9463d47a4b271706a97",
+          "hybridge/transport/numba.py": "e6c5f2ae369cc0512b61116ffd0b697e45f83af344a42b03960b120860e86596",
+          "hybridge/transport/numba_kernels.py": "963fc70d51c24ec3ad93d9b8ba6e3819eaa841b94ac2cd79ded0e3617015d911",
+          "hybridge/transport/numba_local_kernels.py": "6c37a5fc6c1ec9ac59cdef65408deb23b1b4c319142bbe7969221ae56dadecfb",
+          "hybridge/transport/positivity.py": "dd8dfc8215771f6926a0b85173778a83c1f11ee2dd2e7dd27de14f9c3f47c57f",
+          "hybridge/transport/raw_cuda.py": "64703d3786983f92367a4e03aae4e19facaf2601fa46f50a0b94b010c2703b32",
+          "hybridge/transport/residual.py": "9e7abf2135fb696982cf6909bbbb2332e07d3b8ac85ab581afb795cb0a6f7750",
+          "hybridge/transport/tsle_bsr.py": "3c8f31756e82055cf4daa7288ae07048c305f1e26b2605d73bec1de5156337c9",
+          "hybridge/transport/tsle_tensor.py": "bca5795a45135ebe1d4f2684f678388882a78c399b8d56f2d1c5ab84e6e1ad5a",
+          "pyproject.toml": "f72e01adc1c7427b6b3958b4ac6594ccacadec47a7f0d9115b8f03c9e71c9e5d",
+          "scripts/gpu/benchmark_poisson_assembly.py": "da00355f54ba323b9efe7739653c0d2801391dfcfebb6ae3b2ac14540de87550",
+          "scripts/reports/run_provenance.py": "3bbecbe10dc639418d435dc775bfedc4047cf5d4663892fa821a57bbb321977d"
+        }
+      },
+      "source_artifact": "artifacts/poisson_100k_low_orders.json",
+      "source_changes_during_run": [],
+      "source_sha256": "65fcab2f376896638b6c7a8539f98cc2a5960c812fd2d4db8732d54c7366b400"
+    },
+    "raw_variants": [
+      {
+        "format": "coo",
+        "policy": "schur-cholesky"
+      },
+      {
+        "format": "csr",
+        "policy": "schur-cholesky"
+      },
+      {
+        "format": "bsr",
+        "policy": "schur-cholesky"
+      },
+      {
+        "format": "csr",
+        "policy": "none"
+      },
+      {
+        "format": "csr",
+        "policy": "schur-lu"
+      }
+    ],
+    "repeats": 3,
+    "schema_version": 1,
+    "scope": "stationary assembly/RHS/reconstruction only; no global solve, no NumPy assembly",
+    "source": 1.0,
+    "subdivisions": [
+      250,
+      200
+    ],
+    "tau": 1.3,
+    "timing": "synchronized wall seconds; complete assembly wrappers; mesh/JIT/autotuning excluded",
+    "trace_basis": "legendre-modal",
+    "triangles": 100000,
+    "warmups": 1
+  },
+  "precision": "float64",
+  "provenance": {
+    "driver_artifact": "artifacts/poisson_100k_comparison.py",
+    "driver_sha256": "7abdb5a93c3f7f013ce3a98fafb99877ffef481491d9ef6b3e6bf0fb2b3cabd4",
+    "extraction": "All timing samples, medians, numerical results and cache sizes retained. Per-phase tuning reduced to selected configuration and workload identity.",
+    "source_artifact": "artifacts/poisson_100k_comparison.json",
+    "source_sha256": "52f0ec33d3f263988d729362f423c942a7c88bf6ab53edb4ba4c6d87b252d8b7",
+    "source_snapshot": "A complete Git revision and dirty-source snapshot were not captured at execution. Tuning workload source_version identifies the generated Poisson kernel only."
+  },
+  "repeats": 3,
+  "scope": "stationary assembly/RHS/reconstruction only; no global solve, no NumPy assembly",
+  "source": 1.0,
+  "study_date": "2026-10-14",
+  "subdivisions": [
+    250,
+    200
+  ],
+  "tau": 1.3,
+  "timing": "synchronized wall seconds; complete assembly wrappers; mesh/JIT/autotuning excluded",
+  "trace_basis": "legendre-modal",
+  "triangles": 100000,
+  "warmups": 1
+}

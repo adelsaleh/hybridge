@@ -696,9 +696,14 @@ solve is slower or less accurate.
 
 ## Long-Term Degree Extension
 
-The BSR route is the priority for raw-CUDA Poisson p=7,8,9. Extend local
-assembly limits and shared-memory/cooperative-solve policies for element degrees
-36, 45, and 55 only after recording occupancy and capacity. Direct BSR block
-sizes 8, 9, and 10, modal orientation, reconstruction, cached-RHS assembly, and
-BSR-vs-host/CSR parity are required. COO/expanded CSR support at those degrees
-is a secondary validation/debug path, not the production optimization target.
+The pure-Poisson assembly and reconstruction extension is implemented through
+p=9 (2026-10-14). Cooperative kernels cover element sizes 36, 45, and 55,
+direct BSR blocks 8, 9, and 10, and direct CSR/COO emission. Both production
+trace bases and all local-factor cache policies have CuPy, host, and changing
+boundary-data parity checks. Shared-memory capacity and modeled occupancy are
+recorded by the [Poisson tuner](../../backends/raw_cuda.md#poisson-tuning-and-resource-limits).
+BSR remains the optimization priority.
+
+This completes the kernel prerequisite, not native high-order multigrid
+qualification. The native solver gate remains p=4..6; p=7..9 hierarchy,
+smoother, convergence, and complete-solve performance gates above still apply.

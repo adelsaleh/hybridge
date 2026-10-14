@@ -20,7 +20,7 @@ BENCHMARK = ROOT / "scripts/gpu/benchmark_fused_raw_assembly_kernels.py"
 
 def configurations():
     """Enumerate implemented emission/cache combinations without silent fallback."""
-    for fmt, policy in itertools.product(("coo", "csr", "bsr"), ("none", "schur-lu")):
+    for fmt, policy in itertools.product(("coo", "csr", "bsr"), ("none", "schur-lu", "schur-cholesky")):
         yield "poisson", fmt, policy, "assembly", "fused"
         if fmt != "coo":
             yield "poisson", fmt, policy, "rhs", "fused"
@@ -28,8 +28,8 @@ def configurations():
     for fmt in ("coo", "csr", "bsr"):
         yield "transport", fmt, "none", "assembly", "fused"
     yield "transport", "bsr", "none", "assembly", "split3"
-    for fmt, phase in itertools.product(("csr", "bsr"), ("cache", "rhs", "reconstruction")):
-        yield "poisson", fmt, "schur-cholesky", phase, "fused"
+    for fmt in ("csr", "bsr"):
+        yield "poisson", fmt, "schur-cholesky", "cache", "fused"
     for fmt in ("coo", "csr", "bsr"):
         yield "adr", fmt, "none", "assembly", "fused"
 
@@ -51,18 +51,20 @@ def main():
     parser.add_argument("--formats", nargs="+", choices=("coo", "csr", "bsr"), default=["coo", "csr", "bsr"])
     parser.add_argument("--cache-policies", nargs="+", choices=("none", "schur-lu", "schur-cholesky"), default=["none", "schur-lu", "schur-cholesky"])
     args = parser.parse_args()
-    max_order = 9 if set(args.cases) == {"transport"} else 6
+    max_order = 6 if "adr" in args.cases else 9
     if any(order < 1 or order > max_order for order in args.orders) or any(nx < 1 for nx in args.sizes) or args.repeats < 1:
-        parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1; use --cases transport for p=7..9")
+        parser.error(f"require orders in 1..{max_order}, positive sizes, and repeats >= 1; ADR is limited to p<=6")
     args.output.mkdir(parents=True, exist_ok=True)
-    source_paths = [BENCHMARK, Path(__file__), *sorted((ROOT / "hybridge/backends").glob("*diffusion*cuda.py")),
+    source_paths = [BENCHMARK, Path(__file__), ROOT / "hybridge/mixed/raw_cuda/identity.py",
+                    ROOT / "hybridge/mixed/raw_cuda/poisson.py", ROOT / "hybridge/mixed/raw_cuda/poisson_source.py",
+                    ROOT / "hybridge/hdg/cuda/tuning.py",
                     ROOT / "hybridge/mixed/cupy.py", ROOT / "hybridge/transport/raw_cuda.py",
                     ROOT / "hybridge/transport/tsle_bsr.py",
                     ROOT / "hybridge/mixed/raw_cuda/tensor.py",
                     ROOT / "hybridge/hdg/cuda/raw_source.py"]
     source_hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True)
-    manifest = {"scope": "Raw Poisson none/Schur-LU assembly, RHS and reconstruction; separate CuPy compact Schur-Cholesky construction/reuse; fused transport COO/CSR/BSR; transport TSLE BSR; cooperative tensor-ready ADR COO/CSR/BSR",
+    manifest = {"scope": "Raw Poisson p=0..9 direct COO/CSR/BSR assembly, RHS and reconstruction with none/Schur-LU/Schur-Cholesky policies; cache phase includes fused assembly; fused transport COO/CSR/BSR; transport TSLE BSR; cooperative tensor-ready ADR COO/CSR/BSR",
                 "gaps": ["hardware-counter access required for shared-memory/stall attribution", "representative capture is not exhaustive numerical qualification"],
                 "git_head": head.stdout.strip(), "source_sha256": source_hashes, "runs": []}
     manifest_path = args.output / f"manifest-{args.mode}.json"

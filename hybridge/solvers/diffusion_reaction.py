@@ -32,7 +32,7 @@ from hybridge.solvers.capabilities import (
     normalize_trace_basis,
     validate_diffusion_backend_configuration,
 )
-from hybridge.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
+from hybridge.hdg.cuda.launch import RawCudaBlockSize
 from hybridge.linalg.reduction import (
     KnownDofReduction,
     eliminate_known_dofs,
@@ -862,12 +862,9 @@ class DiffusionReactionHDGSolver:
             identity_diffusion=_diffusion_is_identity(options.diffusion),
             scalar_stabilization=np.isscalar(options.stabilization),
         )
+        from hybridge.mixed.raw_cuda.poisson import validate_block_size
         raw_block_size = (
-            resolve_raw_cuda_block_size(
-                options.raw_block_size,
-                equation="diffusion-reaction",
-                order=self.space.order,
-            )
+            validate_block_size(options.raw_block_size, self.space.order)
             if backend == "raw-cuda"
             else None
         )
