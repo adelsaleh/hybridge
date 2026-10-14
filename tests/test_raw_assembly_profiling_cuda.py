@@ -81,7 +81,8 @@ def test_profiled_factor_policies_agree(cp, basis, fmt):
     cache = _make_assembler("poisson", space, SimpleNamespace(
         trace_basis=basis, matrix_format=fmt, block_size=128,
         cache_policy="schur-cholesky", phase="cache"))()
-    assert cache.timings and all(key.startswith("cupy.local_cache.") for key in cache.timings)
+    assert cache.timings['raw.local_factors.created']==1.
+    assert cache.schur_cholesky_cache.raw_context is cache.raw_assembly.poisson_context
 
 
 @pytest.mark.parametrize("basis", ["legacy-lagrange", "legendre-modal"])

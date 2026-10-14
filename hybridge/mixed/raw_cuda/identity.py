@@ -1,18 +1,13 @@
 
-"""Experimental Raw CUDA kernels for diffusion-reaction HDG assembly.
+"""Raw CUDA dispatch and legacy reference kernels for pure Poisson HDG.
 
-The first implementation targets the standalone CUDA diffusion runner
-benchmark path: identity diffusion, scalar zero reaction, legacy-lagrange or legendre-modal
-trace coordinates, and p <= 6.  It keeps the existing CuPy source and boundary
-trace evaluation, then fuses the expensive element-local HDG condensation,
-boundary-column elimination, and COO/RHS emission into Raw CUDA kernels.
+Cooperative calls use ``poisson.py`` for p=0..9, identity diffusion, zero
+reaction, scalar stabilization, and legacy-Lagrange or Legendre-modal traces.
+It emits COO/CSR/BSR directly and supports all local-factor cache policies.
 
-The serial Raw CUDA kernel is intentionally written as a readable baseline: one
-CUDA thread owns one element and performs the same small dense algebra as the
-fused Numba kernel.  The cooperative path keeps the same element ownership, but
-uses all threads in the block to assemble the local Schur matrix, factor its
-trailing updates, solve all trace/source columns, recover flux columns, and emit
-the reduced matrix directly as COO or CSR.
+This module retains the p<=6 single-thread reference and the previous
+cooperative implementation for explicit benchmark comparisons (``_legacy``).
+Source and boundary sampling remain owned by the CuPy wrapper.
 """
 
 from __future__ import annotations
@@ -58,6 +53,7 @@ class RawDiffusionAssemblyResult:
     local_factor_key: tuple[Any, ...] | None = None
     local_factor_bytes: int = 0
     local_factor_kind: str = "none"
+    poisson_context: Any | None = None
 
 
 def _allocate_local_schur_factors(cupy, *, num_elements: int, nel: int, factor_kind: str):
@@ -2052,8 +2048,8 @@ def _raw_trace_orientation_mode(trace_ref) -> int:
 def validate_raw_cuda_supported(cspace, trace_ref) -> None:
     """Validate degree and trace orientation for raw diffusion kernels.
 
-    Raw diffusion kernels currently compile local storage for at most 28
-    scalar element DOFs (``p <= 6``) and support nodal legacy-Lagrange or modal
+    Cooperative Poisson kernels support at most 55 scalar element DOFs
+    (``p <= 9``) and support nodal legacy-Lagrange or modal
     Legendre traces. The shared capability preflight checks the broader backend
     combination; this helper enforces kernel-shape limits at launch setup.
 
@@ -2063,8 +2059,8 @@ def validate_raw_cuda_supported(cspace, trace_ref) -> None:
         If the trace representation or local element size is unsupported.
     """
     _raw_trace_orientation_mode(trace_ref)
-    if cspace.el_dof > 28:
-        raise ValueError('raw CUDA diffusion assembly currently supports p <= 6 (el_dof <= 28)')
+    if cspace.el_dof > 55:
+        raise ValueError('raw CUDA diffusion assembly currently supports p <= 9 (el_dof <= 55)')
 
 
 def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
@@ -2081,8 +2077,17 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cuda(
         block_size: RawCudaBlockSize = "auto",
         cached_factors: RawDiffusionAssemblyResult | None = None,
         local_factor_key: tuple[Any, ...] | None = None,
+        _legacy: bool = False,
 ) -> RawDiffusionAssemblyResult:
     """Assemble only the reduced RHS for a cached compressed diffusion operator."""
+    from .poisson import validate_block_size, refresh_rhs
+    validate_raw_cuda_supported(cspace, trace_ref)
+    if not _legacy and validate_block_size(block_size, cspace.order) != 1:
+        return refresh_rhs(source_rhs=source_rhs, boundary_trace=boundary_trace,
+            cspace=cspace, trace_ref=trace_ref, d0_reference=d0_reference,
+            d1_reference=d1_reference, face_element_mass=face_element_mass, tau=tau,
+            csr_pattern=csr_pattern, block_size=block_size, cached_factors=cached_factors,
+            local_factor_key=local_factor_key)
     cupy = require_cupy()
     raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
@@ -2319,8 +2324,18 @@ def assemble_projected_diffusion_trace_system_eliminated_raw_cuda(
         cache_local_factors: bool = False,
         local_factor_kind: str = "schur-lu",
         local_factor_key: tuple[Any, ...] | None = None,
+        _legacy: bool = False,
 ) -> RawDiffusionAssemblyResult:
     """Assemble the reduced trace system/RHS with a Raw CUDA fused element loop."""
+    from .poisson import validate_block_size, assemble
+    validate_raw_cuda_supported(cspace, trace_ref)
+    if not _legacy and validate_block_size(block_size, cspace.order) != 1:
+        return assemble(source_rhs=source_rhs, boundary_trace=boundary_trace,
+            cspace=cspace, trace_ref=trace_ref, d0_reference=d0_reference,
+            d1_reference=d1_reference, face_element_mass=face_element_mass, tau=tau,
+            matrix_format=matrix_format, block_size=block_size,
+            cache_local_factors=cache_local_factors, local_factor_kind=local_factor_kind,
+            local_factor_key=local_factor_key)
     cupy = require_cupy()
     raw_wall_start = time.perf_counter()
     validate_raw_cuda_supported(cspace, trace_ref)
@@ -2670,8 +2685,17 @@ def reconstruct_projected_diffusion_field_raw_cuda(
         return_local_unknowns: bool = False,
         cached_factors: RawDiffusionAssemblyResult | None = None,
         local_factor_key: tuple[Any, ...] | None = None,
+        _legacy: bool = False,
 ):
     """Recover primal coefficients, optionally with full mixed local unknowns."""
+    from .poisson import validate_block_size, reconstruct
+    validate_raw_cuda_supported(cspace, trace_ref)
+    if not _legacy and validate_block_size(block_size, cspace.order) != 1:
+        return reconstruct(trace=trace, source_rhs=source_rhs, cspace=cspace,
+            trace_ref=trace_ref, d0_reference=d0_reference, d1_reference=d1_reference,
+            face_element_mass=face_element_mass, tau=tau, block_size=block_size,
+            return_local_unknowns=return_local_unknowns, cached_factors=cached_factors,
+            local_factor_key=local_factor_key)
     cupy = require_cupy()
     validate_raw_cuda_supported(cspace, trace_ref)
     block_size = resolve_raw_cuda_block_size(

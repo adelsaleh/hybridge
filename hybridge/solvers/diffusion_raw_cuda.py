@@ -14,7 +14,6 @@ import numpy as np
 
 from hybridge.core.space import VectorDGField
 from hybridge.hdg.condensation_device import require_finite_device_values
-from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
 from hybridge.mixed.coefficients import _diffusion_is_identity
 from hybridge.mixed.postprocess.flux import (
     _normalize_flux_postprocess_space,
@@ -33,11 +32,8 @@ from hybridge.solvers.diffusion_reaction import (
 def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     """Solve a raw-CUDA diffusion trace system directly with device CSR/BSR AMGX."""
     options = owner.options
-    raw_block_size = resolve_raw_cuda_block_size(
-        options.raw_block_size,
-        equation="diffusion-reaction",
-        order=owner.space.order,
-    )
+    from hybridge.mixed.raw_cuda.poisson import validate_block_size
+    raw_block_size = validate_block_size(options.raw_block_size, owner.space.order)
     normalized_solver = (
         "" if options.solver is None
         else str(options.solver).replace("_", "-").lower()
@@ -50,7 +46,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     native_requested = normalized_solver == "fb-hp-mg-pcg"
     matrix_format = str(options.raw_matrix_format).lower()
     if matrix_format == "auto":
-        # fb-hp-mg-pcg needs face-BSR; repeated AMGX solves are correct only with CSR.
+        # Native multigrid requires face-BSR; AMGX retains its scalar-CSR default.
         matrix_format = "bsr" if native_requested else "csr"
     if matrix_format not in {"csr", "bsr"}:
         raise ValueError(
@@ -132,7 +128,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
         id(owner.space),
         trace_basis,
         matrix_format,
-        int(raw_block_size),
+        raw_block_size,
         float(options.stabilization),
         id(owner.reaction),
         local_factor_policy,
@@ -159,8 +155,9 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
             matrix_format=matrix_format,
             block_size=raw_block_size,
             trace_ref=trace_ref,
-            cache_local_factors=cache_local_factors,
-            local_factor_kind=local_factor_policy if cache_local_factors else "schur-lu",
+            cache_local_factors=cache_local_factors or (use_hybrid_cholesky and raw_block_size != 1),
+            local_factor_kind=local_factor_policy
+                if local_factor_policy != "none" and raw_block_size != 1 else "schur-lu",
             local_factor_key=local_factor_key,
         )
         if use_hybrid_cholesky:
@@ -248,7 +245,8 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
                 f"{owner.space.mesh.num_tri} elements, {factor_gib:.3f} GiB",
                 flush=True,
             )
-            print("  local reconstruction backend: CuPy/cuBLAS", flush=True)
+            backend = "raw CUDA compact Cholesky" if cholesky_cache.raw_context is not None else "CuPy/cuBLAS"
+            print(f"  local reconstruction backend: {backend}", flush=True)
         elif cache_local_factors and raw_cache is not None:
             factor_status = "reused" if operator_cache_valid else "created"
             factor_gib = int(raw_cache.local_factor_bytes) / (1024 ** 3)
@@ -547,7 +545,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
         reusable_solver = None
         if options.cache_device_matrix and scale_mode in {"none", "off", "false"}:
             solver_key = (
-                id(owner.space), trace_basis, matrix_format, int(raw_block_size),
+                id(owner.space), trace_basis, matrix_format, raw_block_size,
                 float(options.stabilization), int(assembly_result.rhs.size),
                 id(options.amgx_config), float(options.solver_rtol),
                 None if options.maxiter is None else int(options.maxiter),
@@ -678,7 +676,7 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
 
     (field, flux, trace_cp, local_unknowns_cp), reconstruction = _timed_call(
         (
-            "reconstructing local fields (cupy/cuBLAS Cholesky)"
+            "reconstructing local fields (compact Schur-Cholesky)"
             if use_hybrid_cholesky
             else "reconstructing local fields (raw-cuda)"
         ),
@@ -701,8 +699,11 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     if use_hybrid_cholesky:
         cache = assembly_result.schur_cholesky_cache
         details["cupy.local_factors.bytes"] = float(cache.local_factor_bytes)
-        details["cupy.local_factors.symmetry_error"] = float(cache.symmetry_error)
-        details["cupy.local_factors.coupling_adjoint_error"] = float(cache.coupling_adjoint_error)
+        if cache.raw_context is not None:
+            details["raw.local_factors.symmetry_rtol"] = max(5.e-11, 32*np.finfo(REAL_DTYPE).eps)
+        else:
+            details["cupy.local_factors.symmetry_error"] = float(cache.symmetry_error)
+            details["cupy.local_factors.coupling_adjoint_error"] = float(cache.coupling_adjoint_error)
         details["cupy.local_factors.compact"] = float(cache.compact)
         details["cupy.local_factors.trace_response_bytes"] = float(
             cache.trace_response.nbytes if cache.trace_response is not None else 0

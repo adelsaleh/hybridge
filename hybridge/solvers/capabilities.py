@@ -283,7 +283,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "device -> host",
         ("eliminate",),
         _PRODUCTION_TRACE_BASES,
-        "Identity diffusion and scalar stabilization only.",
+        "Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR.",
     ),
     *_solve_capabilities(
         "diffusion-reaction",
@@ -338,7 +338,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         reconstruction_residency="device (flux postprocessing materializes only on request)",
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes=("Requires CSR or face BSR, identity diffusion, and scalar stabilization; "
+        notes=("Pure Poisson p=0..9 with CSR or face BSR, identity diffusion, zero reaction, and scalar stabilization; "
                "RT_p flux postprocessing is explicit and may materialize reconstruction data."),
     ),
     BackendCapability(

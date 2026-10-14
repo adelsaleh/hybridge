@@ -520,8 +520,8 @@ def test_diffusion_raw_cuda_global_operator_uses_cupy_schur_cholesky_locally() -
         "raw.assembly.wrapper.raw_call",
         "raw.assembly.wrapper.unaccounted",
         "raw.assembly.solver.headline.unaccounted",
-        "raw.assembly.cupy.local_cache.schur_build",
-        "raw.assembly.cupy.local_cache.cholesky",
+        "raw.assembly.raw.poisson.shared_bytes",
+        "raw.assembly.raw.poisson.autotune.wall",
     ):
         assert key in first.timings.details
         assert first.timings.details[key] >= 0.0

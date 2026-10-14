@@ -64,7 +64,7 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | assemble | numpy | none | host | none | none | eliminate | legacy-lagrange, legendre-modal, bernstein | - |
 | diffusion-reaction | assemble | numba | none | host | none | none | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | assemble | cupy | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
-| diffusion-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization only. |
+| diffusion-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate | legacy-lagrange, legendre-modal | Pure Poisson (identity diffusion, zero reaction), scalar stabilization, p=0..9; direct COO/CSR/face BSR. |
 | diffusion-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
 | diffusion-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
 | diffusion-reaction | solve | numpy | petsc | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal, bernstein | Bernstein is supported without HDG postprocessing. |
@@ -76,7 +76,7 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | cupy | amgx | device | device | device (optional host copy) | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host. |
-| diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Requires CSR or face BSR, identity diffusion, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data. |
+| diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Pure Poisson p=0..9 with CSR or face BSR, identity diffusion, zero reaction, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data. |
 | diffusion-reaction | solve | raw-cuda | fb-hp-mg-pcg | device | device | device (flux postprocessing materializes only on request) | eliminate | legendre-modal | Native face-BSR PCG with direct p-to-zero modal multigrid for p=4..6 and one reusable scalar-AMGX coarse hierarchy. |
 
 <!-- END GENERATED CAPABILITY MATRIX -->

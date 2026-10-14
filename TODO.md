@@ -412,13 +412,28 @@ Research studies in later sections inform future solver choices but do not block
 - [x] Establish identity diffusion and scalar zero-reaction parity with `scripts/gpu/run_diffusion_reaction_cuda.py` for the supported raw-CUDA scope.
 - [x] Extend the device assembly plan to tensor diffusion once the scalar path remains correct under the automated validation suite. See `docs/backends/cuda_execution.md`.
 - [x] Benchmark raw-CUDA diffusion assembly phase timings separately from AMGX setup/solve/reconstruction so improvements are not hidden by already acceptable global solve performance.
-- [ ] Extend raw-CUDA Poisson assembly and reconstruction to p=7,8,9 with a
+- [x] Extend raw-CUDA Poisson assembly and reconstruction to p=7,8,9 with a
   BSR-first priority (face block sizes 8, 9, and 10). Preserve normalized/modal
   orientation, per-face additive mass assembly, boundary elimination, cached
   RHS and reconstruction parity, and record shared-memory/occupancy limits for
   element sizes 36, 45, and 55. Keep COO/expanded CSR as secondary validation
   paths rather than the production optimization target. See the [face-block
   hp-multigrid plan](docs/development/plans/face_block_hp_multigrid.md#long-term-degree-extension).
+  Implemented on 2026-10-14: compact/cooperative pure-Poisson kernels cover
+  p=0..9, direct COO/CSR/BSR, both production trace bases, and all three local
+  cache policies. Source and nonzero Dirichlet updates preserve the operator,
+  factors, and BSR metadata; cached reconstruction avoids double counting the
+  boundary lift. Tests compare directly with arbitrary-order dense CuPy and
+  scalar-Schur/cuBLAS assembly/reconstruction, plus NumPy/Numba references and
+  public CSR/BSR AMGX solves with scaling on/off. Resource-screened automatic
+  tuning uses isolated samples and a persistent device/workload cache; the
+  standalone tuner records first-use and warmed phase costs, resources, and
+  modeled occupancy. See [implementation and validation](docs/backends/raw_cuda.md#diffusion-setup-ownership).
+  Finalization adds `scripts/gpu/benchmark_poisson_assembly.py` with GPU
+  reservation and exact source capture, plus the matched 100k-triangle
+  p=2,4,6 follow-up in the [Poisson/CuPy study](docs/research/solver_studies/poisson_raw_cupy_2026_10_14.md).
+  High-order ADR, postprocessing, and native multigrid qualification remain
+  separate work.
 
 ### Device Postprocessing
 

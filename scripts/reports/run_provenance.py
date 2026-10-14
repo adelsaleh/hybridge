@@ -9,10 +9,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
+import io
 import json
 from pathlib import Path
 import platform
 import subprocess
+import tarfile
 
 PACKAGES = ("numpy", "scipy", "numba", "cupy-cuda13x", "gmsh", "matplotlib", "pillow",
             "imageio-ffmpeg", "holoscan-cu13", "pypardiso", "pyamgx")
@@ -42,6 +44,39 @@ def code_state(root):
             digest.update(path.read_bytes())
     return dict(git_head=head, git_branch=_git(root, "rev-parse", "--abbrev-ref", "HEAD"),
                 git_dirty_entries=len(status.splitlines()), code_diff_sha256=digest.hexdigest())
+
+
+def source_snapshot(root, paths, archive):
+    """Archive exact source bytes, including untracked files, with SHA-256 hashes.
+
+    ``paths`` are checkout-relative files, not a Git pathspec. The manifest is
+    also used to detect edits made while a measurement was running.
+    """
+    root, archive = Path(root).resolve(), Path(archive)
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    hashes = {}
+    with tarfile.open(archive, "w:gz") as bundle:
+        for name in sorted(set(str(Path(path)) for path in paths)):
+            path = (root / name).resolve()
+            relative = path.relative_to(root).as_posix()
+            data = path.read_bytes()
+            hashes[relative] = hashlib.sha256(data).hexdigest()
+            entry = tarfile.TarInfo(relative)
+            entry.size = len(data)
+            entry.mode = 0o644
+            bundle.addfile(entry, io.BytesIO(data))
+    return dict(archive=archive.name, archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                files_sha256=hashes)
+
+
+def changed_snapshot_files(root, snapshot):
+    """Return archived files that changed or disappeared since capture."""
+    changed = []
+    for name, digest in snapshot["files_sha256"].items():
+        path = Path(root) / name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            changed.append(name)
+    return sorted(changed)
 
 
 def gpu_stack_state():

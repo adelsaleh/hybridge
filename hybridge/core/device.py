@@ -163,6 +163,7 @@ class CupyDGSpace:
     edg_dof: int
     _mapped_quads_cache: Any = field(default=None, init=False, repr=False, compare=False)
     _degree_elevation_cache: Any = field(default=None, init=False, repr=False, compare=False)
+    _poisson_reference_cache: Any = field(default=None, init=False, repr=False, compare=False)
 
     @property
     def mapped_quads(self):

@@ -3,6 +3,12 @@
 These documents preserve dated measurements and conclusions. They support
 reproducibility but do not define current solver defaults or backend support.
 
+- [Poisson raw CUDA and CuPy comparison on 100,000 triangles](poisson_raw_cupy_2026_10_14.md):
+  p=2,4,6,7,8,9 direct COO/CSR/BSR assembly, Schur cache policies, RHS refresh
+  and reconstruction, numerical parity, and the relation to earlier assembly
+  speedups; maintained GPU-reserving comparison runner and
+  [recorded samples/source manifest](poisson_raw_cupy_2026_10_14.data.json).
+
 - [Advection-reaction AMGX configuration findings](adv_rea_amgx_config_2026_07_20.md) and
   [raw CUDA fused cooperative LU findings](raw_cuda_fused_coop_lu_2026_07_20.md):
   July 2026 p=6--8 AMGX configuration, tolerance and modal-trace sweeps, and

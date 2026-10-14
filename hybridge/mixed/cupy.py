@@ -30,7 +30,7 @@ from hybridge.mixed.raw_cuda.identity import (
 from hybridge.core.device import mapped_quads_cupy
 
 
-RAW_CUDA_MAX_EL_DOF = 28
+RAW_CUDA_MAX_EL_DOF = 55
 
 
 @dataclass(frozen=True)
@@ -82,8 +82,8 @@ class CupyDiffusionSchurCholeskyCache:
     mass_inverse: Any
     jac_inverse: Any
     factor_ptrs: Any
-    symmetry_error: float
-    coupling_adjoint_error: float
+    symmetry_error: float | None
+    coupling_adjoint_error: float | None
     local_factor_bytes: int
     timings: dict[str, float]
     rhs_scatter_kernel: Any
@@ -98,6 +98,7 @@ class CupyDiffusionSchurCholeskyCache:
     compact_reconstruct_kernel: Any | None = None
     compact: bool = False
     stabilization: float = 0.0
+    raw_context: Any | None = None
 
 
 _COMPACT_DIFFUSION_KERNEL_TEMPLATE = r"""
@@ -531,8 +532,9 @@ def build_trace_reference(cspace, kind: str) -> TraceReferenceData:
     if normalized not in {"legacy_lagrange", "legendre_modal"}:
         raise ValueError("trace basis must be 'legacy-lagrange', 'legendre-modal', or 'bernstein'")
 
-    interpolation_nodes, _ = legendre_gauss_lobatto(order + 1)
-    edge_quads, edge_weights = legendre_gauss_lobatto(2 * order + 1)
+    from hybridge.core.quadrature import _legendre_gauss_lobatto
+    interpolation_nodes, _ = _legendre_gauss_lobatto(order + 1)
+    edge_quads, edge_weights = _legendre_gauss_lobatto(2 * order + 1)
     face_points = edge_points(edge_quads)
     face_basis = space.basis_at(face_points.reshape(-1, 2)).reshape(edge_quads.size, 3, space.el_dof).transpose(1, 2, 0)
     if normalized == "legacy_lagrange":
@@ -1002,6 +1004,15 @@ def reconstruct_compact_diffusion_field_cupy(
         cspace,
 ):
     """Recover ``(u,q_x,q_y)`` from cached scalar source/trace responses."""
+    if cache.raw_context is not None:
+        from .raw_cuda.poisson import reconstruct
+        context = cache.raw_context
+        reference = context.reference
+        return reconstruct(trace=trace, source_rhs=context.source_solution, cspace=cspace,
+            trace_ref=context.trace_ref, d0_reference=reference['d'][0],
+            d1_reference=reference['d'][1], face_element_mass=reference['fm'],
+            tau=context.tau, block_size=context.block_size,
+            return_local_unknowns=True, context=context)
     cupy = require_cupy()
     if not cache.compact or cache.compact_reconstruct_kernel is None:
         raise ValueError("compact diffusion reconstruction requires a compact Cholesky cache")
@@ -1385,9 +1396,9 @@ def raw_cuda_diffusion_fallback_reason(cspace, trace_ref) -> tuple[str, str] | N
     if int(cspace.el_dof) <= RAW_CUDA_MAX_EL_DOF:
         return None
     order = int(cspace.order)
-    label = f"raw-cuda p={order} > 6"
+    label = f"raw-cuda p={order} > 9"
     detail = (
-        f"raw CUDA diffusion assembly supports p <= 6 "
+        f"raw CUDA diffusion assembly supports p <= 9 "
         f"(el_dof <= {RAW_CUDA_MAX_EL_DOF}); got p={order}, el_dof={int(cspace.el_dof)}"
     )
     return label, detail
@@ -1555,9 +1566,41 @@ def assemble_projected_diffusion_trace_rhs_cached_cupy(
         trace_ref,
         cached: CupyDiffusionTraceAssembly,
 ) -> CupyDiffusionTraceAssembly:
-    """Rebuild only a zero-Dirichlet reduced RHS from cached CuPy Schur data."""
+    """Refresh a cached Schur RHS; raw Poisson also supports changing Dirichlet data."""
     cupy = require_cupy()
     cache = cached.schur_cholesky_cache
+    if cache is not None and cache.raw_context is not None:
+        from .raw_cuda.poisson import refresh_rhs
+        start = time.perf_counter()
+        context = cache.raw_context
+        moments = source_moments_cupy(source, cspace)
+        cupy.cuda.get_current_stream().synchronize()
+        source_seconds = time.perf_counter() - start
+        boundary_start = time.perf_counter()
+        reuse_boundary = (context.boundary_is_zero and
+                          getattr(boundary_condition, '_hybridge_constant_value', None) == 0.)
+        boundary = (cached.boundary_trace if reuse_boundary else
+                    boundary_trace_values_cupy(boundary_condition, cspace, trace_ref))
+        cupy.cuda.get_current_stream().synchronize()
+        boundary_seconds = time.perf_counter() - boundary_start
+        old = cached.raw_assembly
+        raw = refresh_rhs(source_rhs=moments, boundary_trace=boundary, cspace=cspace,
+            trace_ref=trace_ref, d0_reference=old.d0_reference, d1_reference=old.d1_reference,
+            face_element_mass=old.face_element_mass, tau=context.tau,
+            csr_pattern=old.csr_pattern, block_size=context.block_size,
+            cached_factors=old, local_factor_key=old.local_factor_key)
+        raw.timings.update({
+            'cached_rhs.total': time.perf_counter() - start,
+            'cached_rhs.source_moments': source_seconds,
+            'cached_rhs.boundary': boundary_seconds,
+            'cached_rhs.boundary_reused': float(reuse_boundary),
+            'cached_rhs.scatter_raw_cuda': 1., 'cached_rhs.compact': 1.,
+            'cached_rhs.fused_solve_flux_scatter': raw.timings['raw.kernel.device'],
+            'cached_rhs.local_solve': raw.timings['raw.kernel.device'],
+            'cached_rhs.face_flux': 0., 'cached_rhs.scatter': 0.,
+        })
+        return replace(cached, rhs=raw.rhs, boundary_trace=boundary, source_rhs=moments,
+                       raw_assembly=old, timings=raw.timings)
     if cache is not None and cache.compact:
         return _assemble_projected_diffusion_trace_rhs_compact_cupy(
             source, boundary_condition, cspace, trace_ref, cached
@@ -1642,11 +1685,31 @@ def attach_schur_cholesky_cache_cupy(
 ) -> CupyDiffusionTraceAssembly:
     """Attach reusable CuPy local data to an already assembled trace operator.
 
-    Raw CUDA may construct the global CSR operator once while later local RHS
-    condensation and reconstruction use scalar Schur Cholesky factors through
-    cuBLAS.  The raw local LU factors are deliberately not retained.
+    Cooperative Poisson assembly already owns compact factors and responses.
+    Legacy raw assembly uses the separate CuPy/cuBLAS cache construction.
     """
     cupy = require_cupy()
+    context = getattr(assembled.raw_assembly, 'poisson_context', None)
+    if context is not None and context.policy == 'schur-cholesky':
+        factor = context.factors
+        n = int(cspace.el_dof)
+        pointers = factor.data.ptr + cupy.arange(int(cspace.mesh.num_tri), dtype=cupy.uintp) * n*n*REAL_ITEMSIZE
+        cache = CupyDiffusionSchurCholeskyCache(factor=factor,
+            coupling_x=None, coupling_y=None, mass_inverse=cspace.quad_data.MKrf_inv,
+            jac_inverse=1./cspace.mesh.aff_jacs, factor_ptrs=pointers,
+            # The raw kernel validates these tolerances but does not export
+            # measured defects. Do not report a fabricated zero error.
+            symmetry_error=None, coupling_adjoint_error=None,
+            local_factor_bytes=context.local_factor_bytes, timings=dict(assembled.timings),
+            rhs_scatter_kernel=None,
+            edge_to_solve_edge=assembled.raw_assembly.csr_pattern.edge_to_solve_edge
+                if assembled.raw_assembly.csr_pattern is not None else None,
+            trace_response=context.response, source_solution=context.source_solution,
+            mass_inverse_d0_reference=context.reference['md'][0],
+            mass_inverse_d1_reference=context.reference['md'][1],
+            face_element_trace=context.reference['lifts'], compact=True,
+            stabilization=float(stabilization), raw_context=context)
+        return replace(assembled, schur_cholesky_cache=cache)
     start = time.perf_counter()
     cache = build_scalar_schur_cholesky_cache_cupy(
         reaction, cspace, trace_ref, float(stabilization)
@@ -1729,7 +1792,8 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         tau=float(stabilization),
         csr_pattern=cached_raw.csr_pattern,
         block_size=block_size,
-        cached_factors=cached_raw if cached_raw.schur_lu is not None else None,
+        cached_factors=cached_raw if (cached_raw.schur_lu is not None or
+            getattr(getattr(cached_raw, 'poisson_context', None), 'policy', None) == 'schur-cholesky') else None,
         local_factor_key=local_factor_key,
     )
     timings['wrapper.raw_call'] = time.perf_counter() - phase_start
@@ -1750,7 +1814,7 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
         rhs=raw.rhs,
         boundary_trace=raw.boundary_trace,
         timings=timings,
-        matrix_format="csr",
+        matrix_format=cached_raw.matrix_format,
         indptr=cached_raw.indptr,
         indices=cached_raw.indices,
         source_rhs=source_rhs,
@@ -1767,13 +1831,14 @@ def assemble_projected_diffusion_trace_rhs_eliminated_raw_cupy(
             timings=timings,
             indptr=cached_raw.indptr,
             indices=cached_raw.indices,
-            matrix_format="csr",
+            matrix_format=cached_raw.matrix_format,
             csr_pattern=cached_raw.csr_pattern,
             schur_lu=raw.schur_lu,
             schur_pivots=raw.schur_pivots,
             local_factor_key=raw.local_factor_key,
             local_factor_bytes=raw.local_factor_bytes,
             local_factor_kind=raw.local_factor_kind,
+            poisson_context=raw.poisson_context,
         ),
     )
 

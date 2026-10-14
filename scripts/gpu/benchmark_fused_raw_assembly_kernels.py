@@ -16,7 +16,6 @@ import json
 import statistics
 import sys
 import time
-from dataclasses import replace
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -41,7 +40,7 @@ from hybridge.core.space import DGSpace, VectorDGField
 
 KERNEL_NAMES = {
     "transport": "assemble_advection_raw_fused_bsr",
-    "poisson": "assemble_diffusion_raw_coop_bsr",
+    "poisson": "poisson_local",
     "adr": "assemble_adr_tensor",
 }
 
@@ -63,20 +62,18 @@ def _make_assembler(case: str, space: DGSpace, args):
             return assemble_projected_diffusion_trace_system_eliminated_raw_cupy(
                 source, reaction, _zero, 1.0, space,
                 trace_basis=args.trace_basis, matrix_format=args.matrix_format,
-                block_size=args.block_size, cache_local_factors=args.cache_policy == "schur-lu",
+                block_size=args.block_size, cache_local_factors=args.cache_policy != "none",
+                local_factor_kind=args.cache_policy if args.cache_policy != "none" else "schur-lu",
             )
+        if args.phase == "assembly":
+            return assemble
         if args.cache_policy == "schur-cholesky":
             cspace = as_cupy_space(space)
             trace_ref = build_trace_reference(cspace, args.trace_basis)
-            raw_assembled = assemble()
-
             def build_cache():
-                result = attach_schur_cholesky_cache_cupy(
-                    raw_assembled, reaction, cspace, trace_ref, 1.0)
-                # The retained raw assembly predates this measured operation.
-                return replace(result, timings={
-                    key: value for key, value in result.timings.items()
-                    if key.startswith("cupy.local_cache.")})
+                # Cholesky construction is fused with the raw assembly launch.
+                return attach_schur_cholesky_cache_cupy(
+                    assemble(), reaction, cspace, trace_ref, 1.0)
 
             if args.phase == "cache":
                 return build_cache
@@ -188,13 +185,11 @@ def main(argv=None):
         parser.error("RHS and factor-cache options currently apply only to Poisson")
     if args.phase == "rhs" and args.matrix_format == "coo":
         parser.error("cached RHS requires CSR or BSR")
-    if args.cache_policy == "schur-cholesky" and (args.phase == "assembly" or args.matrix_format == "coo"):
-        parser.error("Schur-Cholesky profiles the separate CuPy cache/RHS path attached to raw CSR/BSR")
     if args.phase == "cache" and args.cache_policy != "schur-cholesky":
-        parser.error("separate cache construction applies to CuPy Schur-Cholesky; raw LU builds during assembly")
+        parser.error("cache profiles combined raw assembly and Schur-Cholesky construction")
     if args.local_assembly == "split3" and (args.case != "transport" or args.matrix_format != "bsr"):
         parser.error("split3 requires transport BSR")
-    max_order = 9 if args.case == "transport" else 6
+    max_order = 6 if args.case == "adr" else 9
     if args.nx < 1 or not 1 <= args.order <= max_order or args.warmup < 1 or args.repeats < 1:
         parser.error(f"require nx >= 1, order in 1..{max_order} for {args.case}, warmup >= 1, repeats >= 1")
 
