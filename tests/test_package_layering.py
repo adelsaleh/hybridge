@@ -27,13 +27,14 @@ LAYERS: dict[str, float] = {
     "hybridge.hdg": 3,
     "hybridge.transport": 4,
     "hybridge.mixed": 4,
+    "hybridge.conforming": 4,
     "hybridge.solvers": 5,
     "hybridge.diagnostics": 6,
     "hybridge.io": 7,
     "hybridge": 8,
 }
 # Families on the same layer that must stay independent of each other.
-SIBLINGS = {"hybridge.transport", "hybridge.mixed"}
+SIBLINGS = {"hybridge.transport", "hybridge.mixed", "hybridge.conforming"}
 
 ALLOWED_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 
