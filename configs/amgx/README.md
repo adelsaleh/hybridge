@@ -276,6 +276,16 @@ Working configs:
 - `diff_rea_gpu4_hdg_pcgf_aggregation_block_jacobi_frobenius_bsr.json`: opt-in p=1..4 diagnostic using whole-block Frobenius aggregation weights and fused 2x2/3x3/5x5 block Jacobi; requires the accompanying patched AMGX source to be rebuilt.
 - `diff_rea_gpu4_hdg_pcgf_block_jacobi_bsr.json`: face-BSR fallback for p=5..6 (block sizes 6..7), which the current AMGX aggregation kernels do not instantiate.
 
+## Condensed CG Poisson (E9)
+
+`hybridge.solvers.cg_poisson.CGPoissonSolver(solver="amgx")` defaults to `diff_rea_gpu4_hdg_pcgf_cheb_l1_aggressive_abs.json`, whose aggressive first level suits the HDG trace but not the condensed high-order CG system (vertex and edge unknowns). Screen on the 40,404-triangle D7 vane mesh, CG(7), hub source, shared GPU (iterations are the result; times there are indicative):
+
+- `cg_poisson_pcgf_classical_cheb3_l1_s1.json`: the default hierarchy without the aggressive level, order-three Chebyshev/L1, 1+1 sweeps: 40 iterations (default: 123).
+- `cg_poisson_pcgf_classical_cheb3_l1_s2.json`: the same with 2+2 sweeps: 28 iterations.
+- Rejected: symmetric multicolor Gauss–Seidel (no convergence in 500 iterations at strength 0.25 or 0.5), SIZE_8 aggregation with Chebyshev (51), stronger threshold 0.5 or wider interpolation (no gain).
+
+Screen script and rows: `~/src/gc-hdg-article/run_outputs/e9_cg_amg_tuning/` (local, untracked). Time them on an exclusive GPU before any comparison.
+
 Direct face-BSR comparison:
 
 ```bash
