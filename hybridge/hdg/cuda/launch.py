@@ -10,7 +10,7 @@ from hybridge.runtime.precision import real_raw_kernel
 
 
 
-RawCudaEquation = Literal["advection-reaction", "diffusion-reaction"]
+RawCudaEquation = Literal["advection-reaction", "diffusion-reaction", "advection-diffusion-reaction"]
 RawCudaBlockSize: TypeAlias = int | Literal["auto"]
 
 RAW_CUDA_EXPLICIT_BLOCK_SIZES = (1, 32, 64, 128)
@@ -45,16 +45,16 @@ def recommended_raw_cuda_block_size(equation: RawCudaEquation, order: int) -> in
             return 64
         if nel <= 128:
             return 128
-    elif equation == "diffusion-reaction":
+    elif equation in {"diffusion-reaction", "advection-diffusion-reaction"}:
         if order <= 2:
             return 32
         if order <= 4:
             return 64
-        if order <= 6:
+        if order <= (9 if equation == "advection-diffusion-reaction" else 6):
             return 128
     else:
         raise ValueError(
-            "equation must be 'advection-reaction' or 'diffusion-reaction'"
+            "equation must be 'advection-reaction', 'diffusion-reaction', or 'advection-diffusion-reaction'"
         )
     raise ValueError(
         f"no raw-CUDA block-size recommendation for {equation} at p={order} "

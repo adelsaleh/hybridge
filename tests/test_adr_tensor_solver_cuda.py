@@ -14,7 +14,7 @@ def cp():
     return cp
 
 
-@pytest.mark.parametrize('order',[2,4,6])
+@pytest.mark.parametrize('order',[2,4,6,7,8,9])
 @pytest.mark.parametrize('basis',['legacy-lagrange','legendre-modal'])
 @pytest.mark.parametrize('fmt',['csr','bsr'])
 def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basis,fmt):
@@ -31,9 +31,18 @@ def test_native_tensor_solve_and_device_reconstruction(cp,monkeypatch,order,basi
               scale_system=True,verbose=False)
     reference=solve_advection_diffusion_reaction_hdg(source,beta,.3,exact,space,
         assembly_backend='numpy',solver='direct',**opts)
+    config = None
+    if order == 8 and fmt == 'bsr':
+        # This AMGX fork's DILU supports blocks 8 and 10, but not 9. Keep native
+        # BSR and use its existing arbitrary-block scalar-row L1 preconditioner.
+        import json
+        from pathlib import Path
+        config = json.loads((Path(__file__).resolve().parents[1] /
+            'configs/amgx/adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json').read_text())
+        config['solver'].update(solver='FGMRES', gmres_n_restart=100, max_iters=300)
     actual=solve_advection_diffusion_reaction_hdg(source,beta,.3,exact,space,
         assembly_backend='raw-cuda',solver='amgx',raw_matrix_format=fmt,
-        materialize_host_solution=False,solver_rtol=1e-10,**opts)
+        materialize_host_solution=False,solver_rtol=1e-10,amgx_config=config,**opts)
     assert isinstance(actual.local_unknowns,cp.ndarray)
     assert isinstance(actual.trace,cp.ndarray)
     assert isinstance(actual.matrix_data,cp.ndarray)

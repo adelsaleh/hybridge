@@ -249,20 +249,20 @@ def assemble_projected_adr_trace_operator_raw_cuda(
     local factors reconstruction reuses.
     ``block_size=1`` uses serial tensor solves in every matrix format; scalar
     CSR with dense preparation retains the original serial diagnostic kernel.
-    Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/6.
+    Cooperative automatic sizing uses 32/64/128 threads for p<=2/4/9.
     """
     from hybridge.hdg.cuda.launch import resolve_raw_cuda_block_size
     from hybridge.mixed.raw_cuda.tensor import assemble_tensor_operator
-    if space.order > 6 or trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
-        raise ValueError("raw CUDA tensor ADR supports p=0--6 and legacy-lagrange/legendre-modal traces")
+    if space.order > 9 or trace_space.kind not in {"legacy-lagrange", "legendre-modal"}:
+        raise ValueError("raw CUDA tensor ADR supports p=0--9 and legacy-lagrange/legendre-modal traces")
     if trace_space.space is not space:
         raise ValueError("trace_space must belong to the ADR space")
     matrix_format = str(matrix_format).lower()
     if matrix_format not in {"coo", "csr", "bsr"}:
         raise ValueError("matrix_format must be 'coo', 'csr', or 'bsr'")
-    block_size = resolve_raw_cuda_block_size(block_size, equation="diffusion-reaction", order=space.order)
+    block_size = resolve_raw_cuda_block_size(block_size, equation="advection-diffusion-reaction", order=space.order)
     if (block_size == 1 and matrix_format == "csr" and prepared.element_boundary is not None
-            and np.isscalar(diffusion)):
+            and np.isscalar(diffusion) and space.order <= 6):
         return _assemble_scalar_serial_operator(prepared, boundary_condition, space,
                                                  diffusion=diffusion, trace_space=trace_space)
     return assemble_tensor_operator(prepared, boundary_condition, space, diffusion=diffusion,

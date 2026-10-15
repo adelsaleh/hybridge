@@ -46,7 +46,7 @@ Other fused paths resolve a fixed launch policy before selecting kernels.
 | Pure Poisson | `p = 0..9` | Device/resource screening and bounded timing |
 | ADR | `p <= 2` | 32 |
 | ADR | `p = 3, 4` | 64 |
-| ADR | `p = 5, 6` | 128 |
+| ADR | `p = 5..9` | 128 |
 
 These are policy defaults covered by launch-resolution and parity tests.
 The p=8--9 fused recommendation is additionally backed by the CUDA-13 SM75
@@ -445,11 +445,21 @@ The required parity and smoke lanes are documented in
 
 ## Tensor ADR assembly and reconstruction
 
-Stationary ADR supports FP64 elliptic tensor diffusion at p=0--6 with both
-`legacy-lagrange` and `legendre-modal` traces. Select `assembly_backend="raw-cuda"`,
-`solver="amgx"`, and `hdg_postprocess="none"` for tensors. `raw_matrix_format`
-accepts COO, direct CSR (default), and native face BSR; `raw_block_size="auto"`
-selects 32/64/128 threads at p<=2/4/6. No BSR scalarization is needed.
+Raw-CUDA ADR assembly and reconstruction accept elliptic tensor diffusion at
+p=0--9 with both `legacy-lagrange` and `legendre-modal` traces. Select
+`assembly_backend="raw-cuda"`, `solver="amgx"`, and `hdg_postprocess="none"`
+for the assembly/reconstruction path. `raw_matrix_format` accepts COO, direct
+CSR (default), and native face BSR; `raw_block_size="auto"` selects 32/64/128
+threads at p<=2/4/9. The p=7--9 FP64 extension passed qualification on
+2026-10-15: 508 ADR checks and clean memcheck/racecheck. See the
+[dated evidence](../research/solver_studies/raw_cuda_adr_high_order_2026_10_15.md)
+and [higher-order implementation](../development/plans/raw_cuda_adr_tensor.md#higher-order-extension-2026-10-14).
+
+Native p=8 BSR solves require an explicit compatible `amgx_config`: the current
+AMGX fork's default `MULTICOLOR_DILU` preconditioner has no specialization for
+9-component blocks. The qualification uses FGMRES with `JACOBI_L1` and
+`jacobi_l1_scalar_rows_for_blocks=1`, retaining BSR storage. This restriction
+does not affect CSR/COO assembly, BSR assembly, or local reconstruction.
 
 For assembly without a sparse solve, use
 `prepare_adr_data(..., dense_local_matrices=False)` followed by
@@ -463,25 +473,36 @@ and returns device `[u,qx,qy]` coefficients plus timings.
 
 The seven exact tensor paths share Numba's classifications. Constant tensors use
 reference mass inverses; variable isotropic/diagonal tensors use scalar
-Cholesky; coupled symmetric/general tensors use Cholesky/pivoted LU. Shared
-storage never exceeds 48 KiB, and local failures are checked before returning.
-The batch width (at most 8 columns) shrinks to fit that limit; when one column
-does not fit, `TensorWorkspaceError` (an `UnsupportedBackendConfigurationError`
-and `ValueError`) is raised before upload, compilation or launch and names the
-order, diffusion kind, quadrature sizes and the largest volume rule that fits.
-In FP64 every p<=5 configuration and every kind except p=6 general variable
-tensors (at most 143 volume points) fits the listed default and overintegrated
-rules; see the
-[shared-memory budget record](../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md)
+Cholesky; coupled symmetric/general tensors use Cholesky/pivoted LU. Through
+p=6, shared storage retains its original 48 KiB limit. At p=7--9, coupling
+entries are recomputed to save shared memory, and the batch width (at most
+eight columns) fits the device's opt-in shared-memory limit. If a variable mass
+factor still does not fit, it uses the requested persistent mass cache directly
+or processes element chunks with at most 64 MiB of temporary device scratch.
+The operator does not retain this temporary scratch. Assembly timings report
+the selected shared bytes/limit, external mass, scratch bytes, and launch count.
+
+Oversized quadrature still raises `TensorWorkspaceError` (an
+`UnsupportedBackendConfigurationError` and `ValueError`) before upload,
+compilation or launch, naming the order, diffusion kind, quadrature sizes and
+largest fitting volume rule. Local factorization failures are checked before
+returning. The p<=6 FP64 layout fits the default and listed overintegrated rules
+except for general variable tensors at p=6 (at most 143 volume points); see the
+[shared-memory requirements](../research/solver_studies/raw_cuda_adr_tensor_shared_memory_2026_09_29.md)
 and `scripts/advection_diffusion_reaction/diagnostics/tensor_shared_memory_budget.py`.
-Reconstruction retains coefficient uploads and rebuilds local factors with the
-same algebra. Diffusion's extracted cooperative helpers preserve its generated
-source and launch/workspace choices.
+
+All three factor-cache policies apply through p=9. `none` rebuilds local factors
+during reconstruction, `schur-lu` retains the scalar Schur LU and pivots, and
+`schur-lu+mass` (the default) also retains variable diffusion mass factors.
+Static mass factors can be reused across assemblies while source, reaction,
+advection, and boundary data change. Reconstruction consumes the full trace and
+keeps its `[u,qx,qy]` coefficients on the device.
 
 `tau_diff` may vary along a face, including through a same-mesh DG field or
 `tau(x,y,*,element,local_face,normal,t=None)` law. Both incidences are sampled
 independently. Original laws are retained; recovery never interpolates an
 incompatible quadrature-only table. Tensor primal and both total-flux recoveries
-are supported through CuPy; primal assembly uses a fused CUDA kernel. See the
+are qualified separately through p=6 with CuPy; primal assembly uses a fused
+CUDA kernel. See the
 [device postprocessing guide](adr_device_postprocessing.md) for qualification. See the [implementation plan](../development/plans/raw_cuda_adr_tensor.md)
 and [qualification report](../research/solver_studies/raw_cuda_adr_tensor_2026_09_28.md).

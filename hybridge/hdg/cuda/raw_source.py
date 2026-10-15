@@ -237,7 +237,17 @@ def checked_warp_lu_source(name, size):
 
 
 RAW_WARP_COLUMN_SOLVES = r"""
-#if NEL <= 32
+// Select a row from registers distributed in consecutive groups of 32 lanes.
+// Constant-index accesses keep the per-lane array in registers for N > 32.
+template<int R>
+__device__ __forceinline__ double warp_row_value(const double (&x)[R], int row) {
+    if(R<=2) return __shfl_sync(0xffffffffu,row<32 ? x[0] : x[R-1],row&31);
+    double value=0.;
+#pragma unroll
+    for(int r=0;r<R;++r) if(row/32==r) value=x[r];
+    return __shfl_sync(0xffffffffu,value,row&31);
+}
+
 // Per-element setup for the warp column solves: fold the LU row interchanges
 // into one permutation (rows[i] is the original row that ends up in position
 // i), and take the pivot reciprocals once. On GPUs with few FP64 units every
@@ -273,6 +283,7 @@ __device__ __forceinline__ void solve_lu_columns_warp(
         const int count)
 {
     // A sub-warp launch cannot hold every row in a lane register.
+#if !RAW_COOPERATIVE_ONLY
     if (blockDim.x < 32) {
         for (int c = threadIdx.x; c < count; c += blockDim.x) {
             double x[NEL];
@@ -289,7 +300,9 @@ __device__ __forceinline__ void solve_lu_columns_warp(
         __syncthreads();
         return;
     }
+#endif
     const int lane = threadIdx.x & 31;
+#if NEL <= 32
     const bool active = lane < NEL;
     const int source_row = active ? rows[lane] : 0;
     for (int c = threadIdx.x >> 5; c < count; c += blockDim.x >> 5) {
@@ -307,9 +320,40 @@ __device__ __forceinline__ void solve_lu_columns_warp(
         }
         if (active) columns[lane * RAW_BATCH_COLS + c] = x;
     }
+#else
+    constexpr int R=(NEL+31)/32;
+    for(int c=threadIdx.x>>5;c<count;c+=blockDim.x>>5) {
+        double x[R];
+#pragma unroll
+        for(int r=0;r<R;++r) {
+            const int row=lane+32*r;
+            x[r]=row<NEL ? columns[rows[row]*RAW_BATCH_COLS+c] : 0.;
+        }
+        for(int j=0;j<NEL-1;++j) {
+            const double xj=warp_row_value(x,j);
+#pragma unroll
+            for(int r=0;r<R;++r) {
+                const int row=lane+32*r;
+                if(row>j && row<NEL) x[r]-=lu[row*NEL+j]*xj;
+            }
+        }
+        for(int j=NEL-1;j>=0;--j) {
+#pragma unroll
+            for(int r=0;r<R;++r) if(lane+32*r==j) x[r]*=inverse_diagonal[j];
+            const double xj=warp_row_value(x,j);
+#pragma unroll
+            for(int r=0;r<R;++r) {
+                const int row=lane+32*r;
+                if(row<j) x[r]-=lu[row*NEL+j]*xj;
+            }
+        }
+#pragma unroll
+        for(int r=0;r<R;++r) {
+            const int row=lane+32*r;
+            if(row<NEL) columns[row*RAW_BATCH_COLS+c]=x[r];
+        }
+    }
+#endif
     __syncthreads();
 }
-#else
-#error "warp LU column solves hold one row per lane and need NEL <= 32 (p <= 6)"
-#endif
 """
