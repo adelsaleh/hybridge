@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from hybridge.runtime.precision import REAL_DTYPE
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -79,6 +80,14 @@ class GuidingCenterCase:
     # electron-impact ionization rate nu(x) of a prescribed neutral gas.
     density_reaction_profile: ScalarCallable | None = None
     density_reaction_rate: Callable[[float], float] | None = None
+    # Electrode potentials: pairs (g_k(x, y), c_k(t)); the wall potential is
+    # potential_boundary + sum_k c_k(t) g_k. Poisson is solved with
+    # potential_boundary alone and the discrete harmonic fields of the g_k are
+    # added (scripts.guiding_center.runtime.electrodes), so a non-equipotential,
+    # time-dependent wall keeps the zero-Dirichlet Poisson path.
+    wall_potentials: tuple = ()
+    # Record the transport outflux through the walls (zero inflow data only).
+    wall_flux_diagnostics: bool = False
 
     @property
     def has_density_forcing(self) -> bool:
@@ -102,6 +111,23 @@ class GuidingCenterCase:
         if self.potential_boundary_constant is not None:
             boundary._hybridge_constant_value = float(self.potential_boundary_constant)
         boundary._hybridge_time = t  # read by the electrode superposition
+        return boundary
+
+    def wall_coefficients(self, time: float) -> tuple[float, ...]:
+        """Electrode weights c_k(t) of :attr:`wall_potentials`."""
+        return tuple(float(rate(float(time))) for _, rate in self.wall_potentials)
+
+    def wall_potential_at(self, time: float) -> ScalarCallable:
+        """Complete wall potential at ``time``: potential_boundary + sum_k c_k(t) g_k."""
+        t = float(time)
+        terms = [(c, g) for c, (g, _) in zip(self.wall_coefficients(t), self.wall_potentials) if c != 0.0]
+
+        def boundary(x, y):
+            value = self.potential_boundary(x, y, t)
+            for weight, pattern in terms:
+                value = value + weight * pattern(x, y)
+            return value
+
         return boundary
 
     def density_boundary_at(self, time: float) -> ScalarCallable | None:
@@ -695,6 +721,313 @@ def diocotron_annulus(
         parameters=parameters,
         conforming_band=band,
         band_modulation=band_modulation if band is not None else None,
+    )
+
+
+def magnetron(
+        *,
+        cathode: float = 0.5,
+        anode: float = 1.0,
+        voltage: float = 0.1,
+        hub_top: float = 0.65,
+        hub_density: float = 1.0,
+        hub_edge: float = 0.01,
+        emission_rate: float = 1.0,
+        emission_top: float | None = None,
+        initial_hub: bool = True,
+        wave_mode: int = 6,
+        wave_amplitude: float = 0.025,
+        wave_speed: float = 0.29,
+        wave_start: float = 0.0,
+        wave_ramp: float = 20.0,
+        band_mesh_size: float | None = None,
+        refine_band: tuple[float, float] | None = None,
+        band_grading: float = 0.25,
+        anode_geometry: str = "circle",
+        back_radius: float = 1.35,
+        vane_fraction: float = 0.5,
+        corner_mesh_size: float | None = None,
+        corner_grading: float = 0.3,
+        vane_width: float | None = None,
+        tip_radius: float | None = None,
+        cathode_mesh_size: float | None = None,
+        cathode_grading: float = 0.3,
+        curvature_points: int | None = None,
+        anode_mesh_size: float | None = None,
+        anode_grading: float = 0.3,
+        emission_profile: str = "cos2",
+        hall_parameter: float | None = None,
+        electron_temperature: float = 0.0,
+        emission_period: float | None = None,
+        emission_duty: float = 0.5,
+        emission_ramp: float | None = None,
+        emission_phase: float = 0.0,
+) -> GuidingCenterCase:
+    r"""Crossed-field (magnetron) diode in the guiding-center limit: emission, spokes, anode current.
+
+    Electrons of density rho >= 0 drift between a cathode r = ``cathode`` and an
+    anode r = ``anode``. With -lap phi = rho (phi is minus the physical potential
+    in model units), the drift u = (d_y phi, -d_x phi) is E x B for B along +z:
+    u_theta = -d_r phi and u_r = (1/r) d_theta phi. The cathode is at phi = 0 and
+    the anode at
+
+        phi = -V + V1 s(t) cos(N (theta - W t)),
+
+    a DC voltage ``voltage`` (anode positive in physical units, so the vacuum drift
+    co-rotates with the electron space charge) and a wave of ``wave_mode`` = N
+    periods turning at the angular velocity ``wave_speed`` = W: the RF field of
+    the anode cavities, prescribed, with amplitude ``wave_amplitude`` = V1
+    switched on by :func:`smooth_switch` over ``wave_ramp``.
+
+    Space-charge-limited emission keeps a Brillouin-like hub of density
+    ``hub_density`` = rho_c on the cathode,
+
+        S + alpha rho = kappa chi(r) (rho_c - rho),  chi = (1 - tanh((r - r_h)/delta))/2,
+
+    a source kappa rho_c chi and a reaction -kappa chi rho (``emission_rate`` =
+    kappa, ``hub_top`` = r_h, ``hub_edge`` = delta). ``emission_top`` = r_e < r_h
+    confines the emission to a cathode layer: chi = 1 below r_e - 2 delta, a
+    cos^2 taper and exactly 0 from r_e on (a tanh tail would keep filling the
+    hub edge); the hub above it is then fed only by the non-axisymmetric drift. The
+    hub starts full (``initial_hub``, density rho_c chi(r) with r_h) or empty.
+
+    The anode wave makes the wall non-equipotential: u.n = -(N V1 s/r) sin(N(theta - W t))
+    on the anode, so the drift crosses it, electrons leave where u.n > 0 (the
+    anode current) and empty space enters elsewhere (inflow data rho = 0). Near
+    synchronism (W close to the edge-wave speed of the hub) the wave draws the
+    hub into N spokes that carry the current. The wall potential enters through
+    ``wall_potentials`` (discrete harmonic fields; Poisson keeps zero Dirichlet data).
+
+    ``anode_geometry="vanes"``: a vane-type anode block (domain ``vane-anode``,
+    :func:`hybridge.core.mesh.gmsh_vane_anode_mesh`) with 2N vanes, tips at
+    r = ``anode``, slots back to ``back_radius``, each vane covering
+    ``vane_fraction`` of the pitch. The drive is the pi mode of the vane
+    resonators: vane k at -V + (-1)^k V1 s(t) cos(N W t), a standing wave whose
+    co-rotating half turns at W; the back wall of each slot carries the cavity
+    voltage, linear in theta between its two vanes, so the vanes are
+    equipotential (u.n = 0) and the electrons leave through the slot back walls.
+    The vane tips are re-entrant 270-degree corners, where the field is
+    singular (~ r^(-1/3)); ``corner_mesh_size`` grades the mesh there.
+
+    ``vane_width``: parallel-sided vanes of that width instead of radial ones
+    (``vane_fraction`` unused); the pi-mode pattern puts a boundary point on vane k
+    when it lies within w/2 of the vane axis, and ramps linearly in theta across
+    each slot back wall between the back corners.
+
+    ``tip_radius`` (with ``vane_width``): round the two tip corners of every vane by a fillet of that
+    radius (:func:`hybridge.core.mesh.vane_tip_fillets`), so the field has no corner singularity.
+
+    ``cathode_mesh_size``/``cathode_grading`` (vanes): grade the mesh towards the cathode, where a
+    pulsed cathode condition opens a diffusive layer of width ~sqrt(D t) at each switch.
+
+    ``curvature_points`` (vanes): bound the mesh size on the curved walls by 2 pi R / points, so the
+    affine chords stay close to the circles (geometric error ~ h^2 / 8R).
+
+    ``emission_profile`` (with ``emission_top``): the taper of the emission layer between
+    r_e - 2 delta and r_e, ``"cos2"`` (default, C^1) or ``"smooth"`` (C^infinity, the compact step
+    f(1-s)/(f(s)+f(1-s)) with f(a) = exp(-1/a)); both are 1 below and exactly 0 above the taper.
+
+    ``hall_parameter`` = h (with ``electron_temperature`` = theta > 0): electrons
+    colliding elastically with a background gas, below the ionization threshold, so
+    no ions are created. They drift with u_E + q/h (q = -grad phi points towards the
+    anode) and diffuse with D = theta/h (Einstein relation). The density then takes
+    an advection-diffusion-reaction solve with absorbing (rho = 0) walls
+    (``scripts.guiding_center.runtime.density_adr``); h -> infinity is the
+    collisionless diode above.
+
+    ``emission_period``: pulsed emission. The source and the reaction of the
+    emission layer follow :func:`pulse_train` (``emission_duty``, ``emission_ramp``).
+    ``emission_phase``: the train is evaluated at t + phase, e.g. half a pulse so that the run starts
+    with the emission on and the cathode data rho_c P(0) = rho_c match the initial hub.
+    """
+    cathode, anode, V = float(cathode), float(anode), float(voltage)
+    width = None if vane_width is None else float(vane_width)
+    if width is not None and anode_geometry != "vanes":
+        raise ValueError("vane_width needs anode_geometry='vanes'")
+    r_h, rho_c, delta, kappa = float(hub_top), float(hub_density), float(hub_edge), float(emission_rate)
+    N, V1, W = int(wave_mode), float(wave_amplitude), float(wave_speed)
+    if not 0.0 < cathode < r_h < anode:
+        raise ValueError("require 0 < cathode < hub_top < anode")
+    if delta <= 0.0 or rho_c < 0.0 or kappa < 0.0 or N < 0:
+        raise ValueError("hub_edge must be positive; hub_density, emission_rate and wave_mode nonnegative")
+    middle_squared = (0.5 * (cathode + anode)) ** 2
+
+    r_e = r_h if emission_top is None else float(emission_top)
+    if not cathode < r_e <= r_h:
+        raise ValueError("require cathode < emission_top <= hub_top")
+
+    def layer(top):
+        def profile(x, y):
+            xp, x_arr, y_arr = _xy_arrays(x, y)
+            return 0.5 * (1.0 - xp.tanh((xp.sqrt(x_arr * x_arr + y_arr * y_arr) - top) / delta))
+        return profile
+
+    if emission_profile not in {"cos2", "smooth"}:
+        raise ValueError("emission_profile must be 'cos2' or 'smooth'")
+
+    def compact_layer(x, y):  # 1 below r_e - 2 delta, a C^1 or C^infinity taper, exactly 0 from r_e on
+        xp, x_arr, y_arr = _xy_arrays(x, y)
+        s = xp.clip((xp.sqrt(x_arr * x_arr + y_arr * y_arr) - (r_e - 2.0 * delta)) / (2.0 * delta), 0.0, 1.0)
+        if emission_profile == "cos2":
+            return xp.cos(0.5 * math.pi * s) ** 2
+
+        def bump(a):
+            return xp.where(a > 0.0, xp.exp(-1.0 / xp.maximum(a, 1.0e-300)), 0.0)
+        rising, falling = bump(s), bump(1.0 - s)
+        return falling / (rising + falling)
+
+    hub = layer(r_h)
+    emitter = hub if emission_top is None else compact_layer
+
+    def anode_pattern(function):
+        def pattern(x, y):
+            xp, x_arr, y_arr = _xy_arrays(x, y)
+            on_anode = x_arr * x_arr + y_arr * y_arr > middle_squared
+            return xp.where(on_anode, function(xp, xp.arctan2(y_arr, x_arr)), 0.0 * x_arr)
+        return pattern
+
+    switch, _ = smooth_switch(wave_start, wave_ramp)
+    walls = [(anode_pattern(lambda xp, theta: -V + 0.0 * theta), lambda t: 1.0)]
+    vanes = anode_geometry == "vanes"
+    if anode_geometry not in {"circle", "vanes"}:
+        raise ValueError("anode_geometry must be 'circle' or 'vanes'")
+    if vanes:
+        if N < 1 or not anode < float(back_radius) or not 0.0 < float(vane_fraction) < 1.0:
+            raise ValueError("a vane anode needs wave_mode >= 1, back_radius > anode and 0 < vane_fraction < 1")
+        pitch, half = 2.0 * math.pi / (2 * N), math.pi * float(vane_fraction) / (2 * N)
+        if width is not None:
+            if not (0.0 < width < 2.0 * anode and 2.0 * math.asin(width / (2.0 * anode)) < pitch):
+                raise ValueError("vane_width must be positive and leave a gap between neighbouring vane tips")
+            half_back = math.asin(width / (2.0 * float(back_radius)))
+
+        def pi_mode(xp, theta):  # (-1)^k on vane k; linear across each slot back wall
+            index = xp.rint(theta / pitch)
+            sign = 1.0 - 2.0 * xp.mod(index, 2.0)
+            offset = xp.abs(theta - index * pitch)
+            ramp = 1.0 - 2.0 * (offset - half) / (pitch - 2.0 * half)
+            return sign * xp.where(offset <= half, 1.0, ramp)
+
+        def parallel_pi_mode(x, y):  # parallel-sided vanes: on vane k within w/2 of its axis
+            xp, x_arr, y_arr = _xy_arrays(x, y)
+            radius_sq = x_arr * x_arr + y_arr * y_arr
+            theta = xp.arctan2(y_arr, x_arr)
+            index = xp.rint(theta / pitch)
+            sign = 1.0 - 2.0 * xp.mod(index, 2.0)
+            offset = xp.abs(theta - index * pitch)
+            on_vane = xp.sqrt(radius_sq) * xp.sin(offset) <= 0.5 * width * (1.0 + 1e-9)
+            ramp = 1.0 - 2.0 * (offset - half_back) / (pitch - 2.0 * half_back)
+            return xp.where(radius_sq > middle_squared, sign * xp.where(on_vane, 1.0, ramp), 0.0 * x_arr)
+
+        if V1 != 0.0:
+            pattern = anode_pattern(pi_mode) if width is None else parallel_pi_mode
+            walls.append((pattern, lambda t: V1 * switch(t) * math.cos(N * W * t)))
+    elif N > 0 and V1 != 0.0:
+        walls += [(anode_pattern(lambda xp, theta: xp.cos(N * theta)),
+                   lambda t: V1 * switch(t) * math.cos(N * W * t)),
+                  (anode_pattern(lambda xp, theta: xp.sin(N * theta)),
+                   lambda t: V1 * switch(t) * math.sin(N * W * t))]
+    emission = kappa * rho_c
+    forcing = {}
+    pulse = None if emission_period is None else pulse_train(emission_period, emission_duty, emission_ramp)
+    if pulse is not None and float(emission_phase) != 0.0:
+        unshifted, phase = pulse, float(emission_phase)
+
+        def pulse(t):
+            return unshifted(t + phase)
+    elif float(emission_phase) != 0.0:
+        raise ValueError("emission_phase needs emission_period")
+    if kappa > 0.0 and pulse is None:
+        forcing = dict(
+            density_source=lambda x, y, t: emission * emitter(x, y),
+            density_source_rate=lambda t: 1.0,
+            density_source_profile=lambda x, y: emission * emitter(x, y),
+            density_reaction_profile=lambda x, y: -kappa * emitter(x, y),
+        )
+    elif kappa > 0.0:  # pulsed emission: source and reaction follow the same pulse train
+        forcing = dict(
+            density_source=lambda x, y, t: emission * pulse(t) * emitter(x, y),
+            density_source_rate=pulse,
+            density_source_profile=lambda x, y: emission * emitter(x, y),
+            density_reaction_profile=lambda x, y: -kappa * emitter(x, y),
+            density_reaction_rate=pulse,
+        )
+    parameters = dict(
+        cathode=cathode, anode=anode, voltage=V, hub_top=r_h, hub_density=rho_c, hub_edge=delta,
+        emission_rate=kappa, emission_top=r_e, initial_hub=bool(initial_hub), wave_mode=N, wave_amplitude=V1, wave_speed=W,
+        wave_start=float(wave_start), wave_ramp=float(wave_ramp),
+        vacuum_cathode_charge=2.0 * math.pi * V / math.log(anode / cathode),
+        anode_geometry=anode_geometry,
+        geometry={
+            "inner_radius": cathode,
+            "outer_radius": float(back_radius) if vanes else anode,
+            "interface_radii": (),
+            "band": ((tuple(float(r) for r in refine_band) if refine_band is not None else (r_h - 0.05, anode))
+                     if band_mesh_size is not None else None),
+            "band_mesh_size": None if band_mesh_size is None else float(band_mesh_size),
+            "band_grading": float(band_grading),
+        },
+    )
+    if vanes:
+        parameters.update(back_radius=float(back_radius), vanes=2 * N, vane_fraction=float(vane_fraction))
+        parameters["geometry"].update(anode_radius=anode, back_radius=float(back_radius), vanes=2 * N,
+                                      vane_fraction=float(vane_fraction),
+                                      corner_mesh_size=None if corner_mesh_size is None else float(corner_mesh_size),
+                                      corner_grading=float(corner_grading))
+        if width is not None:
+            parameters.update(vane_width=width)
+            parameters["geometry"].update(vane_width=width)
+        if cathode_mesh_size is not None:
+            parameters["geometry"].update(cathode_mesh_size=float(cathode_mesh_size),
+                                          cathode_grading=float(cathode_grading))
+        if curvature_points:
+            parameters["geometry"].update(curvature_points=int(curvature_points))
+        if anode_mesh_size is not None:  # outflow layers ~D/|u.n| where the charge reaches the anode
+            parameters["geometry"].update(anode_mesh_size=float(anode_mesh_size), anode_grading=float(anode_grading))
+        if tip_radius is not None:
+            if width is None:
+                raise ValueError("tip_radius needs parallel-sided vanes (vane_width)")
+            parameters.update(tip_radius=float(tip_radius))
+            parameters["geometry"].update(tip_radius=float(tip_radius))
+    elif tip_radius is not None:
+        raise ValueError("tip_radius needs anode_geometry='vanes' with vane_width")
+    if emission_profile != "cos2":
+        if emission_top is None:
+            raise ValueError("emission_profile needs emission_top")
+        parameters.update(emission_profile=emission_profile)
+    if hall_parameter is not None:
+        hall, theta_e = float(hall_parameter), float(electron_temperature)
+        if not (math.isfinite(hall) and hall > 0.0 and math.isfinite(theta_e) and theta_e > 0.0):
+            raise ValueError("a collisional magnetron needs hall_parameter > 0 and electron_temperature > 0")
+        parameters["collisional"] = {"hall_parameter": hall, "electron_temperature": theta_e,
+                                     "diffusion": theta_e / hall}
+        # All-Dirichlet density data of the ADR solve: the anode absorbs (0); the cathode emits at the
+        # hub density rho_c (times the emission pulse), consistent with the emission layer next to it.
+        emitting = pulse if pulse is not None else (lambda t: 1.0)
+
+        def collisional_density_boundary(x, y, t):
+            xp, x_arr, y_arr = _xy_arrays(x, y)
+            on_cathode = x_arr * x_arr + y_arr * y_arr < middle_squared
+            return xp.where(on_cathode, rho_c * emitting(t), 0.0 * x_arr)
+    if pulse is not None:
+        parameters.update(emission_period=float(emission_period), emission_duty=float(emission_duty),
+                          emission_ramp=None if emission_ramp is None else float(emission_ramp))
+        if float(emission_phase) != 0.0:
+            parameters.update(emission_phase=float(emission_phase))
+    return GuidingCenterCase(
+        key="magnetron",
+        description=(f"Magnetron diode {cathode:g}<r<{anode:g}: hub rho_c={rho_c:g} to r={r_h:g}, V={V:g}, "
+                     f"anode wave N={N}, V1={V1:g}, W={W:g}; emission rate {kappa:g}."),
+        initial_density=(lambda x, y: rho_c * hub(x, y)) if initial_hub else _zero_like_xy,
+        potential_boundary=lambda x, y, t: _zero_like_xy(x, y),
+        potential_boundary_constant=0.0,
+        density_boundary=(collisional_density_boundary if hall_parameter is not None
+                          else lambda x, y, t: _zero_like_xy(x, y)),
+        density_transport_boundary_mode="eliminate",
+        default_domain="vane-anode" if vanes else "annulus",
+        parameters=parameters,
+        wall_potentials=tuple(walls),
+        wall_flux_diagnostics=True,
+        **forcing,
     )
 
 
@@ -1349,6 +1682,13 @@ CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
         default_domain="annulus",
         default_params={"k": 3},
     ),
+    "magnetron": GuidingCenterCaseDefinition(
+        key="magnetron",
+        description=("Crossed-field diode: emission-fed hub on a cathode, rotating anode wave, spokes and "
+                     "anode current through a non-equipotential wall."),
+        factory=magnetron,
+        default_domain="annulus",
+    ),
 }
 
 CASE_BY_KEY = CASE_DEFINITIONS
@@ -1384,4 +1724,5 @@ __all__ = [
     "euler_star_vortex_gas",
     "euler_shaped_vortex_gas",
     "diocotron_annulus",
+    "magnetron",
 ]

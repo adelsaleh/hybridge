@@ -29,7 +29,8 @@ from scripts.guiding_center.runtime.configuration import (
     _transport_trace_basis,
     _validate_config,
 )
-from scripts.guiding_center.runtime.diagnostics import _compute_diagnostics, _electric_flux
+from scripts.guiding_center.runtime.diagnostics import (
+    WallChargeBalance, _compute_diagnostics, _electric_flux)
 from scripts.guiding_center.runtime.labels import run_label
 from scripts.guiding_center.runtime.forcing import DensityForcing
 from scripts.guiding_center.runtime.steppers import make_stepper
@@ -101,6 +102,25 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
             verbosity=config.gmsh_verbosity,
             algorithm=config.gmsh_algorithm,
             log_cache=log_mesh_cache,
+        )
+    if domain == "vane-anode":
+        from hybridge.core.mesh import gmsh_vane_anode_mesh
+
+        geometry = case.parameters["geometry"]
+        return gmsh_vane_anode_mesh(
+            config.mesh_size,
+            cathode_radius=float(geometry["inner_radius"]), anode_radius=float(geometry["anode_radius"]),
+            back_radius=float(geometry["back_radius"]), vanes=int(geometry["vanes"]),
+            vane_fraction=float(geometry["vane_fraction"]), band=geometry.get("band"),
+            band_mesh_size=geometry.get("band_mesh_size"), band_grading=float(geometry.get("band_grading", 0.25)),
+            corner_mesh_size=geometry.get("corner_mesh_size"),
+            corner_grading=float(geometry.get("corner_grading", 0.3)),
+            vane_width=geometry.get("vane_width"), tip_radius=geometry.get("tip_radius"),
+            cathode_mesh_size=geometry.get("cathode_mesh_size"),
+            cathode_grading=float(geometry.get("cathode_grading", 0.3)),
+            curvature_points=geometry.get("curvature_points"),
+            anode_mesh_size=geometry.get("anode_mesh_size"), anode_grading=float(geometry.get("anode_grading", 0.3)),
+            verbosity=config.gmsh_verbosity, algorithm=config.gmsh_algorithm, log_cache=log_mesh_cache,
         )
     if domain == "disc":
         return gmsh_disc_mesh(
@@ -380,6 +400,11 @@ def run_guiding_center_case(
     if case.key in EXACT_BOUNDARY_CASES and transport_boundary_mode != "eliminate":
         raise ValueError(f"{case.key} requires boundary_mode='eliminate' with exact density data")
     transport_options = _make_transport_options(config, transport_boundary_mode)
+    wall_balance = None
+    if case.wall_flux_diagnostics:
+        if transport_boundary_mode != "eliminate":
+            raise ValueError("wall flux diagnostics need eliminated (zero inflow) density boundary traces")
+        wall_balance = WallChargeBalance(case, config.time_scheme, _transport_trace_basis(config))
     if _detail_verbosity(config):
         print(
             f"done in {time.perf_counter() - solver_data_start:.5f}s",
@@ -458,6 +483,18 @@ def run_guiding_center_case(
                 f"done in {time.perf_counter() - post_mesh_start:.5f}s",
                 flush=True,
             )
+    if case.wall_potentials:
+        # Electrode potentials: discrete harmonic fields added to every zero-Dirichlet solve.
+        if equilibrium_density is not None:
+            raise ValueError("electrode wall potentials cannot be combined with an equilibrium potential")
+        from scripts.guiding_center.runtime.electrodes import ElectrodePoissonSolver
+
+        def make_electrode_solver(boundary, options):
+            return DiffusionReactionHDGSolver(
+                poisson_space, source=poisson_space.zeros(name="electrode_source_h"),
+                reaction=zero_reaction, boundary_condition=boundary, options=options)
+
+        poisson_solver = ElectrodePoissonSolver(poisson_solver, case, make_electrode_solver)
     if config.transport_electric_field == "compatible":
         from scripts.guiding_center.runtime.compatible_drift import (
             CompatibleFluxPoissonSolver,
@@ -655,6 +692,8 @@ def run_guiding_center_case(
             )
             baseline_mass = float(row["mass"])
             baseline_q_l2 = float(row["q_l2"])
+            if wall_balance is not None:
+                wall_balance.balance(0, row)
             baseline_enstrophy = float(row["enstrophy"])
             equilibrium_potential_l2 = row.get("diocotron_phi_eq_reference_l2")
             equilibrium_density_l2 = row.get("diocotron_rho_eq_reference_l2")
@@ -869,6 +908,10 @@ def run_guiding_center_case(
                     extra["reaction_production"] = forcing.production(solved_density, current_time)
                 if forcing.source_function is not None:  # int S_h: its source term
                     extra["source_production"] = forcing.source_production(current_time)
+                if wall_balance is not None:  # outflux through the open walls: its boundary term
+                    scale = float(stage_extra.get("transport_beta_scale", config.dt))
+                    extra["transport_beta_scale"] = scale
+                    extra.update(wall_balance.flux(advanced.transport_beta, solved_density, scale))
                 row, diagnostics_wall_time = timed_call(
                     "[gc] computing accepted-step diagnostics",
                     _detail_verbosity(config),
@@ -890,6 +933,8 @@ def run_guiding_center_case(
                     ),
                 )
                 row["diagnostics_wall_time"] = diagnostics_wall_time
+                if wall_balance is not None:
+                    row.update(wall_balance.balance(step, row))
                 row["post_poisson_application_time"] = (
                     time.perf_counter() - post_poisson_start
                     if post_poisson_start is not None
