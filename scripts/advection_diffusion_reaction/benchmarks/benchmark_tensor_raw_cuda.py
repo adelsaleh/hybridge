@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Reproducible FP64 assembly sweeps and paired diffusion regression checks.
 
-No global solve, AMGX build, reconstruction, or time integration is performed.
+No global solve, AMGX build, or time integration is performed. Reconstruction
+of a prescribed trace can be measured with --reconstruction.
 JSONL retains each repetition and its preparation/upload/graph/JIT/kernel timings.
 """
 from __future__ import annotations
@@ -21,9 +22,11 @@ if __package__ in {None, ''}:
 import numpy as np
 from hybridge import DGSpace, rectangle_mesh
 from hybridge.runtime.optional import require_cupy
+from hybridge.runtime.benchmarking import reserve_gpu
 from hybridge.mixed.adr_preparation import prepare_adr_data
 from hybridge.mixed.raw_cuda.adr_operator import (
     assemble_projected_adr_trace_operator_raw_cuda,
+    reconstruct_projected_adr_local_unknowns_raw_cuda,
 )
 
 
@@ -49,19 +52,26 @@ def sweep(args,cp):
         for order in args.orders:
             space=DGSpace(rectangle_mesh(nx,nx),order,basis_type='dub_orth')
             beta=(space*space).field((space.constant(.7),space.constant(-.2)))
-            for basis in ('legacy-lagrange','legendre-modal'):
+            for basis in args.bases:
                 trace=space.trace_space(basis)
+                trace_values=cp.zeros(space.mesh.num_edg*(order+1),dtype=cp.float64)
                 for name in args.coefficients:
                     diffusion=coefficient(name)
                     prep=prepare_adr_data(space.constant(1.),.3,beta,space,diffusion=diffusion,
                         trace_space=trace,dense_local_matrices=False,
                         diffusion_stabilization=lambda x,y: .7+.05*x+.03*y)
-                    for fmt in ('coo','csr','bsr'):
-                        for block in (32,64,128):
+                    for fmt in args.matrix_formats:
+                        for block in args.block_sizes:
                             def assemble():
-                                return assemble_projected_adr_trace_operator_raw_cuda(
+                                operator=assemble_projected_adr_trace_operator_raw_cuda(
                                     prep,zero,space,diffusion=diffusion,trace_space=trace,
-                                    matrix_format=fmt,block_size=block)
+                                    matrix_format=fmt,block_size=block,
+                                    cache_local_factors=args.cache_local_factors)
+                                if args.reconstruction:
+                                    _, timings=reconstruct_projected_adr_local_unknowns_raw_cuda(
+                                        operator,trace_values,block_size=block)
+                                    operator.assembly.timings.update(timings)
+                                return operator
                             for _ in range(args.warmup):
                                 result=assemble()
                                 del result
@@ -72,6 +82,7 @@ def sweep(args,cp):
                                 del result
                             emit(args.output,dict(mode='adr',elements=space.mesh.num_tri,order=order,
                                 basis=basis,coefficient=name,matrix_format=fmt,block_size=block,
+                                cache_local_factors=args.cache_local_factors,
                                 samples=samples,median=summarize(samples)))
                     del prep
             del space,beta,trace,assemble
@@ -136,19 +147,29 @@ def main():
                         default=['scalar','constant-full','variable-full'])
     parser.add_argument('--warmup',type=int,default=3)
     parser.add_argument('--repeats',type=int,default=7)
+    parser.add_argument('--bases',nargs='+',choices=['legacy-lagrange','legendre-modal'],
+                        default=['legacy-lagrange','legendre-modal'])
+    parser.add_argument('--matrix-formats',nargs='+',choices=['coo','csr','bsr'],default=['coo','csr','bsr'])
+    parser.add_argument('--block-sizes',type=int,nargs='+',choices=[1,32,64,128],default=[32,64,128])
+    parser.add_argument('--cache-local-factors',choices=['none','schur-lu','schur-lu+mass'],default='schur-lu+mass')
+    parser.add_argument('--reconstruction',action='store_true')
+    parser.add_argument('--gpu-lock',type=Path,default=Path(__file__).resolve().parents[3]/'.cache/gpu-campaign.lock')
     parser.add_argument('--diffusion-before',type=Path)
     args=parser.parse_args()
-    if min(args.nx)<1 or min(args.orders)<0 or max(args.orders)>6 or args.warmup<1 or args.repeats<1:
-        parser.error('require nx>=1, p=0--6, and positive warmup/repeats')
-    cp=require_cupy()
-    args.output.parent.mkdir(parents=True,exist_ok=True)
-    emit(args.output,dict(mode='environment',gpu=cp.cuda.runtime.getDeviceProperties(0)['name'].decode(),
-        cupy=cp.__version__,cuda_runtime=cp.cuda.runtime.runtimeGetVersion(),
-        precision='FP64',warmup=args.warmup,repeats=args.repeats))
-    if args.diffusion_before:
-        diffusion_comparison(args,cp)
-    else:
-        sweep(args,cp)
+    if min(args.nx)<1 or min(args.orders)<0 or max(args.orders)>9 or args.warmup<1 or args.repeats<1:
+        parser.error('require nx>=1, p=0--9, and positive warmup/repeats')
+    if args.diffusion_before and max(args.orders)>6:
+        parser.error('the legacy paired diffusion baseline supports p=0--6')
+    with reserve_gpu(args.gpu_lock,notify=lambda message: print(message,flush=True)):
+        cp=require_cupy()
+        args.output.parent.mkdir(parents=True,exist_ok=True)
+        emit(args.output,dict(mode='environment',gpu=cp.cuda.runtime.getDeviceProperties(cp.cuda.runtime.getDevice())['name'].decode(),
+            cupy=cp.__version__,cuda_runtime=cp.cuda.runtime.runtimeGetVersion(),
+            precision='FP64',warmup=args.warmup,repeats=args.repeats))
+        if args.diffusion_before:
+            diffusion_comparison(args,cp)
+        else:
+            sweep(args,cp)
 
 
 if __name__=='__main__':

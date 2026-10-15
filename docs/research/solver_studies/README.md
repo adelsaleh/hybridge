@@ -22,6 +22,10 @@ reproducibility but do not define current solver defaults or backend support.
 - [Raw CUDA ADR tensor assembly and reconstruction](raw_cuda_adr_tensor_2026_09_28.md):
   FP64 parity, native stationary CSR/BSR solves and matched assembly timings.
 
+- [Higher-order raw CUDA ADR qualification](raw_cuda_adr_high_order_2026_10_15.md):
+  p=0--9 FP64 parity, p=7--9 CuPy comparisons across formats and caches,
+  native CSR/BSR solves, bounded mass scratch, and clean memcheck/racecheck.
+
 - [Numba ADR tensor specialization](numba_adr_tensor_2026_09_25.md):
   variable scalar/tensor parity, manufactured convergence and 42 warmed
   comparisons with coupled LU.

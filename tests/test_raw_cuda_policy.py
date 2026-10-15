@@ -38,6 +38,13 @@ def test_diffusion_recommendation_uses_degree_tiers(order, expected):
     assert recommended_raw_cuda_block_size("diffusion-reaction", order) == expected
 
 
+@pytest.mark.parametrize("order", range(10))
+def test_adr_recommendation_extends_degree_tiers(order):
+    """ADR's larger local solves do not change the legacy DR recommendation."""
+    expected = 32 if order <= 2 else (64 if order <= 4 else 128)
+    assert recommended_raw_cuda_block_size("advection-diffusion-reaction", order) == expected
+
+
 def test_resolver_preserves_explicit_sizes_and_resolves_auto():
     assert resolve_raw_cuda_block_size(
         "auto", equation="diffusion-reaction", order=4
@@ -66,3 +73,5 @@ def test_recommendation_rejects_unqualified_orders():
         recommended_raw_cuda_block_size("diffusion-reaction", 7)
     with pytest.raises(ValueError, match="no raw-CUDA block-size recommendation"):
         recommended_raw_cuda_block_size("advection-reaction", 15)
+    with pytest.raises(ValueError, match="no raw-CUDA block-size recommendation"):
+        recommended_raw_cuda_block_size("advection-diffusion-reaction", 10)

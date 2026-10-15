@@ -1,7 +1,10 @@
-"""Cooperative tensor ADR assembly and reconstruction kernels (p=0--6, FP64 or FP32).
+"""Cooperative tensor ADR assembly and reconstruction kernels (p=0--9, FP64 or FP32).
 
 One block owns an element. Inverse-diffusion mass factors, the scalar Schur
-factor, and small batches of columns share at most 48 KiB. Only coefficient
+factor, and small batches of columns use a device-bounded workspace. Through
+p=6 the existing 48 KiB layout is retained. Higher orders recompute coupling
+entries and use opt-in shared memory; mass factors that still do not fit live
+in the requested device cache or bounded temporary scratch. Only coefficient
 samples and reference tables cross the host/device boundary.
 
 One CUDA source serves both kernels and every order; ``kernel_source``
@@ -26,7 +29,7 @@ Per element the assembly kernel (i) assembles and factors the inverse-diffusion
 mass for variable tensors (kinds 3--6): point coefficients jac*w*kappa^{-1}, one
 phi_i phi_j product per symmetric (i, j) pair, a Cholesky or warp-pivoted LU
 whose diagonal is stored as reciprocals, and warp-per-column triangular solves
-(two rows per lane when the factor is 2*NEL), (ii) folds quadrature weights, the Jacobian and
+(up to four rows per lane when the factor is 2*NEL), (ii) folds quadrature weights, the Jacobian and
 the affine gradient map into per-point coefficients so the NEL^2 contractions
 need no FP64 divides, (iii) accumulates S = A + (N-D) G^{-1} D in column
 batches and factors it, and (iv) solves the local columns and projects the
@@ -36,6 +39,7 @@ once per face point rather than once per trace row.
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 import numpy as np
 
 from hybridge.runtime.precision import REAL_DTYPE, REAL_ITEMSIZE, real_raw_module
@@ -95,11 +99,12 @@ __device__ void invert_diagonal(double* a, int n) {
 
 // Solve the batch columns with a mass factor whose diagonal holds reciprocals:
 // packed Cholesky (L L^T) or full pivoted LU (unit L, U). One warp per
-// column; lane r holds rows r and r+32, so both sweeps are shuffles with one
+// column; lane r holds rows r, r+32, ... so both sweeps are shuffles with one
 // FP64 FMA per row block per step. Forward sums keep the serial order.
 template<int N, bool CHOLESKY>
 __device__ __forceinline__ void triangular_warp(const double* __restrict__ a,
         const int* __restrict__ piv, double* __restrict__ rhs, int count) {
+#if !RAW_COOPERATIVE_ONLY
     if(blockDim.x<32) {
         for(int c=threadIdx.x;c<count;c+=blockDim.x) {
             double x[N];
@@ -123,8 +128,8 @@ __device__ __forceinline__ void triangular_warp(const double* __restrict__ a,
         __syncthreads();
         return;
     }
+#endif
     constexpr int R=(N+31)/32;
-    static_assert(R<=2, "warp mass solves hold at most two rows per lane (2*NEL <= 64)");
     const int lane=threadIdx.x&31;
     for(int c=threadIdx.x>>5;c<count;c+=blockDim.x>>5) {
         double x[R];
@@ -137,8 +142,8 @@ __device__ __forceinline__ void triangular_warp(const double* __restrict__ a,
             for(int k=0;k<N;++k) {
                 const int p=piv[k];
                 if(p==k) continue;
-                const double xk=__shfl_sync(0xffffffffu, k<32 ? x[0] : x[R-1], k&31);
-                const double xp=__shfl_sync(0xffffffffu, p<32 ? x[0] : x[R-1], p&31);
+                const double xk=warp_row_value(x,k);
+                const double xp=warp_row_value(x,p);
 #pragma unroll
                 for(int r=0;r<R;++r) {
                     const int row=lane+32*r;
@@ -151,7 +156,7 @@ __device__ __forceinline__ void triangular_warp(const double* __restrict__ a,
 #pragma unroll
                 for(int r=0;r<R;++r) if(lane+32*r==j) x[r]*=a[packed(j,j)];
             }
-            const double xj=__shfl_sync(0xffffffffu, j<32 ? x[0] : x[R-1], j&31);
+            const double xj=warp_row_value(x,j);
 #pragma unroll
             for(int r=0;r<R;++r) {
                 const int row=lane+32*r;
@@ -162,7 +167,7 @@ __device__ __forceinline__ void triangular_warp(const double* __restrict__ a,
         for(int j=N-1;j>=0;--j) {
 #pragma unroll
             for(int r=0;r<R;++r) if(lane+32*r==j) x[r]*=a[CHOLESKY ? packed(j,j) : j*N+j];
-            const double xj=__shfl_sync(0xffffffffu, j<32 ? x[0] : x[R-1], j&31);
+            const double xj=warp_row_value(x,j);
 #pragma unroll
             for(int r=0;r<R;++r) {
                 const int row=lane+32*r;
@@ -222,15 +227,33 @@ __device__ double face_moment(int face, int i, int d, const double* phi_t,
 // Coupling blocks N_d - D_d: the side normal mass minus the element derivative.
 __device__ __forceinline__ void normal_minus_derivative(int idx, int e, const double* a,
         const double* face_jacs, const double* normals, const double* face_mass,
-        const double* d0, const double* d1, double* mn0, double* mn1) {
+        const double* d0, const double* d1, double& mn0, double& mn1) {
     double nx=0., ny=0.;
     for(int f=0;f<3;++f) {
         const double scale=face_jacs[e*3+f]*face_mass[f*NEL*NEL+idx];
         nx+=normals[(e*3+f)*2]*scale;
         ny+=normals[(e*3+f)*2+1]*scale;
     }
-    mn0[idx]=nx-derivative(0,idx,a,d0,d1);
-    mn1[idx]=ny-derivative(1,idx,a,d0,d1);
+    mn0=nx-derivative(0,idx,a,d0,d1);
+    mn1=ny-derivative(1,idx,a,d0,d1);
+}
+
+// Apply N-D without retaining two NEL^2 matrices at higher orders.
+__device__ __forceinline__ double coupling_product(int i, int c, int e,
+        const double* a, const double* face_jacs, const double* normals,
+        const double* face_mass, const double* d0, const double* d1,
+        const double* mn0, const double* mn1, const double* flux) {
+    double value=0.;
+    for(int j=0;j<NEL;++j) {
+        double x,y;
+#if RAW_COMPACT_COUPLING
+        normal_minus_derivative(i*NEL+j,e,a,face_jacs,normals,face_mass,d0,d1,x,y);
+#else
+        x=mn0[i*NEL+j];y=mn1[i*NEL+j];
+#endif
+        value+=x*flux[j*RAW_BATCH_COLS+c]+y*flux[(NEL+j)*RAW_BATCH_COLS+c];
+    }
+    return value;
 }
 
 // Moment of the weighted trace samples lambda (see RAW_RECONSTRUCT) on one face.
@@ -260,12 +283,12 @@ extern "C" __global__ void assemble_adr_tensor(
         const double* source, const double* boundary, const long long* kinds,
         const double* constants, const double* inverse, int constant_count,
         double* schur_cache, int* pivot_cache, double* mass_cache, int* mass_pivot_cache,
-        int* statuses
+        int* statuses, double* mass_workspace, long long element_offset
 #if RAW_RECONSTRUCT
         , const double* trace, double* unknowns
 #endif
         ) {
-    const int e=blockIdx.x, tid=threadIdx.x, kind=kinds[e];
+    const int e=element_offset+blockIdx.x, tid=threadIdx.x, kind=kinds[e];
     const double* a=aff+4*e;
     const double jac=jacs[e], inv_jac=1./jac;
     const double* tensor=constants+4*(constant_count==1 ? 0 : e);
@@ -273,10 +296,26 @@ extern "C" __global__ void assemble_adr_tensor(
     const double* g=gamma+e*3*NFQ;
     extern __shared__ double shared[];
     double* schur=shared;
+#if RAW_COMPACT_COUPLING
+    double* mn0=nullptr;
+    double* mn1=nullptr;
+    double* work=schur+NEL*NEL;
+#else
     double* mn0=schur+NEL*NEL;
     double* mn1=mn0+NEL*NEL;
-    double* factor=mn1+NEL*NEL;
+    double* work=mn1+NEL*NEL;
+#endif
+#if RAW_EXTERNAL_MASS
+#if RAW_USE_MASS || RAW_WRITE_MASS
+    double* factor=mass_cache+(long long)e*MASS_STRIDE;
+#else
+    double* factor=mass_workspace+(long long)blockIdx.x*FACTOR_STORAGE;
+#endif
+    double* flux=work;
+#else
+    double* factor=work;
     double* flux=factor+FACTOR_STORAGE;
+#endif
     double* u=flux+2*NEL*RAW_BATCH_COLS;
     // Per-point volume/face coefficients, later the weighted face traces.
     double* coef=u+NEL*RAW_BATCH_COLS;
@@ -297,7 +336,9 @@ extern "C" __global__ void assemble_adr_tensor(
         int* const cached_mass_piv=mass_pivot_cache+(long long)e*2*NEL;
 #if RAW_USE_MASS
         // Cached reconstruction: reload the assembly's factored mass (and pivots).
+#if !RAW_EXTERNAL_MASS
         for(int idx=tid;idx<size;idx+=blockDim.x) factor[idx]=cached_mass[idx];
+#endif
         if(kind==6) for(int i=tid;i<n;i+=blockDim.x) mass_piv[i]=cached_mass_piv[i];
         __syncthreads();
 #else
@@ -348,7 +389,9 @@ extern "C" __global__ void assemble_adr_tensor(
         if(*status) {if(tid==0) *status+=1000; return;}
 #if RAW_WRITE_MASS
         // Keep the factored mass for reconstruct_adr_tensor (RAW_USE_MASS).
+#if !RAW_EXTERNAL_MASS
         for(int idx=tid;idx<size;idx+=blockDim.x) cached_mass[idx]=factor[idx];
+#endif
         if(kind==6) for(int i=tid;i<n;i+=blockDim.x) cached_mass_piv[i]=mass_piv[i];
 #endif
 #endif
@@ -361,7 +404,9 @@ extern "C" __global__ void assemble_adr_tensor(
     // (kinds 3--6) were reloaded (RAW_USE_MASS) or refactored above.
     for(int idx=tid;idx<NEL*NEL;idx+=blockDim.x) {
         schur[idx]=cached_lu[idx];
-        normal_minus_derivative(idx,e,a,face_jacs,normals,face_mass,d0,d1,mn0,mn1);
+#if !RAW_COMPACT_COUPLING
+        normal_minus_derivative(idx,e,a,face_jacs,normals,face_mass,d0,d1,mn0[idx],mn1[idx]);
+#endif
     }
     for(int i=tid;i<NEL;i+=blockDim.x) piv[i]=cached_piv[i];
     __syncthreads();
@@ -403,7 +448,10 @@ extern "C" __global__ void assemble_adr_tensor(
         for(int c=0;c<QUAD_COLS;++c) {
             if(j0+c>=NEL) continue;
             schur[i*NEL+j0+c]=v[c];
-            normal_minus_derivative(i*NEL+j0+c,e,a,face_jacs,normals,face_mass,d0,d1,mn0,mn1);
+#if !RAW_COMPACT_COUPLING
+            normal_minus_derivative(i*NEL+j0+c,e,a,face_jacs,normals,face_mass,d0,d1,
+                                    mn0[i*NEL+j0+c],mn1[i*NEL+j0+c]);
+#endif
         }
     }
     __syncthreads();
@@ -419,10 +467,8 @@ extern "C" __global__ void assemble_adr_tensor(
         for(int idx=tid;idx<NEL*RAW_BATCH_COLS;idx+=blockDim.x) {
             int i=idx/RAW_BATCH_COLS,c=idx%RAW_BATCH_COLS;
             if(c<count) {
-                double v=0.;
-                for(int j=0;j<NEL;++j)
-                    v+=mn0[i*NEL+j]*flux[j*RAW_BATCH_COLS+c]+mn1[i*NEL+j]*flux[(NEL+j)*RAW_BATCH_COLS+c];
-                schur[i*NEL+start+c]+=v;
+                schur[i*NEL+start+c]+=coupling_product(i,c,e,a,face_jacs,normals,face_mass,
+                                                      d0,d1,mn0,mn1,flux);
             }
         }
         __syncthreads();
@@ -482,10 +528,7 @@ extern "C" __global__ void assemble_adr_tensor(
         for(int idx=tid;idx<NEL*RAW_BATCH_COLS;idx+=blockDim.x) {
             int i=idx/RAW_BATCH_COLS,c=idx%RAW_BATCH_COLS;
             if(c>=count) continue;
-            double v=0.;
-            for(int j=0;j<NEL;++j)
-                v+=mn0[i*NEL+j]*flux[j*RAW_BATCH_COLS+c]+mn1[i*NEL+j]*flux[(NEL+j)*RAW_BATCH_COLS+c];
-            u[idx]+=v;
+            u[idx]+=coupling_product(i,c,e,a,face_jacs,normals,face_mass,d0,d1,mn0,mn1,flux);
         }
         __syncthreads();
         solve_lu_columns_warp(schur,schur_rows,inverse_diagonal,u,count);
@@ -597,6 +640,7 @@ def mass_factor_size(nel, kind):
 
 TENSOR_SHARED_MEMORY_LIMIT = 48 * 1024
 TENSOR_MAX_BATCH_COLUMNS = 8
+TENSOR_MASS_SCRATCH_LIMIT = 64 * 1024 * 1024
 
 
 class TensorWorkspaceError(UnsupportedBackendConfigurationError, ValueError):
@@ -607,7 +651,7 @@ class TensorWorkspaceError(UnsupportedBackendConfigurationError, ValueError):
     """
 
 
-def tensor_shared_bytes(nel, kind, nq, nfq, batch):
+def tensor_shared_bytes(nel, kind, nq, nfq, batch, *, compact=False, external_mass=False):
     """Return factor/scratch slots and dynamic shared bytes of one element block.
 
     Bytes use the selected precision (``REAL_ITEMSIZE``); integer pivots and
@@ -615,17 +659,20 @@ def tensor_shared_bytes(nel, kind, nq, nfq, batch):
     ``nq``, ``nfq``, ``batch`` or ``kind``.
     """
     storage = max(mass_factor_size(nel, kind), 2 * nel * batch)
-    size = (REAL_ITEMSIZE * (3 * nel * nel + storage + 3 * nel * batch
+    size = (REAL_ITEMSIZE * ((1 if compact else 3) * nel * nel
+                             + (0 if external_mass else storage) + 3 * nel * batch
                              + coefficient_storage(nq, nfq, batch, nel) + nel)
             + 4 * 4 * nel)
     return storage, size
 
 
-def max_tensor_volume_points(nel, kind, nfq):
+def max_tensor_volume_points(nel, kind, nfq, *, compact=False, external_mass=False,
+                             shared_limit=TENSOR_SHARED_MEMORY_LIMIT):
     """Return the largest volume point count NQ that fits at batch width 1 (0 if none)."""
     def fits(nq):
         """Return whether ``nq`` volume points fit at batch width 1."""
-        return tensor_shared_bytes(nel, kind, nq, nfq, 1)[1] <= TENSOR_SHARED_MEMORY_LIMIT
+        return tensor_shared_bytes(nel, kind, nq, nfq, 1, compact=compact,
+                                   external_mass=external_mass)[1] <= shared_limit
 
     if not fits(1):
         return 0
@@ -638,11 +685,12 @@ def max_tensor_volume_points(nel, kind, nfq):
     return low
 
 
-def tensor_workspace(nel, kinds, nq=0, nfq=0, *, order=None):
+def tensor_workspace(nel, kinds, nq=0, nfq=0, *, order=None, compact=False,
+                     external_mass=False, shared_limit=TENSOR_SHARED_MEMORY_LIMIT):
     """Return batch width, factor/scratch slots, and bounded shared bytes.
 
     The widest batch (at most ``TENSOR_MAX_BATCH_COLUMNS``) whose workspace
-    fits ``TENSOR_SHARED_MEMORY_LIMIT`` is chosen for the most expensive
+    fits ``shared_limit`` (48 KiB by default) is chosen for the most expensive
     diffusion kind present. When even one column does not fit,
     ``TensorWorkspaceError`` names the order, kind, quadrature sizes and the
     largest volume rule that would fit.
@@ -651,31 +699,95 @@ def tensor_workspace(nel, kinds, nq=0, nfq=0, *, order=None):
 
     maximum = int(kinds.max()) if kinds.size else 0
     for batch in range(TENSOR_MAX_BATCH_COLUMNS, 0, -1):
-        storage, size = tensor_shared_bytes(nel, maximum, nq, nfq, batch)
-        if size <= TENSOR_SHARED_MEMORY_LIMIT:
+        storage, size = tensor_shared_bytes(nel, maximum, nq, nfq, batch,
+                                           compact=compact, external_mass=external_mass)
+        if size <= shared_limit:
             return batch, storage, size
     label = f"p={order}, " if order is not None else ""
-    largest = max_tensor_volume_points(nel, maximum, nfq)
+    largest = max_tensor_volume_points(nel, maximum, nfq, compact=compact,
+                                       external_mass=external_mass, shared_limit=shared_limit)
     remedy = (f"at most NQ={largest} volume points fit with NFQ={nfq}" if largest
               else f"no volume rule fits with NFQ={nfq}")
     raise TensorWorkspaceError(
         f"raw-CUDA tensor ADR workspace for {label}NEL={nel}, diffusion kind {maximum} "
         f"({DIFFUSION_KINDS[maximum]}), NQ={nq} volume and NFQ={nfq} face quadrature points "
         f"needs {size:,} B of shared memory with one batch column, above the "
-        f"{TENSOR_SHARED_MEMORY_LIMIT:,} B limit; {remedy}. Reduce volume_quad_1d or "
+        f"{shared_limit:,} B limit; {remedy}. Reduce volume_quad_1d or "
         "edge_quad_1d, use the default volume rule, or select assembly_backend='numba'.")
 
 
+@dataclass(frozen=True)
+class TensorExecutionWorkspace:
+    """Element workspace chosen before uploads, compilation, or kernel launches."""
+
+    batch: int
+    storage: int
+    shared_bytes: int
+    compact: bool = False
+    external_mass: bool = False
+
+
+def tensor_execution_workspace(nel, kinds, nq, nfq, *, order, shared_limit):
+    """Keep p<=6's layout; compact higher orders and spill only the mass if needed.
+
+    The mass remains in shared memory whenever one batch column fits. External
+    factors use an explicitly requested persistent cache or bounded scratch;
+    they never silently create a persistent cache for ``cache_local_factors=none``.
+    """
+    if order <= 6:
+        return TensorExecutionWorkspace(*tensor_workspace(
+            nel, kinds, nq, nfq, order=order,
+            shared_limit=min(shared_limit, TENSOR_SHARED_MEMORY_LIMIT)))
+    try:
+        layout = tensor_workspace(nel, kinds, nq, nfq, order=order, compact=True,
+                                  shared_limit=shared_limit)
+        return TensorExecutionWorkspace(*layout, compact=True)
+    except TensorWorkspaceError:
+        layout = tensor_workspace(nel, kinds, nq, nfq, order=order, compact=True,
+                                  external_mass=True, shared_limit=shared_limit)
+        return TensorExecutionWorkspace(*layout, compact=True, external_mass=True)
+
+
+def _tensor_launch_storage(cp, kernel, *, elements, workspace, mass_stride):
+    """Allocate bounded temporary mass storage and opt in before kernel timing."""
+    if workspace.shared_bytes > TENSOR_SHARED_MEMORY_LIMIT:
+        kernel.max_dynamic_shared_size_bytes = workspace.shared_bytes
+    needs_scratch = workspace.external_mass and not mass_stride
+    bytes_per_element = REAL_ITEMSIZE * workspace.storage
+    chunk = max(1, min(elements, TENSOR_MASS_SCRATCH_LIMIT // bytes_per_element)) if needs_scratch else max(1, elements)
+    scratch = cp.empty((chunk, workspace.storage) if needs_scratch else 1, dtype=REAL_DTYPE)
+    return scratch, chunk, (scratch.nbytes if needs_scratch else 0)
+
+
+def _launch_tensor_kernel(kernel, args, *, elements, block_size, workspace,
+                          scratch, chunk, suffix=()):
+    """Launch chunks, reusing scratch in stream order without retaining it.
+
+    The caller holds the temporary allocation through synchronization. Requested
+    persistent mass caches are used in place and need only one launch. Return
+    the number of launches for reporting.
+    """
+    launches = 0
+    for offset in range(0, elements, chunk):
+        kernel((min(chunk, elements-offset),), (block_size,),
+               (*args, scratch, np.int64(offset), *suffix), shared_mem=workspace.shared_bytes)
+        launches += 1
+    return launches
+
+
 def kernel_source(nel, ntr, nq, nfq, orientation, matrix_format, batch, storage, *,
-                  reconstruct=False, cached_factors=False, mass_stride=0, reuse_mass=False):
+                  reconstruct=False, cached_factors=False, mass_stride=0, reuse_mass=False,
+                  compact=False, external_mass=False, cooperative_only=False):
     """Build a shape-specialized kernel using diffusion's shared local helpers.
 
     ``cached_factors`` makes assembly write the per-element Schur LU cache and
     makes reconstruction read it instead of refactoring. ``mass_stride > 0``
     does the same for the factored variable-tensor mass (reals per element);
     ``reuse_mass`` makes assembly read that mass cache as well, for repeated
-    assemblies with an unchanged diffusion tensor. The source is written in double; ``real_raw_module`` specializes it to the
-    selected precision.
+    assemblies with an unchanged diffusion tensor. ``cooperative_only`` omits
+    serial fallback arrays from cooperative p>6 kernels; block-size-1 diagnostics
+    keep them. The source is written in double; ``real_raw_module`` specializes
+    it to the selected precision.
     """
     # Register blocking of the scalar quadrature: 4 column blocks per row.
     quad_cols = (nel + 3) // 4
@@ -683,6 +795,8 @@ def kernel_source(nel, ntr, nq, nfq, orientation, matrix_format, batch, storage,
                    QUAD_COLS=quad_cols, QUAD_COL_BLOCKS=(nel + quad_cols - 1) // quad_cols,
                    TRACE_ORIENTATION_MODE=orientation, RAW_BATCH_COLS=batch,
                    FACTOR_STORAGE=storage, COEF_STORAGE=coefficient_storage(nq, nfq, batch, nel),
+                   RAW_COMPACT_COUPLING=int(compact), RAW_EXTERNAL_MASS=int(external_mass),
+                   RAW_COOPERATIVE_ONLY=int(cooperative_only),
                    RAW_MATRIX_CSR=int(matrix_format!='coo'),
                    RAW_MATRIX_BSR=int(matrix_format=='bsr'), RAW_RECONSTRUCT=int(reconstruct),
                    RAW_WRITE_FACTORS=int(cached_factors and not reconstruct),
@@ -769,8 +883,15 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     xp_tau = cp.get_array_module(tau_d)
     if not bool(xp_tau.isfinite(tau_d).all()) or bool((tau_d <= 0).any()):
         raise ValueError('diffusion stabilization must be finite and strictly positive')
-    batch, storage, shared_bytes = tensor_workspace(nel, tensor.kinds, q.Krf_w.size, trace_space.weights.size,
-                                                    order=space.order)
+    shared_limit = TENSOR_SHARED_MEMORY_LIMIT
+    if space.order > 6:
+        from hybridge.hdg.cuda.tuning import device_signature
+        device = device_signature(cp)
+        shared_limit = int(device.get('sharedMemPerBlockOptin') or device.get('sharedMemPerBlock')
+                           or TENSOR_SHARED_MEMORY_LIMIT)
+    workspace = tensor_execution_workspace(nel, tensor.kinds, q.Krf_w.size, trace_space.weights.size,
+                                            order=space.order, shared_limit=shared_limit)
+    batch, storage, shared_bytes = workspace.batch, workspace.storage, workspace.shared_bytes
     upload_start = time.perf_counter()
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(trace_space)
@@ -847,7 +968,9 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
     jit_start = time.perf_counter()
     code = kernel_source(nel, ntr, q.Krf_w.size, trace_space.weights.size,
                          _trace_orientation_mode(trace_space), matrix_format, batch, storage,
-                         cached_factors=cached, mass_stride=mass_stride, reuse_mass=reuse_mass)
+                         cached_factors=cached, mass_stride=mass_stride, reuse_mass=reuse_mass,
+                         compact=workspace.compact, external_mass=workspace.external_mass,
+                         cooperative_only=space.order > 6 and block_size != 1)
     module = real_raw_module(code=code, options=('--std=c++11',))
     kernel = module.get_function('assemble_adr_tensor')
     timings['raw.kernel.jit'] = time.perf_counter() - jit_start
@@ -855,10 +978,16 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
             cspace.mesh.loc2glob_edge, cspace.mesh.orientations, sides, edge_map,
             *inputs, boundary, kinds, constants, inverse, np.int32(tensor.constants.shape[0]),
             schur_cache, pivot_cache, mass_cache, mass_pivot_cache, statuses)
+    workspace_start = time.perf_counter()
+    scratch, chunk, scratch_bytes = _tensor_launch_storage(
+        cp, kernel, elements=mesh.num_tri, workspace=workspace, mass_stride=mass_stride)
+    timings['raw.workspace'] = time.perf_counter() - workspace_start
     begin, end = cp.cuda.Event(), cp.cuda.Event()
     launch_start = time.perf_counter()
     begin.record()
-    kernel((mesh.num_tri,), (block_size,), args, shared_mem=shared_bytes)
+    launches = _launch_tensor_kernel(kernel, args, elements=mesh.num_tri,
+                                    block_size=block_size, workspace=workspace,
+                                    scratch=scratch, chunk=chunk)
     end.record()
     end.synchronize()
     timings['raw.kernel.wall'] = time.perf_counter() - launch_start
@@ -872,6 +1001,10 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
         raise np.linalg.LinAlgError(f'ADR {stage} factorization/finite-value failure in element {element} (status {code})')
     timings['raw.validation'] = time.perf_counter() - check_start
     timings.update({'raw.block_size': float(block_size), 'raw.shared_bytes': float(shared_bytes),
+                    'raw.shared_limit': float(shared_limit),
+                    'raw.compact_coupling': float(workspace.compact),
+                    'raw.external_mass': float(workspace.external_mass),
+                    'raw.mass_scratch_bytes': float(scratch_bytes), 'raw.launches': float(launches),
                     'raw.batch_columns': float(batch), 'raw.conversion': 0., 'raw.coo_to_csr.wall': 0.,
                     'raw.local_factor_bytes': float(sum(array.nbytes for array in (
                         schur_cache, pivot_cache, mass_cache, mass_pivot_cache) if array.size > 1))})
@@ -889,6 +1022,8 @@ def assemble_tensor_operator(prepared, boundary_condition, space, *, diffusion,
                                    nq=q.Krf_w.size, nfq=trace_space.weights.size,
                                    orientation=_trace_orientation_mode(trace_space),
                                    batch=batch, storage=storage, shared_bytes=shared_bytes,
+                                   compact=workspace.compact, external_mass=workspace.external_mass,
+                                   workspace=workspace,
                                    cached_factors=cached, mass_stride=mass_stride))
 
 
@@ -911,23 +1046,33 @@ def reconstruct_tensor_operator(operator, trace, *, block_size="auto"):
         raise ValueError("reconstruction requires the full trace, including boundary coefficients")
     if not bool(cp.all(cp.isfinite(trace))):
         raise ValueError("reconstruction trace must be finite")
-    block_size=resolve_raw_cuda_block_size(block_size,equation="diffusion-reaction",order=space.order)
+    block_size=resolve_raw_cuda_block_size(block_size,equation="advection-diffusion-reaction",order=space.order)
     shape={key:local[key] for key in ('nel','ntr','nq','nfq','orientation','batch','storage',
-                                      'cached_factors','mass_stride')}
+                                      'cached_factors','mass_stride','compact','external_mass')}
     start=time.perf_counter()
-    module=real_raw_module(code=kernel_source(**shape,matrix_format='csr',reconstruct=True),options=('--std=c++11',))
+    module=real_raw_module(code=kernel_source(**shape,matrix_format='csr',reconstruct=True,
+        cooperative_only=space.order > 6 and block_size != 1),options=('--std=c++11',))
     kernel=module.get_function('reconstruct_adr_tensor')
     timings={'raw.reconstruction.jit':time.perf_counter()-start}
     unknowns=cp.empty((space.mesh.num_tri,3*space.el_dof),dtype=REAL_DTYPE)
     statuses=cp.zeros(space.mesh.num_tri,dtype=cp.int32)
+    workspace_start=time.perf_counter()
+    scratch, chunk, scratch_bytes = _tensor_launch_storage(
+        cp, kernel, elements=space.mesh.num_tri, workspace=local['workspace'], mass_stride=local['mass_stride'])
+    timings['raw.reconstruction.workspace']=time.perf_counter()-workspace_start
     begin,end=cp.cuda.Event(),cp.cuda.Event()
     start=time.perf_counter()
     begin.record()
-    kernel((space.mesh.num_tri,),(block_size,),(*local['args'],statuses,trace,unknowns),shared_mem=local['shared_bytes'])
+    launches = _launch_tensor_kernel(
+        kernel, (*local['args'], statuses), elements=space.mesh.num_tri,
+        block_size=block_size, workspace=local['workspace'], scratch=scratch, chunk=chunk,
+        suffix=(trace, unknowns))
     end.record()
     end.synchronize()
     timings['raw.reconstruction.wall']=time.perf_counter()-start
     timings['raw.reconstruction.cached_factors']=float(bool(local['cached_factors']))
+    timings['raw.reconstruction.mass_scratch_bytes']=float(scratch_bytes)
+    timings['raw.reconstruction.launches']=float(launches)
     timings['raw.reconstruction.device']=cp.cuda.get_elapsed_time(begin,end)/1000.
     if bool(cp.any(statuses)):
         failures=cp.asnumpy(statuses)

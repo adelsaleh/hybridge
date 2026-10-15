@@ -253,7 +253,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         reconstruction_residency="device (optional host materialization)",
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
-        notes="Elliptic tensor diffusion with cooperative p=0--6 assembly/reconstruction, direct CSR/face BSR and device AMGX; variable scalar/tensor primal and both total-flux recoveries use Numba or CuPy. CuPy primal assembly is fused CUDA; materialize_host_solution controls result downloads.",
+        notes="Elliptic tensor diffusion with cooperative p=0--9 assembly/reconstruction, direct COO/CSR/face BSR and device AMGX; p=8 native BSR needs an explicit compatible preconditioner (current AMGX DILU lacks 9x9 blocks). Variable scalar/tensor primal and both total-flux recoveries use Numba or CuPy, qualified separately through p=6. CuPy primal assembly is fused CUDA; materialize_host_solution controls result downloads.",
     ),
     _assembly_capability(
         "diffusion-reaction",

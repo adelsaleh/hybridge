@@ -44,7 +44,7 @@ def tau_law(x, y, *, element, local_face, normal, t=None):
     return 2. + .05*x + .03*y + .1*element + .02*local_face + .01*normal[..., 0]
 
 
-@pytest.mark.parametrize('order', range(7))
+@pytest.mark.parametrize('order', range(10))
 @pytest.mark.parametrize('basis', ['legacy-lagrange', 'legendre-modal'])
 @pytest.mark.parametrize('diffusion,kind', diffusion_cases())
 def test_tensor_assembly_all_shapes(cp, order, basis, diffusion, kind):
@@ -72,7 +72,7 @@ def test_tensor_assembly_all_shapes(cp, order, basis, diffusion, kind):
         np.testing.assert_allclose(dense_device(cp, actual), expected, rtol=2e-10, atol=3e-10)
         np.testing.assert_allclose(cp.asnumpy(actual.rhs), numpy.rhs, rtol=2e-10, atol=3e-10)
         assert operator.diffusion_structure[kind] == mesh.num_tri
-        assert actual.timings['raw.shared_bytes'] <= 48*1024
+        assert actual.timings['raw.shared_bytes'] <= actual.timings['raw.shared_limit']
         assert actual.timings['raw.batch_columns'] <= 8
         assert actual.timings['raw.conversion'] == 0
         if fmt != 'coo':
@@ -158,8 +158,8 @@ def test_resource_and_coefficient_preflight(cp):
     for kwargs in ({'matrix_format':'csc'},{'block_size':256}):
         with pytest.raises(ValueError):
             assemble_projected_adr_trace_operator_raw_cuda(prep,0.,space,trace_space=trace,**kwargs)
-    high=DGSpace(space.mesh,7)
-    with pytest.raises(ValueError,match='p=0--6'):
+    high=DGSpace(space.mesh,10)
+    with pytest.raises(ValueError,match='p=0--9'):
         assemble_projected_adr_trace_operator_raw_cuda(prep,0.,high,trace_space=high.trace_space('legacy-lagrange'))
 
 
