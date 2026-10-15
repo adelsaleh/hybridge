@@ -507,3 +507,75 @@ def transport_velocity_diagnostics(
     result = _diagnostic_scalars(pending, xp)
     result["velocity_diagnostics_backend"] = "cuda" if use_device else "host"
     return result
+
+
+def boundary_upwind_outflux(
+        velocity: VectorDGField,
+        density: DGField,
+        *,
+        trace_basis: str = "legacy-lagrange",
+        groups: dict | None = None,
+        backend: Literal["auto", "host", "device"] = "auto",
+) -> dict[str, float]:
+    r"""Wall outflux of an upwind HDG transport whose boundary trace is eliminated to zero.
+
+    With :math:`\widehat\rho_h = 0` on the wall and the upwind weight
+    :math:`\tau = |\beta\cdot n|`, the boundary flux is
+    :math:`\beta\cdot n\,\widehat\rho_h + \tau(\rho_h - \widehat\rho_h) = |\beta\cdot n|\,\rho_h`
+    on outflow and inflow faces alike (on inflow faces it imposes the zero
+    data weakly). Its integral, with the trace quadrature of the transport
+    solve, is the boundary term of the discrete mass balance:
+    ``outflux`` = :math:`\oint|\beta\cdot n|\rho_h`. ``outflow`` is the part
+    with :math:`\beta\cdot n > 0`. Pass the velocity of the solve (a stage
+    coefficient ``beta = c v`` scales every value by ``c``).
+
+    ``groups`` maps names to predicates ``f(x, y) -> bool`` of the face
+    midpoints (e.g. the inner and outer wall of an annulus); each adds
+    ``outflux_<name>`` and ``outflow_<name>``. Device fields stay resident;
+    only the scalar reductions are copied to the host.
+    """
+    if not isinstance(velocity, VectorDGField) or len(velocity.components) != 2:
+        raise TypeError("velocity must be a two-component VectorDGField")
+    space = density.space
+    if any(component.space.mesh is not space.mesh or component.space.order != space.order
+           for component in velocity.components):
+        raise ValueError("velocity and density must share the mesh and the polynomial order")
+    normalized = str(backend).lower()
+    if normalized not in {"auto", "host", "device"}:
+        raise ValueError("backend must be 'auto', 'host', or 'device'")
+    fields = (*velocity.components, density)
+    use_device = normalized == "device" or (
+        normalized == "auto" and any(field.device_coefficients_materialized() for field in fields))
+    if use_device:
+        from hybridge.core.device import as_cupy_coefficients, as_cupy_space
+        from hybridge.runtime.optional import require_cupy
+
+        xp = require_cupy()
+        cspace = as_cupy_space(space)
+        mesh = cspace.mesh
+        coefficients = [as_cupy_coefficients(field, cspace) for field in fields]
+    else:
+        xp = np
+        mesh = space.mesh
+        coefficients = [field.coeffs for field in fields]
+    trace = space.trace_space(trace_basis)
+    t = trace.quads
+    ones = np.ones_like(t)
+    points = np.stack((np.stack((t, -ones), axis=1),
+                       np.stack((-t, t), axis=1),
+                       np.stack((-ones, -t), axis=1)))
+    face_basis = xp.asarray(space.basis_at(points.reshape(-1, 2)).reshape(3, t.size, -1))
+    vx, vy, rho = (xp.einsum("ki,fqi->kfq", coeff, face_basis) for coeff in coefficients)
+    normal = vx * mesh.normals[:, :, 0, None] + vy * mesh.normals[:, :, 1, None]
+    weights = xp.where(mesh.interior_face_mask[:, :, None], 0.0,
+                       mesh.jacs_el_fc[:, :, None] * xp.asarray(trace.weights))
+    outflux = weights * xp.abs(normal) * rho
+    outflow = weights * xp.maximum(normal, 0.0) * rho
+    pending = {"outflux": xp.sum(outflux), "outflow": xp.sum(outflow)}
+    if groups:
+        midpoints = space.mesh.map_reference_points(np.array([[0.0, -1.0], [0.0, 0.0], [-1.0, 0.0]]))
+        for name, predicate in groups.items():
+            mask = xp.asarray(np.asarray(predicate(midpoints[..., 0], midpoints[..., 1]), dtype=bool))
+            pending[f"outflux_{name}"] = xp.sum(outflux * mask[:, :, None])
+            pending[f"outflow_{name}"] = xp.sum(outflow * mask[:, :, None])
+    return _diagnostic_scalars(pending, xp)

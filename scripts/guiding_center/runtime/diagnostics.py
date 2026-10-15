@@ -39,6 +39,72 @@ def _forced_mass_balance(case, mass: float, baseline_mass: float, time_value: fl
             "mass_balance_relative_error": (mass - expected) / expected if expected else None}
 
 
+class WallChargeBalance:
+    """Wall outflux through an open, zero-inflow boundary and the discrete charge balance.
+
+    With one transport solve per step (SI-Euler, SI-BDF2, SI-BDF3), velocity beta = s v
+    and the forcing taken at t^{n+1}, testing the solve with 1 gives
+
+        M^{n+1} - H^n = s (int S_h + int alpha_h rho^{n+1} - I^{n+1}),
+
+    H^n = M^n (Euler and the BDF2 start-up), (4 M^n - M^{n-1})/3 (BDF2) or
+    (18 M^n - 9 M^{n-1} + 2 M^{n-2})/11 (BDF3, after its SI-BDF2 second step; its
+    Richardson SI-Euler first step combines three solves and has no such identity), and
+    I = oint |v.n| rho_h the wall outflux of the eliminated upwind traces
+    (:func:`hybridge.diagnostics.guiding_center.boundary_upwind_outflux`).
+    ``charge_balance_defect`` is the left side minus the right side; it is
+    round-off when every step is recorded. On an annulus the outflux is also
+    split between the inner and the outer wall.
+    """
+
+    def __init__(self, case, scheme: str, trace_basis: str):
+        geometry = case.parameters.get("geometry") or {}
+        inner, outer = geometry.get("inner_radius"), geometry.get("outer_radius")
+        self.groups = None
+        if inner and outer:
+            middle = (0.5 * (float(inner) + float(outer))) ** 2
+            self.groups = {"inner": lambda x, y: x * x + y * y < middle,
+                           "outer": lambda x, y: x * x + y * y >= middle}
+        self.scheme = str(scheme)
+        self.exact = self.scheme in {"si-euler", "si-bdf2", "si-bdf3"}
+        self.trace_basis = trace_basis
+        self.masses: dict[int, float] = {}
+
+    def flux(self, beta, density, scale: float) -> dict[str, float]:
+        """Physical wall outflux (per unit time) of the step's transport solve."""
+        from hybridge.diagnostics.guiding_center import boundary_upwind_outflux
+
+        values = boundary_upwind_outflux(beta, density, trace_basis=self.trace_basis, groups=self.groups)
+        return {f"wall_{key}": value / float(scale) for key, value in values.items()}
+
+    def balance(self, step: int, row: dict[str, Any]) -> dict[str, Any]:
+        """Record M^{step}; return the defect of the discrete charge balance when its history is complete."""
+        step, mass = int(step), float(row["mass"])
+        self.masses[step] = mass
+        for old in [key for key in self.masses if key < step - 3]:
+            self.masses.pop(old)
+        if step == 0 or not self.exact or step - 1 not in self.masses:
+            return {}
+        masses = [self.masses.get(step - k) for k in (1, 2, 3)]
+        if self.scheme == "si-bdf3":
+            method = row.get("bdf3_startup_method")
+            if method == "si-euler-extrap2":
+                return {}
+            order = 2 if method == "si-bdf2" else 3
+        else:
+            order = 1 if self.scheme == "si-euler" or step == 1 or row.get("bdf2_startup", False) else 2
+        weights = {1: (1.0,), 2: (4.0 / 3.0, -1.0 / 3.0), 3: (18.0 / 11.0, -9.0 / 11.0, 2.0 / 11.0)}[order]
+        if any(mass is None for mass in masses[:order]):
+            return {}
+        history = sum(weight * mass for weight, mass in zip(weights, masses))
+        scale = float(row["transport_beta_scale"])
+        production = (float(row.get("source_production") or 0.0) + float(row.get("reaction_production") or 0.0)
+                      - float(row["wall_outflux"]))
+        defect = mass - history - scale * production
+        return {"charge_balance_defect": defect,
+                "charge_balance_relative_defect": defect / max(abs(mass), 1.0e-300)}
+
+
 def _compute_diagnostics(
         *,
         case,

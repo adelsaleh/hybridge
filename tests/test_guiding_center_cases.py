@@ -124,6 +124,7 @@ def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_
         "diocotron_gaussian_annulus", "diocotron_k", "euler_vortex_gas",
         "positive_turbulence", "euler_star_vortex_gas", "euler_shaped_vortex_gas",
         "spiral_sheet", "rho_helm_wave", "orbiting_vortex", "diocotron_annulus",
+        "magnetron",
     )
 
 

@@ -14,6 +14,7 @@ from hybridge.runtime.precision import REAL_DTYPE, PRECISION
 from dataclasses import dataclass, field
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -1110,6 +1111,253 @@ def gmsh_annulus_mesh(
         },
         num_threads=num_threads,
         log_cache=log_cache,
+    )
+
+
+def vane_anode_corners(
+        *, anode_radius: float, vanes: int, vane_fraction: float, vane_width: float | None = None,
+) -> np.ndarray:
+    """Vane-tip corners (2 per vane) of :func:`gmsh_vane_anode_mesh`, re-entrant domain corners.
+
+    Radial vanes (``vane_width=None``) give 270-degree corners at the tip angles ``+-pi*vane_fraction/vanes``.
+    Parallel-sided vanes of width ``w`` give corners at ``+-asin(w/(2*anode_radius))``, with domain angle
+    270 degrees plus that angle.
+    """
+    if vane_width is None:
+        half = math.pi * float(vane_fraction) / int(vanes)
+    else:
+        half = math.asin(float(vane_width) / (2.0 * float(anode_radius)))
+    angles = np.array([2.0 * math.pi * k / int(vanes) + side * half for k in range(int(vanes)) for side in (-1, 1)])
+    return float(anode_radius) * np.stack((np.cos(angles), np.sin(angles)), axis=1)
+
+
+def vane_tip_fillets(*, anode_radius: float, vanes: int, vane_width: float, tip_radius: float) -> np.ndarray:
+    """Centres of the tip fillets of parallel-sided vanes (2 per vane, ordered as :func:`vane_anode_corners`).
+
+    Each re-entrant tip corner of :func:`gmsh_vane_anode_mesh` is rounded by the circle of radius
+    ``tip_radius`` tangent to the vane side and to the tip arc ``r = anode_radius``; its centre lies
+    inside the vane at distance ``anode_radius + tip_radius`` from the origin.
+    """
+    ra, width, radius = float(anode_radius), float(vane_width), float(tip_radius)
+    if not 0.0 < radius < 0.5 * width:
+        raise ValueError("tip_radius must lie in (0, vane_width/2)")
+    centres = []
+    for k in range(int(vanes)):
+        angle = 2.0 * math.pi * k / int(vanes)
+        cos, sin = math.cos(angle), math.sin(angle)
+        for side in (-1.0, 1.0):
+            y = side * (0.5 * width - radius)
+            x = math.sqrt((ra + radius) ** 2 - y * y)
+            centres.append((cos * x - sin * y, sin * x + cos * y))
+    return np.asarray(centres)
+
+
+def _vane_tip_fillet_piece(occ, anode_radius: float, width: float, radius: float, side: float):
+    """OCC surface (vane-local frame, vane axis along +x) of the part of the vane that a tip fillet removes.
+
+    A pentagon around the corner (centre, tangent point on the tip arc, two points outside the vane,
+    then back along the diameter through the tangent point on the side) minus the fillet disk.
+    """
+    ra = float(anode_radius)
+    y = side * (0.5 * width - radius)
+    x = math.sqrt((ra + radius) ** 2 - y * y)
+    on_arc = np.array([x, y]) * ra / math.hypot(x, y)
+    margin = 0.5 * radius
+    corner_x = math.sqrt(ra * ra - 0.25 * width * width)
+    outline = [(x, y), tuple(on_arc), tuple(on_arc * (1.0 - margin / ra)),
+               (corner_x - margin, side * (0.5 * width + margin)), (x, side * (0.5 * width + margin))]
+    points = [occ.addPoint(px, py, 0.0) for px, py in outline]
+    lines = [occ.addLine(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
+    polygon = occ.addPlaneSurface([occ.addCurveLoop(lines)])
+    piece, _ = occ.cut([(2, polygon)], [(2, occ.addDisk(x, y, 0.0, radius, radius))])
+    return piece
+
+
+def gmsh_vane_anode_mesh(
+        mesh_size: float,
+        *,
+        cathode_radius: float = 0.5,
+        anode_radius: float = 1.0,
+        back_radius: float = 1.35,
+        vanes: int = 12,
+        vane_fraction: float = 0.5,
+        vane_width: float | None = None,
+        tip_radius: float | None = None,
+        band: tuple[float, float] | None = None,
+        band_mesh_size: float | None = None,
+        band_grading: float = 0.25,
+        corner_mesh_size: float | None = None,
+        corner_grading: float = 0.3,
+        cathode_mesh_size: float | None = None,
+        cathode_grading: float = 0.3,
+        curvature_points: int | None = None,
+        anode_mesh_size: float | None = None,
+        anode_grading: float = 0.3,
+        verbosity: int = 0,
+        algorithm: int | None = None,
+        write_path: str | None = None,
+        cache: bool = True,
+        cache_dir: str | os.PathLike[str] | None = None,
+        num_threads: int | None = None,
+        log_cache: bool = True,
+) -> DGMesh:
+    """Mesh the interaction space and slots of a vane-type magnetron.
+
+    The domain is the annulus ``cathode_radius < r < back_radius`` minus
+    ``vanes`` radial vanes ``anode_radius <= r <= back_radius`` centred at
+    ``theta_k = 2 pi k / vanes``, each covering ``vane_fraction`` of the angular
+    pitch: a circular cathode, vane tips (arcs at ``anode_radius``), vane sides
+    (radial segments) and slot back walls (arcs at ``back_radius``). The vane
+    tips have two re-entrant 270-degree corners each
+    (:func:`vane_anode_corners`). Sizes: ``mesh_size`` far away;
+    ``band_mesh_size`` on the radial band ``band``, growing by ``band_grading``
+    per unit distance; ``corner_mesh_size`` at the corners, growing by
+    ``corner_grading``; the smallest applies.
+
+    ``vane_width``: parallel-sided vanes of constant width (the shape of real
+    vane anodes) instead of radial wedges; ``vane_fraction`` is then unused.
+    The vane sides are no longer radial, so no polar grid fits the domain, and
+    the tip corners open to 270 degrees plus ``asin(vane_width/(2*anode_radius))``.
+    ``None`` (default) keeps the radial vanes and their mesh cache keys.
+
+    ``tip_radius`` (parallel-sided vanes only): round the two tip corners of every vane by the
+    circle of that radius tangent to the vane side and the tip arc (:func:`vane_tip_fillets`), as in
+    real anodes, so the domain has no re-entrant corner. ``corner_mesh_size`` then grades towards
+    the fillet arcs. ``None`` (default) keeps the sharp tips and their mesh cache keys.
+
+    ``cathode_mesh_size``: size at the cathode, growing by ``cathode_grading`` per unit distance from
+    it, e.g. to resolve the diffusive layer that a time-dependent cathode condition opens.
+    ``None`` (default) keeps the mesh and its cache keys.
+
+    ``curvature_points``: also bound the size on the curved walls (cathode, tip arcs, slot back
+    walls) by 2 pi R / curvature_points (Gmsh ``Mesh.MeshSizeFromCurvature``), so that the chords of
+    the affine mesh stay close to the arcs (sagitta ~ h^2 / 8R) without refining the interior.
+
+    ``anode_mesh_size``: size on every anode wall (vane sides and tips, slot back walls), growing by
+    ``anode_grading`` per unit distance (Gmsh Distance field on those curves), e.g. for the outflow
+    layers of thickness ~D/|u.n| where the charge reaches an absorbing anode.
+    """
+    rc, ra, rb = float(cathode_radius), float(anode_radius), float(back_radius)
+    count, fraction = int(vanes), float(vane_fraction)
+    if not 0.0 < rc < ra < rb or count < 2 or not 0.0 < fraction < 1.0:
+        raise ValueError("require 0 < cathode < anode < back radius, vanes >= 2 and 0 < vane_fraction < 1")
+    graded = band is not None and band_mesh_size is not None
+    if graded:
+        band = (float(band[0]), float(band[1]))
+        band_mesh_size = float(band_mesh_size)
+        if not rc <= band[0] < band[1] <= rb or not 0.0 < band_mesh_size <= float(mesh_size):
+            raise ValueError("band must lie in the domain and band_mesh_size in (0, mesh_size]")
+    width = None if vane_width is None else float(vane_width)
+    if width is not None and not (0.0 < width < 2.0 * ra
+                                  and 2.0 * math.asin(width / (2.0 * ra)) < 2.0 * math.pi / count):
+        raise ValueError("vane_width must be positive and leave a gap between neighbouring vane tips")
+    corners = vane_anode_corners(anode_radius=ra, vanes=count, vane_fraction=fraction, vane_width=width)
+    fillet = None if tip_radius is None else float(tip_radius)
+    if fillet is not None:
+        if width is None:
+            raise ValueError("tip_radius needs parallel-sided vanes (vane_width)")
+        centres = vane_tip_fillets(anode_radius=ra, vanes=count, vane_width=width, tip_radius=fillet)
+    half = math.pi * fraction / count
+
+    def build(gmsh):
+        occ = gmsh.model.occ
+        domain = [(2, occ.addDisk(0.0, 0.0, 0.0, rb, rb))]
+        domain, _ = occ.cut(domain, [(2, occ.addDisk(0.0, 0.0, 0.0, rc, rc))])
+        far = 2.0 * rb
+        wedges = []
+        for k in range(count):
+            center = 2.0 * math.pi * k / count
+            if width is None:
+                points = [occ.addPoint(0.0, 0.0, 0.0)]
+                points += [occ.addPoint(far * math.cos(angle), far * math.sin(angle), 0.0)
+                           for angle in (center - half, center + half)]
+                lines = [occ.addLine(points[i], points[(i + 1) % 3]) for i in range(3)]
+                sector = occ.addPlaneSurface([occ.addCurveLoop(lines)])
+            else:  # strip of constant width along the vane axis
+                sector = occ.addRectangle(0.0, -0.5 * width, 0.0, far, width)
+                occ.rotate([(2, sector)], 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, center)
+            ring, _ = occ.cut([(2, occ.addDisk(0.0, 0.0, 0.0, far, far))], [(2, occ.addDisk(0.0, 0.0, 0.0, ra, ra))])
+            wedge, _ = occ.intersect(ring, [(2, sector)])
+            if fillet is not None:
+                pieces = [entity for side in (-1.0, 1.0)
+                          for entity in _vane_tip_fillet_piece(occ, ra, width, fillet, side)]
+                occ.rotate(pieces, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, center)
+                wedge, _ = occ.cut(wedge, pieces)
+            wedges += wedge
+        domain, _ = occ.cut(domain, wedges)
+        terms = []
+        if graded:
+            radius = "Sqrt(x^2+y^2)"
+            distance = f"Max(0, Max({band[0]}-{radius}, {radius}-{band[1]}))"
+            terms.append(f"{band_mesh_size}+{float(band_grading)}*{distance}")
+        if cathode_mesh_size is not None:
+            terms.append(f"{float(cathode_mesh_size)}+{float(cathode_grading)}*Max(0, Sqrt(x^2+y^2)-{rc})")
+        if corner_mesh_size is not None:
+            # Fixed-point literals: the MathEval parser rejects exponent notation. Sharp tips: distance to
+            # the corners; rounded tips: distance to the fillet circles.
+            targets = corners if fillet is None else centres
+            offset = "" if fillet is None else f"-{fillet:.12f}"
+            wrap = (lambda text: text) if fillet is None else (lambda text: f"Abs({text})")
+            distances = [wrap(f"Sqrt((x-({x:.12f}))^2+(y-({y:.12f}))^2){offset}") for x, y in targets]
+            nearest = "Min(" * (len(distances) - 1) + ", ".join(
+                [distances[0]] + [f"{distance})" for distance in distances[1:]])
+            terms.append(f"{float(corner_mesh_size)}+{float(corner_grading)}*{nearest}")
+        if terms or anode_mesh_size is not None:
+            smallest = min(float(corner_mesh_size or mesh_size), float(band_mesh_size or mesh_size),
+                           float(cathode_mesh_size or mesh_size), float(anode_mesh_size or mesh_size))
+            for name, value in (("Mesh.MeshSizeMin", smallest), ("Mesh.CharacteristicLengthMin", smallest),
+                                ("Mesh.MeshSizeFromPoints", 0), ("Mesh.MeshSizeFromCurvature", int(curvature_points or 0)),
+                                ("Mesh.MeshSizeExtendFromBoundary", 0)):
+                _set_gmsh_number_option(gmsh, name, value)
+            if curvature_points:
+                _set_gmsh_number_option(gmsh, "Mesh.MeshSizeMin", 0.0)
+                _set_gmsh_number_option(gmsh, "Mesh.CharacteristicLengthMin", 0.0)
+            expression = f"{float(mesh_size)}"
+            for term in terms:
+                expression = f"Min({expression}, {term})"
+            field = gmsh.model.mesh.field.add("MathEval")
+            gmsh.model.mesh.field.setString(field, "F", expression)
+            if anode_mesh_size is not None:
+                occ.synchronize()
+                curves = gmsh.model.getBoundary([entity for entity in domain if entity[0] == 2], combined=True,
+                                                oriented=False, recursive=False)
+                anode = [abs(tag) for dim, tag in curves
+                         if math.hypot(*gmsh.model.occ.getCenterOfMass(1, abs(tag))[:2]) > rc + 1e-6]
+                distance = gmsh.model.mesh.field.add("Distance")
+                gmsh.model.mesh.field.setNumbers(distance, "CurvesList", anode)
+                gmsh.model.mesh.field.setNumber(distance, "Sampling", 400)
+                graded_anode = gmsh.model.mesh.field.add("MathEval")
+                gmsh.model.mesh.field.setString(graded_anode, "F",
+                                                f"{float(anode_mesh_size)}+{float(anode_grading)}*F{distance}")
+                smallest_field = gmsh.model.mesh.field.add("Min")
+                gmsh.model.mesh.field.setNumbers(smallest_field, "FieldsList", [field, graded_anode])
+                field = smallest_field
+            gmsh.model.mesh.field.setAsBackgroundMesh(field)
+        return [tag for dim, tag in domain if dim == 2]
+
+    key = {
+        "geometry": "vane_anode", "cathode_radius": rc, "anode_radius": ra, "back_radius": rb,
+        "vanes": count, "vane_fraction": fraction, "band": band if graded else None,
+        "band_mesh_size": band_mesh_size if graded else None,
+        "band_grading": float(band_grading) if graded else None,
+        "corner_mesh_size": None if corner_mesh_size is None else float(corner_mesh_size),
+        "corner_grading": float(corner_grading) if corner_mesh_size is not None else None,
+    }
+    if width is not None:
+        key["vane_width"] = width
+    if fillet is not None:
+        key["tip_radius"] = fillet
+    if cathode_mesh_size is not None:
+        key["cathode_mesh_size"], key["cathode_grading"] = float(cathode_mesh_size), float(cathode_grading)
+    if curvature_points:
+        key["curvature_points"] = int(curvature_points)
+    if anode_mesh_size is not None:
+        key["anode_mesh_size"], key["anode_grading"] = float(anode_mesh_size), float(anode_grading)
+    return _generate_gmsh_mesh(
+        "vane_anode", mesh_size, build,
+        verbosity=verbosity, algorithm=algorithm, write_path=write_path, cache=cache, cache_dir=cache_dir,
+        cache_key_data=key,
+        num_threads=num_threads, log_cache=log_cache,
     )
 
 
