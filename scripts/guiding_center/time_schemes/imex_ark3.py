@@ -12,13 +12,15 @@ from time import perf_counter
 import numpy as np
 
 from hybridge.core.field_ops import (
-    perpendicular_vector_field,
     solution_field,
     solution_trace,
 )
+from hybridge.core.transfer import project_same_mesh_field
 from hybridge.hdg.gram import field_l2_norm
 from hybridge.runtime.logging import timed_call
-from scripts.guiding_center.time_schemes.stage_support import closest_trace, GuidingCenterStep
+from scripts.guiding_center.time_schemes.stage_support import (
+    closest_trace, GuidingCenterStep, transport_drift,
+)
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageRankFailure, PoissonTauRecovery,
     raise_for_poisson_rank_failure, raise_for_poisson_transport_failure,
@@ -70,6 +72,10 @@ class IMEXARK3Stepper:
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError("IMEX-ARK3 requires a finite positive dt")
         self.space, self.dt, self.time = space, float(dt), 0.
+        # Poisson may use another degree than the density (poisson_order_offset).
+        poisson_space = getattr(poisson_solver, "space", space)
+        self.poisson_space = (space if poisson_space is space or poisson_space.order == space.order
+                              else poisson_space)
         self.residual = residual
         self.density_boundary, self.potential_boundary = density_boundary, potential_boundary
         self.phase_verbosity, self.detail_verbosity = phase_verbosity, detail_verbosity
@@ -78,7 +84,7 @@ class IMEXARK3Stepper:
             max_retries=poisson_tau_max_retries, verbosity=recovery_verbosity, record=recovery_record)
         start = perf_counter()
         self.density = density.copy(name="rho_h")
-        self.potential_trace = solution_trace(poisson_result, space, reduced=False).copy()
+        self.potential_trace = solution_trace(poisson_result, self.poisson_space, reduced=False).copy()
         self.density_trace = None
         work = _ARKWork(self, poisson_solver)
         checkpoint = PoissonCheckpoint(self.density, self.potential_trace, 0., "initial state")
@@ -306,11 +312,13 @@ class _ARKWork:
         guess, guess_time = closest_trace(self.poisson_candidates, stage_time)
         def solve():
             """Solve this Poisson RHS and detach the resulting trace from solver buffers."""
-            self.solver.set_source(density)
+            # Exact embedding of DG(p) into a raised-degree Poisson space DG(q > p).
+            self.solver.set_source(density if stepper.poisson_space is stepper.space
+                                   else project_same_mesh_field(density, stepper.poisson_space))
             self.solver.set_boundary_condition(stepper.potential_boundary(stage_time))
             result = self.solver.solve(initial_guess=guess,
                 **(self.endpoint_postprocess if final else {}))
-            return result, solution_trace(result, stepper.space, reduced=False).copy()
+            return result, solution_trace(result, stepper.poisson_space, reduced=False).copy()
         result, trace = self.timed("poisson",
             f"{label} Poisson t={stage_time:.6f} guess_t={guess_time:.6f}", stepper.phase_verbosity, solve)
         self.poisson_results.append(result)
@@ -323,7 +331,7 @@ class _ARKWork:
         """Evaluate the physical residual and attach provenance on proven rank loss."""
         stepper = self.stepper
         drift = self.timed("beta", f"{checkpoint.label} drift", stepper.detail_verbosity,
-            lambda: perpendicular_vector_field(result.flux, 1, stepper.space))
+            lambda: transport_drift(result.flux, 1, stepper.space))
         try:
             rhs, trace = self.timed("residual", f"{checkpoint.label} explicit HDG residual",
                 stepper.detail_verbosity,
