@@ -60,6 +60,7 @@ def canned_field_operations(monkeypatch):
     for module in (si_euler, si_bdf2, si_bdf3, predictor_corrector, hybrid_bdf3, imex_ark3, recovery):
         for name, function in {
             'perpendicular_vector_field': perpendicular,
+            'transport_drift': lambda flux, scale, space, **kw: perpendicular(flux, scale, space),
             'solution_field': lambda result, space, **kw: result.field,
             'solution_trace': lambda result, space, **kw: result.trace,
             'field_l2_norm': lambda field: float(np.linalg.norm(field)),

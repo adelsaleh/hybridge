@@ -1,8 +1,21 @@
-"""Shared stage result and nearest-time warm-start selection."""
+"""Shared stage result, transport drift and nearest-time warm-start selection."""
 from dataclasses import dataclass
 import math
 from typing import Any
-from hybridge.core.field_ops import trace_linear_combination
+from hybridge.core.field_ops import perpendicular_vector_field, trace_linear_combination
+
+
+def transport_drift(flux, scale, space, *, name="beta_h"):
+    """Return the transport drift ``scale * flux^perp`` of a Poisson flux.
+
+    A flux of degree at most that of the density ``space`` is represented in
+    ``space`` (exact embedding: Poisson offsets 0 and -1). A raised-degree flux
+    (Poisson degree q > p) keeps its own space; the transport assembly and
+    residual contract it with cross-space drift tables at the density's
+    quadrature points, without projection (``hybridge.transport.advection_field``).
+    """
+    flux_order = flux.components[0].space.order
+    return perpendicular_vector_field(flux, scale, space if flux_order <= space.order else None, name=name)
 
 
 def closest_trace(candidates, target_time):

@@ -12,8 +12,9 @@ from tests.test_guiding_center_all_scheme_recovery import canned_field_operation
 def test_legacy_and_current_ark_build_identical_stage_problems(monkeypatch, dt, rank_retry):
     monkeypatch.setattr(legacy, 'field_linear_combination',
                         lambda space, terms, **kwargs: sum(weight*field for weight, field in terms))
-    for name in ('perpendicular_vector_field',
-                 'solution_field', 'solution_trace', 'field_l2_norm'):
+    # The current stepper builds its drift with transport_drift (canned by the fixture).
+    monkeypatch.setattr(legacy, 'perpendicular_vector_field', current.transport_drift)
+    for name in ('solution_field', 'solution_trace', 'field_l2_norm'):
         monkeypatch.setattr(legacy, name, getattr(current, name))
     outcomes, histories, poisson_histories = [], [], []
     for implementation in (current.IMEXARK3Stepper, legacy.IMEXARK3Stepper):

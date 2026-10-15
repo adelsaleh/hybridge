@@ -5,12 +5,11 @@ import math
 from time import perf_counter
 
 from hybridge.core.field_ops import (
-    perpendicular_vector_field,
     solution_field,
     solution_trace,
 )
 from .recovery import with_poisson_recovery, recovery_options, poisson_tau
-from .stage_support import GuidingCenterStep, _fixed_operator_trace_predictor
+from .stage_support import GuidingCenterStep, _fixed_operator_trace_predictor, transport_drift
 
 
 class SIEulerStepper:
@@ -50,7 +49,7 @@ class SIEulerStepper:
 
     def _transport_data(self):
         """Return the frozen-drift Euler equation and its stage metadata."""
-        return (self.density, perpendicular_vector_field(self.poisson_result.flux, self.dt, self.space),
+        return (self.density, transport_drift(self.poisson_result.flux, self.dt, self.space),
                 self.dt, "predictor", {})
 
     def _transport(self, solve_transport, source, beta, guess, scale, stage_time, stage,

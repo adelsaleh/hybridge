@@ -14,10 +14,10 @@ preserving.
 """
 from time import perf_counter
 
-from hybridge.core.field_ops import perpendicular_vector_field, trace_linear_combination
+from hybridge.core.field_ops import trace_linear_combination
 from hybridge.core.time_integration import bdf3_transport_data
 from .si_bdf2 import SIBDF2Stepper
-from .stage_support import GuidingCenterStep
+from .stage_support import GuidingCenterStep, transport_drift
 
 STARTUP_METHOD = "si-euler-extrap2"
 
@@ -33,7 +33,7 @@ def _bdf3_transport_data(space, density, flux, dt, *, previous_density=None, pre
         raise ValueError("BDF3 requires both previous density and previous flux, or neither")
     if (older_density is None) != (older_flux is None):
         raise ValueError("BDF3 requires both older density and older flux, or neither")
-    perpendicular = lambda value: None if value is None else perpendicular_vector_field(value, 1.0, space)
+    perpendicular = lambda value: None if value is None else transport_drift(value, 1.0, space)
     source, beta, scale = bdf3_transport_data(
         density, perpendicular(flux), dt,
         previous_field=previous_density, previous_velocity=perpendicular(previous_flux),
@@ -87,8 +87,8 @@ class SIBDF3Stepper(SIBDF2Stepper):
         half, endpoint = self.time + 0.5*dt, self.time + dt
         start = perf_counter()
         flux = self._drift_flux(self.poisson_result)
-        full_beta = perpendicular_vector_field(flux, dt, space)
-        half_beta = perpendicular_vector_field(flux, 0.5*dt, space)
+        full_beta = transport_drift(flux, dt, space)
+        half_beta = transport_drift(flux, 0.5*dt, space)
         beta_time = perf_counter() - start
         # Both paths start from the accepted state, so a failure in either
         # first stage belongs to the accepted Poisson checkpoint.
@@ -101,7 +101,7 @@ class SIBDF3Stepper(SIBDF2Stepper):
         half_poisson, half_potential_trace = self._stage_poisson(
             half_density, half, "SI-Euler extrap2 half step", self.potential_trace)
         start = perf_counter()
-        second_beta = perpendicular_vector_field(self._drift_flux(half_poisson), 0.5*dt, space)
+        second_beta = transport_drift(self._drift_flux(half_poisson), 0.5*dt, space)
         beta_time += perf_counter() - start
         result, path_density, path_trace = self._transport(
             solve_transport, half_density, second_beta, half_trace, 0.5*dt, endpoint,

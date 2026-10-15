@@ -419,8 +419,8 @@ def _hybrid_startup_method(config: GuidingCenterRunPreset) -> str:
 
 
 def _validate_config(config: GuidingCenterRunPreset) -> None:
-    if config.poisson_order_offset not in {-1, 0}:
-        raise ValueError("poisson_order_offset must be -1 or 0")
+    if config.poisson_order_offset < -1:
+        raise ValueError("poisson_order_offset must be -1, 0, or a raised degree > 0")
     if config.order + config.poisson_order_offset < 0:
         raise ValueError("Poisson degree must be nonnegative; reduced-order Poisson requires density order >= 1")
     if config.transport_electric_field not in {"raw", "postprocessed", "compatible"}:
@@ -429,9 +429,15 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         from scripts.guiding_center.runtime.compatible_drift import compatible_potential_source
 
         compatible_potential_source(config.compatible_potential, config.poisson_assembly_backend)
-    if config.poisson_order_offset or config.transport_electric_field == "postprocessed":
+    if config.poisson_order_offset < 0 or config.transport_electric_field == "postprocessed":
         if config.time_scheme not in {"si-bdf2", "si-bdf3"}:
             raise ValueError("reduced-order Poisson and recovered transport drift currently require si-bdf2 or si-bdf3")
+    if config.poisson_order_offset > 0:
+        # The degree-q raw flux drives DG(p) transport through cross-space drift tables.
+        if config.transport_electric_field != "raw":
+            raise ValueError("a raised Poisson degree transports with the raw LDG-H flux (transport_electric_field=raw)")
+        if config.time_scheme not in {"si-euler", "si-bdf2", "si-bdf3", "imex-ark3"}:
+            raise ValueError("a raised Poisson degree is wired for si-euler, si-bdf2, si-bdf3 and imex-ark3")
     if config.transport_electric_field == "postprocessed":
         if config.poisson_order_offset != -1:
             raise ValueError("recovered BDF drift requires poisson_order_offset=-1 to fit density DG(p)")
