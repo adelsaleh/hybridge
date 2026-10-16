@@ -572,6 +572,11 @@ def _postprocess_diffusion_solution(
     the constrained flux uses ``-grad(u_h_star)`` as the minimum-distance
     reference, which improves the unconstrained high-order modes while
     preserving the same HDG conservation constraints.
+
+    ``postprocessing_backend`` ``"cupy"`` or ``"raw-cuda"`` with ``mode="primal"`` runs the
+    primal recovery on the device (``flux_cupy.postprocess_diffusion_primal_cupy``, same local
+    problem as the host kernel) and returns a device-resident field; ``"raw-cuda"`` with
+    ``mode="flux"`` runs the device flux-only recovery.
     """
     mode = _normalize_hdg_postprocess_mode(mode)
     flux_space = _normalize_flux_postprocess_space(flux_postprocess_space)
@@ -597,6 +602,17 @@ def _postprocess_diffusion_solution(
         from hybridge.runtime.optional import require_cupy
         require_cupy().cuda.get_current_stream().synchronize()
         return None, recovered, cache
+
+    if postprocessing_backend in {"cupy", "raw-cuda"} and mode == "primal":
+        # Device primal recovery (batched CuPy local solves); the result stays on the device.
+        from hybridge.mixed.postprocess.flux_cupy import postprocess_diffusion_primal_cupy
+        from hybridge.runtime.optional import require_cupy
+        trace_ref = space.trace_space("legacy-lagrange") if trace_space is None else trace_space
+        if cache is None or cache.base_space is not space or cache.trace_space is not trace_ref:
+            cache = _new_hdg_postprocess_cache(space, trace_ref)
+        postprocessed_field = postprocess_diffusion_primal_cupy(local_unknowns, space, cache, diffusion)
+        require_cupy().cuda.get_current_stream().synchronize()
+        return postprocessed_field, None, cache
 
     local_unknowns = np.ascontiguousarray(np.asarray(local_unknowns, dtype=REAL_DTYPE))
     expected_unknowns = (space.mesh.num_tri, 3 * space.el_dof)

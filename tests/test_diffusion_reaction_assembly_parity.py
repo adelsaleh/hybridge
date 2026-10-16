@@ -936,6 +936,95 @@ def test_diffusion_modal_raw_cuda_reconstruction_matches_numpy(raw_matrix_format
 @GPU_RUNTIME_MARK
 @pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
 @pytest.mark.parametrize("order", (1, 3, 6))
+def test_diffusion_device_primal_postprocess_matches_host(trace_basis: str, order: int) -> None:
+    """The CuPy primal postprocess reproduces the host Numba kernel on the same local unknowns."""
+    import cupy as cp
+
+    from hybridge.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
+    from hybridge.mixed.postprocess.flux import _new_hdg_postprocess_cache, _postprocess_diffusion_solution
+    from hybridge.mixed.postprocess.flux_cupy import postprocess_diffusion_primal_cupy
+
+    space = DGSpace(_split_triangle_mesh(), order, basis_type="dub_orth")
+    _, _, source, boundary_condition = quadratic_poisson_case()
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
+    trace_space = space.trace_space(trace_basis)
+    expected = solve_diffusion_reaction_hdg(
+        source_h,
+        reaction_h,
+        boundary_condition,
+        space,
+        diffusion=1.0,
+        stabilization=1.3,
+        solver="direct",
+        preconditioner=None,
+        boundary_mode="eliminate",
+        assembly_backend="numba",
+        trace_basis=trace_basis,
+        hdg_postprocess="primal",
+        postprocessing_backend="numba",
+        verbose=False,
+    )
+    assert expected.postprocessed_field is not None
+    local_unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
+        expected.trace, source_h, reaction_h, 1.3, space, trace_space=trace_space,
+    )
+    for diffusion in (1.0, 2.5, np.array([[2.0, 0.3], [0.3, 1.5]])):
+        # kappa = 2.5 checks the scalar kappa^{-1} scaling and the tensor the sampled-kappa path
+        # against the host kernel on the same unknowns.
+        identity = np.isscalar(diffusion) and diffusion == 1.0
+        reference = expected.postprocessed_field if identity else _postprocess_diffusion_solution(
+            local_unknowns, expected.trace, space, 1.3, diffusion, "primal",
+            trace_space=trace_space, postprocessing_backend="numba",
+        )[0]
+        field = postprocess_diffusion_primal_cupy(
+            cp.asarray(local_unknowns, dtype=cp.float64), space,
+            _new_hdg_postprocess_cache(space, trace_space), diffusion,
+        )
+        assert not field.coefficients_materialized
+        np.testing.assert_allclose(
+            field.coeffs, reference.coeffs, rtol=1.0e-10, atol=1.0e-11,
+            err_msg=f"p={order} {trace_basis} kappa={np.ravel(diffusion).tolist()} cupy primal postprocess",
+        )
+
+
+@GPU_RUNTIME_MARK
+@pytest.mark.parametrize("path", ("pq", "inverse", "solve"))
+def test_diffusion_device_primal_postprocess_operator_paths(monkeypatch, path: str) -> None:
+    """The cached P/Q operator, the cached inverses and the per-call solves give the host result."""
+    import cupy as cp
+
+    from hybridge.mixed.numba import reconstruct_projected_diffusion_local_unknowns_numba
+    from hybridge.mixed.postprocess import flux_cupy
+    from hybridge.mixed.postprocess.flux import _new_hdg_postprocess_cache
+
+    space = DGSpace(_split_triangle_mesh(), 4, basis_type="dub_orth")
+    _, _, source, boundary_condition = quadratic_poisson_case()
+    source_h = space.project_callable(source, name="source_h")
+    reaction_h = space.zeros(name="reaction_h")
+    trace_space = space.trace_space("legacy-lagrange")
+    expected = solve_diffusion_reaction_hdg(
+        source_h, reaction_h, boundary_condition, space, diffusion=1.0, stabilization=1.3, solver="direct",
+        preconditioner=None, boundary_mode="eliminate", assembly_backend="numba", trace_basis="legacy-lagrange",
+        hdg_postprocess="primal", postprocessing_backend="numba", verbose=False,
+    )
+    local_unknowns = reconstruct_projected_diffusion_local_unknowns_numba(
+        expected.trace, source_h, reaction_h, 1.3, space, trace_space=trace_space,
+    )
+    cache = _new_hdg_postprocess_cache(space, trace_space)
+    d, count = cache.post_space.el_dof, space.mesh.num_tri
+    # P/Q takes 2 e + 1 columns per coefficient, the inverses d + 1 (fewer for p >= 2).
+    limit = {"pq": 1 << 40, "inverse": count * d * (d + 1) * 8, "solve": 0}[path]
+    monkeypatch.setattr(flux_cupy, "_primal_cache_limit", lambda _cp: limit)
+    field = flux_cupy.postprocess_diffusion_primal_cupy(cp.asarray(local_unknowns), space, cache, 1.0)
+    operator = cache._diffusion_primal_device_states[cp.cuda.runtime.getDevice()]["operator"]
+    assert (operator is None) if path == "solve" else (operator[0] == path)
+    np.testing.assert_allclose(field.coeffs, expected.postprocessed_field.coeffs, rtol=1.0e-10, atol=1.0e-11)
+
+
+@GPU_RUNTIME_MARK
+@pytest.mark.parametrize("trace_basis", ("legacy-lagrange", "legendre-modal"))
+@pytest.mark.parametrize("order", (1, 3, 6))
 def test_diffusion_raw_cuda_reconstruction_full_local_unknowns_matches_numba(trace_basis: str, order: int) -> None:
     import cupy as cp
 

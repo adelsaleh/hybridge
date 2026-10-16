@@ -108,11 +108,12 @@ backends after `solvers/capabilities` preflight validation.
 | Device pipeline | `solvers/diffusion_device` | `solvers/advection_diffusion_reaction_device` |
 | Face-dense storage | `mixed/face_dense`, `solvers/diffusion_face_dense` | – |
 | Flux postprocessing | `mixed/postprocess/flux`; CuPy RT via `flux_cupy`; raw CUDA via `rt_raw_cuda` and `flux_recovery_raw_cuda` | `mixed/postprocess/total_flux`; CuPy via `flux_cupy` |
-| Primal postprocessing | `mixed/postprocess/flux` (host Numba) | `mixed/postprocess/total_flux`; CuPy assembly via `primal_raw_cuda` |
+| Primal postprocessing | `mixed/postprocess/flux` (host Numba); device (raw-CUDA solves, or explicit `postprocessing_backend="cupy"`) via `flux_cupy.postprocess_diffusion_primal_cupy` | `mixed/postprocess/total_flux`; CuPy assembly via `primal_raw_cuda` |
 
 `mixed/postprocess/flux_recovery` holds the reference maps used by the cached
 raw-CUDA recovery. Primal recovery remains two methods: DR solves a
-Stenberg-type problem on q_h with cached κ-independent factors; ADR solves a
+Stenberg-type problem on q_h with cached κ-independent factors (on the host, or
+batched on the device for raw-CUDA solves); ADR solves a
 local mixed problem on the recovered total flux.
 
 ### Shared DR/ADR building blocks

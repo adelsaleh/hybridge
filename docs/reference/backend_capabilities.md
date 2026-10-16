@@ -76,9 +76,8 @@ is checked by `tests/test_backend_capabilities.py`.
 | diffusion-reaction | solve | numba | cupyx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | numba | amgx | host | host -> device -> host | host | eliminate | legacy-lagrange, legendre-modal | - |
 | diffusion-reaction | solve | cupy | amgx | device | device | device (optional host copy) | eliminate | legacy-lagrange, legendre-modal | Identity diffusion and scalar stabilization; HDG postprocessing may materialize reconstruction data on host. |
-| diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Pure Poisson p=0..9 with CSR or face BSR, identity diffusion, zero reaction, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data. |
-| diffusion-reaction | solve | raw-cuda | fb-hp-mg-pcg | device | device | device (flux postprocessing materializes only on request) | eliminate | legendre-modal | Native face-BSR PCG with direct p-to-zero modal multigrid for p=1..9 (kernels compiled for face block sizes 2..10; performance evidence recorded for p=4..6) and one reusable scalar-AMGX coarse hierarchy. |
-
+| diffusion-reaction | solve | raw-cuda | amgx | device | device | device (flux postprocessing materializes only on request) | eliminate | legacy-lagrange, legendre-modal | Pure Poisson p=0..9 with CSR or face BSR, identity diffusion, zero reaction, and scalar stabilization; RT_p flux postprocessing is explicit and may materialize reconstruction data; the p+1 primal postprocess runs on the device (batched CuPy local solves). |
+| diffusion-reaction | solve | raw-cuda | fb-hp-mg-pcg | device | device | device (flux postprocessing materializes only on request) | eliminate | legendre-modal | Native face-BSR PCG with direct p-to-zero modal multigrid for p=1..9 (kernels compiled for face block sizes 2..10; performance evidence recorded for p=4..6) and one reusable scalar-AMGX coarse hierarchy; the p+1 primal postprocess runs on the device. |
 <!-- END GENERATED CAPABILITY MATRIX -->
 
 ## Enforcement

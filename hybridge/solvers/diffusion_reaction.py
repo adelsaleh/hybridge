@@ -311,7 +311,12 @@ def _resolve_diffusion_postprocessing_backend(
         flux_space: FluxPostprocessSpace,
         requested: str,
 ) -> str:
-    """Resolve the host/CuPy diffusion postprocessing execution path."""
+    """Resolve the host/CuPy diffusion postprocessing execution path.
+
+    ``auto`` runs on the device the primal recovery of a raw-CUDA solve (``mode="primal"``),
+    RT_p flux recovery of a CuPy or raw-CUDA solve and the flux-only recovery of a raw-CUDA
+    solve; everything else uses the host Numba kernels.
+    """
     backend = str(requested).strip().lower().replace("_", "-")
     want_flux = mode in {"flux", "both"}
     if mode == "none":
@@ -320,8 +325,10 @@ def _resolve_diffusion_postprocessing_backend(
         backend = (
             assembly_backend
             if assembly_backend in {"cupy", "raw-cuda"}
-            and want_flux
-            and (flux_space == "RT_projection" or (assembly_backend == "raw-cuda" and mode == "flux"))
+            and (
+                (want_flux and (flux_space == "RT_projection" or (assembly_backend == "raw-cuda" and mode == "flux")))
+                or (assembly_backend == "raw-cuda" and mode == "primal")
+            )
             else "numba"
         )
     if backend not in {"numba", "cupy", "raw-cuda"}:
@@ -329,23 +336,36 @@ def _resolve_diffusion_postprocessing_backend(
             "postprocessing_backend must be 'auto', 'numba', 'cupy', or 'raw-cuda'"
         )
     if backend in {"cupy", "raw-cuda"} and not (
-        want_flux and (flux_space == "RT_projection" or (backend == "raw-cuda" and mode == "flux"))
+        mode == "primal"
+        or (want_flux and (flux_space == "RT_projection" or (backend == "raw-cuda" and mode == "flux")))
     ):
         raise NotImplementedError(
-            f"postprocessing_backend={backend!r} supports only flux "
+            f"postprocessing_backend={backend!r} supports primal postprocessing, flux "
             "postprocessing with flux_postprocess_space='RT_projection', "
             "or flux-only l2_closest with raw-cuda"
         )
     return backend
 
 
+def _new_primal_info(cache, before) -> dict[str, float] | None:
+    """The device primal recovery's info record on ``cache`` if the last call made a new one."""
+    info = getattr(cache, "_diffusion_primal_info", None)
+    return info if info is not None and info is not before else None
+
+
 def _reported_diffusion_postprocessing_backend(
         backend: str,
         mode: HDGPostprocessMode,
 ) -> str:
-    """Report mixed CuPy flux and host-Numba primal recovery explicitly."""
+    """Report mixed CuPy flux and host-Numba primal recovery explicitly.
+
+    A device primal recovery is reported as ``cupy`` (batched CuPy local solves) for both device
+    backends.
+    """
     if backend == "cupy" and mode == "both":
         return "cupy+numba"
+    if backend in {"cupy", "raw-cuda"} and mode == "primal":
+        return "cupy"
     return backend
 
 
@@ -357,14 +377,16 @@ def _result_with_hdg_postprocessing(
         flux_postprocess_space: str,
         postprocessing_backend: str,
         elapsed: float,
+        details: dict[str, float] | None = None,
 ) -> DiffusionReactionResult:
-    """Return ``result`` with optional post-processed fields attached."""
+    """Return ``result`` with optional post-processed fields attached (``details`` join the timing details)."""
     if postprocessed_field is None and postprocessed_flux is None:
         return result
     timings = replace(
         result.timings,
         postprocessing=result.timings.postprocessing + elapsed,
         total=result.timings.total + elapsed,
+        details={**(result.timings.details or {}), **(details or {})},
     )
     result_values = {field.name: getattr(result, field.name) for field in fields(DiffusionReactionResult)}
     result_values["timings"] = timings
@@ -372,8 +394,10 @@ def _result_with_hdg_postprocessing(
     result_values["postprocessed_flux"] = postprocessed_flux
     result_values["flux_postprocess_space"] = flux_postprocess_space
     result_values["postprocessing_backend"] = postprocessing_backend
-    if postprocessing_backend == "raw-cuda":
-        # Recovery has consumed these transient reconstruction buffers. Keep
+    if postprocessing_backend == "raw-cuda" or (
+            postprocessing_backend == "cupy" and result.assembly_backend == "raw-cuda"):
+        # Recovery (raw-CUDA flux or device primal of a raw-CUDA solve) has consumed
+        # these transient reconstruction buffers. Keep
         # owning raw/recovered fields and the reduced trace, not duplicate
         # full mixed tables in every accepted BDF history result.
         result_values["local_unknowns_device"] = None
@@ -1335,6 +1359,9 @@ class DiffusionReactionHDGSolver:
             self._hdg_postprocess_cache = cache
             return postprocessed_field, postprocessed_flux
 
+        # The device primal recovery leaves a new info record on the cache (nothing is set here: the cache may
+        # be any object); attach it only when this call made one.
+        info_before = getattr(self._hdg_postprocess_cache, "_diffusion_primal_info", None)
         (postprocessed_field, postprocessed_flux), elapsed = _timed_call(
             "post-processing HDG fields",
             verbosity,
@@ -1350,6 +1377,8 @@ class DiffusionReactionHDGSolver:
                 mode,
             ),
             elapsed=elapsed,
+            # Device primal recovery: operator (2 pq, 1 inverse, 0 per-call solve), cache bytes, build time.
+            details=_new_primal_info(self._hdg_postprocess_cache, info_before),
         )
 
     def _store_result(self, result: DiffusionReactionResult) -> None:

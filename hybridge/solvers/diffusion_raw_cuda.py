@@ -78,9 +78,9 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
     if not np.isscalar(options.stabilization):
         raise NotImplementedError("raw-CUDA diffusion solve currently supports scalar stabilization only")
     postprocess_mode = _normalize_hdg_postprocess_mode(options.hdg_postprocess)
-    if postprocess_mode not in {"none", "flux"}:
+    if postprocess_mode not in {"none", "flux", "primal"}:
         raise NotImplementedError(
-            "raw-CUDA diffusion device solves support hdg_postprocess='none' or 'flux'"
+            "raw-CUDA diffusion device solves support hdg_postprocess='none', 'flux' or 'primal'"
         )
 
     from hybridge.core.device import field_from_cupy_coefficients
@@ -752,12 +752,15 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
         total=time.perf_counter() - total_start,
         details=dict(details),
     )
-    device_postprocess = postprocess_mode == "flux" and _resolve_diffusion_postprocessing_backend(
+    postprocess_backend = "none" if postprocess_mode == "none" else _resolve_diffusion_postprocessing_backend(
         "raw-cuda", postprocess_mode,
         _normalize_flux_postprocess_space(options.flux_postprocess_space),
         options.postprocessing_backend,
-    ) == "raw-cuda"
-    host_postprocess = postprocess_mode == "flux" and not device_postprocess
+    )
+    # Device flux-only recovery and device primal recovery read the local unknowns on the device.
+    device_postprocess = (postprocess_mode == "flux" and postprocess_backend == "raw-cuda") or (
+        postprocess_mode == "primal" and postprocess_backend in {"cupy", "raw-cuda"})
+    host_postprocess = postprocess_mode in {"flux", "primal"} and not device_postprocess
     host_trace = cp.asnumpy(trace_cp) if host_postprocess else None
     host_local_unknowns = cp.asnumpy(local_unknowns_cp) if host_postprocess else None
     result = DiffusionReactionResult(
