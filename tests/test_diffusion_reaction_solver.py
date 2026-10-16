@@ -672,7 +672,7 @@ def test_diffusion_flux_postprocess_aliases_and_backend_preflight() -> None:
     assert _normalize_flux_postprocess_space("rt-p") == "RT_projection"
     with pytest.raises(ValueError, match="flux_postprocess_space"):
         _normalize_flux_postprocess_space("unknown")
-    with pytest.raises(NotImplementedError, match="supports only"):
+    with pytest.raises(NotImplementedError, match="supports primal postprocessing"):
         solve_diffusion_reaction_hdg(
             *_callable_problem(),
             _space(order=1),

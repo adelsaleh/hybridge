@@ -339,7 +339,8 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         boundary_modes=("eliminate",),
         trace_bases=_PRODUCTION_TRACE_BASES,
         notes=("Pure Poisson p=0..9 with CSR or face BSR, identity diffusion, zero reaction, and scalar stabilization; "
-               "RT_p flux postprocessing is explicit and may materialize reconstruction data."),
+               "RT_p flux postprocessing is explicit and may materialize reconstruction data; "
+               "the p+1 primal postprocess runs on the device (batched CuPy local solves)."),
     ),
     BackendCapability(
         equation="diffusion-reaction",
@@ -353,7 +354,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         trace_bases=("legendre-modal",),
         notes=("Native face-BSR PCG with direct p-to-zero modal multigrid for p=1..9 (kernels compiled for face "
                "block sizes 2..10; performance evidence recorded for p=4..6) and one reusable scalar-AMGX "
-               "coarse hierarchy."),
+               "coarse hierarchy; the p+1 primal postprocess runs on the device."),
     ),
 )
 
@@ -730,13 +731,13 @@ def validate_diffusion_backend_configuration(
                 solver_backend,
                 "raw-CUDA diffusion solves require raw_matrix_format='csr' or 'bsr'",
             )
-        if postprocess_mode not in {"none", "flux"}:
+        if postprocess_mode not in {"none", "flux", "primal"}:
             _unsupported(
                 "diffusion-reaction",
                 operation,
                 backend,
                 solver_backend,
-                "raw-CUDA diffusion solves support hdg_postprocess='none' or 'flux'",
+                "raw-CUDA diffusion solves support hdg_postprocess='none', 'flux' or 'primal'",
             )
     return capability
 
