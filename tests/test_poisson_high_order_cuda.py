@@ -274,3 +274,45 @@ def test_cached_factor_owner_and_single_dof_accounting(cp):
         poisson._validate_context(context,context.cspace,context.trace_ref,1.4,None)
     with pytest.raises(ValueError,match='factor key'):
         poisson._validate_context(context,context.cspace,context.trace_ref,1.3,'different')
+
+
+@pytest.mark.parametrize('order',[1,4,6])
+@pytest.mark.parametrize('basis',['legacy-lagrange','legendre-modal'])
+def test_public_solver_primal_postprocess_on_device(cp,order,basis):
+    """hdg_postprocess='primal' on a raw-CUDA solve recovers u* on the device, as the host kernel does."""
+    import json
+    from pathlib import Path
+    pytest.importorskip('pyamgx')
+    config=json.loads(Path('configs/amgx/diff_rea_gpu4_hdg_pcgf_classical_amg.json').read_text())
+    config['solver'].update(print_solve_stats=0,monitor_residual=0)
+    config['solver']['preconditioner'].update(print_grid_stats=0)
+    from hybridge.core.conforming import oswald_average
+    from scripts.guiding_center.runtime.compatible_drift import CompatibleFluxPoissonSolver
+    space=DGSpace(mesh(),order,basis_type='dub_orth')
+    boundary=lambda x,y:.3+x-.5*y+.1*x*y
+    solver=DiffusionReactionHDGSolver(space,source=space.project_callable(lambda x,y:1.+.2*x-.1*y),
+        reaction=space.zeros(),boundary_condition=boundary,stabilization=1.3,
+        assembly_backend='raw-cuda',solver='amgx',amgx_config=config,solver_rtol=1.e-12,maxiter=200,
+        trace_basis=basis,raw_matrix_format='csr',boundary_mode='eliminate',hdg_postprocess='primal',verbose=0)
+    try:
+        device=solver.solve()
+        assert device.postprocessing_backend=='cupy'
+        assert device.postprocessed_field.space.order==order+1
+        assert not device.postprocessed_field.coefficients_materialized
+        assert device.local_unknowns_device is None  # consumed by the device recovery
+        details=device.timings.details
+        assert details['postprocess.primal.operator']==2. and details['postprocess.primal.cache_bytes']>0.
+        assert details['postprocess.primal.build_seconds']>0.  # first call builds the cached operator
+        host=solver.solve(postprocess_overrides={'postprocessing_backend':'numba'})
+        assert host.postprocessing_backend=='numba'
+        assert 'postprocess.primal.operator' not in (host.timings.details or {})
+        np.testing.assert_allclose(device.postprocessed_field.coeffs,host.postprocessed_field.coeffs,
+                                   rtol=1.e-9,atol=1.e-10)
+        # The compatible drift V2 of the raw-CUDA solve: Oswald average of the device u*, on the device.
+        compatible=CompatibleFluxPoissonSolver(solver,space,potential='postprocessed').solve()
+        assert not compatible.flux.components[0].coefficients_materialized
+        reference=oswald_average(host.postprocessed_field,boundary_values=boundary).flux_field(space)
+        for got,expected in zip(compatible.flux.components,reference.components):
+            np.testing.assert_allclose(got.coeffs,expected.coeffs,rtol=1.e-9,atol=1.e-10)
+    finally:
+        solver.clear_cache()

@@ -383,6 +383,17 @@ def run_guiding_center_case(
                 f"done in {time.perf_counter() - post_mesh_start:.5f}s",
                 flush=True,
             )
+    if config.transport_electric_field == "compatible":
+        from scripts.guiding_center.runtime.compatible_drift import (
+            CompatibleFluxPoissonSolver,
+            compatible_potential_source,
+        )
+
+        poisson_solver = CompatibleFluxPoissonSolver(
+            poisson_solver,
+            space,
+            potential=compatible_potential_source(config.compatible_potential, config.poisson_assembly_backend),
+        )
     initial_solve_label = (
         "[gc:init] solving first diffusion/Poisson system"
         if first_poisson_result is None

@@ -157,8 +157,15 @@ def build_parser() -> GuidingCenterArgumentParser:
     parser.add_argument("--order", "-p", type=int, default=None)
     parser.add_argument("--poisson-order-offset", type=int, choices=(-1, 0), default=None,
                         help="Poisson degree relative to density degree (SI-BDF2/BDF3 support -1)")
-    parser.add_argument("--transport-electric-field", choices=("raw", "postprocessed"), default=None,
-                        help="electric field supplying SI-BDF2/BDF3 drift on every Poisson solve")
+    parser.add_argument("--transport-electric-field", choices=("raw", "postprocessed", "compatible"),
+                        default=None,
+                        help="electric field supplying the drift on every Poisson solve: raw HDG flux, "
+                             "recovered flux (SI-BDF2/BDF3 only), or compatible -grad of the Oswald-averaged "
+                             "potential (every scheme; H(div), divergence-free, wall-tangent drift)")
+    parser.add_argument("--compatible-potential", choices=("auto", "postprocessed", "primal"), default=None,
+                        help="potential averaged for --transport-electric-field compatible: the p+1 "
+                             "postprocessed potential, the HDG potential, or auto (postprocessed unless "
+                             "the Poisson backend is raw-CUDA)")
     parser.add_argument("--volume-quadrature", choices=("auto", "symmetric", "duffy"), default=None)
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)

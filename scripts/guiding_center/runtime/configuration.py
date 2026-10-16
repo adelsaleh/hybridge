@@ -272,6 +272,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_cache_local_factors": args.poisson_cache_local_factors,
         "poisson_order_offset": args.poisson_order_offset,
         "transport_electric_field": args.transport_electric_field,
+        "compatible_potential": args.compatible_potential,
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
         "poisson_flux_postprocess_every": args.poisson_flux_postprocess_every,
         "poisson_flux_postprocess_space": args.poisson_flux_postprocess_space,
@@ -422,8 +423,12 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("poisson_order_offset must be -1 or 0")
     if config.order + config.poisson_order_offset < 0:
         raise ValueError("Poisson degree must be nonnegative; reduced-order Poisson requires density order >= 1")
-    if config.transport_electric_field not in {"raw", "postprocessed"}:
-        raise ValueError("transport_electric_field must be raw or postprocessed")
+    if config.transport_electric_field not in {"raw", "postprocessed", "compatible"}:
+        raise ValueError("transport_electric_field must be raw, postprocessed, or compatible")
+    if config.transport_electric_field == "compatible":
+        from scripts.guiding_center.runtime.compatible_drift import compatible_potential_source
+
+        compatible_potential_source(config.compatible_potential, config.poisson_assembly_backend)
     if config.poisson_order_offset or config.transport_electric_field == "postprocessed":
         if config.time_scheme not in {"si-bdf2", "si-bdf3"}:
             raise ValueError("reduced-order Poisson and recovered transport drift currently require si-bdf2 or si-bdf3")
