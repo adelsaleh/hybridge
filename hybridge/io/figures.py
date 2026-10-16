@@ -26,6 +26,51 @@ def publication_style(*, font_size=9.0):
         yield
 
 
+def signed_density_colors(minimum, maximum=1.0, *, base='viridis', floor='#0d0019', samples=512):
+    """Colour map and linear norm for a density that dips below zero.
+
+    The scale runs from ``min(minimum, 0)`` to ``maximum``. Non-negative values
+    keep the ``base`` map (zero at its first colour). Negative values continue it
+    smoothly towards the darker ``floor`` colour, so dips show on the colour bar
+    without an alarm colour. With ``minimum >= 0`` this is ``base`` on
+    [0, maximum].
+    """
+    import matplotlib as mpl
+    import numpy as np
+
+    low, high = min(float(minimum), 0.0), float(maximum)
+    if not high > 0.0:
+        raise ValueError('the density scale needs a positive maximum')
+    base_map = mpl.colormaps[base]
+    norm = mpl.colors.Normalize(low, high)
+    if low == 0.0:
+        return base_map, norm
+    negative = int(round(samples * -low / (high - low)))
+    start = np.array(mpl.colors.to_rgba(floor))
+    ramp = start + np.linspace(0.0, 1.0, max(negative, 2))[:, None] * (np.array(base_map(0.0)) - start)
+    colours = np.vstack((ramp, base_map(np.linspace(0.0, 1.0, samples - negative))))
+    return mpl.colors.ListedColormap(colours, name=f'{base}_signed'), norm
+
+
+def draw_signed_density(panels, maximum=1.0, *, over=None):
+    """Draw density images on one shared :func:`signed_density_colors` scale.
+
+    ``panels`` is a sequence of ``(ax, image, extent)``; the scale starts at the
+    smallest value of all images. ``over`` saturates values above ``maximum``
+    with that colour. Returns the last image artist (for a colour bar), or None.
+    """
+    panels = list(panels)
+    if not panels:
+        return None
+    cmap, norm = signed_density_colors(min(float(image.min()) for _, image, _ in panels), maximum)
+    if over is not None:
+        cmap = cmap.with_extremes(over=over)
+    artist = None
+    for ax, image, extent in panels:
+        artist = ax.imshow(image, extent=extent, origin='upper', cmap=cmap, norm=norm, interpolation='nearest')
+    return artist
+
+
 def apply_figure_theme(figure, foreground, *, transparent=True):
     """Recolor text, ticks and frames for a page theme, optionally on a clear background.
 
