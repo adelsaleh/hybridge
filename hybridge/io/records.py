@@ -1,4 +1,4 @@
-"""Incremental JSONL diagnostics with a matching CSV table."""
+"""Incremental JSONL diagnostics with a matching CSV table, and streamed reads of saved arrays."""
 
 from __future__ import annotations
 import csv
@@ -80,3 +80,36 @@ class DiagnosticsRecorder:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.rows)
+
+
+def iter_npz_slices(path: str | Path, key: str):
+    """Yield ``array[0], array[1], ...`` of the array ``key`` of an ``.npz`` archive, one slice at a time.
+
+    Only that member is read, front to back (a compressed member is inflated as it is read), so the
+    saved states of a large archive are streamed without loading the array or the other members,
+    e.g. the densities of a snapshot file without its potentials and fluxes. Each slice is a new
+    C-ordered array of shape ``array.shape[1:]``.
+    """
+    import zipfile
+
+    from numpy.lib import format as npy_format
+
+    with zipfile.ZipFile(path) as archive, archive.open(f"{key}.npy") as stream:
+        version = npy_format.read_magic(stream)
+        if version == (1, 0):
+            shape, fortran_order, dtype = npy_format.read_array_header_1_0(stream)
+        elif version == (2, 0):
+            shape, fortran_order, dtype = npy_format.read_array_header_2_0(stream)
+        else:
+            raise ValueError(f"{path}: unsupported .npy format version {version} for {key!r}")
+        if fortran_order or dtype.hasobject or not shape:
+            raise ValueError(f"{path}: {key!r} is not a C-ordered numeric array with a leading axis")
+        for _ in range(shape[0]):
+            out = np.empty(shape[1:], dtype=dtype)
+            view, filled = memoryview(out).cast("B"), 0
+            while filled < out.nbytes:
+                count = stream.readinto(view[filled:])
+                if not count:
+                    raise EOFError(f"{path}: {key!r} ends before its {shape[0]} slices")
+                filled += count
+            yield out

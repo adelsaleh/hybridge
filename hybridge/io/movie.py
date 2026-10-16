@@ -7,8 +7,14 @@ import numpy as np
 class MovieWriter:
     """Encode H.264 MP4 incrementally, retaining no frame history in memory."""
 
-    def __init__(self, path, *, fps=20.):
-        """Validate the MP4 path and frame rate; the encoder starts on the first frame."""
+    def __init__(self, path, *, fps=20., crf=23, preset="veryfast", threads=2, metadata=None):
+        """Validate the MP4 path and frame rate; the encoder starts on the first frame.
+
+        ``crf`` (0-51; lower is closer to lossless and larger), ``preset`` (libx264 speed
+        preset, e.g. "veryfast" or "slow": slower presets give smaller files at the same
+        quality) and ``threads`` set the libx264 encoder; ``metadata`` is an optional mapping
+        of MP4 tags (e.g. title, comment).
+        """
         import imageio_ffmpeg
 
         self.path = Path(path)
@@ -16,7 +22,13 @@ class MovieWriter:
             raise ValueError("movie path must end in .mp4")
         if not np.isfinite(fps) or fps <= 0:
             raise ValueError("movie FPS must be finite and positive")
+        if int(crf) != crf or not 0 <= crf <= 51:
+            raise ValueError("movie CRF must be an integer in [0, 51]")
+        if int(threads) != threads or threads < 1:
+            raise ValueError("movie encoder threads must be a positive integer")
         self.fps = float(fps)
+        self.crf, self.preset, self.threads = int(crf), str(preset), int(threads)
+        self.metadata = {str(key): str(value) for key, value in (metadata or {}).items()}
         self._encoder = None
         self._shape = None
         self._closed = False
@@ -39,10 +51,12 @@ class MovieWriter:
                 str(self.path), (image.shape[1], image.shape[0]), fps=self.fps,
                 pix_fmt_in="rgba", pix_fmt_out="yuv420p", codec="libx264",
                 macro_block_size=1, ffmpeg_log_level="error",
-                output_params=["-crf", "23", "-preset", "veryfast", "-threads", "2",
+                output_params=["-crf", str(self.crf), "-preset", self.preset, "-threads", str(self.threads),
                                "-bf", "0", "-g", str(max(1, round(self.fps * 2))),
                                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-                               "-movflags", "+faststart"],
+                               "-movflags", "+faststart",
+                               *(item for key, value in self.metadata.items()
+                                 for item in ("-metadata", f"{key}={value}"))],
             )
             self._encoder.send(None)
         if image.shape != self._shape:

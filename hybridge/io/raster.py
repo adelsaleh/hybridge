@@ -14,6 +14,26 @@ from hybridge.runtime.precision import REAL_DTYPE
 from hybridge.io.live import expanding_color_limits
 
 
+def _raster_box(mesh, width: int, height: int):
+    """Centre and span of a mesh's raster box: its bounding box enlarged by 4% to the raster aspect ratio."""
+    nodes = np.asarray(mesh.node_coords)
+    lo, hi = nodes.min(axis=0), nodes.max(axis=0)
+    center = (lo + hi) / 2
+    span = (hi - lo) * 1.04
+    if np.any(span <= 0):
+        raise ValueError("plotting requires a nondegenerate two-dimensional mesh")
+    span[0] = max(span[0], span[1] * width / height)
+    span[1] = max(span[1], span[0] * height / width)
+    return center, span
+
+
+def raster_bounds(mesh, width: int, height: int) -> tuple[float, float, float, float]:
+    """Bounds ``(x0, x1, y0, y1)`` of :meth:`RasterGeometry.from_mesh` for a ``width`` x ``height`` raster."""
+    center, span = _raster_box(mesh, width, height)
+    lo, hi = center - span / 2, center + span / 2
+    return float(lo[0]), float(hi[0]), float(lo[1]), float(hi[1])
+
+
 @dataclass(frozen=True)
 class RasterGeometry:
     """Pixel ownership on the actual mesh, including holes and DG boundaries."""
@@ -30,14 +50,7 @@ class RasterGeometry:
         """Locate pixel centers in the mesh while preserving its aspect ratio."""
         if width < 2 or height < 2:
             raise ValueError("plot width and height must be at least 2")
-        nodes = np.asarray(mesh.node_coords)
-        lo, hi = nodes.min(axis=0), nodes.max(axis=0)
-        center = (lo + hi) / 2
-        span = (hi - lo) * 1.04
-        if np.any(span <= 0):
-            raise ValueError("plotting requires a nondegenerate two-dimensional mesh")
-        span[0] = max(span[0], span[1] * width / height)
-        span[1] = max(span[1], span[0] * height / width)
+        center, span = _raster_box(mesh, width, height)
         lo, hi = center - span / 2, center + span / 2
         x = lo[0] + (np.arange(width) + 0.5) * span[0] / width
         y = hi[1] - (np.arange(height) + 0.5) * span[1] / height
@@ -113,6 +126,28 @@ class RasterGeometry:
         offsets[0] = 0
         np.cumsum((self.element_ids >= 0).astype(np.int32) * ndof, out=offsets[1:])
         return csr_matrix((data.ravel(), columns.ravel(), offsets), shape=(self.element_ids.size, ncoeff))
+
+    def evaluate(self, space, coefficients, *, fill: float = np.nan, chunk: int = 1 << 18) -> np.ndarray:
+        """Image ``(height, width)`` of DG coefficients ``(K, n)`` of ``space`` at the pixel centres.
+
+        Host evaluation in chunks of pixels, with no sampling matrix, so the memory does not grow
+        with pixels x basis size (large meshes at high resolution); ``fill`` outside the mesh.
+        """
+        coefficients = np.asarray(coefficients).reshape(-1, space.el_dof)
+        values = np.full(self.element_ids.size, fill, dtype=np.result_type(coefficients.dtype, REAL_DTYPE))
+        valid = self.valid_pixels
+        for start in range(0, valid.size, int(chunk)):
+            stop = min(start + int(chunk), valid.size)
+            basis = space.reference.basis_at(self.reference_points[start:stop])
+            values[valid[start:stop]] = np.einsum("cj,cj->c", basis, coefficients[self.element_ids[valid[start:stop]]])
+        return values.reshape(self.height, self.width)
+
+    def pixel_centres(self) -> tuple[np.ndarray, np.ndarray]:
+        """Pixel-centre coordinates ``(x, y)``, each ``(height, width)``, row 0 at the top."""
+        x0, x1, y0, y1 = self.bounds
+        x = x0 + (np.arange(self.width) + 0.5) * (x1 - x0) / self.width
+        y = y1 - (np.arange(self.height) + 0.5) * (y1 - y0) / self.height
+        return np.meshgrid(x, y)
 
     def mesh_lines(self, mesh):
         """Static line coordinates in Holoviz's normalized top-left view."""
@@ -220,3 +255,70 @@ class DeviceRasterSampler:
         # colour table with nearest sampling. Only display indices use FP32.
         indices = normalized * 255.
         return indices.astype(cp.float32).reshape(self.geometry.height, self.geometry.width, 1), limits
+
+
+def subpixel_geometries(mesh, bounds, width: int, height: int, *, supersample: int = 1):
+    """Yield one :class:`RasterGeometry` per sub-pixel offset: the samples of an area-averaged raster.
+
+    The raster has ``width`` x ``height`` pixels over ``bounds = (x0, x1, y0, y1)``, row 0 at the top
+    (the pixel centres of :meth:`RasterGeometry.from_mesh` for the same bounds). Every pixel is sampled
+    at the centres of a regular ``supersample`` x ``supersample`` sub-grid, one geometry per sub-grid
+    position; ``supersample=1`` gives the pixel centres. Each geometry is built when requested, so a
+    caller can release it before the next one.
+    """
+    if int(supersample) != supersample or supersample < 1:
+        raise ValueError("supersample must be a positive integer")
+    x0, x1, y0, y1 = bounds
+    dx, dy = (x1 - x0) / width, (y1 - y0) / height
+    xs, ys = x0 + (np.arange(width) + .5) * dx, y1 - (np.arange(height) + .5) * dy
+    offsets = (np.arange(int(supersample)) + .5) / int(supersample) - .5
+    for oy in offsets:
+        for ox in offsets:
+            xx, yy = np.meshgrid(xs + ox * dx, ys + oy * dy)
+            yield RasterGeometry.from_points(mesh, np.column_stack((xx.ravel(), yy.ravel())),
+                                             width=width, height=height, bounds=bounds)
+
+
+def area_sampling_matrix(space, bounds, width: int, height: int, *, supersample: int = 1,
+                         max_bytes: int = 2 * 1024**3):
+    """Sparse map from DG coefficients of ``space`` to an area-averaged raster, and its empty pixels.
+
+    ``matrix @ coefficients.ravel()`` is the raster (``height * width`` values, row-major, row 0 at the
+    top) whose pixels are the mean of the samples of :func:`subpixel_geometries` that lie in the mesh;
+    ``mask`` ``(height, width)`` marks the pixels without any (value 0). The map is linear, so it suits
+    a field such as a density, applied to every saved state at the cost of one sparse product; a
+    nonlinear quantity such as ``|q|^2`` must be formed per sample before averaging. The sum of the
+    ``supersample**2`` sampling matrices is held: up to ``supersample**2`` times the memory of
+    :meth:`RasterGeometry.sampling_matrix` where the samples of a pixel lie in different elements,
+    and about the same where they share one. ``max_bytes`` bounds each sampling matrix.
+    """
+    from scipy.sparse import diags
+
+    total, counts = None, np.zeros(int(width) * int(height))
+    for geometry in subpixel_geometries(space.mesh, bounds, width, height, supersample=supersample):
+        matrix = geometry.sampling_matrix(space, max_bytes=max_bytes)
+        total = matrix if total is None else total + matrix
+        counts += geometry.element_ids >= 0
+        del geometry, matrix
+    total = (diags(1.0 / np.maximum(counts, 1.0)) @ total).tocsr()
+    return total, (counts == 0).reshape(int(height), int(width))
+
+
+def remove_azimuthal_mean(values, x, y, *, bins: int, mask=None) -> np.ndarray:
+    """``values`` minus their azimuthal mean about the origin, the mean interpolated in r.
+
+    The mean is taken over ``bins`` radial bins of the unmasked pixels and interpolated linearly
+    in r between the bin centroids: a piecewise-constant mean would leave the radial gradient
+    times the bin width (a moire pattern). Masked pixels are returned unchanged.
+    """
+    values = np.asarray(values, dtype=float)
+    radius = np.hypot(x, y)
+    valid = np.isfinite(values) if mask is None else (~np.asarray(mask, dtype=bool) & np.isfinite(values))
+    edges = np.linspace(0.0, float(radius.max()), int(bins) + 1)
+    index = np.minimum(np.digitize(radius, edges) - 1, int(bins) - 1)
+    counts = np.bincount(index[valid], minlength=bins)
+    sums = np.bincount(index[valid], weights=values[valid], minlength=bins)
+    radii = np.bincount(index[valid], weights=radius[valid], minlength=bins)
+    filled = counts > 0
+    mean = np.interp(radius, radii[filled] / counts[filled], sums[filled] / counts[filled])
+    return np.where(valid, values - mean, values)
