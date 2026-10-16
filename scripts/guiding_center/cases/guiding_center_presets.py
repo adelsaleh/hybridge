@@ -31,6 +31,7 @@ class GuidingCenterRunPreset:
     order: int = 2
     poisson_order_offset: int = 0
     transport_electric_field: str = "raw"
+    compatible_potential: str = "auto"
     volume_quadrature: str = "auto"
     initial_projection_quad_1d: int | None = None
     volume_quad_1d: int | None = None
