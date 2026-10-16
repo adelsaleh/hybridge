@@ -614,6 +614,56 @@ def mesh_edge_min_max(mesh: DGMesh) -> tuple[float, float]:
     return float(np.min(lengths)), float(np.max(lengths))
 
 
+def edge_lattice_orientation(
+        mesh: DGMesh,
+        *,
+        box: tuple[tuple[float, float], tuple[float, float]] | None = None,
+        angle_tolerance: float = 5.0,
+) -> dict[str, float]:
+    """Return how closely ``mesh`` follows a lattice of equilateral triangles, and its orientation.
+
+    Only edges whose midpoints, and triangles whose centroids, lie in ``box`` = ((x0, x1), (y0, y1))
+    count (default: the whole mesh). With a_e the edge angles modulo 180 degrees, ``coherence`` is
+    |mean exp(6 i a_e)|: 1 for an equilateral lattice, 1/3 for squares split along one diagonal, near 0
+    for an unstructured mesh. ``angle`` is |arg(mean exp(6 i a_e))|/6 in [0, 30] degrees, the angle between
+    the x axis and the nearest lattice edge family (0 when one family is horizontal, 30 when one is
+    vertical). ``equilateral`` is the share of triangles whose angles all lie within ``angle_tolerance``
+    degrees of 60.
+    """
+    mesh = as_dg_mesh(mesh)
+    coords = np.asarray(mesh.node_coords, dtype=np.float64)
+    edges = np.asarray(mesh.edges)
+    triangles = np.asarray(mesh.triangles)
+
+    def inside(points):
+        if box is None:
+            return np.ones(points.shape[0], dtype=bool)
+        (x0, x1), (y0, y1) = box
+        return (points[:, 0] > x0) & (points[:, 0] < x1) & (points[:, 1] > y0) & (points[:, 1] < y1)
+
+    edges = edges[inside(coords[edges].mean(axis=1))]
+    triangles = triangles[inside(coords[triangles].mean(axis=1))]
+    if edges.shape[0] == 0 or triangles.shape[0] == 0:
+        raise ValueError("no edges or triangles in the box")
+    direction = coords[edges[:, 1]] - coords[edges[:, 0]]
+    mean = np.mean(np.exp(6j * np.arctan2(direction[:, 1], direction[:, 0])))
+    corners = coords[triangles]
+    angles = []
+    for vertex in range(3):
+        u = corners[:, (vertex + 1) % 3] - corners[:, vertex]
+        v = corners[:, (vertex + 2) % 3] - corners[:, vertex]
+        cosine = np.einsum("ij,ij->i", u, v) / (np.linalg.norm(u, axis=1) * np.linalg.norm(v, axis=1))
+        angles.append(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+    equilateral = np.all(np.abs(np.stack(angles, axis=1) - 60.0) < float(angle_tolerance), axis=1)
+    return {
+        "edges": int(edges.shape[0]),
+        "triangles": int(triangles.shape[0]),
+        "coherence": float(abs(mean)),
+        "angle": float(abs(np.degrees(np.angle(mean))) / 6.0),
+        "equilateral": float(np.mean(equilateral)),
+    }
+
+
 def rectangle_mesh(
         nx: int,
         ny: int | None = None,
