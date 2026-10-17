@@ -4,6 +4,18 @@ from __future__ import annotations
 import copy
 import operator
 
+# Degrees the native face-BSR p-multigrid accepts. Every kernel of the cycle is
+# specialized per face block size b = p + 1 and compiled for b = 1..10 (fused
+# block-Jacobi smoother, raw BSR SpMV fallback; the generic cuSPARSE BSR SpMV
+# takes any b >= 2), the Galerkin coarse levels are principal sub-blocks of the
+# fine blocks for any b, and the scalar p = 0 AMGX cycle is degree-independent,
+# so the range is set by the compiled block sizes and by the need for at least
+# one coarsening step (p >= 1). Validated performance evidence exists for
+# p = 4..6 only (``scripts/guiding_center/runtime/fast_profiles``).
+FB_HP_MG_MIN_DEGREE = 1
+FB_HP_MG_MAX_DEGREE = 9
+FB_HP_MG_DEGREES = range(FB_HP_MG_MIN_DEGREE, FB_HP_MG_MAX_DEGREE + 1)
+
 
 def scalar_p0_amgx_config() -> dict:
     """Return the dedicated scalar-AMG cycle for the p=0 face graph.

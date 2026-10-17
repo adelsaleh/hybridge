@@ -21,6 +21,8 @@ import numpy as np
 from hybridge.runtime.optional import require_cupy
 from hybridge.linalg.results import residual_history_is_stagnated
 from hybridge.linalg.multigrid.policy import (
+    FB_HP_MG_MAX_DEGREE,
+    FB_HP_MG_MIN_DEGREE,
     scalar_p0_amgx_config,
     robust_scalar_p0_amgx_config,
     face_hp_mg_preconditioner_parameters,
@@ -733,9 +735,13 @@ class FaceBlockHpMgPcgSolver:
             self.preconditioner_policy, overrides=preconditioner_tuning,
         )
         self.preconditioner_parameters = policy
-        if not 4 <= self.degree <= 6:
+        if not FB_HP_MG_MIN_DEGREE <= self.degree <= FB_HP_MG_MAX_DEGREE:
+            # Face block size b = p + 1: the fused smoother and raw SpMV kernels
+            # are compiled for b = 1..10, and p = 0 has nothing to coarsen.
             raise ValueError(
-                "FB-HP-MG-PCG currently supports polynomial degrees 4 through 6"
+                "FB-HP-MG-PCG supports polynomial degrees "
+                f"{FB_HP_MG_MIN_DEGREE} through {FB_HP_MG_MAX_DEGREE} "
+                f"(face block sizes 2..{FB_HP_MG_MAX_DEGREE + 1}); got p={self.degree}"
             )
         if data.ndim != 3 or tuple(data.shape[1:]) != (
             self.block_size, self.block_size,

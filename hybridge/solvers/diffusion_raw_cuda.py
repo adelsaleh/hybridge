@@ -425,6 +425,12 @@ def solve_raw_cuda_device_amgx(owner) -> DiffusionReactionResult:
                 "solve.fb_hp_mg.best_residual": float(
                     native_result.residual_norm
                 ),
+                # Residual of the initial guess: with best_iteration it gives the
+                # mean contraction per iteration, independent of the guess quality.
+                "solve.fb_hp_mg.initial_residual": (
+                    float(native_result.residual_norm / native_result.residual_over_initial)
+                    if native_result.residual_over_initial > 0 else 0.0
+                ),
                 "solve.fb_hp_mg.terminal_residual": float(
                     native_result.terminal_residual_norm
                     if native_result.terminal_residual_norm is not None

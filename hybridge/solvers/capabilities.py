@@ -351,7 +351,9 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         reconstruction_residency="device (flux postprocessing materializes only on request)",
         boundary_modes=("eliminate",),
         trace_bases=("legendre-modal",),
-        notes="Native face-BSR PCG with direct p-to-zero modal multigrid for p=4..6 and one reusable scalar-AMGX coarse hierarchy.",
+        notes=("Native face-BSR PCG with direct p-to-zero modal multigrid for p=1..9 (kernels compiled for face "
+               "block sizes 2..10; performance evidence recorded for p=4..6) and one reusable scalar-AMGX "
+               "coarse hierarchy."),
     ),
 )
 

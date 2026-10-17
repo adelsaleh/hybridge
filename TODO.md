@@ -326,6 +326,15 @@ Research studies in later sections inform future solver choices but do not block
     production b=7 standalone sample is 0.962 ms for generic cuSPARSE versus
     1.019 ms for raw CUDA with 2.19e-16 relative parity; fused stage parity is
     established at b=2,5,7,10, while the intervening timing sweep is open.
+  - [ ] Extend the production backend from p=4--6 to p=7,8 (face blocks 8 and
+    9) for the guiding-center raised-order Poisson study. This depends on the
+    raw-CUDA BSR assembly at p=7,8 (Diffusion-Reaction, "Raw-CUDA Assembly And
+    Global Solve"). Fused-stage parity exists only at b=2,5,7,10, so b=8,9 need
+    parity and timing. Retune the direct `p->0` hierarchy and the Cheb-2
+    smoothing bounds at these degrees. Support nonzero Dirichlet data, or go
+    through the `ElectrodePoissonSolver` superposition. Add repeated-RHS GPU
+    tests at p=7,8, and apply the same iteration and true-residual gates
+    against CuPy-assembly + AMGX.
   - [ ] Promote the prototype only after p>=4 needs at most 1.25 times the
     hybrid iterations, satisfies the common true-residual contract, and beats
     scalar CSR by at least 10% in an amortized warm solve; final production
