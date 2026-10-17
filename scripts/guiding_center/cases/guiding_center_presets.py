@@ -121,6 +121,8 @@ class GuidingCenterRunPreset:
     density_positivity: str = "none"
     density_positivity_points: str = "quadrature+lattice"
     diocotron_diagnostics: bool = False
+    # Record the enstrophy budget terms D_h, G_h and the SI-Euler/SI-BDF2 L2 identity (zero-flux walls).
+    enstrophy_budget: bool = False
     diocotron_radial_points: int = 32
     diocotron_angular_points: int | None = None
     diagnostics_every: int = 1  # Zero disables field diagnostics, including endpoints.

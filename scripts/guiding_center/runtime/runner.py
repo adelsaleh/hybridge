@@ -31,7 +31,7 @@ from scripts.guiding_center.runtime.configuration import (
     _validate_config,
 )
 from scripts.guiding_center.runtime.diagnostics import (
-    WallChargeBalance, _compute_diagnostics, _electric_flux)
+    EnstrophyBudget, WallChargeBalance, _compute_diagnostics, _electric_flux)
 from scripts.guiding_center.runtime.labels import run_label
 from scripts.guiding_center.runtime.forcing import DensityForcing
 from scripts.guiding_center.runtime.steppers import make_stepper
@@ -406,6 +406,11 @@ def run_guiding_center_case(
         if transport_boundary_mode != "eliminate":
             raise ValueError("wall flux diagnostics need eliminated (zero inflow) density boundary traces")
         wall_balance = WallChargeBalance(case, config.time_scheme, _transport_trace_basis(config))
+    enstrophy_budget = None
+    if getattr(config, "enstrophy_budget", False):
+        if transport_boundary_mode != "zero-flux":
+            raise ValueError("the enstrophy budget needs zero-flux transport walls")
+        enstrophy_budget = EnstrophyBudget(config.time_scheme, _transport_trace_basis(config), config.dt)
     if _detail_verbosity(config):
         print(
             f"done in {time.perf_counter() - solver_data_start:.5f}s",
@@ -729,6 +734,8 @@ def run_guiding_center_case(
         synchronize_step_timing = bool(getattr(config, "synchronize_step_timing", False))
         if synchronize_step_timing:  # start the first step with an idle device
             require_cupy().cuda.Device().synchronize()
+        if enstrophy_budget is not None:
+            enstrophy_budget.start(rho_field)
         for step in range(1, config.num_steps + 1):
             linear_step_start = time.perf_counter()
             next_time = current_time + config.dt
@@ -778,6 +785,15 @@ def run_guiding_center_case(
                 require_cupy().cuda.Device().synchronize()
             advance_end = time.perf_counter()
             rho_field, density_trace = advanced.density, advanced.density_trace
+            budget_row = {}
+            if enstrophy_budget is not None:  # every step: the identity needs the accepted history
+                budget_row = enstrophy_budget.step(
+                    rho_field, density_trace, advanced.transport_beta,
+                    float(advanced.metrics.get("transport_beta_scale", config.dt)),
+                    bool(advanced.metrics.get("bdf2_startup", False)))
+                if synchronize_step_timing:
+                    require_cupy().cuda.Device().synchronize()
+            budget_end = time.perf_counter()
             poisson_result, potential_trace = advanced.poisson_result, advanced.potential_trace
             transport_result = advanced.transport_result
             transport_stage_results, poisson_stage_results = advanced.transport_results, advanced.poisson_results
@@ -851,6 +867,7 @@ def run_guiding_center_case(
                         # The stepper alone (Poisson, transport, KKT, trace updates), without the
                         # enstrophy budget and metric collection; synchronized when requested.
                         "step_advance_wall_time": advance_end - linear_step_start,
+                        "enstrophy_budget_time": budget_end - advance_end,
                         "step_timing_synchronized": synchronize_step_timing,
                         "transport_step_wall_time": transport_step_wall_time,
                         "poisson_step_wall_time": poisson_step_wall_time,
@@ -919,6 +936,7 @@ def run_guiding_center_case(
                     extra["reaction_production"] = forcing.production(solved_density, current_time)
                 if forcing.source_function is not None:  # int S_h: its source term
                     extra["source_production"] = forcing.source_production(current_time)
+                extra.update(budget_row)
                 if wall_balance is not None:  # outflux through the open walls: its boundary term
                     scale = float(stage_extra.get("transport_beta_scale", config.dt))
                     extra["transport_beta_scale"] = scale

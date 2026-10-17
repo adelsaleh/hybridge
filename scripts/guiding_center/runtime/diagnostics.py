@@ -105,6 +105,60 @@ class WallChargeBalance:
                 "charge_balance_relative_defect": defect / max(abs(mass), 1.0e-300)}
 
 
+class EnstrophyBudget:
+    """Enstrophy budget of each transport solve and the defect of the exact L2 identity.
+
+    Records ``enstrophy_dissipation`` D_h and ``enstrophy_defect`` G_h (with its parts)
+    of :func:`hybridge.diagnostics.hdg_identities.transport_enstrophy_terms`, for the
+    unscaled drift b = beta/scale of the step and the new density and interior trace,
+    and ``l2_budget_relative_defect``:
+
+        SI-Euler (and the SI-BDF2 start-up):  |r1|^2 + |r1 - r0|^2 + 2 dt D + dt G - |r0|^2,
+        SI-BDF2:  E^{n+1} + |delta^2 r|^2 + 4 dt D + 2 dt G - E^n,  E^n = |r^n|^2 + |2 r^n - r^{n-1}|^2,
+
+    relative to the enstrophy-like norm on the right; round-off when every step is recorded.
+    Also records ``rho_l1`` (volume quadrature).
+    """
+
+    def __init__(self, scheme: str, trace_basis: str, dt: float):
+        if scheme not in {"si-euler", "si-bdf2"}:
+            raise ValueError("the enstrophy budget is implemented for si-euler and si-bdf2")
+        self.scheme, self.trace_basis, self.dt = str(scheme), trace_basis, float(dt)
+        self.history: list = []  # accepted densities (copies), newest last
+
+    def start(self, density) -> None:
+        self.history = [density.copy(name="rho_budget_0")]
+
+    def step(self, density, trace_reduced, beta, scale: float, startup: bool) -> dict[str, Any]:
+        from hybridge.core.field_ops import field_linear_combination
+        from hybridge.diagnostics.hdg_identities import (
+            field_l1_quadrature, field_l2_squared, transport_enstrophy_terms)
+
+        terms = transport_enstrophy_terms(beta, density, trace_reduced, trace_basis=self.trace_basis)
+        terms = {key: value / float(scale) for key, value in terms.items()}  # D_h, G_h are linear in b
+        row = {f"enstrophy_{key}": value for key, value in terms.items()}
+        row["rho_l1"] = field_l1_quadrature(density)
+        space, dt = density.space, self.dt
+        if self.history:
+            previous = self.history[-1]
+            if self.scheme == "si-euler" or startup or len(self.history) < 2:
+                difference = field_linear_combination(space, [(1.0, density), (-1.0, previous)])
+                right = field_l2_squared(previous)
+                left = (field_l2_squared(density) + field_l2_squared(difference)
+                        + 2.0 * dt * terms["dissipation"] + dt * terms["defect"])
+            else:
+                older = self.history[-2]
+                extrapolated_old = field_linear_combination(space, [(2.0, previous), (-1.0, older)])
+                extrapolated_new = field_linear_combination(space, [(2.0, density), (-1.0, previous)])
+                second = field_linear_combination(space, [(1.0, density), (-2.0, previous), (1.0, older)])
+                right = field_l2_squared(previous) + field_l2_squared(extrapolated_old)
+                left = (field_l2_squared(density) + field_l2_squared(extrapolated_new) + field_l2_squared(second)
+                        + 4.0 * dt * terms["dissipation"] + 2.0 * dt * terms["defect"])
+            row["l2_budget_relative_defect"] = (left - right) / max(abs(right), 1.0e-300)
+        self.history = (self.history + [density.copy(name="rho_budget")])[-2:]
+        return row
+
+
 def _compute_diagnostics(
         *,
         case,
