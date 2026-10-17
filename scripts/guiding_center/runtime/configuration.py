@@ -10,6 +10,7 @@ from typing import Any
 from scripts.guiding_center.time_schemes import STEPPERS
 from hybridge.runtime.precision import PRECISION
 from hybridge.linalg.amgx.config import load_amgx_config, with_amgx_residual_history
+from hybridge.linalg.multigrid.policy import FB_HP_MG_DEGREES
 from scripts.guiding_center.cases.guiding_center_presets import GuidingCenterRunPreset
 
 
@@ -390,9 +391,10 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         runtime = _with_fp32_transport_solver(runtime)
     if (
         args.backend_profile == "device"
-        and not 4 <= int(runtime.order) <= 6
+        and int(runtime.order) + int(runtime.poisson_order_offset) not in FB_HP_MG_DEGREES
         and str(runtime.poisson_solver).replace("_", "-").lower() == "fb-hp-mg-pcg"
     ):
+        # The native p-multigrid kernels are compiled for face block sizes 2..10 (p = 1..9).
         runtime = replace(runtime, poisson_solver="amgx")
     if PRECISION == "float64" and _is_amgx_solver(runtime.poisson_solver) and args.poisson_solver_rtol is None and runtime.poisson_solver_rtol < _AMGX_DEFAULT_RTOL:
         runtime = replace(runtime, poisson_solver_rtol=_AMGX_DEFAULT_RTOL)
