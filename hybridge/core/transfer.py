@@ -496,3 +496,115 @@ def evaluate_field_at_points(field: DGField, points_xy: np.ndarray, *, missing=n
         return result
     result[pt_idx] = _evaluate_coefficients_at_source_points(field, xi_src, src_idx)
     return result
+
+
+def triangle_neighbours(triangles: np.ndarray) -> np.ndarray:
+    """Return ``(n, 3)`` cell ids across the edge opposite each local vertex, ``-1`` on the boundary."""
+    tri = np.asarray(triangles, dtype=np.int64)
+    edges = np.stack([tri[:, [1, 2]], tri[:, [2, 0]], tri[:, [0, 1]]], axis=1).reshape(-1, 2)
+    edges.sort(axis=1)
+    keys = edges[:, 0] * (int(tri.max()) + 1) + edges[:, 1]
+    order = np.argsort(keys, kind="stable")
+    shared = keys[order[1:]] == keys[order[:-1]]
+    first, second = order[:-1][shared], order[1:][shared]
+    neighbours = np.full(edges.shape[0], -1, dtype=np.int64)
+    neighbours[first] = second // 3
+    neighbours[second] = first // 3
+    return neighbours.reshape(-1, 3)
+
+
+@nb.njit(parallel=True, cache=True, fastmath=True)
+def _walk_evaluate_kernel(
+        points: np.ndarray,
+        hints: np.ndarray,
+        origins: np.ndarray,
+        inverses: np.ndarray,
+        neighbours: np.ndarray,
+        coeffs: np.ndarray,
+        basis_kind: int,
+        order: int,
+        bernstein_exps: np.ndarray,
+        bernstein_coeffs: np.ndarray,
+        hierarchical_modes: np.ndarray,
+        dubiner_pq: np.ndarray,
+        max_steps: int,
+        eps: float,
+        values: np.ndarray,
+        cells: np.ndarray,
+) -> None:
+    """Walk from each hint cell towards the point and evaluate the cell polynomial there.
+
+    Each step crosses the edge opposite the most negative barycentric coordinate.
+    Walks that leave through a wall edge or exceed ``max_steps`` report ``cells = -1``.
+    """
+    for point in nb.prange(points.shape[0]):
+        x = points[point, 0]
+        y = points[point, 1]
+        element = hints[point]
+        cells[point] = -1
+        values[point] = np.nan
+        for _ in range(max_steps):
+            dx = x - origins[element, 0]
+            dy = y - origins[element, 1]
+            s = inverses[element, 0, 0] * dx + inverses[element, 0, 1] * dy
+            t = inverses[element, 1, 0] * dx + inverses[element, 1, 1] * dy
+            vertex = 0
+            lowest = 1.0 - s - t
+            if s < lowest:
+                vertex = 1
+                lowest = s
+            if t < lowest:
+                vertex = 2
+                lowest = t
+            if lowest >= -eps:
+                cells[point] = element
+                values[point] = basis_module.evaluate_modal_value(
+                    basis_kind, order, coeffs[element], 2.0 * s - 1.0, 2.0 * t - 1.0,
+                    bernstein_exps, bernstein_coeffs, hierarchical_modes, dubiner_pq,
+                )
+                break
+            element = neighbours[element, vertex]
+            if element < 0:
+                break
+
+
+class CellwiseEvaluator:
+    """Evaluate cellwise polynomial coefficients at physical points on one triangle mesh.
+
+    Points are located by walking from a hint cell (for points sampled in a known cell, or moved
+    a few cells from one) or from the cell of the nearest centroid. The reference map of each cell
+    follows the vertex order of ``triangles``, as the coefficients do. Parallel Numba kernel.
+    """
+
+    def __init__(self, node_coords: np.ndarray, triangles: np.ndarray, order: int, basis_type: str = "bernstein"):
+        nodes = np.asarray(node_coords, dtype=np.float64)
+        self.triangles = np.ascontiguousarray(triangles, dtype=np.int64)
+        vertices = nodes[self.triangles]
+        self.origins = np.ascontiguousarray(vertices[:, 0])
+        jacobians = np.stack([vertices[:, 1] - vertices[:, 0], vertices[:, 2] - vertices[:, 0]], axis=-1)
+        self.inverses = np.ascontiguousarray(np.linalg.inv(jacobians))
+        self.neighbours = np.ascontiguousarray(triangle_neighbours(self.triangles))
+        self.order = int(order)
+        self.payload = basis_module.modal_eval_payload(basis_type, self.order)
+        self._centroids = vertices.mean(axis=1)
+        self._tree = None
+
+    def nearest_cells(self, points: np.ndarray) -> np.ndarray:
+        """Cell of the nearest centroid, a starting cell for the walk."""
+        if self._tree is None:
+            self._tree = cKDTree(self._centroids)
+        return np.asarray(self._tree.query(points, k=1, workers=-1)[1], dtype=np.int64)
+
+    def __call__(self, coefficients: np.ndarray, points: np.ndarray, *, hints: np.ndarray | None = None,
+                 max_steps: int = 64, eps: float = 1.0e-12) -> tuple[np.ndarray, np.ndarray]:
+        """Return ``(values, cells)``; ``cells`` is -1 (value NaN) where no containing cell was reached."""
+        points = np.ascontiguousarray(points, dtype=np.float64).reshape(-1, 2)
+        hints = (self.nearest_cells(points) if hints is None
+                 else np.ascontiguousarray(np.broadcast_to(hints, points.shape[:1]), dtype=np.int64))
+        values = np.empty(points.shape[0], dtype=np.float64)
+        cells = np.empty(points.shape[0], dtype=np.int64)
+        kind, exps, coeffs, modes, pq = self.payload
+        _walk_evaluate_kernel(points, hints, self.origins, self.inverses, self.neighbours,
+                              np.ascontiguousarray(coefficients, dtype=np.float64), kind, self.order, exps, coeffs,
+                              modes, pq, int(max_steps), float(eps), values, cells)
+        return values, cells
