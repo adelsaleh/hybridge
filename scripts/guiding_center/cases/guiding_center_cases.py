@@ -88,6 +88,11 @@ class GuidingCenterCase:
     wall_potentials: tuple = ()
     # Record the transport outflux through the walls (zero inflow data only).
     wall_flux_diagnostics: bool = False
+    # Linearized runs (preset ``linearized``; scripts.guiding_center.runtime.linearized):
+    # grad rho* as (x, y) -> (g_x, g_y) (from equilibrium_radial_derivative when None) and the
+    # infinitesimal initial perturbation q_0 (initial_density - equilibrium_density when None).
+    equilibrium_density_gradient: Callable[[Any, Any], tuple[Any, Any]] | None = None
+    linear_perturbation: ScalarCallable | None = None
 
     imported_equilibrium: Any = None
 

@@ -379,12 +379,22 @@ def run_guiding_center_case(
         projection_label += ", direct Gaussian blobs"
     initial_projection_timings = {} if _detail_verbosity(config) else None
     equilibrium_projection_timings = {} if _detail_verbosity(config) else None
-    rho_field, initial_density_projection_time = timed_call(
-        f"[gc:init] projecting initial density ({projection_label})",
-        _detail_verbosity(config),
-        lambda: _project_case_density(config, space, case, equilibrium=False, name="rho_h",
-                                      timings=initial_projection_timings),
-    )
+    # Linearized runs evolve the perturbation q of the case's equilibrium (runtime/linearized.py).
+    linear = bool(getattr(config, "linearized", False))
+    if linear and getattr(case, "linear_perturbation", None) is not None:
+        rho_field, initial_density_projection_time = timed_call(
+            f"[gc:init] projecting the linear initial perturbation ({projection_label})",
+            _detail_verbosity(config),
+            lambda: _project_initial_field(config, space, case.linear_perturbation, name="q_h",
+                                           timings=initial_projection_timings),
+        )
+    else:
+        rho_field, initial_density_projection_time = timed_call(
+            f"[gc:init] projecting initial density ({projection_label})",
+            _detail_verbosity(config),
+            lambda: _project_case_density(config, space, case, equilibrium=False, name="rho_h",
+                                          timings=initial_projection_timings),
+        )
     _report_projection_timings(config, initial_projection_timings, initial_density_projection_time,
                                label="initial_density_projection", prefix=config.diagnostics_prefix or preset_key)
     density_projector = None
@@ -404,7 +414,7 @@ def run_guiding_center_case(
                   "exact density's moments and the first correction acts on rho_h(dt)", flush=True)
     positivity = None
     initial_positivity = {}
-    if config.positivity_diagnostics:
+    if config.positivity_diagnostics and not linear:
         from hybridge.diagnostics.guiding_center import ScalarPositivityDiagnostics
         positivity, _ = timed_call("[gc:init] caching positivity diagnostics", _detail_verbosity(config),
             lambda: ScalarPositivityDiagnostics(space,
@@ -478,6 +488,10 @@ def run_guiding_center_case(
         )
         _report_projection_timings(config, equilibrium_projection_timings, equilibrium_density_projection_time,
                                    label="equilibrium_density_projection", prefix=config.diagnostics_prefix or preset_key)
+        if linear and getattr(case, "linear_perturbation", None) is None:
+            from hybridge.core.field_ops import field_linear_combination
+
+            rho_field = field_linear_combination(space, [(1.0, rho_field), (-1.0, equilibrium_density)], name="q_h")
         equilibrium_solver, _ = timed_call(
             "[gc:init] constructing equilibrium Poisson solver",
             _detail_verbosity(config),
@@ -574,6 +588,26 @@ def run_guiding_center_case(
             mode=getattr(config, "exact_drift_mode", "pointwise"),
             trace_space=space.trace_space(_transport_trace_basis(config)),
         )
+    linear_setup = None
+    if linear:
+        from scripts.guiding_center.runtime.linearized import EquilibriumCoupling, equilibrium_gradient
+
+        if equilibrium_density is None:
+            raise ValueError("a linearized run needs the case's equilibrium density")
+        if case.wall_potentials or case.potential_boundary_constant != 0.0:
+            raise ValueError("linearized runs need a zero (constant) wall potential: psi = 0 on every wall")
+        # The equilibrium's drift is the one the nonlinear runs start from: same solver and drift policy.
+        poisson_solver.set_source(project_same_mesh_field(equilibrium_density, poisson_space))
+        linear_equilibrium_result, _ = timed_call(
+            "[gc:init] linearized: equilibrium Poisson solve for the frozen drift", _phase_verbosity(config),
+            lambda: poisson_solver.solve(initial_guess=poisson_initial_guess))
+        poisson_solver.set_source(project_same_mesh_field(rho_field, poisson_space))
+        poisson_initial_guess = None
+        coupling, _ = timed_call(
+            "[gc:init] linearized: sampling grad rho* at the volume quadrature", _phase_verbosity(config),
+            lambda: EquilibriumCoupling(space, equilibrium_gradient(case)))
+        linear_setup = dict(equilibrium_result=linear_equilibrium_result, coupling=coupling,
+                            startup=getattr(config, "linearized_startup", "euler"))
     initial_solve_label = (
         "[gc:init] solving first diffusion/Poisson system"
         if first_poisson_result is None
@@ -601,6 +635,8 @@ def run_guiding_center_case(
     transport_preconditioner_reused = False
 
     prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
+    if linear:
+        from scripts.guiding_center.runtime.linearized import linear_initial_density
     if transfer_record is not None:
         # the consistent density is not the projection of a callable; its trace comes from the field
         density_trace = project_field_to_trace(rho_field, trace_basis=_transport_trace_basis(config), reduced=True,
@@ -608,7 +644,7 @@ def run_guiding_center_case(
     else:
         density_trace = project_callable_to_trace(
             space,
-            case.initial_density_at(),
+            linear_initial_density(case) if linear else case.initial_density_at(),
             trace_basis=_transport_trace_basis(config),
             reduced=True,
             backend="device" if prefer_device_trace else "host",
@@ -636,6 +672,7 @@ def run_guiding_center_case(
         transport_boundary_mode=transport_boundary_mode, poisson_solver=poisson_solver,
         positivity=positivity, recovery_record=record_poisson_recovery,
         forcing=forcing if forcing.active else None, density_projector=density_projector,
+        linearized=linear_setup,
     )
     if hasattr(stage_stepper, "initial_poisson_result"):
         poisson_result = stage_stepper.initial_poisson_result
@@ -646,7 +683,8 @@ def run_guiding_center_case(
     if config.diocotron_diagnostics:
         from scripts.guiding_center.diagnostics.diocotron_diagnostics import DiocotronModeDiagnostics
         modal_diagnostics, _ = timed_call("[gc:init] caching polar Fourier diagnostics", _detail_verbosity(config),
-            lambda: DiocotronModeDiagnostics(poisson_space, equilibrium_potential,
+            lambda: DiocotronModeDiagnostics(poisson_space,
+                poisson_space.zeros(name="psi_reference_h") if linear else equilibrium_potential,
                 mode=int(case.parameters["k"]), inner=float(case.parameters["s_minus"]),
                 outer=float(case.parameters["s_plus"]), radial_points=config.diocotron_radial_points,
                 angular_points=config.diocotron_angular_points,
@@ -667,6 +705,9 @@ def run_guiding_center_case(
 
     def benchmark_metrics():
         metrics = {"poisson_tau": float(poisson_solver.options.stabilization)}
+        if linear:
+            metrics.update(linear_density_l2=float(rho_field.l2_norm()),
+                           linear_potential_l2=float(poisson_result.field.l2_norm()))
         if band_modes is not None:
             metrics.update(band_modes.measure(rho_field, poisson_result.field))
         if modal_diagnostics is not None:
@@ -698,8 +739,10 @@ def run_guiding_center_case(
             if transfer_record is not None:
                 initial_extra["equilibrium_transfer"] = transfer_record
             if case.imported_equilibrium is not None:
+                # A linearized run checks the equilibrium it is linearized about, not its perturbation.
                 initial_extra.update(case.imported_equilibrium.initial_diagnostics(
-                    space, rho_field, poisson_result,
+                    space, equilibrium_density if linear else rho_field,
+                    linear_setup["equilibrium_result"] if linear else poisson_result,
                     quadrature_1d=config.initial_projection_quad_1d,
                     trace_basis=_transport_trace_basis(config),
                     transport_electric_field=config.transport_electric_field,
@@ -710,7 +753,7 @@ def run_guiding_center_case(
                 initial_extra["equilibrium_density_projection_profile"] = equilibrium_projection_timings
             initial_extra.update(benchmark_metrics())
             initial_extra["run_configuration"] = dict(case=case.key, case_parameters=case.parameters,
-                run_label=model_label,
+                run_label=model_label, linearized=linear,
                 preset=preset_key, mesh_size=config.mesh_size, triangles=mesh.num_tri, order=config.order,
                 dt=config.dt, time_scheme=config.time_scheme, poisson_tau_initial=config.poisson_tau,
                 initial_projection_quad_1d=config.initial_projection_quad_1d,
@@ -777,8 +820,8 @@ def run_guiding_center_case(
                 time_value=0.0,
                 baseline_mass=baseline_mass,
                 baseline_q_l2=baseline_q_l2,
-                equilibrium_potential=equilibrium_potential,
-                equilibrium_density=equilibrium_density,
+                equilibrium_potential=None if linear else equilibrium_potential,
+                equilibrium_density=None if linear else equilibrium_density,
                 equilibrium_potential_l2=equilibrium_potential_l2,
                 equilibrium_density_l2=equilibrium_density_l2,
                 extra=initial_extra,
@@ -1049,8 +1092,8 @@ def run_guiding_center_case(
                         baseline_mass=baseline_mass,
                         baseline_q_l2=baseline_q_l2,
                         baseline_enstrophy=baseline_enstrophy,
-                        equilibrium_potential=equilibrium_potential,
-                        equilibrium_density=equilibrium_density,
+                        equilibrium_potential=None if linear else equilibrium_potential,
+                        equilibrium_density=None if linear else equilibrium_density,
                         equilibrium_potential_l2=equilibrium_potential_l2,
                         equilibrium_density_l2=equilibrium_density_l2,
                         extra=extra,

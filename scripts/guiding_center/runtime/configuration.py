@@ -482,6 +482,14 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("density_positivity_points must be quadrature+lattice or quadrature+lattice+dense")
     if config.density_positivity != "none" and config.time_scheme not in {"si-euler", "si-bdf2", "si-bdf3"}:
         raise ValueError("density_positivity='kkt' currently supports si-euler, si-bdf2 and si-bdf3 only")
+    if getattr(config, "linearized", False):
+        if config.time_scheme != "si-bdf2":
+            raise ValueError("linearized runs use si-bdf2")
+        if getattr(config, "linearized_startup", "euler") not in ("euler", "richardson"):
+            raise ValueError("linearized_startup must be 'euler' or 'richardson'")
+        if config.density_positivity != "none" or config.enstrophy_budget:
+            raise ValueError("linearized runs evolve a signed perturbation: no density positivity "
+                             "projection and no enstrophy budget")
     if config.diocotron_radial_points < 2:
         raise ValueError("diocotron_radial_points must be at least 2")
     if config.diocotron_angular_points is not None and config.diocotron_angular_points < 2:
