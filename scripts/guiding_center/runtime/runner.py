@@ -13,6 +13,7 @@ from hybridge.runtime.precision import (
     PIPELINE_AUDIT,
     audit_arrays,
 )
+from hybridge.runtime.optional import require_cupy
 from hybridge.core.field_ops import project_callable_to_trace, solution_field, solution_trace
 from hybridge.core.transfer import project_same_mesh_field
 from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
@@ -725,6 +726,9 @@ def run_guiding_center_case(
                 poisson_result=poisson_result, accepted_density_trace_reduced=density_trace,
                 equilibrium_potential=equilibrium_potential))
         current_time = 0.0
+        synchronize_step_timing = bool(getattr(config, "synchronize_step_timing", False))
+        if synchronize_step_timing:  # start the first step with an idle device
+            require_cupy().cuda.Device().synchronize()
         for step in range(1, config.num_steps + 1):
             linear_step_start = time.perf_counter()
             next_time = current_time + config.dt
@@ -770,6 +774,9 @@ def run_guiding_center_case(
                 poisson_solver, solve_stage_transport,
                 endpoint_postprocess=_poisson_postprocess_overrides(config, step),
             )
+            if synchronize_step_timing:  # all queued device work, AMGX included, belongs to this step
+                require_cupy().cuda.Device().synchronize()
+            advance_end = time.perf_counter()
             rho_field, density_trace = advanced.density, advanced.density_trace
             poisson_result, potential_trace = advanced.poisson_result, advanced.potential_trace
             transport_result = advanced.transport_result
@@ -841,6 +848,10 @@ def run_guiding_center_case(
                         "time_scheme": config.time_scheme,
                         "beta_build_time": beta_build_time,
                         "linear_step_wall_time": linear_step_wall_time,
+                        # The stepper alone (Poisson, transport, KKT, trace updates), without the
+                        # enstrophy budget and metric collection; synchronized when requested.
+                        "step_advance_wall_time": advance_end - linear_step_start,
+                        "step_timing_synchronized": synchronize_step_timing,
                         "transport_step_wall_time": transport_step_wall_time,
                         "poisson_step_wall_time": poisson_step_wall_time,
                         "poisson_time": poisson_time,

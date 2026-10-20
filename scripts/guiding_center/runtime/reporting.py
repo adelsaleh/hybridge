@@ -146,6 +146,13 @@ def _print_step_summary(config: GuidingCenterRunPreset, row: dict[str, Any]) -> 
             f"{_format_metric(row.get('phi_max'))}]"
         ),
     ]
+    step_wall = row.get("linear_step_wall_time")
+    if step_wall is not None and phase != "initial":
+        pieces.append(f"step_wall={_format_metric(step_wall, '.3f')}s")
+    for prefix in ("poisson", "transport"):  # summed over the step's stage solves
+        iterations = _first_metric(row, f"{prefix}_step_iterations", f"{prefix}_solver_iterations")
+        if iterations is not None and int(iterations) >= 0 and phase != "initial":
+            pieces.append(f"{prefix}_its={int(iterations)}")
     beta_time = row.get("beta_build_time")
     if beta_time is not None and phase != "initial":
         pieces.append(f"beta={_format_metric(beta_time, '.3f')}s")

@@ -125,6 +125,9 @@ class GuidingCenterRunPreset:
     diocotron_angular_points: int | None = None
     diagnostics_every: int = 1  # Zero disables field diagnostics, including endpoints.
     record_timings: bool = True
+    # Synchronize the device at the end of every step so that step_advance_wall_time (the stepper
+    # alone, without the enstrophy budget) includes all queued GPU work; for performance runs.
+    synchronize_step_timing: bool = False
     poisson_true_residual_every: int = 10
     poisson_residual_history: bool = True
     amgx_residual_history: bool = True
