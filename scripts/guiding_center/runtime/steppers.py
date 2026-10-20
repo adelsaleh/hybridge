@@ -12,9 +12,20 @@ from .configuration import (
 
 def make_stepper(config, case, space, density, poisson_result, density_trace,
                  potential_trace, *, transport_boundary_mode, poisson_solver,
-                 positivity=None, recovery_record=None, forcing=None, density_projector=None):
-    """Initialize the selected algorithm using the tested preset's policies."""
+                 positivity=None, recovery_record=None, forcing=None, density_projector=None,
+                 linearized=None):
+    """Initialize the selected algorithm using the tested preset's policies.
+
+    ``linearized`` (dict with ``equilibrium_result`` and ``coupling``) selects the SI-BDF2 of the
+    equations linearized about that equilibrium (preset ``linearized``; SI-BDF2 only).
+    """
     stepper_type = STEPPERS[config.time_scheme]
+    if linearized is not None:
+        if config.time_scheme != "si-bdf2":
+            raise ValueError("linearized runs use si-bdf2")
+        from scripts.guiding_center.time_schemes.si_bdf2_linearized import LinearizedSIBDF2Stepper
+
+        stepper_type = LinearizedSIBDF2Stepper
     options = dict(
         density_boundary=(lambda t: None) if transport_boundary_mode == "zero-flux" else case.density_boundary_at,
         potential_boundary=case.potential_boundary_at,
@@ -26,6 +37,9 @@ def make_stepper(config, case, space, density, poisson_result, density_trace,
     )
     if config.time_scheme in {"si-bdf2", "si-bdf3"}:
         options["use_postprocessed_flux"] = config.transport_electric_field == "postprocessed"
+    if linearized is not None:
+        options.update(equilibrium_result=linearized["equilibrium_result"], coupling=linearized["coupling"],
+                       startup=linearized.get("startup", "euler"))
     if issubclass(stepper_type, SIEulerStepper):
         return stepper_type(space, config.dt, density, poisson_result, density_trace,
                             potential_trace=potential_trace, density_projector=density_projector,

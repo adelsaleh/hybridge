@@ -124,6 +124,11 @@ class GuidingCenterRunPreset:
     diocotron_diagnostics: bool = False
     # Record the enstrophy budget terms D_h, G_h and the SI-Euler/SI-BDF2 L2 identity (zero-flux walls).
     enstrophy_budget: bool = False
+    # Evolve the perturbation of the case's equilibrium with the equations linearized about it
+    # (frozen equilibrium drift, explicit coupling -u[psi].grad rho*; runtime/linearized.py; SI-BDF2).
+    linearized: bool = False
+    # First step of a linearized run: "euler" (SI-Euler, as the nonlinear SI-BDF2) or "richardson" (second order).
+    linearized_startup: str = "euler"
     diocotron_radial_points: int = 32
     diocotron_angular_points: int | None = None
     diagnostics_every: int = 1  # Zero disables field diagnostics, including endpoints.

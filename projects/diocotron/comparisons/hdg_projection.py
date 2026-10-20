@@ -215,6 +215,49 @@ class DolfinxFieldCheckpoint:
                 indices[position] = adjacent[ids[nearest]]
         return indices
 
+    def evaluate_gradients(self, field_name: str, points: np.ndarray, *, cells=None,
+                           chunk_size=1 << 20) -> tuple[np.ndarray, np.ndarray]:
+        """Physical gradient ``(d_x f, d_y f)`` of the source polynomial at points, cell by cell.
+
+        Points are located as in :meth:`evaluate_points` (walk from ``cells`` or the nearest
+        centroid, then the triangulation locator); the containing cell's Bernstein polynomial
+        is differentiated exactly, through the reference gradients and the cell's inverse map.
+        On a cell edge the gradient of a CG field is two-valued; the located cell decides.
+        """
+        from hybridge.core.transfer import CellwiseEvaluator
+
+        points = np.asarray(points, dtype=float)
+        if points.ndim != 2 or points.shape[1] != 2 or not np.all(np.isfinite(points)):
+            raise ValueError("points must be a finite (n, 2) array")
+        if cells is not None:
+            cells = np.asarray(cells, dtype=np.int64).ravel()
+            if cells.shape != (len(points),) or np.any((cells < 0) | (cells >= len(self.mesh_triangles))):
+                raise ValueError("cells must hold one source cell id per point")
+        coefficients, _ = self._source_coefficients(field_name)
+        if not hasattr(self, "_cell_evaluator"):
+            self._cell_evaluator = CellwiseEvaluator(self.mesh_node_coords, self.mesh_triangles, self.source_order)
+        evaluator = self._cell_evaluator
+        _, located = evaluator(coefficients, points, hints=cells)
+        missing = np.flatnonzero(located < 0)
+        if len(missing):
+            located[missing] = self._locate_cells(points[missing])
+        reference = ReferenceElementData.triangle(self.source_order, basis_type="bernstein")
+        gx, gy = np.empty(len(points)), np.empty(len(points))
+        for start in range(0, len(points), int(chunk_size)):
+            stop = min(start + int(chunk_size), len(points))
+            cell = located[start:stop]
+            inverse = evaluator.inverses[cell]
+            offset = points[start:stop] - evaluator.origins[cell]
+            local = np.einsum("nij,nj->ni", inverse, offset)
+            gradients = reference.gradients_at(2.0*local - 1.0)
+            values = coefficients[cell]
+            d_xi = np.einsum("ni,ni->n", values, gradients[:, :, 0])
+            d_eta = np.einsum("ni,ni->n", values, gradients[:, :, 1])
+            # xi = 2 s - 1, eta = 2 t - 1 with (s, t) = inverse @ (x - origin)
+            gx[start:stop] = 2.0*(d_xi*inverse[:, 0, 0] + d_eta*inverse[:, 1, 0])
+            gy[start:stop] = 2.0*(d_xi*inverse[:, 0, 1] + d_eta*inverse[:, 1, 1])
+        return gx, gy
+
     def _source_coefficients(self, field_name: str) -> tuple[np.ndarray, float]:
         """Reconstruct cell-local Bernstein coefficients for one source field."""
         if field_name not in self.field_names:
