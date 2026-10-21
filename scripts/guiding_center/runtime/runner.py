@@ -538,7 +538,14 @@ def run_guiding_center_case(
     initialization_poisson_wall_time = initial_poisson_wall_time
     if first_poisson_result is not poisson_result:
         initialization_poisson_wall_time += first_poisson_wall_time
-    transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
+    from scripts.guiding_center.runtime.density_adr import make_adr_density_solver
+
+    # Collisional cases (case.parameters["collisional"]) take an ADR density solve; None otherwise.
+    transport_solver = make_adr_density_solver(space, case, config, trace_basis=_transport_trace_basis(config))
+    if transport_solver is not None and config.transport_electric_field == "exact":
+        raise ValueError("the ADR density solve (collisional cases) does not take the exact drift")
+    if transport_solver is None:
+        transport_solver = AdvectionReactionHDGSolver(space, options=transport_options)
     transport_preconditioner_reused = False
 
     prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
@@ -757,6 +764,9 @@ def run_guiding_center_case(
                     source = forcing.stage_source(source, scale, stage_time)
                     # alpha_h(t) changing between stage times changes the operator itself.
                     reuse_operator = reuse_operator and not forcing.time_dependent_reaction
+                set_stage_scale = getattr(transport_solver, "set_stage_scale", None)
+                if set_stage_scale is not None:  # ADR density solve: D enters with the stage factor
+                    set_stage_scale(scale)
                 if reuse_operator:
                     transport_solver.set_source(source, boundary_condition=stage_boundary)
                 else:
@@ -940,7 +950,12 @@ def run_guiding_center_case(
                 if wall_balance is not None:  # outflux through the open walls: its boundary term
                     scale = float(stage_extra.get("transport_beta_scale", config.dt))
                     extra["transport_beta_scale"] = scale
-                    extra.update(wall_balance.flux(advanced.transport_beta, solved_density, scale))
+                    adr_outflux = getattr(transport_solver, "boundary_outflux", None)
+                    if adr_outflux is not None:  # ADR density: numerical total flux, already per unit time
+                        extra.update({f"wall_{key}": value
+                                      for key, value in adr_outflux(groups=wall_balance.groups).items()})
+                    else:
+                        extra.update(wall_balance.flux(advanced.transport_beta, solved_density, scale))
                 row, diagnostics_wall_time = timed_call(
                     "[gc] computing accepted-step diagnostics",
                     _detail_verbosity(config),
