@@ -93,7 +93,7 @@ class GuidingCenterRunPreset:
     transport_petsc_monitor: bool = False
     transport_cupyx_solver: str = "bicgstab"
     transport_amgx_config_path: str | None = None
-    transport_amgx_tolerance: float | None = None
+    transport_amgx_tolerance: float | None = None  # AMGX stopping tolerance of the ADR density solve (None: config file)
     transport_ilu_drop_tol: float | None = None
     transport_ilu_fill_factor: float | None = None
     transport_ilu_failure: str = "raise"
