@@ -653,8 +653,22 @@ def run_guiding_center_case(
                 inner_wall=float(case.parameters.get("inner_wall", 0.0)),
                 backend="device" if projection_backend == "cupy" else "host"))
 
+    # Band-mode spectrum of an imported equilibrium band (case parameter band_stage): density and
+    # potential relative to the projected equilibrium and its HDG potential, every diagnostics step.
+    band_modes = None
+    band = getattr(case.imported_equilibrium, "band", None) if case.imported_equilibrium is not None else None
+    if band is not None and equilibrium_density is not None and not linear:
+        from hybridge.diagnostics.band_modes import BandModeSpectrum
+        band_modes, _ = timed_call("[gc:init] caching band-mode tables", _detail_verbosity(config),
+            lambda: BandModeSpectrum(space, band.theta_and_weight, max_mode=band.max_mode,
+                density_reference=equilibrium_density, potential_reference=equilibrium_potential,
+                potential_space=poisson_space, backend="device" if projection_backend == "cupy" else "host"))
+        band.parameters.update(band_modes.constants)
+
     def benchmark_metrics():
         metrics = {"poisson_tau": float(poisson_solver.options.stabilization)}
+        if band_modes is not None:
+            metrics.update(band_modes.measure(rho_field, poisson_result.field))
         if modal_diagnostics is not None:
             values, elapsed = timed_call("[gc] polar Fourier diagnostics", _detail_verbosity(config),
                                          lambda: modal_diagnostics.measure(poisson_result.field))
