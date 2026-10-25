@@ -121,6 +121,7 @@ def test_00_legacy_gaussian_annulus_cli_smoke(tmp_path: Path) -> None:
 
 def test_guiding_center_case_registry_has_legacy_gaussian_new_diocotron_and_rho_helm() -> None:
     assert tuple(CASE_DEFINITIONS) == (
+        "imported_equilibrium",
         "diocotron_gaussian_annulus", "diocotron_k", "euler_vortex_gas",
         "positive_turbulence", "euler_star_vortex_gas", "euler_shaped_vortex_gas",
         "spiral_sheet", "rho_helm_wave", "orbiting_vortex", "diocotron_annulus",
@@ -151,6 +152,8 @@ def test_guiding_center_case_factories_vectorize_on_arrays() -> None:
     y = np.array([[0.0, 0.3, -0.2], [0.1, 0.2, -0.4]])
 
     for key in CASE_DEFINITIONS:
+        if key == "imported_equilibrium":  # Requires an explicit checkpoint; covered separately.
+            continue
         case = case_definition_by_key(key).build()
         rho0 = case.initial_density(x, y)
         phi_boundary = case.potential_boundary_at(0.125)(x, y)

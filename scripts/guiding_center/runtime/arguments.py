@@ -178,6 +178,9 @@ def build_parser() -> GuidingCenterArgumentParser:
                         help="potential averaged for --transport-electric-field compatible: the p+1 "
                              "postprocessed potential, the HDG potential, or auto (postprocessed unless "
                              "the Poisson backend is raw-CUDA)")
+    parser.add_argument("--equilibrium-transfer", choices=("projection", "consistent"), default=None,
+                        help="imported window equilibria: start from the projection Pi_h W(phi_CG) or from the "
+                             "root of rho = Pi_h W(phi_c(rho)) (consistent; needs the compatible drift)")
     parser.add_argument("--volume-quadrature", choices=("auto", "symmetric", "duffy"), default=None)
     parser.add_argument("--volume-quad-1d", type=int, default=None)
     parser.add_argument("--edge-quad-1d", type=int, default=None)

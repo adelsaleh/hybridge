@@ -89,6 +89,8 @@ class GuidingCenterCase:
     # Record the transport outflux through the walls (zero inflow data only).
     wall_flux_diagnostics: bool = False
 
+    imported_equilibrium: Any = None
+
     @property
     def has_density_forcing(self) -> bool:
         """Return whether the density equation has a source or a reaction term."""
@@ -1614,7 +1616,16 @@ def orbiting_vortex(
 EXACT_BOUNDARY_CASES = frozenset({"rho_helm_wave", "orbiting_vortex"})
 
 
+def imported_equilibrium(**params):
+    """Load an archived potential/window without requiring a DOLFINx runtime."""
+    from scripts.guiding_center.cases.imported_equilibrium import imported_equilibrium as factory
+    return factory(**params)
+
+
 CASE_DEFINITIONS: dict[str, GuidingCenterCaseDefinition] = {
+    "imported_equilibrium": GuidingCenterCaseDefinition(
+        key="imported_equilibrium", description="Archived CG2 equiband on its original polygon",
+        factory=imported_equilibrium, default_domain="imported"),
     "diocotron_gaussian_annulus": GuidingCenterCaseDefinition(
         key="diocotron_gaussian_annulus",
         description="Legacy Gaussian-annulus diocotron perturbation; default azimuthal mode k=3.",

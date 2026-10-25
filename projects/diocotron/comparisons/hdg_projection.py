@@ -129,6 +129,92 @@ class DolfinxFieldCheckpoint:
         """Build a package-native DG mesh from the embedded linear geometry."""
         return DGMesh.from_arrays(self.mesh_node_coords.copy(), self.mesh_triangles.copy())
 
+    def evaluate_points(self, field_name: str, points: np.ndarray, *, cells=None, chunk_size=65536) -> np.ndarray:
+        """Evaluate the complete source polynomial at physical points on any mesh.
+
+        Points are located by a parallel walk (``hybridge.core.transfer.CellwiseEvaluator``)
+        from ``cells`` (one hint cell per point, e.g. the source cell a point was sampled in
+        or moved from) or from the nearest centroid. Points the walk does not reach go
+        through the triangulation locator: points outside the archived polygon are rejected;
+        only coordinate roundoff at its wall is tolerated. No nearest-cell extension across
+        a concave boundary is performed.
+        """
+        from hybridge.core.transfer import CellwiseEvaluator
+
+        points = np.asarray(points, dtype=float)
+        if points.ndim != 2 or points.shape[1] != 2 or not np.all(np.isfinite(points)):
+            raise ValueError("points must be a finite (n, 2) array")
+        if int(chunk_size) != chunk_size or chunk_size < 1:
+            raise ValueError("chunk_size must be a positive integer")
+        if cells is not None:
+            cells = np.asarray(cells, dtype=np.int64).ravel()
+            if cells.shape != (len(points),) or np.any((cells < 0) | (cells >= len(self.mesh_triangles))):
+                raise ValueError("cells must hold one source cell id per point")
+        coefficients, _ = self._source_coefficients(field_name)
+        if not hasattr(self, "_cell_evaluator"):
+            self._cell_evaluator = CellwiseEvaluator(self.mesh_node_coords, self.mesh_triangles, self.source_order)
+        result, located = self._cell_evaluator(coefficients, points, hints=cells)
+        missing = np.flatnonzero(located < 0)
+        if len(missing):
+            result[missing] = self._evaluate_points_located(field_name, points[missing], chunk_size=int(chunk_size))
+        return result
+
+    def _evaluate_points_located(self, field_name: str, points: np.ndarray, *, chunk_size: int) -> np.ndarray:
+        """Triangulation-locator evaluation (serial) for the points the walk did not reach."""
+        nodes, cells = self.mesh_node_coords, self.mesh_triangles
+        coefficients, _ = self._source_coefficients(field_name)
+        reference = ReferenceElementData.triangle(self.source_order, basis_type="bernstein")
+        result = np.empty(len(points))
+        for start in range(0, len(points), chunk_size):
+            batch = points[start:start+chunk_size]
+            indices = self._locate_cells(batch)
+            vertices = nodes[cells[indices]]
+            matrix = np.stack([vertices[:, 1]-vertices[:, 0], vertices[:, 2]-vertices[:, 0]], axis=-1)
+            local = np.linalg.solve(matrix, (batch-vertices[:, 0])[..., None])[..., 0]
+            basis = reference.basis_at(2*local-1)
+            result[start:start+len(batch)] = np.einsum("ni,ni->n", basis, coefficients[indices])
+        return result
+
+    def _locate_cells(self, points: np.ndarray) -> np.ndarray:
+        """Containing source cell of each point by the triangulation locator (serial).
+
+        Points outside the archived polygon are rejected; only coordinate roundoff at
+        its wall is tolerated (the cell adjacent to the nearest wall segment).
+        """
+        import matplotlib.tri as mtri
+
+        nodes, cells = self.mesh_node_coords, self.mesh_triangles
+        if not hasattr(self, "_point_locator"):
+            self._point_locator = mtri.Triangulation(nodes[:, 0], nodes[:, 1], cells.copy()).get_trifinder()
+        tolerance = 64*np.finfo(float).eps*max(1., float(np.max(np.abs(nodes))),
+                                                float(np.max(np.ptp(nodes, axis=0))))
+        indices = np.asarray(self._point_locator(points[:, 0], points[:, 1]), dtype=np.int64)
+        outside = np.flatnonzero(indices < 0)
+        if len(outside):
+            if not hasattr(self, "_point_boundary"):
+                edges = np.concatenate([cells[:, [0, 1]], cells[:, [1, 2]], cells[:, [2, 0]]])
+                edges.sort(axis=1)
+                unique, first, counts = np.unique(edges, axis=0, return_index=True, return_counts=True)
+                ends = nodes[unique[counts == 1]]
+                adjacent = first[counts == 1] % len(cells)
+                lengths = np.linalg.norm(ends[:, 1]-ends[:, 0], axis=1)
+                self._point_boundary = (ends, adjacent, lengths, cKDTree(ends.mean(axis=1)))
+            ends, adjacent, lengths, tree = self._point_boundary
+            candidates = tree.query_ball_point(points[outside], .5*lengths.max()+tolerance)
+            for position, ids in zip(outside, candidates):
+                ids = np.asarray(ids, dtype=int)
+                if not len(ids):
+                    raise ValueError("point outside checkpoint mesh")
+                delta = ends[ids, 1]-ends[ids, 0]
+                relative = points[position]-ends[ids, 0]
+                t = np.clip(np.sum(relative*delta, axis=1)/lengths[ids]**2, 0., 1.)
+                distances = np.linalg.norm(relative-t[:, None]*delta, axis=1)
+                nearest = int(np.argmin(distances))
+                if distances[nearest] > tolerance:
+                    raise ValueError("point outside checkpoint mesh")
+                indices[position] = adjacent[ids[nearest]]
+        return indices
+
     def _source_coefficients(self, field_name: str) -> tuple[np.ndarray, float]:
         """Reconstruct cell-local Bernstein coefficients for one source field."""
         if field_name not in self.field_names:

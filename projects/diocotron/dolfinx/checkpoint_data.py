@@ -21,7 +21,8 @@ GENERIC_DOLFINX_FORMAT_V2 = "hybridge_dolfinx_fields_v2"
 EQUILIBRIUM_FORMAT_V2 = "hybridge_equilibrium_v2"
 
 
-_SUPPORTED_V2_FORMATS = frozenset({GENERIC_DOLFINX_FORMAT_V2, EQUILIBRIUM_FORMAT_V2})
+_SUPPORTED_V2_FORMATS = frozenset({GENERIC_DOLFINX_FORMAT_V2, EQUILIBRIUM_FORMAT_V2,
+    "hdgfem_dolfinx_fields_v2", "hdgfem_equilibrium_v2"})
 
 
 _SUCCESS_STATUSES = frozenset({"OK", "CONVERGED", "CONVERGED_CERTIFIED_SUBBAND"})

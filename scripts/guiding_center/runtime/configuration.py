@@ -275,6 +275,7 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "compatible_potential": args.compatible_potential,
         "exact_drift_order_offset": getattr(args, "exact_drift_order_offset", None),
         "exact_drift_mode": getattr(args, "exact_drift_mode", None),
+        "equilibrium_transfer": getattr(args, "equilibrium_transfer", None),
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
         "poisson_flux_postprocess_every": args.poisson_flux_postprocess_every,
         "poisson_flux_postprocess_space": args.poisson_flux_postprocess_space,
@@ -427,6 +428,10 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("poisson_order_offset must be -1, 0, or a raised degree > 0")
     if config.order + config.poisson_order_offset < 0:
         raise ValueError("Poisson degree must be nonnegative; reduced-order Poisson requires density order >= 1")
+    if config.equilibrium_transfer not in {"projection", "consistent"}:
+        raise ValueError("equilibrium_transfer must be 'projection' or 'consistent'")
+    if config.equilibrium_transfer == "consistent" and config.transport_electric_field != "compatible":
+        raise ValueError("the consistent equilibrium transfer needs transport_electric_field='compatible'")
     if config.transport_electric_field not in {"raw", "postprocessed", "compatible", "exact"}:
         raise ValueError("transport_electric_field must be raw, postprocessed, compatible, or exact")
     exact_drift_mode = getattr(config, "exact_drift_mode", "pointwise")
