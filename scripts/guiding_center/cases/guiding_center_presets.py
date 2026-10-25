@@ -38,6 +38,7 @@ class GuidingCenterRunPreset:
     # the diagnostics read that projection in both modes.
     exact_drift_order_offset: int = 2
     exact_drift_mode: str = "pointwise"
+    equilibrium_transfer: str = "projection"
     volume_quadrature: str = "auto"
     initial_projection_quad_1d: int | None = None
     volume_quad_1d: int | None = None

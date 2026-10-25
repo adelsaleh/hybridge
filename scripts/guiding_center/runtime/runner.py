@@ -14,7 +14,7 @@ from hybridge.runtime.precision import (
     audit_arrays,
 )
 from hybridge.runtime.optional import require_cupy
-from hybridge.core.field_ops import project_callable_to_trace, solution_field, solution_trace
+from hybridge.core.field_ops import project_callable_to_trace, project_field_to_trace, solution_field, solution_trace
 from hybridge.core.transfer import project_same_mesh_field
 from hybridge.diagnostics.guiding_center import transport_velocity_diagnostics
 from hybridge.diagnostics.solver import result_transfer_time, solver_result_metrics
@@ -51,6 +51,10 @@ def _build_mesh(config: GuidingCenterRunPreset, case):
     )
 
     domain = case.default_domain if config.domain == "auto" else config.domain
+    if case.imported_equilibrium is not None:
+        if domain != "imported":
+            raise ValueError("an imported equilibrium must use its archived domain (--domain auto)")
+        return case.imported_equilibrium.to_mesh()
     if domain == "structured-rectangle":
         return rectangle_mesh(config.nx, config.ny, xlim=(-1.0, 1.0), ylim=(-1.0, 1.0))
     log_mesh_cache = _phase_verbosity(config) >= 1
@@ -170,6 +174,35 @@ def _project_initial_field(config: GuidingCenterRunPreset, space, function, *, n
 
 
 
+def _consistent_equilibrium_transfer(config: GuidingCenterRunPreset, case, space, solver, projected, rho_field, *,
+                                     device: bool, verbose: bool):
+    """Newton root of rho = Pi_h W(phi_c(rho)) for an imported window equilibrium (runtime/equilibrium_transfer).
+
+    ``projected`` is the projected equilibrium density and ``solver`` its Poisson solver. The initial density moves
+    by the same correction, so a control starts from the consistent density and a seeded run keeps its displacement
+    on top of it. Returns the consistent density, the moved initial density, its Poisson result and the records.
+    """
+    from hybridge.core.field_ops import field_linear_combination
+    from scripts.guiding_center.runtime.compatible_drift import CompatibleFluxPoissonSolver, compatible_potential_source
+    from scripts.guiding_center.runtime.equilibrium_transfer import ConsistentWindowTransfer, WindowLaw
+
+    profile = case.imported_equilibrium
+    if profile is None or config.transport_electric_field != "compatible":
+        raise ValueError("the consistent transfer needs an imported window equilibrium and the compatible drift")
+    if config.poisson_order_offset:
+        raise ValueError("the consistent transfer needs the Poisson space to be the density space")
+    wrapper = CompatibleFluxPoissonSolver(solver, space, potential=compatible_potential_source(
+        config.compatible_potential, config.poisson_assembly_backend))
+    transfer = ConsistentWindowTransfer(space, wrapper, WindowLaw(profile.window, profile.midpoint),
+                                        quadrature_1d=config.initial_projection_quad_1d, potential="compatible",
+                                        device=device, log=print if verbose else None)
+    density, result, records = transfer.solve(projected)
+    correction = field_linear_combination(space, [(1.0, density), (-1.0, projected)], name="delta_rho_h")
+    moved = field_linear_combination(space, [(1.0, rho_field), (1.0, correction)], name=rho_field.name)
+    return density, moved, result, dict(method="consistent", potential="compatible", newton=records,
+                                        poisson_solves=transfer.solves, poisson_solve_seconds=transfer.solve_seconds)
+
+
 def _project_case_density(config: GuidingCenterRunPreset, space, case, *, equilibrium: bool, name: str,
                           timings=None):
     """Project a case density; sharp conforming bands use the exact elementwise indicator.
@@ -281,6 +314,7 @@ def run_guiding_center_case(
         preset_key: str = "custom",
         step_observer: Callable[[GuidingCenterStepSnapshot], None] | None = None,
         terminal_log_path: str | Path | None = None,
+        case=None,
 ) -> GuidingCenterRunResult:
     """Run a fixed-mesh guiding-center case with the selected time scheme."""
     if (config.plot_diagnostics or config.save_diagnostics) and config.case == "diocotron_k":
@@ -298,7 +332,9 @@ def run_guiding_center_case(
     from scripts.guiding_center.cases.guiding_center_cases import EXACT_BOUNDARY_CASES, case_definition_by_key
 
     case_definition = case_definition_by_key(config.case)
-    case = case_definition.build(**config.case_params)
+    case = case_definition.build(**config.case_params) if case is None else case
+    if case.key != config.case:
+        raise ValueError("supplied case does not match configuration")
     mesh, _ = timed_call(
         f"generating {case.default_domain if config.domain == 'auto' else config.domain} mesh",
         _phase_verbosity(config),
@@ -400,6 +436,8 @@ def run_guiding_center_case(
     )
     if case.key in EXACT_BOUNDARY_CASES and transport_boundary_mode != "eliminate":
         raise ValueError(f"{case.key} requires boundary_mode='eliminate' with exact density data")
+    if case.imported_equilibrium is not None and transport_boundary_mode != "zero-flux":
+        raise ValueError("equiband preservation requires zero-flux transport walls")
     transport_options = _make_transport_options(config, transport_boundary_mode)
     wall_balance = None
     if case.wall_flux_diagnostics:
@@ -426,6 +464,11 @@ def run_guiding_center_case(
     first_poisson_result = None
     first_poisson_wall_time = 0.0
     equilibrium_density_projection_time = 0.0
+    transfer_record = None
+    if config.equilibrium_transfer not in ("projection", "consistent"):
+        raise ValueError("equilibrium_transfer must be 'projection' or 'consistent'")
+    if config.equilibrium_transfer == "consistent" and (case.equilibrium_density is None or linear):
+        raise ValueError("the consistent transfer applies to nonlinear runs of a case with an equilibrium density")
     if case.equilibrium_density is not None:
         equilibrium_density, equilibrium_density_projection_time = timed_call(
             f"[gc:init] projecting equilibrium density ({projection_backend})",
@@ -457,6 +500,15 @@ def run_guiding_center_case(
             _phase_verbosity(config),
             equilibrium_solver.solve,
         )
+        if config.equilibrium_transfer == "consistent":
+            ((equilibrium_density, rho_field, equilibrium_result, transfer_record), transfer_time) = timed_call(
+                "[gc:init] consistent transfer rho = Pi_h W(phi_c(rho)) (Newton-GMRES)",
+                _phase_verbosity(config),
+                lambda: _consistent_equilibrium_transfer(
+                    config, case, space, equilibrium_solver, equilibrium_density, rho_field,
+                    device=projection_backend == "cupy", verbose=_detail_verbosity(config)),
+            )
+            transfer_record["seconds"] = transfer_time
         first_poisson_result = equilibrium_result
         equilibrium_potential = equilibrium_result.field
         equilibrium_potential_l2 = None
@@ -549,13 +601,18 @@ def run_guiding_center_case(
     transport_preconditioner_reused = False
 
     prefer_device_trace = config.transport_assembly_backend == "raw-cuda" and _is_amgx_solver(config.transport_solver)
-    density_trace = project_callable_to_trace(
-        space,
-        case.initial_density_at(),
-        trace_basis=_transport_trace_basis(config),
-        reduced=True,
-        backend="device" if prefer_device_trace else "host",
-    )
+    if transfer_record is not None:
+        # the consistent density is not the projection of a callable; its trace comes from the field
+        density_trace = project_field_to_trace(rho_field, trace_basis=_transport_trace_basis(config), reduced=True,
+                                               backend="device" if prefer_device_trace else "host")
+    else:
+        density_trace = project_callable_to_trace(
+            space,
+            case.initial_density_at(),
+            trace_basis=_transport_trace_basis(config),
+            reduced=True,
+            backend="device" if prefer_device_trace else "host",
+        )
     potential_trace = solution_trace(poisson_result, poisson_space, reduced=False)
     recovery_log_started = False
 
@@ -624,6 +681,15 @@ def run_guiding_center_case(
         if collect_metrics:
             initial_extra = solver_result_metrics("poisson", poisson_result)
             initial_extra.update(initial_positivity)
+            if transfer_record is not None:
+                initial_extra["equilibrium_transfer"] = transfer_record
+            if case.imported_equilibrium is not None:
+                initial_extra.update(case.imported_equilibrium.initial_diagnostics(
+                    space, rho_field, poisson_result,
+                    quadrature_1d=config.initial_projection_quad_1d,
+                    trace_basis=_transport_trace_basis(config),
+                    transport_electric_field=config.transport_electric_field,
+                    advection_stabilization=config.transport_advection_stabilization))
             if initial_projection_timings is not None:
                 initial_extra["initial_density_projection_profile"] = initial_projection_timings
             if equilibrium_projection_timings:

@@ -1485,17 +1485,28 @@ def gmsh_polygon_mesh(
         algorithm: int | None = None, write_path: str | None = None,
         cache: bool = True, cache_dir: str | os.PathLike[str] | None = None,
         num_threads: int | None = None, log_cache: bool = True,
+        extend_from_boundary: bool = True,
 ) -> DGMesh:
-    """Mesh a simple polygon through the standard Gmsh geometry/cache path."""
+    """Mesh a polygon; optionally keep fine boundary sizes out of the interior.
+
+    ``extend_from_boundary=False`` retains every supplied segment but uses the
+    requested interior size, useful when remeshing an archived affine boundary.
+    """
     from hybridge.core.geometry import PolygonDomain
 
     domain = PolygonDomain(vertices)
+    def build(gmsh):
+        surface = _gmsh_polygon_surface(gmsh, domain.vertices, mesh_size)
+        _set_required_gmsh_number_option(gmsh, "Mesh.MeshSizeExtendFromBoundary", int(extend_from_boundary))
+        return surface
+
     return _generate_gmsh_mesh(
         "polygon", mesh_size,
-        lambda gmsh: _gmsh_polygon_surface(gmsh, domain.vertices, mesh_size),
+        build,
         verbosity=verbosity, algorithm=algorithm, write_path=write_path,
         cache=cache, cache_dir=cache_dir, num_threads=num_threads, log_cache=log_cache,
-        cache_key_data={"geometry": "polygon", "vertices": domain.vertices},
+        cache_key_data={"geometry": "polygon", "vertices": domain.vertices,
+                        **({} if extend_from_boundary else {"extend_from_boundary": False})},
     )
 
 

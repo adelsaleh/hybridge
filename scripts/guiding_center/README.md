@@ -881,3 +881,5 @@ To explicitly compile and check the tiny CUDA assembly/reconstruction cases:
 NUMBA_DISABLE_JIT=1 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 PYTHONPATH=. \
   .venv/bin/python -m pytest -q tests/test_transport_lax_friedrichs.py
 ```
+
+Archived noncircular band equilibria can now be imported with `--case imported_equilibrium`; see [transfer, bounded preservation checks and measured limitations](benchmarks/equilibrium_preservation.md).
