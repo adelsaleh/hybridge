@@ -1,0 +1,586 @@
+{
+ "recorded_rows": 241,
+ "hardware": "local RTX PRO 5000 Blackwell records",
+ "tasks": {
+  "smoke-gmsh-raw": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-gmsh-raised": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-gmsh-compatible": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-gmsh-compatible-primal": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-gmsh-exact": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-gmsh-exact-projected": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-aligned-exact": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-unstructured-raw": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-temporal-wave": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-temporal-vortex": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-bdf3": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "smoke-snapshot": {
+   "hours": 0.05,
+   "source": "model",
+   "runs": 1
+  },
+  "lattice-gmsh": {
+   "hours": 0.1,
+   "source": "model",
+   "runs": 1
+  },
+  "lattice-unstructured": {
+   "hours": 0.1,
+   "source": "model",
+   "runs": 1
+  },
+  "gmsh-raw-p2": {
+   "hours": 0.19462931296527838,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raised-p2-s1": {
+   "hours": 0.27286289567671096,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raised-p2-s2": {
+   "hours": 0.35407005568859556,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-compatible-p2": {
+   "hours": 0.23315290255384752,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-compatible-primal-p2": {
+   "hours": 0.29758766975946654,
+   "source": "recorded (other drift)",
+   "runs": 6
+  },
+  "gmsh-exact-p2": {
+   "hours": 0.19462931296527838,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raw-p3": {
+   "hours": 0.22701854398595364,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raised-p3-s1": {
+   "hours": 0.2658014391714177,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raised-p3-s2": {
+   "hours": 0.2911213310581904,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-compatible-p3": {
+   "hours": 0.22755885799219766,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-compatible-primal-p3": {
+   "hours": 0.30004573210182844,
+   "source": "recorded (other drift)",
+   "runs": 5
+  },
+  "gmsh-exact-p3": {
+   "hours": 0.22701854398595364,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raw-p4": {
+   "hours": 1.4353585797027013,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raised-p4-s1": {
+   "hours": 1.4017408689617392,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raised-p4-s2": {
+   "hours": 1.837687565098976,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-compatible-p4": {
+   "hours": 1.3523523048877704,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-compatible-primal-p4": {
+   "hours": 1.415144798418423,
+   "source": "recorded (other drift)",
+   "runs": 6
+  },
+  "gmsh-exact-p4": {
+   "hours": 1.4353585797027013,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "gmsh-raw-p5": {
+   "hours": 0.922905965549459,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raised-p5-s1": {
+   "hours": 1.09602957292544,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raised-p5-s2": {
+   "hours": 1.481950777255002,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-compatible-p5": {
+   "hours": 0.7588840507356831,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-compatible-primal-p5": {
+   "hours": 0.8989272676011683,
+   "source": "recorded (other drift)",
+   "runs": 5
+  },
+  "gmsh-exact-p5": {
+   "hours": 0.922905965549459,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "gmsh-raw-p6": {
+   "hours": 0.5189803377085223,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "gmsh-raised-p6-s1": {
+   "hours": 0.6780338220401124,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "gmsh-raised-p6-s2": {
+   "hours": 0.728477356009098,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "gmsh-compatible-p6": {
+   "hours": 0.4030832999721396,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "gmsh-compatible-primal-p6": {
+   "hours": 0.5099181531795165,
+   "source": "recorded (other drift)",
+   "runs": 4
+  },
+  "gmsh-exact-p6": {
+   "hours": 0.5189803377085223,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "gmsh-finest-raw": {
+   "hours": 0.20341709385803874,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "gmsh-finest-raised": {
+   "hours": 0.2663772975237913,
+   "source": "recorded",
+   "runs": 1
+  },
+  "gmsh-finest-compatible": {
+   "hours": 0.21265256381962166,
+   "source": "recorded",
+   "runs": 1
+  },
+  "gmsh-finest-compatible-primal": {
+   "hours": 0.20373817310705944,
+   "source": "recorded (other drift)",
+   "runs": 1
+  },
+  "gmsh-finest-exact": {
+   "hours": 0.20341709385803874,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "structured-raw-aligned-p2": {
+   "hours": 0.03981459133089326,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-aligned-p2-s1": {
+   "hours": 0.05683172621119108,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-aligned-p2-s2": {
+   "hours": 0.07324991791079002,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-exact-aligned-p2": {
+   "hours": 0.03981459133089326,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raw-aligned-p3": {
+   "hours": 1.888925181433718,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raised-aligned-p3-s1": {
+   "hours": 2.3116456304569146,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raised-aligned-p3-s2": {
+   "hours": 0.31378529427222224,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-exact-aligned-p3": {
+   "hours": 1.888925181433718,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raw-aligned-p4": {
+   "hours": 1.6372394361184903,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-aligned-p4-s1": {
+   "hours": 1.7090259227158013,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-aligned-p4-s2": {
+   "hours": 0.20223502565704016,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "structured-exact-aligned-p4": {
+   "hours": 1.6372394361184903,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raw-misaligned-p2": {
+   "hours": 0.03981459133089326,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-misaligned-p2-s1": {
+   "hours": 0.05683172621119108,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-misaligned-p2-s2": {
+   "hours": 0.07324991791079002,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-exact-misaligned-p2": {
+   "hours": 0.03981459133089326,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raw-misaligned-p3": {
+   "hours": 1.888925181433718,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raised-misaligned-p3-s1": {
+   "hours": 2.3116456304569146,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raised-misaligned-p3-s2": {
+   "hours": 0.31378529427222224,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-exact-misaligned-p3": {
+   "hours": 1.888925181433718,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-raw-misaligned-p4": {
+   "hours": 1.6372394361184903,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-misaligned-p4-s1": {
+   "hours": 1.7090259227158013,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-raised-misaligned-p4-s2": {
+   "hours": 0.20223502565704016,
+   "source": "recorded (same mesh)",
+   "runs": 4
+  },
+  "structured-exact-misaligned-p4": {
+   "hours": 1.6372394361184903,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-compatible-misaligned-p2": {
+   "hours": 0.03996067929574767,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-compatible-misaligned-p3": {
+   "hours": 1.861523985349373,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 6
+  },
+  "structured-compatible-misaligned-p4": {
+   "hours": 1.5373738939402672,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 5
+  },
+  "structured-compatible-primal-misaligned-p2": {
+   "hours": 0.10792666241981187,
+   "source": "recorded (other drift)",
+   "runs": 5
+  },
+  "structured-compatible-primal-misaligned-p3": {
+   "hours": 1.7423958997784015,
+   "source": "recorded (other drift)",
+   "runs": 6
+  },
+  "structured-compatible-primal-misaligned-p4": {
+   "hours": 1.221305008295083,
+   "source": "recorded (other drift)",
+   "runs": 5
+  },
+  "unstructured-raw-p2-s0": {
+   "hours": 0.22681936122981522,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-raw-p2-s1": {
+   "hours": 0.32985899033360006,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-compatible-p2": {
+   "hours": 0.2266806992984655,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-compatible-primal-p2": {
+   "hours": 0.32646636716231453,
+   "source": "recorded (other drift)",
+   "runs": 6
+  },
+  "unstructured-exact-p2": {
+   "hours": 0.22681936122981522,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-raw-p3-s0": {
+   "hours": 0.25445976837472295,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "unstructured-raw-p3-s1": {
+   "hours": 0.3142365378924822,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "unstructured-compatible-p3": {
+   "hours": 0.26124035087777886,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "unstructured-compatible-primal-p3": {
+   "hours": 0.33154994109520813,
+   "source": "recorded (other drift)",
+   "runs": 5
+  },
+  "unstructured-exact-p3": {
+   "hours": 0.25445976837472295,
+   "source": "recorded (same mesh)",
+   "runs": 5
+  },
+  "unstructured-raw-p4-s0": {
+   "hours": 1.5228627546863127,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-raw-p4-s1": {
+   "hours": 1.7446063006090116,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "unstructured-compatible-p4": {
+   "hours": 1.6297161412374406,
+   "source": "recorded (other mesh family)",
+   "runs": 6
+  },
+  "unstructured-compatible-primal-p4": {
+   "hours": 1.6064062428296675,
+   "source": "recorded (other drift)",
+   "runs": 6
+  },
+  "unstructured-exact-p4": {
+   "hours": 1.5228627546863127,
+   "source": "recorded (same mesh)",
+   "runs": 6
+  },
+  "exact-projected-gmsh-p2": {
+   "hours": 0.06830216331363773,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-gmsh-p3": {
+   "hours": 0.0809105731381472,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-gmsh-p4": {
+   "hours": 0.5037873012070971,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-gmsh-p5": {
+   "hours": 0.33171452743412777,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-gmsh-p6": {
+   "hours": 0.18453153497015592,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-misaligned-p2": {
+   "hours": 0.013990012009970895,
+   "source": "recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-misaligned-p3": {
+   "hours": 0.6737624530932768,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-projected-misaligned-p4": {
+   "hours": 0.5731460948253825,
+   "source": "recorded, recorded (same mesh)",
+   "runs": 2
+  },
+  "exact-bdf3-aligned-p2-h0.01": {
+   "hours": 0.008739326645534978,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-aligned-p2-h0.005": {
+   "hours": 0.02961262083873319,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-aligned-p3-h0.01": {
+   "hours": 0.031528508892267965,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-aligned-p4-h0.02": {
+   "hours": 0.02751754858040309,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-misaligned-p2-h0.01": {
+   "hours": 0.008739326645534978,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-misaligned-p2-h0.005": {
+   "hours": 0.02961262083873319,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-misaligned-p3-h0.01": {
+   "hours": 0.031528508892267965,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "exact-bdf3-misaligned-p4-h0.02": {
+   "hours": 0.02751754858040309,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "temporal-wave": {
+   "hours": 1.0,
+   "source": "recorded (whole study)",
+   "runs": 1
+  },
+  "temporal-vortex": {
+   "hours": 3.5,
+   "source": "recorded (whole study)",
+   "runs": 1
+  },
+  "floor-gmsh-p5-s0-h0.01": {
+   "hours": 0.379175811975664,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "floor-gmsh-p4-s1-h0.005": {
+   "hours": 0.5778966868889643,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "boundary-layer-p3-q3": {
+   "hours": 0.06734119346223047,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  },
+  "boundary-layer-p3-q4": {
+   "hours": 0.08072948177081546,
+   "source": "recorded (same mesh)",
+   "runs": 1
+  }
+ }
+}
