@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 
 from scripts.advection_diffusion_reaction.cases import closed_loop_stress_cases as cases
-from scripts.advection_diffusion_reaction.campaigns import logging as reporting
-from scripts.advection_diffusion_reaction.campaigns.stress import run_closed_loop_stress as runner
+from campaigns.common import reporting as reporting
+from campaigns.adr_stress import run_closed_loop_stress as runner
 from scripts.advection_diffusion_reaction.meshes.closed_loop_stress_mesh import background_sizes
 
 

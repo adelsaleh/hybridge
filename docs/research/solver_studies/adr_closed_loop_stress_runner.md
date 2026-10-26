@@ -10,7 +10,7 @@ solver comparisons or certify convergence of a user's numerical campaign.
 From the repository root, inspect the default plan:
 
 ```bash
-.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
+.venv/bin/python -B campaigns/adr_stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main
 ```
 
@@ -27,7 +27,7 @@ HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
 HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
+  campaigns/adr_stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --execute
 ```
 
@@ -71,7 +71,7 @@ HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
 HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
+  campaigns/adr_stress/run_closed_loop_stress.py \
   --geometry square \
   --output run_outputs/solver_studies/adr_square_stress_strong_numba_h150k_pardiso_all \
   --solver-strength strong --maxiter 2000 --orders 6 \
@@ -195,7 +195,7 @@ HYBRIDGE_CUDA13_ROOT=/path/to/cuda-13 \
 HYBRIDGE_AMGX_BUILD_ROOT=../AMGX-build-cuda13 \
 HYBRIDGE_AMGX_INSTALL_ROOT=../AMGX-install-cuda13 \
   scripts/gpu/run_cuda13.sh .venv/bin/python -B \
-  scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
+  campaigns/adr_stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_strong_numba_h150k \
   --solver-strength strong --maxiter 2000 \
   --triangles 100000 150000 --max-triangles 175000 \
@@ -317,7 +317,7 @@ overwritten by a fresh execution.
 Inspect an existing campaign, including one still running:
 
 ```bash
-.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py \
+.venv/bin/python -B campaigns/adr_stress/run_closed_loop_stress.py \
   --output run_outputs/solver_studies/adr_closed_loop_stress_main --status
 ```
 

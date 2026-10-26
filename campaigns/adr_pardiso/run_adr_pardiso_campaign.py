@@ -20,21 +20,21 @@ import platform
 import statistics
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_inventory as archive
-from scripts.advection_diffusion_reaction.campaigns.pardiso import adr_pardiso_tuning as tuning
+from campaigns.adr_pardiso import adr_pardiso_inventory as archive
+from campaigns.adr_pardiso import adr_pardiso_tuning as tuning
 from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import (
     memory_kib, monitor, physical_threads, write_json,
 )
-from scripts.advection_diffusion_reaction.campaigns.logging import event
+from campaigns.common.reporting import event
 
 DEFAULT_OUTPUT = archive.STUDY / 'pardiso_all_2026_09_22'
 SOURCE_FILES = (
     Path(__file__), Path(archive.__file__), Path(tuning.__file__),
-    ROOT/'scripts/advection_diffusion_reaction/campaigns/pardiso/adr_pardiso_worker.py',
+    ROOT/'campaigns/adr_pardiso/adr_pardiso_worker.py',
     ROOT/'scripts/advection_diffusion_reaction/diagnostics/check_cached_adr_pardiso.py',
     ROOT/'hybridge/linalg/pardiso_diagnostics.py', ROOT/'hybridge/linalg/system.py',
     ROOT/'hybridge/linalg/bsr.py', ROOT/'hybridge/mixed/face_dense.py', ROOT/'hybridge/runtime/precision.py',
@@ -300,7 +300,7 @@ def execute(plan, args):
 def main(argv=None):
     args = parser().parse_args(argv)
     if args.worker_spec:
-        from scripts.advection_diffusion_reaction.campaigns.pardiso.adr_pardiso_worker import run
+        from campaigns.adr_pardiso.adr_pardiso_worker import run
         return run(args.worker_spec, args.output)
     if args.status:
         data = archive.read(args.output/'summary.json')

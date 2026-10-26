@@ -16,7 +16,7 @@ import threading
 from time import perf_counter
 import traceback
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class BudgetExceeded(RuntimeError):
@@ -151,7 +151,7 @@ def run_numerical(spec, common):
         cases = load_file('_adr_stress_cases', ROOT/'scripts/advection_diffusion_reaction/cases/closed_loop_stress_cases.py')
         params = cases.StressParameters(**spec['stress_parameters'])
         register_case(spec['case'], lambda: cases.make_case(params, spec['velocity_normalization']))
-    stress_worker = load_file('_adr_stress_worker', ROOT/'scripts/advection_diffusion_reaction/campaigns/stress/closed_loop_stress_worker.py')
+    stress_worker = load_file('_adr_stress_worker', ROOT/'campaigns/adr_stress/closed_loop_stress_worker.py')
     operator_hash = stress_worker.operator_hash
     if spec.get('mesh_path'):
         if hashlib.sha256(Path(spec['mesh_path']).read_bytes()).hexdigest() != spec['mesh_sha256']:

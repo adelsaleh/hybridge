@@ -18,14 +18,14 @@ import subprocess
 import sys
 import time
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction.campaigns.unified.adr_unified_plan import (
+from campaigns.adr_unified.adr_unified_plan import (
     AMGX_BACKENDS, build_plan, fingerprint, memory_estimate, read_inventory,
 )
-from scripts.advection_diffusion_reaction.campaigns.unified.adr_unified_worker import load_file
+from campaigns.adr_unified.adr_unified_worker import load_file
 
 GMRES_ROOT = ROOT/'vendor/adr_gmres'
 WORKER = Path(__file__).with_name('adr_unified_worker.py')

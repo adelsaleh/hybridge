@@ -167,3 +167,14 @@ builders) must then read the `*_accurate` columns and this layout (`poisson_degr
 static import closure of the entry scripts, the AMGX configurations they name, this folder, and the tests of the
 quadrature-point coefficient change. Each file comes with its git status. Commit every modified or untracked
 file it lists. `CODEMAP.md` and `AGENTS.md` are machine-specific and never committed.
+
+## Status and records
+
+| | |
+|---|---|
+| Status | prepared on 2026-10-26 (116 tasks, 446 runs, about 72 local GPU-hours); dependencies, dry runs and the mesh bundle verified; the smoke group has not been run |
+| Output directory | `run_outputs/campaigns/gc_article_convergence` locally; `$WORK/hybridge/campaigns/gc_article_convergence` on Jean Zay (`HYBRIDGE_CAMPAIGN_OUT`) |
+| Mesh bundle | `run_outputs/campaigns/gc_article_convergence/gc_article_meshes.tar.gz` (16 meshes, 99 MB), checked by `campaign.py verify-meshes` |
+| Records | `mesh_manifest.json`, `cost_estimates.json`, `dt_table.json`, `dt_table_exact_bdf3.json` here; run records will be collected into `records/` with `python -m campaigns.common.records collect gc_article_convergence` when the campaign ends |
+| Study | `scripts/guiding_center/studies/convergence/README.md` |
+| Dossier | not part of the GENCI dossier's phase table (the dossier was submitted before this campaign existed); it is the article's convergence evidence and runs on the same allocation |
