@@ -273,6 +273,8 @@ def _runtime_config(config: GuidingCenterRunPreset, args) -> GuidingCenterRunPre
         "poisson_order_offset": args.poisson_order_offset,
         "transport_electric_field": args.transport_electric_field,
         "compatible_potential": args.compatible_potential,
+        "exact_drift_order_offset": getattr(args, "exact_drift_order_offset", None),
+        "exact_drift_mode": getattr(args, "exact_drift_mode", None),
         "poisson_hdg_postprocess": args.poisson_hdg_postprocess,
         "poisson_flux_postprocess_every": args.poisson_flux_postprocess_every,
         "poisson_flux_postprocess_space": args.poisson_flux_postprocess_space,
@@ -423,8 +425,28 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
         raise ValueError("poisson_order_offset must be -1, 0, or a raised degree > 0")
     if config.order + config.poisson_order_offset < 0:
         raise ValueError("Poisson degree must be nonnegative; reduced-order Poisson requires density order >= 1")
-    if config.transport_electric_field not in {"raw", "postprocessed", "compatible"}:
-        raise ValueError("transport_electric_field must be raw, postprocessed, or compatible")
+    if config.transport_electric_field not in {"raw", "postprocessed", "compatible", "exact"}:
+        raise ValueError("transport_electric_field must be raw, postprocessed, compatible, or exact")
+    exact_drift_mode = getattr(config, "exact_drift_mode", "pointwise")
+    if exact_drift_mode not in {"pointwise", "projected"}:
+        raise ValueError("exact_drift_mode must be 'pointwise' or 'projected'")
+    if config.transport_electric_field == "exact":
+        if config.poisson_order_offset != 0:
+            raise ValueError("the exact drift keeps the Poisson degree of the density (poisson_order_offset=0)")
+        if config.exact_drift_order_offset < 0:
+            raise ValueError("exact_drift_order_offset must be nonnegative")
+        # The other schemes (and the linearized runs) build their drifts from result.flux directly.
+        if config.time_scheme not in {"si-euler", "si-bdf2", "si-bdf3", "imex-ark3"}:
+            raise ValueError("the exact drift is wired for si-euler, si-bdf2, si-bdf3 and imex-ark3")
+        if getattr(config, "linearized", False):
+            raise ValueError("linearized runs transport with the equilibrium drift, not the exact drift")
+        if exact_drift_mode == "pointwise":
+            if config.transport_assembly_backend not in {"numpy", "numba", "raw-cuda"}:
+                raise ValueError("the pointwise exact drift needs numpy, numba or raw-cuda transport assembly "
+                                 "(exact_drift_mode='projected' otherwise)")
+            if config.transport_assembly_backend == "raw-cuda" and config.transport_raw_local_assembly == "precomputed":
+                raise ValueError("the pointwise exact drift needs raw-cuda fused or split3 local assembly "
+                                 "(transport_raw_local_assembly)")
     if config.transport_electric_field == "compatible":
         from scripts.guiding_center.runtime.compatible_drift import compatible_potential_source
 

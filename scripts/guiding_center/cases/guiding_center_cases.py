@@ -73,6 +73,7 @@ class GuidingCenterCase:
         boundary = lambda x, y: self.potential_boundary(x, y, t)
         if self.potential_boundary_constant is not None:
             boundary._hybridge_constant_value = float(self.potential_boundary_constant)
+        boundary._hybridge_time = t  # read by the electrode superposition
         return boundary
 
     def density_boundary_at(self, time: float) -> ScalarCallable | None:

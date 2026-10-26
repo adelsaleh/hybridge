@@ -394,6 +394,16 @@ def run_guiding_center_case(
             space,
             potential=compatible_potential_source(config.compatible_potential, config.poisson_assembly_backend),
         )
+    if config.transport_electric_field == "exact":
+        from scripts.guiding_center.runtime.exact_drift import ExactFluxPoissonSolver
+
+        # Pointwise mode: the drift's face points are those of the transport trace space.
+        poisson_solver = ExactFluxPoissonSolver(
+            poisson_solver, case, space, degree_offset=config.exact_drift_order_offset,
+            device=config.transport_assembly_backend in {"cupy", "raw-cuda"},
+            mode=getattr(config, "exact_drift_mode", "pointwise"),
+            trace_space=space.trace_space(_transport_trace_basis(config)),
+        )
     initial_solve_label = (
         "[gc:init] solving first diffusion/Poisson system"
         if first_poisson_result is None
@@ -498,7 +508,10 @@ def run_guiding_center_case(
                 dt=config.dt, time_scheme=config.time_scheme, poisson_tau_initial=config.poisson_tau,
                 initial_projection_quad_1d=config.initial_projection_quad_1d,
                 volume_quadrature=config.volume_quadrature, volume_quad_1d=config.volume_quad_1d,
-                edge_quad_1d=config.edge_quad_1d)
+                edge_quad_1d=config.edge_quad_1d, transport_electric_field=config.transport_electric_field,
+                **({"exact_drift_mode": getattr(config, "exact_drift_mode", "pointwise"),
+                    "exact_drift_order_offset": config.exact_drift_order_offset}
+                   if config.transport_electric_field == "exact" else {}))
             if config.diocotron_diagnostics:
                 from scripts.guiding_center.diagnostics.diocotron_reference import annulus_spectrum
                 initial_extra["diocotron_sharp_annulus_reference"] = annulus_spectrum(

@@ -19,7 +19,7 @@ from hybridge.core.transfer import project_same_mesh_field
 from hybridge.hdg.gram import field_l2_norm
 from hybridge.runtime.logging import timed_call
 from scripts.guiding_center.time_schemes.stage_support import (
-    closest_trace, GuidingCenterStep, transport_drift,
+    closest_trace, drift_flux, GuidingCenterStep, transport_drift,
 )
 from scripts.guiding_center.poisson.poisson_recovery import (
     PoissonCheckpoint, PoissonStageRankFailure, PoissonTauRecovery,
@@ -331,7 +331,7 @@ class _ARKWork:
         """Evaluate the physical residual and attach provenance on proven rank loss."""
         stepper = self.stepper
         drift = self.timed("beta", f"{checkpoint.label} drift", stepper.detail_verbosity,
-            lambda: transport_drift(result.flux, 1, stepper.space))
+            lambda: transport_drift(drift_flux(result), 1, stepper.space))
         try:
             rhs, trace = self.timed("residual", f"{checkpoint.label} explicit HDG residual",
                 stepper.detail_verbosity,

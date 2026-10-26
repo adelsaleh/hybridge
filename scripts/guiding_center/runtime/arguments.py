@@ -159,11 +159,21 @@ def build_parser() -> GuidingCenterArgumentParser:
                         help="Poisson degree relative to density degree: -1 (SI-BDF2/BDF3), 0, or a raised "
                              "degree > 0 (raw drift; SI-Euler, SI-BDF2/BDF3, IMEX-ARK3; the transport "
                              "uses the degree-q flux without projection)")
-    parser.add_argument("--transport-electric-field", choices=("raw", "postprocessed", "compatible"),
+    parser.add_argument("--transport-electric-field", choices=("raw", "postprocessed", "compatible", "exact"),
                         default=None,
                         help="electric field supplying the drift on every Poisson solve: raw HDG flux, "
-                             "recovered flux (SI-BDF2/BDF3 only), or compatible -grad of the Oswald-averaged "
-                             "potential (every scheme; H(div), divergence-free, wall-tangent drift)")
+                             "recovered flux (SI-BDF2/BDF3 only), compatible -grad of the Oswald-averaged "
+                             "potential (every scheme; H(div), divergence-free, wall-tangent drift), or exact: "
+                             "the case's exact drift, see --exact-drift-mode (manufactured cases with an "
+                             "analytic flux; reference runs; SI-Euler, SI-BDF2/BDF3, IMEX-ARK3)")
+    parser.add_argument("--exact-drift-mode", choices=("pointwise", "projected"), default=None,
+                        help="exact drift for --transport-electric-field exact: its values at the transport's "
+                             "quadrature points (pointwise, default; NumPy, Numba or raw-CUDA fused/split3 "
+                             "transport) or the L2 projection of the exact flux onto "
+                             "DG(p + --exact-drift-order-offset) (projected)")
+    parser.add_argument("--exact-drift-order-offset", type=int, default=None,
+                        help="degree offset of the projected exact flux for --transport-electric-field exact "
+                             "(default 2; the transport drift in projected mode, the diagnostics in both)")
     parser.add_argument("--compatible-potential", choices=("auto", "postprocessed", "primal"), default=None,
                         help="potential averaged for --transport-electric-field compatible: the p+1 "
                              "postprocessed potential, the HDG potential, or auto (postprocessed unless "

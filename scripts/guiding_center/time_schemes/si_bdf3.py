@@ -41,7 +41,7 @@ def _bdf3_transport_data(space, density, flux, dt, *, previous_density=None, pre
     )
     source.name = "rho_bdf3_source_h" if older_density is not None else "rho_bdf2_source_h"
     beta.name = "beta_h"
-    for component, label in zip(beta.components, ("beta_h_x", "beta_h_y")):
+    for component, label in zip(getattr(beta, "components", ()), ("beta_h_x", "beta_h_y")):
         component.name = label
     return source, beta, scale
 
