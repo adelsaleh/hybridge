@@ -628,6 +628,29 @@ This remains the highest-priority new shared-API design project after the unstea
 
 ## Guiding-Center
 
+### Campaign organization and cluster follow-ups
+
+- [x] Gather the local campaign launchers, output-directory documentation and small records in
+  [campaigns/README.md](campaigns/README.md). Complete and partial results retain their provenance,
+  source hashes and large-data locations. D8's I/X phase markers do not imply that its full ladder ran.
+- [x] Document the submitted GENCI phases: [assembly](campaigns/h100_assembly/README.md),
+  [H100/H200 solvers](campaigns/h100_solvers/README.md) and
+  [turbulence](campaigns/h100_turbulence/README.md), alongside the later
+  [article convergence campaign](campaigns/gc_article_convergence/README.md).
+- [ ] Build task registries and Slurm launchers for the three GENCI phases, following the convergence
+  campaign: plan/list modes, deterministic sharding, provenance, memory/time limits, complete logs,
+  per-task completion/failure markers and skip-completed resume. Compare with the preserved local
+  baselines. The documented phases are planned work, not target-machine validation.
+- [ ] Generalize D8-S into a shared kernel-smoke runner with selectable cases, degrees, element-unknown
+  targets, step counts and stages, plus a plan mode.
+- [ ] Unify the degree-study and shared-protocol GPU-lock probes, preserving exclusive timing and
+  shared-device accuracy behavior.
+- [ ] Replace the magnetron driver's in-memory snapshot saver after an explicitly requested validation
+  run; retain the existing saved-field format.
+- [ ] Port the skipped positivity-order gates and run the H100 smoke group of the prepared convergence
+  campaign after the target environment is ready.
+
+
 - [x] Record the bounded Gaussian-annulus k=3 host/device solver findings,
   including nonlinear-stage SciPy ILU/upwind-SCC behavior, the 113,894-triangle
   PARDISO/raw-CUDA comparison, strict AMGX true-residual screens, mesh-scope

@@ -585,3 +585,18 @@ The campaign index records partial and completed stages. These commands print pl
 
 Start/resume/stop commands and output overrides are in each campaign README. The D7 shell stages can
 be syntax-checked with `bash -n`; only production v2 offers `DRY=1` configuration inspection.
+
+### Planned GENCI phases
+
+The assembly, H100/H200 solver and turbulence task matrices live in
+`campaigns/h100_assembly/`, `campaigns/h100_solvers/` and `campaigns/h100_turbulence/`.
+Their combined cluster launchers remain to be built. Inspect the existing drivers without solving:
+
+```bash
+.venv/bin/python scripts/gpu/benchmark_advection_tsle_tensor.py --help
+.venv/bin/python scripts/gpu/benchmark_poisson_assembly.py --help
+.venv/bin/python campaigns/adr_unified/run_adr_unified_campaign.py --help
+.venv/bin/python campaigns/adr_pardiso/run_adr_pardiso_campaign.py --help
+.venv/bin/python campaigns/adr_stress/run_closed_loop_stress.py --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.run_diocotron_benchmark --help
+```
