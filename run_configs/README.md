@@ -29,7 +29,7 @@ The disk Euler-gas BDF2 comparison files
 use density DG(6), Poisson potential/flux DG(5), and recovered flux DG(6).
 Both use cached raw CUDA recovery for transport, including startup and retries;
 no extra field L2 convergence order is claimed. See the
-[runner documentation](../scripts/guiding_center/README.md#bdf2-with-reduced-order-poisson-and-recovered-electric-field)
+[runner documentation](../scripts/guiding_center/docs/recovered_field.md#bdf2-with-reduced-order-poisson-and-recovered-electric-field)
 for commands and validation status.
 
 `run_guiding_center_cases.py` accepts argparse response files with `@path`.
@@ -403,5 +403,5 @@ Use `--plot-diagnostics` to display them at the end without writing figures, or
 use both flags to save and display.
 For diocotron, this includes the log-log instability norm
 `||phi - phi_eq||_L2` and time-dependent active-mode rankings and spectra.
-See the [geometry and diagnostic plotting guide](../scripts/guiding_center/README.md#horseshoe-iter-and-pac-man-euler-gas)
+See the [geometry and diagnostic plotting guide](../scripts/guiding_center/docs/showcase_cases.md#horseshoe-iter-and-pac-man-euler-gas)
 for commands, profile definitions, and output details.
