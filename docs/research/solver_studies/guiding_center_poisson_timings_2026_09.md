@@ -249,7 +249,7 @@ benchmark.
 Reproduce the offline analysis from the repository root:
 
 ```bash
-python3 scripts/guiding_center/diagnostics/analyze_poisson_timings.py \
+python3 scripts/guiding_center/studies/solver_tuning/analyze_poisson_timings.py \
   run_outputs/guiding_center/euler_vortex_gas_{si_euler,si_bdf2,h1_bdf3,h2_bdf3,imex_ark3}_p6*_timings.jsonl \
   run_outputs/guiding_center/diocotron_{smooth_m9,gaussian_m64,gaussian_m128}_ark3_p6*_timings.jsonl \
   --output-dir artifacts/poisson_timing_investigation_20260913

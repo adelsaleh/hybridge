@@ -18,8 +18,8 @@ import pytest
 from hybridge import DGSpace, rectangle_mesh
 from hybridge.core.quadrature_coefficients import QuadratureVectorField
 from hybridge.core.space import VectorDGField
-from scripts.guiding_center.benchmarks import run_poisson_degree_study as study
-from scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence import _exact_field_label
+from scripts.guiding_center.studies.convergence import run_poisson_degree_study as study
+from scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence import _exact_field_label
 from scripts.guiding_center.cases.guiding_center_cases import rho_helm_wave
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime import runner
@@ -178,7 +178,7 @@ def test_degree_study_tags_labels_and_worker_options(tmp_path, monkeypatch):
     assert _exact_field_label(SimpleNamespace(exact_drift_mode="pointwise", exact_drift_order_offset=2)) == "exact"
     assert _exact_field_label(SimpleNamespace(exact_drift_mode="projected", exact_drift_order_offset=3)) == "exact_p+3"
     captured = {}
-    monkeypatch.setattr("scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence."
+    monkeypatch.setattr("scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence."
                         "run_spatial_convergence", lambda **options: captured.update(options))
     run = study.Run(**spec, drift="exact", exact_drift_mode="projected", exact_drift_order_offset=3)
     study._worker({"run": asdict(run), "output_dir": str(tmp_path), "verbosity": 0, "log_every": 1})

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from hybridge.linalg.gpu.triangular import ReusableCuPyLUSolve, superlu_gather_indices
-from scripts.guiding_center.poisson import benchmark_scipy_lu_gpu as benchmark
+from scripts.guiding_center.studies.solver_tuning import benchmark_scipy_lu_gpu as benchmark
 
 
 @pytest.fixture(params=["splu", "spilu-nodrop"])

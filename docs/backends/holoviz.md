@@ -114,10 +114,10 @@ coefficient tables and do not run a PDE solve or time integrator:
 
 ```bash
 env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/diagnostics/smoke_holoviz.py
+  .venv/bin/python -B scripts/guiding_center/viewers/smoke_holoviz.py
 
 env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/diagnostics/smoke_holoviz.py \
+  .venv/bin/python -B scripts/guiding_center/viewers/smoke_holoviz.py \
   --save-dir artifacts/holoviz_smoke
 ```
 
@@ -145,7 +145,7 @@ For a small moving scene that uses the same GPU field sampler and viewer, run:
 
 ```bash
 env LD_LIBRARY_PATH=/path/to/cuda-13/lib64 CUDA_PATH=/path/to/cuda-13 \
-  .venv/bin/python -B scripts/guiding_center/diagnostics/animate_holoviz.py \
+  .venv/bin/python -B scripts/guiding_center/viewers/animate_holoviz.py \
   --duration 60 --fps 20 --size 512
 ```
 

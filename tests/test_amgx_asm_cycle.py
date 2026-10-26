@@ -8,7 +8,7 @@ from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 @pytest.mark.parametrize('sweeps', (1, 2))
 def test_asm_staging_matches_symmetric_coarse_correction(sweeps):
     with kernel_cache_only(True):
-        from scripts.guiding_center.poisson.replay_poisson_asm import AsmCycle, patch_coloring_bound
+        from scripts.guiding_center.studies.solver_tuning.replay_poisson_asm import AsmCycle, patch_coloring_bound
         patches = np.array([[0, 1, 2], [0, 3, 4], [1, 3, 5], [2, 4, 5]])
         q, size = 2, 12
         rng = np.random.default_rng(70703)
@@ -54,7 +54,7 @@ def test_fixed_chebyshev_asm_stages_match_dense_polynomial_and_symmetric_cycle(o
     """A fixed Chebyshev smoother preserves the symmetric coarse correction."""
     with kernel_cache_only(True):
         from hybridge.linalg.multigrid.face_hp import _chebyshev_richardson_weights
-        from scripts.guiding_center.poisson.replay_poisson_asm import AsmCycle, patch_energy_bound
+        from scripts.guiding_center.studies.solver_tuning.replay_poisson_asm import AsmCycle, patch_energy_bound
 
         patches = np.array([[0, 1, 2], [0, 3, 4], [1, 3, 5], [2, 4, 5]])
         q, size = 2, 12

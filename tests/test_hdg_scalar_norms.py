@@ -9,7 +9,7 @@ from hybridge.core.field_ops import project_callable_to_trace
 from hybridge.core.mesh import rectangle_mesh
 from hybridge.core.space import DGSpace
 from hybridge.diagnostics.errors import evaluate_hdg_scalar_error
-from scripts.guiding_center.benchmarks import run_guiding_center_temporal_convergence as driver
+from scripts.guiding_center.studies.convergence import run_guiding_center_temporal_convergence as driver
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 
 
@@ -154,7 +154,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
     from hybridge.core.device import field_from_cupy_coefficients
     from hybridge.hdg.condensation import expand_interior_trace
     from hybridge.core.space import DGField
-    from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import (
+    from scripts.guiding_center.studies.convergence.guiding_center_temporal_comparison import (
         VorticityMetrics, VorticityRaster, _resident_coefficients,
     )
 
@@ -209,7 +209,7 @@ def test_device_hdg_diagnostics_and_raster_never_download_field_coefficients(mon
 @pytest.mark.parametrize("basis", ["legacy-lagrange", "legendre-modal", "bernstein"])
 @pytest.mark.parametrize("prescribed_boundary", [True, False])
 def test_pc_endpoint_hdg_norm_uses_accepted_trace_and_boundary(basis, prescribed_boundary):
-    from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import accepted_density_trace
+    from scripts.guiding_center.studies.convergence.guiding_center_temporal_comparison import accepted_density_trace
 
     space = space_for_norms()
     endpoint = space.constant(3.)

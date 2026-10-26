@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from scripts.guiding_center.poisson.asm_patches import (
+from scripts.guiding_center.studies.solver_tuning.asm_patches import (
     build_element_neighbor_patches,
     build_face_pair_patches,
 )

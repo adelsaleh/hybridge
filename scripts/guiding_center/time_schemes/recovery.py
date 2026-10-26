@@ -6,7 +6,7 @@ from hybridge.core.field_ops import solution_trace
 from hybridge.core.transfer import project_same_mesh_field
 from hybridge.core.space import DGField
 from hybridge.runtime.logging import timed_call
-from scripts.guiding_center.poisson.poisson_recovery import (
+from scripts.guiding_center.runtime.poisson_recovery import (
     PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
     raise_for_poisson_rank_failure, raise_for_poisson_transport_failure,
 )

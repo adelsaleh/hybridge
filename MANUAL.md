@@ -1831,7 +1831,7 @@ comparisons.
 Temporal convergence for Euler, predictor-corrector, and BDF2 is available with:
 
 ```bash
-LD_LIBRARY_PATH=$HOME/.local/amgx/lib:$LD_LIBRARY_PATH .venv/bin/python scripts/guiding_center/benchmarks/run_guiding_center_temporal_convergence.py --scheme both --plot-convergence
+LD_LIBRARY_PATH=$HOME/.local/amgx/lib:$LD_LIBRARY_PATH .venv/bin/python scripts/guiding_center/studies/convergence/run_guiding_center_temporal_convergence.py --scheme both --plot-convergence
 ```
 
 Use `--scheme si-bdf2` for BDF2 alone, `--scheme h1-bdf3` for H1, `--scheme h2-bdf3` for H2, or `--scheme all` for all five schemes;
@@ -1873,7 +1873,7 @@ The same driver also compares unforced vortex gas at matching physical times:
 ```bash
 export CUDA_PATH=/path/to/cuda-13
 export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$HOME/.local/amgx/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
+HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence \
   --study vortex-gas --scheme si-bdf2 --final-time 5 --dts 0.01,0.005 \
   --sample-interval 0.5 --plot-comparison --cached-kernels-only \
   --prefix star_hole_bdf2_dt_comparison

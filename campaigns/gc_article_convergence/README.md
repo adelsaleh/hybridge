@@ -57,7 +57,7 @@ triangles. One 80 GB H100 holds every run.
 
 - `campaign.py`: task registry and commands (`list`, `plan`, `status`, `run`, `combine`, `verify-meshes`, `deps`,
   `costs`). One task is one independent ladder: one invocation of
-  `scripts/guiding_center/benchmarks/run_poisson_degree_study.py` (one worker process per run), or one temporal,
+  `scripts/guiding_center/studies/convergence/run_poisson_degree_study.py` (one worker process per run), or one temporal,
   BDF3 or snapshot run. A task is done when every per-run output it expects exists. The driver exits 0 even when
   a run fails, so the exit status alone does not decide.
 - `dt_table.json`: the article time steps, plus p = 3 at h = 0.0025 (the article rule, extrapolated log-log) and
@@ -157,7 +157,7 @@ ln -s ~/src/gc-hdg-article/run_outputs/campaign_gc_article_convergence \
   <local repo>/run_outputs/article/campaign_gc_article_convergence
 ```
 
-The table scripts (`scripts/guiding_center/benchmarks/make_convergence_tables.py` and the article's table
+The table scripts (`scripts/guiding_center/studies/convergence/make_convergence_tables.py` and the article's table
 builders) must then read the `*_accurate` columns and this layout (`poisson_degree/poisson_degree.csv`,
 `runs/<task>/`, `temporal_*`). That change follows the campaign.
 

@@ -263,7 +263,7 @@ def synthetic_run(epsilon=1.e-4,dt=1.,negative_stage=False):
 
 
 def test_analysis_requires_controls_and_catches_stage_only_negativity():
-    from scripts.guiding_center.diagnostics.analyze_diocotron import analyze
+    from scripts.guiding_center.studies.diocotron.analyze_diocotron import analyze
     main=synthetic_run(negative_stage=True)
     summary=analyze(main,control=synthetic_run(epsilon=0),half_seed=synthetic_run(epsilon=5.e-5),refined=synthetic_run(dt=.5))
     assert summary["growth"]["agrees_with_reference"]
@@ -282,7 +282,7 @@ def test_analysis_requires_controls_and_catches_stage_only_negativity():
 
 
 def test_analysis_marks_tau_changes_and_never_fits_short_runs():
-    from scripts.guiding_center.diagnostics.analyze_diocotron import analyze
+    from scripts.guiding_center.studies.diocotron.analyze_diocotron import analyze
     short=synthetic_run()
     short["rows"]=short["rows"][:10];short["times"]=short["times"][:10];short["timings"]=short["timings"][:10]
     short["timings"][2]["poisson_tau_retry_events"]=[dict(tau_before=4000,tau_after=8000)]
@@ -294,7 +294,7 @@ def test_analysis_marks_tau_changes_and_never_fits_short_runs():
 
 
 def test_high_mode_competitor_is_flagged_even_with_weak_second_harmonic():
-    from scripts.guiding_center.diagnostics.analyze_diocotron import analyze
+    from scripts.guiding_center.studies.diocotron.analyze_diocotron import analyze
     run=synthetic_run()
     for row in run["rows"]:
         row["diocotron_phi_mode_17_l2"]=.2*row["diocotron_phi_mode_9_l2"]

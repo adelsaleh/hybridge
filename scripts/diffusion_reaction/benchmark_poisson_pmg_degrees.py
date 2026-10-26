@@ -41,7 +41,7 @@ candidate), appended as soon as it is measured; finished rows are skipped on a
 restart), ``summary.md`` (regenerated from the rows), ``<run_id>.log`` (the
 terminal output, line-buffered, native AMGX output included). ``--dry-run``
 prints the plan without touching the device. Run it under the GPU campaign
-lock (``scripts/guiding_center/benchmarks/campaign_protocol.py``), one
+lock (``campaigns/common/protocol.py``), one
 process per (p, level), e.g. from a study launcher::
 
     .venv/bin/python -u -m scripts.diffusion_reaction.benchmark_poisson_pmg_degrees \\
@@ -130,7 +130,7 @@ def finished_rows(path: Path) -> dict[str, dict]:
 
 def campaign_config(args, *, p: int, hb: float, h: float, candidate: str):
     """The diocotron runner's preset for one candidate: ``build_configs`` without the time loop."""
-    from scripts.guiding_center.benchmarks.run_diocotron_benchmark import BASE_PRESET, _benchmark_cases
+    from scripts.guiding_center.studies.diocotron.run_diocotron_benchmark import BASE_PRESET, _benchmark_cases
     from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
     from scripts.guiding_center.runtime.fast_profiles import default_transport_candidate, device_candidate_overrides
 

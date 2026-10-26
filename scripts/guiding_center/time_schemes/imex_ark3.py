@@ -21,7 +21,7 @@ from hybridge.runtime.logging import timed_call
 from scripts.guiding_center.time_schemes.stage_support import (
     closest_trace, drift_flux, GuidingCenterStep, transport_drift,
 )
-from scripts.guiding_center.poisson.poisson_recovery import (
+from scripts.guiding_center.runtime.poisson_recovery import (
     PoissonCheckpoint, PoissonStageRankFailure, PoissonTauRecovery,
     raise_for_poisson_rank_failure, raise_for_poisson_transport_failure,
 )

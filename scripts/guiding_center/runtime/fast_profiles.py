@@ -40,9 +40,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.guiding_center.paths import AMGX_CONFIGS
 from hybridge.linalg.multigrid.policy import FB_HP_MG_DEGREES
 
-_AMGX_CONFIGS = Path(__file__).resolve().parents[3] / "configs" / "amgx"
+_AMGX_CONFIGS = AMGX_CONFIGS
 TRANSPORT_AMGX_CONFIG = _AMGX_CONFIGS / "adv_rea_gpu4_hdg_bicgstab_scaled_none.json"
 TRANSPORT_RETRY_AMGX_CONFIG = _AMGX_CONFIGS / "adv_rea_gpu4_hdg_fgmres_dilu_abs.json"
 # Transport face BSR pays off above roughly this many triangles (p >= 4); the

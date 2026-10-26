@@ -11,7 +11,7 @@ from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.time_schemes.predictor_corrector import _average_boundary_data
 from scripts.guiding_center.runtime.configuration import _make_transport_options, _validate_config
 from scripts.guiding_center.runtime.runner import run_guiding_center_case
-from scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence import (
+from scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence import (
     _pairwise_rates,
     _selected_schemes,
     plot_convergence,

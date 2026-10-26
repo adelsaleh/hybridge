@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from scripts.guiding_center.poisson.amgx_bsr_smoothing import (
+from scripts.guiding_center.studies.solver_tuning.amgx_bsr_smoothing import (
     CYCLE_COST_OPTIONS, HostAmgxSystem, SCHEDULES, coupled_spd_chain, cycle_gate,
     smoothing_config,
 )

@@ -54,17 +54,17 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import meshes  # noqa: E402  (campaign folder)
-from scripts.guiding_center.benchmarks import run_poisson_degree_study as study  # noqa: E402
+from scripts.guiding_center.studies.convergence import run_poisson_degree_study as study  # noqa: E402
 
 PYTHON = os.environ.get("HYBRIDGE_PYTHON") or sys.executable
 OUT = Path(os.environ.get("HYBRIDGE_CAMPAIGN_OUT") or REPO / "run_outputs" / "campaigns" / "gc_article_convergence")
 DT_TABLE = HERE / "dt_table.json"
 DT_TABLE_BDF3 = HERE / "dt_table_exact_bdf3.json"
 COSTS = HERE / "cost_estimates.json"
-DRIVER = "scripts.guiding_center.benchmarks.run_poisson_degree_study"
-CONVERGENCE = "scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence"
-BDF3 = "scripts/guiding_center/benchmarks/exact_drift_transport_rates.py"
-SNAPSHOT = "scripts/guiding_center/benchmarks/snapshot_manufactured_solution.py"
+DRIVER = "scripts.guiding_center.studies.convergence.run_poisson_degree_study"
+CONVERGENCE = "scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence"
+BDF3 = "scripts/guiding_center/studies/convergence/exact_drift_transport_rates.py"
+SNAPSHOT = "scripts/guiding_center/studies/convergence/snapshot_manufactured_solution.py"
 FINAL_TIME = 0.0625
 AMPLITUDE = "A=0.028134884879909"  # 1 / (8 pi sqrt 2): unit crest-parallel drift
 WAVE = ("--case-param", "kx=8*pi", "--case-param", "U=1", "--case-param", AMPLITUDE)
@@ -694,10 +694,10 @@ def cmd_verify_meshes(tasks: list[Task]) -> None:
 # --------------------------------------------------------------------------------------------
 
 ENTRY_SCRIPTS = (
-    "scripts/guiding_center/benchmarks/run_poisson_degree_study.py",
-    "scripts/guiding_center/benchmarks/run_guiding_center_temporal_convergence.py",
-    "scripts/guiding_center/benchmarks/snapshot_manufactured_solution.py",
-    "scripts/guiding_center/benchmarks/exact_drift_transport_rates.py",
+    "scripts/guiding_center/studies/convergence/run_poisson_degree_study.py",
+    "scripts/guiding_center/studies/convergence/run_guiding_center_temporal_convergence.py",
+    "scripts/guiding_center/studies/convergence/snapshot_manufactured_solution.py",
+    "scripts/guiding_center/studies/convergence/exact_drift_transport_rates.py",
     "scripts/guiding_center/runtime/exact_drift.py",
     "scripts/guiding_center/runtime/compatible_drift.py",
 )

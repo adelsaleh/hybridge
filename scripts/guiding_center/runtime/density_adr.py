@@ -32,6 +32,7 @@ import json
 import math
 from pathlib import Path
 
+from scripts.guiding_center.paths import REPO_ROOT
 from hybridge.core.field_ops import field_linear_combination
 from hybridge.core.space import VectorDGField
 
@@ -42,7 +43,7 @@ IMPLICIT_STAGE_SCHEMES = ("si-euler", "si-bdf2", "si-bdf3")
 
 # Fastest recorded raw-CUDA ADR configuration (n-Gamma D-BDF2 study, 2026-09-29):
 # PBiCGStab + L1 Jacobi on face BSR, about 5x faster per solve than block AMG.
-_ROOT = Path(__file__).resolve().parents[3]
+_ROOT = REPO_ROOT
 ADR_AMGX_CONFIG = _ROOT / "configs" / "amgx" / "adv_rea_gpu4_hdg_pbicgstab_l1_bsr.json"
 
 

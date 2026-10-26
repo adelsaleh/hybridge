@@ -167,7 +167,7 @@ run. The controls use the same initial Poisson tau and projection rule.
   --dt 0.025 --num-steps 2800 --plot-every 0 --verbosity 2 \
   --diagnostics-prefix diocotron_smooth_m9_dt0025
 
-.venv/bin/python -m scripts.guiding_center.diagnostics.analyze_diocotron \
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron \
   run_outputs/guiding_center/diocotron_smooth_m9_ark3_p6_h008_dt005_t70.jsonl \
   --control run_outputs/guiding_center/diocotron_smooth_m9_control_ark3_p6_h008_dt005_t70.jsonl \
   --half-seed run_outputs/guiding_center/diocotron_smooth_m9_half_seed_ark3_p6_h008_dt005_t70.jsonl \
@@ -212,7 +212,7 @@ alone. Separate provisional response files exist for all three modes.
 The static check uses no Poisson solve or time integration:
 
 ```bash
-.venv/bin/python -m scripts.guiding_center.diagnostics.preflight_diocotron \
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.preflight_diocotron \
   --radial-power 4 --no-truncate --mesh-size 0.008 --order 6 \
   --modes 9 32 64 128 --initial-projection-quad-1d 32 \
   --error-quadrature 40 --output artifacts/diocotron_smooth_projection.json

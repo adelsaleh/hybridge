@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from scripts.guiding_center.benchmarks import guiding_center_temporal_comparison as comparison
-from scripts.guiding_center.benchmarks import run_guiding_center_temporal_convergence as driver
+from scripts.guiding_center.studies.convergence import guiding_center_temporal_comparison as comparison
+from scripts.guiding_center.studies.convergence import run_guiding_center_temporal_convergence as driver
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 
 

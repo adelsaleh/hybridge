@@ -11,7 +11,7 @@ from scripts.guiding_center.runtime import runner
 import scripts.guiding_center.run_guiding_center_cases as cli
 import scripts.guiding_center.time_schemes.si_bdf2 as si_bdf2
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
-from scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence import _selected_schemes
+from scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence import _selected_schemes
 
 
 class CoefficientSpace(DGSpace):

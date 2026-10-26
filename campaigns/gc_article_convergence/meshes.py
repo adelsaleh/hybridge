@@ -86,7 +86,7 @@ def _triangles(path: Path) -> int:
 def manifest() -> Path:
     """Write ``mesh_manifest.json`` from the local cache; every mesh of ``MESHES`` must be cached."""
     import numpy as np  # noqa: F401  (fails early without NumPy)
-    from scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence import mesh_family_gmsh_algorithm
+    from scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence import mesh_family_gmsh_algorithm
 
     if mesh_family_gmsh_algorithm("unstructured") != UNSTRUCTURED_ALGORITHM:
         raise SystemExit("the runner's unstructured Gmsh algorithm changed; update UNSTRUCTURED_ALGORITHM")

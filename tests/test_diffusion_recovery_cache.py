@@ -14,7 +14,7 @@ from hybridge.solvers.diffusion_reaction import (
     DiffusionReactionHDGSolver,
 )
 from hybridge.mixed.postprocess.flux import _new_hdg_postprocess_cache
-from scripts.guiding_center.poisson.poisson_recovery import (
+from scripts.guiding_center.runtime.poisson_recovery import (
     PoissonCheckpoint, PoissonStageFailure, PoissonTauRecovery,
 )
 

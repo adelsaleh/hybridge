@@ -279,7 +279,7 @@ only local matrices and prescribed exact trace data:
 
 ```bash
 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -B \
-  -m scripts.guiding_center.diagnostics.compare_field_recovery --density-order 6
+  -m scripts.guiding_center.studies.recovered_field.compare_field_recovery --density-order 6
 ```
 
 For p=6 on the unit triangle with potential exp(x+y/2), the diagnostic gave:
@@ -319,7 +319,7 @@ SciPy direct matrix solves, with no time integration or native compilation
 
 ```bash
 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 \
-  .venv/bin/python -B -m scripts.guiding_center.diagnostics.check_field_recovery_order \
+  .venv/bin/python -B -m scripts.guiding_center.studies.recovered_field.check_field_recovery_order \
   --density-order 6 --jitter 0.15
 ```
 
@@ -354,7 +354,7 @@ moment-based patch recovery would need. For example:
 
 ```bash
 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 \
-  .venv/bin/python -B -m scripts.guiding_center.diagnostics.check_field_recovery_order \
+  .venv/bin/python -B -m scripts.guiding_center.studies.recovered_field.check_field_recovery_order \
   --density-order 3 --case poly --subdivisions 4 8 16 --jitter 0.15
 ```
 
@@ -378,7 +378,7 @@ potential and retaining the degree-p electric field only in each patch's core:
 
 ```bash
 NUMBA_DISABLE_JIT=1 PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 \
-  .venv/bin/python -B -m scripts.guiding_center.diagnostics.check_oversampled_recovery_order \
+  .venv/bin/python -B -m scripts.guiding_center.studies.recovered_field.check_oversampled_recovery_order \
   --density-order 6 --case trig --jitter 0.15
 ```
 
@@ -491,7 +491,7 @@ levels; H1 rebuilds the Poisson-derived residual
 history; H2 rebuilds its drift history. Startup and predictor/corrector stages
 also participate. IMEX-ARK3 rebuilds its frozen operator and all stage residuals.
 The shared replay orchestration is in `time_schemes/recovery.py`; tau policy and
-failure classification are in `poisson/poisson_recovery.py`.
+failure classification are in `runtime/poisson_recovery.py`.
 
 Retries record their old/new tau, failure, and Poisson checkpoint immediately in
 `<diagnostics-prefix>_poisson_tau_recovery.jsonl`, including on exhaustion.
@@ -506,20 +506,20 @@ may perform solves or time integration.
 
 ```bash
 # Saved-system hybrid hierarchy CSR/BSR feasibility study
-.venv/bin/python -m scripts.guiding_center.poisson.benchmark_hybrid_hierarchy_bsr --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_hybrid_hierarchy_bsr --help
 
 # Replay existing Poisson captures
-.venv/bin/python -m scripts.guiding_center.poisson.replay_poisson_bsr --help
-.venv/bin/python -m scripts.guiding_center.poisson.replay_poisson_asm --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.replay_poisson_bsr --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.replay_poisson_asm --help
 
 # Temporal comparisons and precision benchmarks
-.venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence --help
-.venv/bin/python -m scripts.guiding_center.benchmarks.run_precision_benchmark --help
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.run_precision_benchmark --help
 
 # Analyze existing output and inspect a diocotron case
-.venv/bin/python -m scripts.guiding_center.diagnostics.analyze_poisson_timings --help
-.venv/bin/python -m scripts.guiding_center.diagnostics.analyze_diocotron --help
-.venv/bin/python -m scripts.guiding_center.diagnostics.preflight_diocotron --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.analyze_poisson_timings --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.preflight_diocotron --help
 ```
 
 Use the [CUDA launcher](../gpu/run_cuda13.sh) and the repository's configured
@@ -882,4 +882,4 @@ NUMBA_DISABLE_JIT=1 HYBRIDGE_RUN_CUDA_TRANSPORT_TESTS=1 PYTHONPATH=. \
   .venv/bin/python -m pytest -q tests/test_transport_lax_friedrichs.py
 ```
 
-Archived noncircular band equilibria can now be imported with `--case imported_equilibrium`; see [transfer, bounded preservation checks and measured limitations](benchmarks/equilibrium_preservation.md).
+Archived noncircular band equilibria can now be imported with `--case imported_equilibrium`; see [transfer, bounded preservation checks and measured limitations](studies/equilibrium_preservation/README.md).

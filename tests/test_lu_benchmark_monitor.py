@@ -65,7 +65,7 @@ def test_monitor_records_caught_interrupt_instead_of_leaving_running(tmp_path, m
 
 
 def test_benchmark_summary_retains_interrupted_worker(tmp_path, monkeypatch):
-    from scripts.guiding_center.poisson import benchmark_scipy_lu_gpu as benchmark
+    from scripts.guiding_center.studies.solver_tuning import benchmark_scipy_lu_gpu as benchmark
 
     def interrupted(command, env, output, args):
         (output / "result.json").write_text(json.dumps({"status": "interrupted"}))

@@ -107,7 +107,7 @@ and the run summary. These results do not qualify convergence on larger meshes;
 the earlier 157,280-triangle FP32 Poisson residual plateaued around 8e-3.
 
 For separate-process field exports and precision comparisons, use
-`scripts/guiding_center/benchmarks/run_precision_benchmark.py`. It defaults to this same
+`scripts/guiding_center/studies/solver_tuning/run_precision_benchmark.py`. It defaults to this same
 smaller mesh, p=6, dt=0.1, 500 steps and the FP32 tolerances above. Override
 `--precision float64 --rtol 1e-8 --poisson-rtol 1e-8 --atol 0` for an accuracy
 reference. Timing comparisons must state the tolerances and iteration counts.
