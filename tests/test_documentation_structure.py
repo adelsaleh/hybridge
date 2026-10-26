@@ -60,7 +60,7 @@ DEVELOPMENT_PLAN_CONTENTS = {
 }
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 DOCUMENTED_REPOSITORY_PATH = re.compile(
-    r"`((?:configs|scripts)/[^`\s*?\[\]]+\.(?:json|py))`"
+    r"`((?:configs|scripts|campaigns)/[^`\s*?\[\]<>]+\.(?:json|py|sh))`"
 )
 
 
