@@ -1,0 +1,373 @@
+{
+  "status": "completed",
+  "scheduled": 60,
+  "attempted": 60,
+  "passed": 8,
+  "failures": [
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "native_hp_robust",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "bj_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "native_hp_standard",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "asm_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "native_hp_standard",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "native_hp_robust",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "bj_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "asm_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_trap",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "native_hp_robust",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "bj_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "native_hp_standard",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "asm_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "native_hp_standard",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "native_hp_robust",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "bj_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "asm_pp",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_cross",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 100000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "stress_main_orthogonal",
+      "target_triangles": 150000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "numerical_failure"
+    }
+  ],
+  "profile_failures": 0
+}

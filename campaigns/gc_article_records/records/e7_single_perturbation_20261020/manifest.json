@@ -1,0 +1,194 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 3315265920,
+  "file_count": 1942,
+  "subdirectories": 17,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "analysis/amplitude_and_probes.json",
+      "copy": "analysis/amplitude_and_probes.json",
+      "bytes": 1281,
+      "sha256": "3ba0d9884dfebf2608c66d0d216e7d13bd35c3bdc081071f1fe65e0f573e2151"
+    },
+    {
+      "path": "analysis/article_values.json",
+      "copy": "analysis/article_values.json",
+      "bytes": 2916,
+      "sha256": "edd6527c366f66709c992e345d4d42d91e4dc3ff0287e9623bab1c6e2662b2c7"
+    },
+    {
+      "path": "analysis/comparisons.json",
+      "copy": "analysis/comparisons.json",
+      "bytes": 55999,
+      "sha256": "4d9b0385d57737d85991cb3c75e396bf4507723f4434891c44a3b4e97f2d7b56"
+    },
+    {
+      "path": "analysis/p4_preview.json",
+      "copy": "analysis/p4_preview.json",
+      "bytes": 1110,
+      "sha256": "ab68b54523e1baf0fcf928bdff9b5bcdb2e9ca4844ebf5209e716c1da3fea2a8"
+    },
+    {
+      "path": "analysis/p4_vs_p5_provisional.json",
+      "copy": "analysis/p4_vs_p5_provisional.json",
+      "bytes": 2144,
+      "sha256": "de305d4f416332de8053b3b945c5bff5bd69908525f46d75642ee4258dab42b3"
+    },
+    {
+      "path": "analysis/p5_vs_p6_provisional.json",
+      "copy": "analysis/p5_vs_p6_provisional.json",
+      "bytes": 2156,
+      "sha256": "5c5d356af907463d81b8fbaec88cbaa1469f1347fff71f4e0570dc5ad33b905b"
+    },
+    {
+      "path": "analysis/time_step_early_provisional.json",
+      "copy": "analysis/time_step_early_provisional.json",
+      "bytes": 242,
+      "sha256": "9010a4d6f058fd82d3b0b517ff3a4a1105a93af1c81af92fd62116efc0172e9c"
+    },
+    {
+      "path": "controls_summary.json",
+      "copy": "controls_summary.json",
+      "bytes": 2081,
+      "sha256": "2e7e6d10a690efb673c1fe5db6a6209a57ccf73eaeab5070b6f28815ebc65c87"
+    },
+    {
+      "path": "edge_widths.json",
+      "copy": "edge_widths.json",
+      "bytes": 546,
+      "sha256": "a069f1f0175b6ccb6f01849930c1c48fb7ff635cdd154b1162f5d7459f3519ca"
+    },
+    {
+      "path": "evolution_finished.json",
+      "copy": "evolution_finished.json",
+      "bytes": 292,
+      "sha256": "c4ccee53867b5a4dfc0148eacd740c4a1ff4502aee3fdaf00eeaeb3197ba2020"
+    },
+    {
+      "path": "evolution_finished_pgid837758.json",
+      "copy": "evolution_finished_pgid837758.json",
+      "bytes": 371,
+      "sha256": "e122d73e321fef2da9c5bf08e4c95439e99ddaf9e404165da4fca1e407259cdf"
+    },
+    {
+      "path": "evolution_launch.json",
+      "copy": "evolution_launch.json",
+      "bytes": 213,
+      "sha256": "cb7a456c2d30c6a8266e48595ec5053869e2d793474a499e1e42243d5619fb9e"
+    },
+    {
+      "path": "evolution_plan.json",
+      "copy": "evolution_plan.json",
+      "bytes": 24221,
+      "sha256": "f2e22d1974015c6f2d30e489bd13e4f0143777511e226010876b654dfbc94c8a"
+    },
+    {
+      "path": "evolution_runs.jsonl",
+      "copy": "evolution_runs.jsonl",
+      "bytes": 21146,
+      "sha256": "6f27a9382dad68a5254d091bf8c546a002f74652d3ade5c77501759be9ae08c6"
+    },
+    {
+      "path": "geometry_audit.json",
+      "copy": "geometry_audit.json",
+      "bytes": 3074,
+      "sha256": "4498a6e6f8a34e50ffc2ab47da433f631c495102024d848b0b421a88c4466396"
+    },
+    {
+      "path": "manuscript_artifacts.json",
+      "copy": "manuscript_artifacts.json",
+      "bytes": 1549,
+      "sha256": "f731c164fcdc21cfe6c3f6c47d9d67a91c5a6d6d178ab6959bc5831c3aea3e02"
+    },
+    {
+      "path": "pilot_finished.json",
+      "copy": "pilot_finished.json",
+      "bytes": 993,
+      "sha256": "6ee6b046292c88ae34d967f89cf79684153d263a11003fbce8634f592bc69f04"
+    },
+    {
+      "path": "pilot_geometry.json",
+      "copy": "pilot_geometry.json",
+      "bytes": 387,
+      "sha256": "cfa01e6bedf56d0603fffad4a85977a0c79e3cae6af2107ddad0a641f2e1b0c1"
+    },
+    {
+      "path": "pilot_launch.json",
+      "copy": "pilot_launch.json",
+      "bytes": 900,
+      "sha256": "422f04e666d42855570cc93072b1e6d1c78e9a701d4625ef8ba363e9bc9608c0"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 13013,
+      "sha256": "d7294554f4dc7e601eb0f4fa1e56af686ffc0d5232b89d0ff26b860b75a0f422"
+    },
+    {
+      "path": "revision_manifest.json",
+      "copy": "revision_manifest.json",
+      "bytes": 5254,
+      "sha256": "f97a571c9064e6efd9071abd61cadc489632b381800416e3fa4296e6a2d761fb"
+    },
+    {
+      "path": "seed_guard.json",
+      "copy": "seed_guard.json",
+      "bytes": 882,
+      "sha256": "44b3ac9690320816fe209cf61b3790147b0b74a760a44c65600204798452a48b"
+    },
+    {
+      "path": "seed_refinement.json",
+      "copy": "seed_refinement.json",
+      "bytes": 12381,
+      "sha256": "a71027eb1258bd3014a075079332ee2865eb1ca917bb6143b56e6708e4018385"
+    },
+    {
+      "path": "selected_geometry.json",
+      "copy": "selected_geometry.json",
+      "bytes": 518,
+      "sha256": "22377f6069035df9583e63c3e31cc002a8de839797bb65ae33bd8f1618b6af4f"
+    },
+    {
+      "path": "setup_profiles.json",
+      "copy": "setup_profiles.json",
+      "bytes": 257691,
+      "sha256": "74e2421beafd2050e17e540dd3b9c4daf315fe3ff9c5d16431a78573d23be561"
+    },
+    {
+      "path": "source_comparison.json",
+      "copy": "source_comparison.json",
+      "bytes": 2261,
+      "sha256": "522b2ed6febd11f16251a46d2596a02c65984273dcbc257c1e2d66391bf2bde2"
+    },
+    {
+      "path": "source_refinement_finished.json",
+      "copy": "source_refinement_finished.json",
+      "bytes": 2272,
+      "sha256": "c279c566c67eab2fabb2572d0f81626dbeaae5e1a3c58789194dab7fe9810fd5"
+    },
+    {
+      "path": "source_refinement_launch.json",
+      "copy": "source_refinement_launch.json",
+      "bytes": 107,
+      "sha256": "877e37e8f6d46722cfebf8ebd523869fcc2b45189e6a9bbd2798ded352cb564c"
+    },
+    {
+      "path": "undercut_star.json",
+      "copy": "undercut_star.json",
+      "bytes": 4744,
+      "sha256": "2336d03c08c02ee7aca2644dccc11a6168d17057d01d16c6be3f79720daaad52"
+    },
+    {
+      "path": "validation_summary.json",
+      "copy": "validation_summary.json",
+      "bytes": 4003,
+      "sha256": "ae02a6fe052c2ccd07e023e5d5b52de2ae364590732fdfd3ca0b6aa34c358c06"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

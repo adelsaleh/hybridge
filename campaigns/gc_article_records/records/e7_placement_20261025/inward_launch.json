@@ -1,0 +1,8 @@
+{
+  "pid": 1546703,
+  "pgid": 1546703,
+  "stop": "kill -- -1546703",
+  "started_utc": "2026-10-25T18:19:50.666491+00:00",
+  "start": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_inner_band_20261021/medium_cg4_r0p08/medium_cg4_r0p08_01.npz",
+  "delta": 0.00075
+}

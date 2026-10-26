@@ -1,0 +1,1624 @@
+[
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_block_jacobi_fgmres",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2478894,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 927.6138499844819,
+        "setup_stages": {
+          "csr_conversion_ms": 525.6576568353921,
+          "hierarchy_setup_ms": 290.91280698776245
+        },
+        "solves": [
+          {
+            "solve_ms": 233.51280391216278,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              0.2746100109341115,
+              0.2746057745126247,
+              0.2746057044546185,
+              0.2746055739765547
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 0.27460557418960807,
+            "true_relative_residual": 0.9999825459266178,
+            "l2_error": 1.4185885531678415,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13918.343503028154
+          }
+        ],
+        "fresh_setup_solve_ms": 1161.1266538966447,
+        "amortized_ms": 1161.1266538966447,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 2591584256,
+          "reserved_bytes": 2647773184,
+          "peak_live_bytes": 2591584256,
+          "peak_reserved_bytes": 2647773184
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "BLOCK_JACOBI",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "FGMRES",
+        "tolerance": 1e-13,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 4
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "BLOCK_JACOBI",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "FGMRES",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 4
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 18.660157018108293,
+    "runner_started_utc": "2026-09-22T20:46:21+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_dilu_fgmres",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2479197,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 630.0682108849287,
+        "setup_stages": {
+          "csr_conversion_ms": 514.2154491040856,
+          "hierarchy_setup_ms": 7.373176049441099
+        },
+        "solves": [
+          {
+            "solve_ms": 26.849202113226056,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              0.2746103630120574,
+              0.27461035437193065,
+              0.27461035434036213,
+              0.2746103467589034
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 0.2746103467589032,
+            "true_relative_residual": 0.9999999253480243,
+            "l2_error": 1.4185887062333107,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13706.208370858803
+          }
+        ],
+        "fresh_setup_solve_ms": 656.9174129981548,
+        "amortized_ms": 656.9174129981548,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 1045913600,
+          "reserved_bytes": 1047711744,
+          "peak_live_bytes": 1045913600,
+          "peak_reserved_bytes": 1047711744
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "determinism_flag": 1,
+      "exception_handling": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "bsr_spmv_backend": "cusparse_generic",
+        "monitor_residual": 1,
+        "convergence": "RELATIVE_INI_CORE",
+        "tolerance": 1e-10,
+        "max_iters": 4,
+        "print_solve_stats": 0,
+        "obtain_timings": 0,
+        "norm": "L2",
+        "preconditioner": {
+          "solver": "MULTICOLOR_DILU",
+          "max_iters": 2,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "PARALLEL_GREEDY",
+          "max_uncolored_percentage": 0.0,
+          "relaxation_factor": 0.7
+        },
+        "use_scalar_norm": 1,
+        "gmres_n_restart": 4
+      }
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "determinism_flag": 1,
+      "exception_handling": 1,
+      "solver": {
+        "solver": "FGMRES",
+        "bsr_spmv_backend": "cusparse_generic",
+        "monitor_residual": 1,
+        "convergence": "ABSOLUTE",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "print_solve_stats": 0,
+        "obtain_timings": 0,
+        "norm": "L2",
+        "preconditioner": {
+          "solver": "MULTICOLOR_DILU",
+          "max_iters": 2,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "PARALLEL_GREEDY",
+          "max_uncolored_percentage": 0.0,
+          "relaxation_factor": 0.7
+        },
+        "use_scalar_norm": 1,
+        "gmres_n_restart": 4,
+        "store_res_history": 1
+      }
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 17.91173495305702,
+    "runner_started_utc": "2026-09-22T20:46:39+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_multicolor_dilu_pbicgstab",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2479474,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 922.6160221733153,
+        "setup_stages": {
+          "csr_conversion_ms": 521.1630191188306,
+          "hierarchy_setup_ms": 292.93403099291027
+        },
+        "solves": [
+          {
+            "solve_ms": 4532.3860419448465,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              0.2746103669054823,
+              0.2746103669049925,
+              0.2746103669065665,
+              0.2746103669084145
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 0.2746103669083892,
+            "true_relative_residual": 0.9999999987228432,
+            "l2_error": 1.4185887044757193,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13695.02227799967
+          }
+        ],
+        "fresh_setup_solve_ms": 5455.002064118162,
+        "amortized_ms": 5455.002064118162,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 2553389056,
+          "reserved_bytes": 2634657792,
+          "peak_live_bytes": 2586836992,
+          "peak_reserved_bytes": 2634657792
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "MULTICOLOR_DILU",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "PBICGSTAB",
+        "tolerance": 1e-13,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic"
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "MULTICOLOR_DILU",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "PBICGSTAB",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic"
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 22.668838748009875,
+    "runner_started_utc": "2026-09-22T20:46:57+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_block_jacobi_pbicgstab",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2479821,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 924.1416109725833,
+        "setup_stages": {
+          "csr_conversion_ms": 524.7373811434954,
+          "hierarchy_setup_ms": 283.7408818304539
+        },
+        "solves": [
+          {
+            "solve_ms": 439.92448318749666,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              0.43111144911232085,
+              0.32257686902776556,
+              0.2878217654024985,
+              1.1045654849439661
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 1.1045654849439712,
+            "true_relative_residual": 4.0223007454840705,
+            "l2_error": 1.4185380097069273,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13647.705860901624
+          }
+        ],
+        "fresh_setup_solve_ms": 1364.06609416008,
+        "amortized_ms": 1364.06609416008,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 2513100800,
+          "reserved_bytes": 2569777152,
+          "peak_live_bytes": 2520879104,
+          "peak_reserved_bytes": 2569777152
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "BLOCK_JACOBI",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "PBICGSTAB",
+        "tolerance": 1e-13,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic"
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "BLOCK_JACOBI",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "PBICGSTAB",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic"
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 18.557644546963274,
+    "runner_started_utc": "2026-09-22T20:47:20+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_multicolor_dilu_fgmres",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2480110,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 930.2394969854504,
+        "setup_stages": {
+          "csr_conversion_ms": 518.7808210030198,
+          "hierarchy_setup_ms": 302.33464390039444
+        },
+        "solves": [
+          {
+            "solve_ms": 2287.055269116536,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              0.27461036690480306,
+              0.27461023487022745,
+              0.27461015519857074,
+              0.2746101551777079
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 0.2746101542704898,
+            "true_relative_residual": 0.9999992243970174,
+            "l2_error": 1.4185887080232875,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13651.760402834043
+          }
+        ],
+        "fresh_setup_solve_ms": 3217.294766101986,
+        "amortized_ms": 3217.294766101986,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 2622922752,
+          "reserved_bytes": 2692419584,
+          "peak_live_bytes": 2622922752,
+          "peak_reserved_bytes": 2692419584
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "MULTICOLOR_DILU",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "FGMRES",
+        "tolerance": 1e-13,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 4
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "solver": {
+        "preconditioner": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "classical_bsr_hierarchy": "block_graph_dense",
+          "bsr_spmv_backend": "cusparse_generic",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.25,
+          "interpolator": "D2",
+          "aggressive_interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 2,
+          "postsweeps": 2,
+          "smoother": {
+            "solver": "MULTICOLOR_DILU",
+            "max_iters": 1,
+            "relaxation_factor": 1.0
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "print_grid_stats": 0,
+          "dense_lu_num_rows": 2048,
+          "dense_lu_max_rows": 4096,
+          "coarsest_sweeps": 2,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 3,
+          "block_graph_dense_smoothing_weight": 0.6666666666666666,
+          "block_graph_dense_pivot_tolerance": 1e-12,
+          "block_graph_dense_constraint_tolerance": 1e-08,
+          "block_graph_dense_smoothing_steps": 1,
+          "block_graph_dense_constraint_mode": "additive"
+        },
+        "solver": "FGMRES",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "convergence": "ABSOLUTE",
+        "norm": "L2",
+        "print_solve_stats": 0,
+        "monitor_residual": 1,
+        "store_res_history": 1,
+        "obtain_timings": 0,
+        "use_scalar_norm": 1,
+        "bsr_spmv_backend": "cusparse_generic",
+        "gmres_n_restart": 4
+      },
+      "exception_handling": 1,
+      "determinism_flag": 1
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 20.365356754977256,
+    "runner_started_utc": "2026-09-22T20:47:38+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "amgx",
+    "candidate": "amgx_dilu_pbicgstab",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2480424,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 638.6297571007162,
+        "setup_stages": {
+          "csr_conversion_ms": 520.8130651153624,
+          "hierarchy_setup_ms": 6.974335061386228
+        },
+        "solves": [
+          {
+            "solve_ms": 49.54881104640663,
+            "iterations": 4,
+            "status": "not_converged",
+            "outer_matvec_count": null,
+            "preconditioner_applications": null,
+            "counter_note": "AMGX public bindings do not expose exact application counts.",
+            "residual_history": [
+              0.27461036725910953,
+              530.700446058565,
+              408.4889821293333,
+              421.92650512326895,
+              269.27523309434633
+            ],
+            "residual_history_kind": "AMGX reported absolute L2 residuals; final residual checked independently",
+            "passed": false,
+            "true_residual_norm": 269.2752330943464,
+            "true_relative_residual": 980.5719856172461,
+            "l2_error": 8.107270972911008,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13941.733376123011
+          }
+        ],
+        "fresh_setup_solve_ms": 688.1785681471229,
+        "amortized_ms": 688.1785681471229,
+        "passed": false,
+        "cupy_pool_used_bytes": 0,
+        "cupy_pool_reserved_bytes": 1536,
+        "amgx_memory": {
+          "live_bytes": 995246080,
+          "reserved_bytes": 1047703552,
+          "peak_live_bytes": 995246080,
+          "peak_reserved_bytes": 1047703552
+        }
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "config_version": 2,
+      "determinism_flag": 1,
+      "exception_handling": 1,
+      "solver": {
+        "solver": "PBICGSTAB",
+        "bsr_spmv_backend": "cusparse_generic",
+        "monitor_residual": 1,
+        "convergence": "RELATIVE_INI_CORE",
+        "tolerance": 1e-10,
+        "max_iters": 4,
+        "print_solve_stats": 0,
+        "obtain_timings": 0,
+        "norm": "L2",
+        "preconditioner": {
+          "solver": "MULTICOLOR_DILU",
+          "max_iters": 2,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "PARALLEL_GREEDY",
+          "max_uncolored_percentage": 0.0,
+          "relaxation_factor": 0.7
+        },
+        "use_scalar_norm": 1
+      }
+    },
+    "effective_amgx_config": {
+      "config_version": 2,
+      "determinism_flag": 1,
+      "exception_handling": 1,
+      "solver": {
+        "solver": "PBICGSTAB",
+        "bsr_spmv_backend": "cusparse_generic",
+        "monitor_residual": 1,
+        "convergence": "ABSOLUTE",
+        "tolerance": 2.746103672591097e-12,
+        "max_iters": 4,
+        "print_solve_stats": 0,
+        "obtain_timings": 0,
+        "norm": "L2",
+        "preconditioner": {
+          "solver": "MULTICOLOR_DILU",
+          "max_iters": 2,
+          "coloring_level": 1,
+          "matrix_coloring_scheme": "PARALLEL_GREEDY",
+          "max_uncolored_percentage": 0.0,
+          "relaxation_factor": 0.7
+        },
+        "use_scalar_norm": 1,
+        "store_res_history": 1
+      }
+    },
+    "amgx_internal_rtol": 1e-11,
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 18.106638472992927,
+    "runner_started_utc": "2026-09-22T20:47:59+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "bj_pp",
+    "candidate": "bj_pp",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2480711,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "samples": [
+      {
+        "setup_ms": 2079.374077031389,
+        "setup_stages": {
+          "operator_setup_ms": 698.1082940474153,
+          "base_preconditioner_setup_ms": 199.7767488937825,
+          "polynomial_setup_ms": 1166.039623087272,
+          "gmres_workspace_setup_ms": 0.1350089441984892,
+          "rhs_transfer_ms": 2.690077992156148
+        },
+        "solves": [
+          {
+            "solve_ms": 645.7384680397809,
+            "iterations": 4,
+            "outer_matvec_count": 6,
+            "polynomial_applications": 5,
+            "polynomial_inner_matvecs": 480,
+            "base_preconditioner_applications": 485,
+            "total_solve_matvecs": 486,
+            "status": "max_iterations",
+            "block_jacobi_applications": 485,
+            "residual_history": [
+              0.27461036725910953,
+              0.03908632616749153
+            ],
+            "estimated_preconditioned_residual_history": [
+              264.6626059514364,
+              102.52066997605559,
+              56.832077328012474,
+              36.719272483201756,
+              25.892409172552906
+            ],
+            "residual_history_kind": "absolute true residuals at restart boundaries",
+            "passed": false,
+            "true_residual_norm": 0.03908632616749155,
+            "true_relative_residual": 0.1423337602203907,
+            "l2_error": 1.3966464522728872,
+            "trace_reference_error": null,
+            "l2_bound": null,
+            "validation_reconstruction_ms": 13744.95505192317
+          }
+        ],
+        "fresh_setup_solve_ms": 2725.1125450711697,
+        "amortized_ms": 2725.1125450711697,
+        "passed": false,
+        "cupy_pool_used_bytes": 1106250240,
+        "cupy_pool_reserved_bytes": 2975760896
+      }
+    ],
+    "warmups": [],
+    "requested_repeats": 1,
+    "solves_per_setup": 2,
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "face_dense",
+    "worker_sha256": "d65f186038d93b1263bf92617d0cc8347ec07bda93b5e5cdb1a3bcc7b547085c",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "configuration": {
+      "preconditioner": "block_jacobi_poly",
+      "operator": "raw_fused",
+      "application": "raw",
+      "local_solver": "cublas_inverse",
+      "polynomial_degree": 96,
+      "orthogonalization": "cgs2",
+      "restart": 4,
+      "polynomial_orthogonalization": "cgs2"
+    },
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 20.06697630509734,
+    "runner_started_utc": "2026-09-22T20:48:17+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "numerical_failure",
+    "family": "native_hp",
+    "candidate": "native_hp_robust",
+    "case": "stress_square_main_trap",
+    "n": 318,
+    "p": 6,
+    "rtol": 1e-10,
+    "internal_rtol": 1e-11,
+    "samples": [
+      {
+        "setup_ms": 3203.05347815156,
+        "solves": [
+          {
+            "solve_ms": 578.9186418987811,
+            "iterations": 4,
+            "matvec_count": 6,
+            "preconditioner_applications": 5,
+            "passed": false,
+            "true_relative_residual": 0.42020080332870374,
+            "l2_error": 1.402425169765248,
+            "trace_reference_error": null,
+            "peer_trace_relative_difference": null,
+            "residual_history": [
+              0.27461036725910953,
+              0.1153914969246683
+            ],
+            "estimated_preconditioned_residual_history": [
+              168.3154274024766,
+              131.92329702017955,
+              75.69332025913515,
+              66.85562153886019,
+              57.34208807892002
+            ],
+            "residual_history_kind": "absolute true residuals at restart boundaries"
+          }
+        ],
+        "fresh_setup_solve_ms": 3781.972120050341,
+        "amortized_ms": 3781.972120050341,
+        "amgx_memory": {
+          "live_bytes": 96546816,
+          "reserved_bytes": 268435456,
+          "peak_live_bytes": 139636736,
+          "peak_reserved_bytes": 268435456
+        }
+      }
+    ],
+    "warmups": [],
+    "note": "Master native hp-BSR hierarchy on symmetric part, Bernstein coordinate transforms, GMRES on unchanged full ADR operator; not native PCGF on ADR.",
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "policy": "robust",
+    "configuration": {
+      "schedule": "halve",
+      "chebyshev_order": 8,
+      "presweeps": 3,
+      "postsweeps": 3,
+      "coarse_config": {
+        "config_version": 2,
+        "solver": {
+          "solver": "AMG",
+          "algorithm": "CLASSICAL",
+          "selector": "PMIS",
+          "strength": "AHAT",
+          "strength_threshold": 0.4,
+          "interpolator": "D2",
+          "cycle": "W",
+          "presweeps": 3,
+          "postsweeps": 3,
+          "smoother": {
+            "solver": "JACOBI_L1",
+            "max_iters": 1
+          },
+          "coarse_solver": "DENSE_LU_SOLVER",
+          "max_iters": 1,
+          "max_levels": 100,
+          "dense_lu_num_rows": 128,
+          "dense_lu_max_rows": 256,
+          "coarsest_sweeps": 6,
+          "aggressive_levels": 0,
+          "interp_max_elements": 4,
+          "error_scaling": 0,
+          "tolerance": 1e-30,
+          "convergence": "ABSOLUTE",
+          "norm": "L2",
+          "monitor_residual": 1,
+          "print_solve_stats": 0,
+          "obtain_timings": 0
+        }
+      }
+    },
+    "restart": 4,
+    "maxiter": 4,
+    "requested_repeats": 1,
+    "requested_warmups": 0,
+    "solves_per_setup": 2,
+    "peer_solution": null,
+    "trace_dofs": 2111158,
+    "triangles": 201456,
+    "neighbors_sha256": "e82d319e5e96a3e8d59af7254fbe499b53ac686f3e4f44d5ba4e33869f90e0ee",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "cuda_driver": 13000,
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell"
+    },
+    "worker_sha256": "78abd293ee6682a107120a1ea6f21e903b42cd506ff25bca844a520ff3aa1d03",
+    "matrix_cache": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922/cache/stress_square_main_trap_t200000_p6",
+    "matrix_format": "bsr",
+    "adapter_sha256": "9da2a21dcd3f61f2fe697fe7abedbd61b814dab565f20a129e4753b6ee022390",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 21.513630527071655,
+    "runner_started_utc": "2026-09-22T20:48:37+00:00",
+    "target_triangles": 200000,
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  }
+]

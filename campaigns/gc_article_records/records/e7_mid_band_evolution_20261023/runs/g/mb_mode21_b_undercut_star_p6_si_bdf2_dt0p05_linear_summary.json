@@ -1,0 +1,128 @@
+{
+  "prefix": "mb_mode21_b_undercut_star_p6_si_bdf2_dt0p05_linear",
+  "geometry": "undercut_star",
+  "kind": "linear",
+  "triangles": 279662,
+  "element_unknowns": 7830536,
+  "order": 6,
+  "dt": 0.05,
+  "steps": 2400,
+  "final_time": 120.0,
+  "wall_time_s": 1464.2770608439896,
+  "snapshots": "mb_mode21_b_undercut_star_p6_si_bdf2_dt0p05_linear_snapshots.npz",
+  "profiles": "mb_mode21_b_undercut_star_p6_si_bdf2_dt0p05_linear_profiles.npz",
+  "transfer": {
+    "equilibrium_density_projection_time": 12.502423921003356,
+    "equilibrium_poisson_wall_time": 0.8474960410094354
+  },
+  "initial": {
+    "diocotron_rho_eq_relative_l2": null,
+    "diocotron_phi_eq_relative_l2": null,
+    "band_rho_dominant_mode": null,
+    "band_rho_active_modes": null,
+    "mass": -2.2640880717548356e-10,
+    "rho_min": -112.58788661654755,
+    "rho_max": 108.26638763787057,
+    "linear_density_l2": 2.5138886982999438,
+    "linear_potential_l2": 0.0002821688622173179
+  },
+  "final": {
+    "time": 119.99999999999532,
+    "mass_relative_drift": -1878307285.8145297,
+    "energy_relative_drift": 2.6475586189181816e+16,
+    "enstrophy_relative_drift": 1.3642171463773178e+16,
+    "rho_min": -12635997422.79066,
+    "rho_max": 12459722728.723091,
+    "diocotron_rho_eq_relative_l2": null,
+    "diocotron_phi_eq_relative_l2": null,
+    "band_rho_dominant_mode": null,
+    "band_rho_active_modes": null,
+    "band_rho_participation": null,
+    "linear_density_l2": 293621462.40722454,
+    "linear_potential_l2": 52141.50977420571
+  },
+  "max_abs": {
+    "mass_relative_drift": 1878307285.8145297,
+    "energy_relative_drift": 2.6475586189181816e+16,
+    "l2_budget_relative_defect": null,
+    "poisson_physical_rel_residual": 4.997181256681683e-11
+  },
+  "seed": {
+    "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_mid_band_20261023/stages/undercut_star/cg6",
+    "contours_sha256": "159c9a3e23ab6939b4e78de1e43aca6c70caf15f006e02b0070d6f5171e8886a",
+    "archive_id": "big_cg6_q48_01-390b47b31cd8",
+    "thickness": 0.045063800263133745,
+    "half_width": 0.045063800263133745,
+    "half_width_factor": 1.0,
+    "band_length": 8.117031769520313,
+    "circulation_period": 251.28588994846774,
+    "max_mode": 80,
+    "coordinate": "flow angle on the middle contour",
+    "drift_speed_min": 0.028750438711476433,
+    "drift_speed_mean": 0.03252541247941875,
+    "drift_speed_max": 0.03572132889751626,
+    "wall_clearance_min": 0.04109805751200512,
+    "wall_clearance_mean": 0.061059778664134756,
+    "coordinate_geometry": "polyline",
+    "coordinate_spacing": null,
+    "coordinate_max_mode": null,
+    "mode": 21,
+    "phase": 5.358900026823932,
+    "amplitude": 5.467695325167094e-06,
+    "edge_fraction": 0.002,
+    "edge_displacement": 9.01276005262675e-05,
+    "crest_point": [
+      0.1289849917042158,
+      0.8173696641819025
+    ],
+    "crest_theta": 4.681602740078059,
+    "crest_wall_clearance": 0.0410992648598393,
+    "wall_feature": [
+      0.17,
+      0.82
+    ],
+    "wall_margin": 0.00180255201052535,
+    "grid_spacing": 0.0009388276700219442,
+    "grid_shape": [
+      2503,
+      2404
+    ],
+    "rk4_steps": 4,
+    "seed": "rho_0 = W(phi*(Phi_{-1}(x))), Phi time-1 flow of grad^perp chi",
+    "normal_profile": "sinuous g(eta/w)"
+  },
+  "provenance": {
+    "recorded": "2026-10-24T06:34:15+00:00",
+    "python": "3.12.3",
+    "packages": {
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "numba": "0.67.0",
+      "cupy-cuda13x": "14.2.0",
+      "gmsh": "4.15.2",
+      "matplotlib": "3.11.1",
+      "pillow": "12.3.0",
+      "imageio-ffmpeg": "0.6.0",
+      "holoscan-cu13": "4.6.0",
+      "pypardiso": "0.4.7",
+      "pyamgx": "0.1"
+    },
+    "code": {
+      "git_head": "1b761db8eb30bdd68ba3fa491df4a52a25260d7e",
+      "git_branch": "master",
+      "git_dirty_entries": 160,
+      "code_diff_sha256": "5ef3ecd27dc8434537f50553464aa309f3daa63dc40a8b871ef410f81a9a39ef"
+    },
+    "gpu_stack": {
+      "pyamgx_revision": "a44d224d8b92f94b8d004794805528dfe3e8b460",
+      "pyamgx_dirty": false,
+      "amgx_library": "libamgxsh.so",
+      "amgx_library_bytes": 151633152,
+      "amgx_library_modified": "2026-09-28T11:21:52+00:00",
+      "amgx_revision": "c564f9d866eaff427bac17fddaaeeb5c3bbad2d0",
+      "amgx_dirty": false
+    },
+    "cuda_runtime": 13020,
+    "cuda_driver": 13000
+  }
+}

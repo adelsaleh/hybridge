@@ -1,0 +1,30 @@
+{
+  "area": 2.776996918433099,
+  "cells": 402014,
+  "domain_diameter": 3.057286509594837,
+  "edges": 604236,
+  "format": "hdgfem_canonical_gmsh_v1",
+  "geometry": "horseshoe",
+  "geometry_degree": 1,
+  "geometry_parameters": {
+    "cap_points": 28,
+    "gap_half_angle": 0.48,
+    "inner_points": 130,
+    "inner_radius": 0.46,
+    "outer_points": 170,
+    "outer_radius": 1.16,
+    "x_shift": 0.1,
+    "y_scale": 0.92
+  },
+  "geometry_source": null,
+  "gmsh_algorithm": 6,
+  "gmsh_version": "4.15.2",
+  "h_max": 0.005566364654151735,
+  "mesh_sha256": "0a289789708b2b55bb60906c69c1b90acc73109f03fe31582bc6ce218c2b97a4",
+  "msh_file_version": 2.2,
+  "requested_size": 0.004,
+  "source_hash": "3715426e4d97b019b406d53727302a10eb3d7122475c2534d1b62924c4c03a9d",
+  "statistics_geometry": "corner_triangles",
+  "title": "Horseshoe",
+  "vertices": 202223
+}

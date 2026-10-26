@@ -1,0 +1,98 @@
+[
+  {
+    "geometry": "star",
+    "source_id": "star_02-64318bc1b149",
+    "archive_id": "star_inward_20261012_01-62ff18dc87cc",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/star/star_inward_20261012_01.npz",
+    "before": {
+      "midpoint": 0.0025,
+      "thickness": 0.039126166074921906,
+      "clearance": 0.04742248266280838,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 4.606964402468316e-16
+    },
+    "after": {
+      "midpoint": 0.0028,
+      "thickness": 0.03919325874365985,
+      "clearance": 0.05500644304006243,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 6.200440429839094e-16
+    },
+    "clearance_increase_percent": 15.992330960778345,
+    "thickness_change_percent": 0.17147774870012178,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "uglypacman",
+    "source_id": "uglypacman_04-195ec92fe165",
+    "archive_id": "uglypacman_inward_20261012_01-e2762e0cd104",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/uglypacman/uglypacman_inward_20261012_01.npz",
+    "before": {
+      "midpoint": 0.0022,
+      "thickness": 0.03950311653383723,
+      "clearance": 0.04208837585653548,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 7.810659586848968e-16
+    },
+    "after": {
+      "midpoint": 0.0025,
+      "thickness": 0.039538887196609473,
+      "clearance": 0.05051702126840943,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 1.680468348188424e-13
+    },
+    "clearance_increase_percent": 20.0260647752345,
+    "thickness_change_percent": 0.09055149545378338,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "iter",
+    "source_id": "iter_02-73bbb3b25dba",
+    "archive_id": "iter_inward_20261012_01-b14922566841",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/iter/iter_inward_20261012_01.npz",
+    "before": {
+      "midpoint": 0.02,
+      "thickness": 0.10949865556618806,
+      "clearance": 0.13137635556926838,
+      "clearance_measure": "wall_clearance_euclidean",
+      "dual_residual": 3.159961490159043e-16
+    },
+    "after": {
+      "midpoint": 0.0224,
+      "thickness": 0.10942824600515816,
+      "clearance": 0.15125611563330713,
+      "clearance_measure": "wall_clearance_euclidean",
+      "dual_residual": 4.772609967079877e-16
+    },
+    "clearance_increase_percent": 15.131916224877395,
+    "thickness_change_percent": -0.06430175846984243,
+    "mesh_size": 0.01,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "horseshoe",
+    "source_id": "horseshoe_02-1b7669f8cdb6",
+    "archive_id": "horseshoe_inward_20261012_01-a3257f052ad2",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/horseshoe/horseshoe_inward_20261012_01.npz",
+    "before": {
+      "midpoint": 0.0025,
+      "thickness": 0.039155020741870085,
+      "clearance": 0.049336580859304875,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 7.574925401301097e-16
+    },
+    "after": {
+      "midpoint": 0.0028,
+      "thickness": 0.039152425650973696,
+      "clearance": 0.05723048289884515,
+      "clearance_measure": "wall_clearance_along_flow",
+      "dual_residual": 1.0160488819046163e-15
+    },
+    "clearance_increase_percent": 16.000099524633924,
+    "thickness_change_percent": -0.0066277346997156705,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  }
+]

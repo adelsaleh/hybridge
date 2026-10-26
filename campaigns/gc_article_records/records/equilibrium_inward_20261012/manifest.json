@@ -1,0 +1,140 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 1139007051,
+  "file_count": 161,
+  "subdirectories": 10,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 8033,
+      "sha256": "9ba4398ad65033c61d5cd60733a01018e148f6471e5b077e75e5f07179740a5d"
+    },
+    {
+      "path": "archive_verification.json",
+      "copy": "archive_verification.json",
+      "bytes": 64,
+      "sha256": "0f7e851f19a3d9bc6efd4fcc633776e604c10db7d0590ddcf34307a2b755797b"
+    },
+    {
+      "path": "campaign_notes.json",
+      "copy": "campaign_notes.json",
+      "bytes": 1470,
+      "sha256": "5015f4b7944bdc21de8f5cd96713acc9f88dda63920bdb6147fb216c87c43041"
+    },
+    {
+      "path": "catalog.csv",
+      "copy": "catalog.csv",
+      "bytes": 2132,
+      "sha256": "5ea1a16c15eb8ae3eff99b0dfc75ab84225f59e9f64c433eef4c1df72c5bd39f"
+    },
+    {
+      "path": "comparison.json",
+      "copy": "comparison.json",
+      "bytes": 3541,
+      "sha256": "1648e525bace799e05207acce95a06d026247c76716bc8d5714e3fc0216f7c66"
+    },
+    {
+      "path": "inputs/horseshoe/config.json",
+      "copy": "inputs/horseshoe/config.json",
+      "bytes": 1088,
+      "sha256": "9c909c30bc3eeaa31322400fa8736fc9ad68d313238e15dbd3b56819fb041fe6"
+    },
+    {
+      "path": "inputs/horseshoe/mesh.msh.json",
+      "copy": "inputs/horseshoe/mesh.msh.json",
+      "bytes": 518,
+      "sha256": "9ceb917eb22ea14515e37409cff0e6df16db258bca708210e00721a068c5d502"
+    },
+    {
+      "path": "inputs/iter/config.json",
+      "copy": "inputs/iter/config.json",
+      "bytes": 1084,
+      "sha256": "f8a43dfbecac7bdba82085236d8a12742af4f564a3a1f8078edf2baded12a28f"
+    },
+    {
+      "path": "inputs/iter/mesh.msh.json",
+      "copy": "inputs/iter/mesh.msh.json",
+      "bytes": 507,
+      "sha256": "4936ee8c04aece93fe59698bf6a4999afb1a1cca2217eb8744532698b9e18221"
+    },
+    {
+      "path": "inputs/star/config.json",
+      "copy": "inputs/star/config.json",
+      "bytes": 1083,
+      "sha256": "32e1a47c776d2a00bed55a8726bb56b4bb2f186478f9fd15301eb7327d202465"
+    },
+    {
+      "path": "inputs/star/mesh.msh.json",
+      "copy": "inputs/star/mesh.msh.json",
+      "bytes": 508,
+      "sha256": "53b298f80d4ce445b6186217b66b7de32f00a8b5ce6f54616813ef866a0252f7"
+    },
+    {
+      "path": "inputs/uglypacman/config.json",
+      "copy": "inputs/uglypacman/config.json",
+      "bytes": 1089,
+      "sha256": "513f140d92f3191ade8b26e2d93a2d4a9897d45913105f363c1ea8fbcd573344"
+    },
+    {
+      "path": "inputs/uglypacman/config_attempt01_ray_tolerance.json",
+      "copy": "inputs/uglypacman/config_attempt01_ray_tolerance.json",
+      "bytes": 1089,
+      "sha256": "fdefa71699e7c410fb53cb8a97af8542f94e3f33a6ec31ed22147e034ebc2d17"
+    },
+    {
+      "path": "inputs/uglypacman/mesh.msh.json",
+      "copy": "inputs/uglypacman/mesh.msh.json",
+      "bytes": 520,
+      "sha256": "6121505bb4d623800099125d1208a6ff289787218d76975fe9145145ffb0f39d"
+    },
+    {
+      "path": "iter_mpi_check_config.json",
+      "copy": "iter_mpi_check_config.json",
+      "bytes": 1111,
+      "sha256": "c6128f38f01cdbe3d461697b8f98679e5da23f1a0dff104add856cec246d967e"
+    },
+    {
+      "path": "launch.json",
+      "copy": "launch.json",
+      "bytes": 4424,
+      "sha256": "1faa340b6e4802801b51eee17fec5bbdfcdd50ee2b63aa638cb69b896d6dd80b"
+    },
+    {
+      "path": "launch_attempt01.json",
+      "copy": "launch_attempt01.json",
+      "bytes": 1049,
+      "sha256": "ef2c25ff3d9d3df176a3117709cd7a69b5e3b215154f48898c83c954c78785b2"
+    },
+    {
+      "path": "mpi_parity.json",
+      "copy": "mpi_parity.json",
+      "bytes": 318,
+      "sha256": "7bdcc02840c7773d0b89299de8801b55bef2231da60522a9d1359cf503925c31"
+    },
+    {
+      "path": "producer_provenance.json",
+      "copy": "producer_provenance.json",
+      "bytes": 5122,
+      "sha256": "2de898cd38ddb4307f8f77ee476c2fb19dac6161a2fc35a67f6a79047b9c50c9"
+    },
+    {
+      "path": "star_cpu_activity.json",
+      "copy": "star_cpu_activity.json",
+      "bytes": 452,
+      "sha256": "0796a17fb6408c77114615aa6e93751323a9caf0fdbeb00dbc11743391bcaa7b"
+    },
+    {
+      "path": "validation.json",
+      "copy": "validation.json",
+      "bytes": 894,
+      "sha256": "0854c0b09528cae0a8871d847f7cbb7119e8d87a66a1b00ce260d4b30376d69d"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

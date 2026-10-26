@@ -1,0 +1,13 @@
+{
+  "rho_min_checked": -0.5642408427009579,
+  "rho_max_checked": 1.5250335318766721,
+  "rho_bernstein_lower_bound": -2.590551140749226,
+  "rho_bernstein_upper_bound": 3.5922174141485623,
+  "rho_cell_average_min": 1.4035930148590512e-11,
+  "rho_negative_mass_quadrature": 0.001528881299148331,
+  "rho_negative_l2_quadrature": 0.009097362554825308,
+  "rho_negative_cells_sampled": 1658.0,
+  "positivity_status": "violated",
+  "positivity_tolerance": 1e-12,
+  "positivity_backend": "host"
+}

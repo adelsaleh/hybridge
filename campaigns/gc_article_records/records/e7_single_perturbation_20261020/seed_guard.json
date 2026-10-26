@@ -1,0 +1,27 @@
+{
+  "check": {
+    "inner": {
+      "area_relative_change": 8.39291303122991e-09,
+      "max_normal_displacement": 0.0004206601748488156,
+      "max_displacement": 0.003757836330853025,
+      "inverse_error": 5.795153336463284e-14,
+      "points_outside_wall": 0
+    },
+    "middle": {
+      "area_relative_change": 4.834006528398049e-10,
+      "max_normal_displacement": 0.0023834348123691258,
+      "max_displacement": 0.0023834348510950224,
+      "inverse_error": 2.1880666030802312e-13,
+      "points_outside_wall": 0
+    },
+    "outer": {
+      "area_relative_change": 7.212839880921251e-09,
+      "max_normal_displacement": 0.00138926403896066,
+      "max_displacement": 0.004706661934604117,
+      "inverse_error": 1.16891300969941e-13,
+      "points_outside_wall": 0
+    },
+    "edge_displacement_ratio": 0.999999299408259
+  },
+  "identical_control_seed_probe_grid": true
+}

@@ -1,0 +1,5 @@
+{
+  "geometry": "uglypacman",
+  "reason": "Saved-field ray-tolerance refinement improves resolved core fraction from 0.635742 to 0.75 without changing the FE fields or guards",
+  "ray_tolerance": 1e-14
+}

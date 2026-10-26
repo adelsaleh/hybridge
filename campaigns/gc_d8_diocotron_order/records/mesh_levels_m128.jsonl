@@ -1,0 +1,40 @@
+{"s": 0.5, "triangles": 368027, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 0.7, "triangles": 199699, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 1.0, "triangles": 106554, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 1.4, "triangles": 60097, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 2.0, "triangles": 33651, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 2.8, "triangles": 20068, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"s": 4.0, "triangles": 11844, "band": [0.7875003692745857, 0.8124996307254144], "grading": 0.5}
+{"level": "L0", "p": 2, "s": 1.47812, "hb": 0.0029562, "h": 0.059125, "triangles": 54997, "edges": 82549, "element_unknowns": 329982, "trace_unknowns": 247647}
+{"level": "L0", "p": 3, "s": 2.02727, "hb": 0.0040545, "h": 0.0810906, "triangles": 33030, "edges": 49584, "element_unknowns": 330300, "trace_unknowns": 198336}
+{"level": "L0", "p": 4, "s": 2.63144, "hb": 0.0052629, "h": 0.1052576, "triangles": 22046, "edges": 33101, "element_unknowns": 330690, "trace_unknowns": 165505}
+{"level": "L0", "p": 5, "s": 3.29154, "hb": 0.0065831, "h": 0.1316615, "triangles": 15767, "edges": 23682, "element_unknowns": 331107, "trace_unknowns": 142092}
+{"level": "L0", "p": 6, "s": 4.00737, "hb": 0.0080147, "h": 0.1602947, "triangles": 11800, "edges": 17731, "element_unknowns": 330400, "trace_unknowns": 124117}
+{"level": "L0", "p": 7, "s": 4.77785, "hb": 0.0095557, "h": 0.1911139, "triangles": 9201, "edges": 13832, "element_unknowns": 331236, "trace_unknowns": 110656}
+{"level": "L0", "p": 8, "s": 5.60111, "hb": 0.0112022, "h": 0.2240446, "triangles": 7376, "edges": 11094, "element_unknowns": 331920, "trace_unknowns": 99846}
+{"level": "L1", "p": 2, "s": 0.77458, "hb": 0.0015492, "h": 0.0309833, "triangles": 166879, "edges": 250420, "element_unknowns": 1001274, "trace_unknowns": 751260}
+{"level": "L1", "p": 3, "s": 1.03717, "hb": 0.0020743, "h": 0.041487, "triangles": 100072, "edges": 150184, "element_unknowns": 1000720, "trace_unknowns": 600736}
+{"level": "L1", "p": 4, "s": 1.31667, "hb": 0.0026333, "h": 0.0526668, "triangles": 66442, "edges": 99723, "element_unknowns": 996630, "trace_unknowns": 498615}
+{"level": "L1", "p": 5, "s": 1.61374, "hb": 0.0032275, "h": 0.0645496, "triangles": 47508, "edges": 71311, "element_unknowns": 997668, "trace_unknowns": 427866}
+{"level": "L1", "p": 6, "s": 1.92884, "hb": 0.0038577, "h": 0.0771534, "triangles": 35680, "edges": 53561, "element_unknowns": 999040, "trace_unknowns": 374927}
+{"level": "L1", "p": 7, "s": 2.26225, "hb": 0.0045245, "h": 0.0904902, "triangles": 27722, "edges": 41618, "element_unknowns": 997992, "trace_unknowns": 332944}
+{"level": "L1", "p": 8, "s": 2.61418, "hb": 0.0052284, "h": 0.1045672, "triangles": 22260, "edges": 33422, "element_unknowns": 1001700, "trace_unknowns": 300798}
+{"level": "L2", "p": 2, "s": 0.42375, "hb": 0.0008475, "h": 0.0169501, "triangles": 499987, "edges": 750166, "element_unknowns": 2999922, "trace_unknowns": 2250498}
+{"level": "L2", "p": 3, "s": 0.55896, "hb": 0.0011179, "h": 0.0223585, "triangles": 299784, "edges": 449817, "element_unknowns": 2997840, "trace_unknowns": 1799268}
+{"level": "L2", "p": 4, "s": 0.69934, "hb": 0.0013987, "h": 0.0279735, "triangles": 199751, "edges": 299739, "element_unknowns": 2996265, "trace_unknowns": 1498695}
+{"level": "L2", "p": 5, "s": 0.84514, "hb": 0.0016903, "h": 0.0338057, "triangles": 142906, "edges": 214452, "element_unknowns": 3001026, "trace_unknowns": 1286712}
+{"level": "L2", "p": 6, "s": 0.99655, "hb": 0.0019931, "h": 0.039862, "triangles": 107186, "edges": 160858, "element_unknowns": 3001208, "trace_unknowns": 1126006}
+{"level": "L2", "p": 7, "s": 1.15369, "hb": 0.0023074, "h": 0.0461476, "triangles": 83327, "edges": 125059, "element_unknowns": 2999772, "trace_unknowns": 1000472}
+{"level": "L2", "p": 8, "s": 1.31667, "hb": 0.0026333, "h": 0.0526668, "triangles": 66442, "edges": 99723, "element_unknowns": 2989890, "trace_unknowns": 897507}
+{"level": "L3", "p": 2, "s": 0.23708, "hb": 0.0004742, "h": 0.009483, "triangles_estimate": 1500000, "element_unknowns": 9000000.0}
+{"level": "L3", "p": 3, "s": 0.30992, "hb": 0.0006198, "h": 0.012397, "triangles_estimate": 900000, "element_unknowns": 9000000.0}
+{"level": "L3", "p": 4, "s": 0.38434, "hb": 0.0007687, "h": 0.0153735, "triangles": 600509, "edges": 900968, "element_unknowns": 9007635, "trace_unknowns": 4504840}
+{"level": "L3", "p": 5, "s": 0.46043, "hb": 0.0009209, "h": 0.0184173, "triangles": 428618, "edges": 643098, "element_unknowns": 9000978, "trace_unknowns": 3858588}
+{"level": "L3", "p": 6, "s": 0.53827, "hb": 0.0010765, "h": 0.0215307, "triangles": 321724, "edges": 482732, "element_unknowns": 9008272, "trace_unknowns": 3379124}
+{"level": "L3", "p": 7, "s": 0.61789, "hb": 0.0012358, "h": 0.0247157, "triangles": 249791, "edges": 374814, "element_unknowns": 8992476, "trace_unknowns": 2998512}
+{"level": "L3", "p": 8, "s": 0.69934, "hb": 0.0013987, "h": 0.0279735, "triangles": 199751, "edges": 299739, "element_unknowns": 8988795, "trace_unknowns": 2697651}
+{"level": "L0", "p": 9, "s": 6.47465, "hb": 0.0129493, "h": 0.258986, "triangles": 5955, "edges": 8962, "element_unknowns": 327525, "trace_unknowns": 89620}
+{"level": "L1", "p": 9, "s": 2.98469, "hb": 0.0059694, "h": 0.1193874, "triangles": 18161, "edges": 27273, "element_unknowns": 998855, "trace_unknowns": 272730}
+{"level": "L2", "p": 9, "s": 1.48558, "hb": 0.0029712, "h": 0.059423, "triangles": 54504, "edges": 81809, "element_unknowns": 2997720, "trace_unknowns": 818090}
+{"level": "L3", "p": 9, "s": 0.78263, "hb": 0.0015653, "h": 0.0313053, "triangles": 163923, "edges": 245985, "element_unknowns": 9015765, "trace_unknowns": 2459850}
+{"level": "T75k", "p": 8, "s": 1.22956, "hb": 0.0024591, "h": 0.0491825, "triangles": 74710, "edges": 112129, "element_unknowns": 3361950, "trace_unknowns": 1009161, "note": "user 2026-10-18: p = 8 at about 75k triangles"}

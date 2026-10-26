@@ -1,0 +1,58 @@
+[
+  {
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/source_cg6/undercut_star_cg6_01.npz",
+    "window": {
+      "threshold_width_delta": 0.003,
+      "epsilon": 0.00024,
+      "kind": "logistic",
+      "smoothing_mode": "relative_to_delta",
+      "relative_epsilon": 0.08,
+      "midpoint": 0.009000000000000001
+    },
+    "source_order": 6,
+    "thickness": {
+      "weighted_mean": 0.06946325061341269,
+      "min": 0.06310514963330523,
+      "max": 0.08354412904009867
+    },
+    "outer_to_wall": {
+      "weighted_mean": 0.10649644147216991,
+      "min": 0.07421557115166066,
+      "max": 0.18031518287330497
+    },
+    "wall_to_outer": {
+      "mean": 0.24744945912974609,
+      "maximum": 0.4902178886490629,
+      "p95": 0.46116413531186456
+    },
+    "residual": 2.7352545958242606e-15
+  },
+  {
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/thin_225/thin_225_01.npz",
+    "window": {
+      "threshold_width_delta": 0.00225,
+      "epsilon": 0.00017999999999999998,
+      "kind": "logistic",
+      "smoothing_mode": "relative_to_delta",
+      "relative_epsilon": 0.08,
+      "midpoint": 0.006749999999999999
+    },
+    "source_order": 3,
+    "thickness": {
+      "weighted_mean": 0.0599244942576565,
+      "min": 0.0544852534528939,
+      "max": 0.07690264191235499
+    },
+    "outer_to_wall": {
+      "weighted_mean": 0.08901580868852203,
+      "min": 0.06394452791085817,
+      "max": 0.1701748598803037
+    },
+    "wall_to_outer": {
+      "mean": 0.2045786074818739,
+      "maximum": 0.4167068191961205,
+      "p95": 0.3878996875364413
+    },
+    "residual": 9.505440911221484e-16
+  }
+]

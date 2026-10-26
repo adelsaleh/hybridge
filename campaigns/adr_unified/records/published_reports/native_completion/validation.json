@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "scheduled": 126,
+  "attempted": 126,
+  "all_systems_attempted": true,
+  "native_passed_systems": 87,
+  "numerical_failures": 35,
+  "execution_errors": [],
+  "worst_physical_relative_residual": 9.731280447604356e-12,
+  "worst_peer_trace_relative_difference": 8.290573495446636e-09,
+  "note": "Worker physical residuals and manufactured-solution errors are evaluated outside timing. Peer differences are diagnostics, not a replacement for the physical residual."
+}

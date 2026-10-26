@@ -1,0 +1,9 @@
+{
+  "pid": 1441701,
+  "pgid": 1441701,
+  "started_utc": "2026-10-20T18:22:01.962143+00:00",
+  "purpose": "startup check: Richardson first step, broad-band packet",
+  "status": "completed",
+  "failures": [],
+  "finished_utc": "2026-10-20T18:30:40.116867+00:00"
+}

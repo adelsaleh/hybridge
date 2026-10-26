@@ -1,0 +1,16 @@
+{
+  "status": "partial",
+  "finished": 1792161721.955115,
+  "failures": [
+    "iter: distance sampling check failed"
+  ],
+  "accepted_refined": {
+    "star": true,
+    "uglypacman": true,
+    "iter": true,
+    "horseshoe": true
+  },
+  "results": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/RESULTS.md",
+  "gallery": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/final/density_bands.png",
+  "guiding_center_evolution_performed": false
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "tolerance": 1e-13,
+    "rays": 256,
+    "resolved_torsion_fraction": 0.765625,
+    "flow_resolution": 1.799118751274914e-11,
+    "maximum_endpoint_error": 2.810995042553933e-05,
+    "minimum_length": 0.43129306839242076,
+    "maximum_length": 2.3415120582298,
+    "seconds": 24.036334499018267
+  },
+  {
+    "tolerance": 1e-14,
+    "rays": 256,
+    "resolved_torsion_fraction": 0.75,
+    "flow_resolution": 5.11340303795269e-12,
+    "maximum_endpoint_error": 2.8098494289424117e-05,
+    "minimum_length": 0.43129316645956806,
+    "maximum_length": 2.3415122233545778,
+    "seconds": 6.877886660862714
+  }
+]

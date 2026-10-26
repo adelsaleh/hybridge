@@ -1,0 +1,83 @@
+{
+  "rows": [
+    {
+      "prefix": "smoke_annulus_sl_l3_r0p4_0p5_p6_hb0p01_h0p04_si_bdf2_dt0p1_raw_seed",
+      "label": "l3_r0.4_0.5",
+      "order": 6,
+      "band_mesh_size": 0.01,
+      "mesh_size": 0.04,
+      "triangles": 14628,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 1e-06,
+      "window": [
+        26.0,
+        72.0
+      ],
+      "reference_type": "sharp-annulus-analytic",
+      "reference_gamma": 0.18365794757123,
+      "fitted_gamma": null,
+      "relative_error": null,
+      "r_squared": null,
+      "subwindow_gammas": [
+        null,
+        null
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "invariants": {
+        "mass": 1.570644290379781e-15,
+        "energy_from_q_l2": 1.9211493289402275e-10,
+        "enstrophy": 0.0007813095525877424
+      },
+      "wall_time_s": 55.83700652199332,
+      "jsonl": "run_outputs/article/diocotron/smoke_annulus_sl_l3_r0p4_0p5_p6_hb0p01_h0p04_si_bdf2_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 409584,
+      "trace_unknowns": 154203,
+      "semi_lagrangian_gamma": 0.18335,
+      "semi_lagrangian_relative_error": -0.0016767451411845288,
+      "published_analytic_gamma": 0.18366
+    },
+    {
+      "prefix": "smoke_annulus_sl_l3_r0p4_0p5_p6_hb0p01_h0p04_si_bdf2_dt0p1_compatible_seed",
+      "label": "l3_r0.4_0.5",
+      "order": 6,
+      "band_mesh_size": 0.01,
+      "mesh_size": 0.04,
+      "triangles": 14628,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "compatible",
+      "epsilon": 1e-06,
+      "window": [
+        26.0,
+        72.0
+      ],
+      "reference_type": "sharp-annulus-analytic",
+      "reference_gamma": 0.18365794757123,
+      "fitted_gamma": null,
+      "relative_error": null,
+      "r_squared": null,
+      "subwindow_gammas": [
+        null,
+        null
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "invariants": {
+        "mass": 1.3743137540823084e-15,
+        "energy_from_q_l2": 5.580058659981812e-10,
+        "enstrophy": 0.0007812825393428163
+      },
+      "wall_time_s": 57.03164888196625,
+      "jsonl": "run_outputs/article/diocotron/smoke_annulus_sl_l3_r0p4_0p5_p6_hb0p01_h0p04_si_bdf2_dt0p1_compatible_seed.jsonl",
+      "element_unknowns": 409584,
+      "trace_unknowns": 154203,
+      "semi_lagrangian_gamma": 0.18335,
+      "semi_lagrangian_relative_error": -0.0016767451411845288,
+      "published_analytic_gamma": 0.18366
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,161 @@
+{
+  "definition": "Same saved CG6 potential, unchanged contour levels and tolerance; only subdivision grids differ. No PDE solve.",
+  "midpoint": 0.007063329661691963,
+  "results": [
+    {
+      "level": "lower",
+      "kind": "dyadic",
+      "status": "OK",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ],
+      "seconds": 0.4804353881627321
+    },
+    {
+      "level": "lower",
+      "kind": "alternative",
+      "status": "OK",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 5,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 7,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ],
+      "seconds": 1.5054900029208511
+    },
+    {
+      "level": "middle",
+      "kind": "dyadic",
+      "status": "OK",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ],
+      "seconds": 0.19251187099143863
+    },
+    {
+      "level": "middle",
+      "kind": "alternative",
+      "status": "OK",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 5,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 7,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ],
+      "seconds": 0.5976640169974416
+    },
+    {
+      "level": "upper",
+      "kind": "dyadic",
+      "status": "CONTOUR_AUDIT_UNRESOLVED",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 6,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        },
+        {
+          "refinement": 8,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 12,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        },
+        {
+          "refinement": 16,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 18,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        }
+      ],
+      "seconds": 3.998905227985233
+    },
+    {
+      "level": "upper",
+      "kind": "alternative",
+      "status": "OK",
+      "tolerance": 6.12088465388111e-12,
+      "diagnostics": [
+        {
+          "refinement": 5,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 7,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ],
+      "seconds": 1.1794542400166392
+    }
+  ]
+}

@@ -1,0 +1,266 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_preservation_20261024",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 31482342166,
+  "file_count": 4088,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "CHAIN_DONE",
+    "CONTROLS_F_DONE",
+    "CONTROLS_K2_DONE",
+    "CONTROLS_P_DONE",
+    "CONTROLS_T_DONE"
+  ],
+  "copied": [
+    {
+      "path": "CHAIN_DONE",
+      "copy": "CHAIN_DONE",
+      "bytes": 636,
+      "sha256": "e5a7df2b5ada698bbe0f53d3b7e28621e4bb7eb7d3f7a72eb652b087591a9157"
+    },
+    {
+      "path": "CONTROLS_F_DONE",
+      "copy": "CONTROLS_F_DONE",
+      "bytes": 204,
+      "sha256": "14893023b3701465501d2f2b3bba858306d529c6cb8ab73562aace8774ef6055"
+    },
+    {
+      "path": "CONTROLS_K2_DONE",
+      "copy": "CONTROLS_K2_DONE",
+      "bytes": 205,
+      "sha256": "194f820fc0f1c0f34d9bf7eb1ef369c4a1e0832ce591a8fa07975e0cbba10345"
+    },
+    {
+      "path": "CONTROLS_P_DONE",
+      "copy": "CONTROLS_P_DONE",
+      "bytes": 203,
+      "sha256": "22ea5039bd32710da2a8a003b932652c7a181c136dae3f9f78e7c9b5c45641e9"
+    },
+    {
+      "path": "CONTROLS_T_DONE",
+      "copy": "CONTROLS_T_DONE",
+      "bytes": 203,
+      "sha256": "cdfbf45b418cb1818fb82412af06a0f378c5bb4b7d6f773e4092accff711e612"
+    },
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 16517,
+      "sha256": "56322330093d51ef05e6f36a1d53a7048136aa7fd8864cf3c8d25bb47fe017f5"
+    },
+    {
+      "path": "chain_launch.json",
+      "copy": "chain_launch.json",
+      "bytes": 582,
+      "sha256": "165e1cb13ee682a271e8df738a7fae3812a16ec0441176f075e1bf51bfdd71fd"
+    },
+    {
+      "path": "controls_F_launch.json",
+      "copy": "controls_F_launch.json",
+      "bytes": 107,
+      "sha256": "f45e64505f4437a3a6c018889e2a4bf1580385471db9595ca8e7045c2d91501e"
+    },
+    {
+      "path": "controls_F_runs.jsonl",
+      "copy": "controls_F_runs.jsonl",
+      "bytes": 8411,
+      "sha256": "3dd3d58de7c85fb428628fa040beae5806639a9f4dee8f5eec978fae6f9a6079"
+    },
+    {
+      "path": "controls_K2_launch.json",
+      "copy": "controls_K2_launch.json",
+      "bytes": 108,
+      "sha256": "e949e8ed937b23083f09d4619f443016e50462827ffed183ab7577c5ec1cab35"
+    },
+    {
+      "path": "controls_K2_runs.jsonl",
+      "copy": "controls_K2_runs.jsonl",
+      "bytes": 3671,
+      "sha256": "67fca728a985fc2e4318aeafd524fb0dccdd30214d5b23c809cfdc197b8c46af"
+    },
+    {
+      "path": "controls_P_launch.json",
+      "copy": "controls_P_launch.json",
+      "bytes": 106,
+      "sha256": "f85b7d207cd30fa80ba29d221b8708e3bb165b52f6b83d432848254c2b801ab0"
+    },
+    {
+      "path": "controls_P_runs.jsonl",
+      "copy": "controls_P_runs.jsonl",
+      "bytes": 13693,
+      "sha256": "3fe330e132ab60bc86c46e923edf88576243dd4f67afe0494de47478f27d288b"
+    },
+    {
+      "path": "controls_T_launch.json",
+      "copy": "controls_T_launch.json",
+      "bytes": 106,
+      "sha256": "0ec22885a36b732bf32f3dd2cd3247db963adbfd6f9c643ae80ea706c9d8ce0b"
+    },
+    {
+      "path": "controls_T_runs.jsonl",
+      "copy": "controls_T_runs.jsonl",
+      "bytes": 13207,
+      "sha256": "1932f57f78aad84bf75f2691a56cc6e0196f4be3773a9e2344279b8c2277d083"
+    },
+    {
+      "path": "initial_residual.json",
+      "copy": "initial_residual.json",
+      "bytes": 16008,
+      "sha256": "399d78329b81c13d4ff0e4df768e2dff2ebafb05ac65102c2bde595947611864"
+    },
+    {
+      "path": "onset_summary.json",
+      "copy": "onset_summary.json",
+      "bytes": 76381,
+      "sha256": "5d8676f1090cfcc75539b1b891fa547c839ffe2ea26a3b6c196094f58e7f6702"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 16897,
+      "sha256": "fba4d75c1e1cfc13af52fe2fb74aa129e586627968c55cb44cec1f126d0fd023"
+    },
+    {
+      "path": "runs/F/pr_far_b_k0_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/F/pr_far_b_k0_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4473,
+      "sha256": "242c51c459cdd9dd09dfb2d671b2d43cd585c75b6d540928c3d22216c2d1c63a"
+    },
+    {
+      "path": "runs/F/pr_far_b_undercut_star_p4_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/F/pr_far_b_undercut_star_p4_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4455,
+      "sha256": "e727c51455ad29f3fd297b3d54cb6576f8bfec55f2b82586ff029d20cbc83a3e"
+    },
+    {
+      "path": "runs/F/pr_far_b_undercut_star_p5_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/F/pr_far_b_undercut_star_p5_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4463,
+      "sha256": "51c548c35a7e83d0e8742a2fa59fbfd14f0026d3d3dcc44cffe9c5b1f468aaec"
+    },
+    {
+      "path": "runs/F/pr_far_b_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/F/pr_far_b_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4463,
+      "sha256": "0ded61c8f983e5432fa8fb2c9d4837c0ec5b3fd05b852080f50189ff8bf512f1"
+    },
+    {
+      "path": "runs/F/pr_far_c_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/F/pr_far_c_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4464,
+      "sha256": "01712749c329e095e4065c8af831613b9e7f33e8d6989cf5c2ddf4f0d9d68e4e"
+    },
+    {
+      "path": "runs/K2/pr_mid_b_k1p5_undercut_star_p6_si_bdf2_dt0p025_control_summary.json",
+      "copy": "runs/K2/pr_mid_b_k1p5_undercut_star_p6_si_bdf2_dt0p025_control_summary.json",
+      "bytes": 4486,
+      "sha256": "2ee26f614e34f9b7acd318d914e7d465fd36118f63a8be9e446ff1709e2d66bf"
+    },
+    {
+      "path": "runs/K2/pr_mid_c_k0_undercut_star_p6_si_bdf2_dt0p025_control_summary.json",
+      "copy": "runs/K2/pr_mid_c_k0_undercut_star_p6_si_bdf2_dt0p025_control_summary.json",
+      "bytes": 4480,
+      "sha256": "6916c7472e7c77e93da179aef2f03a65fb6cd50296961b86bf0c829381d03ab7"
+    },
+    {
+      "path": "runs/P/pr_iter_iter_p4_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_iter_iter_p4_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4438,
+      "sha256": "52125d4afbd0d6e20ae26a7ace83bbabfc0072ff58f1a1d575299ed05ca9987d"
+    },
+    {
+      "path": "runs/P/pr_iter_iter_p5_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_iter_iter_p5_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4443,
+      "sha256": "1c062c3339439a4a63764444858da54cbf3c175c3bded616ecd4683eb222d0ef"
+    },
+    {
+      "path": "runs/P/pr_iter_iter_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_iter_iter_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4443,
+      "sha256": "e9c3a39822f05948086c1286e69f039f479789c62c1124c3db1bb5bff86d08a4"
+    },
+    {
+      "path": "runs/P/pr_iter_k0_iter_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_iter_k0_iter_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4448,
+      "sha256": "e7c21cb8db9406f1b4ee4b79fb34f68eca1e628b19e9e69457a8d8ce7672b29c"
+    },
+    {
+      "path": "runs/P/pr_uglypacman_k0_uglypacman_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_uglypacman_k0_uglypacman_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4510,
+      "sha256": "a7dff4e60bcee0054214e85b593c2e4a2c918dbcf9c99db0e6a5ca0bd901aff1"
+    },
+    {
+      "path": "runs/P/pr_uglypacman_uglypacman_p4_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_uglypacman_uglypacman_p4_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4505,
+      "sha256": "6f29705c4bc819fe360873a7d967d115af2b93b576823e4a687a9cc80ba2e161"
+    },
+    {
+      "path": "runs/P/pr_uglypacman_uglypacman_p5_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_uglypacman_uglypacman_p5_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4507,
+      "sha256": "1dabdf9c44669c5d196cf99df4ec6fcf24c00c56727e7303d1f3ad2af0b360a3"
+    },
+    {
+      "path": "runs/P/pr_uglypacman_uglypacman_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/P/pr_uglypacman_uglypacman_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4503,
+      "sha256": "c0284e0a198e01a1c54dbdc3d9c1e9775e9daa452c81d3fb0c26bb16d8a94300"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p05_control_summary.json",
+      "bytes": 4473,
+      "sha256": "570e1b0eb2cfc66dd9e6152bf371b2822852597049612ced7a05169068095e87"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p1_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p1_control_summary.json",
+      "bytes": 4465,
+      "sha256": "9a39e1eb4c16fc2aa706f6552b1ad7f2f6c3fc07d26951be93a2cae8fa759591"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p2_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p2_control_summary.json",
+      "bytes": 4466,
+      "sha256": "01bb37c744952ee5adcd16e6f10028ebfc1b8c5043c486faa9240ec15c709bfe"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p4_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_bdf2_dt0p4_control_summary.json",
+      "bytes": 4468,
+      "sha256": "058017dcb478918140a7b8e02c4fa443ebbd8395eaf3444ac1f74feaf5ad7367"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p05_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p05_control_summary.json",
+      "bytes": 4472,
+      "sha256": "445940318d5305d4b4169783d287fdbc92f3470199c6a074dd6eed1e632e272a"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p1_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p1_control_summary.json",
+      "bytes": 4468,
+      "sha256": "39523aea4b9fbaf4858140d3b80a03c150c604d8c651d19de0ae88b7df630377"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p2_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p2_control_summary.json",
+      "bytes": 4472,
+      "sha256": "e484ad0281cf457e3434faf74c9b6547fcfc04cb01aa4f144a79622cacca1518"
+    },
+    {
+      "path": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p4_control_summary.json",
+      "copy": "runs/T/pr_smoke_undercut_star_p6_si_euler_dt0p4_control_summary.json",
+      "bytes": 4468,
+      "sha256": "b12cec09f225cb56cafcf2d8ba69941b97639204a18b76239f1548f8582148db"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

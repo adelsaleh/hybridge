@@ -1,0 +1,94 @@
+{
+  "completed_utc": "2026-10-20T12:15:53.644840+00:00",
+  "scope": "Four existing preservation controls; one new localized packet with its matched controls and refinement checks",
+  "evolution": {
+    "pid": 847876,
+    "pgid": 847876,
+    "stop": "kill -- -847876",
+    "started_utc": "2026-10-20T11:12:03.107279+00:00",
+    "min_free_mib": 8192,
+    "exclusive": false,
+    "phase": "smoke then early-response checks",
+    "status": "completed",
+    "finished_utc": "2026-10-20T12:05:53.138767+00:00"
+  },
+  "completed_run_ids": [
+    "smoke_p6_control",
+    "smoke_p6_a02",
+    "p4_control_a02",
+    "p4_seed_a02",
+    "p5_control_a02",
+    "p5_seed_a02",
+    "p6_control_a02",
+    "p6_seed_a02",
+    "p6_seed_a01",
+    "p6_dt025_control_a02",
+    "p6_dt025_seed_a02"
+  ],
+  "source_comparison": "source_comparison.json",
+  "seed_map_comparison": "seed_refinement.json",
+  "full_comparison": "analysis/comparisons.json",
+  "article_values": "analysis/article_values.json",
+  "early_interval": {
+    "p4_vs_p6_maximum": 0.008227855585865425,
+    "p5_vs_p6_maximum": 0.002682163607038438,
+    "dt05_vs_dt025_maximum": 0.0043520460481123,
+    "amplitude_02_vs_01_maximum": 0.030815704775292482,
+    "control_over_response_maximum": 0.0018959520394976645,
+    "p6_response_amplification_from_t1": 5.1260108306504275
+  },
+  "first_rollup": {
+    "time": 35,
+    "density_p4_vs_p6": 0.6380775784294362,
+    "density_p5_vs_p6": 0.1872964104441318,
+    "density_dt_halving": 1.3982986077493655,
+    "response_dt_halving": 0.6150497802892668,
+    "fine_rho_min": -0.005586756486050841,
+    "fine_rho_max": 1.0366893310722451,
+    "fine_enstrophy_relative_drift": -0.00018412071227419245,
+    "fine_energy_relative_drift": 5.876668334549269e-07,
+    "fine_mass_relative_drift": -9.853607451657736e-14
+  },
+  "later_limit": {
+    "time": 40,
+    "density_p4_vs_p6": 1.1472140711942613,
+    "density_p5_vs_p6": 0.4141645678820475,
+    "density_dt_halving": 4.346270535973266,
+    "response_dt_halving": 0.697046714027999,
+    "fine_rho_min": -0.14811490213607564,
+    "fine_rho_max": 1.0511427412613235,
+    "fine_enstrophy_relative_drift": -0.0009886348547626968,
+    "fine_energy_relative_drift": 2.9502328799292876e-06,
+    "fine_mass_relative_drift": -1.1258931234149551e-13
+  },
+  "software_sha256": {
+    "hybridge/cases/band_displacement.py": "339f4e2dd60444037934b8b4ec38d388ac292714fe6b11f5ab165cbd80a75fd4",
+    "hybridge/diagnostics/band_profiles.py": "e0ce6a99b1e08ba2ecd5a9031aeb413bd393618fa548ad78e8c224484a59f478",
+    "scripts/guiding_center/cases/band_seed.py": "1381bb4919119be6ae639bfe40f32895af2d9792e44c1ab72dcda79341e8a414",
+    "scripts/guiding_center/cases/imported_equilibrium.py": "81bee3faef13ac119709137cba959451f3a26b6b58b17b8e5d52d44c1dfc3c68",
+    "scripts/guiding_center/benchmarks/run_band_evolution.py": "648f300fae75f98854ea68fb6cd94450e141f6cfc21d6fd6cad3d497a9017d3a",
+    "scripts/guiding_center/benchmarks/run_observers.py": "e6108e60338f9c114eb8381bf8d9bd5a4755d5ceb51c08450a604dd32d77d29f",
+    "tests/test_band_displacement.py": "dd91dffc97657e18a7c8686250ceeefd4cac3ef46dba982e887a40064b26ef1d",
+    "tests/test_band_profiles.py": "136088cd392d489172a52d095cd5b0f020a88d01ba0f025c92f51c3681900f03"
+  },
+  "build": {
+    "main_pdf": "main.pdf",
+    "main_log": "texcheck/main.log",
+    "final_pass_log": "main_final_pass2.log",
+    "supplement_pdf": "supplementary/equilibria.pdf",
+    "missing_references_or_citations": false,
+    "existing_main_overfull_box_pt": 1.49994,
+    "visual_pages_checked": [
+      26,
+      27,
+      28
+    ],
+    "frozen_assets_checked": 17
+  },
+  "caveats": [
+    "Empty visibility kernel excludes straight-ray polar meshes, not all mapped/multiblock meshes.",
+    "Amplitude scaling is approximate: profiles differ by up to 3.1% through t=15.",
+    "The first-roll-up density changes by 1.40% under time-step halving; positivity is not preserved.",
+    "Later filaments, eigenvalues and final vortex counts are not established."
+  ]
+}

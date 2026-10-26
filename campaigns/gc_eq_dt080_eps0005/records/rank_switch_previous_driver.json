@@ -1,0 +1,8 @@
+{
+  "pid": 2765227,
+  "pgid": 2765227,
+  "started": 1792162741.3507707,
+  "stop": "kill -- -2765227",
+  "mpi_ranks": 8,
+  "scope": "DOLFINx epsilon continuation only; no HDG runs"
+}

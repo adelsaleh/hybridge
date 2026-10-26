@@ -1,0 +1,86 @@
+{
+  "wall_031": {
+    "label": "wall_031",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria",
+    "archive_id": "nearwall_018-bcc52b613d2f",
+    "name": "nearwall_018",
+    "midpoint": 0.0007500000000000002,
+    "delta": 0.0007500000000000002,
+    "thickness": 0.03415586061126914,
+    "min_wall_clearance": 0.013576267234140498,
+    "triangles": 189548,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/wall_031/mesh.npz"
+  },
+  "wall_072": {
+    "label": "wall_072",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria",
+    "archive_id": "nearwall_009-307266e531a1",
+    "name": "nearwall_009",
+    "midpoint": 0.0015499828020485021,
+    "delta": 0.0009191073996756548,
+    "thickness": 0.037644529707352305,
+    "min_wall_clearance": 0.02543194013285952,
+    "triangles": 196962,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/wall_072/mesh.npz"
+  },
+  "wall_122": {
+    "label": "wall_122",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria",
+    "archive_id": "nearwall_003-3416e67ebe05",
+    "name": "nearwall_003",
+    "midpoint": 0.002684847970782428,
+    "delta": 0.00107200159196438,
+    "thickness": 0.04059068163525549,
+    "min_wall_clearance": 0.041038410569111325,
+    "triangles": 193332,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/wall_122/mesh.npz"
+  },
+  "wall_148": {
+    "label": "wall_148",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria",
+    "archive_id": "nearwall_000-9de615c2c901",
+    "name": "nearwall_000",
+    "midpoint": 0.0033208568050917485,
+    "delta": 0.0011377764121373165,
+    "thickness": 0.04187386585594853,
+    "min_wall_clearance": 0.04966304231423008,
+    "triangles": 188646,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/wall_148/mesh.npz"
+  },
+  "inner_410": {
+    "label": "inner_410",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_inner_band_20261021/equilibria",
+    "archive_id": "medium_cg4_r0p08_01-8c3934b7df74",
+    "name": "medium_cg4_r0p08_01",
+    "midpoint": 0.00525,
+    "delta": 0.00075,
+    "thickness": 0.03374874657568692,
+    "min_wall_clearance": 0.11154169984152562,
+    "triangles": 107946,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/inner_410/mesh.npz"
+  },
+  "mid_25": {
+    "label": "mid_25",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/equilibria",
+    "archive_id": "pl_out_02-4f5427464f62",
+    "name": "pl_out_02",
+    "midpoint": 0.0037500000000000007,
+    "delta": 0.00075,
+    "thickness": 0.03380591239671772,
+    "min_wall_clearance": 0.07885408795536224,
+    "triangles": 135848,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/mid_25/mesh.npz"
+  },
+  "center": {
+    "label": "center",
+    "archive": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/equilibria",
+    "archive_id": "pl_inward_02-70381c7c450e",
+    "name": "pl_inward_02",
+    "midpoint": 0.00675,
+    "delta": 0.00075,
+    "thickness": 0.03382091720523819,
+    "min_wall_clearance": 0.15115083155225592,
+    "triangles": 94262,
+    "mesh_npz": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_placement_20261025/meshes/center/mesh.npz"
+  }
+}

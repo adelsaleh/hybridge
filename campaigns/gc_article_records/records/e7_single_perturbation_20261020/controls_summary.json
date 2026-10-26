@@ -1,0 +1,46 @@
+{
+  "star": {
+    "rho_t1": 0.01152890038815473,
+    "rho_t50": 0.02197476610154522,
+    "phi_t1": 9.597127980018367e-06,
+    "phi_t50": 1.0844294404332554e-05,
+    "max_mass_relative_drift": 2.2734966998069743e-13,
+    "transfer": 1.06013993821409e-05,
+    "final_time": 200.00000000001123,
+    "source": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_band_evolution_20261019/runs/e7_star_p6_si_bdf2_dt0p05_control.jsonl",
+    "sha256": "838da163fc561607700e712e4f56d7349feaf818b9eef065c5a31cc8dac3386a"
+  },
+  "uglypacman": {
+    "rho_t1": 0.011426365537798511,
+    "rho_t50": 0.02173371119905719,
+    "phi_t1": 1.3421359773347411e-05,
+    "phi_t50": 2.050877546831926e-05,
+    "max_mass_relative_drift": 2.1454202943688616e-13,
+    "transfer": 1.4900367045991182e-05,
+    "final_time": 200.00000000001123,
+    "source": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_band_evolution_20261019/runs/e7_uglypacman_p6_si_bdf2_dt0p05_control.jsonl",
+    "sha256": "fb475fe54b389deae37067572bbc9b11e3a1815ed04596e80516b4398fe9e90f"
+  },
+  "iter": {
+    "rho_t1": 0.012257096553083926,
+    "rho_t50": 0.02287450080945654,
+    "phi_t1": 3.2201891486727577e-06,
+    "phi_t50": 6.012719739036694e-06,
+    "max_mass_relative_drift": 3.0111605269065983e-13,
+    "transfer": 3.5390043262501967e-06,
+    "final_time": 200.00000000001123,
+    "source": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_band_evolution_20261019/runs/e7_iter_p6_si_bdf2_dt0p05_control.jsonl",
+    "sha256": "6a7407e34a110449d468d125496f1c0e75b2b3d35b0462584420a88e7e44d065"
+  },
+  "horseshoe": {
+    "rho_t1": 0.011384248643919454,
+    "rho_t50": 0.021745832857240313,
+    "phi_t1": 1.324966523750372e-05,
+    "phi_t50": 1.900294729321774e-05,
+    "max_mass_relative_drift": 2.309560455723502e-13,
+    "transfer": 1.4777111301242327e-05,
+    "final_time": 200.00000000001123,
+    "source": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_band_evolution_20261019/runs/e7_horseshoe_p6_si_bdf2_dt0p05_control.jsonl",
+    "sha256": "d91b60e9483f64dce20bc60bc0d03d2d48fb8bc574797b7f10315c04dc01338a"
+  }
+}

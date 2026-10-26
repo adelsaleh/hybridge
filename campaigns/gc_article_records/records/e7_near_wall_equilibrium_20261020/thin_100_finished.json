@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "-u",
+    "-m",
+    "projects.diocotron.studies.equilibrium_catalog.run_contours",
+    "--config",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/inputs/thin_100.json",
+    "--geometry",
+    "undercut_star",
+    "--name-prefix",
+    "thin_100",
+    "--backend",
+    "pardiso",
+    "--output",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/thin_100",
+    "--midpoint-factors",
+    "3.0",
+    "--warm-checkpoint",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/thin_115/thin_115_01.npz",
+    "--archive",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria",
+    "--atlas-failure",
+    "Near-wall feasibility: PDE and closed contours only"
+  ],
+  "started_utc": "2026-10-20T16:34:38.945078+00:00",
+  "returncode": 1,
+  "finished_utc": "2026-10-20T16:35:13.822137+00:00"
+}

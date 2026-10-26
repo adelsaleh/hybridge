@@ -1,0 +1,7 @@
+{
+  "pid": 2685694,
+  "pgid": 2655634,
+  "stop": "kill -- -2655634",
+  "started": 1792161477.43792,
+  "scope": "saved-field checks only; no time integration"
+}

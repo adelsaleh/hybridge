@@ -1,0 +1,11 @@
+{
+  "portable_checkpoints": 12,
+  "unique_states": 12,
+  "field": "phi",
+  "degree": 2,
+  "checks": "array checksums, finite coefficients, fine mesh cell counts, fixed smoothing, PDE threshold, expected geometry certificates",
+  "maximum_dual_residual": 6.707583608051822e-14,
+  "unit_tests_passed": 22,
+  "same_equation_with_without_atlas_max_coefficient_difference": 9.783840404509192e-16,
+  "coarse_checkpoint_reconstruction_max_error": 3.9898639947466563e-16
+}

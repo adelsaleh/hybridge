@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "tex_files": 4,
+  "figures": 4,
+  "equation_cases": 7,
+  "labels": 15,
+  "references": 2,
+  "selected_rows": 408,
+  "source_counts": {
+    "smooth": 96,
+    "focused_million_dof": 50,
+    "focused_scaling": 144,
+    "oscillatory": 192
+  },
+  "directional_amg_attempted": 32,
+  "directional_amg_passed": 0,
+  "aliases_and_code_references_absent": true,
+  "bundle_members": 19,
+  "bundle_bytes": 969642,
+  "bundle_sha256": "a8c62c2168d1ba4984bec8ab81fbbe149bbd0e7a70138b2dd848c2fce7e8b73d",
+  "visually_reviewed_figures": [
+    "solver_advantage_map",
+    "oscillatory_local_advantage",
+    "focused_h_crossover",
+    "focused_p_crossover"
+  ],
+  "tex_compiled": false,
+  "scope": "Static numerical-selection, TeX dependency, syntax-structure, figure, and archive checks; page count awaits user typesetting."
+}

@@ -1,0 +1,48 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/poisson_pmg_degrees_20261017",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "POISSON_PMG_DONE present; individual solver failures remain in runs/results.jsonl.",
+  "total_bytes": 17576808,
+  "file_count": 92,
+  "subdirectories": 3,
+  "run_attempt_statuses": {
+    "ok": 12
+  },
+  "completion_markers": [
+    "POISSON_PMG_DONE"
+  ],
+  "copied": [
+    {
+      "path": "POISSON_PMG_DONE",
+      "copy": "POISSON_PMG_DONE",
+      "bytes": 20,
+      "sha256": "315b454b2fd51199f3d44ec20b6a8a0a2392b0201b6e201bfc54a8e1602b1349"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 3538,
+      "sha256": "b251732509a0f99c87cc44dde9cf2e6dcc88b7eebddb17158914b0a5041ca641"
+    },
+    {
+      "path": "runs/results.jsonl",
+      "copy": "runs/results.jsonl",
+      "bytes": 565185,
+      "sha256": "afec6a1ea952d8d29b4a6e850e1e00e9ffbbe34ade87205025073a0cb36b9d02"
+    },
+    {
+      "path": "runs/summary.md",
+      "copy": "runs/summary.md",
+      "bytes": 11447,
+      "sha256": "8ad8f026e6c70e627d3361ac49ee1628248d18890768403bec7780bd9e885c18"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 14357,
+      "sha256": "35a3d54bec18fe914fc313b68d82d84cf97f0eac5b10ad8d7de10612b5a85ffb"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

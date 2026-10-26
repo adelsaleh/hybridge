@@ -1,0 +1,9 @@
+{
+  "pid": 2621172,
+  "pgid": 2620667,
+  "stop": "kill -- -2620667",
+  "started": 1792159361.4561908,
+  "scope": "DOLFINx equilibrium computation only; no HDG preservation tests",
+  "mpi_ranks": 8,
+  "maximum_degree": 6
+}

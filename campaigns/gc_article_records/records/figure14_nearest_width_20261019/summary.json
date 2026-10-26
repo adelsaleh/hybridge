@@ -1,0 +1,366 @@
+{
+  "definition": "w(x) = min_{y on inner contour} Euclidean norm(x-y), x on outer contour",
+  "figure_number": 14,
+  "figure_label": "fig:equilibria-dt080-p6",
+  "edge_convention": "outer phi=m-delta/2; inner phi=m+delta/2 (approximately density=1/2)",
+  "selection_sha256": "3e64907bb93f184625c9c503734c09b7f63ba6fd7524142bf71a6a42d3a1e369",
+  "method": "Offline outer-to-inner Euclidean width measurements for article Figure 14.\n\nReads accepted contours only. No equilibrium solves or time integration.\nRun with /home/adelsaleh/src/hybridge/.venv/bin/python measure.py\n",
+  "sampling": "65536 equally spaced outer-arclength points per band; all saved outer vertices also checked",
+  "nearest_point_method": "exact clamped segment projection with conservative midpoint KD-tree pruning",
+  "limitation": "Distances are to saved piecewise-linear contour exports of CG6 fields; sampling convergence does not certify PDE or contour-extraction error.",
+  "elapsed_seconds": 3.5706775188446045,
+  "cases": {
+    "star": {
+      "source": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/star/eps0p005_q64",
+      "contours_sha256": "96294fb3aa475460308b096063069910eb9355f9f6503932e889d96f9beada58",
+      "config_sha256": "5837d1cf225e363eeec9ce80f14a5bfed3d42f285ca3887eaf3649994f70a4ae",
+      "delta": 0.001,
+      "epsilon": 5e-06,
+      "outer_length": 5.610887652846254,
+      "inner_segments": 25094,
+      "outer_segments": 29819,
+      "maximum_inner_segment_length": 0.0007415118736481569,
+      "maximum_outer_segment_length": 0.0005358604980038768,
+      "samples": 65536,
+      "mean": 0.043550426379462874,
+      "std": 0.000999574267420632,
+      "cv_percent": 2.2952112080629417,
+      "minimum": 0.04228263567485918,
+      "maximum": 0.04528078300104537,
+      "median": 0.04335899172200143,
+      "p05": 0.04229988049920955,
+      "p95": 0.04523438470994749,
+      "fraction_within_2_percent": 0.4692230224609375,
+      "fraction_within_5_percent": 1.0,
+      "maximum_relative_deviation_percent": 3.973225443318462,
+      "mean_over_sqrt_2delta": 0.9738171383357904,
+      "sample_and_vertex_minimum": 0.04228261874690927,
+      "sample_and_vertex_maximum": 0.04528078300104537,
+      "exhaustive_validation_points": 130,
+      "exhaustive_max_absolute_difference": 4.85722573273506e-17,
+      "sampling_convergence": {
+        "4096": {
+          "mean": 0.043550437191531004,
+          "std": 0.0009995791430825844,
+          "cv_percent": 2.2952218336787826,
+          "minimum": 0.042283131265518546,
+          "maximum": 0.045280463687058216,
+          "median": 0.04335809626750998,
+          "p05": 0.04229956101826952,
+          "p95": 0.04523445513587684,
+          "fraction_within_2_percent": 0.46923828125,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.972466425351162
+        },
+        "16384": {
+          "mean": 0.043550427198841724,
+          "std": 0.0009995732278161396,
+          "cv_percent": 2.2952087777516095,
+          "minimum": 0.042282756018981,
+          "maximum": 0.04528074870711352,
+          "median": 0.04335926568296736,
+          "p05": 0.04229993861059029,
+          "p95": 0.0452343050709244,
+          "fraction_within_2_percent": 0.46917724609375,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.97314474177608
+        },
+        "65536": {
+          "mean": 0.043550426379462874,
+          "std": 0.000999574267420632,
+          "cv_percent": 2.2952112080629417,
+          "minimum": 0.04228263567485918,
+          "maximum": 0.04528078300104537,
+          "median": 0.04335899172200143,
+          "p05": 0.04229988049920955,
+          "p95": 0.04523438470994749,
+          "fraction_within_2_percent": 0.4692230224609375,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.973225443318462
+        }
+      },
+      "extrema": {
+        "minimum_outer_point": [
+          -0.4010331109169356,
+          0.5526484331046331
+        ],
+        "minimum_inner_point": [
+          -0.3761340139620298,
+          0.5184745212647065
+        ],
+        "maximum_outer_point": [
+          -0.5424549940491384,
+          -0.7405916759719933
+        ],
+        "maximum_inner_point": [
+          -0.5152824669886651,
+          -0.7043700928710905
+        ]
+      }
+    },
+    "uglypacman": {
+      "source": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/uglypacman/eps0p005_q64",
+      "contours_sha256": "af88db507945cb514f7031ed16bd7affab379013d6383c53ac6f5d505f56cf22",
+      "config_sha256": "2e3dc588447a8930eb292d3960f60131ebf696281692faca6da13d00ff6b3f0a",
+      "delta": 0.001,
+      "epsilon": 5e-06,
+      "outer_length": 5.612779800107828,
+      "inner_segments": 24881,
+      "outer_segments": 29825,
+      "maximum_inner_segment_length": 0.0007625702883028211,
+      "maximum_outer_segment_length": 0.00047491051089758443,
+      "samples": 65536,
+      "mean": 0.043546973670429034,
+      "std": 0.0009824499721100665,
+      "cv_percent": 2.2560694562736243,
+      "minimum": 0.040746319306402545,
+      "maximum": 0.0469677784737479,
+      "median": 0.04334469370668708,
+      "p05": 0.04212655685216416,
+      "p95": 0.04574858428855926,
+      "fraction_within_2_percent": 0.7996368408203125,
+      "fraction_within_5_percent": 0.9221649169921875,
+      "maximum_relative_deviation_percent": 7.8554363598446475,
+      "mean_over_sqrt_2delta": 0.9737399334147284,
+      "sample_and_vertex_minimum": 0.040746319306402545,
+      "sample_and_vertex_maximum": 0.04696781421957027,
+      "exhaustive_validation_points": 130,
+      "exhaustive_max_absolute_difference": 5.551115123125783e-17,
+      "sampling_convergence": {
+        "4096": {
+          "mean": 0.04354697886506319,
+          "std": 0.0009824408464406918,
+          "cv_percent": 2.2560482312330583,
+          "minimum": 0.04074855663018918,
+          "maximum": 0.04696738268128106,
+          "median": 0.043344355771355175,
+          "p05": 0.04212941903172616,
+          "p95": 0.045746550220944926,
+          "fraction_within_2_percent": 0.79931640625,
+          "fraction_within_5_percent": 0.921875,
+          "maximum_relative_deviation_percent": 7.8545146078135675
+        },
+        "16384": {
+          "mean": 0.04354697238180147,
+          "std": 0.0009824496301506995,
+          "cv_percent": 2.256068737768945,
+          "minimum": 0.04074654644721987,
+          "maximum": 0.04696738268128106,
+          "median": 0.04334464714150885,
+          "p05": 0.042126993207617654,
+          "p95": 0.045747872736492196,
+          "fraction_within_2_percent": 0.79962158203125,
+          "fraction_within_5_percent": 0.92218017578125,
+          "maximum_relative_deviation_percent": 7.854530665165149
+        },
+        "65536": {
+          "mean": 0.043546973670429034,
+          "std": 0.0009824499721100665,
+          "cv_percent": 2.2560694562736243,
+          "minimum": 0.040746319306402545,
+          "maximum": 0.0469677784737479,
+          "median": 0.04334469370668708,
+          "p05": 0.04212655685216416,
+          "p95": 0.04574858428855926,
+          "fraction_within_2_percent": 0.7996368408203125,
+          "fraction_within_5_percent": 0.9221649169921875,
+          "maximum_relative_deviation_percent": 7.8554363598446475
+        }
+      },
+      "extrema": {
+        "minimum_outer_point": [
+          0.41427136297024864,
+          -0.10227051477063055
+        ],
+        "minimum_inner_point": [
+          0.45499648102552265,
+          -0.10358478125932595
+        ],
+        "maximum_outer_point": [
+          -0.23982274580823948,
+          -0.6975036286191608
+        ],
+        "maximum_inner_point": [
+          -0.1949272897638522,
+          -0.6837061563388644
+        ]
+      }
+    },
+    "iter": {
+      "source": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/iter/eps0p005_q64",
+      "contours_sha256": "a70e77f1dd5833a53a4e97981237e1f12b182f657794edb743146b3b03d3bc2e",
+      "config_sha256": "eb77e2045b3d71ed2a0863a1d9fb5bce0e26294d6d69150cbe1ed98f1dcd64a5",
+      "delta": 0.008,
+      "epsilon": 4e-05,
+      "outer_length": 17.292637692391285,
+      "inner_segments": 26199,
+      "outer_segments": 30390,
+      "maximum_inner_segment_length": 0.002322232429339222,
+      "maximum_outer_segment_length": 0.001563570687645153,
+      "samples": 65536,
+      "mean": 0.12288471771117365,
+      "std": 0.0012088854873688766,
+      "cv_percent": 0.9837557589628211,
+      "minimum": 0.12179457195992462,
+      "maximum": 0.12690846107111609,
+      "median": 0.12249293080031846,
+      "p05": 0.12180269079326254,
+      "p95": 0.12591581199360735,
+      "fraction_within_2_percent": 0.9210968017578125,
+      "fraction_within_5_percent": 1.0,
+      "maximum_relative_deviation_percent": 3.274405015438764,
+      "mean_over_sqrt_2delta": 0.9714889939853552,
+      "sample_and_vertex_minimum": 0.12179457195992462,
+      "sample_and_vertex_maximum": 0.1269085430936065,
+      "exhaustive_validation_points": 130,
+      "exhaustive_max_absolute_difference": 3.7470027081099033e-16,
+      "sampling_convergence": {
+        "4096": {
+          "mean": 0.12288467716052606,
+          "std": 0.0012088381820079927,
+          "cv_percent": 0.9837175878558639,
+          "minimum": 0.12179511048507442,
+          "maximum": 0.12690563258804194,
+          "median": 0.12249313283281668,
+          "p05": 0.12180264799811442,
+          "p95": 0.12591369480579795,
+          "fraction_within_2_percent": 0.921142578125,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.2721373570955725
+        },
+        "16384": {
+          "mean": 0.12288472278660309,
+          "std": 0.0012088847877949052,
+          "cv_percent": 0.9837551490385085,
+          "minimum": 0.12179469202708403,
+          "maximum": 0.12690634788719832,
+          "median": 0.12249290811766375,
+          "p05": 0.12180271209809404,
+          "p95": 0.1259155739654516,
+          "fraction_within_2_percent": 0.921142578125,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.2726811025802105
+        },
+        "65536": {
+          "mean": 0.12288471771117365,
+          "std": 0.0012088854873688766,
+          "cv_percent": 0.9837557589628211,
+          "minimum": 0.12179457195992462,
+          "maximum": 0.12690846107111609,
+          "median": 0.12249293080031846,
+          "p05": 0.12180269079326254,
+          "p95": 0.12591581199360735,
+          "fraction_within_2_percent": 0.9210968017578125,
+          "fraction_within_5_percent": 1.0,
+          "maximum_relative_deviation_percent": 3.274405015438764
+        }
+      },
+      "extrema": {
+        "minimum_outer_point": [
+          0.5931634418250192,
+          5.356337346989098
+        ],
+        "minimum_inner_point": [
+          0.7149576389298997,
+          5.356639523227042
+        ],
+        "maximum_outer_point": [
+          1.3541044178393482,
+          1.8659943020527112
+        ],
+        "maximum_inner_point": [
+          1.389740514856608,
+          1.9877967079436272
+        ]
+      }
+    },
+    "horseshoe": {
+      "source": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/horseshoe/eps0p005_q64",
+      "contours_sha256": "b9f3f6af0ca7ecd8e53d79c20d99884a0b05b20d10489585cde04f8a4ea5e7e2",
+      "config_sha256": "1c739481e4038fe8ce3debf0c32e773142004c57f6425c7a0456c428fd227ecc",
+      "delta": 0.001,
+      "epsilon": 5e-06,
+      "outer_length": 6.7637611385668315,
+      "inner_segments": 30286,
+      "outer_segments": 35700,
+      "maximum_inner_segment_length": 0.0007237714924478446,
+      "maximum_outer_segment_length": 0.0005065550406434236,
+      "samples": 65536,
+      "mean": 0.043474259628992235,
+      "std": 0.0009904790949690262,
+      "cv_percent": 2.278311588102337,
+      "minimum": 0.04243244787520209,
+      "maximum": 0.0468188051166514,
+      "median": 0.043426570075466554,
+      "p05": 0.042444348454827335,
+      "p95": 0.046071556504357694,
+      "fraction_within_2_percent": 0.6297607421875,
+      "fraction_within_5_percent": 0.93426513671875,
+      "maximum_relative_deviation_percent": 7.69316261208679,
+      "mean_over_sqrt_2delta": 0.9721139980190142,
+      "sample_and_vertex_minimum": 0.042432441086600665,
+      "sample_and_vertex_maximum": 0.0468188051166514,
+      "exhaustive_validation_points": 130,
+      "exhaustive_max_absolute_difference": 5.551115123125783e-17,
+      "sampling_convergence": {
+        "4096": {
+          "mean": 0.04347423712686982,
+          "std": 0.0009904984154410186,
+          "cv_percent": 2.278357208547377,
+          "minimum": 0.04243268980909348,
+          "maximum": 0.04681812709319955,
+          "median": 0.0434264114448329,
+          "p05": 0.042444256926958725,
+          "p95": 0.046073967610717276,
+          "fraction_within_2_percent": 0.629150390625,
+          "fraction_within_5_percent": 0.9345703125,
+          "maximum_relative_deviation_percent": 7.691658755440245
+        },
+        "16384": {
+          "mean": 0.04347425850700257,
+          "std": 0.0009904799980393945,
+          "cv_percent": 2.2783137241543843,
+          "minimum": 0.0424326822861785,
+          "maximum": 0.04681844637982814,
+          "median": 0.04342660585824719,
+          "p05": 0.0424443904170756,
+          "p95": 0.046071550215354175,
+          "fraction_within_2_percent": 0.6297607421875,
+          "fraction_within_5_percent": 0.934326171875,
+          "maximum_relative_deviation_percent": 7.692340220792748
+        },
+        "65536": {
+          "mean": 0.043474259628992235,
+          "std": 0.0009904790949690262,
+          "cv_percent": 2.278311588102337,
+          "minimum": 0.04243244787520209,
+          "maximum": 0.0468188051166514,
+          "median": 0.043426570075466554,
+          "p05": 0.042444348454827335,
+          "p95": 0.046071556504357694,
+          "fraction_within_2_percent": 0.6297607421875,
+          "fraction_within_5_percent": 0.93426513671875,
+          "maximum_relative_deviation_percent": 7.69316261208679
+        }
+      },
+      "extrema": {
+        "minimum_outer_point": [
+          0.001079094590758645,
+          0.4847762565585506
+        ],
+        "minimum_inner_point": [
+          0.0011653163520288095,
+          0.5272086168333412
+        ],
+        "maximum_outer_point": [
+          -0.636448367917956,
+          -0.5005102384222307
+        ],
+        "maximum_inner_point": [
+          -0.6530535821990935,
+          -0.45673504714648083
+        ]
+      }
+    }
+  }
+}

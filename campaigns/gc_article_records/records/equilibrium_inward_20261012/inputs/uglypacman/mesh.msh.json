@@ -1,0 +1,13 @@
+{
+  "geometry": "uglypacman",
+  "requested_size": 0.003,
+  "num_cells": 613674,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "c2dc8553d962fba76882906418e74b8062807a3d9006d77b01d5324280be8a69",
+  "source_archive_id": "uglypacman_04-195ec92fe165",
+  "source_checkpoint_sha256": "195ec92fe16553c4cd718a0140c7476a57640a49e75c54694a7d8390df75bfaf",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 2194,
+  "geometric_extrapolation_required": false
+}

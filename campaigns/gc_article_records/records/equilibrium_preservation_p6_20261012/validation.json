@@ -1,0 +1,72 @@
+{
+  "completed_runs": 8,
+  "all_saved_states_checked": true,
+  "all_threads_verified": true,
+  "all_poisson_residuals_pass": true,
+  "runs": [
+    {
+      "geometry": "star",
+      "scheme": "si-euler",
+      "triangles": 80106,
+      "rho_drift": 0.00011588360301839661,
+      "phi_drift": 1.0596361750005582e-06,
+      "peak_cpu_cores": 16.183084452497315
+    },
+    {
+      "geometry": "star",
+      "scheme": "si-bdf2",
+      "triangles": 80106,
+      "rho_drift": 0.00012398175461134493,
+      "phi_drift": 1.1060499264814367e-06,
+      "peak_cpu_cores": 15.097418390889715
+    },
+    {
+      "geometry": "uglypacman",
+      "scheme": "si-euler",
+      "triangles": 61200,
+      "rho_drift": 0.0001349229475774791,
+      "phi_drift": 1.7391099008151181e-06,
+      "peak_cpu_cores": 14.974817306439817
+    },
+    {
+      "geometry": "uglypacman",
+      "scheme": "si-bdf2",
+      "triangles": 61200,
+      "rho_drift": 0.00014320062470138465,
+      "phi_drift": 1.792120738067978e-06,
+      "peak_cpu_cores": 16.106591716192728
+    },
+    {
+      "geometry": "iter",
+      "scheme": "si-euler",
+      "triangles": 63208,
+      "rho_drift": 0.0003131484598191987,
+      "phi_drift": 1.2733776791588832e-06,
+      "peak_cpu_cores": 16.158398411802562
+    },
+    {
+      "geometry": "iter",
+      "scheme": "si-bdf2",
+      "triangles": 63208,
+      "rho_drift": 0.000334162347830974,
+      "phi_drift": 1.3312815638271743e-06,
+      "peak_cpu_cores": 16.2065827227232
+    },
+    {
+      "geometry": "horseshoe",
+      "scheme": "si-euler",
+      "triangles": 71868,
+      "rho_drift": 0.00011335292527192525,
+      "phi_drift": 1.3163137736802298e-06,
+      "peak_cpu_cores": 16.06001432646043
+    },
+    {
+      "geometry": "horseshoe",
+      "scheme": "si-bdf2",
+      "triangles": 71868,
+      "rho_drift": 0.00012136300544920093,
+      "phi_drift": 1.3752019539457955e-06,
+      "peak_cpu_cores": 15.037168668915722
+    }
+  ]
+}

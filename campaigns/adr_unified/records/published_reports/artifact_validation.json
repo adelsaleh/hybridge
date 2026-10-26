@@ -1,0 +1,54 @@
+{
+  "status": "passed",
+  "native_systems": 101,
+  "native_converged_systems": 87,
+  "selected_rows": 876,
+  "lu_selected_rows": 204,
+  "lu_overview_cells": 180,
+  "native_selected_rows": 204,
+  "overview_cells_checked": 900,
+  "original_campaign_samples_preserved": true,
+  "manuscripts": {
+    "main.tex": {
+      "tex_files": 15,
+      "figures": 12,
+      "references": 10
+    },
+    "main_synthesis.tex": {
+      "tex_files": 7,
+      "figures": 8,
+      "references": 7
+    },
+    "oscillatory/initial/preview.tex": {
+      "tex_files": 4,
+      "figures": 2,
+      "references": 1
+    }
+  },
+  "portable_archives": {
+    "adr_results_bundle.zip": {
+      "entries": 210,
+      "tex_files": 15,
+      "figures": 12,
+      "references": 10,
+      "sha256": "037dfde4f8513fba53e084f71d0db10e782bb9cabf703cdea6ec1333fc9be5c2"
+    },
+    "adr_results_synthesis_bundle.zip": {
+      "entries": 55,
+      "tex_files": 7,
+      "figures": 8,
+      "references": 7,
+      "sha256": "efde9079faedb2440da273121c8591bcec4ea093989ff1c8e20b3a441c75d120"
+    },
+    "adr_oscillatory_bundle.zip": {
+      "entries": 44,
+      "tex_files": 4,
+      "figures": 2,
+      "references": 1,
+      "sha256": "0f33d5c91d8efdb3a0721f7c56470b44a36e24347d3739eea056d1b86a9699fb"
+    }
+  },
+  "tex_compiled": false,
+  "page_count_verified": false,
+  "note": "Static structure, figure dependencies, saved-sample rankings and archive integrity checked; TeX typesetting remains user-run."
+}

@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/audit_saved_flow.py",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/branch",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/ugly_refined_flow_tolerance.json"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 16.090736214071512,
+  "peak_cpu_cores": 0.0,
+  "peak_active_ranks": 0,
+  "peak_sum_rank_rss_bytes": 0,
+  "monitored_argument": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/ugly_refined_flow_tolerance.json",
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/ugly_refined_flow_audit_1792160047.log"
+}

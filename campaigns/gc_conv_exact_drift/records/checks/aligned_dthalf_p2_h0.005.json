@@ -1,0 +1,20 @@
+[
+ {
+  "mesh_family": "structured",
+  "order": 2,
+  "mesh_size": 0.005,
+  "triangles": 320000,
+  "dt": 0.0002281021897810219,
+  "num_steps": 274,
+  "final_time": 0.0625,
+  "scheme": "bdf3-exact-drift",
+  "rho_l2_error": 0.00026416752453761136,
+  "rho_l2_interior_error": 0.00015694489038452182,
+  "wall_time_s": 467.02016653399915,
+  "step_time_median_s": 1.7091165265301242,
+  "amgx_iterations_max": 13,
+  "case_params": "kx=8*pi;U=1;A=0.028134884879909;ky=8*pi",
+  "rho_l2_rate": null,
+  "rho_l2_interior_rate": null
+ }
+]

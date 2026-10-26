@@ -1,0 +1,9 @@
+{
+  "pid": 1404776,
+  "pgid": 1404776,
+  "started_utc": "2026-10-20T18:05:49.803671+00:00",
+  "lane": "base",
+  "packet_kd": 0.5,
+  "final_time": 160.0,
+  "purpose": "near-wall packet: controls, seeds, linear references, refinements"
+}

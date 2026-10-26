@@ -1,0 +1,10 @@
+{
+  "pid": 575273,
+  "pgid": 575273,
+  "stop": "kill -- -575273",
+  "started_utc": "2026-10-22T18:36:28.359864+00:00",
+  "delta": 0.0010184015252064915,
+  "midpoint": 0.0022355725019368444,
+  "start": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/equilibria/objects/29bf40587d944b824603b8e49f59e54358f703fca823eddac9a278de3579c1dd.npz",
+  "purpose": "resolved mid-band source; no evolution"
+}

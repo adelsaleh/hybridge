@@ -1,0 +1,46 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/figure14_nearest_width_20261019",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 7800907,
+  "file_count": 10,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "completed.json"
+  ],
+  "copied": [
+    {
+      "path": "completed.json",
+      "copy": "completed.json",
+      "bytes": 67,
+      "sha256": "04a55dff3c582fe1d556b9f5937ac40d4df79ae28e7a087aed3de5ead189ded0"
+    },
+    {
+      "path": "contour_field_audit.json",
+      "copy": "contour_field_audit.json",
+      "bytes": 7639,
+      "sha256": "89f71c4992b0d61a5e10fb20b07bddae2106e8d3fd64585cc2406ce4630fdd8b"
+    },
+    {
+      "path": "report.txt",
+      "copy": "report.txt",
+      "bytes": 2403,
+      "sha256": "57ee048ddcf9cc117b86ed8de13b8c1263b51c18041312d57343a0f1b4a45948"
+    },
+    {
+      "path": "summary.csv",
+      "copy": "summary.csv",
+      "bytes": 831,
+      "sha256": "f56e7d43fed5ac8053eb567ca87bdb246c27bd04a4ef6fa0edd3b4d80f72f259"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 14568,
+      "sha256": "a67751a5ce62fc932f4300d4dcd75ab1e5be592000f1cd5af9c8f294fffd898b"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

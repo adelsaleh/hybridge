@@ -1,0 +1,97 @@
+{
+  "rows": [
+    {
+      "prefix": "d0p_annulus_sl_l3_r0p4_0p5_p4_hb0p01_h0p04_imex_ark3_dt0p05_raw_seed",
+      "label": "l3_r0.4_0.5",
+      "order": 4,
+      "band_mesh_size": 0.01,
+      "mesh_size": 0.04,
+      "triangles": 14628,
+      "scheme": "imex-ark3",
+      "dt": 0.05,
+      "velocity": "raw",
+      "epsilon": 1e-06,
+      "window": [
+        26.0,
+        72.0
+      ],
+      "reference_type": "sharp-annulus-analytic",
+      "reference_gamma": 0.18365794757123,
+      "sharp_reference_gamma": 0.18365794757123,
+      "fitted_gamma": 0.18290193727082016,
+      "relative_error": -0.004116403947706243,
+      "potential_norm_gamma": 0.18309856393490503,
+      "potential_norm_relative_error": -0.0030457905237561795,
+      "r_squared": 0.9999823084639039,
+      "subwindow_gammas": [
+        0.18345473060286913,
+        0.1816013379853315
+      ],
+      "control_fraction": 0.04705310670346539,
+      "positivity": "violated",
+      "density_minimum": -0.7251271434195401,
+      "invariants": {
+        "mass": 4.1818404231361666e-14,
+        "energy_from_q_l2": 8.292741510414377e-07,
+        "enstrophy": 0.028592320944953606
+      },
+      "wall_time_s": 894.4632453711238,
+      "jsonl": "run_outputs/article/diocotron/d0p_annulus_sl_l3_r0p4_0p5_p4_hb0p01_h0p04_imex_ark3_dt0p05_raw_seed.jsonl",
+      "element_unknowns": 219420,
+      "trace_unknowns": 110145,
+      "median_linear_step_wall_time": 0.4640694569097832,
+      "median_poisson_step_wall_time": 0.29171550017781556,
+      "median_transport_step_wall_time": 0.1406558824237436,
+      "semi_lagrangian_gamma": 0.18335,
+      "semi_lagrangian_relative_error": -0.0016767451411845288,
+      "published_analytic_gamma": 0.18366
+    },
+    {
+      "prefix": "d0p_annulus_sl_l3_r0p4_0p5_p5_hb0p01_h0p04_imex_ark3_dt0p05_raw_seed",
+      "label": "l3_r0.4_0.5",
+      "order": 5,
+      "band_mesh_size": 0.01,
+      "mesh_size": 0.04,
+      "triangles": 14628,
+      "scheme": "imex-ark3",
+      "dt": 0.05,
+      "velocity": "raw",
+      "epsilon": 1e-06,
+      "window": [
+        26.0,
+        72.0
+      ],
+      "reference_type": "sharp-annulus-analytic",
+      "reference_gamma": 0.18365794757123,
+      "sharp_reference_gamma": 0.18365794757123,
+      "fitted_gamma": 0.1829898128324144,
+      "relative_error": -0.0036379298998562366,
+      "potential_norm_gamma": 0.18312436117458197,
+      "potential_norm_relative_error": -0.0029053270152715614,
+      "r_squared": 0.9999884877051126,
+      "subwindow_gammas": [
+        0.1834360876836662,
+        0.18194125971636757
+      ],
+      "control_fraction": 0.014191674548726276,
+      "positivity": "violated",
+      "density_minimum": -0.5808959727292679,
+      "invariants": {
+        "mass": 1.3154145931930669e-14,
+        "energy_from_q_l2": 5.995733200810877e-07,
+        "enstrophy": 0.02133058523531799
+      },
+      "wall_time_s": 929.5416083021555,
+      "jsonl": "run_outputs/article/diocotron/d0p_annulus_sl_l3_r0p4_0p5_p5_hb0p01_h0p04_imex_ark3_dt0p05_raw_seed.jsonl",
+      "element_unknowns": 307188,
+      "trace_unknowns": 132174,
+      "median_linear_step_wall_time": 0.4921801835298538,
+      "median_poisson_step_wall_time": 0.29042015119921416,
+      "median_transport_step_wall_time": 0.1625404885271564,
+      "semi_lagrangian_gamma": 0.18335,
+      "semi_lagrangian_relative_error": -0.0016767451411845288,
+      "published_analytic_gamma": 0.18366
+    }
+  ],
+  "failures": []
+}

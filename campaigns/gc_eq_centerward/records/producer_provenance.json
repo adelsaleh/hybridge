@@ -1,0 +1,80 @@
+{
+  "branch": "diocotron-dolfinx",
+  "head": "a3936c1bc4c9aed1b8e02ef9865e5d1b46d8184a",
+  "uncommitted_changes": true,
+  "sources": [
+    {
+      "path": "projects/diocotron/studies/equilibrium_catalog/run.py",
+      "sha256": "a76a07fe9c606bddc71048b5c3403aaa765e9b760660c1ef0371130016216ea6"
+    },
+    {
+      "path": "projects/diocotron/studies/equilibrium_catalog/run_contours.py",
+      "sha256": "c68d8c16ab0fffe15c0a09184064f50b0f3e2e59a8f6c563b147e86b83ec71a8"
+    },
+    {
+      "path": "projects/diocotron/studies/equilibrium_catalog/render.py",
+      "sha256": "921be468da910038306c81c05116fa5b5d1ce5e7ec38e4aead82526d5f774d9d"
+    },
+    {
+      "path": "projects/diocotron/studies/equilibrium_catalog/compare.py",
+      "sha256": "412965ab3cf92d9b9ff783bb5f2ff812ec53e885d9feb84094494668a0337f6d"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equilibrium_seed.py",
+      "sha256": "24f67e0499e318af7a7746a8072fca9f2d8a523b3e2414a7176beddb3e732807"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equilibrium_archive.py",
+      "sha256": "f4e941f9d482c7ae67d5e9a4706f6718186e013600c98e3d72c9b1bc34b50805"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equiband/equilibrium.py",
+      "sha256": "386ef5636e4727e53cd7984aa7ba110e55da081f67ecf3c7a2e63aa4557c18d4"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equiband/geometry.py",
+      "sha256": "a14e55f515b5347ee56203c123d5270789c67e3b4c755e31330256a483e1cc64"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equiband/continuation.py",
+      "sha256": "81eb627a1f87f5565f63cacc49d9363daa1e24bee2f6513a0543a78ab5d0e259"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/equiband/config.py",
+      "sha256": "74a1d818bf7beddb863c9a57dfb051dd267976be34ba6202a14964e4e3486f00"
+    }
+  ],
+  "baseline_family": "inward_20261012",
+  "target_midpoint_factors": {
+    "star": 4.5,
+    "uglypacman": 4.0,
+    "iter": 4.5,
+    "horseshoe": 4.5
+  },
+  "mesh_epsilon_and_delta": "same as baseline; fresh midpoint solves",
+  "continuation_steps": "Star uses the inherited adaptive controls; subsequent full-atlas cases start at 0.2 delta and cap at 0.25 delta to avoid oversized predictors. ITER uses its adaptive 0.2 delta Newton steps.",
+  "test_sources": [
+    {
+      "path": "projects/diocotron/tests/dolfinx/test_equilibrium_archive.py",
+      "sha256": "714a86f0a0e67411f1daa9d88830d9a73450eacb28cce054fd71f42a021ff6f5"
+    }
+  ],
+  "input_configurations": [
+    {
+      "path": "inputs/horseshoe.json",
+      "sha256": "463551a824e70629e09131b7e358735b38727f82a8b706930b3996597859ce66"
+    },
+    {
+      "path": "inputs/iter.json",
+      "sha256": "1f38a2d517942880bd43fecb3a7bd49a1c1b4874df2822c20627875dfdfc927a"
+    },
+    {
+      "path": "inputs/star.json",
+      "sha256": "32e1a47c776d2a00bed55a8726bb56b4bb2f186478f9fd15301eb7327d202465"
+    },
+    {
+      "path": "inputs/uglypacman.json",
+      "sha256": "4e66a387c53a20af2b16bcb9ddc6352ce2d84f4e189e85f8e454cf04a3e1fe1b"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "geometry": "star",
+  "requested_size": 0.0045,
+  "num_cells": 823806,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "cba2ba3121ccb9a97986c510d1c2c29b9af9b2bcaab37930142bba88424f5c8f",
+  "source_archive_id": "star_dt080_placement_20261016-f270e1ce2ee9",
+  "source_checkpoint_sha256": "f270e1ce2ee9d1bb9018754c49571ec592cb45c5b6cfafa97a372e14c18e1b0c",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 3826,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/star/contours.npz",
+    "contours_sha256": "f14e6be38bfeb0d4b9faad4a709581cab82f5b96785e7f4d59b1a16b143ca9f3",
+    "band_size": 0.0008,
+    "buffer": 0.0035,
+    "grading": 0.3,
+    "distance_samples": 13690,
+    "definition": "distance to sampled outer/inner transition contours"
+  }
+}

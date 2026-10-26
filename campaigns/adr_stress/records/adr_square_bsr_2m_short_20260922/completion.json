@@ -1,0 +1,82 @@
+{
+  "status": "completed",
+  "scheduled": 10,
+  "attempted": 10,
+  "passed": 0,
+  "failures": [
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_fgmres",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_dilu_fgmres",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_pbicgstab",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_block_jacobi_pbicgstab",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_multicolor_dilu_fgmres",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "amgx_dilu_pbicgstab",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "bj_pp",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "native_hp_robust",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "native_hp_standard",
+      "status": "assembly_failed"
+    },
+    {
+      "case": "stress_square_main_trap",
+      "target_triangles": 200000,
+      "p": 6,
+      "candidate": "asm_pp",
+      "status": "assembly_failed"
+    }
+  ],
+  "profile_failures": 0,
+  "pardiso_attempted": 0,
+  "pardiso_passed": 0,
+  "pardiso_failures": 0
+}

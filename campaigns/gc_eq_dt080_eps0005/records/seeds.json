@@ -1,0 +1,26 @@
+{
+  "star": {
+    "archive_id": "star_dt080_cg6_refined_20261016-6ee44236c6bf",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/star_dt080_cg6_refined_20261016.npz",
+    "config": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/config.json",
+    "relative_epsilon": 0.08
+  },
+  "uglypacman": {
+    "archive_id": "uglypacman_dt080_cg6_refined_20261016-48f4dc07ef06",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/uglypacman_dt080_cg6_refined_20261016.npz",
+    "config": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/config.json",
+    "relative_epsilon": 0.08
+  },
+  "iter": {
+    "archive_id": "iter_dt080_cg6_refined_20261016-ca20430799b1",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/iter/iter_dt080_cg6_refined_20261016.npz",
+    "config": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/iter/config.json",
+    "relative_epsilon": 0.08
+  },
+  "horseshoe": {
+    "archive_id": "horseshoe_dt080_cg6_refined_20261016-d443f5e088d6",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/horseshoe/horseshoe_dt080_cg6_refined_20261016.npz",
+    "config": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/horseshoe/config.json",
+    "relative_epsilon": 0.08
+  }
+}

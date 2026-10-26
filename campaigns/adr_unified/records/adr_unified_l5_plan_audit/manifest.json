@@ -1,0 +1,18 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_unified_l5_plan_audit",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 1208146,
+  "file_count": 1,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [],
+  "too_large_or_nontext": [
+    {
+      "path": "plan.json",
+      "bytes": 1208146
+    }
+  ],
+  "inventory_errors": []
+}

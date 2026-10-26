@@ -1,0 +1,28 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e9_retime_20261015",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Historical comparison stage; completion evidence retained.",
+  "total_bytes": 199428,
+  "file_count": 7,
+  "subdirectories": 1,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "all-done"
+  ],
+  "copied": [
+    {
+      "path": "all-done",
+      "copy": "all-done",
+      "bytes": 20,
+      "sha256": "98819eaa26ce0c599fee70e61e1981740914499f1ec6f061edf4ea5be3fe1a7b"
+    },
+    {
+      "path": "timing/poisson_cg_vs_hdg.jsonl",
+      "copy": "timing/poisson_cg_vs_hdg.jsonl",
+      "bytes": 20406,
+      "sha256": "591053e487aff6e8762c88a7853655e3e58f1c1db9a891984c6a45427d939af9"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

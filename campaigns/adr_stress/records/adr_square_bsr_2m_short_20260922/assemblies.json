@@ -1,0 +1,23 @@
+[
+  {
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "status": "error",
+    "worker_kind": "assemble",
+    "error": "host planning estimate 95.18 GiB exceeds budget from live available RAM 114.67 GiB",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 80, in main\n    result = dispatch(spec, common)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem/scripts/advection_diffusion_reaction/closed_loop_stress_worker.py\", line 50, in dispatch\n    result = assemble(spec)\n             ^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem-gmres/scripts/adr_performance_worker.py\", line 131, in assemble\n    estimate=guard(spec,'assembly')\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem-gmres/scripts/adr_performance_worker.py\", line 61, in guard\n    raise BudgetExceeded(f'host planning estimate {host/2**30:.2f} GiB exceeds budget from live available RAM {available/2**30:.2f} GiB')\nscripts.adr_performance_worker.BudgetExceeded: host planning estimate 95.18 GiB exceeds budget from live available RAM 114.67 GiB\n",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 1,
+    "runner_wall_seconds": 0.4661275180988014,
+    "runner_started_utc": "2026-09-22T20:25:18+00:00"
+  }
+]

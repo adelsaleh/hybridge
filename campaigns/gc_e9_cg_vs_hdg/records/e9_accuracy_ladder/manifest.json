@@ -1,0 +1,28 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e9_accuracy_ladder",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Historical comparison stage; completion evidence retained.",
+  "total_bytes": 28819,
+  "file_count": 2,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "all-done"
+  ],
+  "copied": [
+    {
+      "path": "all-done",
+      "copy": "all-done",
+      "bytes": 9,
+      "sha256": "2e02a87e7799df227a9287e2b694c275b81827095db61abfea72447ca19d9aaf"
+    },
+    {
+      "path": "poisson_cg_vs_hdg.jsonl",
+      "copy": "poisson_cg_vs_hdg.jsonl",
+      "bytes": 28810,
+      "sha256": "69502ef20bc95916f0ad59a690991520a3c93b86c8b8800f199723c54af4028b"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

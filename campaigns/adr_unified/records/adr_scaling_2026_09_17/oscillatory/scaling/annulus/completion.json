@@ -1,0 +1,290 @@
+{
+  "status": "completed",
+  "scheduled": 96,
+  "attempted": 96,
+  "passed": 61,
+  "reused": 0,
+  "preserved_22825_jobs_unchanged": true,
+  "failures": [
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 2048,
+      "p": 6,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 2048,
+      "p": 6,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 2048,
+      "p": 6,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 2048,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 1,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 1,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 2,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 2,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 2,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 2,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 3,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 3,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 3,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 3,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 4,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 8192,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 32768,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 32768,
+      "p": 6,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 32768,
+      "p": 6,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 32768,
+      "p": 6,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 32768,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 99458,
+      "p": 6,
+      "candidate": "dilu_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_weak",
+      "geometry": "annulus",
+      "target_triangles": 99458,
+      "p": 6,
+      "candidate": "dilu_pbicgstab",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 99458,
+      "p": 6,
+      "candidate": "amg_fgmres",
+      "status": "numerical_failure"
+    },
+    {
+      "case": "cellular7_directional",
+      "geometry": "annulus",
+      "target_triangles": 99458,
+      "p": 6,
+      "candidate": "amg_pbicgstab",
+      "status": "numerical_failure"
+    }
+  ]
+}

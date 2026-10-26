@@ -1,0 +1,14 @@
+{
+  "mean_thickness": 0.06947268046918771,
+  "band_length": 4.40106380246284,
+  "straight_strip_starting_wavelength": 0.545637156467978,
+  "minimum_gap_over_mean_thickness": 1.0683106714491402,
+  "mean_gap_over_mean_thickness": 1.532991157837352,
+  "normal_strip_half_width_over_d_passes": {
+    "0.75": true,
+    "1.0": true,
+    "1.25": false,
+    "1.5": false,
+    "2.0": false
+  }
+}

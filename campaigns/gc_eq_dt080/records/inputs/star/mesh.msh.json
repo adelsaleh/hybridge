@@ -1,0 +1,13 @@
+{
+  "geometry": "star",
+  "requested_size": 0.006,
+  "num_cells": 211768,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "36da104d6ea3ce12310228e08fbb2a9621ee3f1da8b4fcd7449bf0dc06304dec",
+  "source_archive_id": "star_centerward_20261015_01-0828fa6548f4",
+  "source_checkpoint_sha256": "0828fa6548f4c29c57735c7480c2c3944cf86473b2978a0cc2415c6c6ea1f138",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 3826,
+  "geometric_extrapolation_required": false
+}

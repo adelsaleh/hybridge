@@ -1,0 +1,90 @@
+[
+  {
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "status": "passed",
+    "kind": "assembly",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 2477423,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMBA_NUM_THREADS": "24",
+        "NUMBA_THREADING_LAYER": "default"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "estimates": {
+      "trace_dofs": 2119152,
+      "elements": 202248,
+      "assembly_host_bytes": 102200966784,
+      "assembly_device_bytes": 64578290112,
+      "solver_device_bytes": 10678531584,
+      "cache_disk_bytes": 16429447104
+    },
+    "numba_warmup_ms": 153.5572810098529,
+    "numba_threads": 24,
+    "numba_threading_layer": "omp",
+    "numba_version": "0.67.0",
+    "numba_fastmath": false,
+    "space_setup_ms": 1055.3803851362318,
+    "assembly_samples_ms": [
+      {
+        "host_coefficient_sampling": 25711.94890514016,
+        "host_diffusion_geometry": 6252.243424998596,
+        "host_inverse_mass": 1391.265552956611,
+        "host_advection_and_local_matrix": 13582.730069989339,
+        "host_trace_coupling": 6204.795524012297,
+        "host_source": 22381.788794882596,
+        "host_finite_check": 2019.0527150407434,
+        "host_preparation": 80073.77518014982,
+        "host_to_device": 0.0,
+        "local_inverse": 1897.1079969778657,
+        "condensation": 391.7106678709388,
+        "global_blocks": 1057.7455598395318,
+        "device_to_host": 0.0,
+        "rhs_and_boundary": 800.1180230639875,
+        "assembly_total": 84220.48352402635
+      }
+    ],
+    "validation": {},
+    "assembly_median_ms": 84220.48352402635,
+    "arrays": {
+      "system_blocks.npy": 591124368,
+      "local_inverse.npy": 11371788416,
+      "system_rhs.npy": 16889392,
+      "boundary.npy": 2842947200,
+      "system_global_faces.npy": 2412880,
+      "source_rhs.npy": 135378560,
+      "loc2glob.npy": 4835072,
+      "system_neighbors.npy": 12063888,
+      "element_blocks.npy": 710736896,
+      "system_boundary_trace.npy": 16955472,
+      "system_global_to_local.npy": 2422320
+    },
+    "operator_sha256": "e4569a7819e3bb69b626f8b5a757e730071e226ec380a455f88cab17e9aa14d5",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "reaction": 0.001,
+      "geometry": "square"
+    },
+    "velocity_normalization": 1.9369164612238958,
+    "mesh_sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e",
+    "returncode": 0,
+    "runner_wall_seconds": 91.20130344596691,
+    "runner_started_utc": "2026-09-22T20:44:49+00:00"
+  }
+]

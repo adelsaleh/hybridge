@@ -1,0 +1,119 @@
+{
+  "pardiso": {
+    "status": "passed",
+    "candidate": "pardiso",
+    "samples": [
+      {
+        "warmup": true,
+        "seconds": 3.129943443927914,
+        "residual_norm": 3.665999773473402e-11,
+        "relative_residual": 8.947970975975715e-11,
+        "relative_trace_difference": 3.336061299233628e-13,
+        "passed": true,
+        "pardiso_phase": 33
+      },
+      {
+        "warmup": false,
+        "seconds": 2.869357222924009,
+        "residual_norm": 3.665054854516974e-11,
+        "relative_residual": 8.945664618114499e-11,
+        "relative_trace_difference": 3.33513509860524e-13,
+        "passed": true,
+        "pardiso_phase": 33
+      },
+      {
+        "warmup": false,
+        "seconds": 2.8894582691136748,
+        "residual_norm": 3.66667292452367e-11,
+        "relative_residual": 8.949614002825806e-11,
+        "relative_trace_difference": 3.330292912186557e-13,
+        "passed": true,
+        "pardiso_phase": 33
+      },
+      {
+        "warmup": false,
+        "seconds": 2.8637355829123408,
+        "residual_norm": 3.663947354490974e-11,
+        "relative_residual": 8.942961432435043e-11,
+        "relative_trace_difference": 3.3287248242565755e-13,
+        "passed": true,
+        "pardiso_phase": 33
+      }
+    ],
+    "new_compilation_allowed": false,
+    "time_integration": false,
+    "stage": "completed",
+    "peak_process_rss_kib": 19933640,
+    "trace_dofs": 3820649,
+    "matrix_sha256": {
+      "data": "59c6b08d61e871beed14d061e941e8488c5dc2bef4ccef8e343a3d4534a2813f",
+      "indices": "49162ac81bae0917a9bb204ee7ca74f3adecf8606405315d461f96a0f71284c4",
+      "indptr": "7cd6a7b4176bb89f13d050280490b2bf8572c64fe79f21be8f7c1d2d9743f98a"
+    },
+    "rhs_sha256": "13d7e30fc7c8d1223c9b22bede10ccc908c83fd7153abd0c826e6cbcecf91a2b",
+    "target": 1e-10,
+    "rhs_norm": 0.4097017953361935,
+    "conversion_seconds": 0.5736710941419005,
+    "matrix_nnz": 133547687,
+    "factorization_seconds": 12.094281921861693,
+    "factor_statistics": {
+      "raw_iparm": {
+        "7": 0,
+        "14": 0,
+        "15": 8429376,
+        "16": 6099224,
+        "17": 10778505,
+        "18": 1231945211,
+        "60": 0
+      },
+      "iparm_indexing": "one_based",
+      "in_core": true,
+      "symbolic_peak_kib": 8429376,
+      "symbolic_permanent_kib": 6099224,
+      "numerical_factors_kib": 10778505,
+      "estimated_solver_peak_kib": 16877729,
+      "factor_nnz": 1231945211,
+      "fill_ratio": 9.224758875831373,
+      "wrapper_matrix_copy_bytes": 0,
+      "wrapper_uses_matrix_hash": true,
+      "perturbed_pivots": 0,
+      "iterative_refinement_steps": 0
+    },
+    "timing_scope": "PyPardiso solve with retained factors, including wrapper matrix-reuse checks; RHS and solution on CPU",
+    "mean_reused_seconds": 2.8741836916500083,
+    "returncode": 0,
+    "worker_wall_seconds": 28.03484308719635,
+    "monitored_peak_rss_gib": 18.654224395751953,
+    "monitored_peak_hwm_gib": 19.01020050048828,
+    "minimum_available_gib": 93.78271102905273,
+    "memory_poll_seconds": 0.5
+  },
+  "superlu-cupy": {
+    "status": "failed",
+    "candidate": "superlu-cupy",
+    "samples": [],
+    "new_compilation_allowed": false,
+    "time_integration": false,
+    "stage": "failed",
+    "peak_process_rss_kib": 5712892,
+    "trace_dofs": 3820649,
+    "matrix_sha256": {
+      "data": "59c6b08d61e871beed14d061e941e8488c5dc2bef4ccef8e343a3d4534a2813f",
+      "indices": "49162ac81bae0917a9bb204ee7ca74f3adecf8606405315d461f96a0f71284c4",
+      "indptr": "7cd6a7b4176bb89f13d050280490b2bf8572c64fe79f21be8f7c1d2d9743f98a"
+    },
+    "rhs_sha256": "13d7e30fc7c8d1223c9b22bede10ccc908c83fd7153abd0c826e6cbcecf91a2b",
+    "target": 1e-10,
+    "rhs_norm": 0.4097017953361935,
+    "conversion_seconds": 0.5768630399834365,
+    "matrix_nnz": 133547687,
+    "error": "",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/adelsaleh/src/hdgfem/scripts/guiding_center/poisson/benchmark_poisson_lu.py\", line 100, in worker\n    factors = splu(csr.tocsc(), permc_spec=\"MMD_AT_PLUS_A\")\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/adelsaleh/src/hdgfem/.venv/lib/python3.12/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py\", line 444, in splu\n    return _superlu.gstrf(N, A.nnz, A.data, indices, indptr,\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nMemoryError\n",
+    "returncode": 1,
+    "worker_wall_seconds": 6.508800021139905,
+    "monitored_peak_rss_gib": 5.110260009765625,
+    "monitored_peak_hwm_gib": 5.448238372802734,
+    "minimum_available_gib": 106.67298126220703,
+    "memory_poll_seconds": 0.5
+  }
+}

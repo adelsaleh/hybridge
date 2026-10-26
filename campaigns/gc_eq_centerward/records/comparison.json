@@ -1,0 +1,122 @@
+[
+  {
+    "geometry": "star",
+    "source_id": "star_inward_20261012_01-62ff18dc87cc",
+    "archive_id": "star_centerward_20261015_01-0828fa6548f4",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/star/star_centerward_20261015_01.npz",
+    "before": {
+      "midpoint": 0.0028,
+      "thickness": 0.03919325874365985,
+      "clearance": 0.05500644304006243,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.04340147125006044,
+      "minimum_thickness": 0.03632097955403324,
+      "maximum_thickness": 0.04126017744526078,
+      "dual_residual": 6.200440429839094e-16
+    },
+    "after": {
+      "midpoint": 0.0045000000000000005,
+      "thickness": 0.03958342133178274,
+      "clearance": 0.10240092463541224,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.0731052960463755,
+      "minimum_thickness": 0.0366585479558752,
+      "maximum_thickness": 0.04153098125250221,
+      "dual_residual": 1.1336783024370314e-15
+    },
+    "clearance_increase_percent": 86.1616912055763,
+    "thickness_change_percent": 0.9954839189941111,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "uglypacman",
+    "source_id": "uglypacman_inward_20261012_01-e2762e0cd104",
+    "archive_id": "uglypacman_centerward_20261015_01-a1cd1093d1de",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/uglypacman/uglypacman_centerward_20261015_01.npz",
+    "before": {
+      "midpoint": 0.0025,
+      "thickness": 0.039538887196609473,
+      "clearance": 0.05051702126840943,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.029093304452337043,
+      "minimum_thickness": 0.03321811396710961,
+      "maximum_thickness": 0.05078331690143889,
+      "dual_residual": 1.680468348188424e-13
+    },
+    "after": {
+      "midpoint": 0.004,
+      "thickness": 0.03964656841796589,
+      "clearance": 0.09804601084745615,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.04847100960751427,
+      "minimum_thickness": 0.0343735313953939,
+      "maximum_thickness": 0.045838376194136776,
+      "dual_residual": 5.169980068308706e-15
+    },
+    "clearance_increase_percent": 94.08509921143894,
+    "thickness_change_percent": 0.27234256953405644,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "iter",
+    "source_id": "iter_inward_20261012_01-b14922566841",
+    "archive_id": "iter_centerward_20261015_01-04b1cdaffd04",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/iter/iter_centerward_20261015_01.npz",
+    "before": {
+      "midpoint": 0.0224,
+      "thickness": 0.10942824600515816,
+      "clearance": 0.15125611563330713,
+      "clearance_measure": "wall_clearance_euclidean",
+      "minimum_clearance": 0.12130217017935768,
+      "minimum_thickness": 0.10259167469968981,
+      "maximum_thickness": 0.13091298861416445,
+      "dual_residual": 4.772609967079877e-16
+    },
+    "after": {
+      "midpoint": 0.036000000000000004,
+      "thickness": 0.10937772417504028,
+      "clearance": 0.26688855782286536,
+      "clearance_measure": "wall_clearance_euclidean",
+      "minimum_clearance": 0.21486505162967318,
+      "minimum_thickness": 0.10517848982823719,
+      "maximum_thickness": 0.11889643533517041,
+      "dual_residual": 8.796130367843384e-16
+    },
+    "clearance_increase_percent": 76.4481103493944,
+    "thickness_change_percent": -0.04616891155825309,
+    "mesh_size": 0.01,
+    "mpi_ranks": 8
+  },
+  {
+    "geometry": "horseshoe",
+    "source_id": "horseshoe_inward_20261012_01-a3257f052ad2",
+    "archive_id": "horseshoe_centerward_20261015_01-e7d2014fe7d2",
+    "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_centerward_20261015/horseshoe/horseshoe_centerward_20261015_01.npz",
+    "before": {
+      "midpoint": 0.0028,
+      "thickness": 0.039152425650973696,
+      "clearance": 0.05723048289884515,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.04701414888661859,
+      "minimum_thickness": 0.037137398798015586,
+      "maximum_thickness": 0.046184351985596006,
+      "dual_residual": 1.0160488819046163e-15
+    },
+    "after": {
+      "midpoint": 0.0045000000000000005,
+      "thickness": 0.03919074078341954,
+      "clearance": 0.105341849432061,
+      "clearance_measure": "wall_clearance_along_flow",
+      "minimum_clearance": 0.07917279400261057,
+      "minimum_thickness": 0.03722782663507379,
+      "maximum_thickness": 0.04349922955583119,
+      "dual_residual": 1.7789888363334226e-15
+    },
+    "clearance_increase_percent": 84.06598039414182,
+    "thickness_change_percent": 0.09786145253785072,
+    "mesh_size": 0.003,
+    "mpi_ranks": 8
+  }
+]

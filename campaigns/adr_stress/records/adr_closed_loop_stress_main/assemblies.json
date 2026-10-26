@@ -1,0 +1,215 @@
+[
+  {
+    "case": "stress_main_trap",
+    "target_triangles": 50000,
+    "p": 6,
+    "status": "passed",
+    "kind": "assembly",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 1071498,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "estimates": {
+      "trace_dofs": 522032,
+      "elements": 49928,
+      "assembly_host_bytes": 25231735424,
+      "assembly_device_bytes": 15943069632,
+      "solver_device_bytes": 3039464960,
+      "cache_disk_bytes": 4056170944
+    },
+    "space_setup_ms": 340.65133903641254,
+    "assembly_samples_ms": [
+      {
+        "host_preparation": 74072.16181594413,
+        "host_to_device": 2063.4934999980032,
+        "local_inverse": 194.52755595557392,
+        "condensation": 111.4670520182699,
+        "global_blocks": 295.4342169687152,
+        "device_to_host": 711.2789250677451,
+        "rhs_and_boundary": 154.1675110347569,
+        "assembly_total": 77602.6126400102
+      }
+    ],
+    "validation": {},
+    "assembly_median_ms": 77602.6126400102,
+    "arrays": {
+      "system_blocks.npy": 143240848,
+      "local_inverse.npy": 2802361088,
+      "system_rhs.npy": 4092720,
+      "boundary.npy": 700590368,
+      "system_global_faces.npy": 584784,
+      "source_rhs.npy": 33361568,
+      "loc2glob.npy": 1191608,
+      "system_neighbors.npy": 2923408,
+      "element_blocks.npy": 175147688,
+      "system_boundary_trace.npy": 4247896,
+      "system_global_to_local.npy": 606952
+    },
+    "operator_sha256": "760214183c1726d94e053726a94d9af4c0fc6a62dd85427893d8124fb237c5b8",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "neck_width": 0.02,
+      "reaction": 0.001
+    },
+    "velocity_normalization": 65.89683874444368,
+    "mesh_sha256": "3c85accf5b8492638dbe0fa321d5f8a03d128d9369fd511cd3136fd6d9ba2c05"
+  },
+  {
+    "case": "stress_main_trap",
+    "target_triangles": 100000,
+    "p": 6,
+    "status": "passed",
+    "kind": "assembly",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 1079423,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "estimates": {
+      "trace_dofs": 1041187,
+      "elements": 99458,
+      "assembly_host_bytes": 50260178864,
+      "assembly_device_bytes": 31757970552,
+      "solver_device_bytes": 6052933600,
+      "cache_disk_bytes": 8079648584
+    },
+    "space_setup_ms": 577.8523830231279,
+    "assembly_samples_ms": [
+      {
+        "host_preparation": 161005.2365930751,
+        "host_to_device": 4062.2140689520165,
+        "local_inverse": 356.11606296151876,
+        "condensation": 156.86353598721325,
+        "global_blocks": 593.9408770063892,
+        "device_to_host": 1661.4089088980108,
+        "rhs_and_boundary": 1288.4741430170834,
+        "assembly_total": 169124.3433430791
+      }
+    ],
+    "validation": {},
+    "assembly_median_ms": 169124.3433430791,
+    "arrays": {
+      "system_blocks.npy": 286544288,
+      "local_inverse.npy": 5568313088,
+      "system_rhs.npy": 8187104,
+      "boundary.npy": 1392078368,
+      "system_global_faces.npy": 1169696,
+      "source_rhs.npy": 66289568,
+      "loc2glob.npy": 2367608,
+      "system_neighbors.npy": 5847968,
+      "element_blocks.npy": 348019688,
+      "system_boundary_trace.npy": 8385512,
+      "system_global_to_local.npy": 1198040
+    },
+    "operator_sha256": "7fc2146520d07d4a60c92efb2c786002ce83bc187ff8798f2a82dbfe6c4fc43e",
+    "stress_parameters": {
+      "variant": "trap",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "neck_width": 0.02,
+      "reaction": 0.001
+    },
+    "velocity_normalization": 65.89683874444368,
+    "mesh_sha256": "fd53a7324de926bae2b18ffb1c4a20125bd8ac5af1239c8da624bc1fdc5813ca"
+  },
+  {
+    "case": "stress_main_cross",
+    "target_triangles": 50000,
+    "p": 6,
+    "status": "passed",
+    "kind": "assembly",
+    "environment": {
+      "python": "3.12.3",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "platform": "Linux-6.17.0-1010-oem-x86_64-with-glibc2.39",
+      "pid": 1093738,
+      "thread_env": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1"
+      },
+      "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+      "total_vram_bytes": 50728861696,
+      "device": 0,
+      "cupy": "14.2.0",
+      "cuda_runtime": 13020,
+      "driver": 13000
+    },
+    "estimates": {
+      "trace_dofs": 522032,
+      "elements": 49928,
+      "assembly_host_bytes": 25231735424,
+      "assembly_device_bytes": 15943069632,
+      "solver_device_bytes": 3039464960,
+      "cache_disk_bytes": 4056170944
+    },
+    "space_setup_ms": 349.866466014646,
+    "assembly_samples_ms": [
+      {
+        "host_preparation": 77401.46906895097,
+        "host_to_device": 2088.7865079566836,
+        "local_inverse": 222.6744219660759,
+        "condensation": 126.28678104374558,
+        "global_blocks": 299.47953403461725,
+        "device_to_host": 710.4579510632902,
+        "rhs_and_boundary": 154.96764599811286,
+        "assembly_total": 81004.2122999439
+      }
+    ],
+    "validation": {},
+    "assembly_median_ms": 81004.2122999439,
+    "arrays": {
+      "system_blocks.npy": 143240848,
+      "local_inverse.npy": 2802361088,
+      "system_rhs.npy": 4092720,
+      "boundary.npy": 700590368,
+      "system_global_faces.npy": 584784,
+      "source_rhs.npy": 33361568,
+      "loc2glob.npy": 1191608,
+      "system_neighbors.npy": 2923408,
+      "element_blocks.npy": 175147688,
+      "system_boundary_trace.npy": 4247896,
+      "system_global_to_local.npy": 606952
+    },
+    "operator_sha256": "912ff07742eff76467c6c14159e04663924e0d3320f83fb8da1916ada142725e",
+    "stress_parameters": {
+      "variant": "cross",
+      "epsilon": 1e-06,
+      "speed": 50.0,
+      "neck_width": 0.02,
+      "reaction": 0.001
+    },
+    "velocity_normalization": 3.2100476002408573,
+    "mesh_sha256": "3c85accf5b8492638dbe0fa321d5f8a03d128d9369fd511cd3136fd6d9ba2c05"
+  }
+]

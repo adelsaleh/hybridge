@@ -1,0 +1,336 @@
+{
+  "source_root": "gc-hdg-article/run_outputs",
+  "collected": "2026-10-26",
+  "files": [
+    {
+      "campaign": "gc_d8_diocotron_order",
+      "source": "diocotron_order_20261016/launcher.py",
+      "copy": "gc_d8_diocotron_order/launcher.py",
+      "source_sha256": "fea2044cfa8bcbac34f6b31299a1a36aada126ea2045cff81f01ee2c4593411e"
+    },
+    {
+      "campaign": "gc_d8s_smoke",
+      "source": "diocotron_order_smoke_20261016/launcher.py",
+      "copy": "gc_d8s_smoke/launcher.py",
+      "source_sha256": "9d99a1e284931c3fa3dd3172190d60b45c647d0d0919656461187949b8803053"
+    },
+    {
+      "campaign": "gc_d8s_smoke",
+      "source": "diocotron_order_smoke_20261016/mesh_levels_smoke.py",
+      "copy": "gc_d8s_smoke/mesh_levels_smoke.py",
+      "source_sha256": "2ed0557c307dfb0448cee85107b4b685d57d68f53cfb4567390889cb51df2a89"
+    },
+    {
+      "campaign": "gc_e7_band_evolution",
+      "source": "e7_band_evolution_20261019/launcher.py",
+      "copy": "gc_e7_band_evolution/launcher.py",
+      "source_sha256": "e2845bb3dd9dc514d2d194a1f2bee33207bd41b5b904ad93ea7f0b7690b5823b"
+    },
+    {
+      "campaign": "gc_e7_five_sites",
+      "source": "e7_five_sites_20261019/launcher.py",
+      "copy": "gc_e7_five_sites/launcher.py",
+      "source_sha256": "e5ee4c3b7589de9cda68248673a94add521c9bbc03d6f89100c75a247b6cfbf7"
+    },
+    {
+      "campaign": "gc_e7_lumps",
+      "source": "e7_lumps_20261020/launcher.py",
+      "copy": "gc_e7_lumps/launcher.py",
+      "source_sha256": "67806b0f173d39315aee89aa49d909176886f82899278ee675771d6b6b32e6f0"
+    },
+    {
+      "campaign": "gc_eq_centerward",
+      "source": "equilibrium_centerward_20261015/launcher.py",
+      "copy": "gc_eq_centerward/launcher.py",
+      "source_sha256": "3deb623217bb715a7100d926d0210b24ecfcf784eb08942f764fbe0056f94927"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/audit_refined_ugly_launcher.py",
+      "copy": "gc_eq_dt080/audit_refined_ugly_launcher.py",
+      "source_sha256": "65e5bfd01575d8d5a20d05e94b7dfb102604366c77db113cbc42baa62e89c09c"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/audit_saved_flow.py",
+      "copy": "gc_eq_dt080/audit_saved_flow.py",
+      "source_sha256": "e11f980d43fdf29f6582e987a1b110f4ead5d1e0c2d214bdd268cb6b7199fec4"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/background_finish/launcher.py",
+      "copy": "gc_eq_dt080/background_finish/launcher.py",
+      "source_sha256": "0d235aa7e3278e0e26e046e08d808fe00ae03ccdcad1cbb2731cfa7eca13e25b"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/high_order_checks.py",
+      "copy": "gc_eq_dt080/high_order_checks.py",
+      "source_sha256": "32cd4ed416add83662f24ce1c6807f16c275323b21313b4f063d3a1542138f52"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/high_order_launcher.py",
+      "copy": "gc_eq_dt080/high_order_launcher.py",
+      "source_sha256": "377761f491c2dd47a3f41babfb75cfa5af425e3abe5c16828c436320529c2888"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/high_order_refinement_launcher.py",
+      "copy": "gc_eq_dt080/high_order_refinement_launcher.py",
+      "source_sha256": "cff88c97ddd79824c22fd3cf9026e2565cff7e158233cdd95b3422d756a70014"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/launcher.py",
+      "copy": "gc_eq_dt080/launcher.py",
+      "source_sha256": "cf74a61330d5f9ec30f3d0998bdcc4253a311d76263a4d5b025a150cd1a1eadf"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/prepare_article.py",
+      "copy": "gc_eq_dt080/prepare_article.py",
+      "source_sha256": "e7c02f1883e3324fef09268d21a5c13f4a469675ec6738353706f81979bd8801"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/render_gallery.py",
+      "copy": "gc_eq_dt080/render_gallery.py",
+      "source_sha256": "552ab882de95b0de8a9f3e9fafa5aad0ee0455e0201af295fd38d7e9bc73ef2c"
+    },
+    {
+      "campaign": "gc_eq_dt080",
+      "source": "equilibrium_dt080_20261016/summarize.py",
+      "copy": "gc_eq_dt080/summarize.py",
+      "source_sha256": "718d2f441c2f133dcf15e35f43c240c795b87e7027472dba323624c83d2f51cc"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/article_update/launcher.py",
+      "copy": "gc_eq_dt080_eps0005/article_update/launcher.py",
+      "source_sha256": "b8ac094b18e0244ea9f4872d097c8717bff0d2f0a7b2ff3c91450bbe43f922e7"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/horseshoe_recovery/launcher.py",
+      "copy": "gc_eq_dt080_eps0005/horseshoe_recovery/launcher.py",
+      "source_sha256": "f75c60b2d4e149cbbe53052353847e3a2119c2edff9567dc00a3a1a4e95e3056"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/launcher.py",
+      "copy": "gc_eq_dt080_eps0005/launcher.py",
+      "source_sha256": "0bf24045a2a617c58086cec1720664eb2f7f9a13f2733fe1dc29efa510a102b5"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/postprocess.py",
+      "copy": "gc_eq_dt080_eps0005/postprocess.py",
+      "source_sha256": "45834502faf442de4f214aa8feaf515ea804116e6263d31091261c9d3bbd9445"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/prepare.py",
+      "copy": "gc_eq_dt080_eps0005/prepare.py",
+      "source_sha256": "3625557d4099951a09ca06ae6cb6a7f2b5c45f845c105a0a0b42fd112e719d49"
+    },
+    {
+      "campaign": "gc_eq_dt080_eps0005",
+      "source": "equilibrium_dt080_eps0005_20261016/switch_ranks.py",
+      "copy": "gc_eq_dt080_eps0005/switch_ranks.py",
+      "source_sha256": "f0b1dce9c0e28dde8ccd72c0bd0e95c8d783913cd008980493433b35683c0ae1"
+    },
+    {
+      "campaign": "gc_poisson_pmg_degrees",
+      "source": "poisson_pmg_degrees_20261017/launcher.py",
+      "copy": "gc_poisson_pmg_degrees/launcher.py",
+      "source_sha256": "ddb8c2e70acc26429b9e54492256971f9f1eac5ae6f1651d3d43f63519bd5ecf"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron/run_convergence.sh",
+      "copy": "gc_d7_magnetron/run_convergence.sh",
+      "source_sha256": "de4d611a8f4e9e9ff7ededdfb8bb8a2d5a729baa130f235a900ca65b43833833"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron/run_convergence_dt.sh",
+      "copy": "gc_d7_magnetron/run_convergence_dt.sh",
+      "source_sha256": "3a2d4bdcfd04c2c9977fe387f02b687c98f44c071791542bf5242a2e0907bfa2"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron_d7_diagnosis_20261016/launch.sh",
+      "copy": "gc_d7_magnetron/launch_diagnosis.sh",
+      "source_sha256": "bd4d59cc0421139d21545dd9fceb06f3314ed746f27934261f45cb8187237b30"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron_d7_pilot/launch.sh",
+      "copy": "gc_d7_magnetron/launch_pilot.sh",
+      "source_sha256": "2c6a3e78ee53c5f092a7208953fc06e7ed7d3a40f27fb92e112f7036df836174"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron_d7_production/launch.sh",
+      "copy": "gc_d7_magnetron/launch_production.sh",
+      "source_sha256": "84d88c81aad63cc88d523965c19b215d1cdff715a3f174dca12aec5753b49d40"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron_d7_production_v2/launch.sh",
+      "copy": "gc_d7_magnetron/launch_production_v2.sh",
+      "source_sha256": "4121f25478f94f8c2d1bfa9a8a4b05610b03c5af5a6022c4036215f459b68214"
+    },
+    {
+      "campaign": "gc_d7_magnetron",
+      "source": "magnetron_d7_supg/launch.sh",
+      "copy": "gc_d7_magnetron/launch_supg.sh",
+      "source_sha256": "09ae921c72194a99aac2cde8a7fed3076aea43c31df9b5baae6bf1a86d42b666"
+    },
+    {
+      "campaign": "gc_e9_cg_vs_hdg",
+      "source": "e9_retime_20261015/launch.sh",
+      "copy": "gc_e9_cg_vs_hdg/launch_retime.sh",
+      "source_sha256": "461b64c8f729d1ce73ddab71887f27df36389d00a481e538ba44109a2046a762"
+    },
+    {
+      "campaign": "gc_e9_cg_vs_hdg",
+      "source": "e9_cg_vs_hdg/launch.sh",
+      "copy": "gc_e9_cg_vs_hdg/launch.sh",
+      "source_sha256": "ba555029979beacdd7a8c75b254ba0ef49dc8b6af3bb8fce4628892139c529b0"
+    },
+    {
+      "campaign": "gc_conv_poisson_degree",
+      "source": "convergence_poisson_degree/run_campaign.sh",
+      "copy": "gc_conv_poisson_degree/run_campaign.sh",
+      "source_sha256": "772d9f5fbc5b71efc173b8b51c7940ab5e155168521101237ecd46bbcb03acb2"
+    },
+    {
+      "campaign": "gc_conv_poisson_degree",
+      "source": "convergence_poisson_degree/run_extension.sh",
+      "copy": "gc_conv_poisson_degree/run_extension.sh",
+      "source_sha256": "03d2ff3d3fe963460980d95b349cfd86c4a46cf7239eb333ae251487a07df470"
+    },
+    {
+      "campaign": "gc_conv_unstructured",
+      "source": "convergence_unstructured/run_campaign.sh",
+      "copy": "gc_conv_unstructured/run_campaign.sh",
+      "source_sha256": "a40615bf942b474db339f76820265d0bf627d328fd19e025bd1d11119ca5a76e"
+    },
+    {
+      "campaign": "gc_conv_exact_drift",
+      "source": "convergence_exact_drift/run_aligned.sh",
+      "copy": "gc_conv_exact_drift/run_aligned.sh",
+      "source_sha256": "218798fb1b89c24697a5fecf35511d5c47dbb594a574b1905a84af3643afe8f0"
+    },
+    {
+      "campaign": "gc_conv_exact_drift",
+      "source": "convergence_exact_drift/run_exact_drift.sh",
+      "copy": "gc_conv_exact_drift/run_exact_drift.sh",
+      "source_sha256": "ee7ce70e05e1203f25c54100f10a25befcbe3d42aced7ca0c3294152b2fc1b51"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns.sh",
+      "copy": "gc_diocotron_shell/run_campaigns.sh",
+      "source_sha256": "d1a84b434b960d42e9856cd89a9303236c129216a07698ef87d4452a987898d6"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v10.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v10.sh",
+      "source_sha256": "91a31760c617f799094a81208af8c087eccb17f5fe92c57074e2df353223e142"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v2.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v2.sh",
+      "source_sha256": "ebc06b5b8594ac26bf73071e1064d1f4a668d6f0cf9c25b9947365903509e056"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v3.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v3.sh",
+      "source_sha256": "2bb8c7675a2fa9313d8d857edce431f1694c78bc0e41d36532ea7dedeaa47e18"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v4.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v4.sh",
+      "source_sha256": "a14800a4c5fb33ce7bc0570be9cdc4309fa81359cc4d184ed4ec9e87c78446f7"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v5.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v5.sh",
+      "source_sha256": "22f715f4e5f2e6e9cf451ccf8b337726e4b6c97082e77e4c0f4943fcdbc19ff4"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v6.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v6.sh",
+      "source_sha256": "d0b24c62bbf3fb376f1f4dfdeb22c1ca8dee24d03cf65ca7c58632060a79619e"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v7.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v7.sh",
+      "source_sha256": "0015ead755ce6866a88400c60c19285773e8c76b9151bcd23e7e9eba16cc347e"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v8.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v8.sh",
+      "source_sha256": "b1c1b81d599ba5c6f1b1e23282e635e7155dd7988d4238f5f5706997e0e94d0c"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_campaigns_v9.sh",
+      "copy": "gc_diocotron_shell/run_campaigns_v9.sh",
+      "source_sha256": "4dcf9fcc9aa8f148005e62ba9736e1ece7357cdbe3638eb717926f4aa48c8189"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_fixed_injector.sh",
+      "copy": "gc_diocotron_shell/run_fixed_injector.sh",
+      "source_sha256": "163f10108ba2e5d94abe74ad02e05cf9040c56d9032e64d47a9da9427bb0debd"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_followup.sh",
+      "copy": "gc_diocotron_shell/run_followup.sh",
+      "source_sha256": "612f395c24551f8aa9408128ad39f7b2153936d0ca72befe1a22847188f044df"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_injection_checks.sh",
+      "copy": "gc_diocotron_shell/run_injection_checks.sh",
+      "source_sha256": "52f1c55793081b3159014ab2cf58d11e6e2cdb16f18e78075fa93b3d5ccf5dc7"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_injection_v1.sh",
+      "copy": "gc_diocotron_shell/run_injection_v1.sh",
+      "source_sha256": "3c62941d8b69f20dff9ff1a6e9be7cfc924b89e62989a8e0c0fa6ec9462f20e0"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_ionization.sh",
+      "copy": "gc_diocotron_shell/run_ionization.sh",
+      "source_sha256": "f1cdff84171fbe49baae5650466d2477988aae806d5c45fbeb3a2820ddbc77ad"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/run_ionization_dt.sh",
+      "copy": "gc_diocotron_shell/run_ionization_dt.sh",
+      "source_sha256": "0398ecb4fa319b6a092e8c5eb723038450e081db4afe1e30a1a3cb1eca397de5"
+    },
+    {
+      "campaign": "gc_diocotron_shell",
+      "source": "diocotron/todo_20261015/launcher.py",
+      "copy": "gc_diocotron_shell/todo_20261015/launcher.py",
+      "source_sha256": "658a1ea4819cb42f42d239745be15c3cafe02d933540033d32cadc267eaab730"
+    }
+  ]
+}

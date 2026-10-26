@@ -1,0 +1,9 @@
+{
+  "pid": 1382089,
+  "pgid": 1382089,
+  "started_utc": "2026-10-20T17:55:50.380836+00:00",
+  "purpose": "near-wall linearized packet responses (wavenumber scan)",
+  "status": "completed",
+  "failures": [],
+  "finished_utc": "2026-10-20T19:57:53.368350+00:00"
+}

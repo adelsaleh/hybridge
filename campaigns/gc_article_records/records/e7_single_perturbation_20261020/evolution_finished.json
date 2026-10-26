@@ -1,0 +1,11 @@
+{
+  "pid": 847876,
+  "pgid": 847876,
+  "stop": "kill -- -847876",
+  "started_utc": "2026-10-20T11:12:03.107279+00:00",
+  "min_free_mib": 8192,
+  "exclusive": false,
+  "phase": "smoke then early-response checks",
+  "status": "completed",
+  "finished_utc": "2026-10-20T12:05:53.138767+00:00"
+}

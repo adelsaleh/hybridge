@@ -1,0 +1,33 @@
+{
+  "command": [
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/mpiexec",
+    "-n",
+    "8",
+    "-bind-to",
+    "core",
+    "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+    "-u",
+    "-m",
+    "projects.diocotron.studies.equilibrium_catalog.run_distance",
+    "--config",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/inputs/iter/config.json",
+    "--geometry",
+    "iter",
+    "--name",
+    "iter_dt080_placement_20261016",
+    "--output",
+    "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/iter",
+    "--archive",
+    "/home/adelsaleh/src/gc-hdg-article/equilibria",
+    "--target-distance",
+    ".8",
+    "--warm-equilibrium",
+    "iter_centerward_20261015_01"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 733.4459330581594,
+  "peak_cpu_cores": 9.193677476467341,
+  "peak_active_ranks": 17,
+  "peak_sum_rank_rss_bytes": 29352075264,
+  "log": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement_iter_1792153532.log"
+}

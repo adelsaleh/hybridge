@@ -1,0 +1,38 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/adr_square_bsr_2m_short_mem90_20260922",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 15718178178,
+  "file_count": 218,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "assemblies.json",
+      "copy": "assemblies.json",
+      "bytes": 2940,
+      "sha256": "77198b5bf8132e693cfd0f7eaa5db07b9def2528229c8d80bc818ad0fa1cacbb"
+    },
+    {
+      "path": "events.jsonl",
+      "copy": "events.jsonl",
+      "bytes": 38869,
+      "sha256": "9dfd27fd6fc6b2e02d7450a97709609141871b127a8ffb952cc58da8a7d4ddc0"
+    },
+    {
+      "path": "manifest.json",
+      "copy": "source/manifest.json",
+      "bytes": 38535,
+      "sha256": "f8273eebc0c0bd6036273762464cae3679270da73e586341baf8b093cd35fb6c"
+    },
+    {
+      "path": "summary.json",
+      "copy": "summary.json",
+      "bytes": 53897,
+      "sha256": "97d110b6db2b06fb19a1539693244db76cfd38ced8e292df0583452e1d3f8a9b"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

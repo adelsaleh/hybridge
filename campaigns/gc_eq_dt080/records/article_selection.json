@@ -1,0 +1,6 @@
+{
+  "star": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/star/eps0p005_q64",
+  "uglypacman": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/uglypacman/eps0p005_q64",
+  "iter": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/iter/eps0p005_q64",
+  "horseshoe": "run_outputs/equilibrium_dt080_eps0005_20261016/stages/horseshoe/eps0p005_q64"
+}

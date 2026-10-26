@@ -1,0 +1,96 @@
+{
+  "schema": "bernstein-shared-edge-high-order-v2",
+  "results": [
+    {
+      "level": "lower",
+      "status": "OK",
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "level": "middle",
+      "status": "OK",
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ]
+    },
+    {
+      "level": "upper",
+      "status": "OK",
+      "diagnostics": [
+        {
+          "refinement": 2,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 4,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 6,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        },
+        {
+          "refinement": 8,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 12,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        },
+        {
+          "refinement": 16,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 18,
+          "components": null,
+          "closed": null,
+          "ambiguous_edges": 0
+        },
+        {
+          "refinement": 5,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        },
+        {
+          "refinement": 7,
+          "hidden_subtriangles": 0,
+          "near_level_vertices": 0,
+          "components": 1,
+          "closed": true
+        }
+      ]
+    }
+  ]
+}

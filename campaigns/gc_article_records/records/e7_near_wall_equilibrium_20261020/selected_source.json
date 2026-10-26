@@ -1,0 +1,12 @@
+{
+  "name": "refined_cg6_q48_01",
+  "midpoint": 0.0007500000000000002,
+  "distance": null,
+  "mass": 0.3493528028970371,
+  "mean_thickness": 0.03638590374545519,
+  "wall_clearance": 0.010109990012483767,
+  "dual_residual": 6.266593889861238e-16,
+  "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_near_wall_equilibrium_20261020/refined_cg6_q48/refined_cg6_q48_01.npz",
+  "state_id": "60cf2d1c4d0c43c49d46c7d60d66b21c",
+  "archive_id": "refined_cg6_q48_01-4a7bf9500531"
+}

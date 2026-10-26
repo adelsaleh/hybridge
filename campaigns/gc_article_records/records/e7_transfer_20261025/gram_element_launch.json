@@ -1,0 +1,13 @@
+{
+  "pid": 1556166,
+  "pgid": 1556166,
+  "stop": "kill -- -1556166",
+  "weight": "element",
+  "started_utc": "2026-10-25T18:34:48.871829+00:00",
+  "checks": [
+    "pacman_resolved",
+    "mid_b",
+    "pacman_refined",
+    "pacman_refined_k0"
+  ]
+}

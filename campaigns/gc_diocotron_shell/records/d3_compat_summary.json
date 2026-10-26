@@ -1,0 +1,177 @@
+{
+  "rows": [
+    {
+      "prefix": "d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_si_bdf2_dt0p1_compatible_seed",
+      "label": "m9_zg_p50",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 15458,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "truncated-profile-nystrom",
+      "reference_gamma": 0.18024882156010877,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17869001934459508,
+      "relative_error": -0.008648057734978667,
+      "potential_norm_gamma": 0.1793422694242974,
+      "potential_norm_relative_error": -0.005029448336831723,
+      "r_squared": 0.9999401729692642,
+      "subwindow_gammas": [
+        0.17994726331877342,
+        0.17603398818477656
+      ],
+      "control_fraction": 0.00033852333446265074,
+      "positivity": "violated",
+      "density_minimum": -0.7516257464155233,
+      "invariants": {
+        "mass": 1.492642282310027e-13,
+        "energy_from_q_l2": 0.0005751158005880923,
+        "enstrophy": 0.15494188176232934
+      },
+      "wall_time_s": 107.56944630504586,
+      "jsonl": "run_outputs/article/diocotron/d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_si_bdf2_dt0p1_compatible_seed.jsonl",
+      "element_unknowns": 432824,
+      "trace_unknowns": 162862,
+      "median_linear_step_wall_time": 0.036220817477442324,
+      "median_poisson_step_wall_time": 0.01563564798561856,
+      "median_transport_step_wall_time": 0.01878575247246772
+    },
+    {
+      "prefix": "d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_si_bdf2_dt0p05_compatible_seed",
+      "label": "m9_zg_p50",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 15458,
+      "scheme": "si-bdf2",
+      "dt": 0.05,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "truncated-profile-nystrom",
+      "reference_gamma": 0.18024882156010877,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17890655698407254,
+      "relative_error": -0.00744673149271389,
+      "potential_norm_gamma": 0.1795600354113026,
+      "potential_norm_relative_error": -0.0038213073619261613,
+      "r_squared": 0.9999395480834865,
+      "subwindow_gammas": [
+        0.1801727575514328,
+        0.17622337705575064
+      ],
+      "control_fraction": 0.00033874815823418724,
+      "positivity": "violated",
+      "density_minimum": -1.1907419668754289,
+      "invariants": {
+        "mass": 3.20445735544026e-13,
+        "energy_from_q_l2": 0.00012740462495577288,
+        "enstrophy": 0.11296175337479054
+      },
+      "wall_time_s": 138.56106991507113,
+      "jsonl": "run_outputs/article/diocotron/d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_si_bdf2_dt0p05_compatible_seed.jsonl",
+      "element_unknowns": 432824,
+      "trace_unknowns": 162862,
+      "median_linear_step_wall_time": 0.03201383294072002,
+      "median_poisson_step_wall_time": 0.011491887969896197,
+      "median_transport_step_wall_time": 0.018442494911141694
+    },
+    {
+      "prefix": "d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_imex_ark3_dt0p1_compatible_seed",
+      "label": "m9_zg_p50",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 15458,
+      "scheme": "imex-ark3",
+      "dt": 0.1,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "truncated-profile-nystrom",
+      "reference_gamma": 0.18024882156010877,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.1789670584529319,
+      "relative_error": -0.007111076211665727,
+      "potential_norm_gamma": 0.17962548311597715,
+      "potential_norm_relative_error": -0.003458210926076721,
+      "r_squared": 0.9999382542868296,
+      "subwindow_gammas": [
+        0.18024541462888113,
+        0.17626538600725322
+      ],
+      "control_fraction": 0.0003391628330279225,
+      "positivity": "violated",
+      "density_minimum": -1.2867851299522715,
+      "invariants": {
+        "mass": 1.6437959311515487e-14,
+        "energy_from_q_l2": 4.055240998150246e-05,
+        "enstrophy": 0.10914194474863768
+      },
+      "wall_time_s": 203.14020467805676,
+      "jsonl": "run_outputs/article/diocotron/d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_imex_ark3_dt0p1_compatible_seed.jsonl",
+      "element_unknowns": 432824,
+      "trace_unknowns": 162862,
+      "median_linear_step_wall_time": 0.16304039198439568,
+      "median_poisson_step_wall_time": 0.09869346499908715,
+      "median_transport_step_wall_time": 0.03635752451373264
+    },
+    {
+      "prefix": "d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_imex_ark3_dt0p05_compatible_seed",
+      "label": "m9_zg_p50",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 15458,
+      "scheme": "imex-ark3",
+      "dt": 0.05,
+      "velocity": "compatible",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "truncated-profile-nystrom",
+      "reference_gamma": 0.18024882156010877,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.1789768361933427,
+      "relative_error": -0.007056830417844856,
+      "potential_norm_gamma": 0.1796319295514241,
+      "potential_norm_relative_error": -0.0034224468340224505,
+      "r_squared": 0.9999390936473308,
+      "subwindow_gammas": [
+        0.18024797500980838,
+        0.17628282516029264
+      ],
+      "control_fraction": 0.0003392115617168339,
+      "positivity": "violated",
+      "density_minimum": -1.3738498435230573,
+      "invariants": {
+        "mass": 1.6626901372567387e-14,
+        "energy_from_q_l2": 8.27981689195911e-06,
+        "enstrophy": 0.09020567912397823
+      },
+      "wall_time_s": 313.5600596590666,
+      "jsonl": "run_outputs/article/diocotron/d3_compat_disk_zg_m9_zg_p50_p6_hb0p008_h0p04_imex_ark3_dt0p05_compatible_seed.jsonl",
+      "element_unknowns": 432824,
+      "trace_unknowns": 162862,
+      "median_linear_step_wall_time": 0.15404385596048087,
+      "median_poisson_step_wall_time": 0.09068493207450956,
+      "median_transport_step_wall_time": 0.03558478696504608
+    }
+  ],
+  "failures": []
+}

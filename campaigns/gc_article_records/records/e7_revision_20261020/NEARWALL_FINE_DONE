@@ -1,0 +1,12 @@
+{
+  "pid": 1718366,
+  "pgid": 1693744,
+  "started_utc": "2026-10-20T20:56:45.270910+00:00",
+  "lane": "fine",
+  "packet_kd": 0.5,
+  "final_time": 160.0,
+  "purpose": "near-wall packet: controls, seeds, linear references, refinements",
+  "status": "completed",
+  "failures": [],
+  "finished_utc": "2026-10-21T03:20:12.836879+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "pid": 1589734,
+  "pgid": 1589734,
+  "stop": "kill -- -1589734",
+  "lane": "c",
+  "labels": [
+    "center"
+  ],
+  "final": 300,
+  "started_utc": "2026-10-25T19:18:46.378678+00:00",
+  "finished_utc": "2026-10-25T22:35:36.263743+00:00",
+  "done": [
+    "center"
+  ],
+  "failures": [],
+  "pending": []
+}

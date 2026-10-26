@@ -1,0 +1,311 @@
+{
+  "rows": [
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p8_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "si-bdf2",
+      "dt": 0.8,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.16490761395442888,
+      "relative_error": -0.08211763057213085,
+      "potential_norm_gamma": 0.1653883265894347,
+      "potential_norm_relative_error": -0.07944196483510194,
+      "r_squared": 0.999981876459501,
+      "subwindow_gammas": [
+        0.16557935675123409,
+        0.16350826449545516
+      ],
+      "control_fraction": 1.2742602369810424e-06,
+      "positivity": "violated",
+      "density_minimum": -0.13496724706571406,
+      "invariants": {
+        "mass": 1.1452431292641406e-12,
+        "energy_from_q_l2": 0.01024680435545279,
+        "enstrophy": 0.28678397149367313
+      },
+      "wall_time_s": 65.36747872503474,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p8_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.11825113208033144,
+      "median_poisson_step_wall_time": 0.06631078303325921,
+      "median_transport_step_wall_time": 0.05104420299176127
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p4_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "si-bdf2",
+      "dt": 0.4,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17409727244425555,
+      "relative_error": -0.0309676241739666,
+      "potential_norm_gamma": 0.17462481442519454,
+      "potential_norm_relative_error": -0.028031304426045428,
+      "r_squared": 0.9999427221071464,
+      "subwindow_gammas": [
+        0.17532315072983423,
+        0.17150697224919303
+      ],
+      "control_fraction": 9.673514682434368e-07,
+      "positivity": "violated",
+      "density_minimum": -0.16491565615161974,
+      "invariants": {
+        "mass": 7.94139206280635e-14,
+        "energy_from_q_l2": 0.00416266825289801,
+        "enstrophy": 0.20913151111217967
+      },
+      "wall_time_s": 73.47470033797435,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p4_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.09162959910463542,
+      "median_poisson_step_wall_time": 0.0533898186404258,
+      "median_transport_step_wall_time": 0.03796438639983535
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p2_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "si-bdf2",
+      "dt": 0.2,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17704507954470458,
+      "relative_error": -0.014560012050464713,
+      "potential_norm_gamma": 0.17761346205426082,
+      "potential_norm_relative_error": -0.01139637228816115,
+      "r_squared": 0.9999213538649997,
+      "subwindow_gammas": [
+        0.17849710159344553,
+        0.1740103458258816
+      ],
+      "control_fraction": 8.155843923124562e-07,
+      "positivity": "violated",
+      "density_minimum": -0.1780576641430999,
+      "invariants": {
+        "mass": 6.36132180741594e-15,
+        "energy_from_q_l2": 0.0010726778911211783,
+        "enstrophy": 0.1283443737123257
+      },
+      "wall_time_s": 86.00891300407238,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p2_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.07649089710321277,
+      "median_poisson_step_wall_time": 0.04289355140645057,
+      "median_transport_step_wall_time": 0.03311782644595951
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p1_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17784014799746123,
+      "relative_error": -0.010134629269319803,
+      "potential_norm_gamma": 0.17842129430151402,
+      "potential_norm_relative_error": -0.006899945716772438,
+      "r_squared": 0.9999154494143814,
+      "subwindow_gammas": [
+        0.17935171218117038,
+        0.17465838346810372
+      ],
+      "control_fraction": 7.236760433652392e-07,
+      "positivity": "violated",
+      "density_minimum": -0.1805692047057019,
+      "invariants": {
+        "mass": 6.771729665958903e-15,
+        "energy_from_q_l2": 0.00023055229071985964,
+        "enstrophy": 0.07111936442056441
+      },
+      "wall_time_s": 108.9993694180157,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_si_bdf2_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.06349657953251153,
+      "median_poisson_step_wall_time": 0.031112589058466256,
+      "median_transport_step_wall_time": 0.03129150904715061
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p4_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "imex-ark3",
+      "dt": 0.4,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.1779602645140309,
+      "relative_error": -0.009466055937909727,
+      "potential_norm_gamma": 0.17856153001618036,
+      "potential_norm_relative_error": -0.006119388124738368,
+      "r_squared": 0.9999070651142437,
+      "subwindow_gammas": [
+        0.17953873547961127,
+        0.17460228813399106
+      ],
+      "control_fraction": 2.2916488121716247e-08,
+      "positivity": "violated",
+      "density_minimum": -0.13833756499363487,
+      "invariants": {
+        "mass": 1.190182789774595e-14,
+        "energy_from_q_l2": 0.00046546104619335445,
+        "enstrophy": 0.10954174034569963
+      },
+      "wall_time_s": 124.8293094560504,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p4_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.38266217801719904,
+      "median_poisson_step_wall_time": 0.2693232090678066,
+      "median_transport_step_wall_time": 0.0720248386496678
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p2_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "imex-ark3",
+      "dt": 0.2,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17807868118983544,
+      "relative_error": -0.00880694398812872,
+      "potential_norm_gamma": 0.17867205494694263,
+      "potential_norm_relative_error": -0.005504201943238213,
+      "r_squared": 0.999910486679711,
+      "subwindow_gammas": [
+        0.17963220607216449,
+        0.17482593641939725
+      ],
+      "control_fraction": 2.2825492579276508e-08,
+      "positivity": "violated",
+      "density_minimum": -0.11515635666512626,
+      "invariants": {
+        "mass": 1.190182789774595e-14,
+        "energy_from_q_l2": 8.819864309984467e-05,
+        "enstrophy": 0.060908196203556024
+      },
+      "wall_time_s": 180.1637122409884,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p2_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.3505165035603568,
+      "median_poisson_step_wall_time": 0.24505619599949569,
+      "median_transport_step_wall_time": 0.06346920551732183
+    },
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p1_raw_seed",
+      "label": "m9_smooth_p4",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "imex-ark3",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 0.0001,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.17810504526240012,
+      "relative_error": -0.008660200506653563,
+      "potential_norm_gamma": 0.17869296049966868,
+      "potential_norm_relative_error": -0.005387840801322193,
+      "r_squared": 0.9999126224030913,
+      "subwindow_gammas": [
+        0.1796427895835926,
+        0.1748666657954102
+      ],
+      "control_fraction": 2.2799708191071557e-08,
+      "positivity": "violated",
+      "density_minimum": -0.1954503863595083,
+      "invariants": {
+        "mass": 1.190182789774595e-14,
+        "energy_from_q_l2": 1.673398567794212e-05,
+        "enstrophy": 0.029139103917860888
+      },
+      "wall_time_s": 285.9773129960522,
+      "jsonl": "run_outputs/article/diocotron/d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.3261203404981643,
+      "median_poisson_step_wall_time": 0.22225920157507062,
+      "median_transport_step_wall_time": 0.061655119177885354
+    }
+  ],
+  "failures": [
+    {
+      "prefix": "d1dt_disk_smooth_m9_smooth_p4_p6_hb0p008_h0p04_imex_ark3_dt0p8_raw_seed",
+      "error": "LinearSolveConvergenceError: pyamgx-device solve exhausted 6 bounded attempts: primary-stage-guess: backend-nonconvergence; pbicgstab-l1-warm: backend-nonconvergence; pbicgstab-block-jacobi-warm: backend-nonconvergence; robust-warm-scaled: backend-nonconvergence; robust-correction-1: backend-nonconvergence; robust-correction-2: backend-nonconvergence"
+    }
+  ]
+}

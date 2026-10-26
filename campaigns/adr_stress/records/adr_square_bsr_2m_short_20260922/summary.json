@@ -1,0 +1,452 @@
+[
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_block_jacobi_fgmres",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_dilu_fgmres",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_multicolor_dilu_pbicgstab",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_block_jacobi_pbicgstab",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_multicolor_dilu_fgmres",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "amgx_dilu_pbicgstab",
+    "family": "amgx",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "bj_pp",
+    "family": "bj_pp",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "native_hp_robust",
+    "family": "native_hp",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "native_hp_standard",
+    "family": "native_hp",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  },
+  {
+    "status": "assembly_failed",
+    "assembly_status": "error",
+    "case": "stress_square_main_trap",
+    "target_triangles": 200000,
+    "p": 6,
+    "candidate": "asm_pp",
+    "family": "asm_pp",
+    "mesh": {
+      "geometry": "square",
+      "triangles": 201456,
+      "vertices": 101319,
+      "boundary_components": 1,
+      "edge_lengths": [
+        0.004382765555305897,
+        0.00892340004734491
+      ],
+      "minimum_shape_quality": 0.7824376977839093,
+      "minimum_neck_gap_over_element_diameter": null,
+      "neck_size_screen_passed": null,
+      "boundary_midpoint_distance_max": 0.0,
+      "sampled_unscaled_wall_normal_speed_max": {
+        "trap": 0.0,
+        "cross": 0.0,
+        "orthogonal": 0.9009682789531596
+      },
+      "note": "Straight square walls; exact Dirichlet data on every edge. No neck screen applies.",
+      "attempt": 0,
+      "bulk_size": 0.006797058187186571,
+      "target_triangles": 200000,
+      "xlim": [
+        -1.0,
+        1.0
+      ],
+      "ylim": [
+        -1.0,
+        1.0
+      ],
+      "file": "trial_00.npz",
+      "sha256": "eef70a35094445d00d5a6b0dec8ca0d7bdc171007323f2f0df7cd199b3fa2b3e"
+    },
+    "accuracy_status": "h/p and quadrature convergence not established",
+    "sampled_wall_normal_speed_max": 0.0,
+    "sampled_wall_normal_speed_over_U": 0.0
+  }
+]

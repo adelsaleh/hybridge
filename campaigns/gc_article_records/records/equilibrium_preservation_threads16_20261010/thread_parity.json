@@ -1,0 +1,7 @@
+{
+  "rho_initial_max_abs_difference": 0.0,
+  "phi_initial_max_abs_difference": 3.426078865054194e-17,
+  "rho_final_max_abs_difference": 2.838701496088447e-14,
+  "phi_final_max_abs_difference": 7.632783294297951e-17,
+  "scope": "one four-step BDF2 run; Numba 1 to 16; Pardiso 16 both; host worker count set to 16 in rerun"
+}

@@ -1,0 +1,71 @@
+{
+  "repository": "/home/adelsaleh/src/hybridge",
+  "branch": "master",
+  "head": "c9da79930b3bcb0ad3a708da25939573c7b1bbbc",
+  "uncommitted_changes": true,
+  "sources": [
+    {
+      "path": "scripts/guiding_center/benchmarks/run_equilibrium_preservation.py",
+      "sha256": "3040279b9b10de42290f5004de01a20d58999889197c05399ae7e61d0397a69a"
+    },
+    {
+      "path": "scripts/guiding_center/cases/imported_equilibrium.py",
+      "sha256": "ca55fb73137c9235d414dfcf694516f85973009a423443e02869d2682cd26f55"
+    },
+    {
+      "path": "scripts/guiding_center/runtime/runner.py",
+      "sha256": "fae1280f0e1f3bf32e174af27c2fa2d328c772338cf601c37e1053ce952f2af7"
+    },
+    {
+      "path": "scripts/guiding_center/diagnostics/plot_equilibrium_preservation.py",
+      "sha256": "3e3986c8466b98e3c4c2d69c628f5328052373e8f2065bf9dfe8ec6c39bccfd9"
+    },
+    {
+      "path": "projects/diocotron/comparisons/hdg_projection.py",
+      "sha256": "611785747ca17af4288c96b3682224baffe7d2a11c81d5526026742b1a8c4311"
+    },
+    {
+      "path": "projects/diocotron/dolfinx/checkpoint_data.py",
+      "sha256": "c03a15ff2355da5627172126266789d7b05c56a39600243e647178b2bbf9a1e8"
+    },
+    {
+      "path": "hybridge/core/mesh.py",
+      "sha256": "719a2961f213e52f1080d9621f2b9949ec86951984a89a8ec7bb39976b49ac51"
+    }
+  ],
+  "python": "/home/adelsaleh/src/hybridge/.venv/bin/python",
+  "threads": {
+    "numba": 16,
+    "host_numpy": 16,
+    "pypardiso": 16,
+    "openblas": 1
+  },
+  "cpu_affinity": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "poisson_cache_local_factors": "schur-lu",
+  "linear_relative_tolerance": 1e-11,
+  "time_integration": {
+    "schemes": [
+      "si-euler",
+      "si-bdf2"
+    ],
+    "dt": 0.05,
+    "steps": 4
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_cg_baseline_20261025",
+  "collected": "2026-10-26T18:20:49+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 17161800531,
+  "file_count": 198,
+  "subdirectories": 7,
+  "run_attempt_statuses": {},
+  "completion_markers": [
+    "BASELINE_DONE",
+    "CG4_CONSISTENT_DONE",
+    "CG4_DONE",
+    "CG6_CONSISTENT_DONE",
+    "CG6_DONE",
+    "CONSISTENT_DONE"
+  ],
+  "copied": [
+    {
+      "path": "BASELINE_DONE",
+      "copy": "BASELINE_DONE",
+      "bytes": 202,
+      "sha256": "9eaea03720e634df0632ab55ed3c0eecfce7b0ab293392c87373381323cb2759"
+    },
+    {
+      "path": "CG4_CONSISTENT_DONE",
+      "copy": "CG4_CONSISTENT_DONE",
+      "bytes": 145,
+      "sha256": "effb9f98ec630632f9f5e45d9e63ded9c5ae258bd3c1d57e37ef315e002337a9"
+    },
+    {
+      "path": "CG4_DONE",
+      "copy": "CG4_DONE",
+      "bytes": 143,
+      "sha256": "463d6578df72ab60274eb9180cbbbc50680b7197e94758ef851f95ce14c890df"
+    },
+    {
+      "path": "CG6_CONSISTENT_DONE",
+      "copy": "CG6_CONSISTENT_DONE",
+      "bytes": 144,
+      "sha256": "208bdbcf6e459ced14c55478eac67a5876b55e33076001c4450d16f0c060f134"
+    },
+    {
+      "path": "CG6_DONE",
+      "copy": "CG6_DONE",
+      "bytes": 144,
+      "sha256": "83917acd497963d5f4229cd0cfed5843f9db463e1c09d3a68065f0d0d53a05be"
+    },
+    {
+      "path": "CONSISTENT_DONE",
+      "copy": "CONSISTENT_DONE",
+      "bytes": 202,
+      "sha256": "5b3de1f3742176374302df541aa42b7ddd9a3bca3b2c52dd53cc5a37fce3df86"
+    },
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 13218,
+      "sha256": "2d5c499b52f015b0fd35aa1b7174dca0859fe1824be105a0d113b3fca19002bd"
+    },
+    {
+      "path": "baseline_launch.json",
+      "copy": "baseline_launch.json",
+      "bytes": 123,
+      "sha256": "90dde7ae3f035c59dc019848fc72374609dfb056a25b5a3596db3a8ad6fbb131"
+    },
+    {
+      "path": "baseline_summary.json",
+      "copy": "baseline_summary.json",
+      "bytes": 243483,
+      "sha256": "eae179b3d8e3946fb953d4032eb203db24d5d699242f9279f30561a551217533"
+    },
+    {
+      "path": "consistent_launch.json",
+      "copy": "consistent_launch.json",
+      "bytes": 123,
+      "sha256": "0ec4a110a818344a6374998e03d37c5f09188a297422c1bb5425677ed9fdd2d5"
+    },
+    {
+      "path": "t0_predictor.json",
+      "copy": "t0_predictor.json",
+      "bytes": 144156,
+      "sha256": "8161df30cb2489dea93b2ff2ac9791151d7832623e7a35f72a7df9d49f696909"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

@@ -1,0 +1,5 @@
+{
+  "pid": 2433852,
+  "reason": "Switch from shrinking fixed-midpoint steps to the existing pseudo-arclength continuation near a suspected fold",
+  "time": 1792154163.3996708
+}

@@ -1,0 +1,14 @@
+{
+  "old": {
+    "weighted_mean": 0.05500644304006243,
+    "min": 0.04340147125006044,
+    "max": 0.06535610458359908,
+    "definition": "arc length from outer threshold c_minus to boundary along torsion flow"
+  },
+  "new": {
+    "weighted_mean": 0.10240092463541224,
+    "min": 0.0731052960463755,
+    "max": 0.13334857456063243,
+    "definition": "arc length from outer threshold c_minus to boundary along torsion flow"
+  }
+}

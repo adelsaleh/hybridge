@@ -1,0 +1,37 @@
+[
+  {
+    "geometry": "uglypacman",
+    "command": [
+      "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/mpiexec",
+      "-n",
+      "8",
+      "-bind-to",
+      "core",
+      "/home/adelsaleh/src/.envs/diocotron-fenicsx/bin/python",
+      "-u",
+      "-m",
+      "projects.diocotron.studies.equilibrium_catalog.run",
+      "--config",
+      "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/inputs/uglypacman/config.json",
+      "--geometry",
+      "uglypacman",
+      "--name-prefix",
+      "uglypacman_inward_20261012",
+      "--output",
+      "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_inward_20261012/uglypacman",
+      "--midpoint-factors",
+      "2.5",
+      "--backend",
+      "mumps",
+      "--archive",
+      "/home/adelsaleh/src/gc-hdg-article/equilibria",
+      "--warm-equilibrium",
+      "uglypacman_04"
+    ],
+    "exit_code": 1,
+    "wall_seconds": 130.30665822594892,
+    "peak_active_ranks": 8,
+    "peak_cpu_cores": 8.310653727848768,
+    "peak_sum_rank_rss_bytes": 50245992448
+  }
+]

@@ -1,0 +1,57 @@
+{
+ "reference": {
+  "courant_max": 865.2434726267979,
+  "explicit_advective_step_ratio": 4326.21736313399,
+  "explicit_diffusive_step_ratio_estimate": 6312.539852446624,
+  "min_edge": 0.0004624500362037444,
+  "diffusion": 0.0003333333333333333,
+  "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/nokkt_p2_s0p45/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p2q3_h0p0135_hb0p00675_vanes12_rb1p35_vw0p26_cm0p00135g0p3_cv3000_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw.jsonl",
+  "order": 2,
+  "dt": 0.05,
+  "triangles": 221708,
+  "density_unknowns": 1330248,
+  "interior_edges": 328626,
+  "trace_unknowns": 985878,
+  "trace_nonzeros": 14646906,
+  "dg_element_unknowns": 1330248,
+  "dg_element_nonzeros": 31642560,
+  "balance": 1.2861057539391833e-12,
+  "rho_min": -0.007094561772044875,
+  "step_wall": 1.0296665073838085
+ },
+ "times": [
+  10.0,
+  20.0
+ ],
+ "pixels": 1600,
+ "runs": [
+  {
+   "courant_max": 481.4216620769798,
+   "explicit_advective_step_ratio": 6258.481607000738,
+   "explicit_diffusive_step_ratio_estimate": 48066.09750361103,
+   "min_edge": 0.000912433082466463,
+   "diffusion": 0.0003333333333333333,
+   "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_diagnosis_20261016/runs/nokkt_p6_s1/d7_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6q7_h0p03_hb0p015_vanes12_rb1p35_vw0p26_cm0p003g0p3_cv3000_hall30_te0p01_pulse20d0p5_si_bdf2_dt0p05_raw.jsonl",
+   "order": 6,
+   "dt": 0.05,
+   "triangles": 60840,
+   "density_unknowns": 1703520,
+   "interior_edges": 87678,
+   "trace_unknowns": 613746,
+   "trace_nonzeros": 20780998,
+   "dg_element_unknowns": 1703520,
+   "dg_element_nonzeros": 185177664,
+   "balance": 2.2471952795503097e-12,
+   "rho_min": -0.007094270027700389,
+   "step_wall": 1.0855422884924337,
+   "current_l2": 8.92626658175286e-06,
+   "current_max": 1.6376045132029872e-05,
+   "charge_l2": 2.3925718359194245e-07,
+   "charge_max": 5.38084348749809e-07,
+   "density_l2": {
+    "10.0": 3.504669024250044e-05,
+    "20.0": 1.969794438194084e-05
+   }
+  }
+ ]
+}

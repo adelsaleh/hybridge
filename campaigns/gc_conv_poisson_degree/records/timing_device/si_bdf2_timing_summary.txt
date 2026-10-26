@@ -1,0 +1,111 @@
+ p         K |     q=p   q=p+1      V2 |  (p+1)/p   V2/p V2/(p+1) | rep spread | V2 post/step |      SM MHz | excl
+ 2    369790 |   0.174   0.275   0.174 |     1.58  1.003     0.63 |       0.6% |      0.43 ms |  2527-2527 | yyy
+ 2   1478818 |   0.544   0.811   0.542 |     1.49  0.997     0.67 |       0.2% |      1.70 ms |  2527-2527 | yyy
+ 3     92552 |   0.079   0.092   0.080 |     1.16  1.007     0.87 |       2.6% |      0.26 ms |           - | yyy
+ 3    369790 |   0.232   0.283   0.233 |     1.22  1.001     0.82 |       0.8% |      1.00 ms |  2527-2527 | yyy
+ 4     92552 |   0.092   0.116   0.093 |     1.26  1.009     0.80 |       0.8% |      0.49 ms |  2535-2535 | yyy
+ 4    369790 |   0.263   0.293   0.264 |     1.11  1.005     0.90 |       1.4% |      1.89 ms |  2535-2535 | yyy
+ 5     23254 |   0.063   0.071   0.064 |     1.12  1.015     0.90 |       2.9% |      0.25 ms |           - | yyy
+ 5     92552 |   0.107   0.127   0.109 |     1.19  1.017     0.86 |       5.7% |      0.86 ms |  2535-2535 | yyy
+ 6      5822 |   0.048   0.053   0.050 |     1.11  1.031     0.93 |       3.3% |      0.14 ms |           - | yyy
+ 6     23254 |   0.065   0.076   0.066 |     1.18  1.027     0.87 |      10.1% |      0.39 ms |  2535-2535 | yyy
+ 7     23254 |   0.081   0.094   0.078 |     1.15  0.962     0.83 |      10.8% |      0.58 ms |  2527-2527 | yyy
+ 7     92552 |   0.203   0.230   0.210 |     1.13  1.036     0.92 |       4.4% |      2.26 ms |  2527-2557 | yyy
+ 8     23254 |   0.127   0.147   0.130 |     1.16  1.029     0.89 |       2.5% |      0.88 ms |  2557-2557 | yyy
+ 8     92552 |   0.373   0.439   0.375 |     1.18  1.006     0.85 |       1.1% |      3.34 ms |  2557-2557 | yyy
+ 9     23254 |   0.220     nan   0.222 |      nan  1.007      nan |       0.6% |      1.26 ms |  2557-2557 | yy
+ 9     92552 |   0.759     nan   0.756 |      nan  0.997      nan |       1.0% |      4.80 ms |  2535-2557 | yy
+
+Discarded (not exclusive): none
+Detail: per run step [s], Poisson/transport wall per step, unknowns, peak GPU memory, SM clock
+p=2 K=  369790 V2     rep1 step=0.1738 poisson=0.1250 transport=0.0473 post=0.43ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=1666455 mem=4136MiB clock=2527.0 excl=True
+p=2 K=  369790 V2     rep2 step=0.1745 poisson=0.1249 transport=0.0479 post=0.43ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=1666455 mem=3774MiB clock=2527.0 excl=True
+p=2 K=  369790 q=p    rep1 step=0.1732 poisson=0.1246 transport=0.0480 post=0.00ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=1666455 mem=3704MiB clock=2527.0 excl=True
+p=2 K=  369790 q=p    rep2 step=0.1742 poisson=0.1246 transport=0.0483 post=0.00ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=1666455 mem=3704MiB clock=2527.0 excl=True
+p=2 K=  369790 q=p+1  rep1 step=0.2752 poisson=0.2242 transport=0.0499 post=0.00ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=2221940 mem=5728MiB clock=2527.0 excl=True
+p=2 K=  369790 q=p+1  rep2 step=0.2741 poisson=0.2238 transport=0.0495 post=0.00ms dt=1.330e-03 element=2218740 trace=1666455 poisson_trace=2221940 mem=5706MiB clock=2527.0 excl=True
+p=2 K= 1478818 V2     rep1 step=0.5421 poisson=0.3523 transport=0.1891 post=1.70ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=6659481 mem=14788MiB clock=2527.0 excl=True
+p=2 K= 1478818 V2     rep2 step=0.5420 poisson=0.3520 transport=0.1890 post=1.69ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=6659481 mem=15952MiB clock=2527.0 excl=True
+p=2 K= 1478818 q=p    rep1 step=0.5435 poisson=0.3503 transport=0.1895 post=0.00ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=6659481 mem=11580MiB clock=2527.0 excl=True
+p=2 K= 1478818 q=p    rep2 step=0.5440 poisson=0.3523 transport=0.1892 post=0.00ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=6659481 mem=11274MiB clock=2527.0 excl=True
+p=2 K= 1478818 q=p+1  rep1 step=0.8109 poisson=0.6127 transport=0.1953 post=0.00ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=8879308 mem=18446MiB clock=2527.0 excl=True
+p=2 K= 1478818 q=p+1  rep2 step=0.8121 poisson=0.6147 transport=0.1967 post=0.00ms dt=7.530e-04 element=8872908 trace=6659481 poisson_trace=8879308 mem=18446MiB clock=2527.0 excl=True
+p=3 K=   92552 V2     rep1 step=0.0786 poisson=0.0596 transport=0.0178 post=0.25ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=556912 mem=0MiB clock=None excl=True
+p=3 K=   92552 V2     rep2 step=0.0806 poisson=0.0605 transport=0.0186 post=0.26ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=556912 mem=0MiB clock=None excl=True
+p=3 K=   92552 q=p    rep1 step=0.0796 poisson=0.0600 transport=0.0183 post=0.00ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=556912 mem=0MiB clock=None excl=True
+p=3 K=   92552 q=p    rep2 step=0.0786 poisson=0.0592 transport=0.0176 post=0.00ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=556912 mem=0MiB clock=None excl=True
+p=3 K=   92552 q=p+1  rep1 step=0.0927 poisson=0.0740 transport=0.0179 post=0.00ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=3 K=   92552 q=p+1  rep2 step=0.0909 poisson=0.0723 transport=0.0177 post=0.00ms dt=6.068e-04 element=925520 trace=556912 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=3 K=  369790 V2     rep1 step=0.2337 poisson=0.1712 transport=0.0606 post=1.00ms dt=2.753e-04 element=3697900 trace=2221940 poisson_trace=2221940 mem=7306MiB clock=2527.0 excl=True
+p=3 K=  369790 V2     rep2 step=0.2318 poisson=0.1696 transport=0.0601 post=1.00ms dt=2.753e-04 element=3697900 trace=2221940 poisson_trace=2221940 mem=7306MiB clock=2527.0 excl=True
+p=3 K=  369790 q=p    rep1 step=0.2324 poisson=0.1699 transport=0.0606 post=0.00ms dt=2.753e-04 element=3697900 trace=2221940 poisson_trace=2221940 mem=5666MiB clock=2527.0 excl=True
+p=3 K=  369790 q=p+1  rep1 step=0.2835 poisson=0.2205 transport=0.0626 post=0.00ms dt=2.753e-04 element=3697900 trace=2221940 poisson_trace=2777425 mem=7860MiB clock=2527.0 excl=True
+p=3 K=  369790 q=p+1  rep2 step=0.2824 poisson=0.2198 transport=0.0614 post=0.00ms dt=2.753e-04 element=3697900 trace=2221940 poisson_trace=2777425 mem=7860MiB clock=2527.0 excl=True
+p=4 K=   92552 V2     rep1 step=0.0934 poisson=0.0635 transport=0.0286 post=0.49ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=4 K=   92552 V2     rep2 step=0.0928 poisson=0.0632 transport=0.0279 post=0.48ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=4 K=   92552 q=p    rep1 step=0.0920 poisson=0.0626 transport=0.0279 post=0.00ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=4 K=   92552 q=p    rep2 step=0.0924 poisson=0.0631 transport=0.0282 post=0.00ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=696140 mem=0MiB clock=None excl=True
+p=4 K=   92552 q=p+1  rep1 step=0.1156 poisson=0.0854 transport=0.0289 post=0.00ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=835368 mem=0MiB clock=None excl=True
+p=4 K=   92552 q=p+1  rep2 step=0.1165 poisson=0.0861 transport=0.0293 post=0.00ms dt=1.766e-04 element=1388280 trace=696140 poisson_trace=835368 mem=0MiB clock=2535.0 excl=True
+p=4 K=  369790 V2     rep1 step=0.2646 poisson=0.1606 transport=0.1002 post=1.89ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=2777425 mem=10726MiB clock=2535.0 excl=True
+p=4 K=  369790 V2     rep2 step=0.2639 poisson=0.1609 transport=0.1002 post=1.89ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=2777425 mem=10726MiB clock=2535.0 excl=True
+p=4 K=  369790 q=p    rep1 step=0.2633 poisson=0.1617 transport=0.1015 post=0.00ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=2777425 mem=8014MiB clock=2535.0 excl=True
+p=4 K=  369790 q=p    rep2 step=0.2627 poisson=0.1604 transport=0.1010 post=0.00ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=2777425 mem=7988MiB clock=2535.0 excl=True
+p=4 K=  369790 q=p+1  rep1 step=0.2947 poisson=0.1882 transport=0.1042 post=0.00ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=3332910 mem=10368MiB clock=2535.0 excl=True
+p=4 K=  369790 q=p+1  rep2 step=0.2907 poisson=0.1867 transport=0.1032 post=0.00ms dt=5.858e-05 element=5546850 trace=2777425 poisson_trace=3332910 mem=9594MiB clock=2535.0 excl=True
+p=5 K=   23254 V2     rep1 step=0.0642 poisson=0.0487 transport=0.0145 post=0.25ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=210486 mem=0MiB clock=None excl=True
+p=5 K=   23254 V2     rep2 step=0.0643 poisson=0.0488 transport=0.0143 post=0.25ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=210486 mem=0MiB clock=None excl=True
+p=5 K=   23254 q=p    rep1 step=0.0636 poisson=0.0479 transport=0.0141 post=0.00ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=210486 mem=0MiB clock=None excl=True
+p=5 K=   23254 q=p    rep2 step=0.0629 poisson=0.0481 transport=0.0143 post=0.00ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=210486 mem=0MiB clock=None excl=True
+p=5 K=   23254 q=p+1  rep1 step=0.0720 poisson=0.0557 transport=0.0145 post=0.00ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=5 K=   23254 q=p+1  rep2 step=0.0700 poisson=0.0547 transport=0.0144 post=0.00ms dt=1.443e-04 element=488334 trace=210486 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=5 K=   92552 V2     rep1 step=0.1059 poisson=0.0624 transport=0.0419 post=0.85ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=835368 mem=612MiB clock=2535.0 excl=True
+p=5 K=   92552 V2     rep2 step=0.1119 poisson=0.0658 transport=0.0452 post=0.87ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=835368 mem=4442MiB clock=2535.0 excl=True
+p=5 K=   92552 q=p    rep1 step=0.1082 poisson=0.0628 transport=0.0432 post=0.00ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=835368 mem=448MiB clock=2535.0 excl=True
+p=5 K=   92552 q=p    rep2 step=0.1060 poisson=0.0617 transport=0.0425 post=0.00ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=835368 mem=0MiB clock=None excl=True
+p=5 K=   92552 q=p+1  rep1 step=0.1252 poisson=0.0800 transport=0.0436 post=0.00ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=974596 mem=4108MiB clock=2535.0 excl=True
+p=5 K=   92552 q=p+1  rep2 step=0.1291 poisson=0.0824 transport=0.0451 post=0.00ms dt=4.128e-05 element=1943592 trace=835368 poisson_trace=974596 mem=4108MiB clock=2535.0 excl=True
+p=6 K=    5822 V2     rep1 step=0.0504 poisson=0.0385 transport=0.0104 post=0.13ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=61831 mem=0MiB clock=None excl=True
+p=6 K=    5822 V2     rep2 step=0.0488 poisson=0.0377 transport=0.0097 post=0.14ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=61831 mem=0MiB clock=None excl=True
+p=6 K=    5822 q=p    rep1 step=0.0487 poisson=0.0376 transport=0.0098 post=0.00ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=61831 mem=0MiB clock=None excl=True
+p=6 K=    5822 q=p    rep2 step=0.0475 poisson=0.0364 transport=0.0096 post=0.00ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=61831 mem=0MiB clock=None excl=True
+p=6 K=    5822 q=p+1  rep1 step=0.0526 poisson=0.0418 transport=0.0096 post=0.00ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=70664 mem=0MiB clock=None excl=True
+p=6 K=    5822 q=p+1  rep2 step=0.0540 poisson=0.0422 transport=0.0098 post=0.00ms dt=2.256e-04 element=163016 trace=61831 poisson_trace=70664 mem=0MiB clock=None excl=True
+p=6 K=   23254 V2     rep1 step=0.0674 poisson=0.0441 transport=0.0209 post=0.39ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=6 K=   23254 V2     rep2 step=0.0656 poisson=0.0440 transport=0.0202 post=0.39ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=6 K=   23254 q=p    rep1 step=0.0646 poisson=0.0434 transport=0.0199 post=0.00ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=6 K=   23254 q=p    rep2 step=0.0648 poisson=0.0433 transport=0.0202 post=0.00ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=245567 mem=0MiB clock=None excl=True
+p=6 K=   23254 q=p+1  rep1 step=0.0725 poisson=0.0512 transport=0.0200 post=0.00ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=280648 mem=0MiB clock=None excl=True
+p=6 K=   23254 q=p+1  rep2 step=0.0798 poisson=0.0548 transport=0.0235 post=0.00ms dt=4.823e-05 element=651112 trace=245567 poisson_trace=280648 mem=448MiB clock=2535.0 excl=True
+p=7 K=   23254 V2     rep1 step=0.0781 poisson=0.0474 transport=0.0298 post=0.58ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=280648 mem=0MiB clock=None excl=True
+p=7 K=   23254 V2     rep2 step=0.0783 poisson=0.0473 transport=0.0298 post=0.58ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=280648 mem=0MiB clock=None excl=True
+p=7 K=   23254 q=p    rep1 step=0.0854 poisson=0.0501 transport=0.0332 post=0.00ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=280648 mem=2256MiB clock=2527.0 excl=True
+p=7 K=   23254 q=p    rep2 step=0.0771 poisson=0.0462 transport=0.0296 post=0.00ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=280648 mem=0MiB clock=None excl=True
+p=7 K=   23254 q=p+1  rep1 step=0.0972 poisson=0.0618 transport=0.0329 post=0.00ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=315729 mem=2794MiB clock=2527.0 excl=True
+p=7 K=   23254 q=p+1  rep2 step=0.0901 poisson=0.0581 transport=0.0306 post=0.00ms dt=3.692e-05 element=837144 trace=280648 poisson_trace=315729 mem=0MiB clock=None excl=True
+p=7 K=   92552 V2     rep1 step=0.2126 poisson=0.1001 transport=0.1112 post=2.27ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1113824 mem=8122MiB clock=2557.0 excl=True
+p=7 K=   92552 V2     rep2 step=0.2081 poisson=0.0971 transport=0.1092 post=2.24ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1113824 mem=8122MiB clock=2557.0 excl=True
+p=7 K=   92552 q=p    rep1 step=0.2032 poisson=0.0934 transport=0.1065 post=0.00ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1113824 mem=5956MiB clock=2527.0 excl=True
+p=7 K=   92552 q=p    rep2 step=0.2029 poisson=0.0951 transport=0.1064 post=0.00ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1113824 mem=5584MiB clock=2557.0 excl=True
+p=7 K=   92552 q=p+1  rep1 step=0.2246 poisson=0.1170 transport=0.1063 post=0.00ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1253052 mem=7576MiB clock=2557.0 excl=True
+p=7 K=   92552 q=p+1  rep2 step=0.2344 poisson=0.1216 transport=0.1117 post=0.00ms dt=1.846e-05 element=3331872 trace=1113824 poisson_trace=1253052 mem=7576MiB clock=2557.0 excl=True
+p=8 K=   23254 V2     rep1 step=0.1287 poisson=0.0568 transport=0.0707 post=0.87ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=315729 mem=4088MiB clock=2557.0 excl=True
+p=8 K=   23254 V2     rep2 step=0.1319 poisson=0.0586 transport=0.0711 post=0.88ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=315729 mem=4088MiB clock=2557.0 excl=True
+p=8 K=   23254 q=p    rep1 step=0.1253 poisson=0.0542 transport=0.0696 post=0.00ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=315729 mem=3060MiB clock=2557.0 excl=True
+p=8 K=   23254 q=p    rep2 step=0.1279 poisson=0.0557 transport=0.0700 post=0.00ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=315729 mem=448MiB clock=2557.0 excl=True
+p=8 K=   23254 q=p+1  rep1 step=0.1461 poisson=0.0715 transport=0.0730 post=0.00ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=350810 mem=3508MiB clock=2557.0 excl=True
+p=8 K=   23254 q=p+1  rep2 step=0.1478 poisson=0.0723 transport=0.0741 post=0.00ms dt=2.918e-05 element=1046430 trace=315729 poisson_trace=350810 mem=3686MiB clock=2557.0 excl=True
+p=8 K=   92552 V2     rep1 step=0.3770 poisson=0.1141 transport=0.2606 post=3.34ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1253052 mem=13316MiB clock=2557.0 excl=True
+p=8 K=   92552 V2     rep2 step=0.3729 poisson=0.1125 transport=0.2606 post=3.34ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1253052 mem=13316MiB clock=2557.0 excl=True
+p=8 K=   92552 q=p    rep1 step=0.3720 poisson=0.1097 transport=0.2599 post=0.00ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1253052 mem=8892MiB clock=2557.0 excl=True
+p=8 K=   92552 q=p    rep2 step=0.3737 poisson=0.1090 transport=0.2610 post=0.00ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1253052 mem=8890MiB clock=2557.0 excl=True
+p=8 K=   92552 q=p+1  rep1 step=0.4406 poisson=0.1654 transport=0.2734 post=0.00ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1392280 mem=10366MiB clock=2557.0 excl=True
+p=8 K=   92552 q=p+1  rep2 step=0.4383 poisson=0.1643 transport=0.2725 post=0.00ms dt=1.459e-05 element=4164840 trace=1253052 poisson_trace=1392280 mem=10784MiB clock=2557.0 excl=True
+p=9 K=   23254 V2     rep1 step=0.2216 poisson=0.0697 transport=0.1506 post=1.26ms dt=2.363e-05 element=1278970 trace=350810 poisson_trace=350810 mem=5238MiB clock=2557.0 excl=True
+p=9 K=   23254 V2     rep2 step=0.2214 poisson=0.0701 transport=0.1500 post=1.25ms dt=2.363e-05 element=1278970 trace=350810 poisson_trace=350810 mem=5238MiB clock=2557.0 excl=True
+p=9 K=   23254 q=p    rep1 step=0.2207 poisson=0.0690 transport=0.1506 post=0.00ms dt=2.363e-05 element=1278970 trace=350810 poisson_trace=350810 mem=3566MiB clock=2557.0 excl=True
+p=9 K=   23254 q=p    rep2 step=0.2194 poisson=0.0686 transport=0.1506 post=0.00ms dt=2.363e-05 element=1278970 trace=350810 poisson_trace=350810 mem=3782MiB clock=2557.0 excl=True
+p=9 K=   92552 V2     rep1 step=0.7602 poisson=0.1721 transport=0.5855 post=4.81ms dt=1.181e-05 element=5090360 trace=1392280 poisson_trace=1392280 mem=16524MiB clock=2557.0 excl=True
+p=9 K=   92552 V2     rep2 step=0.7528 poisson=0.1705 transport=0.5810 post=4.80ms dt=1.181e-05 element=5090360 trace=1392280 poisson_trace=1392280 mem=16524MiB clock=2557.0 excl=True
+p=9 K=   92552 q=p    rep1 step=0.7623 poisson=0.1695 transport=0.5864 post=0.00ms dt=1.181e-05 element=5090360 trace=1392280 poisson_trace=1392280 mem=10684MiB clock=2557.0 excl=True
+p=9 K=   92552 q=p    rep2 step=0.7557 poisson=0.1679 transport=0.5839 post=0.00ms dt=1.181e-05 element=5090360 trace=1392280 poisson_trace=1392280 mem=10684MiB clock=2535.0 excl=True

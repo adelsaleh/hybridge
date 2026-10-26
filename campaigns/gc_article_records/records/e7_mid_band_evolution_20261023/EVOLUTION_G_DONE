@@ -1,0 +1,10 @@
+{
+  "pid": 624572,
+  "pgid": 103064,
+  "started_utc": "2026-10-24T05:24:08.704792+00:00",
+  "lane": "g",
+  "purpose": "mid-band evolution (Section 7.3 repeated)",
+  "status": "completed",
+  "failures": [],
+  "finished_utc": "2026-10-24T07:22:51.585160+00:00"
+}

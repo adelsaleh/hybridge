@@ -26,3 +26,10 @@ Plan and preflight (read-only):
 The full run (starts solves; only on a CUDA 13 GPU with the patched AMGX and pyamgx built and
 activated) adds `--branch-root vendor/adr_gmres --maxiter 2000 --execute`; the complete command, the
 timeouts and the memory guard are in `docs/research/solver_studies/adr_unified_l5_campaign.md`.
+
+## Additional saved output directories
+
+- [adr_oscillatory_2026_09_18](records/adr_oscillatory_2026_09_18/DATA.md).
+- [adr_scaling_2026_09_17](records/adr_scaling_2026_09_17/DATA.md).
+- [adr_unified_l5_plan_audit](records/adr_unified_l5_plan_audit/DATA.md).
+- [published_reports](records/published_reports/DATA.md).

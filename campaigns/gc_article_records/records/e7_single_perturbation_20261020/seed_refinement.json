@@ -1,0 +1,328 @@
+{
+  "base": {
+    "parameters": {
+      "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/stages/undercut_star/cg6",
+      "contours_sha256": "cf279e7d990a618692f467b1113ee8038481b50417989eb21da8b5810f30b517",
+      "archive_id": "undercut_star_cg6_01-fec81e3fddbb",
+      "thickness": 0.06946325061341269,
+      "half_width": 0.06946325061341269,
+      "half_width_factor": 1.0,
+      "band_length": 4.401092951686556,
+      "circulation_period": 83.87741267247381,
+      "max_mode": 80,
+      "coordinate": "flow angle on the middle contour",
+      "drift_speed_min": 0.0438634026721336,
+      "drift_speed_mean": 0.05280107636088773,
+      "drift_speed_max": 0.057458297771593336,
+      "wall_clearance_min": 0.09574949255565066,
+      "wall_clearance_mean": 0.12692267039298868,
+      "coordinate_geometry": "periodic C2 cubic spline",
+      "coordinate_spacing": 0.0017365812653353171,
+      "coordinate_max_mode": 128,
+      "mode": null,
+      "phase": 3.141592653589793,
+      "amplitude": 0.00020822882384961464,
+      "edge_fraction": 0.02,
+      "edge_displacement": 0.0013892650122682537,
+      "crest_point": [
+        0.08125873211671568,
+        0.7000410715220099
+      ],
+      "crest_theta": 4.80874874408506,
+      "crest_wall_clearance": 0.142138916777424,
+      "wall_feature": [
+        0.17,
+        0.82
+      ],
+      "wall_margin": 0.03473162530670634,
+      "grid_spacing": 0.0034731625306706343,
+      "grid_shape": [
+        493,
+        477
+      ],
+      "rk4_steps": 4,
+      "seed": "rho_0 = W(phi*(Phi_{-1}(x))), Phi time-1 flow of grad^perp chi",
+      "normal_profile": "sinuous g(eta/w)",
+      "seed_shape": "localized-wave-packet",
+      "amplitude_calibration": "actual finite-map maximum normal edge displacement",
+      "packet_kd": 0.8,
+      "packet_wavelength": 0.5455630945539099,
+      "packet_wavelengths": 3.0,
+      "packet_half_length": 0.8183446418308649,
+      "packet_center_s": 0.7700197238658777,
+      "packet_profile": "-g(s_local/a) sin(2*pi*s_local/wavelength), physical arclength"
+    },
+    "check": {
+      "inner": {
+        "area_relative_change": 8.39291303122991e-09,
+        "max_normal_displacement": 0.0004206601748488156,
+        "max_displacement": 0.003757836330853025,
+        "inverse_error": 5.795153336463284e-14,
+        "points_outside_wall": 0
+      },
+      "middle": {
+        "area_relative_change": 4.834006528398049e-10,
+        "max_normal_displacement": 0.0023834348123691258,
+        "max_displacement": 0.0023834348510950224,
+        "inverse_error": 2.1880666030802312e-13,
+        "points_outside_wall": 0
+      },
+      "outer": {
+        "area_relative_change": 7.212839880921251e-09,
+        "max_normal_displacement": 0.00138926403896066,
+        "max_displacement": 0.004706661934604117,
+        "inverse_error": 1.16891300969941e-13,
+        "points_outside_wall": 0
+      },
+      "edge_displacement_ratio": 0.999999299408259
+    }
+  },
+  "rk8": {
+    "parameters": {
+      "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/stages/undercut_star/cg6",
+      "contours_sha256": "cf279e7d990a618692f467b1113ee8038481b50417989eb21da8b5810f30b517",
+      "archive_id": "undercut_star_cg6_01-fec81e3fddbb",
+      "thickness": 0.06946325061341269,
+      "half_width": 0.06946325061341269,
+      "half_width_factor": 1.0,
+      "band_length": 4.401092951686556,
+      "circulation_period": 83.87741267247381,
+      "max_mode": 80,
+      "coordinate": "flow angle on the middle contour",
+      "drift_speed_min": 0.0438634026721336,
+      "drift_speed_mean": 0.05280107636088773,
+      "drift_speed_max": 0.057458297771593336,
+      "wall_clearance_min": 0.09574949255565066,
+      "wall_clearance_mean": 0.12692267039298868,
+      "coordinate_geometry": "periodic C2 cubic spline",
+      "coordinate_spacing": 0.0017365812653353171,
+      "coordinate_max_mode": 128,
+      "mode": null,
+      "phase": 3.141592653589793,
+      "amplitude": 0.00020822882373032546,
+      "edge_fraction": 0.02,
+      "edge_displacement": 0.0013892650122682537,
+      "crest_point": [
+        0.08125873211671568,
+        0.7000410715220099
+      ],
+      "crest_theta": 4.80874874408506,
+      "crest_wall_clearance": 0.142138916777424,
+      "wall_feature": [
+        0.17,
+        0.82
+      ],
+      "wall_margin": 0.03473162530670634,
+      "grid_spacing": 0.0034731625306706343,
+      "grid_shape": [
+        493,
+        477
+      ],
+      "rk4_steps": 8,
+      "seed": "rho_0 = W(phi*(Phi_{-1}(x))), Phi time-1 flow of grad^perp chi",
+      "normal_profile": "sinuous g(eta/w)",
+      "seed_shape": "localized-wave-packet",
+      "amplitude_calibration": "actual finite-map maximum normal edge displacement",
+      "packet_kd": 0.8,
+      "packet_wavelength": 0.5455630945539099,
+      "packet_wavelengths": 3.0,
+      "packet_half_length": 0.8183446418308649,
+      "packet_center_s": 0.7700197238658777,
+      "packet_profile": "-g(s_local/a) sin(2*pi*s_local/wavelength), physical arclength"
+    },
+    "check": {
+      "inner": {
+        "area_relative_change": 8.393655104299569e-09,
+        "max_normal_displacement": 0.00042066017464062195,
+        "max_displacement": 0.0037578363159562413,
+        "inverse_error": 1.831026719408895e-15,
+        "points_outside_wall": 0
+      },
+      "middle": {
+        "area_relative_change": 4.835327693797353e-10,
+        "max_normal_displacement": 0.0023834348119506766,
+        "max_displacement": 0.002383434850676596,
+        "inverse_error": 7.250931643594205e-15,
+        "points_outside_wall": 0
+      },
+      "outer": {
+        "area_relative_change": 7.214831732049731e-09,
+        "max_normal_displacement": 0.0013892640389609572,
+        "max_displacement": 0.004706661878126038,
+        "inverse_error": 3.635132808361986e-15,
+        "points_outside_wall": 0
+      },
+      "edge_displacement_ratio": 0.9999992994084729
+    }
+  },
+  "grid40": {
+    "parameters": {
+      "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/stages/undercut_star/cg6",
+      "contours_sha256": "cf279e7d990a618692f467b1113ee8038481b50417989eb21da8b5810f30b517",
+      "archive_id": "undercut_star_cg6_01-fec81e3fddbb",
+      "thickness": 0.06946325061341269,
+      "half_width": 0.06946325061341269,
+      "half_width_factor": 1.0,
+      "band_length": 4.401092951686556,
+      "circulation_period": 83.87741267247381,
+      "max_mode": 80,
+      "coordinate": "flow angle on the middle contour",
+      "drift_speed_min": 0.0438634026721336,
+      "drift_speed_mean": 0.05280107636088773,
+      "drift_speed_max": 0.057458297771593336,
+      "wall_clearance_min": 0.09574949255565066,
+      "wall_clearance_mean": 0.12692267039298868,
+      "coordinate_geometry": "periodic C2 cubic spline",
+      "coordinate_spacing": 0.0017365812653353171,
+      "coordinate_max_mode": 128,
+      "mode": null,
+      "phase": 3.141592653589793,
+      "amplitude": 0.00020822459796909857,
+      "edge_fraction": 0.02,
+      "edge_displacement": 0.0013892650122682537,
+      "crest_point": [
+        0.08125873211671568,
+        0.7000410715220099
+      ],
+      "crest_theta": 4.80874874408506,
+      "crest_wall_clearance": 0.142138916777424,
+      "wall_feature": [
+        0.17,
+        0.82
+      ],
+      "wall_margin": 0.03473162530670634,
+      "grid_spacing": 0.0017365812653353171,
+      "grid_shape": [
+        976,
+        944
+      ],
+      "rk4_steps": 4,
+      "seed": "rho_0 = W(phi*(Phi_{-1}(x))), Phi time-1 flow of grad^perp chi",
+      "normal_profile": "sinuous g(eta/w)",
+      "seed_shape": "localized-wave-packet",
+      "amplitude_calibration": "actual finite-map maximum normal edge displacement",
+      "packet_kd": 0.8,
+      "packet_wavelength": 0.5455630945539099,
+      "packet_wavelengths": 3.0,
+      "packet_half_length": 0.8183446418308649,
+      "packet_center_s": 0.7700197238658777,
+      "packet_profile": "-g(s_local/a) sin(2*pi*s_local/wavelength), physical arclength"
+    },
+    "check": {
+      "inner": {
+        "area_relative_change": 8.478084456697843e-09,
+        "max_normal_displacement": 0.0004206501235237772,
+        "max_displacement": 0.0037577804801154,
+        "inverse_error": 3.952132836864316e-14,
+        "points_outside_wall": 0
+      },
+      "middle": {
+        "area_relative_change": 7.247669131515977e-10,
+        "max_normal_displacement": 0.002383380170734601,
+        "max_displacement": 0.002383380208700918,
+        "inverse_error": 1.8867958785232166e-13,
+        "points_outside_wall": 0
+      },
+      "outer": {
+        "area_relative_change": 7.2081433044601795e-09,
+        "max_normal_displacement": 0.0013892640364831714,
+        "max_displacement": 0.004706549917451183,
+        "inverse_error": 1.1454413659170492e-13,
+        "points_outside_wall": 0
+      },
+      "edge_displacement_ratio": 0.9999992976249501
+    }
+  },
+  "curve64": {
+    "parameters": {
+      "stage": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_single_perturbation_20261020/stages/undercut_star/cg6",
+      "contours_sha256": "cf279e7d990a618692f467b1113ee8038481b50417989eb21da8b5810f30b517",
+      "archive_id": "undercut_star_cg6_01-fec81e3fddbb",
+      "thickness": 0.06946325061341269,
+      "half_width": 0.06946325061341269,
+      "half_width_factor": 1.0,
+      "band_length": 4.401092951686556,
+      "circulation_period": 83.87741267247381,
+      "max_mode": 80,
+      "coordinate": "flow angle on the middle contour",
+      "drift_speed_min": 0.04386312093956376,
+      "drift_speed_mean": 0.05280107638003044,
+      "drift_speed_max": 0.057458237888381794,
+      "wall_clearance_min": 0.09574954877815818,
+      "wall_clearance_mean": 0.12692267379021854,
+      "coordinate_geometry": "periodic C2 cubic spline",
+      "coordinate_spacing": 0.0017365812653353171,
+      "coordinate_max_mode": 64,
+      "mode": null,
+      "phase": 3.141592653589793,
+      "amplitude": 0.0002081793004393512,
+      "edge_fraction": 0.02,
+      "edge_displacement": 0.0013892650122682537,
+      "crest_point": [
+        0.08125885272820296,
+        0.7000418171224353
+      ],
+      "crest_theta": 4.80874874408506,
+      "crest_wall_clearance": 0.14213838067746684,
+      "wall_feature": [
+        0.17,
+        0.82
+      ],
+      "wall_margin": 0.03473162530670634,
+      "grid_spacing": 0.0034731625306706343,
+      "grid_shape": [
+        493,
+        477
+      ],
+      "rk4_steps": 4,
+      "seed": "rho_0 = W(phi*(Phi_{-1}(x))), Phi time-1 flow of grad^perp chi",
+      "normal_profile": "sinuous g(eta/w)",
+      "seed_shape": "localized-wave-packet",
+      "amplitude_calibration": "actual finite-map maximum normal edge displacement",
+      "packet_kd": 0.8,
+      "packet_wavelength": 0.5455630945539099,
+      "packet_wavelengths": 3.0,
+      "packet_half_length": 0.8183446418308649,
+      "packet_center_s": 0.7700197238658777,
+      "packet_profile": "-g(s_local/a) sin(2*pi*s_local/wavelength), physical arclength"
+    },
+    "check": {
+      "inner": {
+        "area_relative_change": 8.396190853687813e-09,
+        "max_normal_displacement": 0.0004207001636383942,
+        "max_displacement": 0.0037569421420828326,
+        "inverse_error": 5.782458374205181e-14,
+        "points_outside_wall": 0
+      },
+      "middle": {
+        "area_relative_change": 4.84256412747186e-10,
+        "max_normal_displacement": 0.0023828938751577905,
+        "max_displacement": 0.0023828939140697683,
+        "inverse_error": 2.184646421361122e-13,
+        "points_outside_wall": 0
+      },
+      "outer": {
+        "area_relative_change": 7.193592277410232e-09,
+        "max_normal_displacement": 0.0013892640396950125,
+        "max_displacement": 0.004705534223175699,
+        "inverse_error": 1.1637977395607416e-13,
+        "points_outside_wall": 0
+      },
+      "edge_displacement_ratio": 0.9999992999368497
+    }
+  },
+  "comparison": {
+    "rk8": {
+      "relative_rms_normal_difference": 8.253945510224052e-08,
+      "max_vector_difference_over_target": 2.477149745979859e-07
+    },
+    "grid40": {
+      "relative_rms_normal_difference": 0.00018596556277768528,
+      "max_vector_difference_over_target": 0.0013041002567189934
+    },
+    "curve64": {
+      "relative_rms_normal_difference": 0.000342624098855393,
+      "max_vector_difference_over_target": 0.000814512998834892
+    }
+  }
+}

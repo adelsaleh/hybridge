@@ -1,0 +1,26 @@
+{
+  "data_directory": "/home/adelsaleh/src/hybridge/run_outputs/solver_studies/iter_repeated_poisson_20260924",
+  "collected": "2026-10-26T18:20:50+00:00",
+  "status": "recorded; completion not inferred",
+  "total_bytes": 1142613614,
+  "file_count": 8,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "inverse_memory_gate.json",
+      "copy": "inverse_memory_gate.json",
+      "bytes": 169,
+      "sha256": "57d120501587e4741f35132755c8faef3cd8aba16c7c7bbb378c3bc7a506e967"
+    },
+    {
+      "path": "probe.json",
+      "copy": "probe.json",
+      "bytes": 9993,
+      "sha256": "4bd36cba64aa1289056e98d86a6ad81aee4decf1c685a2a260ec59a3a9161b0a"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

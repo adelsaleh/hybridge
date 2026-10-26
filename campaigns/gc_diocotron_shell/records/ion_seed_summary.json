@@ -1,0 +1,48 @@
+{
+  "rows": [
+    {
+      "prefix": "ion_seed_disk_ionization_m9_ionize_nu0p005_w0p1_x0p475_y0_p6_hb0p008_h0p04_si_bdf2_dt0p1_raw_seed",
+      "label": "m9_ionize_nu0.005_w0.1_x0.475_y0",
+      "order": 6,
+      "band_mesh_size": 0.008,
+      "mesh_size": 0.04,
+      "triangles": 36334,
+      "scheme": "si-bdf2",
+      "dt": 0.1,
+      "velocity": "raw",
+      "epsilon": 1e-12,
+      "window": [
+        20.0,
+        50.0
+      ],
+      "reference_type": "smooth-radial-nystrom-richardson",
+      "reference_gamma": 0.1796609450699205,
+      "sharp_reference_gamma": 0.1796309594114391,
+      "fitted_gamma": 0.09376764506346043,
+      "relative_error": -0.4780855403662276,
+      "potential_norm_gamma": 0.052459441644144796,
+      "potential_norm_relative_error": -0.7080086513864846,
+      "r_squared": 0.9017726553825727,
+      "subwindow_gammas": [
+        0.1589717005086247,
+        0.037070905035381053
+      ],
+      "control_fraction": null,
+      "positivity": "violated",
+      "density_minimum": -0.5777653008325603,
+      "invariants": {
+        "mass": 0.0685548830369582,
+        "energy_from_q_l2": 0.14241368187751008,
+        "enstrophy": 0.30913273226805676
+      },
+      "wall_time_s": 676.438319790992,
+      "jsonl": "run_outputs/article/diocotron/ion_seed_disk_ionization_m9_ionize_nu0p005_w0p1_x0p475_y0_p6_hb0p008_h0p04_si_bdf2_dt0p1_raw_seed.jsonl",
+      "element_unknowns": 1017352,
+      "trace_unknowns": 382060,
+      "median_linear_step_wall_time": 0.10608373454306275,
+      "median_poisson_step_wall_time": 0.06921254948247224,
+      "median_transport_step_wall_time": 0.03575416444800794
+    }
+  ],
+  "failures": []
+}

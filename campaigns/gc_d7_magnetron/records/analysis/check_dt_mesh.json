@@ -1,0 +1,61 @@
+{
+ "reference": {
+  "courant_max": 1272.4791145224276,
+  "explicit_advective_step_ratio": 16542.22848879156,
+  "explicit_diffusive_step_ratio_estimate": 170094.83105067717,
+  "min_edge": 0.0004850370308865666,
+  "diffusion": 0.0003333333333333333,
+  "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_production_v2/runs/p6_s0p5/d7v2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p015_hb0p0075_vanes12_rb1p35_vw0p26_cm0p0015g0p3_cv3000_hall30_te0p01_pulse20d0p5ph5_si_bdf2_dt0p05_compatible.jsonl",
+  "order": 6,
+  "dt": 0.05,
+  "triangles": 184495,
+  "density_unknowns": 5165860,
+  "interior_edges": 272872,
+  "trace_unknowns": 1910104,
+  "trace_nonzeros": 66097374,
+  "dg_element_unknowns": 5165860,
+  "dg_element_nonzeros": 572507376,
+  "balance": 2.010446453762934e-12,
+  "rho_min": -0.009541496908354359,
+  "step_wall": 1.5001383305061609
+ },
+ "times": [
+  10.0,
+  20.0,
+  30.0,
+  40.0
+ ],
+ "pixels": 1600,
+ "runs": [
+  {
+   "courant_max": 159.10795116600386,
+   "explicit_advective_step_ratio": 2068.4033651580503,
+   "explicit_diffusive_step_ratio_estimate": 21261.853881334646,
+   "min_edge": 0.0004850370308865666,
+   "diffusion": 0.0003333333333333333,
+   "path": "/home/adelsaleh/src/gc-hdg-article/run_outputs/magnetron_d7_production_v2/runs/show_p6_s0p5_dt0p00625/d7v2_N6_a0p05_w0p25_rc0p5_rh0p65_d0p025_V0p1_k1_e0p6_p6_h0p015_hb0p0075_vanes12_rb1p35_vw0p26_cm0p0015g0p3_cv3000_hall30_te0p01_pulse20d0p5ph5_si_bdf2_dt0p00625_compatible.jsonl",
+   "order": 6,
+   "dt": 0.00625,
+   "triangles": 184495,
+   "density_unknowns": 5165860,
+   "interior_edges": 272872,
+   "trace_unknowns": 1910104,
+   "trace_nonzeros": 66097374,
+   "dg_element_unknowns": 5165860,
+   "dg_element_nonzeros": 572507376,
+   "balance": 1.9373105086139673e-13,
+   "rho_min": -8.58779343706041e-13,
+   "step_wall": 1.1991642443463206,
+   "current_l2": 0.020017356876439366,
+   "current_max": 0.039164888114548484,
+   "charge_l2": 0.00021433389257183104,
+   "charge_max": 0.000490567582191879,
+   "density_l2": {
+    "10.0": 0.003331317904042026,
+    "20.0": 0.01695753007473082,
+    "30.0": 0.03351235964436284,
+    "40.0": 0.009775767495010704
+   }
+  }
+ ]
+}

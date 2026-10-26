@@ -1,0 +1,5 @@
+{
+  "mpi_ranks": 12,
+  "geometry_overrides": {},
+  "reason": "User requested trying more ranks; apply after the active 8-rank stage finishes, and retain per-stage timing evidence."
+}

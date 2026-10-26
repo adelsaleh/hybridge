@@ -1,0 +1,50 @@
+[
+  {
+    "status": "passed",
+    "threads": 24,
+    "timings_ms": {
+      "csr_conversion": 864.6828520577401,
+      "analysis_factorization": 3164.025482023135,
+      "solve": 744.231593911536,
+      "probe_reused_solve": 713.075046078302,
+      "setup_solve": 3908.257075934671
+    },
+    "stage": "finished",
+    "case": "stress_square_main_trap",
+    "dofs": 1060556,
+    "operator_sha256": "23328fa6ab229303b87e47d33c06f9a7e2fc84b4ce0bea42fbc9957993d93293",
+    "campaign_hash_checked": true,
+    "spec": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/specs/assemble_stress_square_main_trap_t100000_p6.json",
+    "spec_sha256": "ac226bbae5c12a611f51b1c7d0bb190b4b57602aa4f0854fd8741ac7ce64635f",
+    "neighbors_sha256": "ac722dec8e4705a8e6e17407c3b89291a13e2e3c6209a9db3c370ab31211f121",
+    "nnz": 37037532,
+    "mkl_max_threads": 24,
+    "matrix_type": "real_nonsymmetric",
+    "pypardiso_version": "0.4.7",
+    "mkl_version": "2026.1.0",
+    "thread_environment": {
+      "MKL_NUM_THREADS": "24",
+      "MKL_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "24",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "perturbed_pivots": 0,
+    "pardiso_memory_kib": {
+      "15": 2501216,
+      "16": 1856794,
+      "17": 2709690
+    },
+    "iterative_refinement_steps": 2,
+    "physical_relative_residual": 4.2136256442495667e-13,
+    "face_relative_residual": 4.158863667035666e-13,
+    "backward_error_inf": 2.3613266357208186e-16,
+    "probe_relative_residual": 2.6201376004239847e-16,
+    "probe_relative_solution_error": 2.398606481959255e-10,
+    "returncode": 0,
+    "worker_wall_seconds": 7.524915882968344,
+    "diagnostic_output": "/home/adelsaleh/src/hdgfem/run_outputs/solver_studies/adr_square_stress_strong_numba_h150k/pardiso/stress_square_main_trap_t100000_p6/attempt_1",
+    "runner_wall_seconds": 7.533995034056716,
+    "target_triangles": 100000,
+    "p": 6
+  }
+]

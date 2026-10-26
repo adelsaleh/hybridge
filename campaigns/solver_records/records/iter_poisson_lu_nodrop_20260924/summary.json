@@ -1,0 +1,30 @@
+{
+  "superlu-nodrop-cupy": {
+    "status": "error",
+    "candidate": "superlu-nodrop-cupy",
+    "samples": [],
+    "new_compilation_allowed": false,
+    "time_integration": false,
+    "stage": "CPU SuperLU factorization (MMD_AT_PLUS_A)",
+    "peak_process_rss_kib": 3075232,
+    "trace_dofs": 3820649,
+    "matrix_sha256": {
+      "data": "59c6b08d61e871beed14d061e941e8488c5dc2bef4ccef8e343a3d4534a2813f",
+      "indices": "49162ac81bae0917a9bb204ee7ca74f3adecf8606405315d461f96a0f71284c4",
+      "indptr": "7cd6a7b4176bb89f13d050280490b2bf8572c64fe79f21be8f7c1d2d9743f98a"
+    },
+    "rhs_sha256": "13d7e30fc7c8d1223c9b22bede10ccc908c83fd7153abd0c826e6cbcecf91a2b",
+    "target": 1e-10,
+    "rhs_norm": 0.4097017953361935,
+    "conversion_seconds": 0.584482311969623,
+    "matrix_nnz": 133547687,
+    "factor_driver": "spilu with ALL dropping disabled",
+    "error": "worker failed; inspect worker.log",
+    "returncode": -15,
+    "worker_wall_seconds": 1350.250622374937,
+    "monitored_peak_rss_gib": 26.383148193359375,
+    "monitored_peak_hwm_gib": 26.83725357055664,
+    "minimum_available_gib": 86.23813247680664,
+    "memory_poll_seconds": 0.5
+  }
+}

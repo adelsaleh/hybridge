@@ -1,0 +1,9 @@
+{
+  "pid": 268099,
+  "pgid": 268099,
+  "stop": "kill -- -268099",
+  "started_utc": "2026-10-22T09:17:45.440692+00:00",
+  "delta": 0.00075,
+  "midpoint": 0.00525,
+  "purpose": "resolved inner-band source; no evolution"
+}

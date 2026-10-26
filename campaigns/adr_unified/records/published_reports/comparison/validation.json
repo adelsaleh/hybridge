@@ -1,0 +1,11 @@
+{
+  "endpoint": {
+    "attempted": 50,
+    "passed": 44
+  },
+  "scaling": {
+    "attempted": 144,
+    "passed": 140
+  },
+  "maximum_passing_residual": 1.6526910658675957e-11
+}

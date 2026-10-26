@@ -1,0 +1,75 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e7_lumps_20261020",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "LUMPS_DONE_a/b/c present; SKIP markers identify deliberately omitted runs.",
+  "total_bytes": 33405565576,
+  "file_count": 360,
+  "subdirectories": 15,
+  "run_attempt_statuses": {
+    "ok": 10,
+    "oom": 1
+  },
+  "completion_markers": [
+    "LUMPS_DONE_a",
+    "LUMPS_DONE_b",
+    "LUMPS_DONE_c"
+  ],
+  "copied": [
+    {
+      "path": "LUMPS_DONE_a",
+      "copy": "LUMPS_DONE_a",
+      "bytes": 20,
+      "sha256": "7bdc794e9bb36957d2240a86d813e89ba6f8b3985a66d44efa251b9e227c9105"
+    },
+    {
+      "path": "LUMPS_DONE_b",
+      "copy": "LUMPS_DONE_b",
+      "bytes": 20,
+      "sha256": "e28723afabf876e99d4eba13ffceaf3981a9c231be14525039f31b2a141b845e"
+    },
+    {
+      "path": "LUMPS_DONE_c",
+      "copy": "LUMPS_DONE_c",
+      "bytes": 20,
+      "sha256": "9ad5dca2a60e35b09270cbb39301c5b8cb3582f9409c3c6b7ecc67bfe1323854"
+    },
+    {
+      "path": "README.md",
+      "copy": "README.md",
+      "bytes": 9746,
+      "sha256": "002f668ce0b341c41b327c3983fd0bdef84f3ed0d741122eed359086256328fc"
+    },
+    {
+      "path": "driver_a.json",
+      "copy": "driver_a.json",
+      "bytes": 103,
+      "sha256": "b35d6567749016b76293665c3c3389672b52a63f13f4b436f75936736ccfaa11"
+    },
+    {
+      "path": "driver_b.json",
+      "copy": "driver_b.json",
+      "bytes": 103,
+      "sha256": "e77fc4435729ae103b62b3a102556ab449d4ab7bc1968afedd615121b6d349aa"
+    },
+    {
+      "path": "driver_c.json",
+      "copy": "driver_c.json",
+      "bytes": 103,
+      "sha256": "01c83563c87dfe11d3cbe2c655ba17ede79a7f6d7c731e94d733a54cda35cbb8"
+    },
+    {
+      "path": "provenance.jsonl",
+      "copy": "provenance.jsonl",
+      "bytes": 33219,
+      "sha256": "2537047c7ce66cf9a5ed5cc4219c85354a1a28ee5f59f3ab207921511450c89e"
+    },
+    {
+      "path": "runs.jsonl",
+      "copy": "runs.jsonl",
+      "bytes": 25635,
+      "sha256": "a4bc3ce40cfe963c46ede28b40ab637fe4d98db76b584baa29f355136a3ffec6"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

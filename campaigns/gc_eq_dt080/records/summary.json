@@ -1,0 +1,1592 @@
+{
+  "updated": "2026-10-16T14:42:00.026950+00:00",
+  "target_distance": 0.8,
+  "definition": "zeta_T=s/L; fixed boundary-arclength trajectory weights",
+  "guiding_center_evolution_performed": false,
+  "cases": [
+    {
+      "level": "placement",
+      "geometry": "star",
+      "name": "star_dt080_placement_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.7999999947013494,
+      "mass": 0.24607491009425791,
+      "mean_thickness": 0.03991536378467536,
+      "wall_clearance": 0.1986672193762836,
+      "dual_residual": 8.940012113456586e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/star/star_dt080_placement_20261016.npz",
+      "state_id": "1d3bd4a5c0384ccbbc2e6015bc7e3949",
+      "target_distance": 0.8,
+      "distance_error": 5.298650629370627e-09,
+      "target_reached": true,
+      "archive_id": "star_dt080_placement_20261016-f270e1ce2ee9",
+      "triangles": 211768,
+      "dofs": 427363,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.04081114337626203,
+        "inner_threshold_margin": 0.0005350732573031047,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999947013494,
+        "absolute_error": 5.298650629370627e-09,
+        "tolerance": 2e-06,
+        "zeta_min": 0.7528782541933257,
+        "zeta_max": 0.8382361980724177,
+        "zeta_weighted_std": 0.02945743932938708,
+        "contour_arclength_audit": 0.8146386574422833,
+        "primary_minus_contour": -0.014638662740933839
+      },
+      "transition_resolution": null,
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "placement",
+      "geometry": "uglypacman",
+      "name": "uglypacman_dt080_placement_20261016",
+      "midpoint": 0.006330356021532107,
+      "distance": 0.7999999684156879,
+      "mass": 0.24605922788938792,
+      "mean_thickness": 0.04024602362496858,
+      "wall_clearance": 0.21791593404052023,
+      "dual_residual": 8.38504774024555e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/uglypacman/uglypacman_dt080_placement_20261016.npz",
+      "state_id": "8a48020d00414db88080a26b5663be8d",
+      "target_distance": 0.8,
+      "distance_error": 3.1584312165655604e-08,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_placement_20261016-19ba0cf9191b",
+      "triangles": 158358,
+      "dofs": 320829,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.05251713697002169,
+        "inner_threshold_margin": 0.0004225523374913895,
+        "flow_core_torsion_margin": 0.11174852900398768,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999684156879,
+        "absolute_error": 3.1584312165655604e-08,
+        "tolerance": 2e-06,
+        "zeta_min": 0.6580743118671382,
+        "zeta_max": 0.908997933779368,
+        "zeta_weighted_std": 0.07178667793378762,
+        "contour_arclength_audit": 0.8187703407652445,
+        "primary_minus_contour": -0.018770372349556586
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999857814,
+        "crossing_cell_h_max": 0.006000000000692315,
+        "minimum_epsilon_over_slope_h": 0.27566878586528915,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "placement",
+      "geometry": "iter",
+      "name": "iter_dt080_placement_20261016",
+      "midpoint": 0.06619795105542751,
+      "distance": 0.79999999894342,
+      "mass": 2.1508247870511426,
+      "mean_thickness": 0.11090603671961072,
+      "wall_clearance": 0.6987123605479844,
+      "dual_residual": 7.798720970054797e-16,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/iter/iter_dt080_placement_20261016.npz",
+      "state_id": "34c46b5147d64ccd8bd43ddaa8116dda",
+      "target_distance": 0.8,
+      "distance_error": 1.0565800456774355e-09,
+      "target_reached": true,
+      "archive_id": "iter_dt080_placement_20261016-f04eb12fe1aa",
+      "triangles": 182558,
+      "dofs": 368459,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.03317830317860213,
+        "inner_threshold_margin": 0.0042552960050396965,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.79999999894342,
+        "absolute_error": 1.0565800456774355e-09,
+        "tolerance": 2e-06,
+        "zeta_min": 0.6570602216650185,
+        "zeta_max": 0.8574519587310245,
+        "zeta_weighted_std": 0.04427468866680018,
+        "contour_arclength_audit": 0.814196663583856,
+        "primary_minus_contour": -0.014196664640436008
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.019999999993059295,
+        "crossing_cell_h_max": 0.02000000003250104,
+        "minimum_epsilon_over_slope_h": 0.259748976702806,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "placement",
+      "geometry": "horseshoe",
+      "name": "horseshoe_dt080_placement_20261016",
+      "midpoint": 0.0070239997549309706,
+      "distance": 0.7999999546083363,
+      "mass": 0.2972761853797182,
+      "mean_thickness": 0.04090210785470376,
+      "wall_clearance": 0.25469106141906117,
+      "dual_residual": 1.1099712370406482e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/horseshoe/horseshoe_dt080_placement_20261016.npz",
+      "state_id": "6984a8bb02f346cb824e08cf29df5abb",
+      "target_distance": 0.8,
+      "distance_error": 4.539166376105186e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_placement_20261016-6b6203fc1cd9",
+      "triangles": 185876,
+      "dofs": 376613,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.06002051293712179,
+        "inner_threshold_margin": 0.0003501101029881916,
+        "flow_core_torsion_margin": 0.04348740993217659,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999546083363,
+        "absolute_error": 4.539166376105186e-08,
+        "tolerance": 2e-06,
+        "zeta_min": 0.5450251927306538,
+        "zeta_max": 0.9052914428839224,
+        "zeta_weighted_std": 0.07909522349709992,
+        "contour_arclength_audit": 0.8175777887560347,
+        "primary_minus_contour": -0.017577834147698423
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999231179,
+        "crossing_cell_h_max": 0.006000000004665445,
+        "minimum_epsilon_over_slope_h": 0.2968922301261763,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "resolved",
+      "geometry": "star",
+      "name": "star_dt080_resolved_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.800000058574079,
+      "mass": 0.24607496017463695,
+      "mean_thickness": 0.039915704414128526,
+      "wall_clearance": 0.19866709249598108,
+      "dual_residual": 1.5415941470661258e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/resolved/star/star_dt080_resolved_20261016.npz",
+      "state_id": "e451baafe4564036920517a3715afe88",
+      "target_distance": 0.8,
+      "distance_error": 5.8574078920514694e-08,
+      "target_reached": true,
+      "archive_id": "star_dt080_resolved_20261016-a8e6e7066e35",
+      "triangles": 823806,
+      "dofs": 1651439,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.04094076483934264,
+        "inner_threshold_margin": 0.0005350732935047228,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.800000058574079,
+        "absolute_error": 5.8574078920514694e-08,
+        "tolerance": 2e-06,
+        "zeta_min": 0.7528780894631723,
+        "zeta_max": 0.8382356879327795,
+        "zeta_weighted_std": 0.029457431690936644,
+        "contour_arclength_audit": 0.8146668414374413,
+        "primary_minus_contour": -0.014666782863362315
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0006832278047410062,
+        "crossing_cell_h_max": 0.0010420855226659237,
+        "minimum_epsilon_over_slope_h": 1.9462443613514613,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "resolved",
+      "geometry": "uglypacman",
+      "name": "uglypacman_dt080_resolved_20261016",
+      "midpoint": 0.006330631608802858,
+      "distance": 0.7999999990906398,
+      "mass": 0.24604513837353417,
+      "mean_thickness": 0.04024663040469202,
+      "wall_clearance": 0.2179244561212209,
+      "dual_residual": 1.6872376501866456e-13,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/resolved/uglypacman/uglypacman_dt080_resolved_20261016.npz",
+      "state_id": "163ba551bbf648998d6399badfcb3416",
+      "target_distance": 0.8,
+      "distance_error": 9.093602537646461e-10,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_resolved_20261016-4c8533644a6b",
+      "triangles": 732484,
+      "dofs": 1469129,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.05205974475183695,
+        "inner_threshold_margin": 0.00042255106030650823,
+        "flow_core_torsion_margin": 0.1088145943537574,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999990906398,
+        "absolute_error": 9.093602537646461e-10,
+        "tolerance": 2e-06,
+        "zeta_min": 0.657675350175737,
+        "zeta_max": 0.9090064009339403,
+        "zeta_weighted_std": 0.07181280760959387,
+        "contour_arclength_audit": 0.8189693053691797,
+        "primary_minus_contour": -0.018969306278539877
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0006500850064529561,
+        "crossing_cell_h_max": 0.0010147093112399495,
+        "minimum_epsilon_over_slope_h": 1.8928512430168185,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "resolved",
+      "geometry": "horseshoe",
+      "name": "horseshoe_dt080_resolved_20261016",
+      "midpoint": 0.007023912199462995,
+      "distance": 0.7999999754635978,
+      "mass": 0.2972999582814982,
+      "mean_thickness": 0.04090111946871403,
+      "wall_clearance": 0.2546452857000181,
+      "dual_residual": 2.441542808226804e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/resolved/horseshoe/horseshoe_dt080_resolved_20261016.npz",
+      "state_id": "cbd3ee893d9343c495da7dff01b88e8e",
+      "target_distance": 0.8,
+      "distance_error": 2.453640224331366e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_resolved_20261016-5f7c3a15cccd",
+      "triangles": 876284,
+      "dofs": 1757659,
+      "degree": 2,
+      "guards": {
+        "minimum_normalized_transversality": 0.05733110316172596,
+        "inner_threshold_margin": 0.00035011198023660733,
+        "flow_core_torsion_margin": 0.05135451356325149,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999754635978,
+        "absolute_error": 2.453640224331366e-08,
+        "tolerance": 2e-06,
+        "zeta_min": 0.539121570019928,
+        "zeta_max": 0.9052972860367179,
+        "zeta_weighted_std": 0.079163976124313,
+        "contour_arclength_audit": 0.8175955340130939,
+        "primary_minus_contour": -0.017595558549496126
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0006865612362160404,
+        "crossing_cell_h_max": 0.0010841883196551683,
+        "minimum_epsilon_over_slope_h": 1.8063894493737966,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "cg4",
+      "geometry": "star",
+      "name": "star_dt080_cg4_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.8000000758113215,
+      "mass": 0.2460749654232048,
+      "mean_thickness": 0.03991569936894629,
+      "wall_clearance": 0.1986670752469733,
+      "dual_residual": 2.1996287515672083e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/star/star_dt080_cg4_20261016.npz",
+      "state_id": "e93bcc71c64848dcb8981b09c0d7eebf",
+      "target_distance": 0.8,
+      "distance_error": 7.58113214427425e-08,
+      "target_reached": true,
+      "archive_id": "star_dt080_cg4_20261016-7114541cd669",
+      "triangles": 211768,
+      "dofs": 1701797,
+      "degree": 4,
+      "guards": {
+        "minimum_normalized_transversality": 0.04094593181689941,
+        "inner_threshold_margin": 0.0005350732962090352,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.8000000758113215,
+        "absolute_error": 7.58113214427425e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.7528782381904116,
+        "zeta_max": 0.8382363770519741,
+        "zeta_weighted_std": 0.029457437856217718,
+        "contour_arclength_audit": 0.8146387325391334,
+        "primary_minus_contour": -0.01463865672781195
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999974365,
+        "crossing_cell_h_max": 0.006000000000291508,
+        "minimum_epsilon_over_slope_h": 0.2950503991942336,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "cg4",
+      "geometry": "uglypacman",
+      "name": "uglypacman_dt080_cg4_20261016",
+      "midpoint": 0.006330382945803317,
+      "distance": 0.7999999989423681,
+      "mass": 0.24605480660104131,
+      "mean_thickness": 0.040246740019295395,
+      "wall_clearance": 0.2179169644578331,
+      "dual_residual": 1.1183118340067501e-13,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/uglypacman/uglypacman_dt080_cg4_20261016.npz",
+      "state_id": "b2e7d846eabc4e5bbdbb24b5a44bbdfa",
+      "target_distance": 0.8,
+      "distance_error": 1.0576319819932678e-09,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_cg4_20261016-f67dd8e4ad89",
+      "triangles": 158358,
+      "dofs": 1275089,
+      "degree": 4,
+      "guards": {
+        "minimum_normalized_transversality": 0.05251574691474733,
+        "inner_threshold_margin": 0.000422554030482988,
+        "flow_core_torsion_margin": 0.11181583261626793,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999989423681,
+        "absolute_error": 1.0576319819932678e-09,
+        "tolerance": 2e-07,
+        "zeta_min": 0.658072835829556,
+        "zeta_max": 0.908997228099549,
+        "zeta_weighted_std": 0.07178753804027677,
+        "contour_arclength_audit": 0.8187724344459648,
+        "primary_minus_contour": -0.01877243550359675
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999857814,
+        "crossing_cell_h_max": 0.006000000000692315,
+        "minimum_epsilon_over_slope_h": 0.2762412628984609,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "cg4",
+      "geometry": "iter",
+      "name": "iter_dt080_cg4_20261016",
+      "midpoint": 0.06619802896425944,
+      "distance": 0.799999999999895,
+      "mass": 2.1508244129833045,
+      "mean_thickness": 0.11090730819621902,
+      "wall_clearance": 0.6987117813787765,
+      "dual_residual": 1.930803277861472e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/iter/iter_dt080_cg4_20261016.npz",
+      "state_id": "7a4d28becc434c97b27101bac609f4ab",
+      "target_distance": 0.8,
+      "distance_error": 1.0502709812953981e-13,
+      "target_reached": true,
+      "archive_id": "iter_dt080_cg4_20261016-0ff5f7c07a0e",
+      "triangles": 182558,
+      "dofs": 1467149,
+      "degree": 4,
+      "guards": {
+        "minimum_normalized_transversality": 0.033031773385184655,
+        "inner_threshold_margin": 0.004255296319015264,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.799999999999895,
+        "absolute_error": 1.0502709812953981e-13,
+        "tolerance": 2e-07,
+        "zeta_min": 0.6570603260492143,
+        "zeta_max": 0.8574515657186127,
+        "zeta_weighted_std": 0.04427466330492006,
+        "contour_arclength_audit": 0.8141966459084193,
+        "primary_minus_contour": -0.014196645908524319
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.019999999993059295,
+        "crossing_cell_h_max": 0.02000000003250104,
+        "minimum_epsilon_over_slope_h": 0.26031479339252295,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "cg4",
+      "geometry": "horseshoe",
+      "name": "horseshoe_dt080_cg4_20261016",
+      "midpoint": 0.007024001293807543,
+      "distance": 0.7999999753885301,
+      "mass": 0.29727618497223185,
+      "mean_thickness": 0.040901723959544924,
+      "wall_clearance": 0.2546908004269351,
+      "dual_residual": 2.7182369221661536e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/horseshoe/horseshoe_dt080_cg4_20261016.npz",
+      "state_id": "e114b509cb93433992681098b35311c2",
+      "target_distance": 0.8,
+      "distance_error": 2.461146997312369e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_cg4_20261016-58d38a7c2eac",
+      "triangles": 185876,
+      "dofs": 1496729,
+      "degree": 4,
+      "guards": {
+        "minimum_normalized_transversality": 0.059903039573835096,
+        "inner_threshold_margin": 0.00035011018475535755,
+        "flow_core_torsion_margin": 0.04348862303554801,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999753885301,
+        "absolute_error": 2.461146997312369e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.5450252606912313,
+        "zeta_max": 0.9052914056814249,
+        "zeta_weighted_std": 0.07909521562996778,
+        "contour_arclength_audit": 0.8175777953556778,
+        "primary_minus_contour": -0.01757781996714769
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999231179,
+        "crossing_cell_h_max": 0.006000000004665445,
+        "minimum_epsilon_over_slope_h": 0.2974779524314805,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": null,
+      "distance_refinement": null
+    },
+    {
+      "level": "cg6",
+      "geometry": "star",
+      "name": "star_dt080_cg6_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.8000000762327059,
+      "mass": 0.246074965482202,
+      "mean_thickness": 0.03991569936311719,
+      "wall_clearance": 0.1986670749047703,
+      "dual_residual": 4.577501704642258e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/star/star_dt080_cg6_20261016.npz",
+      "state_id": "d3823905226347da9a6de66fb11a1807",
+      "target_distance": 0.8,
+      "distance_error": 7.623270581458286e-08,
+      "target_reached": true,
+      "archive_id": "star_dt080_cg6_20261016-5f14fbfa5f52",
+      "triangles": 211768,
+      "dofs": 3823303,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.04094596169967846,
+        "inner_threshold_margin": 0.0005350732963841,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.8000000762327059,
+        "absolute_error": 7.623270581458286e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.7528782384765356,
+        "zeta_max": 0.8382363779064503,
+        "zeta_weighted_std": 0.02945743799271626,
+        "contour_arclength_audit": 0.8146387330414429,
+        "primary_minus_contour": -0.014638656808736994
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999974365,
+        "crossing_cell_h_max": 0.006000000000291508,
+        "minimum_epsilon_over_slope_h": 0.2950509595814674,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/star/star_dt080_cg4_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/star/star_dt080_cg6_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 211768,
+            "fine_cells": 211768,
+            "coarse_midpoint": 0.007012771274074477,
+            "fine_midpoint": 0.007012771274074477,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.5112227016780967e-10,
+              "coarse_l2_norm": 0.011616646154715037,
+              "fine_l2_norm": 0.011616646161458778,
+              "relative_l2_difference": 3.022578679660128e-08
+            },
+            "density": {
+              "l2_difference": 2.9046604034083485e-07,
+              "coarse_l2_norm": 0.4201476937471092,
+              "fine_l2_norm": 0.4201476954466242,
+              "relative_l2_difference": 6.913426956491203e-07
+            },
+            "gradient": {
+              "l2_difference": 2.141374336535216e-06,
+              "coarse_l2_norm": 0.042122387970252,
+              "fine_l2_norm": 0.04212238797841558,
+              "relative_l2_difference": 5.083696436281111e-05
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 211768,
+            "fine_cells": 211768,
+            "coarse_midpoint": 0.007012771274074477,
+            "fine_midpoint": 0.007012771274074477,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.511222701754609e-10,
+              "coarse_l2_norm": 0.011616646154715034,
+              "fine_l2_norm": 0.011616646161458776,
+              "relative_l2_difference": 3.022578679725993e-08
+            },
+            "density": {
+              "l2_difference": 2.9045948232597607e-07,
+              "coarse_l2_norm": 0.42014769374709127,
+              "fine_l2_norm": 0.4201476954466065,
+              "relative_l2_difference": 6.913270868169939e-07
+            },
+            "gradient": {
+              "l2_difference": 2.141374336535217e-06,
+              "coarse_l2_norm": 0.042122387970252,
+              "fine_l2_norm": 0.04212238797841558,
+              "relative_l2_difference": 5.083696436281113e-05
+            }
+          }
+        ]
+      },
+      "distance_refinement": null
+    },
+    {
+      "level": "cg6",
+      "geometry": "uglypacman",
+      "name": "uglypacman_dt080_cg6_20261016",
+      "midpoint": 0.00633038650168654,
+      "distance": 0.799999999999787,
+      "mass": 0.246054188494872,
+      "mean_thickness": 0.04024673679441999,
+      "wall_clearance": 0.217917118699767,
+      "dual_residual": 4.109036016710543e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/uglypacman/uglypacman_dt080_cg6_20261016.npz",
+      "state_id": "fa652ebc5ea74d83ad4add3410521624",
+      "target_distance": 0.8,
+      "distance_error": 2.1305179842556754e-13,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_cg6_20261016-8be04755cdf7",
+      "triangles": 158358,
+      "dofs": 2862781,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.05251588000416177,
+        "inner_threshold_margin": 0.00042255426051559207,
+        "flow_core_torsion_margin": 0.039558896067682814,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.799999999999787,
+        "absolute_error": 2.1305179842556754e-13,
+        "tolerance": 2e-07,
+        "zeta_min": 0.6580726194504435,
+        "zeta_max": 0.9089971316548081,
+        "zeta_weighted_std": 0.07178765881197051,
+        "contour_arclength_audit": 0.8187727226562761,
+        "primary_minus_contour": -0.018772722656489105
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999857814,
+        "crossing_cell_h_max": 0.006000000000692315,
+        "minimum_epsilon_over_slope_h": 0.27624506391352144,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/uglypacman/uglypacman_dt080_cg4_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/uglypacman/uglypacman_dt080_cg6_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 158358,
+            "fine_cells": 158358,
+            "coarse_midpoint": 0.006330382945803317,
+            "fine_midpoint": 0.00633038650168654,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 5.5923507631541515e-08,
+              "coarse_l2_norm": 0.0083232032139243,
+              "fine_l2_norm": 0.008323211221518368,
+              "relative_l2_difference": 6.7189821504180965e-06
+            },
+            "density": {
+              "l2_difference": 3.7129664298597294e-05,
+              "coarse_l2_norm": 0.4204060966005565,
+              "fine_l2_norm": 0.4204055704691657,
+              "relative_l2_difference": 8.831867821627862e-05
+            },
+            "gradient": {
+              "l2_difference": 8.868103799825825e-05,
+              "coarse_l2_norm": 0.04007163054501999,
+              "fine_l2_norm": 0.04007159115462685,
+              "relative_l2_difference": 0.0022130650528964266
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 158358,
+            "fine_cells": 158358,
+            "coarse_midpoint": 0.006330382945803317,
+            "fine_midpoint": 0.00633038650168654,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 5.5923507631573246e-08,
+              "coarse_l2_norm": 0.0083232032139243,
+              "fine_l2_norm": 0.008323211221518368,
+              "relative_l2_difference": 6.718982150421908e-06
+            },
+            "density": {
+              "l2_difference": 3.712966418861073e-05,
+              "coarse_l2_norm": 0.4204060966005768,
+              "fine_l2_norm": 0.4204055704691854,
+              "relative_l2_difference": 8.831867795465435e-05
+            },
+            "gradient": {
+              "l2_difference": 8.868103799825928e-05,
+              "coarse_l2_norm": 0.040071630545019984,
+              "fine_l2_norm": 0.04007159115462685,
+              "relative_l2_difference": 0.0022130650528964526
+            }
+          }
+        ]
+      },
+      "distance_refinement": null
+    },
+    {
+      "level": "cg6",
+      "geometry": "iter",
+      "name": "iter_dt080_cg6_20261016",
+      "midpoint": 0.06619802896425944,
+      "distance": 0.8000000334058697,
+      "mass": 2.150824523015431,
+      "mean_thickness": 0.1109073011193418,
+      "wall_clearance": 0.6987116464233499,
+      "dual_residual": 3.608815039738328e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/iter/iter_dt080_cg6_20261016.npz",
+      "state_id": "5cfcfc1a1ecc4cd18c793f8e4c763ca9",
+      "target_distance": 0.8,
+      "distance_error": 3.340586962607972e-08,
+      "target_reached": true,
+      "archive_id": "iter_dt080_cg6_20261016-3047fd8f0454",
+      "triangles": 182558,
+      "dofs": 3296071,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.03303162190793931,
+        "inner_threshold_margin": 0.004255296351294374,
+        "flow_core_torsion_margin": 0.19647810597599408,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.8000000334058697,
+        "absolute_error": 3.340586962607972e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.6570604064686167,
+        "zeta_max": 0.8574515953090127,
+        "zeta_weighted_std": 0.044274650339195525,
+        "contour_arclength_audit": 0.8141966824776201,
+        "primary_minus_contour": -0.014196649071750445
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.019999999993059295,
+        "crossing_cell_h_max": 0.02000000003250104,
+        "minimum_epsilon_over_slope_h": 0.2603244493035473,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/iter/iter_dt080_cg4_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/iter/iter_dt080_cg6_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 182558,
+            "fine_cells": 182558,
+            "coarse_midpoint": 0.06619802896425944,
+            "fine_midpoint": 0.06619802896425944,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 1.2640720836022132e-07,
+              "coarse_l2_norm": 0.33747282722264565,
+              "fine_l2_norm": 0.337472839121283,
+              "relative_l2_difference": 3.7457002077370834e-07
+            },
+            "density": {
+              "l2_difference": 5.104684086429644e-06,
+              "coarse_l2_norm": 1.2408089814941146,
+              "fine_l2_norm": 1.2408090285929514,
+              "relative_l2_difference": 4.113996569011298e-06
+            },
+            "gradient": {
+              "l2_difference": 0.0001197023504006289,
+              "coarse_l2_norm": 0.3818633612929295,
+              "fine_l2_norm": 0.3818633711678614,
+              "relative_l2_difference": 0.00031346905578961525
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 182558,
+            "fine_cells": 182558,
+            "coarse_midpoint": 0.06619802896425944,
+            "fine_midpoint": 0.06619802896425944,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 1.264072083611428e-07,
+              "coarse_l2_norm": 0.33747282722264565,
+              "fine_l2_norm": 0.33747283912128295,
+              "relative_l2_difference": 3.74570020776439e-07
+            },
+            "density": {
+              "l2_difference": 5.104687887013554e-06,
+              "coarse_l2_norm": 1.2408089814974297,
+              "fine_l2_norm": 1.2408090285963689,
+              "relative_l2_difference": 4.113999631988568e-06
+            },
+            "gradient": {
+              "l2_difference": 0.00011970235040061499,
+              "coarse_l2_norm": 0.38186336129292947,
+              "fine_l2_norm": 0.38186337116786134,
+              "relative_l2_difference": 0.0003134690557895789
+            }
+          }
+        ]
+      },
+      "distance_refinement": null
+    },
+    {
+      "level": "cg6",
+      "geometry": "horseshoe",
+      "name": "horseshoe_dt080_cg6_20261016",
+      "midpoint": 0.007024001293807543,
+      "distance": 0.7999999762661333,
+      "mass": 0.2972761857039199,
+      "mean_thickness": 0.040901724510021095,
+      "wall_clearance": 0.25469079814096285,
+      "dual_residual": 6.543350074976015e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/horseshoe/horseshoe_dt080_cg6_20261016.npz",
+      "state_id": "6616ed58486a48eea8f8d5484a221fd1",
+      "target_distance": 0.8,
+      "distance_error": 2.3733866760800026e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_cg6_20261016-acf46db49c20",
+      "triangles": 185876,
+      "dofs": 3360349,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.05990297947622679,
+        "inner_threshold_margin": 0.00035011018488805695,
+        "flow_core_torsion_margin": 0.0434886250378399,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999762661333,
+        "absolute_error": 2.3733866760800026e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.5450252605874951,
+        "zeta_max": 0.9052914057155821,
+        "zeta_weighted_std": 0.07909521546842765,
+        "contour_arclength_audit": 0.817577795731152,
+        "primary_minus_contour": -0.017577819465018685
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005999999999231179,
+        "crossing_cell_h_max": 0.006000000004665445,
+        "minimum_epsilon_over_slope_h": 0.2974829139321141,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg4/horseshoe/horseshoe_dt080_cg4_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/horseshoe/horseshoe_dt080_cg6_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 185876,
+            "fine_cells": 185876,
+            "coarse_midpoint": 0.007024001293807543,
+            "fine_midpoint": 0.007024001293807543,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 2.2637448280984102e-10,
+              "coarse_l2_norm": 0.009171321518085961,
+              "fine_l2_norm": 0.009171321531109389,
+              "relative_l2_difference": 2.4682864082561297e-08
+            },
+            "density": {
+              "l2_difference": 3.197774530537729e-07,
+              "coarse_l2_norm": 0.4620824925625339,
+              "fine_l2_norm": 0.4620824949073299,
+              "relative_l2_difference": 6.920354191688301e-07
+            },
+            "gradient": {
+              "l2_difference": 1.1745536727182755e-06,
+              "coarse_l2_norm": 0.04632636410610101,
+              "fine_l2_norm": 0.046326364166945085,
+              "relative_l2_difference": 2.5353892839195574e-05
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 185876,
+            "fine_cells": 185876,
+            "coarse_midpoint": 0.007024001293807543,
+            "fine_midpoint": 0.007024001293807543,
+            "coarse_degree": 4,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 2.2637448282800674e-10,
+              "coarse_l2_norm": 0.00917132151808596,
+              "fine_l2_norm": 0.009171321531109389,
+              "relative_l2_difference": 2.4682864084542007e-08
+            },
+            "density": {
+              "l2_difference": 3.1976791675923144e-07,
+              "coarse_l2_norm": 0.4620824925625395,
+              "fine_l2_norm": 0.4620824949073362,
+              "relative_l2_difference": 6.920147815237107e-07
+            },
+            "gradient": {
+              "l2_difference": 1.1745536727182755e-06,
+              "coarse_l2_norm": 0.04632636410610101,
+              "fine_l2_norm": 0.046326364166945085,
+              "relative_l2_difference": 2.5353892839195574e-05
+            }
+          }
+        ]
+      },
+      "distance_refinement": null
+    },
+    {
+      "level": "cg6_refined",
+      "geometry": "star",
+      "name": "star_dt080_cg6_refined_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.8000000784336851,
+      "mass": 0.24607496548228283,
+      "mean_thickness": 0.03991569899678454,
+      "wall_clearance": 0.19866707212575385,
+      "dual_residual": 4.505449748441596e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/star_dt080_cg6_refined_20261016.npz",
+      "state_id": "d4e76c7252ad47808cee6044b5143397",
+      "target_distance": 0.8,
+      "distance_error": 7.843368510229709e-08,
+      "target_reached": true,
+      "archive_id": "star_dt080_cg6_refined_20261016-6ee44236c6bf",
+      "triangles": 264268,
+      "dofs": 4768303,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.040945961802869836,
+        "inner_threshold_margin": 0.0005350732963839699,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.8000000784336851,
+        "absolute_error": 7.843368510229709e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.7528782384845892,
+        "zeta_max": 0.8382363766204283,
+        "zeta_weighted_std": 0.029457438585953417,
+        "contour_arclength_audit": 0.8146387357362613,
+        "primary_minus_contour": -0.014638657302576186
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0019387780267061743,
+        "crossing_cell_h_max": 0.0033232150474395614,
+        "minimum_epsilon_over_slope_h": 0.5650563012712507,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/star/star_dt080_cg6_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/star_dt080_cg6_refined_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 211768,
+            "fine_cells": 264268,
+            "coarse_midpoint": 0.007012771274074477,
+            "fine_midpoint": 0.007012771274074477,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 7.191318711457777e-11,
+              "coarse_l2_norm": 0.011616646161458685,
+              "fine_l2_norm": 0.011616646161456105,
+              "relative_l2_difference": 6.190529186744525e-09
+            },
+            "density": {
+              "l2_difference": 6.003572563006691e-09,
+              "coarse_l2_norm": 0.4201476954464904,
+              "fine_l2_norm": 0.42014769544974573,
+              "relative_l2_difference": 1.4289195509165382e-08
+            },
+            "gradient": {
+              "l2_difference": 7.918122929936276e-07,
+              "coarse_l2_norm": 0.042122388146978405,
+              "fine_l2_norm": 0.04212238797842593,
+              "relative_l2_difference": 1.8797896581722164e-05
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 211768,
+            "fine_cells": 264268,
+            "coarse_midpoint": 0.007012771274074477,
+            "fine_midpoint": 0.007012771274074477,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 7.225322950652275e-11,
+              "coarse_l2_norm": 0.011616646161458773,
+              "fine_l2_norm": 0.011616646161456102,
+              "relative_l2_difference": 6.219801180331905e-09
+            },
+            "density": {
+              "l2_difference": 6.002950241471314e-09,
+              "coarse_l2_norm": 0.4201476954466366,
+              "fine_l2_norm": 0.42014769544974556,
+              "relative_l2_difference": 1.4287714312095601e-08
+            },
+            "gradient": {
+              "l2_difference": 8.177285076223815e-07,
+              "coarse_l2_norm": 0.04212238793783925,
+              "fine_l2_norm": 0.04212238797842592,
+              "relative_l2_difference": 1.9413156444055415e-05
+            }
+          }
+        ]
+      },
+      "distance_refinement": {
+        "primary_distance": 0.8000000784336851,
+        "primary_rays": 256,
+        "primary_center_stop_radius": 1e-05,
+        "agreement_tolerance": 5e-05,
+        "passed": true,
+        "checks": [
+          {
+            "rays": 256,
+            "center_stop_radius": 1e-05,
+            "distance": 0.8000000784336845,
+            "difference_from_primary": -6.661338147750939e-16,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 1.0,
+            "flow_core_torsion_margin": null,
+            "maximum_center_connector_length": 3.1961747372543065e-05,
+            "elapsed_seconds": 6.433436507126316
+          },
+          {
+            "rays": 1024,
+            "center_stop_radius": 1e-05,
+            "distance": 0.8000000732976719,
+            "difference_from_primary": -5.136013281337171e-09,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 1.0,
+            "flow_core_torsion_margin": null,
+            "maximum_center_connector_length": 3.1980013212844124e-05,
+            "elapsed_seconds": 18.30046427785419
+          },
+          {
+            "rays": 256,
+            "center_stop_radius": 5e-06,
+            "distance": 0.8000000784336843,
+            "difference_from_primary": -8.881784197001252e-16,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 1.0,
+            "flow_core_torsion_margin": null,
+            "maximum_center_connector_length": 1.5935278457598084e-05,
+            "elapsed_seconds": 6.567448185058311
+          }
+        ],
+        "definition": "same saved equilibrium and torsion fields; refined trajectory sampling"
+      }
+    },
+    {
+      "level": "cg6_refined",
+      "geometry": "uglypacman",
+      "name": "uglypacman_dt080_cg6_refined_20261016",
+      "midpoint": 0.00633038650168654,
+      "distance": 0.7999999686448792,
+      "mass": 0.24605385698472504,
+      "mean_thickness": 0.04024673346638953,
+      "wall_clearance": 0.2179169817436042,
+      "dual_residual": 5.1034685223041715e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/uglypacman_dt080_cg6_refined_20261016.npz",
+      "state_id": "28a04bc0cb0e4a83902decf6184b6ee0",
+      "target_distance": 0.8,
+      "distance_error": 3.1355120833076455e-08,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_cg6_refined_20261016-48f4dc07ef06",
+      "triangles": 215246,
+      "dofs": 3887077,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.052515213333179246,
+        "inner_threshold_margin": 0.00042255427477097367,
+        "flow_core_torsion_margin": 0.09618774350698456,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999686448792,
+        "absolute_error": 3.1355120833076455e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.6580711816898374,
+        "zeta_max": 0.9089961223208286,
+        "zeta_weighted_std": 0.07178705153602516,
+        "contour_arclength_audit": 0.8187728505491219,
+        "primary_minus_contour": -0.018772881904242644
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0019782701987681025,
+        "crossing_cell_h_max": 0.003345593221992369,
+        "minimum_epsilon_over_slope_h": 0.5308482389159166,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/uglypacman/uglypacman_dt080_cg6_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/uglypacman_dt080_cg6_refined_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 158358,
+            "fine_cells": 215246,
+            "coarse_midpoint": 0.00633038650168654,
+            "fine_midpoint": 0.00633038650168654,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.708682252202297e-08,
+              "coarse_l2_norm": 0.008323211221518328,
+              "fine_l2_norm": 0.008323215428479584,
+              "relative_l2_difference": 4.4558287407920286e-06
+            },
+            "density": {
+              "l2_difference": 2.506147305817666e-05,
+              "coarse_l2_norm": 0.42040557046928606,
+              "fine_l2_norm": 0.4204052865722519,
+              "relative_l2_difference": 5.961264964699613e-05
+            },
+            "gradient": {
+              "l2_difference": 7.287561845049903e-05,
+              "coarse_l2_norm": 0.04007159069444671,
+              "fine_l2_norm": 0.040071564187331966,
+              "relative_l2_difference": 0.0018186367297720208
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 158358,
+            "fine_cells": 215246,
+            "coarse_midpoint": 0.00633038650168654,
+            "fine_midpoint": 0.00633038650168654,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.708679338910496e-08,
+              "coarse_l2_norm": 0.008323211221518306,
+              "fine_l2_norm": 0.008323215428479584,
+              "relative_l2_difference": 4.4558252405921055e-06
+            },
+            "density": {
+              "l2_difference": 2.5061473540161574e-05,
+              "coarse_l2_norm": 0.4204055704691313,
+              "fine_l2_norm": 0.42040528657225174,
+              "relative_l2_difference": 5.961265079347297e-05
+            },
+            "gradient": {
+              "l2_difference": 7.29131745923953e-05,
+              "coarse_l2_norm": 0.04007159098357776,
+              "fine_l2_norm": 0.040071564187331966,
+              "relative_l2_difference": 0.0018195739565226585
+            }
+          }
+        ]
+      },
+      "distance_refinement": {
+        "primary_distance": 0.7999999686448792,
+        "primary_rays": 256,
+        "primary_center_stop_radius": 1e-05,
+        "agreement_tolerance": 5e-05,
+        "passed": true,
+        "checks": [
+          {
+            "rays": 256,
+            "center_stop_radius": 1e-05,
+            "distance": 0.7999999686448791,
+            "difference_from_primary": -1.1102230246251565e-16,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.748046875,
+            "flow_core_torsion_margin": 0.09618774350698456,
+            "maximum_center_connector_length": 2.8006745401192897e-05,
+            "elapsed_seconds": 9.634135382948443
+          },
+          {
+            "rays": 1024,
+            "center_stop_radius": 1e-05,
+            "distance": 0.8000206214413907,
+            "difference_from_primary": 2.065279651153329e-05,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.744140625,
+            "flow_core_torsion_margin": 0.09223662549450184,
+            "maximum_center_connector_length": 2.8105293258581948e-05,
+            "elapsed_seconds": 32.56847751978785
+          },
+          {
+            "rays": 256,
+            "center_stop_radius": 5e-06,
+            "distance": 0.7999999686448792,
+            "difference_from_primary": 0.0,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.748046875,
+            "flow_core_torsion_margin": 0.09618774350698456,
+            "maximum_center_connector_length": 1.4036855272504744e-05,
+            "elapsed_seconds": 10.036255804821849
+          }
+        ],
+        "definition": "same saved equilibrium and torsion fields; refined trajectory sampling"
+      }
+    },
+    {
+      "level": "cg6_refined",
+      "geometry": "iter",
+      "name": "iter_dt080_cg6_refined_20261016",
+      "midpoint": 0.06619896947988435,
+      "distance": 0.7999999999846243,
+      "mass": 2.150813567716041,
+      "mean_thickness": 0.11090728013841411,
+      "wall_clearance": 0.6987122408125199,
+      "dual_residual": 4.343858949817231e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/iter/iter_dt080_cg6_refined_20261016.npz",
+      "state_id": "3febff812b7f47f3970d2669478850b8",
+      "target_distance": 0.8,
+      "distance_error": 1.5375700712638718e-11,
+      "target_reached": true,
+      "archive_id": "iter_dt080_cg6_refined_20261016-ca20430799b1",
+      "triangles": 250997,
+      "dofs": 4529746,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.033081531976281706,
+        "inner_threshold_margin": 0.004255290257024397,
+        "flow_core_torsion_margin": null,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999999846243,
+        "absolute_error": 1.5375700712638718e-11,
+        "tolerance": 2e-07,
+        "zeta_min": 0.6555722837651926,
+        "zeta_max": 0.8574584894822006,
+        "zeta_weighted_std": 0.044291375452289734,
+        "contour_arclength_audit": 0.8141908187885055,
+        "primary_minus_contour": -0.014190818803881178
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.005820968192611532,
+        "crossing_cell_h_max": 0.010140706183184309,
+        "minimum_epsilon_over_slope_h": 0.5630625040071876,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/iter/iter_dt080_cg6_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/iter/iter_dt080_cg6_refined_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 182558,
+            "fine_cells": 250997,
+            "coarse_midpoint": 0.06619802896425944,
+            "fine_midpoint": 0.06619896947988435,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.94500332595854e-06,
+              "coarse_l2_norm": 0.3374728391212784,
+              "fine_l2_norm": 0.3374760964326349,
+              "relative_l2_difference": 1.1689726672970511e-05
+            },
+            "density": {
+              "l2_difference": 0.000275779166130646,
+              "coarse_l2_norm": 1.2408090285954956,
+              "fine_l2_norm": 1.2408059040698707,
+              "relative_l2_difference": 0.0002222581027589281
+            },
+            "gradient": {
+              "l2_difference": 8.583890690868224e-05,
+              "coarse_l2_norm": 0.3818633733381803,
+              "fine_l2_norm": 0.3818650459964165,
+              "relative_l2_difference": 0.00022478859431791976
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 182558,
+            "fine_cells": 250997,
+            "coarse_midpoint": 0.06619802896425944,
+            "fine_midpoint": 0.06619896947988435,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 3.94500333231154e-06,
+              "coarse_l2_norm": 0.33747283912128334,
+              "fine_l2_norm": 0.3374760964326348,
+              "relative_l2_difference": 1.1689726691795549e-05
+            },
+            "density": {
+              "l2_difference": 0.0002757791697137154,
+              "coarse_l2_norm": 1.2408090285959865,
+              "fine_l2_norm": 1.2408059040698698,
+              "relative_l2_difference": 0.00022225810564662356
+            },
+            "gradient": {
+              "l2_difference": 8.589533756403868e-05,
+              "coarse_l2_norm": 0.3818633720760755,
+              "fine_l2_norm": 0.38186504599641646,
+              "relative_l2_difference": 0.00022493637075346443
+            }
+          }
+        ]
+      },
+      "distance_refinement": {
+        "primary_distance": 0.7999999999846243,
+        "primary_rays": 256,
+        "primary_center_stop_radius": 1e-05,
+        "agreement_tolerance": 5e-05,
+        "passed": false,
+        "checks": [
+          {
+            "rays": 256,
+            "center_stop_radius": 1e-05,
+            "distance": 0.7999999999846292,
+            "difference_from_primary": 4.884981308350689e-15,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 1.0,
+            "flow_core_torsion_margin": null,
+            "maximum_center_connector_length": 0.00010681935795527562,
+            "elapsed_seconds": 7.90779533283785
+          },
+          {
+            "rays": 1024,
+            "center_stop_radius": 1e-05,
+            "error": "ValueError(\"INVALID_RAY_ATLAS: torsion-flow resolution core is too large; diagnostics={'resolved_torsion_fraction': 0.232421875, 'flow_resolution': 1.9441570468512703e-11, 'unresolved_neighbor_pairs': 1, 'minimum_resolved_neighbor_separation': 6.688457107442731e-11, 'maximum_resolved_winding_error': 1.9984014443252818e-15}, required_fraction=0.5\")",
+            "elapsed_seconds": 4.650424489984289
+          },
+          {
+            "rays": 256,
+            "center_stop_radius": 5e-06,
+            "distance": 0.7999999999854481,
+            "difference_from_primary": 8.237854842718662e-13,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 1.0,
+            "flow_core_torsion_margin": null,
+            "maximum_center_connector_length": 5.339748008178048e-05,
+            "elapsed_seconds": 7.493787802988663
+          }
+        ],
+        "definition": "same saved equilibrium and torsion fields; refined trajectory sampling"
+      }
+    },
+    {
+      "level": "cg6_refined",
+      "geometry": "horseshoe",
+      "name": "horseshoe_dt080_cg6_refined_20261016",
+      "midpoint": 0.007024001293807543,
+      "distance": 0.7999999749410863,
+      "mass": 0.2972761857107521,
+      "mean_thickness": 0.04090172576014821,
+      "wall_clearance": 0.25469081264453164,
+      "dual_residual": 6.346125663419472e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/horseshoe/horseshoe_dt080_cg6_refined_20261016.npz",
+      "state_id": "669d69f2b0724eb6877f75857aa6e497",
+      "target_distance": 0.8,
+      "distance_error": 2.5058913721842657e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_cg6_refined_20261016-d443f5e088d6",
+      "triangles": 257368,
+      "dofs": 4648495,
+      "degree": 6,
+      "guards": {
+        "minimum_normalized_transversality": 0.05990296353064755,
+        "inner_threshold_margin": 0.00035011018489170334,
+        "flow_core_torsion_margin": 0.03079331249815953,
+        "all_selected_guards_pass": true
+      },
+      "distance_spread": {
+        "definition": "zeta_T=s/L with fixed boundary-arclength ray-label weights",
+        "attained": 0.7999999749410863,
+        "absolute_error": 2.5058913721842657e-08,
+        "tolerance": 2e-07,
+        "zeta_min": 0.545025158667023,
+        "zeta_max": 0.9052914051106127,
+        "zeta_weighted_std": 0.07909522129734364,
+        "contour_arclength_audit": 0.8175777851547394,
+        "primary_minus_contour": -0.017577810213653122
+      },
+      "transition_resolution": {
+        "crossing_cell_h_min": 0.0019132659803933751,
+        "crossing_cell_h_max": 0.003434099396530612,
+        "minimum_epsilon_over_slope_h": 0.586626614378727,
+        "definition": "epsilon / (abs(dphi/ds) * cell diameter) at both threshold crossings"
+      },
+      "refinement": {
+        "coarse": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6/horseshoe/horseshoe_dt080_cg6_20261016.npz",
+        "fine": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/horseshoe/horseshoe_dt080_cg6_refined_20261016.npz",
+        "definition": "complete FE polynomials and nonlinear windows at fine-cell Gauss-Duffy points",
+        "comparisons": [
+          {
+            "quadrature_points_per_duffy_coordinate": 8,
+            "coarse_cells": 185876,
+            "fine_cells": 257368,
+            "coarse_midpoint": 0.007024001293807543,
+            "fine_midpoint": 0.007024001293807543,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 4.309707412388692e-11,
+              "coarse_l2_norm": 0.009171321531109371,
+              "fine_l2_norm": 0.00917132153121575,
+              "relative_l2_difference": 4.699112769866436e-09
+            },
+            "density": {
+              "l2_difference": 6.568815357938089e-09,
+              "coarse_l2_norm": 0.4620824949071025,
+              "fine_l2_norm": 0.46208249491596476,
+              "relative_l2_difference": 1.421567670321012e-08
+            },
+            "gradient": {
+              "l2_difference": 4.7056543090774997e-07,
+              "coarse_l2_norm": 0.04632636423176228,
+              "fine_l2_norm": 0.046326364167483966,
+              "relative_l2_difference": 1.0157616281012516e-05
+            }
+          },
+          {
+            "quadrature_points_per_duffy_coordinate": 12,
+            "coarse_cells": 185876,
+            "fine_cells": 257368,
+            "coarse_midpoint": 0.007024001293807543,
+            "fine_midpoint": 0.007024001293807543,
+            "coarse_degree": 6,
+            "fine_degree": 6,
+            "potential": {
+              "l2_difference": 4.340453301497829e-11,
+              "coarse_l2_norm": 0.009171321531109328,
+              "fine_l2_norm": 0.009171321531215748,
+              "relative_l2_difference": 4.7326367162295525e-09
+            },
+            "density": {
+              "l2_difference": 6.567848797087047e-09,
+              "coarse_l2_norm": 0.4620824949073028,
+              "fine_l2_norm": 0.46208249491596465,
+              "relative_l2_difference": 1.4213584953659607e-08
+            },
+            "gradient": {
+              "l2_difference": 4.824604477325576e-07,
+              "coarse_l2_norm": 0.04632636416722525,
+              "fine_l2_norm": 0.04632636416748396,
+              "relative_l2_difference": 1.0414381883894789e-05
+            }
+          }
+        ]
+      },
+      "distance_refinement": {
+        "primary_distance": 0.7999999749410863,
+        "primary_rays": 256,
+        "primary_center_stop_radius": 1e-05,
+        "agreement_tolerance": 5e-05,
+        "passed": true,
+        "checks": [
+          {
+            "rays": 256,
+            "center_stop_radius": 1e-05,
+            "distance": 0.7999999749410491,
+            "difference_from_primary": -3.7192471324942744e-14,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.8203125,
+            "flow_core_torsion_margin": 0.03079331249815953,
+            "maximum_center_connector_length": 3.057100591635957e-05,
+            "elapsed_seconds": 8.668880444951355
+          },
+          {
+            "rays": 1024,
+            "center_stop_radius": 1e-05,
+            "distance": 0.7999677260049799,
+            "difference_from_primary": -3.2248936106427095e-05,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.8056640625,
+            "flow_core_torsion_margin": 0.016144874908543883,
+            "maximum_center_connector_length": 3.055971583209767e-05,
+            "elapsed_seconds": 26.281470068963245
+          },
+          {
+            "rays": 256,
+            "center_stop_radius": 5e-06,
+            "distance": 0.7999999749410489,
+            "difference_from_primary": -3.7414515929867775e-14,
+            "admissible": true,
+            "reason": "OK",
+            "resolved_torsion_fraction": 0.8203125,
+            "flow_core_torsion_margin": 0.03079331249815953,
+            "maximum_center_connector_length": 1.528401170624841e-05,
+            "elapsed_seconds": 8.166756795020774
+          }
+        ],
+        "definition": "same saved equilibrium and torsion fields; refined trajectory sampling"
+      }
+    }
+  ],
+  "driver_completion": {
+    "status": "complete",
+    "failures": [],
+    "finished": 1792159773.6237981,
+    "guiding_center_evolution_performed": false
+  },
+  "saved_field_checks": {
+    "status": "partial",
+    "failures": [
+      "iter: distance sampling check failed"
+    ],
+    "finished": 1792161719.9287004,
+    "guiding_center_evolution_performed": false
+  },
+  "selected": {
+    "star": {
+      "level": "cg6_refined",
+      "name": "star_dt080_cg6_refined_20261016",
+      "midpoint": 0.007012771274074477,
+      "distance": 0.8000000784336851,
+      "mass": 0.24607496548228283,
+      "mean_thickness": 0.03991569899678454,
+      "wall_clearance": 0.19866707212575385,
+      "dual_residual": 4.505449748441596e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/star/star_dt080_cg6_refined_20261016.npz",
+      "state_id": "d4e76c7252ad47808cee6044b5143397",
+      "target_distance": 0.8,
+      "distance_error": 7.843368510229709e-08,
+      "target_reached": true,
+      "archive_id": "star_dt080_cg6_refined_20261016-6ee44236c6bf"
+    },
+    "uglypacman": {
+      "level": "cg6_refined",
+      "name": "uglypacman_dt080_cg6_refined_20261016",
+      "midpoint": 0.00633038650168654,
+      "distance": 0.7999999686448792,
+      "mass": 0.24605385698472504,
+      "mean_thickness": 0.04024673346638953,
+      "wall_clearance": 0.2179169817436042,
+      "dual_residual": 5.1034685223041715e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/uglypacman/uglypacman_dt080_cg6_refined_20261016.npz",
+      "state_id": "28a04bc0cb0e4a83902decf6184b6ee0",
+      "target_distance": 0.8,
+      "distance_error": 3.1355120833076455e-08,
+      "target_reached": true,
+      "archive_id": "uglypacman_dt080_cg6_refined_20261016-48f4dc07ef06"
+    },
+    "iter": {
+      "level": "cg6_refined",
+      "name": "iter_dt080_cg6_refined_20261016",
+      "midpoint": 0.06619896947988435,
+      "distance": 0.7999999999846243,
+      "mass": 2.150813567716041,
+      "mean_thickness": 0.11090728013841411,
+      "wall_clearance": 0.6987122408125199,
+      "dual_residual": 4.343858949817231e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/iter/iter_dt080_cg6_refined_20261016.npz",
+      "state_id": "3febff812b7f47f3970d2669478850b8",
+      "target_distance": 0.8,
+      "distance_error": 1.5375700712638718e-11,
+      "target_reached": true,
+      "archive_id": "iter_dt080_cg6_refined_20261016-ca20430799b1"
+    },
+    "horseshoe": {
+      "level": "cg6_refined",
+      "name": "horseshoe_dt080_cg6_refined_20261016",
+      "midpoint": 0.007024001293807543,
+      "distance": 0.7999999749410863,
+      "mass": 0.2972761857107521,
+      "mean_thickness": 0.04090172576014821,
+      "wall_clearance": 0.25469081264453164,
+      "dual_residual": 6.346125663419472e-15,
+      "checkpoint": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/cg6_refined/horseshoe/horseshoe_dt080_cg6_refined_20261016.npz",
+      "state_id": "669d69f2b0724eb6877f75857aa6e497",
+      "target_distance": 0.8,
+      "distance_error": 2.5058913721842657e-08,
+      "target_reached": true,
+      "archive_id": "horseshoe_dt080_cg6_refined_20261016-d443f5e088d6"
+    }
+  }
+}

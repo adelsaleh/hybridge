@@ -1,0 +1,27 @@
+{
+  "star": {
+    "mpi_ranks": 8,
+    "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1 mpiexec -n 8 -bind-to core python -u -m projects.diocotron.studies.equilibrium_catalog.run --config inputs/star/config.json --geometry star --name-prefix star_inward_20261012 --output star --midpoint-factors 2.8 --backend mumps --archive ../../equilibria --warm-equilibrium star_02",
+    "accepted": true
+  },
+  "adjustments": [
+    {
+      "case": "uglypacman",
+      "attempt": "uglypacman_attempt01_atlas.log",
+      "reason": "Atlas resolution fraction 0.4990234375 below required 0.5 before equilibrium solve",
+      "action": "Tighten ray_tolerance from 1e-10 to 1e-11; retain the acceptance guard and all physical inputs"
+    },
+    {
+      "case": "star HDG p6",
+      "attempt": "star_hdg_attempt01_tolerance.log",
+      "reason": "Initial Poisson physical relative residual about 1.77e-12 above 1e-12; no evolution performed",
+      "action": "Use explicit 1e-11 relative tolerance; record measured residuals"
+    },
+    {
+      "case": "iter",
+      "attempt": "iter_attempt01_center_guard.log",
+      "reason": "PDE-only setup incorrectly required a unique torsion critical point; near-wall stationary root at (6.4e-12,2.19000000000365)",
+      "action": "Allow resolved secondary roots only when build_flow_atlas=False; preserve default uniqueness and unresolved-root guards, PDE tolerance and three-contour checks"
+    }
+  ]
+}

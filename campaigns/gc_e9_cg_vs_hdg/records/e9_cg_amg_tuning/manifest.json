@@ -1,0 +1,20 @@
+{
+  "data_directory": "/home/adelsaleh/src/gc-hdg-article/run_outputs/e9_cg_amg_tuning",
+  "collected": "2026-10-26T18:20:48+00:00",
+  "status": "Historical comparison stage; completion evidence retained.",
+  "total_bytes": 8670,
+  "file_count": 2,
+  "subdirectories": 0,
+  "run_attempt_statuses": {},
+  "completion_markers": [],
+  "copied": [
+    {
+      "path": "variants.jsonl",
+      "copy": "variants.jsonl",
+      "bytes": 3406,
+      "sha256": "bb353caa853c08c5ea52f0a10ca78b8757c231a94dc64eb0d0029ecac5bd69c4"
+    }
+  ],
+  "too_large_or_nontext": [],
+  "inventory_errors": []
+}

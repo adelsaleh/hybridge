@@ -1,0 +1,95 @@
+{
+  "star": {
+    "archive_id": "star_dt080_eps0p005_q64_cg6_20261016-50344ef8ba2a",
+    "boundary_vertices": 3826,
+    "visibility_kernel_signed_radius": 0.6476436259629532,
+    "visibility_kernel_center": [
+      -3.7156278635566828e-06,
+      -1.7339076075762274e-06
+    ],
+    "non_star_shaped": false,
+    "feasibility_residual": 0.0,
+    "maximum_interior_angle_degrees": 181.51617285218964,
+    "reentrant_corners_over_190_degrees": [],
+    "interpretation": "Empty visibility kernel excludes a straight-ray polar grid from any center; it does not exclude multiblock or other mapped grids."
+  },
+  "uglypacman": {
+    "archive_id": "uglypacman_dt080_eps0p005_q64_cg6_20261016-c5665190d632",
+    "boundary_vertices": 4216,
+    "visibility_kernel_signed_radius": 0.20672657949370096,
+    "visibility_kernel_center": [
+      0.797110795092356,
+      -0.11280361990490492
+    ],
+    "non_star_shaped": false,
+    "feasibility_residual": 6.56735776871642e-12,
+    "maximum_interior_angle_degrees": 304.9453603540083,
+    "reentrant_corners_over_190_degrees": [
+      {
+        "point": [
+          0.35,
+          -0.1
+        ],
+        "interior_angle": 304.9453603540083
+      }
+    ],
+    "interpretation": "Empty visibility kernel excludes a straight-ray polar grid from any center; it does not exclude multiblock or other mapped grids."
+  },
+  "iter": {
+    "archive_id": "iter_dt080_eps0p005_q64_cg6_20261016-7a52ddd5ee71",
+    "boundary_vertices": 3933,
+    "visibility_kernel_signed_radius": 0.261450912811263,
+    "visibility_kernel_center": [
+      1.2538110427855675,
+      2.2965732451409826
+    ],
+    "non_star_shaped": false,
+    "feasibility_residual": 8.665290707199347e-14,
+    "maximum_interior_angle_degrees": 256.8771633042163,
+    "reentrant_corners_over_190_degrees": [
+      {
+        "point": [
+          2.5,
+          1.6
+        ],
+        "interior_angle": 256.8771633042163
+      },
+      {
+        "point": [
+          4.5,
+          4.61
+        ],
+        "interior_angle": 201.2341734504885
+      },
+      {
+        "point": [
+          4.5,
+          5.82
+        ],
+        "interior_angle": 227.90097000136726
+      },
+      {
+        "point": [
+          1.47,
+          9.62
+        ],
+        "interior_angle": 195.40622034776737
+      }
+    ],
+    "interpretation": "Empty visibility kernel excludes a straight-ray polar grid from any center; it does not exclude multiblock or other mapped grids."
+  },
+  "horseshoe": {
+    "archive_id": "horseshoe_dt080_eps0p005_q64_cg6_20261016-0cd7b1251dd5",
+    "boundary_vertices": 5290,
+    "visibility_kernel_signed_radius": -0.4550524135643362,
+    "visibility_kernel_center": [
+      -0.0006785766644407691,
+      -0.09505408534645463
+    ],
+    "non_star_shaped": true,
+    "feasibility_residual": 2.4424906541753444e-15,
+    "maximum_interior_angle_degrees": 187.95057985382326,
+    "reentrant_corners_over_190_degrees": [],
+    "interpretation": "Empty visibility kernel excludes a straight-ray polar grid from any center; it does not exclude multiblock or other mapped grids."
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "geometry": "horseshoe",
+  "requested_size": 0.0045,
+  "num_cells": 876284,
+  "gmsh_version": "4.15.2",
+  "geometry_degree": 1,
+  "mesh_sha256": "9bd036cc65cc66570f02f2bb2fa521d7d8b2cf666156160adac01905177b5325",
+  "source_archive_id": "horseshoe_dt080_placement_20261016-6b6203fc1cd9",
+  "source_checkpoint_sha256": "6b6203fc1cd9b6df66e51df68db5c9128c51cf8bfe237d85e49fb6c9c1751f0b",
+  "boundary": "all archived affine segments retained; subdivisions allowed",
+  "boundary_vertices": 4860,
+  "geometric_extrapolation_required": false,
+  "transition_refinement": {
+    "contours": "/home/adelsaleh/src/gc-hdg-article/run_outputs/equilibrium_dt080_20261016/placement/horseshoe/contours.npz",
+    "contours_sha256": "c4f29e75e593d30457daaf44c9f097ba7dd5fd4a486a0cf5ac571d635bd0f729",
+    "band_size": 0.0008,
+    "buffer": 0.0035,
+    "grading": 0.3,
+    "distance_samples": 16558,
+    "definition": "distance to sampled outer/inner transition contours"
+  },
+  "corner_refinement": {
+    "size": 0.0001,
+    "grading": 0.15,
+    "minimum_angle_deviation": 25.0,
+    "points": [
+      [
+        0.4928107361378706,
+        -1.12891411042397
+      ],
+      [
+        -0.4921018764553414,
+        -1.128761036180786
+      ],
+      [
+        -0.1953962032253301,
+        -0.5091712448661795
+      ],
+      [
+        -0.1966383974252403,
+        -0.5054969198431964
+      ],
+      [
+        0.1961853799742916,
+        -0.5060633859535033
+      ],
+      [
+        0.1954809830678595,
+        -0.5098919211443452
+      ],
+      [
+        0.4894457397550999,
+        -1.126928636895438
+      ]
+    ]
+  }
+}
