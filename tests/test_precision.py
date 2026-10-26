@@ -127,7 +127,7 @@ finally:
 
 def test_fp32_guiding_center_p6_pipeline_matches_fp64(tmp_path):
     _require_cuda_and_binding()
-    common = [sys.executable, '-m', 'scripts.guiding_center.benchmarks.run_precision_benchmark',
+    common = [sys.executable, '-m', 'scripts.guiding_center.studies.solver_tuning.run_precision_benchmark',
               '--num-steps', '2', '--mesh-size', '0.18', '--minimum-triangles', '0',
               '--verbosity', '0', '--output', str(tmp_path)]
     for precision, tolerance in [('float32', '0.002'), ('float64', '1e-8')]:

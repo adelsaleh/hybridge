@@ -49,7 +49,7 @@ After the build, run the saved-system experiment from the existing environment:
 ```bash
 source .env
 # from the repository root
-scripts/gpu/run_cuda13.sh .venv/bin/python -m scripts.guiding_center.poisson.benchmark_hybrid_hierarchy_bsr \
+scripts/gpu/run_cuda13.sh .venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_hybrid_hierarchy_bsr \
   --output-dir artifacts/hybrid_hierarchy_bsr_feasibility_20260914
 ```
 

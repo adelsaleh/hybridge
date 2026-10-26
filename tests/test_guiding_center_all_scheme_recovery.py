@@ -13,7 +13,7 @@ from scripts.guiding_center.time_schemes import STEPPERS
 from scripts.guiding_center.time_schemes import (
     si_euler, si_bdf2, si_bdf3, predictor_corrector, hybrid_bdf3, imex_ark3, recovery, stage_support,
 )
-from scripts.guiding_center.poisson.poisson_recovery import is_transport_solve_failure
+from scripts.guiding_center.runtime.poisson_recovery import is_transport_solve_failure
 
 
 class CannedField(np.ndarray):

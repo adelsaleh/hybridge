@@ -12,7 +12,7 @@ from hybridge.runtime.logging import timed_call
 from .recovery import (
     StepRecoveryWork, with_poisson_recovery, recovery_options, poisson_tau,
 )
-from scripts.guiding_center.poisson.poisson_recovery import PoissonStageFailure
+from scripts.guiding_center.runtime.poisson_recovery import PoissonStageFailure
 from hybridge.core.field_ops import (
     perpendicular_vector_field,
     solution_field,

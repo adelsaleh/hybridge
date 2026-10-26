@@ -7,6 +7,7 @@ import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from scripts.guiding_center.paths import AMGX_CONFIGS, REPO_ROOT
 from scripts.guiding_center.time_schemes import STEPPERS
 from hybridge.runtime.precision import PRECISION
 from hybridge.linalg.amgx.config import load_amgx_config, with_amgx_residual_history
@@ -193,7 +194,7 @@ def _with_fp32_transport_solver(config: GuidingCenterRunPreset) -> GuidingCenter
     """Use FGMRES for the stock FP32 transport profile that BiCGSTAB destabilizes."""
     if PRECISION != "float32" or not _is_amgx_solver(config.transport_solver):
         return config
-    config_dir = Path(__file__).resolve().parents[3] / "configs" / "amgx"
+    config_dir = AMGX_CONFIGS
     stock_bicgstab = config_dir / "adv_rea_gpu4_hdg_bicgstab_scaled_none.json"
     selected_path = config.transport_amgx_config_path
     if selected_path is None or Path(selected_path).resolve() != stock_bicgstab:
@@ -527,7 +528,7 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
             raise ValueError(f"{config.time_scheme} requires unit-factor upwind or conflict-averaged-upwind stabilization")
         if config.transport_boundary_mode not in {"auto", "zero-flux", "eliminate"}:
             raise ValueError(f"{config.time_scheme} requires zero-flux or eliminated transport boundaries")
-    from scripts.guiding_center.poisson.poisson_recovery import PoissonTauRecovery
+    from scripts.guiding_center.runtime.poisson_recovery import PoissonTauRecovery
     PoissonTauRecovery(factor=config.poisson_tau_retry_factor, max_retries=config.poisson_tau_max_retries)
     if config.poisson_tau_max_retries or config.time_scheme == "imex-ark3":
         if not math.isfinite(config.poisson_tau) or config.poisson_tau <= 0:
@@ -631,7 +632,7 @@ def _validate_config(config: GuidingCenterRunPreset) -> None:
 def _make_poisson_options(config: GuidingCenterRunPreset):
     from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 
-    config_dir = Path(__file__).resolve().parents[3] / "configs" / "amgx"
+    config_dir = AMGX_CONFIGS
     primary_path = config.poisson_amgx_config_path
     if primary_path is None and config.poisson_retry_policy == "amgx-robust":
         primary_path = str(
@@ -798,7 +799,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
         fallback_path = config.transport_retry_amgx_config_path
         if fallback_path is None:
             fallback_path = str(
-                Path(__file__).resolve().parents[3]
+                REPO_ROOT
                 / "configs"
                 / "amgx"
                 / "adv_rea_gpu4_hdg_fgmres_dilu_abs.json"
@@ -808,7 +809,7 @@ def _make_transport_options(config: GuidingCenterRunPreset, boundary_mode: str):
             tolerance=config.transport_solver_rtol,
             absolute_tolerance=config.transport_solver_atol,
         )
-        amgx_config_dir = Path(__file__).resolve().parents[3] / "configs" / "amgx"
+        amgx_config_dir = AMGX_CONFIGS
         # AMGX's plain BICGSTAB ignores preconditioners; PBICGSTAB applies them.
         # These one-sweep Jacobi retries keep native BSR and rebuild their cheap
         # diagonal data for the current matrix. Apply the caller's scaling to

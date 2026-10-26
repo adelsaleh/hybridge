@@ -26,7 +26,7 @@ No new mesh or kernel was generated. Command used:
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
   CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_scipy_lu_gpu \
   --iter-mesh-size 0.2 --max-capture-dofs 25000 \
   --output run_outputs/solver_studies/iter_small_lu_gpu_20260925 \
   --threads 24 --factor-driver splu \
@@ -65,7 +65,7 @@ the saved factors, with live terminal output, run:
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
   CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_small_lu_gpu_20260925/poisson_capture \
   --factor-cache run_outputs/solver_studies/iter_small_lu_gpu_20260925/factors \
   --output run_outputs/solver_studies/iter_small_lu_gpu_20260925_replay \
@@ -155,7 +155,7 @@ setup may take hours again. This command allows 12 hours per worker.
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
   CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_repeated_poisson_20260924 \
   --output run_outputs/solver_studies/iter_final_lu_gpu_20260925 \
   --threads 24 --factor-driver spilu-nodrop --initial-fill 5 \
@@ -180,7 +180,7 @@ From the repository root, run:
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
   CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_scipy_lu_gpu \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_scipy_lu_gpu \
   --capture run_outputs/solver_studies/iter_repeated_poisson_20260924 \
   --output run_outputs/solver_studies/iter_scipy_lu_gpu_20260924 \
   --threads 24 --factor-driver auto --repeats 10

@@ -76,7 +76,7 @@ From the repository root, choose a new empty output directory:
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 OPENBLAS_NUM_THREADS=1 \
   CUDA_PATH=/path/to/cuda-13 LD_LIBRARY_PATH=/path/to/cuda-13/lib64 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_repeated_poisson \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_repeated_poisson \
   --output run_outputs/solver_studies/iter_repeated_poisson_repeat \
   --repeats 3 --warmup 1
 ```
@@ -188,7 +188,7 @@ To reproduce the CPU LU benchmark, choose a new empty output directory:
 ```bash
 env PYTHONDONTWRITEBYTECODE=1 NUMBA_DISABLE_JIT=1 \
   .venv/bin/python -u -B \
-  -m scripts.guiding_center.poisson.benchmark_poisson_lu \
+  -m scripts.guiding_center.studies.solver_tuning.benchmark_poisson_lu \
   --capture run_outputs/solver_studies/iter_repeated_poisson_20260924 \
   --output run_outputs/solver_studies/iter_poisson_lu_repeat \
   --candidates pardiso --threads 16 --repeats 3

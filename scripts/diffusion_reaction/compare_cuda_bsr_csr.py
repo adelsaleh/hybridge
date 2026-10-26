@@ -521,7 +521,7 @@ def _replay_worker(args):
                         report["factor_input_nnz"] = int(csr.nnz)
                         report["csr_bytes"] = sum(a.nbytes for a in (csr.data, csr.indices, csr.indptr))
                     else:
-                        from scripts.guiding_center.poisson.replay_poisson_asm import BsrAction, captured_patch_map
+                        from scripts.guiding_center.studies.solver_tuning.replay_poisson_asm import BsrAction, captured_patch_map
                         sync(); started = time.perf_counter()
                         operator = BsrAction(matrix)
                         device_rhs = cp.asarray(rhs)
@@ -531,7 +531,7 @@ def _replay_worker(args):
                                                             PyAMGXCsrDeviceSolver,
                                                         )
                             from hybridge.linalg.gpu.sparse import _DeviceBsrMatrixView
-                            from scripts.guiding_center.poisson.amgx_bsr_smoothing import smoothing_config
+                            from scripts.guiding_center.studies.solver_tuning.amgx_bsr_smoothing import smoothing_config
                             sweeps = int(args.replay_worker[-1])
                             config = smoothing_config(postsweeps=3, hierarchy="scalar_expand",
                                                       tolerance=0.1*args.rtol*rhs_norm, max_iters=args.maxiter)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+from scripts.guiding_center.paths import REPO_ROOT
 import sys
 
 
@@ -14,7 +15,7 @@ def configure_precision_cli() -> None:
     args, _ = parser.parse_known_args()
     os.environ['HYBRIDGE_PRECISION'] = args.precision
     if args.precision == 'float32':
-        root = Path(__file__).resolve().parents[3]
+        root = REPO_ROOT
         os.environ['NUMBA_CACHE_DIR'] = str(root/'.cache'/'numba-float32')
         os.environ['CUPY_CACHE_DIR'] = str(root/'.cache'/'cupy-float32')
         os.environ['CUPY_CACHE_SAVE_CUDA_SOURCE'] = '1'

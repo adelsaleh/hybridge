@@ -9,7 +9,7 @@ import pytest
 
 from hybridge.diagnostics.guiding_center import azimuthal_mode_diagnostics
 
-from scripts.guiding_center.benchmarks.benchmark_host_solver_stages import (
+from scripts.guiding_center.studies.solver_tuning.benchmark_host_solver_stages import (
     SCIPY_ITERATIVE_SOLVERS,
     STRENGTHS,
     StageBenchmark,

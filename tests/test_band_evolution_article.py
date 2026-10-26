@@ -1,7 +1,7 @@
 """Pure helpers of the E7 article script (no runs, no figures)."""
 import numpy as np
 
-from scripts.guiding_center.diagnostics.plot_band_evolution_article import longest_interval, panel_requests
+from scripts.guiding_center.studies.band_evolution.plot_band_evolution_article import longest_interval, panel_requests
 
 
 def test_longest_interval_picks_the_longest_stretch():

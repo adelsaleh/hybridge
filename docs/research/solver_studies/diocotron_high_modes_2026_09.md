@@ -118,7 +118,7 @@ Compute the article's prediction independently of time integration:
 Analyze a completed run, retaining the sharp and smooth references separately:
 
 ```bash
-.venv/bin/python -m scripts.guiding_center.diagnostics.analyze_diocotron \
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron \
   run_outputs/guiding_center/diocotron_gaussian_m128_ark3_p6_h008_dt005_t70.jsonl \
   --output-dir artifacts/diocotron_m128_full_analysis
 ```

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from scripts.guiding_center.poisson import benchmark_poisson_lu as benchmark
+from scripts.guiding_center.studies.solver_tuning import benchmark_poisson_lu as benchmark
 
 
 @pytest.mark.parametrize("candidate", ["superlu-cupy", "superlu-nodrop-cupy"])

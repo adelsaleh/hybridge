@@ -324,7 +324,7 @@ The temporal-convergence driver supplements its manufactured solution with
 units. Initial conditions, spatial operators and solver tolerances are fixed.
 
 ```bash
-HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.benchmarks.run_guiding_center_temporal_convergence \
+HYBRIDGE_PRECISION=float64 .venv/bin/python -m scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence \
   --study vortex-gas --dts 0.01,0.005 --final-time 5 \
   --sample-interval 0.5 --plot-comparison --cached-kernels-only \
   --prefix star_hole_bdf2_dt_comparison

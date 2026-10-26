@@ -14,7 +14,7 @@ from hybridge.transport.diagnostics import (
 )
 from hybridge.solvers.diffusion_reaction import DiffusionReactionHDGOptions
 from scripts.guiding_center.time_schemes import imex_ark3 as ark
-from scripts.guiding_center.poisson.poisson_recovery import PoissonTauRecovery
+from scripts.guiding_center.runtime.poisson_recovery import PoissonTauRecovery
 from tests.test_guiding_center_imex_ark3 import scalar_stepper
 
 

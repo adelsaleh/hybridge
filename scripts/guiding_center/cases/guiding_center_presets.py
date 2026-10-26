@@ -6,7 +6,9 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+from scripts.guiding_center.paths import REPO_ROOT
+
+_REPO_ROOT = REPO_ROOT
 _AMGX_DIR = _REPO_ROOT / "configs" / "amgx"
 
 

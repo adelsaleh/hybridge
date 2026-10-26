@@ -158,7 +158,7 @@ def test_truncated_profile_reference_converges_and_tends_to_the_sharp_band():
 
 def test_analysis_of_a_truncated_band_uses_the_truncated_reference():
     from scripts.guiding_center.cases.guiding_center_cases import diocotron_k
-    from scripts.guiding_center.diagnostics.analyze_diocotron import analyze
+    from scripts.guiding_center.studies.diocotron.analyze_diocotron import analyze
     from scripts.guiding_center.diagnostics.diocotron_reference import PAPER_PARAMETERS
 
     parameters = diocotron_k(**PAPER_PARAMETERS).parameters
