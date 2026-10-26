@@ -168,5 +168,30 @@ def parallel_copy(array: np.ndarray, *, min_chunk: int = MIN_CHUNK) -> np.ndarra
     return out
 
 
+def use_all_cpu_threads() -> dict[str, object]:
+    """Run Numba kernels and the host NumPy pool on every available CPU, verified.
+
+    Numba's pool size is fixed at import by ``NUMBA_NUM_THREADS``; a smaller
+    pool than the visible CPUs raises instead of running silently on fewer
+    threads. Returns the active counts and the Numba threading layer.
+    """
+    import numba
+
+    available = _available_cpus()
+    if int(numba.config.NUMBA_NUM_THREADS) < available:
+        raise RuntimeError(f"Numba's pool has {numba.config.NUMBA_NUM_THREADS} threads but {available} CPUs are "
+                           "available; unset NUMBA_NUM_THREADS or set it to the CPU count")
+    numba.set_num_threads(available)
+    host = set_host_threads(available)
+    if numba.get_num_threads() != available or host != available:
+        raise RuntimeError(f"thread setup failed: numba={numba.get_num_threads()} host={host}, expected {available}")
+    try:
+        layer = numba.threading_layer()
+    except ValueError:  # no parallel kernel has run yet
+        layer = str(numba.config.THREADING_LAYER)
+    return {"cpus": available, "numba_threads": numba.get_num_threads(), "numba_threading_layer": layer,
+            "host_threads": host}
+
+
 __all__ = ["MIN_CHUNK", "POINT_CHUNK", "element_chunks", "elementwise", "for_element_chunks", "host_threads",
-           "parallel_copy", "set_host_threads"]
+           "parallel_copy", "set_host_threads", "use_all_cpu_threads"]
