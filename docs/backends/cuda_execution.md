@@ -85,6 +85,15 @@ workspaces cost about `E*(NEL**2 + 6*NQF)*8` bytes more than fused, roughly 17
 and 25 GB per million triangles at p=8 and p=9. See [`raw_cuda.md`](raw_cuda.md)
 for earlier timings and the full support/reuse contract.
 
+Fused and split3 assembly also take the advection field and the reaction as values at
+the quadrature points (`QuadratureVectorField`, `QuadratureScalar`, passed to
+`assemble_reduced_system_cuda` as `beta_values=` and `reaction`). They then use
+the quadrature volume operator, whatever `raw_volume_operator="auto"` would
+choose; `"tensor"` and the precomputed path reject them. The
+guiding-center exact-drift reference runs use this path
+(`--exact-drift-mode pointwise`). See [`raw_cuda.md`](raw_cuda.md) for the
+kernel variants.
+
 ### Experimental tensorized TSLE
 
 `hybridge/transport/tsle_tensor.py` keeps the split3 algebra and stages but

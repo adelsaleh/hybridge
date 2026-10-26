@@ -11,7 +11,7 @@ from hybridge.hdg import condensation as hdg
 from hybridge.hdg import matrices
 import hybridge.hdg.coefficients as hdg_coefficients
 import hybridge.hdg.stabilization as hdg_stabilization
-from hybridge.core.element_coefficients import ElementCoefficient
+from hybridge.core.element_coefficients import ElementCoefficient, element_beta_normal, element_beta_samples
 from hybridge.runtime.threads import parallel_copy
 from hybridge.core.space import DGSpace, DGTraceSpace, VectorDGField
 from hybridge.mixed.local_numpy import (
@@ -158,34 +158,6 @@ def diffusion_stabilization_on_trace(prepared, space, trace_space, *, device=Fal
     if xp.any(~xp.isfinite(values)) or xp.any(values <= 0.):
         raise ValueError("diffusion stabilization must be finite and strictly positive")
     return values
-
-
-def element_beta_normal(beta, space: DGSpace, trace_space: DGTraceSpace, *, xp=np, t=None):
-    """Return ``beta.n`` of an element-local vector coefficient, shape ``(K, 3, nfq)``.
-
-    Each element sees its own values on its faces, so ``beta.n`` may jump
-    across a face.
-    """
-    if beta.components != 2:
-        raise ValueError("element-local advection coefficient must have two components")
-    face = beta.face_values(space, trace_space, xp=xp, t=t)
-    if xp is np:
-        normals = space.mesh.normals
-    else:
-        from hybridge.core.device import as_cupy_space
-        normals = as_cupy_space(space).mesh.normals
-    normal = face[..., 0] * normals[:, :, 0, None] + face[..., 1] * normals[:, :, 1, None]
-    return xp.ascontiguousarray(normal)
-
-
-def element_beta_samples(beta, space: DGSpace, trace_space: DGTraceSpace, *, xp=np, t=None):
-    """Return ``(beta.n, beta)`` of an element-local vector coefficient.
-
-    ``beta.n`` is :func:`element_beta_normal`; volume samples have shape
-    ``(K, nq, 2)``. Nothing is projected into the solution space.
-    """
-    return (element_beta_normal(beta, space, trace_space, xp=xp, t=t),
-            beta.volume_values(space, xp=xp, t=t))
 
 
 def _normal_flux(beta, space: DGSpace, trace_space: DGTraceSpace, *, t=None) -> np.ndarray:

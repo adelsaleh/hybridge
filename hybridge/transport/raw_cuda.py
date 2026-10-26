@@ -81,6 +81,8 @@ class RawAdvectionAssemblyResult:
     source_rhs: Any | None = None
     source_coeffs: Any | None = None
     beta_coeffs: Any | None = None
+    beta_face_basis: Any | None = None
+    volume_table: Any | None = None
     reaction_coeffs: Any | None = None
     reaction_scalar: float = 0.0
     reaction_is_scalar: bool = False
@@ -95,6 +97,11 @@ class RawAdvectionAssemblyResult:
     lu_mode: str = "safe"
     zero_boundary_flux: bool = False
     advection_stabilization: object = None
+    beta_volume_values: Any | None = None
+    beta_normal_flux: Any | None = None
+    reaction_values: Any | None = None
+    pointwise_beta: bool = False
+    pointwise_reaction: bool = False
 
 
 @dataclass
@@ -636,25 +643,57 @@ _RAW_FUSED_TEMPLATE = r"""
 #ifndef RAW_LU_SCRATCH_THREADS
 #define RAW_LU_SCRATCH_THREADS 128
 #endif
+// Quadrature-point coefficients: RAW_POINTWISE_BETA reads the physical advection field at
+// the volume points from beta_volume_values (E, RAW_NQV, 2) and beta.n at the
+// face points from beta_normal_flux (E, 3, NQF), for this side and its
+// neighbour; RAW_POINTWISE_REACTION reads the reaction from reaction_values
+// (E, RAW_NQV). Both need the quadrature volume operator. Unused pointers are
+// one-entry dummies.
+#ifndef RAW_POINTWISE_BETA
+#define RAW_POINTWISE_BETA 0
+#endif
+#ifndef RAW_POINTWISE_REACTION
+#define RAW_POINTWISE_REACTION 0
+#endif
+#if (RAW_POINTWISE_BETA || RAW_POINTWISE_REACTION) && !RAW_VOLUME_QUADRATURE
+#error "quadrature-point coefficients need RAW_VOLUME_QUADRATURE"
+#endif
 
+// The advection field beta_h may live in its own DG space with NBETA basis functions
+// (NBETA == NEL for a same-space advection): beta_coeffs is (2, E, NBETA),
+// beta_face_basis is that basis on this space's face quadrature (3, NBETA, NQF)
+// and the volume tensors run over NBETA advection modes.
 __device__ __forceinline__ double raw_side_normal(
-        const double* beta_coeffs, const double* face_basis, const double* normals,
+        const double* beta_coeffs, const double* beta_face_basis, const double* normals,
         const long long num_elements, const long long side, const int qf)
 {
     const long long element = side / 3;
     const int face = side % 3;
     double bx = 0.0, by = 0.0;
-    for (int k = 0; k < NEL; ++k) {
-        const double phi = face_basis[(face * NEL + k) * NQF + qf];
-        bx += beta_coeffs[element * NEL + k] * phi;
-        by += beta_coeffs[(num_elements + element) * NEL + k] * phi;
+    for (int k = 0; k < NBETA; ++k) {
+        const double phi = beta_face_basis[(face * NBETA + k) * NQF + qf];
+        bx += beta_coeffs[element * NBETA + k] * phi;
+        by += beta_coeffs[(num_elements + element) * NBETA + k] * phi;
     }
     return bx * normals[side * 2] + by * normals[side * 2 + 1];
 }
 
+// beta.n of element side `side` at face point qf: the quadrature-point table
+// with RAW_POINTWISE_BETA, else evaluated from the advection field coefficients.
+__device__ __forceinline__ double raw_side_normal_flux(
+        const double* beta_coeffs, const double* beta_face_basis, const double* beta_normal_flux,
+        const double* normals, const long long num_elements, const long long side, const int qf)
+{
+#if RAW_POINTWISE_BETA
+    return beta_normal_flux[side * NQF + qf];
+#else
+    return raw_side_normal(beta_coeffs, beta_face_basis, normals, num_elements, side, qf);
+#endif
+}
+
 __device__ __forceinline__ bool raw_inactive_face_gauge(
-        const double* tau_face, const double* beta_coeffs, const double* face_basis,
-        const double* normals, const long long* edge_side_indices,
+        const double* tau_face, const double* beta_coeffs, const double* beta_face_basis,
+        const double* beta_normal_flux, const double* normals, const long long* edge_side_indices,
         const long long num_elements, const long long element, const int face,
         const long long edge)
 {
@@ -668,7 +707,8 @@ __device__ __forceinline__ bool raw_inactive_face_gauge(
     // the other raw velocity is nonnegative (equal outflow or two zeros).
     // Read immutable coefficients, never another block's weights.
     for (int q = 0; q < NQF; ++q)
-        if (raw_side_normal(beta_coeffs, face_basis, normals, num_elements, other, q) < 0.0)
+        if (raw_side_normal_flux(beta_coeffs, beta_face_basis, beta_normal_flux, normals,
+                                 num_elements, other, q) < 0.0)
             return false;
     return true;
 #else
@@ -694,6 +734,7 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const double* __restrict__ volume_table,
         const int* __restrict__ advection_sparse_offsets,
         const int* __restrict__ advection_sparse_modes,
         const double* __restrict__ advection_sparse_values0,
@@ -701,11 +742,15 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const int use_sparse_advection,
         const int mass_is_diagonal,
         const double* __restrict__ face_basis,
+        const double* __restrict__ beta_face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
         const double* __restrict__ source_coeffs,
         const double* __restrict__ beta_coeffs,
         const double* __restrict__ reaction_coeffs,
+        const double* __restrict__ beta_volume_values,
+        const double* __restrict__ beta_normal_flux,
+        const double* __restrict__ reaction_values,
         const double reaction_scalar,
         const int reaction_is_scalar,
         const long long* __restrict__ loc2glob_edge,
@@ -749,19 +794,104 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     // so the inner volume loop only does two coefficient/tensor products per k
     // instead of rereading beta and remultiplying geometry for every matrix
     // entry.
-    for (int k = tid; k < NEL; k += blockDim.x) {
-        const double beta_x = beta_coeffs[((0 * num_elements + element) * NEL) + k];
-        const double beta_y = beta_coeffs[((1 * num_elements + element) * NEL) + k];
-        source_cache[k] = source_coeffs[element * NEL + k];
+#if !RAW_POINTWISE_BETA
+    for (int k = tid; k < NBETA; k += blockDim.x) {
+        const double beta_x = beta_coeffs[((0 * num_elements + element) * NBETA) + k];
+        const double beta_y = beta_coeffs[((1 * num_elements + element) * NBETA) + k];
         beta_x_cache[k] = beta_x;
         beta_y_cache[k] = beta_y;
         beta_ref0_cache[k] = beta_x * inv_t00 + beta_y * inv_t10;
         beta_ref1_cache[k] = beta_x * inv_t01 + beta_y * inv_t11;
+    }
+#endif
+    for (int k = tid; k < NEL; k += blockDim.x) {
+        source_cache[k] = source_coeffs[element * NEL + k];
+#if !RAW_POINTWISE_REACTION
         if (!reaction_is_scalar) {
             reaction_cache[k] = reaction_coeffs[element * NEL + k];
         }
+#endif
     }
     __syncthreads();
+
+#if RAW_VOLUME_QUADRATURE
+    // Volume operator by quadrature (RAW_NQV points of the solution rule):
+    //   A_ij = sum_q phi_j(q) H_i(q),
+    //   H_i(q) = jac w_q (r(q) phi_i(q) - b0(q) d0 phi_i(q) - b1(q) d1 phi_i(q)),
+    // with b_D(q) = sum_k beta_refD[k] psi_k(q) the advection field in reference
+    // coordinates and r(q) the projected reaction.  This is the tensor
+    // contraction below with the sums reordered: about NQV*NEL^2 work instead
+    // of 2*NBETA*NEL^2 (+NEL^3 for a field reaction), independent of the advection field
+    // degree.  local_rhs is still unused here and holds H for RAW_QCHUNK points
+    // plus b0, b1 and r of those points.  volume_table packs
+    // [w | phi | d0 phi | d1 phi | psi] at the RAW_VT_* offsets.
+    for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+        const int i = idx / NEL;
+        const int j = idx - i * NEL;
+        local_lu[idx] = reaction_is_scalar
+            ? ((mass_is_diagonal && i != j) ? 0.0 : reaction_scalar * jac * mass_matrix[idx])
+            : 0.0;
+    }
+    {
+        double* volume_h = local_rhs;
+        double* volume_b = local_rhs + RAW_QCHUNK * NEL;
+        for (int q0 = 0; q0 < RAW_NQV; q0 += RAW_QCHUNK) {
+            const int nq = min(RAW_QCHUNK, RAW_NQV - q0);
+            for (int qq = tid; qq < nq; qq += blockDim.x) {
+                const int q = q0 + qq;
+#if RAW_POINTWISE_BETA
+                // Physical advection field at this volume point, folded into reference
+                // coordinates with the element's inverse affine map.
+                const double point_bx = beta_volume_values[(element * RAW_NQV + q) * 2];
+                const double point_by = beta_volume_values[(element * RAW_NQV + q) * 2 + 1];
+                const double b0 = point_bx * inv_t00 + point_by * inv_t10;
+                const double b1 = point_bx * inv_t01 + point_by * inv_t11;
+#else
+                const double* psi = volume_table + RAW_VT_PSI + q * NBETA;
+                double b0 = 0.0;
+                double b1 = 0.0;
+                for (int k = 0; k < NBETA; ++k) {
+                    b0 = fma(beta_ref0_cache[k], psi[k], b0);
+                    b1 = fma(beta_ref1_cache[k], psi[k], b1);
+                }
+#endif
+                double r = 0.0;
+                if (!reaction_is_scalar) {
+#if RAW_POINTWISE_REACTION
+                    r = reaction_values[element * RAW_NQV + q];
+#else
+                    const double* phi = volume_table + RAW_VT_PHI + q * NEL;
+                    for (int k = 0; k < NEL; ++k)
+                        r = fma(reaction_cache[k], phi[k], r);
+#endif
+                }
+                const double scale = jac * volume_table[q];
+                volume_b[qq] = scale * b0;
+                volume_b[RAW_QCHUNK + qq] = scale * b1;
+                volume_b[2 * RAW_QCHUNK + qq] = scale * r;
+            }
+            __syncthreads();
+            for (int idx = tid; idx < nq * NEL; idx += blockDim.x) {
+                const int qq = idx / NEL;
+                const int t = (q0 + qq) * NEL + (idx - qq * NEL);
+                volume_h[idx] = volume_b[2 * RAW_QCHUNK + qq] * volume_table[RAW_VT_PHI + t]
+                    - volume_b[qq] * volume_table[RAW_VT_D0 + t]
+                    - volume_b[RAW_QCHUNK + qq] * volume_table[RAW_VT_D1 + t];
+            }
+            __syncthreads();
+            for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
+                const int i = idx / NEL;
+                const int j = idx - i * NEL;
+                const double* phi_j = volume_table + RAW_VT_PHI + q0 * NEL + j;
+                double value = local_lu[idx];
+                for (int qq = 0; qq < nq; ++qq)
+                    value = fma(volume_h[qq * NEL + i], phi_j[qq * NEL], value);
+                local_lu[idx] = value;
+            }
+            __syncthreads();
+        }
+    }
+#endif
 
     // Reset every local RHS column.  Columns 0..3*NTR-1 are local trace columns;
     // the last column is the projected source moment.  These columns will be
@@ -777,16 +907,20 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
     for (int idx = tid; idx < 3 * NQF; idx += blockDim.x) {
         const int face = idx / NQF;
         const int qf = idx - face * NQF;
+#if RAW_POINTWISE_BETA
+        double normal_flux = beta_normal_flux[(element * 3 + face) * NQF + qf];
+#else
         double beta_x = 0.0;
         double beta_y = 0.0;
-        for (int k = 0; k < NEL; ++k) {
-            const double phi = face_basis[(face * NEL + k) * NQF + qf];
+        for (int k = 0; k < NBETA; ++k) {
+            const double phi = beta_face_basis[(face * NBETA + k) * NQF + qf];
             beta_x += beta_x_cache[k] * phi;
             beta_y += beta_y_cache[k] * phi;
         }
         const double normal_x = normals[(element * 3 + face) * 2 + 0];
         const double normal_y = normals[(element * 3 + face) * 2 + 1];
         double normal_flux = beta_x * normal_x + beta_y * normal_y;
+#endif
 #if RAW_CONFLICT_AVERAGED_UPWIND
         const long long side = element * 3 + face;
         const long long edge = loc2glob_edge[side];
@@ -795,8 +929,8 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         const long long other = left == side ? right : left;
         if (other >= 0) {
             const int other_q = orientations[side] == orientations[other] ? qf : NQF - 1 - qf;
-            const double neighbor = raw_side_normal(beta_coeffs, face_basis, normals,
-                                                    num_elements, other, other_q);
+            const double neighbor = raw_side_normal_flux(beta_coeffs, beta_face_basis, beta_normal_flux,
+                                                         normals, num_elements, other, other_q);
             if (normal_flux >= 0.0 && neighbor >= 0.0 && normal_flux + neighbor > 0.0)
                 normal_flux = (normal_flux - neighbor) * 0.5;
         }
@@ -833,9 +967,10 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
         local_rhs[i * NCOLS + source_col] = jac * source_value;
     }
 
+#if !RAW_VOLUME_QUADRATURE
     // Volume operator: reaction mass minus beta . grad contribution.  Reaction
     // can be a scalar or a projected element field.  The advection tensor stores
-    // int phi_k * phi_j * grad_D(phi_i), shaped D,k,i,j.
+    // int psi_k * phi_j * grad_D(phi_i), shaped D,k,i,j with k < NBETA advection modes.
     for (int idx = tid; idx < NEL * NEL; idx += blockDim.x) {
         const int i = idx / NEL;
         const int j = idx - i * NEL;
@@ -862,15 +997,16 @@ __device__ __forceinline__ void assemble_projected_local_advection_raw(
                     + beta_ref1_cache[k] * advection_sparse_values1[pos];
             }
         } else {
-            for (int k = 0; k < NEL; ++k) {
-                const double adv0 = advection_tensor[((0 * NEL + k) * NEL + i) * NEL + j];
-                const double adv1 = advection_tensor[((1 * NEL + k) * NEL + i) * NEL + j];
+            for (int k = 0; k < NBETA; ++k) {
+                const double adv0 = advection_tensor[((0 * NBETA + k) * NEL + i) * NEL + j];
+                const double adv1 = advection_tensor[((1 * NBETA + k) * NEL + i) * NEL + j];
                 advection_value += beta_ref0_cache[k] * adv0 + beta_ref1_cache[k] * adv1;
             }
         }
         local_lu[idx] = value - jac * advection_value;
     }
     __syncthreads();
+#endif
 
     // Upwind boundary mass: int_{faces} |beta.n| phi_i phi_j.  The matrix is
     // symmetric, so each thread owns one upper-triangle entry and writes it and
@@ -1256,6 +1392,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const double* __restrict__ volume_table,
         const int* __restrict__ advection_sparse_offsets,
         const int* __restrict__ advection_sparse_modes,
         const double* __restrict__ advection_sparse_values0,
@@ -1263,6 +1400,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const int use_sparse_advection,
         const int mass_is_diagonal,
         const double* __restrict__ face_basis,
+        const double* __restrict__ beta_face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
         const double* __restrict__ edge_mass,
@@ -1270,6 +1408,9 @@ extern "C" __global__ void assemble_advection_raw_fused(
         const double* __restrict__ source_coeffs,
         const double* __restrict__ beta_coeffs,
         const double* __restrict__ reaction_coeffs,
+        const double* __restrict__ beta_volume_values,
+        const double* __restrict__ beta_normal_flux,
+        const double* __restrict__ reaction_values,
         const double* __restrict__ boundary_trace,
         const double reaction_scalar,
         const int reaction_is_scalar,
@@ -1286,12 +1427,15 @@ extern "C" __global__ void assemble_advection_raw_fused(
     double* tau_face = local_rhs + (NEL * NCOLS);      // 3 x NQF trace tau values
     double* gamma_face = tau_face + (3 * NQF);         // 3 x NQF trace gamma values
     double* source_cache = gamma_face + (3 * NQF);     // NEL projected source coefficients
-    double* beta_x_cache = source_cache + NEL;         // NEL projected beta_x coefficients
-    double* beta_y_cache = beta_x_cache + NEL;         // NEL projected beta_y coefficients
-    double* beta_ref0_cache = beta_y_cache + NEL;      // NEL beta coefficients transformed by inv_aff_mats_t column 0
-    double* beta_ref1_cache = beta_ref0_cache + NEL;   // NEL beta coefficients transformed by inv_aff_mats_t column 1
-    double* reaction_cache = beta_ref1_cache + NEL;    // NEL projected reaction coefficients when reaction is nonscalar
-    double* schur_lift_rows = reaction_cache + NEL;    // p>=8: 3*NTR x NEL spill-free Schur lifts
+    double* beta_x_cache = source_cache + NEL;         // NBETA advection field beta_x coefficients
+    double* beta_y_cache = beta_x_cache + NBETA;       // NBETA advection field beta_y coefficients
+    double* beta_ref0_cache = beta_y_cache + NBETA;    // NBETA advection coefficients transformed by inv_aff_mats_t column 0
+    double* beta_ref1_cache = beta_ref0_cache + NBETA; // NBETA advection coefficients transformed by inv_aff_mats_t column 1
+    double* reaction_cache = beta_ref1_cache + NBETA;  // NEL projected reaction coefficients when reaction is nonscalar
+    // The coefficient block spans RAW_COEFF_CACHE_DOUBLES >= 2*NEL + 4*NBETA
+    // doubles from source_cache; the BSR kernel reuses it to stage 3*NTR*NTR
+    // diagonal Schur entries, so it is at least that long too.
+    double* schur_lift_rows = source_cache + RAW_COEFF_CACHE_DOUBLES; // p>=8: 3*NTR x NEL spill-free Schur lifts
 #if NEL >= 45
     double* post_lift_workspace = schur_lift_rows + (3 * NTR * NEL);
 #else
@@ -1314,12 +1458,12 @@ extern "C" __global__ void assemble_advection_raw_fused(
             source_cache, beta_x_cache, beta_y_cache,
             beta_ref0_cache, beta_ref1_cache, reaction_cache,
             aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
-            mass_matrix, reaction_triples, advection_tensor,
+            mass_matrix, reaction_triples, advection_tensor, volume_table,
             advection_sparse_offsets, advection_sparse_modes,
             advection_sparse_values0, advection_sparse_values1,
             use_sparse_advection, mass_is_diagonal,
-            face_basis, face_weights, trace_basis,
-            source_coeffs, beta_coeffs, reaction_coeffs,
+            face_basis, beta_face_basis, face_weights, trace_basis,
+            source_coeffs, beta_coeffs, reaction_coeffs, beta_volume_values, beta_normal_flux, reaction_values,
             reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
             zero_boundary_flux, num_elements, element);
 #if RAW_LU_MODE_COOP
@@ -1356,7 +1500,7 @@ extern "C" __global__ void assemble_advection_raw_fused(
             }
 
             const bool gauge_face = raw_inactive_face_gauge(
-                tau_face, beta_coeffs, face_basis, normals, edge_side_indices,
+                tau_face, beta_coeffs, beta_face_basis, beta_normal_flux, normals, edge_side_indices,
                 num_elements, element, row_face, row_edge);
             const long long side_base = side_flux_offsets[side_id];
             const bool row_positive_lift = orientations[element * 3 + row_face];
@@ -1457,6 +1601,7 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const double* __restrict__ volume_table,
         const int* __restrict__ advection_sparse_offsets,
         const int* __restrict__ advection_sparse_modes,
         const double* __restrict__ advection_sparse_values0,
@@ -1464,11 +1609,15 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         const int use_sparse_advection,
         const int mass_is_diagonal,
         const double* __restrict__ face_basis,
+        const double* __restrict__ beta_face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
         const double* __restrict__ source_coeffs,
         const double* __restrict__ beta_coeffs,
         const double* __restrict__ reaction_coeffs,
+        const double* __restrict__ beta_volume_values,
+        const double* __restrict__ beta_normal_flux,
+        const double* __restrict__ reaction_values,
         const double reaction_scalar,
         const int reaction_is_scalar,
         const int zero_boundary_flux,
@@ -1481,17 +1630,20 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
     double* tau_face = local_rhs + (NEL * NCOLS);      // 3 x NQF trace tau values
     double* gamma_face = tau_face + (3 * NQF);         // 3 x NQF trace gamma values
     double* source_cache = gamma_face + (3 * NQF);     // NEL projected source coefficients
-    double* beta_x_cache = source_cache + NEL;         // NEL projected beta_x coefficients
-    double* beta_y_cache = beta_x_cache + NEL;         // NEL projected beta_y coefficients
-    double* beta_ref0_cache = beta_y_cache + NEL;      // NEL beta coefficients transformed by inv_aff_mats_t column 0
-    double* beta_ref1_cache = beta_ref0_cache + NEL;   // NEL beta coefficients transformed by inv_aff_mats_t column 1
-    double* reaction_cache = beta_ref1_cache + NEL;    // NEL projected reaction coefficients when reaction is nonscalar
+    double* beta_x_cache = source_cache + NEL;         // NBETA advection field beta_x coefficients
+    double* beta_y_cache = beta_x_cache + NBETA;       // NBETA advection field beta_y coefficients
+    double* beta_ref0_cache = beta_y_cache + NBETA;    // NBETA advection coefficients transformed by inv_aff_mats_t column 0
+    double* beta_ref1_cache = beta_ref0_cache + NBETA; // NBETA advection coefficients transformed by inv_aff_mats_t column 1
+    double* reaction_cache = beta_ref1_cache + NBETA;  // NEL projected reaction coefficients when reaction is nonscalar
+    // The coefficient block spans RAW_COEFF_CACHE_DOUBLES >= 2*NEL + 4*NBETA
+    // doubles from source_cache; the BSR kernel reuses it to stage 3*NTR*NTR
+    // diagonal Schur entries, so it is at least that long too.
 #if RAW_LU_MODE_COOP
-    double* lu_pivot_abs = reaction_cache + NEL;       // block scratch for cooperative pivot reduction
+    double* lu_pivot_abs = source_cache + RAW_COEFF_CACHE_DOUBLES; // block scratch for cooperative pivot reduction
     int* pivots = reinterpret_cast<int*>(lu_pivot_abs + RAW_LU_SCRATCH_THREADS);
     int* lu_pivot_rows = pivots + NEL;                 // block scratch for cooperative pivot row reduction
 #else
-    int* pivots = reinterpret_cast<int*>(reaction_cache + NEL);
+    int* pivots = reinterpret_cast<int*>(source_cache + RAW_COEFF_CACHE_DOUBLES);
 #endif
 
     const int tid = threadIdx.x;
@@ -1505,12 +1657,12 @@ extern "C" __global__ void reconstruct_advection_raw_fused(
         source_cache, beta_x_cache, beta_y_cache,
         beta_ref0_cache, beta_ref1_cache, reaction_cache,
         aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
-        mass_matrix, reaction_triples, advection_tensor,
+        mass_matrix, reaction_triples, advection_tensor, volume_table,
             advection_sparse_offsets, advection_sparse_modes,
             advection_sparse_values0, advection_sparse_values1,
             use_sparse_advection, mass_is_diagonal,
-        face_basis, face_weights, trace_basis,
-        source_coeffs, beta_coeffs, reaction_coeffs,
+        face_basis, beta_face_basis, face_weights, trace_basis,
+        source_coeffs, beta_coeffs, reaction_coeffs, beta_volume_values, beta_normal_flux, reaction_values,
         reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
             zero_boundary_flux, num_elements, element);
 
@@ -1713,6 +1865,43 @@ def _raw_trace_orientation_mode(trace_ref) -> str:
     )
 
 
+def volume_quadrature_layout(nel: int, ntr: int, nbeta: int, nqv: int) -> dict[str, int]:
+    """Return the packed volume-table offsets and chunk size of the quadrature operator.
+
+    ``volume_table`` holds ``[w (NQV) | phi (NQV, NEL) | d0 phi | d1 phi |
+    psi (NQV, NBETA)]``. The kernel stages ``H`` for ``qchunk`` points plus
+    three per-point advection/reaction values in the not-yet-used local RHS block
+    (``NEL * (3 * NTR + 1)`` doubles).
+    """
+    nel, ntr, nbeta, nqv = int(nel), int(ntr), int(nbeta), int(nqv)
+    qchunk = max(1, min(nqv, (nel * (3 * ntr + 1)) // (nel + 3)))
+    return {
+        "nqv": nqv,
+        "qchunk": qchunk,
+        "phi": nqv,
+        "d0": nqv + nqv * nel,
+        "d1": nqv + 2 * nqv * nel,
+        "psi": nqv + 3 * nqv * nel,
+        "size": nqv + 3 * nqv * nel + nqv * nbeta,
+    }
+
+
+def _volume_quadrature_macros(nel: int, ntr: int, nbeta: int, nqv: int | None) -> str:
+    """Return the ``RAW_VOLUME_QUADRATURE`` macro block (disabled when ``nqv`` is None)."""
+    if nqv is None:
+        return "#define RAW_VOLUME_QUADRATURE 0\n"
+    layout = volume_quadrature_layout(nel, ntr, nbeta, nqv)
+    return (
+        "#define RAW_VOLUME_QUADRATURE 1\n"
+        f"#define RAW_NQV {layout['nqv']}\n"
+        f"#define RAW_QCHUNK {layout['qchunk']}\n"
+        f"#define RAW_VT_PHI {layout['phi']}\n"
+        f"#define RAW_VT_D0 {layout['d0']}\n"
+        f"#define RAW_VT_D1 {layout['d1']}\n"
+        f"#define RAW_VT_PSI {layout['psi']}\n"
+    )
+
+
 def _kernel_source(
         template: str,
         *,
@@ -1723,9 +1912,30 @@ def _kernel_source(
         lu_mode: str = 'safe',
         trace_orientation: str = 'nodal',
         advection_stabilization=None,
+        nbeta: int | None = None,
+        nqv: int | None = None,
+        pointwise_beta: bool = False,
+        pointwise_reaction: bool = False,
 ) -> str:
-    """Build an instantiated CUDA kernel source string for advection assembly."""
-    source = template.replace('NEL', str(int(nel))).replace('NTR', str(int(ntr))).replace('NCOLS', str(int(ncols)))
+    """Build an instantiated CUDA kernel source string for advection assembly.
+
+    ``nbeta`` is the number of advection basis functions (default ``nel``: a
+    advection field in the solution space). ``nqv`` (the solution volume-rule size)
+    selects the quadrature volume operator (``RAW_VOLUME_QUADRATURE``) over the
+    contraction with the reference advection tensor; see
+    :func:`volume_quadrature_layout`. ``pointwise_beta`` / ``pointwise_reaction``
+    (``RAW_POINTWISE_BETA`` / ``RAW_POINTWISE_REACTION``) read the advection field and the
+    reaction from their values at the quadrature points; both need ``nqv``.
+    """
+    if (pointwise_beta or pointwise_reaction) and nqv is None:
+        raise ValueError("quadrature-point coefficients need the quadrature volume operator (nqv)")
+    nbeta = int(nel) if nbeta is None else int(nbeta)
+    source = (
+        template.replace('NBETA', str(nbeta))
+        .replace('NEL', str(int(nel)))
+        .replace('NTR', str(int(ntr)))
+        .replace('NCOLS', str(int(ncols)))
+    )
     if nqf is not None:
         source = source.replace('NQF', str(int(nqf)))
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
@@ -1743,7 +1953,11 @@ def _kernel_source(
         f"#define RAW_LU_SCRATCH_THREADS {_RAW_LU_SCRATCH_THREADS}\n"
         f"#define RAW_TRACE_ORIENTATION_MODAL {1 if trace_orientation == 'modal' else 0}\n"
         f"#define RAW_NTR {int(ntr)}\n"
-        "__device__ __forceinline__ int raw_local_trace_dof(const bool positive, const int global_dof) {\n"
+        f"#define RAW_COEFF_CACHE_DOUBLES {_coefficient_cache_doubles(nel, ntr, nbeta)}\n"
+        f"#define RAW_POINTWISE_BETA {1 if pointwise_beta else 0}\n"
+        f"#define RAW_POINTWISE_REACTION {1 if pointwise_reaction else 0}\n"
+        + _volume_quadrature_macros(nel, ntr, nbeta, nqv)
+        + "__device__ __forceinline__ int raw_local_trace_dof(const bool positive, const int global_dof) {\n"
         "#if RAW_TRACE_ORIENTATION_MODAL\n"
         "    return global_dof;\n"
         "#else\n"
@@ -1777,20 +1991,36 @@ def _shared_sizes(nel: int, ntr: int) -> tuple[int, int]:
     return assembly_bytes, reconstruct_bytes
 
 
-def _fused_shared_sizes(nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe') -> tuple[int, int]:
+def _coefficient_cache_doubles(nel: int, ntr: int, nbeta: int | None = None) -> int:
+    """Return the length of the fused kernels' per-element coefficient block.
+
+    The block holds the source and reaction caches (``nel`` each) and four
+    advection caches (``nbeta`` each: beta_x, beta_y and both reference-frame
+    combinations). The face-BSR kernel reuses it to stage ``3*ntr*ntr``
+    diagonal Schur entries, so it is never shorter than that. An advection field with
+    fewer modes than the solution (``nbeta < nel``) would otherwise make the
+    staging overrun into the Schur lifts and pivots.
+    """
+    nbeta = int(nel) if nbeta is None else int(nbeta)
+    return max(2 * int(nel) + 4 * nbeta, 3 * int(ntr) * int(ntr))
+
+
+def _fused_shared_sizes(
+        nel: int, ntr: int, nqf: int, *, lu_mode: str = 'safe', nbeta: int | None = None,
+) -> tuple[int, int]:
     """Compute shared-memory byte sizes for fused advection kernels."""
     ncols = 3 * ntr + 1
     normalized_lu_mode = _normalize_raw_lu_mode(lu_mode)
     # The fused kernels keep the local operator, all local trace/source columns,
-    # trace tau and gamma on face quadrature points, and six short per-element
-    # coefficient caches: source, beta_x, beta_y, transformed beta_ref0,
-    # transformed beta_ref1, and optional reaction coefficients.  The reaction
-    # cache is reserved even for scalar reaction so the CUDA shared-memory
-    # layout is compile-time fixed.
+    # trace tau and gamma on face quadrature points, and a per-element
+    # coefficient block (_coefficient_cache_doubles): source, beta_x, beta_y,
+    # transformed beta_ref0, transformed beta_ref1, and optional reaction
+    # coefficients.  The reaction cache is reserved even for scalar reaction
+    # so the CUDA shared-memory layout is compile-time fixed.
     # The experimental cooperative LU mode adds fixed block-sized scratch arrays
     # for pivot absolute values and pivot row indices.  p=8--9 with the supported trace bases remain below the target
     # device opt-in shared-memory limit.
-    base_doubles = nel * nel + nel * ncols + 6 * nqf + 6 * nel
+    base_doubles = nel * nel + nel * ncols + 6 * nqf + _coefficient_cache_doubles(nel, ntr, nbeta)
     assembly_doubles = base_doubles
     # At p>=8 the fused Schur loop would otherwise materialize one NEL-entry
     # lift vector in every participating thread.  NVRTC lowers that
@@ -1914,6 +2144,105 @@ def _raw_fused_bsr_template() -> str:
     return source
 
 
+def _advection_launch_inputs(cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref):
+    """Normalize the advection field arrays for a fused launch and return them with ``nbeta``.
+
+    ``beta_coeffs`` is ``(2, E, NB)``; ``beta_face_basis`` the advection field basis on
+    the trace face quadrature ``(3, NB, NQF)`` (``None`` = the solution basis,
+    which requires ``NB == NEL``); ``advection_tensor`` is ``(2, NB, NEL, NEL)``.
+    See :mod:`hybridge.transport.advection_field`.
+    """
+    nel = int(cspace.el_dof)
+    nqf = int(trace_ref.weights.size)
+    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
+    if beta_coeffs.ndim != 3 or tuple(beta_coeffs.shape[:2]) != (2, int(cspace.mesh.num_tri)):
+        raise ValueError(
+            f"beta_coeffs must have shape (2, {int(cspace.mesh.num_tri)}, NB); got {tuple(beta_coeffs.shape)}"
+        )
+    nbeta = int(beta_coeffs.shape[2])
+    if beta_face_basis is None:
+        if nbeta != nel:
+            raise ValueError("an advection field from another DG space needs its beta_face_basis table")
+        beta_face_basis = trace_ref.bas_of_bd_quads
+    else:
+        beta_face_basis = cupy.ascontiguousarray(beta_face_basis, dtype=REAL_DTYPE)
+    if tuple(beta_face_basis.shape) != (3, nbeta, nqf):
+        raise ValueError(f"beta_face_basis must have shape (3, {nbeta}, {nqf}); got {tuple(beta_face_basis.shape)}")
+    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
+    if tuple(advection_tensor.shape) != (2, nbeta, nel, nel):
+        raise ValueError(
+            f"advection_tensor must have shape (2, {nbeta}, {nel}, {nel}); got {tuple(advection_tensor.shape)}"
+        )
+    return beta_coeffs, beta_face_basis, advection_tensor, nbeta
+
+
+def _volume_launch_inputs(cupy, volume_table, nel: int, nbeta: int):
+    """Return ``(device_table_or_dummy, nqv_or_None)`` for a fused launch.
+
+    ``volume_table`` (see :func:`volume_quadrature_layout`) selects the
+    quadrature volume operator; ``None`` keeps the tensor contraction and
+    passes a one-entry dummy pointer.
+    """
+    if volume_table is None:
+        return cupy.zeros(1, dtype=REAL_DTYPE), None
+    volume_table = cupy.ascontiguousarray(volume_table, dtype=REAL_DTYPE).reshape(-1)
+    per_point = 1 + 3 * int(nel) + int(nbeta)
+    nqv, rest = divmod(int(volume_table.size), per_point)
+    if rest or nqv < 1:
+        raise ValueError(f"volume_table size {volume_table.size} is not a multiple of 1 + 3*NEL + NB = {per_point}")
+    return volume_table, nqv
+
+
+def _pointwise_launch_inputs(cupy, cspace, trace_ref, beta_volume_values=None, beta_normal_flux=None,
+                             reaction_values=None) -> tuple:
+    """Normalize quadrature-point coefficients for a fused launch.
+
+    ``beta_volume_values`` ``(E, NQV, 2)`` and ``beta_normal_flux`` ``(E, 3, NQF)`` come together
+    (pointwise advection); ``reaction_values`` is ``(E, NQV)``. Returns the three device arrays, with
+    one-entry dummies for the unused ones, and the ``(pointwise_beta, pointwise_reaction)`` flags.
+    """
+    if (beta_volume_values is None) != (beta_normal_flux is None):
+        raise ValueError("a quadrature-point advection field needs both its volume values and its normal flux")
+    num_tri = int(cspace.mesh.num_tri)
+    nqv = int(cspace.quad_data.Krf_w.size)
+    nqf = int(trace_ref.weights.size)
+    dummy = cupy.zeros(1, dtype=REAL_DTYPE)
+    pointwise_beta = beta_volume_values is not None
+    pointwise_reaction = reaction_values is not None
+    if pointwise_beta:
+        beta_volume_values = cupy.ascontiguousarray(beta_volume_values, dtype=REAL_DTYPE)
+        beta_normal_flux = cupy.ascontiguousarray(beta_normal_flux, dtype=REAL_DTYPE)
+        if tuple(beta_volume_values.shape) != (num_tri, nqv, 2):
+            raise ValueError(f"beta_volume_values must have shape ({num_tri}, {nqv}, 2); "
+                             f"got {tuple(beta_volume_values.shape)}")
+        if tuple(beta_normal_flux.shape) != (num_tri, 3, nqf):
+            raise ValueError(f"beta_normal_flux must have shape ({num_tri}, 3, {nqf}); "
+                             f"got {tuple(beta_normal_flux.shape)}")
+    else:
+        beta_volume_values = beta_normal_flux = dummy
+    if pointwise_reaction:
+        reaction_values = cupy.ascontiguousarray(reaction_values, dtype=REAL_DTYPE)
+        if tuple(reaction_values.shape) != (num_tri, nqv):
+            raise ValueError(f"reaction_values must have shape ({num_tri}, {nqv}); "
+                             f"got {tuple(reaction_values.shape)}")
+    else:
+        reaction_values = dummy
+    return beta_volume_values, beta_normal_flux, reaction_values, pointwise_beta, pointwise_reaction
+
+
+def _fused_advection_inputs(cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref,
+                        pointwise_beta: bool) -> tuple:
+    """Return ``(beta_coeffs, beta_face_basis, advection_tensor, nbeta)`` for a fused launch.
+
+    A quadrature-point advection field (``pointwise_beta``) needs no coefficient tables: one-entry dummies,
+    the solution face basis and ``nbeta = NEL``, so the shared layout is that of a same-space advection.
+    """
+    if not pointwise_beta:
+        return _advection_launch_inputs(cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref)
+    dummy = cupy.zeros(1, dtype=REAL_DTYPE)
+    return dummy, trace_ref.bas_of_bd_quads, dummy, int(cspace.el_dof)
+
+
 def validate_raw_cuda_supported(
         cspace,
         trace_ref,
@@ -1998,7 +2327,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda(
         trace_orientation=_raw_trace_orientation_mode(trace_ref),
     )
     kernel = _compile_kernel(cupy, source, kernel_name, assembly_shared)
-    grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+    # One block per element: no transport kernel does edge-indexed work, so the
+    # former max(elements, interior edges) grid only added empty blocks.
+    grid = (int(cspace.mesh.num_tri),)
     kernel(
         grid,
         (block_size,),
@@ -2074,8 +2405,23 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         local_response=None,
         cache_local_response: bool = True,
         factor_workspace: RawAdvectionFactorWorkspace | None = None,
+        beta_face_basis=None,
+        volume_table=None,
+        beta_volume_values=None,
+        beta_normal_flux=None,
+        reaction_values=None,
 ) -> RawAdvectionAssemblyResult:
-    """Assemble the reduced advection trace system with fused projected local assembly."""
+    """Assemble the reduced advection trace system with fused projected local assembly.
+
+    The advection field ``beta_coeffs`` ``(2, E, NB)`` may live in another DG space than
+    the solution; then ``beta_face_basis`` and ``advection_tensor`` are its
+    cross-space tables (:func:`hybridge.transport.advection_field.advection_field_reference`).
+    ``volume_table`` selects the quadrature volume operator
+    (:func:`volume_quadrature_layout`) instead of the tensor contraction.
+    ``beta_volume_values`` ``(E, NQV, 2)`` with ``beta_normal_flux`` ``(E, 3, NQF)``
+    give the advection field at the quadrature points instead of ``beta_coeffs``, and
+    ``reaction_values`` ``(E, NQV)`` the reaction; both need ``volume_table``.
+    """
     cupy = require_cupy()
     lu_mode = _normalize_raw_lu_mode(lu_mode)
     validate_raw_cuda_supported(
@@ -2097,15 +2443,23 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
     )
     if block_size not in {1, 32, 64, 128}:
         raise ValueError('raw CUDA advection block_size must be one of 1, 32, 64, 128')
-    assembly_shared, _ = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode)
+    (beta_volume_values, beta_normal_flux, reaction_values,
+     pointwise_beta, pointwise_reaction) = _pointwise_launch_inputs(
+        cupy, cspace, trace_ref, beta_volume_values, beta_normal_flux, reaction_values)
+    beta_coeffs, beta_face_basis, advection_tensor, nbeta = _fused_advection_inputs(
+        cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref, pointwise_beta)
+    if (pointwise_beta or pointwise_reaction) and volume_table is None:
+        raise ValueError("quadrature-point coefficients need the quadrature volume table (volume_table)")
+    volume_table, nqv = _volume_launch_inputs(cupy, volume_table, nel, nbeta)
+    assembly_shared, _ = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode, nbeta=nbeta)
 
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
-    if reaction_is_scalar:
+    if pointwise_reaction and reaction_is_scalar:
+        raise ValueError("reaction_values give a field reaction; set reaction_is_scalar=False")
+    if reaction_is_scalar or pointwise_reaction:
         reaction_coeffs = cupy.empty(1, dtype=REAL_DTYPE)
     else:
         reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
     advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
@@ -2211,7 +2565,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         source = _kernel_source(
             template, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
-            advection_stabilization=advection_stabilization,
+            advection_stabilization=advection_stabilization, nbeta=nbeta, nqv=nqv,
+            pointwise_beta=pointwise_beta, pointwise_reaction=pointwise_reaction,
         )
         source = _apply_fused_assembly_launch_bounds(
             source, kernel_name=kernel_name, nel=nel, block_size=block_size
@@ -2227,7 +2582,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         end = cupy.cuda.Event()
         launch_wall_start = time.perf_counter()
         begin.record(stream)
-        grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+        grid = (int(cspace.mesh.num_tri),)  # one block per element (no edge-indexed work)
         kernel(
             grid,
             (block_size,),
@@ -2254,6 +2609,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 cspace.quad_data.MKrf,
                 cspace.quad_data.weighted_triple_phi_flat,
                 advection_tensor,
+                volume_table,
                 advection_sparse_offsets,
                 advection_sparse_modes,
                 advection_sparse_values0,
@@ -2261,6 +2617,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 np.int32(1 if use_sparse_advection else 0),
                 np.int32(1 if mass_is_diagonal else 0),
                 trace_ref.bas_of_bd_quads,
+                beta_face_basis,
                 trace_ref.weights,
                 trace_ref.bas1d_of_ref_edg_qds,
                 trace_ref.M_rf_fc,
@@ -2268,6 +2625,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 source_coeffs,
                 beta_coeffs,
                 reaction_coeffs,
+                beta_volume_values,
+                beta_normal_flux,
+                reaction_values,
                 boundary_trace_full.reshape(-1),
                 REAL_DTYPE(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
@@ -2282,7 +2642,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         source = _kernel_source(
             _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
             lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
-            advection_stabilization=advection_stabilization,
+            advection_stabilization=advection_stabilization, nbeta=nbeta, nqv=nqv,
+            pointwise_beta=pointwise_beta, pointwise_reaction=pointwise_reaction,
         )
         source = _apply_fused_assembly_launch_bounds(
             source, kernel_name='assemble_advection_raw_fused', nel=nel, block_size=block_size
@@ -2298,7 +2659,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         end = cupy.cuda.Event()
         launch_wall_start = time.perf_counter()
         begin.record(stream)
-        grid = (max(int(cspace.mesh.num_tri), int(cspace.mesh.int_edges_inds.size)),)
+        grid = (int(cspace.mesh.num_tri),)  # one block per element (no edge-indexed work)
         kernel(
             grid,
             (block_size,),
@@ -2325,6 +2686,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 cspace.quad_data.MKrf,
                 cspace.quad_data.weighted_triple_phi_flat,
                 advection_tensor,
+                volume_table,
                 advection_sparse_offsets,
                 advection_sparse_modes,
                 advection_sparse_values0,
@@ -2332,6 +2694,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 np.int32(1 if use_sparse_advection else 0),
                 np.int32(1 if mass_is_diagonal else 0),
                 trace_ref.bas_of_bd_quads,
+                beta_face_basis,
                 trace_ref.weights,
                 trace_ref.bas1d_of_ref_edg_qds,
                 trace_ref.M_rf_fc,
@@ -2339,6 +2702,9 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
                 source_coeffs,
                 beta_coeffs,
                 reaction_coeffs,
+                beta_volume_values,
+                beta_normal_flux,
+                reaction_values,
                 boundary_trace_full.reshape(-1),
                 REAL_DTYPE(reaction_scalar),
                 np.int32(1 if reaction_is_scalar else 0),
@@ -2360,6 +2726,7 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         'raw.kernel' if matrix_format == 'coo' else f'raw.{matrix_format}_kernel'
     ] = device_seconds
     timings['raw.block_size'] = float(block_size)
+    timings['raw.volume_quadrature'] = float(nqv is not None)
     map_wall = timings.get('raw.csr_pattern.wrapper', timings.get('raw.map_setup', 0.0))
     timings['raw.total'] = (
         timings.get('raw.input_prepare', 0.0)
@@ -2386,6 +2753,8 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         csr_pattern=csr_pattern,
         source_coeffs=source_coeffs,
         beta_coeffs=beta_coeffs,
+        beta_face_basis=beta_face_basis,
+        volume_table=volume_table if nqv is not None else None,
         reaction_coeffs=reaction_coeffs,
         reaction_scalar=float(reaction_scalar),
         reaction_is_scalar=bool(reaction_is_scalar),
@@ -2400,6 +2769,11 @@ def assemble_projected_advection_trace_system_eliminated_raw_cuda_fused(
         lu_mode=lu_mode,
         zero_boundary_flux=zero_boundary_flux,
         advection_stabilization=advection_stabilization,
+        beta_volume_values=beta_volume_values if pointwise_beta else None,
+        beta_normal_flux=beta_normal_flux if pointwise_beta else None,
+        reaction_values=reaction_values if pointwise_reaction else None,
+        pointwise_beta=pointwise_beta,
+        pointwise_reaction=pointwise_reaction,
     )
 
 
@@ -2465,8 +2839,18 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
         lu_mode: str = 'coop',
         zero_boundary_flux: bool = False,
         advection_stabilization=None,
+        beta_face_basis=None,
+        volume_table=None,
+        beta_volume_values=None,
+        beta_normal_flux=None,
+        reaction_values=None,
 ):
-    """Recover primal coefficients with fused projected local reconstruction."""
+    """Recover primal coefficients with fused projected local reconstruction.
+
+    ``beta_face_basis`` and ``advection_tensor`` describe an advection field from another
+    DG space as in the fused assembly; ``beta_volume_values``, ``beta_normal_flux``
+    and ``reaction_values`` give quadrature-point coefficients as there.
+    """
     cupy = require_cupy()
     lu_mode = _normalize_raw_lu_mode(lu_mode)
     validate_raw_cuda_supported(
@@ -2485,14 +2869,22 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     )
     if block_size not in {1, 32, 64, 128}:
         raise ValueError('raw CUDA advection block_size must be one of 1, 32, 64, 128')
-    _, reconstruct_shared = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode)
-    if reaction_is_scalar:
+    (beta_volume_values, beta_normal_flux, reaction_values,
+     pointwise_beta, pointwise_reaction) = _pointwise_launch_inputs(
+        cupy, cspace, trace_ref, beta_volume_values, beta_normal_flux, reaction_values)
+    beta_coeffs, beta_face_basis, advection_tensor, nbeta = _fused_advection_inputs(
+        cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref, pointwise_beta)
+    if (pointwise_beta or pointwise_reaction) and volume_table is None:
+        raise ValueError("quadrature-point coefficients need the quadrature volume table (volume_table)")
+    volume_table, nqv = _volume_launch_inputs(cupy, volume_table, nel, nbeta)
+    _, reconstruct_shared = _fused_shared_sizes(nel, ntr, nqf, lu_mode=lu_mode, nbeta=nbeta)
+    if pointwise_reaction and reaction_is_scalar:
+        raise ValueError("reaction_values give a field reaction; set reaction_is_scalar=False")
+    if reaction_is_scalar or pointwise_reaction:
         reaction_coeffs = cupy.empty(1, dtype=REAL_DTYPE)
     else:
         reaction_coeffs = cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
     advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
@@ -2505,7 +2897,8 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
     source = _kernel_source(
         _RAW_FUSED_TEMPLATE, nel=nel, ntr=ntr, ncols=ncols, nqf=nqf,
         lu_mode=lu_mode, trace_orientation=_raw_trace_orientation_mode(trace_ref),
-        advection_stabilization=advection_stabilization,
+        advection_stabilization=advection_stabilization, nbeta=nbeta, nqv=nqv,
+        pointwise_beta=pointwise_beta, pointwise_reaction=pointwise_reaction,
     )
     kernel = _compile_kernel(cupy, source, 'reconstruct_advection_raw_fused', reconstruct_shared)
     start = time.perf_counter()
@@ -2526,6 +2919,7 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             cspace.quad_data.MKrf,
             cspace.quad_data.weighted_triple_phi_flat,
             advection_tensor,
+            volume_table,
             advection_sparse_offsets,
             advection_sparse_modes,
             advection_sparse_values0,
@@ -2533,11 +2927,15 @@ def reconstruct_projected_advection_field_raw_cuda_fused(
             np.int32(1 if use_sparse_advection else 0),
             np.int32(1 if mass_is_diagonal else 0),
             trace_ref.bas_of_bd_quads,
+            beta_face_basis,
             trace_ref.weights,
             trace_ref.bas1d_of_ref_edg_qds,
             source_coeffs,
             beta_coeffs,
             reaction_coeffs,
+            beta_volume_values,
+            beta_normal_flux,
+            reaction_values,
             REAL_DTYPE(reaction_scalar),
             np.int32(1 if reaction_is_scalar else 0),
             np.int32(1 if zero_boundary_flux else 0),

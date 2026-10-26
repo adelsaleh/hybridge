@@ -15,7 +15,8 @@ from hybridge.solvers.advection_stages import (
     TransportAssemblyInputs,
     TransportReconstruction,
 )
-from hybridge.transport.local_numpy import _callable_advection_mats
+from hybridge.core.quadrature_coefficients import QuadratureVectorField
+from hybridge.transport.local_numpy import _callable_advection_mats, _values_advection_mats
 
 
 def assemble_transport_numba(
@@ -192,7 +193,9 @@ def assemble_transport_numpy(inputs: TransportAssemblyInputs) -> TransportAssemb
             "assembling advection matrices",
             verbosity,
             lambda: (
-                transport_local_numpy.add_advection_mats(local_blocks, space, beta_h, scale=-1.0)
+                np.subtract(local_blocks, _values_advection_mats(space, beta_h.arrays(np)[0]), out=local_blocks)
+                if isinstance(beta_h, QuadratureVectorField)
+                else transport_local_numpy.add_advection_mats(local_blocks, space, beta_h, scale=-1.0)
                 if beta_h is not None
                 else np.subtract(local_blocks, _callable_advection_mats(space, beta_callables), out=local_blocks)
             ),

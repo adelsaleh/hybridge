@@ -23,13 +23,28 @@ valid assembly, solve, and reconstruction combinations.
 
 | Solver | Parameter | NumPy | CuPy | Numba | raw CUDA |
 | --- | --- | --- | --- | --- | --- |
-| Advection-reaction | source, reaction | Vectorized callable, scalar, or DGField | CuPy-compatible callable, scalar, or resident/host DGField | Same-space DGField; lazy zero/constant fields are supported | Same-space projected DGField |
-| Advection-reaction | beta | Pair of callables or VectorDGField | Pair of CuPy-compatible callables or VectorDGField | Same-space VectorDGField | Same-space projected VectorDGField |
+| Advection-reaction | source, reaction | Vectorized callable, scalar, DGField, or `QuadratureScalar` | CuPy-compatible callable, scalar, or resident/host DGField | Same-space DGField or `QuadratureScalar`; lazy zero/constant fields are supported | Same-space projected DGField or `QuadratureScalar` (fused, split3); a constant reaction field uses the scalar mass path |
+| Advection-reaction | beta | Pair of callables, VectorDGField (any DG space on the mesh), or `QuadratureVectorField` | Pair of CuPy-compatible callables or VectorDGField (any DG space on the mesh) | VectorDGField from any DG space on the mesh (any degree and basis), or `QuadratureVectorField` | VectorDGField from any DG space on the mesh (fused, split3, precomputed), or `QuadratureVectorField` (fused, split3) |
 | Diffusion-reaction | source, reaction | Vectorized callable, scalar, or DGField | Reusable device path projected/constant subset | Same-space DGField | Same-space projected fields within the raw-kernel subset |
 | Diffusion-reaction | diffusion | Positive scalar, supported tensor forms, or supported callable tensor components | Identity production subset | Identity or adapter-projected inverse tensor | Identity production subset |
 | ADR | source, reaction | Callable, DG input or `ElementCoefficient` accepted by common preparation | No standalone CuPy assembly path | Common host preparation lowers the accepted input to tables | Common device preparation lowers the input to device tables; `ElementCoefficient` and CuPy source moments/values and reaction values stay on the device |
 | ADR | beta | Pair of formulas, VectorDGField or two-component `ElementCoefficient` (sampled directly at volume, per-incidence face and recovery points); common preparation owns sampling | No standalone CuPy assembly path | Common preparation supplies sampled vector data | Common preparation supplies sampled device data (`ElementCoefficient` evaluated with `xp=cupy`) |
 | ADR | diffusion | Positive scalar or elliptic tensor; constants, callables, DG fields | CuPy postprocessing only | Same inputs as NumPy, with exact per-element structural specialization | Same tensor inputs; p=0--9 assembly/reconstruction ([FP64 qualification](../research/solver_studies/raw_cuda_adr_high_order_2026_10_15.md)); tensor primal and both total-flux recoveries qualified separately through p=6 |
+
+An advection field from another DG space (for example a raw LDG-H Poisson flux of degree
+`q != p`) is never projected: every backend evaluates it with its own basis at
+the solution space's volume and face quadrature points. Numba and raw CUDA
+contract its coefficients with cross-space reference tables
+(`hybridge.transport.advection_field`). The solution space's volume rule therefore sets
+how exactly the `q + 2p - 1` volume integrand is integrated (`volume_degree`),
+and its size also selects the raw/Numba volume operator: a tensor contraction,
+or a sum over the quadrature points when that is cheaper.
+
+`QuadratureVectorField` and `QuadratureScalar` (see [Coefficient Inputs](coefficient_inputs.md)) give the
+exact coefficient values at those quadrature points instead: the advection field at the volume points with its normal
+flux at the face points, the reaction and source at the volume points. Nothing is projected; the kernels use
+the sum over the quadrature points as volume operator, and a source enters through its moments. CuPy assembly
+rejects them.
 
 For variable/tensor ADR diffusion, the default stabilization uses the maximum
 sampled `n^T K n` independently on each element-face incidence, divided by the
@@ -58,7 +73,7 @@ capturing NumPy-only operations.
 | Solver/path | Advection stabilization | Diffusion stabilization |
 | --- | --- | --- |
 | Advection-reaction NumPy/CuPy | None selects conflict-averaged upwind for DG velocities, standard upwind for analytic callables; explicit upwind/ScaledUpwind/LF/conflict policy, scalar, callable, DGField, compatible incidence constants, or face table | Not applicable |
-| Advection-reaction Numba | None selects conflict-averaged upwind for DG velocities; explicit upwind/ScaledUpwind/LF/conflict policy, scalar, or projected DGField | Not applicable |
+| Advection-reaction Numba | None selects conflict-averaged upwind for DG velocities and `QuadratureVectorField`; explicit upwind/ScaledUpwind/LF/conflict policy, scalar, or projected DGField | Not applicable |
 | Advection-reaction raw CUDA | None selects conflict-averaged upwind; explicit upwind, ScaledUpwind, lax-friedrichs, or conflict-averaged-upwind | Not applicable |
 | Diffusion-reaction NumPy/Numba | Not applicable | Default GlobalLengthDiffusion; positive scalar, shape (K,), or shape (K,3) explicit inputs |
 | Diffusion-reaction CuPy/raw CUDA | Not applicable | Default GlobalLengthDiffusion resolved before dispatch, or an explicit positive scalar |

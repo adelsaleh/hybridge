@@ -4,6 +4,12 @@ The algebraic trace constraint is eliminated with independent face mass
 solves. This is the same flux as advection_reaction, tau*u - (tau-beta.n)*uhat,
 including when the two element-side velocities differ. Reusing a trace from
 a solve with a different velocity would define a different spatial operator.
+The velocity may live in another DG space on the mesh (any degree); it is
+evaluated with its own basis at this space's quadrature points, as in the
+assembly (``hybridge.transport.advection_field``). It may also be a
+:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`, the velocity
+given by its values at this space's volume points and its normal flux at the
+trace face points, which are used as they are.
 """
 from __future__ import annotations
 
@@ -98,6 +104,7 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
         self.active_faces = (mesh.interior_face_mask if self.boundary_mode == "zero-flux"
                              else xp.ones((mesh.num_tri, 3), dtype=bool))
         self.face_basis = trace.bas_of_bd_quads
+        self._advection_bases = {}
         self.face_weighted_basis = trace.weighted_bas_of_bd_quads
         self.volume_weighted_gradient = q.dbas_of_quads * q.Krf_w[None, None, :]
         n, nq, nfq, nt = mesh.num_tri, q.Krf_w.size, trace.weights.size, trace.edg_dof
@@ -121,6 +128,38 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             return field.coeffs
         from hybridge.core.device import as_cupy_coefficients
         return as_cupy_coefficients(field, self.cspace)
+
+    def _advection_data(self, beta):
+        """Return the advection field coefficients per component and its basis at this space's points.
+
+        The bases are ``(NB, NQV)`` on the volume rule and ``(3, NB, NQF)`` on
+        the trace face quadrature, cached per advection basis family and degree.
+        An advection field in this space's basis uses the solution tables themselves.
+        """
+        from hybridge.transport.advection_field import advection_field_reference, advection_field_space, same_advection_basis
+        beta_space = advection_field_space(beta, self.space)
+        if beta_space is self.space:
+            return [self._coefficients(c) for c in beta.components], (self.q.bas_of_quads, self.face_basis)
+        key = (str(beta_space.reference.basis_type), int(beta_space.order))
+        bases = self._advection_bases.get(key)
+        if bases is None:
+            if same_advection_basis(self.space, beta_space):
+                bases = (self.q.bas_of_quads, self.face_basis)
+            else:
+                advection = advection_field_reference(self.space, beta_space, self.trace_host)
+                if self.cspace is None:
+                    bases = (np.ascontiguousarray(advection.volume_basis.T, dtype=REAL_DTYPE),
+                             np.ascontiguousarray(advection.face_basis, dtype=REAL_DTYPE))
+                else:
+                    from hybridge.transport.cuda import advection_face_basis_cupy, advection_volume_basis_cupy
+                    bases = (advection_volume_basis_cupy(advection, self.cspace), advection_face_basis_cupy(advection, self.trace))
+            self._advection_bases[key] = bases
+        if self.cspace is None:
+            coeffs = [np.asarray(c.coeffs, dtype=REAL_DTYPE) for c in beta.components]
+        else:
+            from hybridge.core.device import as_cupy_vector_coefficients
+            coeffs = as_cupy_vector_coefficients(beta, self.cspace)
+        return coeffs, bases
 
     def _sum_sides(self, values):
         """Gather and sum contributions using the inverse mesh edge map."""
@@ -191,11 +230,19 @@ class UpwindHDGTransportResidual(HDGTraceWorkspace):
             raise ValueError("transport residual requires two velocity components")
         self.u_volume[:] = rho @ q.bas_of_quads
         self.u_face[:] = xp.einsum("ki,fiq->kfq", rho, self.face_basis)
-        for component in (0, 1):
-            b = self._coefficients(beta.components[component])
-            self.beta_volume[:, :, component] = b @ q.bas_of_quads
-            self.beta_face[:, :, :, component] = xp.einsum("ki,fiq->kfq", b, self.face_basis)
-        self.normal_flux[:] = xp.einsum("kfqd,kfd->kfq", self.beta_face, mesh.normals)
+        from hybridge.core.quadrature_coefficients import QuadratureVectorField
+        if isinstance(beta, QuadratureVectorField):
+            beta.check(self.space, self.trace_host)
+            volume, normal_flux = beta.arrays(xp)
+            self.beta_volume[:] = volume
+            self.normal_flux[:] = normal_flux
+        else:
+            coeffs, (beta_volume_basis, beta_face_basis) = self._advection_data(beta)
+            for component in (0, 1):
+                b = coeffs[component]
+                self.beta_volume[:, :, component] = b @ beta_volume_basis
+                self.beta_face[:, :, :, component] = xp.einsum("ki,fiq->kfq", b, beta_face_basis)
+            self.normal_flux[:] = xp.einsum("kfqd,kfd->kfq", self.beta_face, mesh.normals)
         from hybridge.hdg.stabilization import (effective_advection_normal_flux,
                                               resolve_transport_stabilization)
         self.normal_flux[:] = effective_advection_normal_flux(

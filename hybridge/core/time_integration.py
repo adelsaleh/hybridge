@@ -1,4 +1,9 @@
-"""Reusable time-discretization algebra for DG transport fields."""
+"""Reusable time-discretization algebra for DG transport fields.
+
+Velocities are DG vector fields (:class:`~hybridge.core.space.VectorDGField`) or advection fields given
+at the quadrature points (:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`);
+the history levels of one call must all have the same kind and layout.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import math
 from numbers import Real
 
 from hybridge.core.field_ops import field_linear_combination
+from hybridge.core.quadrature_coefficients import QuadratureVectorField
 from hybridge.core.space import DGField, VectorDGField
 
 
@@ -13,8 +19,8 @@ def _checked_current(field, velocity, dt) -> float:
     """Validate the current field, its velocity and the step; return float dt."""
     if not isinstance(field, DGField):
         raise TypeError("field must be a DGField")
-    if not isinstance(velocity, VectorDGField):
-        raise TypeError("velocity must be a VectorDGField")
+    if not isinstance(velocity, (VectorDGField, QuadratureVectorField)):
+        raise TypeError("velocity must be a VectorDGField or a QuadratureVectorField")
     if velocity.dim != 2:
         raise ValueError("velocity must have two components")
     if not isinstance(dt, Real) or isinstance(dt, bool):
@@ -22,6 +28,9 @@ def _checked_current(field, velocity, dt) -> float:
     dt = float(dt)
     if not math.isfinite(dt) or dt <= 0:
         raise ValueError("dt must be finite and positive")
+    if isinstance(velocity, QuadratureVectorField):
+        field.space.assert_same_mesh(velocity.space)
+        return dt
     for component in velocity.components:
         field.space.assert_same_mesh(component.space)
     return dt
@@ -31,6 +40,12 @@ def _check_history(field, velocity, history_field, history_velocity, label) -> N
     """Require one history level to match the current field and velocity bases."""
     if not isinstance(history_field, DGField):
         raise TypeError(f"{label}_field must be a DGField")
+    if isinstance(velocity, QuadratureVectorField):
+        if not isinstance(history_velocity, QuadratureVectorField):
+            raise TypeError(f"{label}_velocity must be a QuadratureVectorField like velocity")
+        field.space.assert_coefficient_compatible(history_field.space)
+        history_velocity.check(velocity.space, velocity.trace_space)
+        return
     if not isinstance(history_velocity, VectorDGField):
         raise TypeError(f"{label}_velocity must be a VectorDGField")
     field.space.assert_coefficient_compatible(history_field.space)
@@ -38,6 +53,23 @@ def _check_history(field, velocity, history_field, history_velocity, label) -> N
         raise ValueError(f"{label} velocity must have the same dimension as velocity")
     for current, history in zip(velocity.components, history_velocity.components):
         current.space.assert_coefficient_compatible(history.space)
+
+
+def _scaled_velocity_combination(effective_dt, weights, velocities, name):
+    """Return ``effective_dt * sum_i weights[i] * velocities[i]``, integer weights combined first.
+
+    DG velocities combine componentwise with :func:`field_linear_combination`; quadrature
+    advection fields with :meth:`QuadratureVectorField.linear_combination`, which keeps a single-valued
+    normal flux bitwise antisymmetric.
+    """
+    if isinstance(velocities[0], QuadratureVectorField):
+        combined = effective_dt * QuadratureVectorField.linear_combination(list(zip(weights, velocities)), name=name)
+        combined.name = name
+        return combined
+    return VectorDGField(tuple(
+        effective_dt*field_linear_combination(components[0].space, list(zip(weights, components)))
+        for components in zip(*(velocity.components for velocity in velocities))
+    ), name=name)
 
 
 def bdf2_transport_data(
@@ -75,10 +107,7 @@ def bdf2_transport_data(
     # separately rounded fractional weights in single precision.
     source = field_linear_combination(field.space, [(4, field), (-1, previous_field)])/3
     source.name = "bdf2_source_h"
-    beta = VectorDGField(tuple(
-        effective_dt*field_linear_combination(current.space, [(2, current), (-1, previous)])
-        for current, previous in zip(velocity.components, previous_velocity.components)
-    ), name="bdf2_beta_h")
+    beta = _scaled_velocity_combination(effective_dt, (2, -1), (velocity, previous_velocity), "bdf2_beta_h")
     return source, beta, effective_dt
 
 
@@ -120,11 +149,8 @@ def bdf3_transport_data(
     source = field_linear_combination(
         field.space, [(18, field), (-9, previous_field), (2, older_field)])/11
     source.name = "bdf3_source_h"
-    beta = VectorDGField(tuple(
-        effective_dt*field_linear_combination(current.space, [(3, current), (-3, previous), (1, older)])
-        for current, previous, older in zip(
-            velocity.components, previous_velocity.components, older_velocity.components)
-    ), name="bdf3_beta_h")
+    beta = _scaled_velocity_combination(effective_dt, (3, -3, 1), (velocity, previous_velocity, older_velocity),
+                                        "bdf3_beta_h")
     return source, beta, effective_dt
 
 

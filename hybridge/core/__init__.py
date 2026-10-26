@@ -34,6 +34,7 @@ from hybridge.core.field_ops import (
 )
 from hybridge.core.trace_transfer import bernstein_degree_elevation_matrix, prolong_trace_coefficients
 from hybridge.core.space import DGCoefficientLayout, DGField, DGSpace, DGTraceSpace, VectorDGField, VectorDGSpace
+from hybridge.core.quadrature_coefficients import QuadratureVectorField, QuadratureScalar
 
 from hybridge.core.geometry import DiskDomain, PolygonDomain, shaped_domain
 
@@ -46,6 +47,8 @@ __all__ = [
     "DGField",
     "DGMesh",
     "DGSpace",
+    "QuadratureVectorField",
+    "QuadratureScalar",
     "SmoothStarGeometry",
     "StructuredSizeOptions",
     "VectorDGField",

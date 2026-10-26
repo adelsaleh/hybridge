@@ -330,6 +330,8 @@ The solver APIs expose multiple assembly and solve paths. The important rule is
 that fast Numba and raw-CUDA kernels are table driven: coefficients must already
 be represented as `DGField` or `VectorDGField` objects, usually via
 `space.project_callable(...)`, `space.constant(...)`, or `space.zeros(...)`.
+For advection-reaction, they may instead be given at the quadrature points
+(`QuadratureVectorField`, `QuadratureScalar`; see Coefficient Ownership below).
 NumPy and CuPy paths can still sample analytic callables directly.
 
 Advection-reaction backends:
@@ -340,7 +342,8 @@ Numba          projected/table assembly and reconstruction; supports boundary el
                tangent zero-boundary-flux, upwind-SCC ordering, and compact zero/constant descriptors
 CuPy           device assembly baseline; accepts CuPy-compatible callables and DG fields
 raw-CUDA       fused projected assembly; supports COO and direct CSR emission, safe or cooperative LU,
-               legendre-modal and legacy-lagrange traces, device AMGX solves, and zero-flux boundaries
+               legendre-modal and legacy-lagrange traces, device AMGX solves, and zero-flux boundaries;
+               fused and split3 also take quadrature-point advection and reaction values
 ```
 
 Diffusion-reaction backends:
@@ -866,13 +869,29 @@ Lazy exact constants should be created with `space.zeros(...)` or
 not build a full host coefficient table until `.coeffs` or `.asarray()` is
 requested.
 
+Exact coefficient values at the quadrature points are a third form, for the
+advection-reaction solver only. `QuadratureVectorField.from_callable(law, space,
+trace_space=space.trace_space(kind))` evaluates the advection field at the volume points
+and its normal flux at the face points. The normal flux is single valued: each
+edge point is evaluated once and its neighbour gets the negated value.
+`QuadratureScalar.from_callable(law, space)` does the same for a reaction or a
+source; a source enters through its moments. Nothing is projected:
+
+```python
+from hybridge import QuadratureVectorField, QuadratureScalar
+
+trace = space.trace_space("legacy-lagrange")
+beta_q = QuadratureVectorField.from_callable(lambda x, y: (beta_x(x, y), beta_y(x, y)), space, trace_space=trace)
+reaction_q = QuadratureScalar.from_callable(reaction, space)
+```
+
 Backend coefficient support is deliberately explicit:
 
 ```text
-NumPy assembly              callables, DGField/VectorDGField, arrays, lazy constants
+NumPy assembly              callables, DGField/VectorDGField, arrays, lazy constants, quadrature-point values
 CuPy assembly               CuPy-compatible callables, DGField/VectorDGField, lazy constants
-Numba assembly              DGField/VectorDGField or compact zero/constant descriptors only
-raw-CUDA advection-reaction projected source, beta, and reaction fields only
+Numba assembly              DGField/VectorDGField, compact zero/constant descriptors, or quadrature-point values
+raw-CUDA advection-reaction projected source, beta, and reaction fields; quadrature-point values with fused/split3
 raw-CUDA diffusion          current scalar path uses device source/boundary data and zero reaction
 ```
 

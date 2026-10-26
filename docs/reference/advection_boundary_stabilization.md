@@ -31,6 +31,7 @@ For advection-reaction transport, `advection_stabilization=None` selects
 This includes the public functional/stateful solvers, Numba/CuPy adapters,
 raw-CUDA assembly, reconstruction, and the explicit transport residual. Selection
 uses the coefficient representation without sampling or host/device transfers.
+An advection field given at the quadrature points (`QuadratureVectorField`) resolves the same way.
 Two analytic velocity callables retain standard sidewise upwind.
 
 Request `advection_stabilization="upwind"` or `ScaledUpwind(1.)` to retain the
@@ -54,6 +55,14 @@ reuses device-resident coefficients when available.
 
 For `zero-flux`, boundary-side `tau` and `gamma` weights are set to zero after
 normal-flux evaluation. Interior-face stabilization is unchanged.
+
+A `QuadratureVectorField` supplies the side-normal velocity `b` directly at the face
+quadrature points of each element side. `QuadratureVectorField.from_callable` evaluates
+the advection field once per edge point and gives the neighbour the negated value, so the two
+sides of an interior face cancel exactly. Conflict averaging then changes no node,
+and the inactive-face gauge applies only where the advection field is tangent to the whole
+face. Advection fields sampled side by side from DG fields (`from_vector_field`) keep their
+own side values, like a DG advection field.
 
 ## Ordering, Reconstruction, And Residency
 

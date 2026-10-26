@@ -141,6 +141,40 @@ parity, autotune reuse, workspace identity, tangent-assembler, and explicit
 p=9/256-thread TSLE scratch tests live in `tests/test_advection_tsle_bsr.py`.
 The latter is also clean under CUDA-13 memcheck and racecheck.
 
+## Quadrature-Point Coefficients (advection-reaction)
+
+The fused kernels (COO, CSR, BSR, `reconstruct_advection_raw_fused`) and the split3
+build kernel also accept the advection field and the reaction as values at the quadrature
+points (`QuadratureVectorField`, `QuadratureScalar`; see
+[`../reference/coefficient_inputs.md`](../reference/coefficient_inputs.md)).
+Two compile-time macros select the variant, so the DG kernels are unchanged:
+
+- `RAW_POINTWISE_BETA`: the kernel reads `beta_volume_values` `(E, NQV, 2)` at the
+  volume points and `beta_normal_flux` `(E, 3, NQF)` at the face points. The volume
+  term maps each point value to reference coordinates with the element's inverse
+  Jacobian, as the coefficient path does after contracting the advection basis. The
+  own and the neighbour side-normal flux come from `raw_side_normal_flux`, which the
+  inactive-face gauge also uses.
+- `RAW_POINTWISE_REACTION`: the kernel reads `reaction_values` `(E, NQV)` at the
+  volume points.
+
+Both need the quadrature volume operator (`RAW_VOLUME_QUADRATURE`; the source
+stops with `#error` otherwise), so `raw_volume_operator="tensor"` is rejected.
+In the pointwise-advection variant `NBETA` equals `NEL`, so the shared-memory layout
+and the coefficient block are those of a same-space advection field. Unused pointers are
+one-entry dummies. Both flags enter the kernel-source and split3 module and
+tuning cache keys. The source keeps entering through its moments, so a
+`QuadratureScalar` source needs no kernel change. Precomputed assembly and the
+tensorized TSLE path take DG advection fields only.
+
+The pointwise variants match the Numba pointwise reference to the tolerance of
+the DG parity tests (rtol 2e-10) for p = 2, 3, 6, both trace bases, eliminated
+and zero-flux boundaries, and default and upwind stabilization
+(`tests/test_transport_quadrature_coefficients.py`). At p = 5 and 6 the fused
+assembly kernels keep one NEL-entry Schur lift vector per thread in local memory
+(NEL x 8 bytes) with either advection input; the pointwise variant adds none, and
+reconstruction uses none.
+
 ## Discontinuous Advection Audit
 
 CuPy assembly stores `beta . n` per element side. Raw-CUDA precomputed,

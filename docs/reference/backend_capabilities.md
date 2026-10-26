@@ -23,13 +23,12 @@ The Python source of truth is
 is checked by `tests/test_backend_capabilities.py`.
 
 <!-- BEGIN GENERATED CAPABILITY MATRIX -->
-
 | Equation | Operation | Assembly | Sparse solve | Assembly residency | Solve residency | Reconstruction | Boundary modes | Trace bases | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | - |
-| advection-reaction | assemble | numba | none | host | none | none | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | - |
+| advection-reaction | assemble | numpy | none | host | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | Accepts quadrature-point advection, reaction and source (QuadratureVectorField, QuadratureScalar). |
+| advection-reaction | assemble | numba | none | host | none | none | penalty, eliminate, zero-flux | legacy-lagrange, legendre-modal | Accepts quadrature-point advection, reaction and source; they force the per-point volume operator. |
 | advection-reaction | assemble | cupy | none | device (optional host copy) | none | none | penalty, eliminate | legacy-lagrange, legendre-modal | COO values and RHS remain on-device unless host assembly diagnostics are requested. |
-| advection-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate, zero-flux | legacy-lagrange, legendre-modal | Assembly-only diagnostics materialize the reduced system on the host. |
+| advection-reaction | assemble | raw-cuda | none | device -> host | none | none | eliminate, zero-flux | legacy-lagrange, legendre-modal | Assembly-only diagnostics materialize the reduced system on the host. Quadrature-point advection, reaction and source need fused or split3 local assembly and the quadrature volume operator. |
 | advection-reaction | solve | numpy | scipy | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numpy | pypardiso | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |
 | advection-reaction | solve | numpy | petsc | host | host | host | penalty, eliminate | legacy-lagrange, legendre-modal | - |

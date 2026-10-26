@@ -139,7 +139,16 @@ def _beta_values_on_volume(
         beta_field.components[0].space.assert_same_mesh(space)
         beta_field.components[1].space.assert_same_mesh(space)
         coeffs = as_cupy_vector_coefficients(beta_field, cspace)
-        return cupy.ascontiguousarray(cupy.einsum("dKi,iq->Kqd", coeffs, cspace.quad_data.bas_of_quads))
+        basis = cspace.quad_data.bas_of_quads
+        beta_space = beta_field.components[0].space
+        if beta_space is not space:
+            # An advection field from another DG space (any degree) is evaluated exactly at
+            # this space's quadrature points with its own basis.
+            from hybridge.transport.cuda import advection_volume_basis_cupy
+            from hybridge.transport.advection_field import advection_field_reference, advection_field_space
+            advection = advection_field_reference(space, advection_field_space(beta_field, space), space.trace_space())
+            basis = advection_volume_basis_cupy(None if advection.same_basis else advection, cspace)
+        return cupy.ascontiguousarray(cupy.einsum("dKi,iq->Kqd", coeffs, basis))
 
     if beta_callables is None:
         raise ValueError("either beta_field or beta_callables must be provided")

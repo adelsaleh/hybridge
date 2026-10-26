@@ -114,6 +114,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "host",
         ("penalty", "eliminate"),
         _PRODUCTION_TRACE_BASES,
+        "Accepts quadrature-point advection, reaction and source (QuadratureVectorField, QuadratureScalar).",
     ),
     _assembly_capability(
         "advection-reaction",
@@ -121,6 +122,7 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "host",
         ("penalty", "eliminate", "zero-flux"),
         _PRODUCTION_TRACE_BASES,
+        "Accepts quadrature-point advection, reaction and source; they force the per-point volume operator.",
     ),
     _assembly_capability(
         "advection-reaction",
@@ -136,7 +138,8 @@ BACKEND_CAPABILITIES: tuple[BackendCapability, ...] = (
         "device -> host",
         ("eliminate", "zero-flux"),
         _PRODUCTION_TRACE_BASES,
-        "Assembly-only diagnostics materialize the reduced system on the host.",
+        "Assembly-only diagnostics materialize the reduced system on the host. Quadrature-point advection, "
+        "reaction and source need fused or split3 local assembly and the quadrature volume operator.",
     ),
     *_solve_capabilities(
         "advection-reaction",
@@ -464,6 +467,13 @@ def _unsupported(
 # on FP64-capable GPUs against
 # docs/research/solver_studies/advection_assembly_baseline_2026_10_03.md.
 RAW_SPLIT3_MIN_ORDER = 8
+# From this order "auto" also picks split3 when its workspace fits in
+# RAW_SPLIT3_WORKSPACE_FRACTION of the available device memory. With the
+# quadrature volume operator split3 assembles 8-10% faster than fused at p=6
+# and p=7 on the RTX PRO 5000 (157k/80k triangles, 2026-10-14), at the cost of
+# an E*(NEL^2 + NEL*NCOLS + 6*NQF) workspace (about 1.8 GB at p=6, 157k).
+RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER = 6
+RAW_SPLIT3_WORKSPACE_FRACTION = 0.25
 
 
 def resolve_raw_local_assembly(
@@ -473,19 +483,39 @@ def resolve_raw_local_assembly(
         bsr_output: bool,
         raw_lu_mode: str | None = None,
         cache_operator: bool = False,
+        split3_workspace_bytes: int | None = None,
+        available_device_bytes: int | None = None,
 ) -> str:
     """Resolve ``raw_local_assembly="auto"`` for one raw-CUDA advection assembly.
 
-    ``"auto"`` selects ``"split3"`` from :data:`RAW_SPLIT3_MIN_ORDER` on when
-    its requirements hold (face-BSR output, cooperative LU, no operator
-    cache), and ``"fused"`` otherwise. Explicit values pass through.
+    ``"auto"`` selects ``"split3"`` when its requirements hold (face-BSR
+    output, cooperative LU, no operator cache) and either the order is at
+    least :data:`RAW_SPLIT3_MIN_ORDER`, or it is at least
+    :data:`RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER` and the split3 workspace fits in
+    :data:`RAW_SPLIT3_WORKSPACE_FRACTION` of ``available_device_bytes``
+    (both sizes supplied by the caller, see
+    ``transport.tsle_bsr.split3_memory_sizes``); ``"fused"`` otherwise.
+    Explicit values pass through.
     """
     if raw_local_assembly != "auto":
         return raw_local_assembly
-    if (int(order) >= RAW_SPLIT3_MIN_ORDER and bsr_output
-            and raw_lu_mode in {None, "coop"} and not cache_operator):
+    if not (bsr_output and raw_lu_mode in {None, "coop"} and not cache_operator):
+        return "fused"
+    if int(order) >= RAW_SPLIT3_MIN_ORDER:
+        return "split3"
+    if (int(order) >= RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER and split3_workspace_bytes is not None
+            and available_device_bytes is not None
+            and split3_workspace_bytes <= RAW_SPLIT3_WORKSPACE_FRACTION * available_device_bytes):
         return "split3"
     return "fused"
+
+
+def split3_memory_check_needed(raw_local_assembly: str, *, order: int, bsr_output: bool,
+                               raw_lu_mode: str | None = None, cache_operator: bool = False) -> bool:
+    """Return whether resolving ``"auto"`` depends on the split3 workspace size and free device memory."""
+    return (raw_local_assembly == "auto" and bsr_output and raw_lu_mode in {None, "coop"}
+            and not cache_operator
+            and RAW_SPLIT3_MEMORY_AWARE_MIN_ORDER <= int(order) < RAW_SPLIT3_MIN_ORDER)
 
 
 def validate_advection_backend_configuration(
@@ -506,8 +536,13 @@ def validate_advection_backend_configuration(
     advection_stabilization_is_lax_friedrichs: bool = False,
     advection_stabilization_is_scaled_upwind: bool = False,
     advection_stabilization_is_conflict_averaged: bool = False,
+    quadrature_coefficients: bool = False,
 ) -> BackendCapability:
-    """Validate advection backend support before coefficient or device setup."""
+    """Validate advection backend support before coefficient or device setup.
+
+    ``quadrature_coefficients`` marks a advection, reaction or source given at the quadrature points
+    (:mod:`hybridge.core.quadrature_coefficients`): NumPy, Numba and raw-CUDA fused/split3 accept them.
+    """
     backend = normalize_assembly_backend(assembly_backend)
     basis = normalize_trace_basis(trace_basis)
     if boundary_mode not in {"penalty", "eliminate", "zero-flux"}:
@@ -516,6 +551,14 @@ def validate_advection_backend_configuration(
         raise ValueError("trace_ordering must be 'none' or 'upwind-scc'")
     solver_backend = None if operation == "assemble" else normalize_solver_backend(solver, cupyx_solver=cupyx_solver)
     capability = get_backend_capability("advection-reaction", operation, backend, solver_backend)
+    if quadrature_coefficients and backend not in {"numpy", "numba", "raw-cuda"}:
+        _unsupported(
+            "advection-reaction",
+            operation,
+            backend,
+            solver_backend,
+            "quadrature-point coefficients need assembly_backend='numpy', 'numba' or 'raw-cuda'",
+        )
     if boundary_mode not in capability.boundary_modes:
         _unsupported(
             "advection-reaction",
@@ -544,6 +587,14 @@ def validate_advection_backend_configuration(
         if raw_local_assembly not in {"precomputed", "fused", "split3"}:
             raise ValueError(
                 "raw_local_assembly must be 'precomputed', 'fused', or 'split3'"
+            )
+        if quadrature_coefficients and raw_local_assembly == "precomputed":
+            _unsupported(
+                "advection-reaction",
+                operation,
+                backend,
+                solver_backend,
+                "quadrature-point coefficients need raw_local_assembly='fused' or 'split3'",
             )
         if raw_lu_mode not in {None, "safe", "coop"}:
             raise ValueError("raw_lu_mode must be None, 'safe', or 'coop'")

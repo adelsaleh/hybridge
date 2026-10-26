@@ -1,4 +1,11 @@
-"""hybridge.transport.numba."""
+"""Numba advection-reaction HDG assembly: fused projected-coefficient kernels and local assembly.
+
+Coefficients are DG fields (projected coefficients) or quadrature-point coefficients
+(:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`,
+:class:`~hybridge.core.quadrature_coefficients.QuadratureScalar`): exact values of the advection field at the
+volume and face quadrature points and of the reaction at the volume points, which force the
+per-point volume operator. A quadrature source is replaced by the DG field with the same moments.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +14,7 @@ import hybridge.hdg.stabilization as hdg_stabilization
 import numpy as np
 import time
 from collections.abc import Callable
+from hybridge.core.quadrature_coefficients import QuadratureVectorField, QuadratureScalar
 from hybridge.core.space import DGField, DGSpace, DGTraceSpace, VectorDGField
 from hybridge.linalg.reduction import KnownDofReduction
 from hybridge.runtime.optional import NUMBA_AVAILABLE
@@ -21,11 +29,11 @@ from hybridge.hdg.trace_maps import (
 from hybridge.hdg.coefficients import (
     _reaction_coefficients,
     _same_space_field_coefficients,
-    _same_space_vector_coefficients,
     _source_coefficients,
     beta_values_on_volume,
     reaction_values_on_volume,
 )
+from hybridge.transport.advection_field import AdvectionFieldReference, advection_field_coefficients, advection_field_reference, advection_field_space
 from hybridge.transport.numba_kernels import (
     assemble_face_trace_weights_kernel,
     assemble_projected_trace_system_eliminated_kernel,
@@ -89,7 +97,13 @@ def assemble_local_advection_reaction_numba(
     start = time.perf_counter()
     trace_ref = _trace_ref(space, trace_space)
     _trace_orientation_mode(trace_ref)
-    beta_volume = beta_values_on_volume(beta_field, beta_callables, space)
+    if isinstance(beta_field, QuadratureVectorField):
+        beta_field.check(space, trace_ref)
+        beta_volume, quadrature_flux = (np.ascontiguousarray(a, dtype=np.float64) for a in beta_field.arrays(np))
+        if beta_dot_normal is None:
+            beta_dot_normal = quadrature_flux
+    else:
+        beta_volume = beta_values_on_volume(beta_field, beta_callables, space)
     if beta_dot_normal is None:
         if beta_field is None:
             raise ValueError("beta_dot_normal is required when beta is provided as callables")
@@ -107,7 +121,11 @@ def assemble_local_advection_reaction_numba(
     if zero_boundary_flux:
         tau_face = tau_face.copy()
         _zero_boundary_face_values(space, beta_dot_normal, tau_face)
-    reaction_values = reaction_values_on_volume(reaction, space)
+    if isinstance(reaction, QuadratureScalar):
+        reaction.check(space)
+        reaction_values = np.ascontiguousarray(reaction.values(np), dtype=np.float64)
+    else:
+        reaction_values = reaction_values_on_volume(reaction, space)
     timings["coefficient_values"] = time.perf_counter() - start
 
     local_mats = np.empty((space.mesh.num_tri, space.el_dof, space.el_dof), dtype=np.float64)
@@ -191,11 +209,17 @@ def _advection_trace_weight_tables(
         tau_coeffs: np.ndarray,
         *,
         trace_space: DGTraceSpace | None = None,
+        beta_face_basis: np.ndarray | None = None,
+        pointwise_beta: bool = False,
+        beta_normal_flux: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Allocate side weights and precompute policies without neighbor coupling.
 
     Kind 4 deliberately returns uninitialized storage: each owning element
     fills its weights during assembly/reconstruction from immutable beta data.
+    ``beta_face_basis`` is the advection field basis on the trace face quadrature
+    (default: the solution basis, for a same-space advection). With
+    ``pointwise_beta`` the normal flux is ``beta_normal_flux`` (K, 3, NQF).
     """
     mesh = space.mesh
     trace_ref = _trace_ref(space, trace_space)
@@ -203,15 +227,19 @@ def _advection_trace_weight_tables(
     gamma_face_values = np.empty_like(tau_face_values)
     if tau_kind == 4:
         return tau_face_values, gamma_face_values
+    face_basis = np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64)
     assemble_face_trace_weights_kernel(
         tau_face_values,
         gamma_face_values,
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
-        np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        face_basis,
+        face_basis if beta_face_basis is None else np.ascontiguousarray(beta_face_basis, dtype=np.float64),
         beta_coeffs,
         int(tau_kind),
         float(tau_scalar),
         np.ascontiguousarray(tau_coeffs, dtype=np.float64),
+        bool(pointwise_beta),
+        _POINTWISE_FLUX_DUMMY if beta_normal_flux is None else np.ascontiguousarray(beta_normal_flux, dtype=np.float64),
     )
     return tau_face_values, gamma_face_values
 
@@ -226,19 +254,123 @@ def _zero_boundary_face_values(space: DGSpace, *tables: np.ndarray) -> None:
         table[boundary_faces] = 0.0
 
 
-def _reference_advection_tensor(space: DGSpace) -> np.ndarray:
-    r"""Return :math:`\int_{\hat K}\phi_k\phi_j\nabla_{\hat x_D}\phi_i`."""
+# Numba picks the quadrature volume operator when it does at least this many
+# times less work than the tensor contraction. CPU calibration (16 threads,
+# 20k-80k triangles, p=2..6, advection degree p..p+2, field and constant
+# reaction): the vectorized tensor contraction breaks even near a 1.5-2x work
+# ratio; with 2.0 the choice is right for every measured case and the
+# quadrature form is 1.04-1.23x faster where it is selected.
+_NUMBA_VOLUME_QUADRATURE_MARGIN = 2.0
+
+
+def _use_volume_quadrature(space: DGSpace, nbeta: int, reaction_is_scalar: bool) -> bool:
+    """Choose the Numba volume operator: per-point rank-1 updates or tensor contraction.
+
+    Work per element: tensor ``2*NB*NEL^2`` (+ ``NEL^3`` for a field
+    reaction); quadrature ``NQV*NEL^2`` plus per-point advection/reaction sums.
+    """
+    nel = int(space.el_dof)
+    nqv = int(space.quad_data.Krf_w.size)
+    tensor = 2.0 * nbeta * nel * nel + (0.0 if reaction_is_scalar else float(nel) ** 3)
+    quadrature = float(nqv) * nel * nel + nqv * (3.0 * nel + 2.0 * nbeta + (0.0 if reaction_is_scalar else nel))
+    return _NUMBA_VOLUME_QUADRATURE_MARGIN * quadrature < tensor
+
+
+def _volume_quadrature_tables(space: DGSpace, advection: AdvectionFieldReference, use: bool) -> tuple:
+    """Return ``(use, weights, phi, d0 phi, d1 phi, psi)`` float64 tables for the fused kernels."""
+    if not use:
+        empty = np.zeros((1, 1), dtype=np.float64)
+        return False, np.zeros(1, dtype=np.float64), empty, empty, empty, empty
     q = space.quad_data
-    return np.ascontiguousarray(
-        np.einsum(
-            "q,qk,qj,qiD->Dkij",
-            q.Krf_w,
-            q.phi,
-            q.phi,
-            q.gphi,
-            optimize=True,
-        ),
-        dtype=np.float64,
+    cache = getattr(q, "_hybridge_numba_volume_quadrature", None)
+    if cache is None:
+        cache = {}
+        object.__setattr__(q, "_hybridge_numba_volume_quadrature", cache)
+    key = None if advection.same_basis else (str(advection.beta_space.reference.basis_type), int(advection.beta_space.order))
+    if key not in cache:
+        gphi = np.asarray(q.gphi, dtype=np.float64)
+        cache[key] = (
+            np.ascontiguousarray(q.Krf_w, dtype=np.float64),
+            np.ascontiguousarray(q.phi, dtype=np.float64),
+            np.ascontiguousarray(gphi[:, :, 0]),
+            np.ascontiguousarray(gphi[:, :, 1]),
+            np.ascontiguousarray(advection.volume_basis, dtype=np.float64),
+        )
+    return (True,) + cache[key]
+
+
+def _advection_tables(beta_field: VectorDGField, space: DGSpace, trace_ref: DGTraceSpace) -> tuple[np.ndarray, AdvectionFieldReference]:
+    """Return host advection coefficients ``(2, nK, NB)`` and the advection field reference tables.
+
+    The advection field may live in any DG space on the solution mesh; see
+    :mod:`hybridge.transport.advection_field`.
+    """
+    advection = advection_field_reference(space, advection_field_space(beta_field, space), trace_ref)
+    return advection_field_coefficients(beta_field, space), advection
+
+
+# One-element stand-ins for the pointwise kernel inputs of a DG coefficient (read-only).
+_POINTWISE_FLUX_DUMMY = np.zeros((1, 1, 1), dtype=np.float64)
+_POINTWISE_VOLUME_DUMMY = np.zeros((1, 1, 2), dtype=np.float64)
+_POINTWISE_REACTION_DUMMY = np.zeros((1, 1), dtype=np.float64)
+
+
+def _advection_inputs(beta, space: DGSpace, trace_ref: DGTraceSpace) -> tuple:
+    """Return ``(beta_coeffs, advection, pointwise_beta, beta_normal_flux, beta_volume_values)``.
+
+    A DG advection field gives its coefficients and reference tables (:func:`_advection_tables`) and
+    dummy pointwise arrays. A :class:`QuadratureVectorField` gives its host values, a dummy
+    coefficient table and the solution-space tables, which the kernels then use only
+    for their sizes.
+    """
+    if isinstance(beta, QuadratureVectorField):
+        beta.check(space, trace_ref)
+        volume, flux = beta.arrays(np)
+        return (np.zeros((2, 1, 1), dtype=np.float64), advection_field_reference(space, space, trace_ref), True,
+                np.ascontiguousarray(flux, dtype=np.float64), np.ascontiguousarray(volume, dtype=np.float64))
+    beta_coeffs, advection = _advection_tables(beta, space, trace_ref)
+    return beta_coeffs, advection, False, _POINTWISE_FLUX_DUMMY, _POINTWISE_VOLUME_DUMMY
+
+
+def _reaction_inputs(reaction, space: DGSpace) -> tuple:
+    """Return ``(coeffs, scalar, is_scalar, pointwise_reaction, reaction_values)`` for the fused kernels."""
+    if isinstance(reaction, QuadratureScalar):
+        reaction.check(space)
+        return (np.zeros((1, 1), dtype=np.float64), 0.0, False, True,
+                np.ascontiguousarray(reaction.values(np), dtype=np.float64))
+    coeffs, scalar, is_scalar = _reaction_coefficients(reaction, space)
+    return coeffs, scalar, is_scalar, False, _POINTWISE_REACTION_DUMMY
+
+
+def _source_input(source, space: DGSpace):
+    """Return a quadrature source as the host DG field with the same moments; other sources unchanged."""
+    if isinstance(source, QuadratureScalar):
+        source.check(space)
+        return source.to_host().project(name="source_h")
+    return source
+
+
+def _fused_coefficient_inputs(source, beta_field, reaction, space: DGSpace, trace_ref: DGTraceSpace) -> dict:
+    """Validate and convert the coefficients of one fused assembly or reconstruction.
+
+    Returns the source coefficients, the advection field and reaction kernel inputs, the volume
+    tables (the per-point operator is forced for any quadrature-point coefficient) and
+    the five pointwise kernel arguments in launch order.
+    """
+    source_coeffs, source_kind = _source_coefficients(_source_input(source, space), space)
+    beta_coeffs, advection, pointwise_beta, beta_normal_flux, beta_volume_values = _advection_inputs(
+        beta_field, space, trace_ref)
+    reaction_coeffs, reaction_scalar, reaction_is_scalar, pointwise_reaction, reaction_values = _reaction_inputs(
+        reaction, space)
+    use = (True if pointwise_beta or pointwise_reaction
+           else _use_volume_quadrature(space, advection.el_dof, reaction_is_scalar))
+    return dict(
+        source_coeffs=source_coeffs, source_kind=source_kind, beta_coeffs=beta_coeffs, advection=advection,
+        reaction_coeffs=reaction_coeffs, reaction_scalar=reaction_scalar, reaction_is_scalar=reaction_is_scalar,
+        volume_tables=_volume_quadrature_tables(space, advection, use),
+        pointwise_beta=pointwise_beta, beta_normal_flux=beta_normal_flux,
+        pointwise=(bool(pointwise_beta), beta_normal_flux, beta_volume_values, bool(pointwise_reaction),
+                   reaction_values),
     )
 
 
@@ -272,14 +404,20 @@ def assemble_projected_trace_system_numba(
     ``source``
         :class:`DGField` in ``space``.
     ``beta_field``
-        two-component :class:`VectorDGField` with both components in ``space``.
+        two-component :class:`VectorDGField` on the same mesh; both components
+        share one DG space, which may differ from ``space`` in degree and basis
+        (no projection: see :mod:`hybridge.transport.advection_field`).
     ``reaction``
         :class:`DGField` in ``space``; use ``space.zeros`` or ``space.constant``
         for exact zero/constant coefficients.
 
-    Python callables, scalars, and loose coefficient arrays are intentionally
-    rejected here.  Convert them through the owning :class:`DGSpace` before
-    calling the solver.
+    Quadrature-point coefficients are accepted as well: a
+    :class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField` for ``beta_field``,
+    :class:`~hybridge.core.quadrature_coefficients.QuadratureScalar` for ``reaction``
+    (both force the per-point volume operator) and for ``source`` (replaced by
+    the DG field with the same moments). Python callables, scalars, and loose
+    coefficient arrays are intentionally rejected here.  Convert them through
+    the owning :class:`DGSpace` before calling the solver.
     """
     from hybridge.hdg.stabilization import resolve_transport_stabilization
     advection_stabilization = resolve_transport_stabilization(
@@ -291,9 +429,11 @@ def assemble_projected_trace_system_numba(
     start = time.perf_counter()
     trace_ref = _trace_ref(space, trace_space)
     trace_orientation_mode = _trace_orientation_mode(trace_ref)
-    source_coeffs, source_kind = _source_coefficients(source, space)
-    beta_coeffs = _same_space_vector_coefficients(beta_field, space)
-    reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    inputs = _fused_coefficient_inputs(source, beta_field, reaction, space, trace_ref)
+    source_coeffs, source_kind = inputs["source_coeffs"], inputs["source_kind"]
+    beta_coeffs, advection = inputs["beta_coeffs"], inputs["advection"]
+    reaction_coeffs, reaction_scalar = inputs["reaction_coeffs"], inputs["reaction_scalar"]
+    reaction_is_scalar, volume_tables = inputs["reaction_is_scalar"], inputs["volume_tables"]
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
         advection_stabilization,
         space,
@@ -303,7 +443,9 @@ def assemble_projected_trace_system_numba(
 
     start = time.perf_counter()
     boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
-    if beta_dot_normal is None:
+    if beta_dot_normal is None and inputs["pointwise_beta"]:
+        beta_dot_normal = inputs["beta_normal_flux"]
+    elif beta_dot_normal is None:
         beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
@@ -322,6 +464,9 @@ def assemble_projected_trace_system_numba(
         tau_scalar,
         tau_coeffs,
         trace_space=trace_ref,
+        beta_face_basis=advection.face_basis,
+        pointwise_beta=inputs["pointwise_beta"],
+        beta_normal_flux=inputs["beta_normal_flux"],
     )
     timings["trace_weights"] = time.perf_counter() - start
 
@@ -357,8 +502,9 @@ def assemble_projected_trace_system_numba(
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
-        _reference_advection_tensor(space),
+        advection.advection_tensor,
         np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(advection.face_basis, dtype=np.float64),
         np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
         np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
         np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
@@ -377,6 +523,8 @@ def assemble_projected_trace_system_numba(
         tau_kind == 4,
         mesh.edge_side_indices,
         False,
+        *volume_tables,
+        *inputs["pointwise"],
     )
     timings["kernel"] = time.perf_counter() - start
 
@@ -425,9 +573,11 @@ def assemble_projected_trace_system_eliminated_numba(
     start = time.perf_counter()
     trace_ref = _trace_ref(space, trace_space)
     trace_orientation_mode = _trace_orientation_mode(trace_ref)
-    source_coeffs, source_kind = _source_coefficients(source, space)
-    beta_coeffs = _same_space_vector_coefficients(beta_field, space)
-    reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    inputs = _fused_coefficient_inputs(source, beta_field, reaction, space, trace_ref)
+    source_coeffs, source_kind = inputs["source_coeffs"], inputs["source_kind"]
+    beta_coeffs, advection = inputs["beta_coeffs"], inputs["advection"]
+    reaction_coeffs, reaction_scalar = inputs["reaction_coeffs"], inputs["reaction_scalar"]
+    reaction_is_scalar, volume_tables = inputs["reaction_is_scalar"], inputs["volume_tables"]
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
         advection_stabilization,
         space,
@@ -442,7 +592,9 @@ def assemble_projected_trace_system_eliminated_numba(
         if boundary_condition is None:
             raise ValueError("boundary_condition is required unless zero_boundary_flux=True")
         boundary_trace = hdg_assembly.boundary_trace_coefficients(boundary_condition, space, trace_space=trace_ref)
-    if beta_dot_normal is None:
+    if beta_dot_normal is None and inputs["pointwise_beta"]:
+        beta_dot_normal = inputs["beta_normal_flux"]
+    elif beta_dot_normal is None:
         beta_dot_normal = hdg_coefficients.advective_boundary_normal(beta_field, space, trace_space=trace_ref)
     else:
         beta_dot_normal = np.ascontiguousarray(beta_dot_normal, dtype=np.float64)
@@ -460,6 +612,9 @@ def assemble_projected_trace_system_eliminated_numba(
         tau_scalar,
         tau_coeffs,
         trace_space=trace_ref,
+        beta_face_basis=advection.face_basis,
+        pointwise_beta=inputs["pointwise_beta"],
+        beta_normal_flux=inputs["beta_normal_flux"],
     )
     timings["trace_weights"] = time.perf_counter() - start
     if zero_boundary_flux and tau_kind != 4:
@@ -525,8 +680,9 @@ def assemble_projected_trace_system_eliminated_numba(
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
-        _reference_advection_tensor(space),
+        advection.advection_tensor,
         np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(advection.face_basis, dtype=np.float64),
         np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
         np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
         np.ascontiguousarray(trace_ref.M_rf_fc, dtype=np.float64),
@@ -544,6 +700,8 @@ def assemble_projected_trace_system_eliminated_numba(
         tau_kind == 4,
         mesh.edge_side_indices,
         zero_boundary_flux,
+        *volume_tables,
+        *inputs["pointwise"],
     )
     timings["kernel"] = time.perf_counter() - start
 
@@ -622,9 +780,11 @@ def reconstruct_projected_field_numba(
 
     trace_ref = _trace_ref(space, trace_space)
     trace_orientation_mode = _trace_orientation_mode(trace_ref)
-    source_coeffs, source_kind = _source_coefficients(source, space)
-    beta_coeffs = _same_space_vector_coefficients(beta_field, space)
-    reaction_coeffs, reaction_scalar, reaction_is_scalar = _reaction_coefficients(reaction, space)
+    inputs = _fused_coefficient_inputs(source, beta_field, reaction, space, trace_ref)
+    source_coeffs, source_kind = inputs["source_coeffs"], inputs["source_kind"]
+    beta_coeffs, advection = inputs["beta_coeffs"], inputs["advection"]
+    reaction_coeffs, reaction_scalar = inputs["reaction_coeffs"], inputs["reaction_scalar"]
+    reaction_is_scalar, volume_tables = inputs["reaction_is_scalar"], inputs["volume_tables"]
     tau_kind, tau_scalar, tau_coeffs = _advection_stabilization_coefficients(
         advection_stabilization,
         space,
@@ -644,6 +804,9 @@ def reconstruct_projected_field_numba(
         tau_scalar,
         tau_coeffs,
         trace_space=trace_ref,
+        beta_face_basis=advection.face_basis,
+        pointwise_beta=inputs["pointwise_beta"],
+        beta_normal_flux=inputs["beta_normal_flux"],
     )
     if zero_boundary_flux and tau_kind != 4:
         _zero_boundary_face_values(space, tau_face_values, gamma_face_values)
@@ -658,8 +821,9 @@ def reconstruct_projected_field_numba(
         np.ascontiguousarray(mesh.normals, dtype=np.float64),
         np.ascontiguousarray(q.MKrf, dtype=np.float64),
         np.ascontiguousarray(q.weighted_triple_phi_flat.reshape(q.el_dof, q.el_dof, q.el_dof), dtype=np.float64),
-        _reference_advection_tensor(space),
+        advection.advection_tensor,
         np.ascontiguousarray(trace_ref.bas_of_bd_quads, dtype=np.float64),
+        np.ascontiguousarray(advection.face_basis, dtype=np.float64),
         np.ascontiguousarray(trace_ref.weights, dtype=np.float64),
         np.ascontiguousarray(trace_ref.bas1d_of_ref_edg_qds, dtype=np.float64),
         int(trace_orientation_mode),
@@ -674,5 +838,7 @@ def reconstruct_projected_field_numba(
         tau_kind == 4,
         mesh.edge_side_indices,
         zero_boundary_flux,
+        *volume_tables,
+        *inputs["pointwise"],
     )
     return space.field(coeffs, name=name)

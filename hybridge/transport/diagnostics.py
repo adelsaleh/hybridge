@@ -190,9 +190,13 @@ def analyze_transport_snapshot(arrays):
 
 
 def _transport_snapshot_arrays(assembly) -> dict:
-    """Advection inputs and mesh/trace tables of a raw transport assembly."""
+    """Advection inputs and mesh/trace tables of a raw transport assembly.
+
+    An advection field given at the quadrature points is saved as its volume values and normal flux.
+    """
     raw = getattr(assembly, "raw", None)
-    if raw is None or raw.beta_coeffs is None:
+    pointwise = bool(getattr(raw, "pointwise_beta", False))
+    if raw is None or (raw.beta_coeffs is None and not pointwise):
         return {}
 
     def host(array):
@@ -202,7 +206,9 @@ def _transport_snapshot_arrays(assembly) -> dict:
     space, trace = assembly.cspace.host, assembly.trace_ref.host
     mesh = space.mesh
     arrays = {}
-    for name in ("source_coeffs", "beta_coeffs", "reaction_coeffs"):
+    names = ("source_coeffs", "reaction_coeffs", "beta_volume_values", "reaction_values") if pointwise else (
+        "source_coeffs", "beta_coeffs", "reaction_coeffs")
+    for name in names:
         value = getattr(raw, name, None)
         if value is not None:
             arrays[name] = host(value)
@@ -219,12 +225,18 @@ def _transport_snapshot_arrays(assembly) -> dict:
         order=np.array(space.order), basis_type=np.array(space.reference.basis_type),
         trace_kind=np.array(trace.kind),
     )
-    # Raw fused assembly uses this exact reference face basis and each
-    # element's own outward normal (before boundary-flux suppression).
-    arrays["normal_flux"] = np.einsum(
-        "dki,kfd,fiq->kfq", arrays["beta_coeffs"], mesh.normals,
-        trace.bas_of_bd_quads, optimize=True,
-    )
+    # Raw fused assembly uses the advection field basis on the trace face quadrature
+    # (the solution basis for a same-space advection) and each element's own
+    # outward normal (before boundary-flux suppression); a quadrature-point
+    # advection field carries the normal flux itself.
+    if pointwise:
+        arrays["normal_flux"] = host(raw.beta_normal_flux)
+    else:
+        advection_face_basis = getattr(raw, "beta_face_basis", None)
+        face_basis = trace.bas_of_bd_quads if advection_face_basis is None else host(advection_face_basis)
+        arrays["normal_flux"] = np.einsum(
+            "dki,kfd,fiq->kfq", arrays["beta_coeffs"], mesh.normals, face_basis, optimize=True,
+        )
     arrays["effective_normal_flux"] = effective_advection_normal_flux(
         arrays["normal_flux"], mesh, getattr(raw, "advection_stabilization", None)).copy()
     if raw.zero_boundary_flux:
