@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from hybridge.io.figures import publication_style, save_publication_figure  # noqa: E402
-from scripts.guiding_center.diagnostics.plot_diocotron_highmode import _records, _series  # noqa: E402
-from scripts.guiding_center.diagnostics.plot_diocotron_ionization import _image, _raster  # noqa: E402
+from scripts.guiding_center.diagnostics.run_records import (  # noqa: E402
+    image as _image, raster as _raster, records as _records, series as _series)
 
 INK, MUTED = "#0b0b0b", "#52514e"
 

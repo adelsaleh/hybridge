@@ -122,7 +122,7 @@ def test_linear_perturbation_is_minus_seed_velocity_dot_gradient():
 
 
 def test_initial_state_is_forwarded_only_to_observers_that_record_it(tmp_path):
-    from scripts.guiding_center.benchmarks.run_observers import Observers, SpillingSnapshotSaver
+    from scripts.guiding_center.runtime.observers import Observers, SpillingSnapshotSaver
 
     calls = []
     saver = SpillingSnapshotSaver((0.5,), 0.1, tmp_path/"spill")

@@ -23,7 +23,7 @@ from hybridge.linalg.amgx.host import initialize_pyamgx_once
 from hybridge.runtime.optional import require_cupy
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import block_basis_congruence, cycle_gate, smoothing_cases
 from scripts.guiding_center.poisson.benchmark_poisson_backends import digest
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 from scripts.guiding_center.poisson.tune_poisson_bsr_smoothing import provenance, save_json
 
 

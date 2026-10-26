@@ -413,7 +413,7 @@ def _replay_worker(args):
     """Use production package solvers on one hash-verified physical system."""
     from scipy import sparse
     from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import write_json
-    from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+    from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
     source = REPLAY_PRESETS[args.preset]
     report = dict(status="running", candidate=args.replay_worker, warmups=[], samples=[])
     output = args.output

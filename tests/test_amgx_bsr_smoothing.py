@@ -17,7 +17,7 @@ def installed_amgx_only():
             pytest.skip('CUDA device unavailable')
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip('CUDA runtime unavailable')
-    from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+    from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
     with kernel_cache_only(True):
         yield
 

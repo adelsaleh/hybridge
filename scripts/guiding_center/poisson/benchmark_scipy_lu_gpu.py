@@ -24,7 +24,7 @@ import numpy as np
 from scipy import sparse
 
 from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import monitor, write_json
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 from scripts.guiding_center.poisson.benchmark_poisson_backends import digest
 
 

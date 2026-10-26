@@ -227,7 +227,7 @@ def completed(args, geometry, kind) -> bool:
 
 
 def snapshot_times(args):
-    from scripts.guiding_center.benchmarks.run_observers import snapshot_schedule
+    from scripts.guiding_center.runtime.observers import snapshot_schedule
     if args.snapshot_times:
         return tuple(float(t) for t in args.snapshot_times.split(","))
     return snapshot_schedule(args.num_steps * args.dt)
@@ -272,8 +272,9 @@ def seed_figure(case, path, check):
 
 
 def run_one(args, geometry, kind) -> dict:
-    from scripts.guiding_center.benchmarks.run_observers import (
-        BandMovieObserver, BandProfileObserver, Observers, SpillingSnapshotSaver, release_device_memory)
+    from scripts.guiding_center.runtime.device import release_device_memory
+    from scripts.guiding_center.runtime.observers import (
+        BandMovieObserver, BandProfileObserver, Observers, SpillingSnapshotSaver)
     from scripts.guiding_center.runtime.runner import run_guiding_center_case
     from scripts.reports.run_provenance import run_provenance
     prefix = prefix_of(args, geometry, kind)

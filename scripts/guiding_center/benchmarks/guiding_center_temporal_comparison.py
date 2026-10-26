@@ -9,7 +9,6 @@ import csv
 import hashlib
 import json
 import math
-from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
@@ -19,6 +18,7 @@ import numpy as np
 from hybridge.hdg.gram import ScalarHDGGram
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.runtime.configuration import _validate_config
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only  # noqa: F401 (re-exported)
 from scripts.guiding_center.runtime.runner import run_guiding_center_case
 
 DEFAULT_VORTEX_PRESET = "euler_star_hole_si_bdf2_p6_h008_dt005_t50_raw_cuda_bsr"
@@ -69,22 +69,6 @@ def prepare_vortex_comparison(*, preset=DEFAULT_VORTEX_PRESET, scheme="si-bdf2",
     for config in configs:
         _validate_config(config)
     return configs
-
-
-@contextmanager
-def kernel_cache_only(enabled):
-    """Allow loading existing JIT caches, but reject new native compilation."""
-    with ExitStack() as stack:
-        if enabled:
-            from unittest.mock import patch
-
-            def forbidden(*args, **kwargs):
-                raise RuntimeError("Kernel cache miss: new compilation is disabled (--cached-kernels-only)")
-
-            for name in ("numba.core.dispatcher._FunctionCompiler._compile_core",
-                         "cupy.cuda.compiler.compile_using_nvrtc", "cupy.cuda.compiler.compile_using_nvcc"):
-                stack.enter_context(patch(name, forbidden))
-        yield
 
 
 class VorticityMetrics:

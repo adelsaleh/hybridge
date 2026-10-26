@@ -39,7 +39,7 @@ def test_explicit_factors_preserve_original_nonsymmetric_operator(explicit_facto
 def test_gpu_lu_reuses_analysis_with_changing_rhs(explicit_factors, candidate):
     from hybridge.runtime.optional import require_cupy_device
     from hybridge.linalg.gpu.sparse import scipy_csr_to_cupy
-    from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+    from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 
     cp = require_cupy_device()
     matrix, _, _, (lower, upper, perm_r, perm_c) = explicit_factors

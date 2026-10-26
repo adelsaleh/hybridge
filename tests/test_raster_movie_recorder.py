@@ -49,14 +49,14 @@ def test_recorder_samples_fields_of_another_degree_on_its_mesh(tmp_path):
 
 
 def test_diocotron_movie_observer_normalizes_the_perturbation(tmp_path):
-    from scripts.guiding_center.benchmarks.run_diocotron_benchmark import _MovieObserver, _Observers
+    from scripts.guiding_center.runtime.observers import MovieObserver, Observers
 
     space = DGSpace(rectangle_mesh(3, 3), 2, basis_type="dub_orth")
     equilibrium = space.project_callable(lambda x, y: 1 - x * x - y * y)
-    observer = _MovieObserver(tmp_path / "run.mp4", interval=0.5, dt=0.1, density_scale=1.0,
+    observer = MovieObserver(tmp_path / "run.mp4", interval=0.5, dt=0.1, density_scale=1.0,
                               label="test", raster=48, fps=5.)
     observer_calls = []
-    combined = _Observers(observer, observer_calls.append, None)
+    combined = Observers(observer, observer_calls.append, None)
     for step in range(1, 13):
         t = 0.1 * step
         snapshot = SimpleNamespace(

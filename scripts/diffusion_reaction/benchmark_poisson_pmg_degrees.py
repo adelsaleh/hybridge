@@ -347,11 +347,9 @@ def native_diagnostics(solver) -> dict | None:
 
 
 def _release_device_memory(cp) -> None:
-    import gc
+    from scripts.guiding_center.runtime.device import release_device_memory
 
-    gc.collect()
-    cp.get_default_memory_pool().free_all_blocks()
-    cp.get_default_pinned_memory_pool().free_all_blocks()
+    release_device_memory()
 
 
 def measure_candidate(args, *, p: int, level: str, level_row: dict, candidate: str, system, reference: dict | None,

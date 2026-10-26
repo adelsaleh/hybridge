@@ -29,7 +29,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from hybridge.io.figures import draw_signed_density, publication_style, save_publication_figure  # noqa: E402
-from scripts.guiding_center.diagnostics.plot_diocotron_highmode import _local_rates, _records, _series, load_rows  # noqa: E402
+from scripts.guiding_center.diagnostics.plot_diocotron_highmode import _local_rates, load_rows  # noqa: E402
+from scripts.guiding_center.diagnostics.run_records import records as _records, series as _series  # noqa: E402
 
 INK, MUTED = "#0b0b0b", "#52514e"
 MODE = 9

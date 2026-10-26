@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 from hybridge.io.figures import (add_matplotlib_mesh, draw_signed_density, publication_style,  # noqa: E402
                                  save_publication_figure)
 from scripts.guiding_center.diagnostics.magnetron_convergence import _snapshot_path  # noqa: E402
-from scripts.guiding_center.diagnostics.plot_diocotron_highmode import _records, _series  # noqa: E402
+from scripts.guiding_center.diagnostics.run_records import records as _records, series as _series  # noqa: E402
 
 INK, MUTED, PULSE = "#0b0b0b", "#52514e", "#e8e3d3"
 

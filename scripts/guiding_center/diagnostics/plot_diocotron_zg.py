@@ -31,6 +31,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from scripts.guiding_center.diagnostics.run_records import records as _records, series as _series  # noqa: E402
 from hybridge.io.figures import publication_style, save_publication_figure, signed_density_colors  # noqa: E402
 from scripts.guiding_center.diagnostics.analyze_diocotron_campaign import analyse_row  # noqa: E402
 from scripts.guiding_center.diagnostics.diocotron_reference import fit_growth  # noqa: E402
@@ -42,14 +43,6 @@ INK, MUTED = "#0b0b0b", "#52514e"
 DT_STYLES = {0.1: ("--", "^"), 0.05: ("-", "o")}
 ZG_MAX_MASS_DRIFT, ZG_MAX_ENERGY_DRIFT = 5.8e-4, 1.8e-3
 ZG_WINDOW = (20.0, 50.0)
-
-
-def _records(path):
-    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
-
-
-def _series(records, key):
-    return np.array([np.nan if r.get(key) is None else float(r[key]) for r in records], dtype=float)
 
 
 def _seeded(rows, velocity="raw"):

@@ -37,11 +37,10 @@ from scripts.guiding_center.benchmarks.run_diocotron_benchmark import (
     BASE_PRESET,
     VELOCITIES,
     _num_steps,
-    _Observers,
-    _release_device_memory,
-    _SnapshotSaver,
     _write_summary,
 )
+from scripts.guiding_center.runtime.device import release_device_memory
+from scripts.guiding_center.runtime.observers import Observers, SnapshotSaver
 
 
 def _floats(text: str) -> tuple[float, ...]:
@@ -316,7 +315,7 @@ def run_campaign(args) -> None:
     for record in records:
         jsonl = output_dir / f"{record['prefix']}.jsonl"
         started = time.perf_counter()
-        saver = _SnapshotSaver(args.snapshot_times, record["dt"]) if args.snapshot_times else None
+        saver = SnapshotSaver(args.snapshot_times, record["dt"]) if args.snapshot_times else None
         movie = None
         if args.movie_interval > 0:
             positivity = "KKT positivity" if args.density_positivity == "kkt" else "no positivity limiter"
@@ -328,11 +327,11 @@ def run_campaign(args) -> None:
         try:
             try:
                 run_guiding_center_case(record["config"], preset_key=record["prefix"],
-                                        step_observer=_Observers(saver, movie))
+                                        step_observer=Observers(saver, movie))
             finally:
                 if movie is not None:
                     movie.close()
-                _release_device_memory()
+                release_device_memory()
             if saver is not None:
                 saver.save(output_dir / f"{record['prefix']}_snapshots.npz")
         except Exception as error:  # a failed run is a result

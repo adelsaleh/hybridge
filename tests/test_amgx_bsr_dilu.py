@@ -10,7 +10,7 @@ import pytest
 from scipy import sparse
 
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import ROOT, HostAmgxSystem, coupled_spd_chain, cycle_gate
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 
 
 def dilu_config():

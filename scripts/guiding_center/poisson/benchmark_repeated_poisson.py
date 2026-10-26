@@ -25,7 +25,7 @@ from hybridge.core.device import (
     field_from_cupy_coefficients,
 )
 from hybridge.runtime.optional import require_cupy
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
 from scripts.guiding_center.cases.guiding_center_presets import preset_by_key
 from scripts.guiding_center.poisson.benchmark_poisson_backends import digest

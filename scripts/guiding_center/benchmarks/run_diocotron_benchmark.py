@@ -76,6 +76,8 @@ from scripts.guiding_center.diagnostics.diocotron_reference import (
     SEMI_LAGRANGIAN_INNER_WALL,
     candidate_annulus,
 )
+from scripts.guiding_center.runtime.device import release_device_memory
+from scripts.guiding_center.runtime.observers import MovieObserver, Observers, SnapshotSaver
 
 BASE_PRESET = "diocotron_gaussian_m64_si_bdf2_p6_h0068_dt05_t400"
 BENCHMARKS = ("annulus-sl", "disk-smooth", "disk-zg", "disk-highmode", "disk-injection", "disk-ionization")
@@ -443,141 +445,6 @@ def _write_summary(rows, failures, output_dir: Path, prefix: str) -> None:
             writer.writerows(flat)
 
 
-class _SnapshotSaver:
-    """Step observer storing host copies of rho_h, phi_h and q_h = -grad phi_h near requested times.
-
-    The first observed step (t = dt) and the equilibrium potential phi_h^eq are
-    always stored too, so figures of phi_h - phi_h^eq need no offline Poisson solve.
-    """
-
-    def __init__(self, times, dt, *, density_only=False):
-        self.density_only = bool(density_only)
-        self.pending = sorted(float(t) for t in times)
-        self.tolerance = .5 * float(dt)
-        self.times, self.densities, self.potentials, self.fluxes = [], [], [], []
-        self.space = self.equilibrium = None
-
-    def __call__(self, snapshot) -> None:
-        requested = bool(self.pending) and abs(snapshot.time - self.pending[0]) <= self.tolerance
-        if not requested and self.space is not None:
-            return
-        if requested:
-            self.pending.pop(0)
-        equilibrium = getattr(snapshot, "equilibrium_potential", None)
-        if self.space is None and equilibrium is not None:
-            self.equilibrium = np.asarray(equilibrium.coeffs).copy()
-        self.space = snapshot.space
-        self.times.append(float(snapshot.time))
-        self.densities.append(np.asarray(snapshot.accepted_density.coeffs).copy())
-        if self.density_only:
-            return
-        self.potentials.append(np.asarray(snapshot.poisson_result.field.coeffs).copy())
-        flux = getattr(snapshot.poisson_result, "flux", None)
-        if flux is not None:
-            self.fluxes.append(np.stack([np.asarray(c.coeffs) for c in flux.components]))
-
-    def save(self, path: Path) -> None:
-        if not self.times:
-            return
-        mesh = self.space.mesh
-        extra = {} if len(self.fluxes) != len(self.times) else dict(flux=np.stack(self.fluxes))
-        if len(self.potentials) == len(self.times):
-            extra["potential"] = np.stack(self.potentials)
-        if self.equilibrium is not None and not self.density_only:
-            extra["equilibrium_potential"] = self.equilibrium
-        np.savez_compressed(path, times=np.asarray(self.times), density=np.stack(self.densities),
-                            node_coords=mesh.node_coords,
-                            triangles=mesh.triangles, order=self.space.order,
-                            basis=self.space.reference.basis_type, **extra)
-
-
-class _MovieObserver:
-    """Step observer streaming rho_h and the normalized potential perturbation to an MP4.
-
-    Left: the density with a fixed scale (undershoots below -1e-3 in magenta).
-    Right: (phi_h - phi_eq)/max|phi_h - phi_eq|, so the seeded mode stays
-    visible while it grows by many orders of magnitude; the caption gives
-    the time and the perturbation amplitude.
-    """
-
-    def __init__(self, path: Path, *, interval: float, dt: float, density_scale: float, label: str,
-                 raster: int, fps: float):
-        self.path, self.interval, self.half_step = path, float(interval), .5 * float(dt)
-        self.density_scale, self.label = float(density_scale), label
-        self.raster, self.fps = int(raster), float(fps)
-        self.next_time, self.recorder, self.equilibrium = 0.0, None, None
-
-    def _build(self, snapshot):
-        import matplotlib as mpl
-
-        from hybridge.io.recording import RasterMovieRecorder
-
-        density_map = mpl.colormaps["viridis"].with_extremes(under="magenta")
-        density_map.colorbar_extend = "min"
-        self.recorder = RasterMovieRecorder(
-            snapshot.space, self.path,
-            # Undershoots below -1e-3 of the scale are magenta; roundoff-level negatives are not.
-            panels=[(r"Density $\rho_h$", dict(cmap=density_map,
-                                               clim=(-1.0e-3 * self.density_scale, 1.02 * self.density_scale))),
-                    (r"$(\phi_h-\phi_h^{\rm eq})/\max|\phi_h-\phi_h^{\rm eq}|$",
-                     dict(cmap="RdBu_r", clim=(-1.0, 1.0)))],
-            width=self.raster, height=self.raster, size=(1700, 820), fps=self.fps,
-            title=self.label, boundary_mesh=snapshot.space.mesh)
-        reference = snapshot.equilibrium_potential
-        self.equilibrium = None if reference is None else self.recorder.sample(reference)
-
-    def __call__(self, snapshot) -> None:
-        if snapshot.time + self.half_step < self.next_time:
-            return
-        while self.next_time <= snapshot.time + self.half_step:
-            self.next_time += self.interval
-        if self.recorder is None:
-            self._build(snapshot)
-        density = self.recorder.sample(snapshot.accepted_density)
-        potential = self.recorder.sample(snapshot.poisson_result.field)
-        perturbation = potential if self.equilibrium is None else potential - self.equilibrium
-        amplitude = float(np.ma.max(np.ma.abs(perturbation))) if perturbation.count() else 0.0
-        scaled = perturbation / amplitude if amplitude > 0 else perturbation
-        self.recorder.frame((density, scaled), caption=(
-            f"{self.label}   t = {snapshot.time:7.2f}   max|phi - phi_eq| = {amplitude:.2e}"))
-
-    def close(self) -> None:
-        if self.recorder is not None:
-            self.recorder.close()
-
-
-class _Observers:
-    """Call several step observers in order."""
-
-    def __init__(self, *observers):
-        self.observers = [observer for observer in observers if observer is not None]
-
-    def __call__(self, snapshot) -> None:
-        for observer in self.observers:
-            observer(snapshot)
-
-    def observe_initial(self, snapshot) -> None:
-        """Forward the runner's step-0 snapshot (initial state) to observers that record it."""
-        for observer in self.observers:
-            initial = getattr(observer, "observe_initial", None)
-            if initial is not None:
-                initial(snapshot)
-
-
-def _release_device_memory() -> None:
-    """Return cached CuPy blocks between runs, so later (larger) runs start from a clean pool."""
-    import gc
-
-    gc.collect()
-    try:
-        from hybridge.runtime.optional import require_cupy
-
-        cupy = require_cupy()
-        cupy.get_default_memory_pool().free_all_blocks()
-        cupy.get_default_pinned_memory_pool().free_all_blocks()
-    except Exception:
-        pass
-
 
 def run_campaign(args) -> None:
     from scripts.guiding_center.runtime.runner import run_guiding_center_case
@@ -621,7 +488,7 @@ def run_campaign(args) -> None:
                                          error=f"{type(error).__name__}: {error}"))
             _write_summary(rows, failures, output_dir, args.prefix)
             continue
-        saver = (_SnapshotSaver(args.snapshot_times, record["dt"], density_only=args.snapshot_density_only)
+        saver = (SnapshotSaver(args.snapshot_times, record["dt"], density_only=args.snapshot_density_only)
                  if args.snapshot_times and record["epsilon"] != 0.0 else None)
         movie = None
         if args.movie_interval > 0:
@@ -632,17 +499,17 @@ def run_campaign(args) -> None:
                      f"{record['triangles']} triangles  "
                      f"{record['scheme']}  dt={record['dt']:g}  {record['velocity']} drift  "
                      f"eps={record['epsilon']:g}")
-            movie = _MovieObserver(output_dir / "movies" / f"{record['prefix']}.mp4",
+            movie = MovieObserver(output_dir / "movies" / f"{record['prefix']}.mp4",
                                    interval=args.movie_interval, dt=record["dt"], density_scale=1.0,
                                    label=label, raster=raster, fps=args.movie_fps)
         try:
             try:
                 result = run_guiding_center_case(record["config"], preset_key=record["prefix"],
-                                                 step_observer=_Observers(saver, movie))
+                                                 step_observer=Observers(saver, movie))
             finally:
                 if movie is not None:
                     movie.close()
-                _release_device_memory()
+                release_device_memory()
             if saver is not None:
                 saver.save(output_dir / f"{record['prefix']}_snapshots.npz")
         except Exception as error:  # a failed run at a fixed tau is a result
@@ -673,7 +540,7 @@ def run_campaign(args) -> None:
         _write_summary(rows, failures, output_dir, args.prefix)
         # Drop the finished run's device fields before the next (possibly larger) run.
         result = None
-        _release_device_memory()
+        release_device_memory()
 
 
 def _floats(text: str) -> tuple[float, ...]:

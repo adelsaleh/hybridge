@@ -36,6 +36,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from scripts.guiding_center.diagnostics.run_records import records as _records, series as _series  # noqa: E402
 from hybridge.io.figures import (  # noqa: E402
     add_matplotlib_mesh, publication_style, save_publication_figure, signed_density_colors)
 from scripts.guiding_center.diagnostics.analyze_diocotron_campaign import analyse_row  # noqa: E402
@@ -46,14 +47,6 @@ MODE_MARKERS = {64: "o", 128: "s"}
 INK, MUTED = "#0b0b0b", "#52514e"
 # Roll-up sector mesh overlay (_draw_mesh): edge widths ~`fraction` of the triangle size on the page, <= `linewidth` pt.
 MESH_STYLE = dict(color="#b8b8b8", alpha=.3, linewidth=.12, fraction=.1)
-
-
-def _records(path):
-    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
-
-
-def _series(records, key):
-    return np.array([np.nan if r.get(key) is None else float(r[key]) for r in records], dtype=float)
 
 
 def load_rows(summaries, *, velocity=None):

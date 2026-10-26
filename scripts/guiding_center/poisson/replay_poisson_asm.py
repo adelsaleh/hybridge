@@ -40,7 +40,7 @@ from hybridge.linalg.multigrid.face_hp import (
 from scripts.guiding_center.poisson.amgx_bsr_smoothing import ROOT, smoothing_cases
 from scripts.guiding_center.poisson.asm_patches import build_element_neighbor_patches, build_face_pair_patches
 from scripts.guiding_center.poisson.benchmark_poisson_backends import digest
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 from scripts.guiding_center.poisson.tune_poisson_bsr_smoothing import provenance, save_json
 
 
