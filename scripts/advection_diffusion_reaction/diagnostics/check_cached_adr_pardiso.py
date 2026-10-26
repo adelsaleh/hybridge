@@ -24,12 +24,12 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.advection_diffusion_reaction.campaigns.logging import event
+from campaigns.common.reporting import event
 
 
 def write_json(path, value):
     # Reuse campaign persistence without importing the branch's numerical code.
-    from scripts.advection_diffusion_reaction.campaigns.stress.run_closed_loop_stress import load_common
+    from campaigns.adr_stress.run_closed_loop_stress import load_common
     common = load_common(ROOT/'vendor/adr_gmres')
     common.atomic_json(path, value)
 

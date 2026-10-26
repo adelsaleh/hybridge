@@ -20,7 +20,7 @@ import threading
 from time import monotonic
 import traceback
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 GMRES_ROOT = ROOT / "vendor/adr_gmres"
 if __package__ in {None, ""}:
     sys.path.insert(0, str(ROOT))
@@ -28,7 +28,7 @@ if __package__ in {None, ""}:
 from scripts.advection_diffusion_reaction.cases.closed_loop_stress_cases import (
     GEOMETRIES, LEVELS, VARIANTS, StressParameters, estimate_normalization,
 )
-from scripts.advection_diffusion_reaction.campaigns.logging import (
+from campaigns.common.reporting import (
     artifact_details, campaign_status, event, print_details, read_json,
     result_details, timed_phase,
 )
@@ -393,7 +393,7 @@ def execute(plan, args, common):
             common.atomic_json(out/"assemblies.json", assemblies)
             if target in pardiso_targets(args):
                 if assembled["status"] == "passed":
-                    from scripts.advection_diffusion_reaction.campaigns.stress.closed_loop_stress_pardiso import run_coarse_check
+                    from campaigns.adr_stress.closed_loop_stress_pardiso import run_coarse_check
                     check = run_coarse_check(key, args, common)
                 else:
                     check = dict(status="assembly_failed", assembly_status=assembled["status"])

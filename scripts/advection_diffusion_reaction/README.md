@@ -17,12 +17,12 @@ advection_diffusion_reaction/
 ├── benchmarks/                  # tensor timings and solver-profile preparation
 ├── meshes/                      # oscillatory/stress geometry and mesh preparation
 ├── diagnostics/                 # cached-system Pardiso check, FP32/FP64 raw-CUDA assembly check, tensor shared-memory budget
-└── campaigns/
-    ├── logging.py               # shared campaign reporting
-    ├── stress/                  # closed-loop stress orchestration and workers
-    ├── unified/                 # iterative inventory, plans and workers
-    └── pardiso/                 # direct-solver inventory, tuning and workers
 ```
+
+The ADR campaigns (closed-loop stress, unified iterative inventory, PyPardiso
+direct solves) and their shared reporting module live in the repository's
+[`campaigns/`](../../campaigns/README.md) (`campaigns/adr_stress`,
+`campaigns/adr_unified`, `campaigns/adr_pardiso`, `campaigns/common/reporting.py`).
 
 All case factories are under `cases/`; `cases/catalogue.py` supplies the registry
 exported by `cases/__init__.py`. The public import
@@ -32,7 +32,7 @@ for example:
 
 ```sh
 python -m scripts.advection_diffusion_reaction.studies.manufactured_disk --help
-python scripts/advection_diffusion_reaction/campaigns/stress/run_closed_loop_stress.py --help
+python campaigns/adr_stress/run_closed_loop_stress.py --help
 python -m scripts.advection_diffusion_reaction.benchmarks.benchmark_tensor_numba --help
 ```
 
@@ -162,13 +162,13 @@ the current HYBRIDGE package.
 | [study_diffusion_stabilization.py](studies/study_diffusion_stabilization.py) | Disk stabilization studies. |
 | [benchmark_tensor_numba.py](benchmarks/benchmark_tensor_numba.py) | Prepared tensor assembly/reconstruction benchmark without a global solve. |
 | [benchmark_tensor_raw_cuda.py](benchmarks/benchmark_tensor_raw_cuda.py) | Raw-CUDA tensor assembly formats, launch sizes and diffusion controls. |
-| [run_closed_loop_stress.py](campaigns/stress/run_closed_loop_stress.py) | Existing square/annulus stress campaign and qualified mesh preparation. |
-| [run_adr_unified_campaign.py](campaigns/unified/run_adr_unified_campaign.py) | Iterative replay of the archived ADR inventory. |
-| [run_adr_pardiso_campaign.py](campaigns/pardiso/run_adr_pardiso_campaign.py) | Direct-solver campaign for archived systems. |
+| [run_closed_loop_stress.py](../../campaigns/adr_stress/run_closed_loop_stress.py) | Existing square/annulus stress campaign and qualified mesh preparation (`campaigns/adr_stress`). |
+| [run_adr_unified_campaign.py](../../campaigns/adr_unified/run_adr_unified_campaign.py) | Iterative replay of the archived ADR inventory (`campaigns/adr_unified`). |
+| [run_adr_pardiso_campaign.py](../../campaigns/adr_pardiso/run_adr_pardiso_campaign.py) | Direct-solver campaign for archived systems (`campaigns/adr_pardiso`). |
 | [check_cached_adr_pardiso.py](diagnostics/check_cached_adr_pardiso.py) | Bounded cached-system CPU diagnostic with detailed resource monitoring. |
 | [compare_tensor_raw_cuda_precision.py](diagnostics/compare_tensor_raw_cuda_precision.py) | Raw-CUDA tensor assembly and reconstruction in FP64 vs FP32 (one worker per `HYBRIDGE_PRECISION`), COO/CSR/BSR agreement and kernel times; exits 1 above tolerance. No solve. |
 | [tensor_shared_memory_budget.py](diagnostics/tensor_shared_memory_budget.py) | Host-only table of the raw-CUDA tensor ADR shared-memory budget per order, diffusion kind and volume/face quadrature rule (batch width, bytes, largest fitting NQ); `--json` records. No GPU or solve. |
-| [export_adr_unified_inventory.py](campaigns/unified/export_adr_unified_inventory.py) | Export the archived-system inventory. |
+| [export_adr_unified_inventory.py](../../campaigns/adr_unified/export_adr_unified_inventory.py) | Export the archived-system inventory (`campaigns/adr_unified`). |
 | [make_oscillatory_geometry.py](meshes/make_oscillatory_geometry.py), [make_oscillatory_scaling_meshes.py](meshes/make_oscillatory_scaling_meshes.py) | Existing study geometry/mesh generators. |
 | [prepare_adr_solver_kernel_profiles.py](benchmarks/prepare_adr_solver_kernel_profiles.py) | Existing solver-profile preparation. |
 

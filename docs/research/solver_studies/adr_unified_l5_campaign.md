@@ -35,7 +35,7 @@ not execute numerical kernels or establish numerical/build compatibility.
 From the HYBRIDGE repository, create a plan without CUDA, meshes or solves:
 
 ```sh
-.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+.venv/bin/python -B campaigns/adr_unified/run_adr_unified_campaign.py \
   --output run_outputs/solver_studies/adr_unified_l5 \
   --l5-triangles 400000
 ```
@@ -44,7 +44,7 @@ Only on a compatible CUDA-13.0-Update-1+ GPU with the patched libraries already
 built and activated, the full-run command is:
 
 ```sh
-.venv/bin/python -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+.venv/bin/python -B campaigns/adr_unified/run_adr_unified_campaign.py \
   --branch-root vendor/adr_gmres \
   --output run_outputs/solver_studies/adr_unified_l5 \
   --l5-triangles 400000 --maxiter 2000 \
@@ -236,7 +236,7 @@ export LD_LIBRARY_PATH="$HYBRIDGE_AMGX_V100_BUILD:$HYBRIDGE_CUDA12_ROOT/lib64${L
 export PYTHONPATH="$HYBRIDGE_PYAMGX_V100_BUILD${PYTHONPATH:+:$PYTHONPATH}"
 cd "$HYBRIDGE_SRC"
 
-"$HYBRIDGE_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+"$HYBRIDGE_PYTHON" -B campaigns/adr_unified/run_adr_unified_campaign.py \
   --branch-root "$HYBRIDGE_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --preflight
@@ -245,7 +245,7 @@ cd "$HYBRIDGE_SRC"
 After preflight passes, launch:
 
 ```sh
-"$HYBRIDGE_PYTHON" -B scripts/advection_diffusion_reaction/campaigns/unified/run_adr_unified_campaign.py \
+"$HYBRIDGE_PYTHON" -B campaigns/adr_unified/run_adr_unified_campaign.py \
   --branch-root "$HYBRIDGE_GMRES_SRC" \
   --output run_outputs/solver_studies/adr_unified_l5_v100_legacy \
   --amgx-backend legacy --l5-triangles 400000 --maxiter 2000 \

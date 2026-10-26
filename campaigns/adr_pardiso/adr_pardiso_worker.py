@@ -15,9 +15,9 @@ import resource
 import time
 import traceback
 
-from scripts.advection_diffusion_reaction.campaigns.pardiso.adr_pardiso_inventory import digest, read, timing_metrics
+from campaigns.adr_pardiso.adr_pardiso_inventory import digest, read, timing_metrics
 from scripts.advection_diffusion_reaction.diagnostics.check_cached_adr_pardiso import memory_kib, write_json
-from scripts.advection_diffusion_reaction.campaigns.logging import event
+from campaigns.common.reporting import event
 
 
 def process_memory():

@@ -15,7 +15,7 @@ import sys
 import traceback
 
 # Direct-file entry point intentionally avoids importing master's scripts package.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]/"cases"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]/"scripts/advection_diffusion_reaction/cases"))
 from closed_loop_stress_cases import StressParameters, make_case
 
 
