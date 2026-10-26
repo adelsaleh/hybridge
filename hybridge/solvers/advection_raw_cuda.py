@@ -24,7 +24,9 @@ def assemble_transport_raw_cuda(
     """Assemble the reduced transport trace system with the raw CUDA kernels.
 
     With a device AMGX solve and no host-system request the operator stays on the
-    device and the host COO fields are None.
+    device and the host COO fields are None. An advection field given at the quadrature points
+    (:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`) is uploaded as such
+    and passed to the fused or split3 kernels instead of advection coefficients.
     """
     space = inputs.space
     trace_space_host = inputs.trace_space
@@ -41,8 +43,10 @@ def assemble_transport_raw_cuda(
     from hybridge.core.device import as_cupy_space, as_cupy_vector_coefficients
     from hybridge.runtime.optional import require_cupy
     from hybridge.transport.cuda import (
+        _advection_field_for,
         assemble_reduced_system_cuda,
         beta_dot_normal_from_coeffs,
+        advection_face_basis_cupy,
     )
     from hybridge.core.device import as_cupy_trace_space
 
@@ -59,11 +63,19 @@ def assemble_transport_raw_cuda(
     trace_ref = as_cupy_trace_space(trace_host, device=cspace.device_id)
     detail_timings["raw.trace_space.device"] = time.perf_counter() - setup_start
     if beta_h is None:
-        raise TypeError("assembly_backend='raw-cuda' requires beta to be a VectorDGField")
+        raise TypeError("assembly_backend='raw-cuda' requires beta to be a VectorDGField or a QuadratureVectorField")
+    from hybridge.core.quadrature_coefficients import QuadratureVectorField
+    beta_values = None
     setup_start = time.perf_counter()
-    cuda_beta_coeffs = as_cupy_vector_coefficients(beta_h, cspace)
-    cp.cuda.get_current_stream().synchronize()
-    detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
+    if isinstance(beta_h, QuadratureVectorField):
+        beta_values = beta_h.to_device()
+        cuda_beta_coeffs = None
+        cp.cuda.get_current_stream().synchronize()
+        detail_timings["raw.beta_values.to_device"] = time.perf_counter() - setup_start
+    else:
+        cuda_beta_coeffs = as_cupy_vector_coefficients(beta_h, cspace)
+        cp.cuda.get_current_stream().synchronize()
+        detail_timings["raw.beta_coeffs.to_device"] = time.perf_counter() - setup_start
     raw_eliminated = raw_local_assembly in {"fused", "split3"}
     normalized_solver = "" if solver is None else str(solver).lower()
     raw_cuda_device_amgx = (
@@ -85,9 +97,16 @@ def assemble_transport_raw_cuda(
         )
     beta_dot_normal_cp = None
 
+    beta_space = None if beta_values is not None else beta_h.components[0].space
+    if not raw_eliminated and beta_values is not None:
+        from hybridge.runtime.errors import UnsupportedBackendConfigurationError
+        raise UnsupportedBackendConfigurationError(
+            "quadrature-point coefficients need raw_local_assembly='fused' or 'split3'")
     if not raw_eliminated:
         setup_start = time.perf_counter()
-        beta_dot_normal_cp = beta_dot_normal_from_coeffs(cuda_beta_coeffs, cspace, trace_ref)
+        advection = _advection_field_for(cuda_beta_coeffs, beta_space, cspace, trace_ref)
+        beta_dot_normal_cp = beta_dot_normal_from_coeffs(
+            cuda_beta_coeffs, cspace, trace_ref, beta_face_basis=advection_face_basis_cupy(advection, trace_ref))
         cp.cuda.get_current_stream().synchronize()
         detail_timings["raw.beta_dot_normal"] = time.perf_counter() - setup_start
     cuda_assembly, trace_assembly = _timed_call(
@@ -112,6 +131,8 @@ def assemble_transport_raw_cuda(
             raw_tsle_workspace=tsle_workspace,
             raw_cache_local_response=not matrix_pattern_only,
             raw_factor_workspace=factor_workspace if cache_operator else None,
+            beta_space=beta_space,
+            beta_values=beta_values,
         ),
         multiline=_detailed_logging(verbosity),
     )

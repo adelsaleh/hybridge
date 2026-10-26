@@ -129,11 +129,15 @@ def _make_assembler(case: str, space: DGSpace, args):
 
     cspace = as_cupy_space(space)
     trace_ref = as_cupy_trace_space(space.trace_space(args.trace_basis), device=cspace.device_id)
+    # The drift may live in its own DG space (--beta-order != --order), as a
+    # raw Poisson flux of another degree does.
+    beta_order = args.order if getattr(args, "beta_order", None) is None else args.beta_order
+    beta_space = space if beta_order == args.order else DGSpace(space.mesh, beta_order, basis_type="dub_orth")
     beta = VectorDGField(
-        (space.project_callable(lambda x, y: 1.0 + 0.1 * y),
-         space.project_callable(lambda x, y: 0.3 - 0.1 * x)) if variable else
-        (space.constant(1.0, name="beta_x"), space.constant(0.3, name="beta_y")),
-        space, name="beta",
+        (beta_space.project_callable(lambda x, y: 1.0 + 0.1 * y),
+         beta_space.project_callable(lambda x, y: 0.3 - 0.1 * x)) if variable else
+        (beta_space.constant(1.0, name="beta_x"), beta_space.constant(0.3, name="beta_y")),
+        beta_space, name="beta",
     )
     beta_coeffs = as_cupy_vector_coefficients(beta, cspace)
 
@@ -159,7 +163,7 @@ def _make_assembler(case: str, space: DGSpace, args):
             source, reaction, _zero, beta_coeffs, cspace, trace_ref,
             backend="raw-cuda", raw_local_assembly=args.local_assembly, raw_lu_mode="coop",
             raw_matrix_format=args.matrix_format, raw_block_size=args.block_size,
-            raw_cache_local_response=False,
+            raw_cache_local_response=False, beta_space=beta_space,
         )
     return assemble
 
@@ -178,6 +182,8 @@ def main(argv=None):
     parser.add_argument("--phase", choices=("assembly", "rhs", "cache", "reconstruction"), default="assembly")
     parser.add_argument("--local-assembly", choices=("fused", "split3"), default="fused")
     parser.add_argument("--coefficient-case", choices=("constant", "variable"), default="constant")
+    parser.add_argument("--beta-order", type=int, default=None,
+                        help="transport: degree of the drift's DG space (default: --order)")
     args = parser.parse_args(argv)
     if args.case != "adr" and args.block_size == 1:
         parser.error("this harness profiles cooperative Poisson/transport at 32/64/128 threads")
@@ -189,6 +195,8 @@ def main(argv=None):
         parser.error("cache profiles combined raw assembly and Schur-Cholesky construction")
     if args.local_assembly == "split3" and (args.case != "transport" or args.matrix_format != "bsr"):
         parser.error("split3 requires transport BSR")
+    if args.beta_order is not None and (args.case != "transport" or args.beta_order < 0):
+        parser.error("--beta-order applies to transport and must be nonnegative")
     max_order = 6 if args.case == "adr" else 9
     if args.nx < 1 or not 1 <= args.order <= max_order or args.warmup < 1 or args.repeats < 1:
         parser.error(f"require nx >= 1, order in 1..{max_order} for {args.case}, warmup >= 1, repeats >= 1")

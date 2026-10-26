@@ -555,6 +555,8 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
         workspace: RawAdvectionTsleTensorWorkspace | None = None,
         cache_local_response: bool = True,
         advection_stabilization=None,
+        beta_face_basis=None,
+        volume_table=None,
         precision: str = "float32",
         contraction: str = "cutensor",
         compute: str = "default",
@@ -596,6 +598,18 @@ def assemble_projected_advection_trace_system_eliminated_tsle_tensor(
                                 label="tensor TSLE advection assembly")
     if str(matrix_format).lower() not in {"bsr", "auto"}:
         raise ValueError("tensor TSLE requires matrix_format='bsr'")
+    # beta_face_basis is accepted for input parity with split3; only the
+    # solution-space table (a same-space advection) is supported here.
+    # volume_table (the quadrature form of the same volume operator) is
+    # accepted for input parity with split3 and ignored: this path builds the
+    # operator by its own tensor contraction.
+    del volume_table
+    if tuple(getattr(beta_coeffs, "shape", ())[2:]) != (int(cspace.el_dof),) or (
+            beta_face_basis is not None and beta_face_basis is not trace_ref.bas_of_bd_quads):
+        raise NotImplementedError(
+            "tensor TSLE supports only an advection field in the solution space; use "
+            "raw_local_assembly='fused' or 'split3' for an advection field from another DG space"
+        )
     if precision not in TENSOR_PRECISIONS:
         raise ValueError(f"precision must be one of {TENSOR_PRECISIONS}")
     if contraction not in TENSOR_CONTRACTIONS:

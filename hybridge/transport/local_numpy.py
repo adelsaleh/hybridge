@@ -205,7 +205,11 @@ def _callable_beta_values_on_volume(beta: tuple[Callable, Callable], space: DGSp
 
 def _callable_advection_mats(space: DGSpace, beta: tuple[Callable, Callable]) -> np.ndarray:
     r"""Assemble advection matrices from callable coefficients without projection."""
-    beta_values = _callable_beta_values_on_volume(beta, space)
+    return _values_advection_mats(space, _callable_beta_values_on_volume(beta, space))
+
+
+def _values_advection_mats(space: DGSpace, beta_values: np.ndarray) -> np.ndarray:
+    r"""Assemble advection matrices from advection values ``(K, NQV, 2)`` at the volume quadrature points."""
     scaled_inv_t = space.mesh.aff_jacs[:, None, None] * space.mesh.inv_aff_mats_t
     return np.einsum(
         "Kqd,KdD,jq,Diq,q->Kij",

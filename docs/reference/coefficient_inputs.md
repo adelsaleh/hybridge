@@ -87,6 +87,32 @@ p=2 with the default 6-point rule, so prefer an `ElementCoefficient` or
 `hybridge.hdg.condensation.source_moments_from_values` for values), and a CuPy reaction of shape
 `(K, nq)` passes through unchanged.
 
+### Coefficients at the quadrature points (advection-reaction)
+
+`QuadratureVectorField` and `QuadratureScalar` (`hybridge.core.quadrature_coefficients`, exported from `hybridge`)
+hold coefficient values at the quadrature points of one solution space. They let the advection-reaction
+solver use exact PDE coefficients without a DG projection:
+
+- `QuadratureVectorField(space, trace_space, volume, normal_flux)` stores the advection field at the volume quadrature points
+  (`(K, NQV, 2)`, at `space.quad_data.Krf_quads`) and its outward normal flux at the trace face points
+  (`(K, 3, NQF)`). `QuadratureVectorField.from_callable(law, space, trace_space=...)` evaluates `law(x, y) -> (bx, by)`.
+  The law is evaluated once per edge point, on one side of each interior edge, and the other side receives the
+  negated value. The normal flux is therefore single valued: its two sides cancel exactly, and conflict
+  averaging has nothing to average.
+- `QuadratureScalar(space, volume)` stores a reaction or a source at the volume quadrature points (`(K, NQV)`).
+  A source enters only through its moments `J sum_q w_q f_q phi_i`. The solver converts it to the DG field with
+  the same moments (`QuadratureScalar.project()`), so the load vector is the one of the exact values.
+- `from_vector_field`, `from_field` and `from_element_coefficient` sample DG fields or element coefficients
+  element by element (each side of a face uses its own values); tests use them to compare against DG inputs.
+- Both types store NumPy or CuPy arrays (`device=True`, `to_device()`, `to_host()`), check their layout against
+  the solver's space and trace (`check`), and support scaling, sums and `linear_combination`. The BDF2/BDF3 helpers
+  of `hybridge.core.time_integration` combine advection fields this way, which keeps a single-valued normal flux single valued.
+
+Supported by NumPy and Numba assembly, raw-CUDA fused and split3 local assembly, and the explicit residual
+`hybridge.transport.residual.UpwindHDGTransportResidual`. A quadrature-point advection field or reaction uses the
+per-point volume operator. CuPy assembly, raw-CUDA precomputed assembly and `raw_volume_operator="tensor"` reject
+them. Stabilization resolves as for a DG advection field: conflict-averaged upwind by default.
+
 ### Lazy zero and constant DG fields
 
 `space.zeros(...)` and `space.constant(value, ...)` create exact DG fields with metadata but no full coefficient table. Their `constant_value` property is the authoritative fast-path fact. Accessing `.coeffs` or `.asarray()` materializes the full host table.
@@ -107,7 +133,7 @@ CuPy-backed fields can be constructed without a host table through `CupyDGSpace.
 | Numba assembly/reconstruction | Rejected | Host tables/descriptors only | Compact host descriptors for zero/constant | Downloads through `.coeffs` if used |
 | CuPy assembly | Sample directly on device when callable is CuPy-compatible | `as_cupy_coefficients` | Fast paths without table materialization | Native path |
 | Raw-CUDA diffusion | Callable source can become device `source_rhs`; reaction remains zero-only for now | Device tables or prepared device RHS as required | Zero reaction checked through metadata/device data | Native for accepted table inputs |
-| Raw-CUDA advection-reaction | Rejected for strict raw paths | Projected `DGField`/`VectorDGField` required | Currently table-driven, with zero/constant descriptors deferred | Native once accessed via CuPy helpers |
+| Raw-CUDA advection-reaction | Rejected for strict raw paths | Projected `DGField`/`VectorDGField`, or `QuadratureVectorField`/`QuadratureScalar` (fused, split3) | Currently table-driven, with zero/constant descriptors deferred | Native once accessed via CuPy helpers |
 
 ## `.coeffs` Materialization Audit
 

@@ -121,9 +121,38 @@ def physical_points(space, reference_points, *, xp=np):
     return xp.einsum("Krc,qc->Kqr", mesh.aff_mats, xp.asarray(points)) + mesh.aff_vecs[:, None, :]
 
 
+def element_beta_normal(beta, space, trace_space, *, xp=np, t=None):
+    """Return ``beta.n`` of an element-local vector coefficient, shape ``(K, 3, nfq)``.
+
+    Each element sees its own values on its faces, so ``beta.n`` may jump
+    across a face.
+    """
+    if beta.components != 2:
+        raise ValueError("element-local advection coefficient must have two components")
+    face = beta.face_values(space, trace_space, xp=xp, t=t)
+    if xp is np:
+        normals = space.mesh.normals
+    else:
+        from hybridge.core.device import as_cupy_space
+        normals = as_cupy_space(space).mesh.normals
+    normal = face[..., 0] * normals[:, :, 0, None] + face[..., 1] * normals[:, :, 1, None]
+    return xp.ascontiguousarray(normal)
+
+
+def element_beta_samples(beta, space, trace_space, *, xp=np, t=None):
+    """Return ``(beta.n, beta)`` of an element-local vector coefficient.
+
+    ``beta.n`` is :func:`element_beta_normal`; volume samples have shape
+    ``(K, nq, 2)``. Nothing is projected into the solution space.
+    """
+    return (element_beta_normal(beta, space, trace_space, xp=xp, t=t),
+            beta.volume_values(space, xp=xp, t=t))
+
+
 def is_element_coefficient(value) -> bool:
     """Return whether ``value`` is an :class:`ElementCoefficient`."""
     return isinstance(value, ElementCoefficient)
 
 
-__all__ = ["ElementCoefficient", "is_element_coefficient", "physical_points"]
+__all__ = ["ElementCoefficient", "element_beta_normal", "element_beta_samples", "is_element_coefficient",
+           "physical_points"]

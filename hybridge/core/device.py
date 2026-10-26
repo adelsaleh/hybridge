@@ -457,33 +457,58 @@ def as_cupy_coefficients(field: DGField, cspace: CupyDGSpace, *, copy: bool = Fa
     if not isinstance(field, DGField):
         raise TypeError("as_cupy_coefficients expects a DGField")
     field.space.assert_same_mesh(cspace.host)
+    return _cupy_field_coefficients(field, cspace.host, cspace.device_id, copy=copy)
+
+
+def _cupy_field_coefficients(field: DGField, layout_space: DGSpace, device_id: int, *, copy: bool = False):
+    """Return device coefficients of ``field`` laid out as ``layout_space``.
+
+    Shared by :func:`as_cupy_coefficients` (layout = the target CuPy space)
+    and :func:`as_cupy_vector_coefficients` (layout = the field's own space,
+    which need not be mirrored to the device).
+    """
     cupy = require_cupy()
-    with cupy.cuda.Device(cspace.device_id):
-        cached = field._device_coefficients_for(cspace.device_id)
+    with cupy.cuda.Device(device_id):
+        cached = field._device_coefficients_for(device_id)
         if cached is not None:
-            result = _normalize_cupy_coefficients(cached, cspace, copy=copy)
+            array = cupy.asarray(cached, dtype=REAL_DTYPE)
+            if array.shape != layout_space.shape:
+                raise ValueError(f"coeffs must have shape {layout_space.shape}; got {array.shape}")
+            result = array if array.flags.c_contiguous else cupy.ascontiguousarray(array)
             if result is not cached:
-                field._store_device_coefficients(result, device_id=cspace.device_id)
-            return result
+                field._store_device_coefficients(result, device_id=device_id)
+            return result.copy() if copy else result
 
         constant_value = field.constant_value
         if constant_value is not None:
-            reference = cupy.asarray(cspace.host._constant_reference_coeffs(constant_value), dtype=REAL_DTYPE)
-            result = cupy.broadcast_to(reference[None, :], cspace.host.shape).copy()
+            reference = cupy.asarray(layout_space._constant_reference_coeffs(constant_value), dtype=REAL_DTYPE)
+            result = cupy.broadcast_to(reference[None, :], layout_space.shape).copy()
         else:
             result = cupy.asarray(np.ascontiguousarray(field.coeffs, dtype=REAL_DTYPE), dtype=REAL_DTYPE)
+            if result.shape != layout_space.shape:
+                raise ValueError(f"coeffs must have shape {layout_space.shape}; got {result.shape}")
             if not result.flags.c_contiguous:
                 result = cupy.ascontiguousarray(result)
-        field._store_device_coefficients(result, device_id=cspace.device_id)
+        field._store_device_coefficients(result, device_id=device_id)
         return result.copy() if copy else result
 
 
 def as_cupy_vector_coefficients(field: VectorDGField, cspace: CupyDGSpace, *, copy: bool = False):
-    """Return component-first vector DG coefficients on ``cspace``."""
+    """Return component-first ``(dim, E, n)`` vector DG coefficients on ``cspace``'s device.
+
+    Components keep their own DG space (same mesh as ``cspace``): an advection field from
+    another degree yields ``n = component.space.el_dof`` without mirroring that
+    space to the device.
+    """
     if not isinstance(field, VectorDGField):
         raise TypeError("as_cupy_vector_coefficients expects a VectorDGField")
     cupy = require_cupy()
-    components = [as_cupy_coefficients(component, cspace) for component in field.components]
+    for component in field.components:
+        component.space.assert_same_mesh(cspace.host)
+    components = [
+        _cupy_field_coefficients(component, component.space, cspace.device_id)
+        for component in field.components
+    ]
     result = cupy.ascontiguousarray(cupy.stack(components, axis=0))
     return result.copy() if copy else result
 

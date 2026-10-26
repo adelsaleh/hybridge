@@ -32,6 +32,7 @@ from hybridge.core.projection import project_callable
 from hybridge.core.time_integration import bdf2_transport_data, bdf3_transport_data
 from hybridge.cases.profiles import sample_gaussian_blob_field
 from hybridge.core.element_coefficients import ElementCoefficient
+from hybridge.core.quadrature_coefficients import QuadratureVectorField, QuadratureScalar
 from hybridge.core.pointwise import PointwiseCoefficient, PointwiseLaw, pointwise_coefficient, pointwise_law
 from hybridge.core.field_ops import (
     coefficient_field,
@@ -161,6 +162,8 @@ __all__ = [
     "DGMesh",
     "DGSpace",
     "ElementCoefficient",
+    "QuadratureVectorField",
+    "QuadratureScalar",
     "PointwiseCoefficient",
     "PointwiseLaw",
     "LinearSolveCapacityError",

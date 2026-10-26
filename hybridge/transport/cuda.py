@@ -19,6 +19,7 @@ from typing import Literal
 
 import numpy as np
 
+from hybridge.core.quadrature_coefficients import QuadratureVectorField, QuadratureScalar
 from hybridge.core.space import DGField, DGSpace, DGTraceSpace
 from hybridge.core.device import CupyDGSpace, as_cupy_coefficients, as_cupy_space
 from hybridge.runtime.optional import require_cupy
@@ -78,6 +79,12 @@ def reaction_coefficients_cupy(reaction, cspace: CupyDGSpace, timings: dict[str,
         return cp.empty(1, dtype=REAL_DTYPE), float(reaction), True
     if isinstance(reaction, DGField):
         reaction.space.assert_same_mesh(cspace.host)
+        constant_value = reaction.constant_value
+        if constant_value is not None:
+            # A constant field is exactly the scalar mass term, as in the Numba
+            # adapters (hdg.coefficients._reaction_coefficients): the kernels
+            # skip the NEL^3 triple-product contraction.
+            return cp.empty(1, dtype=REAL_DTYPE), float(constant_value), True
         return as_cupy_coefficients(reaction, cspace), 0.0, False
     coeffs = project_callable_cupy(reaction, cspace, timings, "projection.reaction")
     return coeffs, 0.0, False
@@ -111,23 +118,28 @@ def _reference_advection_tensor_host(cspace: CupyDGSpace) -> np.ndarray:
     q = cspace.host.quad_data
     cached = getattr(q, "_hybridge_reference_advection_tensor", None)
     if cached is None:
-        cached = np.ascontiguousarray(
-            np.einsum(
-                "q,qk,qj,qiD->Dkij",
-                q.Krf_w,
-                q.phi,
-                q.phi,
-                q.gphi,
-                optimize=True,
-            ),
-            dtype=REAL_DTYPE,
-        )
+        from hybridge.transport.advection_field import solution_advection_tensor
+        cached = np.ascontiguousarray(solution_advection_tensor(cspace.host), dtype=REAL_DTYPE)
         object.__setattr__(q, "_hybridge_reference_advection_tensor", cached)
     return cached
 
 
-def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Build or reuse the dense reference advection contraction tensor on device."""
+def _advection_key(advection) -> tuple | None:
+    """Return the cache key of a cross-space advection basis, or None for the solution basis."""
+    if advection is None or advection.same_basis:
+        return None
+    return (str(advection.beta_space.reference.basis_type), int(advection.beta_space.order))
+
+
+def reference_advection_tensor_cupy(
+        cspace: CupyDGSpace, timings: dict[str, float] | None = None, *, advection=None,
+):
+    """Build or reuse the dense reference advection contraction tensor on device.
+
+    ``advection`` (:class:`hybridge.transport.advection_field.AdvectionFieldReference`) selects the
+    ``(2, NB, NEL, NEL)`` tensor of an advection field from another DG space; ``None`` or
+    a same-basis advection field gives the solution-space tensor.
+    """
     cp = require_cupy()
     start = time.perf_counter()
     q = cspace.host.quad_data
@@ -135,10 +147,13 @@ def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, floa
     if cache is None:
         cache = {}
         object.__setattr__(q, "_hybridge_reference_advection_tensor_cupy", cache)
-    if cspace.device_id not in cache:
+    advection_key = _advection_key(advection)
+    key = cspace.device_id if advection_key is None else (cspace.device_id, advection_key)
+    if key not in cache:
+        host = _reference_advection_tensor_host(cspace) if advection_key is None else advection.advection_tensor
         with cp.cuda.Device(cspace.device_id):
-            cache[cspace.device_id] = cp.asarray(_reference_advection_tensor_host(cspace))
-    result = cache[cspace.device_id]
+            cache[key] = cp.asarray(np.asarray(host, dtype=REAL_DTYPE))
+    result = cache[key]
     if timings is not None:
         timings["reference_advection_tensor"] = timings.get("reference_advection_tensor", 0.0) + sync_elapsed(start)
     return result
@@ -147,21 +162,37 @@ def reference_advection_tensor_cupy(cspace: CupyDGSpace, timings: dict[str, floa
 def reference_advection_sparse_cupy(
         cspace: CupyDGSpace,
         timings: dict[str, float] | None = None,
+        *,
+        advection=None,
 ):
-    """Return a CSR-by-matrix-entry Dubiner advection contraction."""
+    """Return a CSR-by-matrix-entry Dubiner advection contraction.
+
+    Entry ``(i, j)`` lists the advection field modes ``k`` with a nonzero tensor value;
+    with a cross-space ``advection`` the modes run over its ``NB`` basis functions
+    (sparse only when both bases are orthogonal Dubiner).
+    """
     cp = require_cupy()
     start = time.perf_counter()
     q = cspace.host.quad_data
-    sparse_candidate = str(q.basis_type) == "dub_orth"
-    cached = getattr(q, "_hybridge_sparse_advection_tensor", None)
+    advection_key = _advection_key(advection)
+    sparse_candidate = str(q.basis_type) == "dub_orth" and (
+        advection_key is None or advection_key[0] == "dub_orth")
+    if advection_key is None:
+        cached = getattr(q, "_hybridge_sparse_advection_tensor", None)
+    else:
+        cached = _sparse_cache(q, "_hybridge_sparse_advection_tensors").get(advection_key)
     if sparse_candidate and cached is None:
-        dense = _reference_advection_tensor_host(cspace)
+        dense = _reference_advection_tensor_host(cspace) if advection_key is None else advection.advection_tensor
         nel = int(q.el_dof)
+        nbeta = int(dense.shape[1])
         by_entry = np.ascontiguousarray(dense.transpose(0, 2, 3, 1))
         scale = max(float(np.max(np.abs(by_entry))), 1.0)
         zero_tolerance = 128.0 * np.finfo(REAL_DTYPE).eps * scale
-        mask = np.any(np.abs(by_entry) > zero_tolerance, axis=0)
-        counts = np.count_nonzero(mask, axis=1).reshape(-1)
+        mask = np.any(np.abs(by_entry) > zero_tolerance, axis=0)  # (i, j, k)
+        # Modes are counted per matrix entry (i, j), i.e. along k. Counting
+        # along j only coincides for a same-space advection, whose tensor
+        # int phi_k phi_j grad(phi_i) is symmetric in (j, k).
+        counts = np.count_nonzero(mask, axis=2).reshape(-1)
         offsets = np.empty(nel * nel + 1, dtype=np.int32)
         offsets[0] = 0
         cumulative = np.cumsum(counts, dtype=np.int64)
@@ -169,19 +200,23 @@ def reference_advection_sparse_cupy(
             raise OverflowError("sparse advection contraction exceeds int32 indexing")
         offsets[1:] = cumulative
         modes = np.broadcast_to(
-            np.arange(nel, dtype=np.int32), (nel, nel, nel)
+            np.arange(nbeta, dtype=np.int32), (nel, nel, nbeta)
         )[mask]
         values0 = np.ascontiguousarray(by_entry[0][mask], dtype=REAL_DTYPE)
         values1 = np.ascontiguousarray(by_entry[1][mask], dtype=REAL_DTYPE)
         cached = (offsets, np.ascontiguousarray(modes), values0, values1)
-        object.__setattr__(q, "_hybridge_sparse_advection_tensor", cached)
+        if advection_key is None:
+            object.__setattr__(q, "_hybridge_sparse_advection_tensor", cached)
+        else:
+            _sparse_cache(q, "_hybridge_sparse_advection_tensors")[advection_key] = cached
     # Indirect sparse loads only beat the dense compile-time contraction when
     # enough k entries vanish.  The p=6 Dubiner tensor retains about 57% of its
     # entries and was 18 ms slower on the 157k-element production mesh, so keep
     # that case on the dense path.  Retain sparse support for genuinely sparse
     # lower-order tensors rather than imposing the regression globally.
+    nbeta = int(q.el_dof) if advection is None else int(advection.el_dof)
     sparse_density = (
-        float(cached[2].size) / float(int(q.el_dof) ** 3)
+        float(cached[2].size) / float(nbeta * int(q.el_dof) ** 2)
         if sparse_candidate and cached is not None else 1.0
     )
     enabled = bool(sparse_candidate and sparse_density <= 0.40)
@@ -189,7 +224,7 @@ def reference_advection_sparse_cupy(
     if device_cache is None:
         device_cache = {}
         object.__setattr__(q, "_hybridge_sparse_advection_tensor_cupy", device_cache)
-    key = int(cspace.device_id)
+    key = int(cspace.device_id) if advection_key is None else (int(cspace.device_id), advection_key)
     if enabled and key not in device_cache:
         device_cache[key] = tuple(cp.asarray(array) for array in cached)
     if enabled:
@@ -216,10 +251,118 @@ def reference_advection_sparse_cupy(
     return offsets, modes, values0, values1, enabled, mass_is_diagonal
 
 
-def beta_dot_normal_from_coeffs(beta_coeffs, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
-    """Evaluate the element-side normal advection flux from DG coefficients."""
+def _sparse_cache(owner, name: str) -> dict:
+    """Return a private per-object dictionary cache."""
+    cache = getattr(owner, name, None)
+    if cache is None:
+        cache = {}
+        object.__setattr__(owner, name, cache)
+    return cache
+
+
+def advection_face_basis_cupy(advection, trace_ref: CupyDGTraceSpace):
+    """Return the advection field basis on the trace face quadrature on ``trace_ref``'s device.
+
+    ``None``/same-basis advection fields use the solution table ``trace_ref.bas_of_bd_quads``.
+    """
     cp = require_cupy()
-    return cp.einsum("dKi,Kfd,fiq->Kfq", beta_coeffs, cspace.mesh.normals, trace_ref.bas_of_bd_quads, optimize=True)
+    advection_key = _advection_key(advection)
+    if advection_key is None:
+        return trace_ref.bas_of_bd_quads
+    cache = _sparse_cache(trace_ref.host, "_hybridge_advection_face_basis_cupy")
+    key = (int(trace_ref.device_id), advection_key)
+    if key not in cache:
+        with cp.cuda.Device(trace_ref.device_id):
+            cache[key] = cp.asarray(advection.face_basis, dtype=REAL_DTYPE)
+    return cache[key]
+
+
+def advection_volume_basis_cupy(advection, cspace: CupyDGSpace):
+    """Return the ``(NB, NQV)`` advection basis at the solution volume quadrature on device."""
+    cp = require_cupy()
+    advection_key = _advection_key(advection)
+    if advection_key is None:
+        return cspace.quad_data.bas_of_quads
+    cache = _sparse_cache(cspace.host.quad_data, "_hybridge_advection_volume_basis_cupy")
+    key = (int(cspace.device_id), advection_key)
+    if key not in cache:
+        with cp.cuda.Device(cspace.device_id):
+            cache[key] = cp.ascontiguousarray(cp.asarray(advection.volume_basis.T, dtype=REAL_DTYPE))
+    return cache[key]
+
+
+RawVolumeOperator = Literal["auto", "tensor", "quadrature"]
+
+
+def reference_volume_table_cupy(cspace: CupyDGSpace, advection=None):
+    """Return the packed volume quadrature table of the raw quadrature volume operator.
+
+    ``[w (NQV) | phi (NQV, NEL) | d0 phi | d1 phi | psi (NQV, NB)]`` on the
+    solution volume rule, with ``psi`` the advection field basis (the solution basis for
+    ``advection=None``); see :func:`hybridge.transport.raw_cuda.volume_quadrature_layout`.
+    """
+    cp = require_cupy()
+    q = cspace.host.quad_data
+    cache = _sparse_cache(q, "_hybridge_volume_quadrature_table_cupy")
+    key = (int(cspace.device_id), _advection_key(advection))
+    if key not in cache:
+        psi = q.phi if _advection_key(advection) is None else advection.volume_basis
+        gphi = np.asarray(q.gphi, dtype=REAL_DTYPE)
+        host = np.concatenate((
+            np.asarray(q.Krf_w, dtype=REAL_DTYPE).ravel(),
+            np.asarray(q.phi, dtype=REAL_DTYPE).ravel(),
+            np.ascontiguousarray(gphi[:, :, 0]).ravel(),
+            np.ascontiguousarray(gphi[:, :, 1]).ravel(),
+            np.asarray(psi, dtype=REAL_DTYPE).ravel(),
+        ))
+        with cp.cuda.Device(cspace.device_id):
+            cache[key] = cp.asarray(host)
+    return cache[key]
+
+
+def use_volume_quadrature(
+        cspace: CupyDGSpace, nbeta: int, *, reaction_is_scalar: bool,
+        sparse_density: float | None = None, requested: RawVolumeOperator = "auto",
+) -> bool:
+    """Choose the raw volume operator: quadrature (True) or tensor contraction (False).
+
+    Per element the tensor form costs ``2*NB*NEL^2`` (times the sparse density
+    when the sparse Dubiner contraction is enabled) plus ``NEL^3`` for a field
+    reaction; the quadrature form costs about ``NQV*NEL^2`` plus the per-point
+    advection/reaction sums. ``auto`` picks the quadrature form when it does at
+    least ``_VOLUME_QUADRATURE_MARGIN`` times less work, so over-integrated
+    volume rules (large ``NQV``) keep the tensor contraction.
+    """
+    if requested not in {"auto", "tensor", "quadrature"}:
+        raise ValueError("raw volume operator must be 'auto', 'tensor', or 'quadrature'")
+    if requested != "auto":
+        return requested == "quadrature"
+    nel = int(cspace.el_dof)
+    nqv = int(cspace.host.quad_data.Krf_w.size)
+    density = 1.0 if sparse_density is None else float(sparse_density)
+    tensor = 2.0 * nbeta * nel * nel * density + (0.0 if reaction_is_scalar else float(nel) ** 3)
+    quadrature = float(nqv) * nel * nel + nqv * (3.0 * nel + 2.0 * nbeta + (0.0 if reaction_is_scalar else nel))
+    return _VOLUME_QUADRATURE_MARGIN * quadrature < tensor
+
+
+# Measured on the RTX PRO 5000 Blackwell (fused/split3 face BSR, 80k-157k
+# triangles, p=2..8, advection degree p..p+2, default and raised volume rules):
+# the quadrature form breaks even near a 1.2x work ratio (it adds chunk
+# synchronizations and per-point advection field sums); a 1.25 margin ranks every
+# measured case correctly. Default rules, p=2..7: 1.03-1.52x faster with the
+# quadrature form, growing with p and the advection field degree.
+_VOLUME_QUADRATURE_MARGIN = 1.25
+
+
+def beta_dot_normal_from_coeffs(beta_coeffs, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, *, beta_face_basis=None):
+    """Evaluate the element-side normal advection flux from DG coefficients.
+
+    ``beta_face_basis`` is the advection field basis on the trace face quadrature
+    (default: the solution basis).
+    """
+    cp = require_cupy()
+    basis = trace_ref.bas_of_bd_quads if beta_face_basis is None else beta_face_basis
+    return cp.einsum("dKi,Kfd,fiq->Kfq", beta_coeffs, cspace.mesh.normals, basis, optimize=True)
 
 
 def reaction_mass_cupy(reaction, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
@@ -270,12 +413,18 @@ def boundary_mass_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTr
     return result
 
 
-def advection_mats_cupy(beta_coeffs, cspace: CupyDGSpace, timings: dict[str, float] | None = None):
-    """Assemble element advection matrices on the device."""
+def advection_mats_cupy(beta_coeffs, cspace: CupyDGSpace, timings: dict[str, float] | None = None, *,
+                        beta_volume_basis=None):
+    """Assemble element advection matrices on the device.
+
+    ``beta_volume_basis`` ``(NB, NQV)`` is the advection field basis at the solution
+    volume quadrature (default: the solution basis).
+    """
     cp = require_cupy()
     start = time.perf_counter()
     q = cspace.quad_data
-    beta_values = cp.einsum("dKi,iq->Kqd", beta_coeffs, q.bas_of_quads, optimize=True)
+    basis = q.bas_of_quads if beta_volume_basis is None else beta_volume_basis
+    beta_values = cp.einsum("dKi,iq->Kqd", beta_coeffs, basis, optimize=True)
     scaled_inv_t = cspace.mesh.aff_jacs[:, None, None] * cspace.mesh.inv_aff_mats_t
     result = cp.einsum(
         "Kqd,KdD,jq,Diq,q->Kij",
@@ -309,12 +458,12 @@ def element_boundary_mats_cupy(beta_dot_normal, cspace: CupyDGSpace, trace_ref: 
     return cp.ascontiguousarray(result)
 
 
-def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0):
+def local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace, timings: dict[str, float] | None = None, *, upwind_scale: float = 1.0, beta_volume_basis=None):
     """Assemble complete element-local advection-reaction matrices on the device."""
     return (
         reaction_mass_cupy(reaction, cspace, timings)
         + boundary_mass_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=upwind_scale)
-        - advection_mats_cupy(beta_coeffs, cspace, timings)
+        - advection_mats_cupy(beta_coeffs, cspace, timings, beta_volume_basis=beta_volume_basis)
     )
 
 
@@ -535,11 +684,37 @@ def assemble_reduced_system_cuda(
     raw_cache_local_response: bool = True,
     raw_factor_workspace=None,
     advection_stabilization=None,
+    beta_space: DGSpace | None = None,
+    raw_volume_operator: RawVolumeOperator = "auto",
+    beta_values: QuadratureVectorField | None = None,
 ) -> CudaAdvectionAssembly:
-    """Assemble the boundary-eliminated advection trace system on device."""
+    """Assemble the boundary-eliminated advection trace system on device.
+
+    ``beta_coeffs`` ``(2, E, NB)`` are the advection field coefficients in
+    ``beta_space`` (default: the solution space). An advection field from another DG
+    space on the same mesh is contracted with cross-space reference tables
+    (:mod:`hybridge.transport.advection_field`) in every path, without projection.
+    ``raw_volume_operator`` selects how the fused and split3 kernels build the
+    volume operator (:func:`use_volume_quadrature`).
+
+    ``beta_values`` (:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`)
+    gives the advection field at the quadrature points instead of ``beta_coeffs`` (then
+    ``None``), and ``reaction`` may be a
+    :class:`~hybridge.core.quadrature_coefficients.QuadratureScalar`. Such
+    coefficients need raw-CUDA fused or split3 local assembly and force the
+    quadrature volume operator.
+    """
     from hybridge.hdg.stabilization import resolve_transport_stabilization
+    from hybridge.runtime.errors import UnsupportedBackendConfigurationError
+    pointwise_beta = beta_values is not None
+    pointwise_reaction = isinstance(reaction, QuadratureScalar)
+    if (pointwise_beta or pointwise_reaction) and (backend != "raw-cuda" or raw_local_assembly == "precomputed"):
+        raise UnsupportedBackendConfigurationError(
+            "quadrature-point coefficients need backend='raw-cuda' with raw_local_assembly='fused' or 'split3'")
+    if (pointwise_beta or pointwise_reaction) and raw_volume_operator == "tensor":
+        raise ValueError("quadrature-point coefficients need the quadrature volume operator, not 'tensor'")
     advection_stabilization = resolve_transport_stabilization(
-        advection_stabilization, beta_coeffs)
+        advection_stabilization, beta_values if pointwise_beta else beta_coeffs)
     if zero_boundary_flux and boundary_condition is not None:
         raise ValueError("boundary_condition must be None when boundary_mode='zero-flux'")
     from hybridge.hdg.stabilization import (
@@ -555,9 +730,19 @@ def assemble_reduced_system_cuda(
     trace_ref = trace_space if isinstance(trace_space, CupyDGTraceSpace) else as_cupy_trace_space(trace_space, device=cspace.device_id)
     timings: dict[str, float] = {}
     start_total = time.perf_counter()
+    if pointwise_beta:
+        beta_values.check(cspace.host, trace_ref.host if hasattr(trace_ref, "host") else trace_space)
+        advection = beta_face_basis = beta_volume_basis = None
+    else:
+        advection = _advection_field_for(beta_coeffs, beta_space, cspace, trace_ref)
+        beta_face_basis = advection_face_basis_cupy(advection, trace_ref)
+        beta_volume_basis = advection_volume_basis_cupy(advection, cspace)
     if backend == "raw-cuda":
         source = _require_raw_dg_field(source, cspace, "source")
-        reaction = _require_raw_dg_field(reaction, cspace, "reaction")
+        if pointwise_reaction:
+            reaction.check(cspace.host)
+        else:
+            reaction = _require_raw_dg_field(reaction, cspace, "reaction")
         if raw_local_assembly not in {"precomputed", "fused", "split3"}:
             raise ValueError("raw_local_assembly must be 'precomputed', 'fused', or 'split3'")
         if raw_lu_mode not in {None, "safe", "coop"}:
@@ -585,8 +770,12 @@ def assemble_reduced_system_cuda(
                 )
         if eliminated_local_assembly:
             source_coeffs = source_coefficients_cupy(source, cspace, timings)
-            reaction_coeffs, reaction_scalar, reaction_is_scalar = reaction_coefficients_cupy(reaction, cspace, timings)
-            advection_tensor = reference_advection_tensor_cupy(cspace, timings)
+            if pointwise_reaction:
+                reaction_coeffs, reaction_scalar, reaction_is_scalar = None, 0.0, False
+            else:
+                reaction_coeffs, reaction_scalar, reaction_is_scalar = reaction_coefficients_cupy(
+                    reaction, cspace, timings)
+            advection_tensor = None if pointwise_beta else reference_advection_tensor_cupy(cspace, timings, advection=advection)
             (
                 advection_sparse_offsets,
                 advection_sparse_modes,
@@ -594,7 +783,15 @@ def assemble_reduced_system_cuda(
                 advection_sparse_values1,
                 use_sparse_advection,
                 mass_is_diagonal,
-            ) = reference_advection_sparse_cupy(cspace, timings)
+            ) = reference_advection_sparse_cupy(cspace, timings, advection=advection)
+            volume_table = None
+            if pointwise_beta or pointwise_reaction:
+                volume_table = reference_volume_table_cupy(cspace, None if pointwise_beta else advection)
+            elif use_volume_quadrature(
+                    cspace, int(beta_coeffs.shape[-1]), reaction_is_scalar=bool(reaction_is_scalar),
+                    sparse_density=timings.get("reference_advection_sparse.density") if use_sparse_advection else None,
+                    requested=raw_volume_operator):
+                volume_table = reference_volume_table_cupy(cspace, advection)
             if zero_boundary_flux:
                 boundary_trace = cp.zeros((cspace.mesh.bnd_edges_inds.size, cspace.edg_dof), dtype=REAL_DTYPE)
             else:
@@ -622,7 +819,14 @@ def assemble_reduced_system_cuda(
                 zero_boundary_flux=zero_boundary_flux,
                 cache_local_response=raw_cache_local_response,
                 advection_stabilization=advection_stabilization,
+                beta_face_basis=beta_face_basis,
+                volume_table=volume_table,
+                beta_volume_values=beta_values.to_device().volume if pointwise_beta else None,
+                beta_normal_flux=beta_values.to_device().normal_flux if pointwise_beta else None,
+                reaction_values=reaction.to_device().volume if pointwise_reaction else None,
             )
+            if pointwise_beta:
+                beta_dot_normal = common_raw_options["beta_normal_flux"]
             if raw_local_assembly == "split3":
                 raw = assemble_projected_advection_trace_system_eliminated_tsle_bsr(
                     **common_raw_options,
@@ -639,9 +843,10 @@ def assemble_reduced_system_cuda(
             if zero_boundary_flux:
                 raise NotImplementedError("raw-CUDA zero-flux assembly currently requires raw_local_assembly='fused'")
             if beta_dot_normal is None:
-                beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
+                beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref, beta_face_basis=beta_face_basis)
             beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, advection_stabilization, xp=cp)
-            local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
+            local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor,
+                                         beta_volume_basis=beta_volume_basis)
             element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
             source_rhs = source_moments_cupy(source, cspace, timings)
             boundary_trace = boundary_trace_values_cupy(boundary_condition, cspace, trace_ref)
@@ -686,11 +891,12 @@ def assemble_reduced_system_cuda(
     if zero_boundary_flux:
         raise NotImplementedError("CuPy zero-flux advection assembly is not implemented yet; use backend='raw-cuda' with raw_local_assembly='fused' or backend='numba'")
     if beta_dot_normal is None:
-        beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref)
+        beta_dot_normal = beta_dot_normal_from_coeffs(beta_coeffs, cspace, trace_ref, beta_face_basis=beta_face_basis)
     beta_dot_normal = effective_advection_normal_flux(beta_dot_normal, cspace.mesh, advection_stabilization, xp=cp)
     maps = build_dof_maps(cspace)
     rows, cols = setup_reduced_indices(cspace, timings)
-    local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
+    local_mats = local_mats_cupy(reaction, beta_coeffs, beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor,
+                                 beta_volume_basis=beta_volume_basis)
     element_boundary = element_boundary_mats_cupy(beta_dot_normal, cspace, trace_ref, timings, upwind_scale=factor)
     source_rhs = source_moments_cupy(source, cspace, timings)
     local_rhs = cp.concatenate((element_boundary, source_rhs[..., None]), axis=2)
@@ -727,6 +933,23 @@ def assemble_reduced_system_cuda(
         raw=None,
         timings=timings,
     )
+
+
+def _advection_field_for(beta_coeffs, beta_space, cspace: CupyDGSpace, trace_ref: CupyDGTraceSpace):
+    """Return the host advection tables for ``beta_space`` (None for the solution basis)."""
+    nbeta = int(beta_coeffs.shape[-1])
+    if beta_space is None:
+        if nbeta != int(cspace.el_dof):
+            raise ValueError(
+                f"beta_coeffs have {nbeta} modes per element but the solution space has "
+                f"{int(cspace.el_dof)}; pass beta_space for an advection field from another DG space"
+            )
+        return None
+    from hybridge.transport.advection_field import advection_field_reference
+    advection = advection_field_reference(cspace.host, beta_space, trace_ref.host)
+    if advection.el_dof != nbeta:
+        raise ValueError(f"beta_coeffs have {nbeta} modes per element; beta_space has {advection.el_dof}")
+    return None if advection.same_basis else advection
 
 
 def update_reduced_system_rhs_cuda(assembly, source, boundary_condition, factors):
@@ -805,6 +1028,11 @@ def reconstruct_advection_field_cuda(trace, source, reaction, beta_coeffs, assem
                 lu_mode=raw.lu_mode,
                 zero_boundary_flux=raw.zero_boundary_flux,
                 advection_stabilization=raw.advection_stabilization,
+                beta_face_basis=raw.beta_face_basis,
+                volume_table=raw.volume_table,
+                beta_volume_values=raw.beta_volume_values,
+                beta_normal_flux=raw.beta_normal_flux,
+                reaction_values=raw.reaction_values,
             )
         else:
             uh, kernel_elapsed = reconstruct_projected_advection_field_raw_cuda(

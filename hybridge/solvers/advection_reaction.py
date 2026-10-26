@@ -24,6 +24,7 @@ from hybridge.solvers.capabilities import (
     normalize_assembly_backend,
     normalize_trace_basis,
     resolve_raw_local_assembly,
+    split3_memory_check_needed,
     validate_advection_backend_configuration,
 )
 from hybridge.hdg.cuda.launch import RawCudaBlockSize, resolve_raw_cuda_block_size
@@ -44,6 +45,8 @@ from hybridge.linalg.ordering import (
     save_upwind_reordered_matrix_patterns,
     upwind_scc_trace_ordering,
 )
+from hybridge.core.element_coefficients import ElementCoefficient
+from hybridge.core.quadrature_coefficients import QuadratureVectorField, QuadratureScalar
 from hybridge.core.space import DGField, DGSpace, VectorDGField
 from hybridge.hdg.coefficients import (
     _is_callable_beta,
@@ -200,15 +203,21 @@ class AdvectionReactionHDGOptions:
         return {field.name: getattr(self, field.name) for field in fields(type(self))}
 
 
-def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> VectorDGField:
-    """Return a two-component VectorDGField or raise a backend-specific error."""
+def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> VectorDGField | QuadratureVectorField:
+    """Return a two-component VectorDGField or QuadratureVectorField, or raise a backend-specific error.
+
+    The advection field's components must share one DG space on the solution mesh; that
+    space may differ from ``space`` in degree and basis family (the kernels
+    contract its coefficients with cross-space reference tables, see
+    :mod:`hybridge.transport.advection_field`). A :class:`QuadratureVectorField` gives the advection field
+    at the quadrature points of ``space`` and its trace space.
+    """
+    if isinstance(beta, QuadratureVectorField):
+        beta.check(space)
+        return beta
     if isinstance(beta, VectorDGField):
-        if beta.dim != 2:
-            raise ValueError("advection field must have two components")
-        beta.components[0].space.assert_same_mesh(space)
-        beta.components[1].space.assert_same_mesh(space)
-        if beta.components[0].space is not space or beta.components[1].space is not space:
-            raise ValueError(f"beta must live in the same DGSpace object for assembly_backend='{backend}'")
+        from hybridge.transport.advection_field import advection_field_space
+        advection_field_space(beta, space)
         return beta
     if _is_callable_beta(beta):
         raise TypeError(
@@ -219,6 +228,44 @@ def _require_beta_field_for_backend(beta, space: DGSpace, *, backend: str) -> Ve
         f"assembly_backend='{backend}' requires beta to be a VectorDGField; "
         "wrap coefficient data with (space * space).field(...)."
     )
+
+
+def _quadrature_transport_inputs(source, beta, reaction, space: DGSpace, trace_space, *, device: bool):
+    """Convert element-local coefficients to quadrature-point coefficients; flag any quadrature input.
+
+    An :class:`ElementCoefficient` advection field becomes a (per-side) :class:`QuadratureVectorField`, a scalar one a
+    :class:`QuadratureScalar` (device arrays for raw-CUDA). Returns ``(source, beta, reaction, flag)``.
+    """
+    if isinstance(beta, ElementCoefficient):
+        beta = QuadratureVectorField.from_element_coefficient(beta, space, trace_space=trace_space, device=device)
+    if isinstance(reaction, ElementCoefficient):
+        reaction = QuadratureScalar.from_element_coefficient(reaction, space, device=device)
+    if isinstance(source, ElementCoefficient):
+        source = QuadratureScalar.from_element_coefficient(source, space, device=device)
+    flag = (isinstance(beta, QuadratureVectorField) or isinstance(reaction, QuadratureScalar)
+            or isinstance(source, QuadratureScalar))
+    return source, beta, reaction, flag
+
+
+def _quadrature_source_field(source, space: DGSpace, *, device: bool):
+    """Return a quadrature source as the DG field with the same moments (host or device); others unchanged."""
+    if not isinstance(source, QuadratureScalar):
+        return source
+    source.check(space)
+    return (source.to_device() if device else source.to_host()).project(name="source_h")
+
+
+def _resolve_local_assembly(space: DGSpace, trace_basis: str, raw_local_assembly: str, *, bsr_output: bool,
+                            raw_lu_mode, cache_operator: bool = False, workspace=None) -> str:
+    """Resolve ``raw_local_assembly``; at p=6-7 ``"auto"`` also compares split3's workspace with free memory."""
+    memory = {}
+    if split3_memory_check_needed(raw_local_assembly, order=space.order, bsr_output=bsr_output,
+                                  raw_lu_mode=raw_lu_mode, cache_operator=cache_operator):
+        from hybridge.transport.tsle_bsr import split3_memory_sizes
+        needed, available = split3_memory_sizes(space, space.trace_space(trace_basis), workspace)
+        memory = dict(split3_workspace_bytes=needed, available_device_bytes=available)
+    return resolve_raw_local_assembly(raw_local_assembly, order=space.order, bsr_output=bsr_output,
+                                      raw_lu_mode=raw_lu_mode, cache_operator=cache_operator, **memory)
 
 
 def _with_implied_options(options: AdvectionReactionHDGOptions, explicit) -> AdvectionReactionHDGOptions:
@@ -649,9 +696,9 @@ class AdvectionReactionHDGSolver:
             raise ValueError(
                 "tangent-boundary BSR assembly requires boundary_mode='zero-flux'"
             )
-        local_assembly = resolve_raw_local_assembly(
-            options.raw_local_assembly, order=self.space.order, bsr_output=True,
-            raw_lu_mode=options.raw_lu_mode,
+        local_assembly = _resolve_local_assembly(
+            self.space, normalize_trace_basis(options.trace_basis), options.raw_local_assembly,
+            bsr_output=True, raw_lu_mode=options.raw_lu_mode, workspace=self._raw_cuda_tsle_workspace,
         )
         if local_assembly not in {"fused", "split3"}:
             raise ValueError(
@@ -696,6 +743,7 @@ class AdvectionReactionHDGSolver:
             advection_stabilization=hdg_stabilization.resolve_transport_stabilization(
                 options.advection_stabilization, self.beta),
             raw_cache_local_response=False,
+            beta_space=beta.components[0].space,
         )
         if assembly.matrix_format != "bsr":
             raise RuntimeError("raw-CUDA tangent-boundary assembly did not return BSR")
@@ -882,18 +930,33 @@ def solve_advection_reaction_hdg(
         :class:`DGField`, source moment arrays, or source values on ``space``
         volume quadrature points.  Numba/raw-CUDA assembly requires a same-space
         :class:`DGField`; use ``space.project_callable``, ``space.zeros``, or
-        ``space.constant`` before calling those backends.
+        ``space.constant`` before calling those backends. A
+        :class:`~hybridge.core.quadrature_coefficients.QuadratureScalar` source
+        (values at the volume quadrature points) is accepted by NumPy, Numba and
+        raw-CUDA: it enters the load vector through its moments, so it is
+        replaced by the DG field with the same moments.
     beta
         Advection coefficient.  NumPy/CuPy assembly accepts a tuple of two
         callables, a two-component :class:`VectorDGField`, a tuple of two
         :class:`DGField` objects, or compatible DG coefficient data.
-        Numba/raw-CUDA assembly requires a two-component :class:`VectorDGField`.
+        Numba/raw-CUDA assembly requires a two-component :class:`VectorDGField`
+        whose components share one DG space on the same mesh; its degree and
+        basis may differ from ``space`` (for example a higher-degree Poisson
+        flux). The advection field is evaluated exactly at the solution quadrature
+        points, without projection. NumPy, Numba and raw-CUDA (fused, split3)
+        also accept a :class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`,
+        the advection field given by its values at the volume and trace face quadrature
+        points (for example exact values of an analytic advection), or an
+        element-local :class:`~hybridge.core.element_coefficients.ElementCoefficient`.
     reaction
         Reaction coefficient.  NumPy/CuPy assembly accepts scalar constants,
         analytic callables, :class:`DGField`, DG coefficient arrays, or reaction
         values on volume quadrature points.  Numba/raw-CUDA assembly requires a
         same-space :class:`DGField`; use ``space.zeros`` or ``space.constant``
-        for exact zero/constant coefficients.
+        for exact zero/constant coefficients. NumPy, Numba and raw-CUDA
+        (fused, split3) also accept a
+        :class:`~hybridge.core.quadrature_coefficients.QuadratureScalar`
+        (values at the volume quadrature points).
     boundary_condition
         Dirichlet trace callable ``g(x, y)`` or real scalar constant. With
         ``boundary_mode="zero-flux"``, this must be ``None``; supplied boundary
@@ -953,7 +1016,7 @@ def solve_advection_reaction_hdg(
         Assembly backend.  ``"numpy"`` is the established vectorized reference
         path.  ``"numba"`` uses the fused projected-coefficient trace assembly
         backend and requires same-space ``DGField`` source/reaction inputs plus
-        ``VectorDGField`` beta.  ``"auto"`` currently keeps the stable NumPy
+        a ``VectorDGField`` beta (any DG space on the same mesh).  ``"auto"`` currently keeps the stable NumPy
         path. ``"cupy"`` assembles the dense local condensation and trace
         operators on the GPU and reconstructs from a device trace with batched
         CuPy solves. Compatible Cupyx solves consume device COO/RHS directly;
@@ -1048,12 +1111,16 @@ def solve_advection_reaction_hdg(
             ScaledUpwind,
             is_conflict_averaged_upwind,
         )
+    source, beta, reaction, quadrature_coefficients = _quadrature_transport_inputs(
+        source, beta, reaction, space, space.trace_space(trace_basis), device=effective_backend == "raw-cuda")
     advection_stabilization = hdg_stabilization.resolve_transport_stabilization(
         advection_stabilization, beta)
     if effective_backend == "raw-cuda":
-        raw_local_assembly = resolve_raw_local_assembly(
+        raw_local_assembly = _resolve_local_assembly(
+            space,
+            trace_basis,
             raw_local_assembly,
-            order=space.order,
+            workspace=_raw_tsle_workspace,
             bsr_output=(
                 ("" if solver is None else str(solver).lower()) in {"amgx", "pyamgx"}
                 and not requires_host_system
@@ -1082,6 +1149,7 @@ def solve_advection_reaction_hdg(
         advection_stabilization_is_lax_friedrichs=is_lax_friedrichs(advection_stabilization),
         advection_stabilization_is_scaled_upwind=isinstance(advection_stabilization, ScaledUpwind),
         advection_stabilization_is_conflict_averaged=is_conflict_averaged_upwind(advection_stabilization),
+        quadrature_coefficients=quadrature_coefficients,
     )
     boundary_condition = hdg_assembly.normalize_boundary_condition(
         boundary_condition,
@@ -1144,27 +1212,54 @@ def solve_advection_reaction_hdg(
     def prepare_data():
         """Normalize coefficient inputs and prepare backend-specific assembly data."""
         if cached is not None:
-            source_rhs = (_require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
-                          if effective_backend == "raw-cuda" else hdg_assembly.source_moments(source, space))
+            if effective_backend == "raw-cuda":
+                source_rhs = _require_same_space_dg_field_for_backend(
+                    _quadrature_source_field(source, space, device=True), space, label="source", backend="raw-cuda")
+            elif isinstance(source, QuadratureScalar):
+                source.check(space)
+                source_rhs = np.ascontiguousarray(source.to_host().moments())
+            else:
+                source_rhs = hdg_assembly.source_moments(source, space)
             return cached["beta_h"], cached["beta_dot_normal"], cached["beta_callables"], source_rhs, cached["reaction_h"]
-        if effective_backend == "raw-cuda":
-            source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="raw-cuda")
-            reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="raw-cuda")
-            beta_field = _require_beta_field_for_backend(beta, space, backend="raw-cuda")
-            return beta_field, None, None, source_field, reaction_field
-        if effective_backend == "numba":
-            source_field = _require_same_space_dg_field_for_backend(source, space, label="source", backend="numba")
-            reaction_field = _require_same_space_dg_field_for_backend(reaction, space, label="reaction", backend="numba")
-            beta_field = _require_beta_field_for_backend(beta, space, backend="numba")
+        if effective_backend in {"raw-cuda", "numba"}:
+            device = effective_backend == "raw-cuda"
+            source_field = _require_same_space_dg_field_for_backend(
+                _quadrature_source_field(source, space, device=device), space, label="source",
+                backend=effective_backend)
+            if isinstance(reaction, QuadratureScalar):
+                reaction.check(space)
+                reaction_field = reaction.to_device() if device else reaction.to_host()
+            else:
+                reaction_field = _require_same_space_dg_field_for_backend(
+                    reaction, space, label="reaction", backend=effective_backend)
+            beta_field = _require_beta_field_for_backend(beta, space, backend=effective_backend)
+            if isinstance(beta_field, QuadratureVectorField):
+                beta_field.check(space, trace_space_host)
+                beta_field = beta_field.to_device() if device else beta_field.to_host()
+                normal_flux = None if device else np.ascontiguousarray(beta_field.normal_flux)
+                return beta_field, normal_flux, None, source_field, reaction_field
             return beta_field, None, None, source_field, reaction_field
 
-        beta_field, beta_normal_flux, beta_callables = _prepare_beta_data(
-            beta,
-            space,
-            trace_space=trace_space_host,
-        )
-        source_rhs = hdg_assembly.source_moments(source, space)
-        return beta_field, beta_normal_flux, beta_callables, source_rhs, reaction
+        if isinstance(beta, QuadratureVectorField):
+            beta.check(space, trace_space_host)
+            beta_field, beta_normal_flux, beta_callables = beta.to_host(), np.ascontiguousarray(
+                beta.to_host().normal_flux), None
+        else:
+            beta_field, beta_normal_flux, beta_callables = _prepare_beta_data(
+                beta,
+                space,
+                trace_space=trace_space_host,
+            )
+        if isinstance(source, QuadratureScalar):
+            source.check(space)
+            source_rhs = np.ascontiguousarray(source.to_host().moments())
+        else:
+            source_rhs = hdg_assembly.source_moments(source, space)
+        reaction_data = reaction
+        if isinstance(reaction, QuadratureScalar):
+            reaction.check(space)
+            reaction_data = np.ascontiguousarray(reaction.values(np))
+        return beta_field, beta_normal_flux, beta_callables, source_rhs, reaction_data
 
     (beta_h, beta_dot_normal, beta_callables, source_data, reaction_h), preparation = _timed_call(
         "preparing coefficient data",

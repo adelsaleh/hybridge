@@ -88,7 +88,10 @@ import numpy as np
 from hybridge.transport.raw_cuda import (
     RawAdvectionAssemblyResult,
     _RAW_FUSED_TEMPLATE,
+    _fused_advection_inputs,
     _kernel_source,
+    _pointwise_launch_inputs,
+    _volume_launch_inputs,
     _raw_trace_orientation_mode,
     validate_raw_cuda_supported,
 )
@@ -217,8 +220,9 @@ _TSLE_KERNEL_TEMPLATE = r"""
 //   local_response   NEL*NCOLS
 //   tau_face         3*NQF
 //   gamma_face       3*NQF
-//   six NEL-length coefficient caches (source, beta_x, beta_y, beta in
-//   reference coordinates 0/1, reaction)
+//   coefficient caches: source and reaction (NEL each), beta_x, beta_y and
+//   beta in reference coordinates 0/1 (NBETA each: the advection field may live in its
+//   own DG space)
 extern "C" __global__ void advection_tsle_build(
         double* __restrict__ element_operator,
         double* __restrict__ element_response,
@@ -234,6 +238,7 @@ extern "C" __global__ void advection_tsle_build(
         const double* __restrict__ mass_matrix,
         const double* __restrict__ reaction_triples,
         const double* __restrict__ advection_tensor,
+        const double* __restrict__ volume_table,
         const int* __restrict__ advection_sparse_offsets,
         const int* __restrict__ advection_sparse_modes,
         const double* __restrict__ advection_sparse_values0,
@@ -241,11 +246,15 @@ extern "C" __global__ void advection_tsle_build(
         const int use_sparse_advection,
         const int mass_is_diagonal,
         const double* __restrict__ face_basis,
+        const double* __restrict__ beta_face_basis,
         const double* __restrict__ face_weights,
         const double* __restrict__ trace_basis,
         const double* __restrict__ source_coeffs,
         const double* __restrict__ beta_coeffs,
         const double* __restrict__ reaction_coeffs,
+        const double* __restrict__ beta_volume_values,
+        const double* __restrict__ beta_normal_flux,
+        const double* __restrict__ reaction_values,
         const double reaction_scalar,
         const int reaction_is_scalar,
         const int zero_boundary_flux,
@@ -258,10 +267,10 @@ extern "C" __global__ void advection_tsle_build(
     double* gamma_face = tau_face + 3 * NQF;
     double* source_cache = gamma_face + 3 * NQF;
     double* beta_x_cache = source_cache + NEL;
-    double* beta_y_cache = beta_x_cache + NEL;
-    double* beta_ref0_cache = beta_y_cache + NEL;
-    double* beta_ref1_cache = beta_ref0_cache + NEL;
-    double* reaction_cache = beta_ref1_cache + NEL;
+    double* beta_y_cache = beta_x_cache + NBETA;
+    double* beta_ref0_cache = beta_y_cache + NBETA;
+    double* beta_ref1_cache = beta_ref0_cache + NBETA;
+    double* reaction_cache = beta_ref1_cache + NBETA;
 
     const long long element = blockIdx.x;
     if (element >= num_elements) {
@@ -272,12 +281,12 @@ extern "C" __global__ void advection_tsle_build(
         source_cache, beta_x_cache, beta_y_cache,
         beta_ref0_cache, beta_ref1_cache, reaction_cache,
         aff_jacs, inv_aff_mats_t, jacs_el_fc, normals,
-        mass_matrix, reaction_triples, advection_tensor,
+        mass_matrix, reaction_triples, advection_tensor, volume_table,
         advection_sparse_offsets, advection_sparse_modes,
         advection_sparse_values0, advection_sparse_values1,
         use_sparse_advection, mass_is_diagonal,
-        face_basis, face_weights, trace_basis,
-        source_coeffs, beta_coeffs, reaction_coeffs,
+        face_basis, beta_face_basis, face_weights, trace_basis,
+        source_coeffs, beta_coeffs, reaction_coeffs, beta_volume_values, beta_normal_flux, reaction_values,
         reaction_scalar, reaction_is_scalar, loc2glob_edge, edge_side_indices, orientations, edge_to_solve_edge,
         zero_boundary_flux, num_elements, element);
 
@@ -538,13 +547,15 @@ extern "C" __global__ void advection_tsle_scatter_bsr(
 # ``double``, so the hard-coded 8 equals REAL_ITEMSIZE.
 
 
-def _shared_bytes_build(nel: int, ncols: int, nqf: int) -> int:
+def _shared_bytes_build(nel: int, ncols: int, nqf: int, nbeta: int | None = None) -> int:
     """Return dynamic shared bytes for local-operator construction.
 
-    Operator ``nel**2``, response ``nel*ncols``, tau/gamma ``6*nqf``, and six
-    ``nel``-length coefficient caches. The size does not depend on block size.
+    Operator ``nel**2``, response ``nel*ncols``, tau/gamma ``6*nqf``, source
+    and reaction caches (``nel`` each) and four advection caches (``nbeta`` each,
+    default ``nel``). The size does not depend on block size.
     """
-    return int((nel * nel + nel * ncols + 6 * nqf + 6 * nel) * 8 + 256)
+    nbeta = int(nel) if nbeta is None else int(nbeta)
+    return int((nel * nel + nel * ncols + 6 * nqf + 2 * nel + 4 * nbeta) * 8 + 256)
 
 
 def _shared_bytes_solve(nel: int, ncols: int, block_size: int) -> int:
@@ -574,14 +585,19 @@ def _device_property(properties: dict, name: str, default: int) -> int:
     return int(value)
 
 
-def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: str, advection_stabilization=None) -> _TsleKernels:
+def _compile_kernels(
+        cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: str, advection_stabilization=None,
+        nbeta: int | None = None, nqv: int | None = None, pointwise_beta: bool = False,
+        pointwise_reaction: bool = False,
+) -> _TsleKernels:
     """Compile or reuse the three kernels for one discrete CUDA signature.
 
     The source is ``_RAW_FUSED_TEMPLATE`` (the shared local-assembly, LU, and
     solve device routines) followed by ``_TSLE_KERNEL_TEMPLATE``, instantiated
     with ``lu_mode="coop"``. Dimensions, trace orientation, the upwind
     ``tau`` factor, and the conflict-averaged flag are compile-time constants
-    and form the cache key.
+    and form the cache key, with the quadrature-point coefficient flags
+    (``pointwise_beta``, ``pointwise_reaction``).
 
     Each kernel's dynamic shared-memory limit is raised to the largest stage
     requirement at the largest candidate block. That opts in beyond the 48 KiB
@@ -600,7 +616,10 @@ def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: s
     factor = upwind_factor(advection_stabilization)
     if factor is None:
         raise ValueError("Unsupported TSLE advection stabilization")
-    key = (device_id, int(nel), int(ntr), int(nqf), str(trace_orientation), factor, is_conflict_averaged_upwind(advection_stabilization))
+    nbeta = int(nel) if nbeta is None else int(nbeta)
+    key = (device_id, int(nel), int(ntr), int(nqf), str(trace_orientation), factor,
+           is_conflict_averaged_upwind(advection_stabilization), nbeta, nqv, bool(pointwise_beta),
+           bool(pointwise_reaction))
     cached = _TSLE_MODULE_CACHE.get(key)
     if cached is not None:
         return _TsleKernels(cached.build, cached.solve, cached.scatter, 0.0)
@@ -614,6 +633,10 @@ def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: s
         lu_mode="coop",
         trace_orientation=trace_orientation,
         advection_stabilization=advection_stabilization,
+        nbeta=nbeta,
+        nqv=nqv,
+        pointwise_beta=pointwise_beta,
+        pointwise_reaction=pointwise_reaction,
     )
     started = time.perf_counter()
     module = real_raw_module(
@@ -629,7 +652,7 @@ def _compile_kernels(cupy, *, nel: int, ntr: int, nqf: int, trace_orientation: s
         time.perf_counter() - started,
     )
     max_shared = max(
-        _shared_bytes_build(nel, 3 * ntr + 1, nqf),
+        _shared_bytes_build(nel, 3 * ntr + 1, nqf, nbeta),
         _shared_bytes_solve(nel, 3 * ntr + 1, max(_TSLE_BLOCK_CANDIDATES)),
         _shared_bytes_scatter(nel, ntr),
     )
@@ -690,6 +713,7 @@ def _select_launch_blocks(
         ncols: int,
         nqf: int,
         timings: dict[str, float],
+        nbeta: int | None = None,
 ) -> tuple[int, int, int]:
     """Select explicit or sampled/full-mesh stage launch sizes.
 
@@ -748,7 +772,7 @@ def _select_launch_blocks(
         value
         for value in _TSLE_BLOCK_CANDIDATES
         if value <= max_threads
-        and _shared_bytes_build(nel, ncols, nqf) <= max_shared
+        and _shared_bytes_build(nel, ncols, nqf, nbeta) <= max_shared
         and _shared_bytes_solve(nel, ncols, value) <= max_shared
         and _shared_bytes_scatter(nel, ntr) <= max_shared
     ]
@@ -764,7 +788,7 @@ def _select_launch_blocks(
     for block in candidates:
         launch = lambda block=block: kernels.build(
             grid, (block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf),
+            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
         )
         build_times[block] = _candidate_median(cupy, lambda: None, launch)
         timings[f"raw.tsle.autotune.build.{block}"] = build_times[block]
@@ -774,7 +798,7 @@ def _select_launch_blocks(
         for block in build_finalists:
             launch = lambda block=block: kernels.build(
                 full_grid, (block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf),
+                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
             )
             full_build_times[block] = _candidate_median(cupy, lambda: None, launch)
             timings[f"raw.tsle.autotune.full.build.{block}"] = full_build_times[block]
@@ -786,7 +810,7 @@ def _select_launch_blocks(
         """Rebuild sampled local systems before a destructive solve trial."""
         kernels.build(
             grid, (build_block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf),
+            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
         )
 
     solve_times: dict[int, float] = {}
@@ -803,7 +827,7 @@ def _select_launch_blocks(
             """Rebuild full-mesh local systems before a solve finalist."""
             kernels.build(
                 full_grid, (build_block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf),
+                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
             )
 
         full_solve_times: dict[int, float] = {}
@@ -822,7 +846,7 @@ def _select_launch_blocks(
         """Prepare sampled solved columns and zero scatter outputs."""
         kernels.build(
             grid, (build_block,), build_args,
-            shared_mem=_shared_bytes_build(nel, ncols, nqf),
+            shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
         )
         kernels.solve(
             grid, (solve_block,), solve_args,
@@ -845,7 +869,7 @@ def _select_launch_blocks(
             """Prepare full-mesh solved columns and zero scatter outputs."""
             kernels.build(
                 full_grid, (build_block,), build_args,
-                shared_mem=_shared_bytes_build(nel, ncols, nqf),
+                shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
             )
             kernels.solve(
                 full_grid, (solve_block,), solve_args,
@@ -897,6 +921,11 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         workspace: RawAdvectionTsleWorkspace | None = None,
         cache_local_response: bool = True,
         advection_stabilization=None,
+        beta_face_basis=None,
+        volume_table=None,
+        beta_volume_values=None,
+        beta_normal_flux=None,
+        reaction_values=None,
 ) -> RawAdvectionAssemblyResult:
     """Assemble a reduced face-BSR system with the TSLE three-stage pipeline.
 
@@ -911,7 +940,9 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     Parameters
     ----------
     source_coeffs, beta_coeffs : array_like
-        Projected source ``(E, NEL)`` and velocity ``(2, E, NEL)`` coefficients.
+        Projected source ``(E, NEL)`` and advection field ``(2, E, NB)`` coefficients;
+        the advection field may live in another DG space (``NB != NEL``), described by
+        ``beta_face_basis`` and ``advection_tensor``.
     reaction_coeffs, reaction_scalar, reaction_is_scalar
         Either a projected ``(E, NEL)`` reaction field, or a constant
         ``reaction_scalar`` when ``reaction_is_scalar`` is true (the array is
@@ -923,7 +954,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         CuPy element space and trace reference data. The trace basis must be
         legacy-lagrange nodal or legendre-modal, with p <= 9.
     advection_tensor, advection_sparse_*, use_sparse_advection
-        Dense ``(2, NEL, NEL, NEL)`` reference advection tensor, or its
+        Dense ``(2, NB, NEL, NEL)`` reference advection tensor, or its
         CSR-like sparse form, selected by ``use_sparse_advection``.
     mass_is_diagonal : bool
         Lets the kernel skip off-diagonal reference-mass products.
@@ -943,6 +974,16 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         is reused, the next assembly overwrites that view.
     advection_stabilization
         Upwind stabilization policy; see ``hybridge.hdg.stabilization``.
+    beta_face_basis : array_like, optional
+        ``(3, NB, NQF)`` advection basis on the trace face quadrature; ``None``
+        for an advection field in the solution space.
+    volume_table : array_like, optional
+        Packed volume quadrature table selecting the quadrature volume
+        operator (``hybridge.transport.raw_cuda.volume_quadrature_layout``).
+    beta_volume_values, beta_normal_flux, reaction_values : array_like, optional
+        Quadrature-point advection field ``(E, NQV, 2)`` with its normal flux ``(E, 3, NQF)``
+        and reaction ``(E, NQV)``, as in the fused assembly; they need
+        ``volume_table``.
 
     Returns
     -------
@@ -985,13 +1026,21 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
     # so that reconstruction reuses the same device buffers. A scalar reaction
     # passes a 1-element dummy that the kernel never reads.
     source_coeffs = cupy.ascontiguousarray(source_coeffs, dtype=REAL_DTYPE)
-    beta_coeffs = cupy.ascontiguousarray(beta_coeffs, dtype=REAL_DTYPE)
+    (beta_volume_values, beta_normal_flux, reaction_values,
+     pointwise_beta, pointwise_reaction) = _pointwise_launch_inputs(
+        cupy, cspace, trace_ref, beta_volume_values, beta_normal_flux, reaction_values)
+    beta_coeffs, beta_face_basis, advection_tensor, nbeta = _fused_advection_inputs(
+        cupy, beta_coeffs, beta_face_basis, advection_tensor, cspace, trace_ref, pointwise_beta)
+    if (pointwise_beta or pointwise_reaction) and volume_table is None:
+        raise ValueError("quadrature-point coefficients need the quadrature volume table (volume_table)")
+    volume_table, nqv = _volume_launch_inputs(cupy, volume_table, nel, nbeta)
+    if pointwise_reaction and reaction_is_scalar:
+        raise ValueError("reaction_values give a field reaction; set reaction_is_scalar=False")
     reaction_coeffs = (
         cupy.empty(1, dtype=REAL_DTYPE)
-        if reaction_is_scalar
+        if reaction_is_scalar or pointwise_reaction
         else cupy.ascontiguousarray(reaction_coeffs, dtype=REAL_DTYPE)
     )
-    advection_tensor = cupy.ascontiguousarray(advection_tensor, dtype=REAL_DTYPE)
     advection_sparse_offsets = cupy.ascontiguousarray(advection_sparse_offsets, dtype=cupy.int32)
     advection_sparse_modes = cupy.ascontiguousarray(advection_sparse_modes, dtype=cupy.int32)
     advection_sparse_values0 = cupy.ascontiguousarray(advection_sparse_values0, dtype=REAL_DTYPE)
@@ -1036,6 +1085,10 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         nqf=nqf,
         trace_orientation=trace_orientation,
         advection_stabilization=advection_stabilization,
+        nbeta=nbeta,
+        nqv=nqv,
+        pointwise_beta=pointwise_beta,
+        pointwise_reaction=pointwise_reaction,
     )
     timings["raw.tsle.jit"] = float(kernels.jit_seconds)
 
@@ -1057,6 +1110,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         cspace.quad_data.MKrf,
         cspace.quad_data.weighted_triple_phi_flat,
         advection_tensor,
+        volume_table,
         advection_sparse_offsets,
         advection_sparse_modes,
         advection_sparse_values0,
@@ -1064,11 +1118,15 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         np.int32(1 if use_sparse_advection else 0),
         np.int32(1 if mass_is_diagonal else 0),
         trace_ref.bas_of_bd_quads,
+        beta_face_basis,
         trace_ref.weights,
         trace_ref.bas1d_of_ref_edg_qds,
         source_coeffs,
         beta_coeffs,
         reaction_coeffs,
+        beta_volume_values,
+        beta_normal_flux,
+        reaction_values,
         REAL_DTYPE(reaction_scalar),
         np.int32(1 if reaction_is_scalar else 0),
         np.int32(1 if zero_boundary_flux else 0),
@@ -1112,11 +1170,15 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         nel,
         ntr,
         nqf,
+        nbeta,
+        nqv,
         trace_orientation,
         bool(use_sparse_advection),
         bool(mass_is_diagonal),
         bool(reaction_is_scalar),
         bool(zero_boundary_flux),
+        bool(pointwise_beta),
+        bool(pointwise_reaction),
         min(num_elements, _TSLE_TUNE_LIMIT),
         num_elements,
     )
@@ -1137,6 +1199,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         ncols=ncols,
         nqf=nqf,
         timings=timings,
+        nbeta=nbeta,
     )
     build_block, solve_block, scatter_block = selected
     timings["raw.tsle.build.block_size"] = float(build_block)
@@ -1161,7 +1224,7 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         (num_elements,),
         (build_block,),
         build_args,
-        shared_mem=_shared_bytes_build(nel, ncols, nqf),
+        shared_mem=_shared_bytes_build(nel, ncols, nqf, nbeta),
     )
     events[1].record(stream)
     kernels.solve(
@@ -1211,6 +1274,8 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         csr_pattern=pattern,
         source_coeffs=source_coeffs,
         beta_coeffs=beta_coeffs,
+        beta_face_basis=beta_face_basis,
+        volume_table=volume_table if nqv is not None else None,
         reaction_coeffs=reaction_coeffs,
         reaction_scalar=float(reaction_scalar),
         reaction_is_scalar=bool(reaction_is_scalar),
@@ -1224,7 +1289,37 @@ def assemble_projected_advection_trace_system_eliminated_tsle_bsr(
         local_response=response,
         lu_mode="coop",
         zero_boundary_flux=bool(zero_boundary_flux),
+        beta_volume_values=beta_volume_values if pointwise_beta else None,
+        beta_normal_flux=beta_normal_flux if pointwise_beta else None,
+        reaction_values=reaction_values if pointwise_reaction else None,
+        pointwise_beta=pointwise_beta,
+        pointwise_reaction=pointwise_reaction,
     )
+
+
+def split3_workspace_bytes(num_elements: int, nel: int, ntr: int, nqf: int) -> int:
+    """Return the bytes of a :class:`RawAdvectionTsleWorkspace` for this discrete signature."""
+    ncols = 3 * int(ntr) + 1
+    return int(num_elements) * (int(nel) ** 2 + int(nel) * ncols + 6 * int(nqf)) * REAL_ITEMSIZE
+
+
+def split3_memory_sizes(space, trace_space, workspace: RawAdvectionTsleWorkspace | None = None) -> tuple[int, int]:
+    """Return ``(workspace_bytes, available_bytes)`` for the memory-aware split3 choice.
+
+    Available memory is the driver's free device memory plus the free blocks
+    of CuPy's default memory pool. A workspace already allocated for this
+    signature counts as available, so a solver that chose split3 keeps it.
+    """
+    cupy = require_cupy()
+    nqf = int(trace_space.weights.size)
+    needed = split3_workspace_bytes(space.mesh.num_tri, space.el_dof, space.order + 1, nqf)
+    free, _total = cupy.cuda.runtime.memGetInfo()
+    available = int(free) + int(cupy.get_default_memory_pool().free_bytes())
+    signature = (int(cupy.cuda.runtime.getDevice()), int(space.mesh.num_tri), int(space.el_dof),
+                 3 * (space.order + 1) + 1, nqf)
+    if workspace is not None and workspace.signature == signature:
+        available += workspace.nbytes
+    return needed, available
 
 
 def clear_tsle_runtime_caches() -> None:
@@ -1242,4 +1337,6 @@ __all__ = [
     "RawAdvectionTsleWorkspace",
     "assemble_projected_advection_trace_system_eliminated_tsle_bsr",
     "clear_tsle_runtime_caches",
+    "split3_memory_sizes",
+    "split3_workspace_bytes",
 ]
