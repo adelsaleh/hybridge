@@ -51,7 +51,7 @@ def test_sampler_recovers_polynomial_field_and_reuses_location():
 
 def test_profile_observer_keeps_signed_fields_and_separate_degrees(tmp_path):
     from types import SimpleNamespace
-    from scripts.guiding_center.benchmarks.run_observers import BandProfileObserver
+    from scripts.guiding_center.runtime.observers import BandProfileObserver
     mesh = rectangle_mesh(6, 6, xlim=(-1, 1), ylim=(-1, 1))
     density_space, potential_space = DGSpace(mesh, 2), DGSpace(mesh, 3)
     density = project_callable(lambda x, y: x-y, density_space)

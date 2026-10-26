@@ -1,12 +1,13 @@
-"""Step observers for long article runs: snapshot states spilled to disk and the snapshot schedule.
+"""Step observers of the guiding-center drivers and the snapshot schedule of long runs.
 
-``SpillingSnapshotSaver`` stores host copies of rho_h and phi_h at requested times (and always at the
-first observed step: the initial state t = 0 when the runner reports it through ``observe_initial``,
-else t = dt) as one ``.npz`` per state in ``spill_dir`` while the run proceeds, so a
-long high-resolution run does not hold gigabytes of states in memory. ``save`` assembles the layout of
-``run_diocotron_benchmark._SnapshotSaver`` (``times, density, potential, equilibrium_potential,
-node_coords, triangles, order, basis``), which ``render_diocotron_movie.py`` reads, and removes the
-spilled files. ``Observers`` and ``release_device_memory`` are the diocotron driver's helpers.
+``SnapshotSaver`` keeps host copies of rho_h, phi_h and q_h near requested times in memory;
+``SpillingSnapshotSaver`` writes each requested state to ``spill_dir`` immediately (and always the first
+observed step: the initial state t = 0 when the runner reports it through ``observe_initial``, else
+t = dt), so a long high-resolution run does not hold gigabytes of states in memory; its ``save``
+assembles the same layout (``times, density, potential, equilibrium_potential, node_coords, triangles,
+order, basis``), which ``render_diocotron_movie.py`` reads, and removes the spilled files.
+``MovieObserver`` and ``BandMovieObserver`` stream rho_h and the normalized potential perturbation to an
+MP4; ``BandProfileObserver`` saves fixed transverse probes; ``Observers`` calls several observers in order.
 """
 from __future__ import annotations
 
@@ -15,8 +16,126 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.guiding_center.benchmarks.run_diocotron_benchmark import (  # noqa: F401 (re-exported)
-    _Observers as Observers, _release_device_memory as release_device_memory)
+
+class SnapshotSaver:
+    """Step observer storing host copies of rho_h, phi_h and q_h = -grad phi_h near requested times.
+
+    The first observed step (t = dt) and the equilibrium potential phi_h^eq are
+    always stored too, so figures of phi_h - phi_h^eq need no offline Poisson solve.
+    """
+
+    def __init__(self, times, dt, *, density_only=False):
+        self.density_only = bool(density_only)
+        self.pending = sorted(float(t) for t in times)
+        self.tolerance = .5 * float(dt)
+        self.times, self.densities, self.potentials, self.fluxes = [], [], [], []
+        self.space = self.equilibrium = None
+
+    def __call__(self, snapshot) -> None:
+        requested = bool(self.pending) and abs(snapshot.time - self.pending[0]) <= self.tolerance
+        if not requested and self.space is not None:
+            return
+        if requested:
+            self.pending.pop(0)
+        equilibrium = getattr(snapshot, "equilibrium_potential", None)
+        if self.space is None and equilibrium is not None:
+            self.equilibrium = np.asarray(equilibrium.coeffs).copy()
+        self.space = snapshot.space
+        self.times.append(float(snapshot.time))
+        self.densities.append(np.asarray(snapshot.accepted_density.coeffs).copy())
+        if self.density_only:
+            return
+        self.potentials.append(np.asarray(snapshot.poisson_result.field.coeffs).copy())
+        flux = getattr(snapshot.poisson_result, "flux", None)
+        if flux is not None:
+            self.fluxes.append(np.stack([np.asarray(c.coeffs) for c in flux.components]))
+
+    def save(self, path: Path) -> None:
+        if not self.times:
+            return
+        mesh = self.space.mesh
+        extra = {} if len(self.fluxes) != len(self.times) else dict(flux=np.stack(self.fluxes))
+        if len(self.potentials) == len(self.times):
+            extra["potential"] = np.stack(self.potentials)
+        if self.equilibrium is not None and not self.density_only:
+            extra["equilibrium_potential"] = self.equilibrium
+        np.savez_compressed(path, times=np.asarray(self.times), density=np.stack(self.densities),
+                            node_coords=mesh.node_coords,
+                            triangles=mesh.triangles, order=self.space.order,
+                            basis=self.space.reference.basis_type, **extra)
+
+
+class MovieObserver:
+    """Step observer streaming rho_h and the normalized potential perturbation to an MP4.
+
+    Left: the density with a fixed scale (undershoots below -1e-3 in magenta).
+    Right: (phi_h - phi_eq)/max|phi_h - phi_eq|, so the seeded mode stays
+    visible while it grows by many orders of magnitude; the caption gives
+    the time and the perturbation amplitude.
+    """
+
+    def __init__(self, path: Path, *, interval: float, dt: float, density_scale: float, label: str,
+                 raster: int, fps: float):
+        self.path, self.interval, self.half_step = path, float(interval), .5 * float(dt)
+        self.density_scale, self.label = float(density_scale), label
+        self.raster, self.fps = int(raster), float(fps)
+        self.next_time, self.recorder, self.equilibrium = 0.0, None, None
+
+    def _build(self, snapshot):
+        import matplotlib as mpl
+
+        from hybridge.io.recording import RasterMovieRecorder
+
+        density_map = mpl.colormaps["viridis"].with_extremes(under="magenta")
+        density_map.colorbar_extend = "min"
+        self.recorder = RasterMovieRecorder(
+            snapshot.space, self.path,
+            # Undershoots below -1e-3 of the scale are magenta; roundoff-level negatives are not.
+            panels=[(r"Density $\rho_h$", dict(cmap=density_map,
+                                               clim=(-1.0e-3 * self.density_scale, 1.02 * self.density_scale))),
+                    (r"$(\phi_h-\phi_h^{\rm eq})/\max|\phi_h-\phi_h^{\rm eq}|$",
+                     dict(cmap="RdBu_r", clim=(-1.0, 1.0)))],
+            width=self.raster, height=self.raster, size=(1700, 820), fps=self.fps,
+            title=self.label, boundary_mesh=snapshot.space.mesh)
+        reference = snapshot.equilibrium_potential
+        self.equilibrium = None if reference is None else self.recorder.sample(reference)
+
+    def __call__(self, snapshot) -> None:
+        if snapshot.time + self.half_step < self.next_time:
+            return
+        while self.next_time <= snapshot.time + self.half_step:
+            self.next_time += self.interval
+        if self.recorder is None:
+            self._build(snapshot)
+        density = self.recorder.sample(snapshot.accepted_density)
+        potential = self.recorder.sample(snapshot.poisson_result.field)
+        perturbation = potential if self.equilibrium is None else potential - self.equilibrium
+        amplitude = float(np.ma.max(np.ma.abs(perturbation))) if perturbation.count() else 0.0
+        scaled = perturbation / amplitude if amplitude > 0 else perturbation
+        self.recorder.frame((density, scaled), caption=(
+            f"{self.label}   t = {snapshot.time:7.2f}   max|phi - phi_eq| = {amplitude:.2e}"))
+
+    def close(self) -> None:
+        if self.recorder is not None:
+            self.recorder.close()
+
+
+class Observers:
+    """Call several step observers in order."""
+
+    def __init__(self, *observers):
+        self.observers = [observer for observer in observers if observer is not None]
+
+    def __call__(self, snapshot) -> None:
+        for observer in self.observers:
+            observer(snapshot)
+
+    def observe_initial(self, snapshot) -> None:
+        """Forward the runner's step-0 snapshot (initial state) to observers that record it."""
+        for observer in self.observers:
+            initial = getattr(observer, "observe_initial", None)
+            if initial is not None:
+                initial(snapshot)
 
 
 def snapshot_schedule(final_time, *, fine_until=60.0, fine=2.5, coarse=5.0) -> tuple[float, ...]:
@@ -151,7 +270,7 @@ class BandProfileObserver:
 class BandMovieObserver:
     """Step observer streaming rho_h (signed density scale) and (phi_h - phi_eq)/max|.| to an MP4.
 
-    Like ``run_diocotron_benchmark._MovieObserver`` but with the article's signed density colours
+    Like ``MovieObserver`` but with the article's signed density colours
     (``hybridge.io.figures.signed_density_colors``, no undershoot alarm colour) on [density_min, 1].
     """
 

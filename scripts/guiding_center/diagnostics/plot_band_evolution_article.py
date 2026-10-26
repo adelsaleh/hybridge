@@ -121,7 +121,7 @@ def article_style():
                          "ytick.labelsize": 6.5, "lines.linewidth": 1.1})
 
 
-def preservation_figure(data, out, spectrum):
+def article_preservation_figure(data, out, spectrum):
     fig, axes = plt.subplots(1, 3, figsize=(TEXT_WIDTH, 2.3), constrained_layout=True,
                              gridspec_kw=dict(width_ratios=(1, 1, 1.25)))
     for g, pair in data.items():
@@ -496,7 +496,7 @@ def main(argv=None):
             run = find_run(Path(runs), prefix, g, "seed")
             if run is not None:
                 extra.append((label, run, int(order)))
-        preservation_figure(data, figures, tuple(args.spectrum.split(":")))
+        article_preservation_figure(data, figures, tuple(args.spectrum.split(":")))
         preservation_table(data, tables / "e7_preservation.tex")
         rates_table(data, extra, tables / "e7_rates.tex", order=args.order)
         conservation_table(data, tables / "e7_conservation.tex")

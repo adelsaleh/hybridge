@@ -7,7 +7,7 @@ import pytest
 
 from hybridge.linalg.multigrid.face_hp import solve_pcgf_prototype
 from hybridge.runtime.precision import REAL_DTYPE
-from scripts.guiding_center.benchmarks.guiding_center_temporal_comparison import kernel_cache_only
+from scripts.guiding_center.runtime.kernel_cache import kernel_cache_only
 
 
 @pytest.fixture

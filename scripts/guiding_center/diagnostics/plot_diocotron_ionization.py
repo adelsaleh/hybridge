@@ -18,7 +18,6 @@ Reads the run records of ``run_diocotron_benchmark.py --benchmark disk-ionizatio
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib
@@ -28,7 +27,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from hybridge.io.figures import draw_signed_density, publication_style, save_publication_figure  # noqa: E402
-from scripts.guiding_center.diagnostics.plot_diocotron_highmode import _records, _series  # noqa: E402
+from scripts.guiding_center.diagnostics.run_records import (  # noqa: E402
+    image as _image, raster as _raster, records as _records, series as _series)
 
 INK, MUTED = "#0b0b0b", "#52514e"
 SERIES = ("#2a5b8c", "#c4622d", "#3f8f5a", "#8a5aa8")
@@ -105,26 +105,6 @@ def checks_figure(column_paths, map_path, reference_path, stem, *, mode=9):
             right.legend(frameon=False, fontsize=7, loc="lower right")
             right.grid(True, which="major", alpha=.5)
         return save_publication_figure(figure, stem, dpi=300)
-
-
-def _raster(npz, pixels):
-    from hybridge.core.mesh import DGMesh
-    from hybridge.core.space import DGSpace
-    from hybridge.io.raster import RasterGeometry
-
-    mesh = DGMesh(npz["node_coords"], npz["triangles"])
-    space = DGSpace(mesh, int(npz["order"]), basis_type=str(npz["basis"]))
-    geometry = RasterGeometry.from_mesh(mesh, pixels, pixels)
-    mask = (geometry.element_ids < 0).reshape(geometry.height, geometry.width)
-    return geometry, geometry.sampling_matrix(space), mask
-
-
-def _image(ax, values, geometry, mask):
-    """Panel ``(ax, image, extent)`` for :func:`draw_signed_density` (one scale per figure)."""
-    ax.set_xticks([]); ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    return ax, np.ma.array(values, mask=mask), geometry.bounds
 
 
 def map_frames_figure(map_npz, reference_npz, stem, *, nu, s_values=(70., 100., 150., 200., 250.), pixels=420):

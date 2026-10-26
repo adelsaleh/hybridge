@@ -6,7 +6,7 @@ import numpy as np
 
 from scripts.guiding_center.benchmarks import campaign_protocol
 from scripts.guiding_center.benchmarks.run_band_evolution import parse_args, prefix_of
-from scripts.guiding_center.benchmarks.run_observers import SpillingSnapshotSaver, snapshot_schedule
+from scripts.guiding_center.runtime.observers import SpillingSnapshotSaver, snapshot_schedule
 
 
 def test_parse_args_and_prefix(tmp_path):

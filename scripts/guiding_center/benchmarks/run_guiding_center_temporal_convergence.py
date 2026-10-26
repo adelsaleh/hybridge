@@ -18,6 +18,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from scripts.guiding_center.runtime.device import release_device_memory
 from hybridge.diagnostics.errors import evaluate_hdg_scalar_error, evaluate_trace_error
 from hybridge.hdg.condensation import expand_interior_trace
 from scripts.guiding_center.cases.guiding_center_cases import case_definition_by_key
@@ -764,25 +765,6 @@ def _resolve_backend(backend: str, mesh_size: float, scheme: str = "") -> str:
     return backend
 
 
-def _release_device_memory() -> None:
-    """Drop finished runs' device objects between runs of one process.
-
-    Garbage-collect (AMGX solvers free their device memory when collected) and return CuPy's
-    cached blocks; without this, long in-process ladders end in AMGX setup out-of-memory.
-    """
-    import gc
-
-    gc.collect()
-    try:
-        from hybridge.runtime.optional import require_cupy
-
-        cupy = require_cupy()
-        cupy.get_default_memory_pool().free_all_blocks()
-        cupy.get_default_pinned_memory_pool().free_all_blocks()
-    except Exception:
-        pass
-
-
 def _run_case(config, run_prefix: str, backend: str):
     """Run one case with Numba and host NumPy on every available core, verified.
 
@@ -904,7 +886,7 @@ def run_temporal_convergence(
             row["final_fields"] = None if fields is None else str(fields)
             rows.append(row)
             del result
-            _release_device_memory()
+            release_device_memory()
             print(f"{selected_scheme} dt={dt:g} C={row['courant']:.3g} rho L2={row['rho_l2_error']:.4e}"
                   + (f" rho-ref={row['rho_ref_l2_error']:.4e} phi-ref={row['phi_ref_l2_error']:.4e}"
                      if reference is not None else ""), flush=True)
@@ -1012,7 +994,7 @@ def run_spatial_convergence(
                   f"rho L2={row['rho_l2_error']:.4e} phi L2={row['phi_l2_error']:.4e} "
                   f"({row['wall_time_s']:.1f} s)", flush=True)
             del result
-            _release_device_memory()
+            release_device_memory()
     _spatial_rates(rows)
     rows.sort(key=lambda row: (int(row["order"]), -float(row["h_eff"])))
     csv_path, json_path = _write_outputs(rows, output_path, prefix)
