@@ -1,0 +1,162 @@
+{
+ "gmsh:0.08": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.08,
+  "algorithm": null,
+  "triangles": 1474,
+  "file": ".cache/hybridge/meshes/rectangle-73b63c95c0e5f061b22357e24c351b1d905c79ee59aede30ace7befd819bc453.npz",
+  "bytes": 48409,
+  "sha256": "10585d94da6b1af62289fa873be9cd3c037595f0773bf99029755c54d1006222"
+ },
+ "gmsh:0.04": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.04,
+  "algorithm": null,
+  "triangles": 5822,
+  "file": ".cache/hybridge/meshes/rectangle-64160c62df15e79957d4d3600d7c08b5fcf63674ec6cf5316eef44b835d5a62b.npz",
+  "bytes": 188345,
+  "sha256": "4dd0ae5fcd5100059a4bed14a37df93b2357bf33fea9c5fdb706c8060724d913"
+ },
+ "gmsh:0.02": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.02,
+  "algorithm": null,
+  "triangles": 23254,
+  "file": ".cache/hybridge/meshes/rectangle-5756c86ed4ec24073d00581953c6f6773f85fdf79510ad3decfcd9fbee51ae26.npz",
+  "bytes": 747769,
+  "sha256": "4f550fea7414b73b0037122f113ee6efb5cb3588bfb8176a3a52c3c26c666bd0"
+ },
+ "gmsh:0.0125": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.0125,
+  "algorithm": null,
+  "triangles": 59334,
+  "file": ".cache/hybridge/meshes/rectangle-3d2eba8d5d0c504f30250593717314f2961b533deeb1058fe54a10513eb38a00.npz",
+  "bytes": 1904251,
+  "sha256": "f6987c5b98411548534d3015bad9823fc6b38f13d610f7a589c0d98c4ab80038"
+ },
+ "gmsh:0.01": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.01,
+  "algorithm": null,
+  "triangles": 92552,
+  "file": ".cache/hybridge/meshes/rectangle-0dde8c14bece38bceb15d0899b7d547c52be663e09f9e3d8e5f0675cd37caeea.npz",
+  "bytes": 2968505,
+  "sha256": "e5bd0aff290d69310556d3cc363a84cc719dbd32811c8f103a1528756d20ac05"
+ },
+ "gmsh:0.005": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.005,
+  "algorithm": null,
+  "triangles": 369790,
+  "file": ".cache/hybridge/meshes/rectangle-cd68d84140cb198afc3af0094a4c4eafd81c1f3249332e1027acf2ebfcf7e47a.npz",
+  "bytes": 11846522,
+  "sha256": "b08b1b143a7f746ca20f5f392e013bac7e6cfd9e8c4b37b4256d4a70761f06d8"
+ },
+ "gmsh:0.0025": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.0025,
+  "algorithm": null,
+  "triangles": 1478818,
+  "file": ".cache/hybridge/meshes/rectangle-f1112f773addfaf166853793cf5ea9db74326f75ee063dd38773c1a60a45ff84.npz",
+  "bytes": 47348219,
+  "sha256": "eaedd9125d30855ff1de72cbdd7d51e9dc0fc0feccbf2f6e6fc8fa45dd79eff5"
+ },
+ "gmsh:0.00177": {
+  "family": "gmsh",
+  "model": "rectangle",
+  "mesh_size": 0.00177,
+  "algorithm": null,
+  "triangles": 2950142,
+  "file": ".cache/hybridge/meshes/rectangle-0d35938bdf9d93a3a0553d844fdca544badb62392dd93bb413fca932c73fca8f.npz",
+  "bytes": 94441148,
+  "sha256": "cbc0c6a342eeb61ac332b77f6c8ddb30a836954f02b42e315d86722546981944"
+ },
+ "unstructured:0.08": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.08,
+  "algorithm": 5,
+  "triangles": 1690,
+  "file": ".cache/hybridge/meshes/rectangle-bb8e1a62c645bc7f3a098c6908923e83563550a4e63135fc3657a8fe40fc7686.npz",
+  "bytes": 55318,
+  "sha256": "36d4038880f69d50d1e67ca0be05b8fc96730bc688e50801db2324935839a003"
+ },
+ "unstructured:0.04": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.04,
+  "algorithm": 5,
+  "triangles": 6628,
+  "file": ".cache/hybridge/meshes/rectangle-d69cb3da9fa88de2bbd0e79797afb3706e63b5da3ac30cc2aaa8267996039aa9.npz",
+  "bytes": 214134,
+  "sha256": "a7be066e8ada85ffbe3762909f3fa9f2bf0267cfd4b6c66b3a9a4e6ea07c6409"
+ },
+ "unstructured:0.02": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.02,
+  "algorithm": 5,
+  "triangles": 26344,
+  "file": ".cache/hybridge/meshes/rectangle-ab012bc627b00c5a7f6da88590aa184a3e56bd17e975c47b866ac59e32aa69b7.npz",
+  "bytes": 846646,
+  "sha256": "4e422b742d15e875711d81867ffd5a793b7d622c94f0d8a0b9aeac78adacac5a"
+ },
+ "unstructured:0.01": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.01,
+  "algorithm": 5,
+  "triangles": 105726,
+  "file": ".cache/hybridge/meshes/rectangle-8217c938afb14769b0172f9fa7d86cbca839a1990e2bd180b5f8b8cdfd7cc166.npz",
+  "bytes": 3390070,
+  "sha256": "4a6f590bbd3b034d7f5b80c1746e900cef6bdea6bbc50d48d50a6d5e3f2f2580"
+ },
+ "unstructured:0.005": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.005,
+  "algorithm": 5,
+  "triangles": 423612,
+  "file": ".cache/hybridge/meshes/rectangle-d3b882fa864df50b54d81559819318453c273adf1a2ef5d9ed1c628b549ed09f.npz",
+  "bytes": 13568823,
+  "sha256": "b1044457f92ec9154271ba3d2f7ced94bbf651d50e875e58a9d48df910706d3c"
+ },
+ "unstructured:0.0025": {
+  "family": "unstructured",
+  "model": "rectangle",
+  "mesh_size": 0.0025,
+  "algorithm": 5,
+  "triangles": 1695090,
+  "file": ".cache/hybridge/meshes/rectangle-86d7701f7c9f7c016a8a8af1f685c0b9aaed112cb608013d9c0c4ee906c2621e.npz",
+  "bytes": 54268920,
+  "sha256": "6b8b0b90fb97d296e3776a72e153339d1b3e94a6c390542cce49b2c40836cb2b"
+ },
+ "polygon:0.025": {
+  "family": "polygon",
+  "model": "polygon",
+  "mesh_size": 0.025,
+  "algorithm": null,
+  "triangles": 12666,
+  "file": ".cache/hybridge/meshes/polygon-ba28f8574183fffdb2fe10a5a5140f20984422c134c4c13d37ba64543df806f7.npz",
+  "bytes": 408414,
+  "sha256": "94f0b145da0dfd336ee2a7c3cdaae36c3ca2f84da2d96b28c9159f2964d87560"
+ },
+ "polygon:0.00625": {
+  "family": "polygon",
+  "model": "polygon",
+  "mesh_size": 0.00625,
+  "algorithm": null,
+  "triangles": 199110,
+  "file": ".cache/hybridge/meshes/polygon-fe1407503b21d04ab9143cde3c3a7c89d4d02c7790dd6cc48f0380d19257ed2b.npz",
+  "bytes": 6382304,
+  "sha256": "a31e4580ad1f53e0ec04455ef6c9dbdb5fe6424096827d3d9f7cdd92072fc130"
+ }
+}
