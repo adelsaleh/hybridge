@@ -142,7 +142,7 @@ accounted for in convergence and invariant comparisons. This recovery policy
 also applies to SI Euler, predictor-corrector, SI BDF2, and both hybrid BDF3
 schemes, including their startup stages. Their replay refreshes all cached
 Poisson-derived flux or residual histories at the new tau; see the
-[guiding-center runner documentation](../../../scripts/guiding_center/README.md#poisson-tau-fallback-for-every-scheme).
+[guiding-center runner documentation](../../../scripts/guiding_center/docs/schemes.md#poisson-tau-fallback-for-every-scheme).
 
 ## Diagnostics and user run
 

@@ -366,3 +366,205 @@ The destination is replaced on a new run. Closing the viewer stops capture;
 normal viewer cleanup finalizes the encoder. Recording retains every requested
 frame and adds framebuffer readback and CPU H.264 encoding work, but does not
 enable field diagnostics. Install the `holoviz` extra for the bundled encoder.
+
+## Studies
+
+One block per study, in the order of `README.md`: options first, then dry runs, then the commands
+that start solves (marked **starts solves**), then analysis and figures (no solve). Every command
+below is checked by `tests/test_guiding_center_example_runs.py` (module present, options accepted by
+the script's parser, presets, cases and `@run_configs` files present). Each study's README gives the
+context, the output directories and the follow-ups.
+
+### Convergence (`studies/convergence/`)
+
+Options and dry runs:
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence --help
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_guiding_center_temporal_convergence --study manufactured --scheme both --orders 2,3,4 --dry-run
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --help
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --families misaligned,aligned --checks --dry-run
+```
+
+Poisson degree study and unstructured meshes (**starts solves**; each command waits for 16 GiB of free device memory):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --families misaligned,aligned --checks --min-free-gpu-mib 16384
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --families gmsh --orders 2,3,4,5,6 --checks --min-free-gpu-mib 16384
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --combine-only --families misaligned,aligned,gmsh --orders 2,3,4,5,6
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --lattice --families unstructured --output-dir run_outputs/article/convergence_unstructured
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --families unstructured --orders 2,3,4 --checks --offsets 0,1 --output-dir run_outputs/article/convergence_unstructured --min-free-gpu-mib 16384
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --families unstructured --orders 2,3,4 --checks --drift compatible --offsets 0 --output-dir run_outputs/article/convergence_unstructured --min-free-gpu-mib 16384
+.venv/bin/python -m scripts.guiding_center.studies.convergence.run_poisson_degree_study --combine-only --families unstructured --orders 2,3,4 --output-dir run_outputs/article/convergence_unstructured
+```
+
+Exact-drift rates, steady rates and the manufactured snapshot (**starts solves**):
+
+```bash
+.venv/bin/python scripts/guiding_center/studies/convergence/exact_drift_transport_rates.py --orders 2 --mesh-sizes 0.1 \
+  --case-param 'kx=8*pi' --case-param 'ky=-8*pi' --case-param U=1 --case-param A=0.028134884879909 --final-time 0.0625 \
+  --dt-table run_outputs/article/convergence_exact_drift/dt_table.json --output run_outputs/article/convergence_exact_drift/runs/misaligned_p2_h0.1.csv
+.venv/bin/python scripts/guiding_center/studies/convergence/exact_drift_transport_rates.py --combine run_outputs/article/convergence_exact_drift/runs/misaligned_p2_h0.1.csv
+.venv/bin/python scripts/guiding_center/studies/convergence/steady_transport_velocity_rates.py --drifts averaged --orders 1,2,3,4 --mesh-sizes 0.2,0.1,0.05,0.025,0.0125 --output run_outputs/article/convergence_poisson_degree/steady/steady_drift_averaged.csv
+.venv/bin/python -u scripts/guiding_center/studies/convergence/snapshot_manufactured_solution.py --order 3 --mesh-size 0.005 --dt 0.00027533039647577095 --final-time 0.0625 \
+  --case-param 'kx=8*pi' --case-param 'ky=8*pi' --case-param U=1 --case-param A=0.028134884879909 \
+  --backend device --device-profile bsr --mesh-family structured --poisson-order-offset 0 --resolution 2000 --output run_outputs/article/convergence_poisson_degree/snapshots/wave_p3.npz
+```
+
+Tables and figures (no solve):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.convergence.make_convergence_tables --temporal run_outputs/article/convergence_poisson_degree/temporal.csv --output-dir ../gc-hdg-article/tables
+.venv/bin/python -m scripts.guiding_center.studies.convergence.plot_convergence_study --spatial run_outputs/article/convergence_poisson_degree/spatial.csv --output-dir ../gc-hdg-article/figures
+```
+
+### Diocotron (`studies/diocotron/`)
+
+Options and dry runs (no mesh, no solve):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.run_diocotron_benchmark --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.run_diocotron_benchmark --benchmark disk-smooth --orders 6 --dts 0.05 --final-time 70 --schemes si-bdf2 --velocities raw --output-dir run_outputs/article/diocotron/smooth --dry-run
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.run_diocotron_benchmark --benchmark disk-zg --orders 6 --dts 0.05 --schemes imex-ark3 --velocities raw --output-dir run_outputs/article/diocotron/zg --dry-run
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.preflight_diocotron --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron --help
+```
+
+One D8 run with the launcher's options (**starts a solve** without `--dry-run`):
+
+```bash
+.venv/bin/python -u -m scripts.guiding_center.studies.diocotron.run_diocotron_benchmark --benchmark disk-highmode --modes 128 \
+  --orders 6 --band-mesh-sizes 0.004 --mesh-size 0.02 --dts 0.0125 --final-time 70 --schemes si-bdf2 \
+  --velocities compatible --compatible-potential postprocessed --poisson-tau 128000 \
+  --poisson-candidate amgx-cheb-csr --transport-candidate fused+csr --poisson-order-offset 0 \
+  --synchronize-step-timing --enstrophy-budget --movie-interval 0 --epsilon 1e-4 --diagnostics-every 10 \
+  --snapshot-times 30,40,45,50,55,60,70 --poisson-solver-atol 1e-14 \
+  --output-dir run_outputs/article/diocotron_order_20261016/runs --prefix d8 --run-tag C1_L2_p6_dt0.0125 --verbosity 2 --dry-run
+```
+
+Analysis and figures (no solve):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron_order select run_outputs/article/diocotron_order_smoke_20261016
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron_order report run_outputs/article/diocotron_order_smoke_20261016
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron_pairs --runs run_outputs/article/diocotron_order_20261016 --output-dir run_outputs/article/diocotron_order_20261016/pairs
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.diocotron_order_errors --times 30,50,70 --fields density,potential --output run_outputs/article/diocotron_order_20261016/errors_p6_vs_p9.json run_outputs/article/diocotron_order_20261016/runs/d8_C1_L2_p6 run_outputs/article/diocotron_order_20261016/runs/d8_C1_L3_p9
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.analyze_diocotron_campaign --output run_outputs/article/diocotron/summary --latex ../gc-hdg-article/tables/diocotron_growth.tex
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_highmode --output-dir ../gc-hdg-article/figures --stem diocotron_highmode
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_growth --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_smooth --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_zg --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_injection --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.plot_diocotron_ionization --help
+.venv/bin/python -m scripts.guiding_center.studies.diocotron.render_diocotron_movie --work-dir run_outputs/article/movies --threads 4 --duration 42 --title 'Smooth ring, $m=9$' --output ../gc-hdg-article/supplementary/movies/diocotron_smooth_m9.mp4 run_outputs/article/diocotron/smooth_m9_snapshots.npz
+```
+
+### Magnetron (`studies/magnetron/`)
+
+Options, one D7 v2 configuration (`--dry-run` builds only the meshes; **starts a solve** without it) and E9 (**starts solves**):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.run_magnetron --help
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.run_magnetron \
+  --anode-geometry vanes --vane-width 0.26 --wave-amplitudes 0.05 --wave-speeds 0.25 --hub-edge 0.025 \
+  --emission-top 0.6 --refine-band 0.55,1.35 --schemes si-bdf2 --final-time 40 \
+  --hall-parameter 30 --electron-temperature 0.01 --emission-period 20 --emission-phase 5 \
+  --density-backend device --density-positivity-points quadrature+lattice+dense --velocities compatible \
+  --poisson-order-offset 0 --curvature-points 3000 --density-rtol 1e-10 \
+  --snapshot-times 10,20,30,40 --prefix d7v2 --verbosity 1 \
+  --orders 6 --dts 0.05 --mesh-size 0.03 --band-mesh-size 0.015 --corner-mesh-size 0.001 --cathode-mesh-size 0.003 \
+  --density-positivity none --movie-interval 0 --output-dir run_outputs/article/magnetron_d7_production_v2/dry/p6_s1 --dry-run
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.run_poisson_cg_vs_hdg --help
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.run_poisson_cg_vs_hdg --orders 6,7 --output-dir run_outputs/article/e9_cg_vs_hdg
+```
+
+Analysis, tables and figures (no solve):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.magnetron_order_efficiency --reference run_outputs/article/magnetron_d7_production_v2/runs/ref_p6_s0p36/d7v2.jsonl --runs run_outputs/article/magnetron_d7_production_v2/runs/p6_s1/d7v2.jsonl run_outputs/article/magnetron_d7_production_v2/runs/p4_s0p72/d7v2.jsonl --stem d7_ladder --times 10,20,30,40
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.magnetron_convergence --runs run_outputs/article/magnetron_d7_production_v2/runs/p6_s2/d7v2.jsonl run_outputs/article/magnetron_d7_production_v2/runs/p6_s1/d7v2.jsonl --parameter mesh --label 'mesh scale' --stem d7_mesh --times 10,20,30,40
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.write_magnetron_tables --ladder d7_ladder.json --dt d7_dt.json --ladder-table ../gc-hdg-article/tables/magnetron_ladder.tex --dt-table ../gc-hdg-article/tables/magnetron_dt.tex
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.plot_magnetron --runs run_outputs/article/magnetron_d7_production_v2/runs/p6_s1/d7v2.jsonl --stem magnetron --times 10,20,30,40
+.venv/bin/python -m scripts.guiding_center.studies.magnetron.plot_discharge --run run_outputs/article/magnetron_d7_production_v2/runs/p6_s1/d7v2.jsonl --stem discharge --times 10,20,30,40
+```
+
+### Band evolution (`studies/band_evolution/`)
+
+Options and the E7 run form (**starts solves** without `--dry-run`):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.band_evolution.run_band_evolution --help
+.venv/bin/python -u -m scripts.guiding_center.studies.band_evolution.run_band_evolution \
+  --geometries star --kinds control,seed --modes 'star=16;uglypacman=16;iter=18;horseshoe=20' --edge-fraction 0.05 \
+  --order 6 --dt 0.05 --final-time 200 --initial-projection-quad-1d 24 \
+  --poisson-solver-atol 5e-14 --poisson-solver-rtol 5e-11 \
+  --output-dir run_outputs/article/e7_band_evolution_20261019/runs --prefix e7 --skip-existing --verbosity 1 --dry-run
+```
+
+Transfer check, analysis and figures (no time stepping):
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.band_evolution.equilibrium_transfer_check --help
+.venv/bin/python -m scripts.guiding_center.studies.band_evolution.analyze_band_evolution --runs run_outputs/article/e7_band_evolution_20261019/runs --output run_outputs/article/e7_band_evolution_20261019/analysis --prefix e7
+.venv/bin/python -m scripts.guiding_center.studies.band_evolution.plot_band_evolution_article --runs run_outputs/article/e7_band_evolution_20261019/runs --article ../gc-hdg-article --prefix e7
+```
+
+### Equilibrium preservation (`studies/equilibrium_preservation/`)
+
+Options; the smoke driver (**starts solves**) is in the study README.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.equilibrium_preservation.run_equilibrium_preservation --help
+.venv/bin/python -m scripts.guiding_center.studies.equilibrium_preservation.plot_equilibrium_preservation --help
+```
+
+### Recovered field (`studies/recovered_field/`)
+
+Bounded matrix diagnostics; `NUMBA_DISABLE_JIT=1` is mandatory (no kernel compilation):
+
+```bash
+NUMBA_DISABLE_JIT=1 .venv/bin/python -m scripts.guiding_center.studies.recovered_field.check_field_recovery_order --help
+NUMBA_DISABLE_JIT=1 .venv/bin/python -m scripts.guiding_center.studies.recovered_field.check_field_recovery_order --density-order 3 --subdivisions 2 4 8
+NUMBA_DISABLE_JIT=1 .venv/bin/python -m scripts.guiding_center.studies.recovered_field.check_oversampled_recovery_order --help
+NUMBA_DISABLE_JIT=1 .venv/bin/python -m scripts.guiding_center.studies.recovered_field.compare_field_recovery --density-order 3
+```
+
+### Solver tuning (`studies/solver_tuning/`)
+
+Options (the replays and benchmarks solve when started without `--help`) and the offline analyses:
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_poisson_backends --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.tune_poisson_bsr_smoothing --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.tune_poisson_p0_amgx --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_hybrid_hierarchy_bsr --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.replay_poisson_bsr --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.replay_poisson_asm --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_poisson_lu --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_repeated_poisson --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_scipy_lu_gpu --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.run_precision_benchmark --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.benchmark_host_solver_stages --help
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.analyze_poisson_timings --output-dir run_outputs/solver_studies/poisson_timings run_outputs/article/diocotron_order_20261016/runs/d8_C1_L2_p6_timings.jsonl
+.venv/bin/python -m scripts.guiding_center.studies.solver_tuning.audit_solver_convergence --windows 0:20,20:70 --json run_outputs/solver_studies/audit.json run_outputs/article/diocotron_order_20261016/runs/d8_C1_L2_p6.jsonl
+```
+
+### Viewers (`viewers/`)
+
+```bash
+.venv/bin/python -B scripts/guiding_center/viewers/smoke_holoviz.py --help
+.venv/bin/python -B scripts/guiding_center/viewers/animate_holoviz.py --help
+```
+
+## Campaigns
+
+Campaign launchers, their records and the shared protocol live in `campaigns/` (index and
+conventions in `campaigns/README.md`). The article convergence campaign (H100-ready) prints its task
+list and plan without solving:
+
+```bash
+.venv/bin/python campaigns/gc_article_convergence/campaign.py list
+.venv/bin/python campaigns/gc_article_convergence/campaign.py plan --shards 8
+.venv/bin/python campaigns/gc_article_convergence/campaign.py run --shard 0/8 --dry-run
+.venv/bin/python campaigns/gc_article_convergence/campaign.py verify-meshes
+```

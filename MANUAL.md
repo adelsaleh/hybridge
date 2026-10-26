@@ -1601,6 +1601,16 @@ advection-reaction or diffusion-reaction HDG workflows.
 
 ### Fixed-Mesh Guiding-Center Cases Runner
 
+The guiding-center scripts are grouped by study since 2026-10-26: the case CLI
+and its launcher at `scripts/guiding_center/`, the shared `cases/`, `time_schemes/`,
+`runtime/` and `diagnostics/` packages, one `studies/<study>/` directory per
+study (convergence, diocotron, magnetron, band evolution, equilibrium
+preservation, recovered field, solver tuning) with its own README, the HoloViz
+`viewers/`, the scheme and showcase notes under `docs/`, and the canonical
+tested commands in `scripts/guiding_center/example_runs.md`. Campaign
+launchers and their records live in `campaigns/`. The old → new path map is in
+`scripts/guiding_center/README.md`.
+
 The fixed-mesh guiding-center runner lives in `scripts/guiding_center/` and is
 separate from the older semilinear-equilibrium scripts. It supports three fixed-
 mesh time schemes. With `A(v) rho = div(v rho)`, `q = -grad(phi)`, and

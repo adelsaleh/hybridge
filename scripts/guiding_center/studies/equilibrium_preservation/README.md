@@ -1,4 +1,20 @@
-# Imported equilibria: transfer and short preservation checks
+# Equilibrium preservation study
+
+Bounded CPU checks that archived equilibria (the DOLFINx CG2 catalogue of `gc-hdg-article/equilibria`)
+are preserved by the guiding-center runner over a few steps: `run_equilibrium_preservation.py` (one
+case at a time, mesh capped before assembly, PyPardiso with verified threads) and
+`plot_equilibrium_preservation.py` (renders the saved checks). Outputs go to
+`run_outputs/article/equilibrium_check_<tag>`; the earlier checks are `run_outputs/article/equilibrium_inward_20261012`
+and the catalogue campaigns of 2026-10-15/16 (`equilibrium_centerward_20261015`, `equilibrium_dt080_20261016`,
+`equilibrium_dt080_eps0005_20261016`, driven from the `diocotron-dolfinx` branch; see `campaigns/README.md`).
+Commands: `--help` and `--dry-run` first; the smoke driver below starts solves.
+
+```bash
+.venv/bin/python -m scripts.guiding_center.studies.equilibrium_preservation.run_equilibrium_preservation --help
+.venv/bin/python -m scripts.guiding_center.studies.equilibrium_preservation.plot_equilibrium_preservation --help
+```
+
+## Imported equilibria: transfer and short preservation checks
 
 The standard guiding-center runner accepts `--case imported_equilibrium`.
 Choose `--case-param archive=PATH --case-param equilibrium=ID` (a stable ID or
