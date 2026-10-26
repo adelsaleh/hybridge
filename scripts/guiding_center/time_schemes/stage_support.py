@@ -3,6 +3,18 @@ from dataclasses import dataclass
 import math
 from typing import Any
 from hybridge.core.field_ops import perpendicular_vector_field, trace_linear_combination
+from hybridge.core.quadrature_coefficients import QuadratureVectorField
+
+
+def drift_flux(result):
+    """Return what supplies the transport drift of a Poisson ``result``: its flux, or an exact drift.
+
+    A pointwise exact-drift run (``runtime/exact_drift.py``) attaches ``result.exact_drift``, the exact
+    drift at the transport's quadrature points (:class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField`);
+    every other run uses ``result.flux``. Either goes to :func:`transport_drift`.
+    """
+    exact = getattr(result, "exact_drift", None)
+    return result.flux if exact is None else exact
 
 
 def transport_drift(flux, scale, space, *, name="beta_h"):
@@ -13,7 +25,13 @@ def transport_drift(flux, scale, space, *, name="beta_h"):
     (Poisson degree q > p) keeps its own space; the transport assembly and
     residual contract it with cross-space drift tables at the density's
     quadrature points, without projection (``hybridge.transport.advection_field``).
+    A :class:`~hybridge.core.quadrature_coefficients.QuadratureVectorField` (see
+    :func:`drift_flux`) already is the drift ``(-q_y, q_x)`` and is only scaled.
     """
+    if isinstance(flux, QuadratureVectorField):
+        drift = flux * float(scale)
+        drift.name = name
+        return drift
     flux_order = flux.components[0].space.order
     return perpendicular_vector_field(flux, scale, space if flux_order <= space.order else None, name=name)
 

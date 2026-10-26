@@ -32,6 +32,12 @@ class GuidingCenterRunPreset:
     poisson_order_offset: int = 0
     transport_electric_field: str = "raw"
     compatible_potential: str = "auto"
+    # transport_electric_field="exact": the drift is the case's exact drift at every solve time
+    # (runtime/exact_drift.py), either at the transport's quadrature points (exact_drift_mode="pointwise")
+    # or as the L2 projection of the exact flux onto DG(order + exact_drift_order_offset) ("projected");
+    # the diagnostics read that projection in both modes.
+    exact_drift_order_offset: int = 2
+    exact_drift_mode: str = "pointwise"
     volume_quadrature: str = "auto"
     initial_projection_quad_1d: int | None = None
     volume_quad_1d: int | None = None

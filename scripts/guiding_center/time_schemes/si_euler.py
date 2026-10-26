@@ -9,7 +9,7 @@ from hybridge.core.field_ops import (
     solution_trace,
 )
 from .recovery import with_poisson_recovery, recovery_options, poisson_tau
-from .stage_support import GuidingCenterStep, _fixed_operator_trace_predictor, transport_drift
+from .stage_support import GuidingCenterStep, _fixed_operator_trace_predictor, drift_flux, transport_drift
 
 
 class SIEulerStepper:
@@ -44,12 +44,12 @@ class SIEulerStepper:
         self.phase_verbosity, self.detail_verbosity = phase_verbosity, detail_verbosity
 
     def _drift_flux(self, result):
-        """Select the electric field used by this scheme's transport history."""
-        return result.flux
+        """Select the electric field (or exact drift) used by this scheme's transport history."""
+        return drift_flux(result)
 
     def _transport_data(self):
         """Return the frozen-drift Euler equation and its stage metadata."""
-        return (self.density, transport_drift(self.poisson_result.flux, self.dt, self.space),
+        return (self.density, transport_drift(drift_flux(self.poisson_result), self.dt, self.space),
                 self.dt, "predictor", {})
 
     def _transport(self, solve_transport, source, beta, guess, scale, stage_time, stage,

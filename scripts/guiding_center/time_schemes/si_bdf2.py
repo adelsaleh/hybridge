@@ -1,7 +1,7 @@
 """Constant-step semi-implicit BDF2 with an SI-Euler first step."""
 from hybridge.core.time_integration import bdf2_transport_data
 from .si_euler import SIEulerStepper
-from .stage_support import transport_drift
+from .stage_support import drift_flux, transport_drift
 
 
 def _bdf2_transport_data(space, density, flux, dt, *, previous_density=None, previous_flux=None):
@@ -26,7 +26,7 @@ def _bdf2_transport_data(space, density, flux, dt, *, previous_density=None, pre
     if previous_density is not None:
         source.name = "rho_bdf2_source_h"
     beta.name = "beta_h"
-    for component, label in zip(beta.components, ("beta_h_x", "beta_h_y")):
+    for component, label in zip(getattr(beta, "components", ()), ("beta_h_x", "beta_h_y")):
         component.name = label
     return source, beta, scale
 
@@ -47,7 +47,7 @@ class SIBDF2Stepper(SIEulerStepper):
     def _drift_flux(self, result):
         """Require recovery on every solve when it supplies the BDF2 drift."""
         if not self.use_postprocessed_flux:
-            return result.flux
+            return drift_flux(result)
         flux = getattr(result, "postprocessed_flux", None)
         if flux is None:
             raise ValueError("BDF2 recovered drift requires a postprocessed flux on every Poisson solve")
